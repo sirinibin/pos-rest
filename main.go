@@ -35,6 +35,9 @@ func main() {
 	// Logout
 	router.HandleFunc("/v1/logout", controller.LogOut).Methods("DELETE")
 
+	//Business
+	router.HandleFunc("/v1/business", controller.CreateBusiness).Methods("POST")
+
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))
 	}()
