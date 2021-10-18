@@ -25,6 +25,15 @@ func main() {
 
 	// OAuth2 Authentication
 	router.HandleFunc("/v1/authorize", controller.Authorize).Methods("POST")
+	router.HandleFunc("/v1/accesstoken", controller.Accesstoken).Methods("POST")
+
+	// Refresh access token
+	router.HandleFunc("/v1/refresh", controller.RefreshAccesstoken).Methods("POST")
+
+	//Me
+	router.HandleFunc("/v1/me", controller.Me).Methods("GET")
+	// Logout
+	router.HandleFunc("/v1/logout", controller.LogOut).Methods("DELETE")
 
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))

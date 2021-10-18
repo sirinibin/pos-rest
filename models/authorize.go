@@ -2,6 +2,8 @@ package models
 
 import (
 	"errors"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -19,10 +21,11 @@ type AuthCodeResponse struct {
 	ExpiresAt int64  `bson:"expires_at" json:"expires_at"`
 }
 
-func AuthenticateByAuthCode(tokenStr string) (tokenClaims TokenClaims, err error) {
+func AuthenticateByAuthCode(r *http.Request) (tokenClaims TokenClaims, err error) {
 
-	if govalidator.IsNull(tokenStr) {
-		return tokenClaims, errors.New("auth_code is required")
+	tokenStr, err := ParseAuthCodeFromRequest(r)
+	if err != nil {
+		return tokenClaims, err
 	}
 
 	tokenClaims, err = AuthenticateByJWTToken(tokenStr)
@@ -35,6 +38,31 @@ func AuthenticateByAuthCode(tokenStr string) (tokenClaims TokenClaims, err error
 
 	return tokenClaims, nil
 
+}
+
+func ParseAuthCodeFromRequest(r *http.Request) (string, error) {
+	keys, ok := r.URL.Query()["auth_code"]
+	tokenStr := ""
+	if !ok || len(keys[0]) < 1 {
+		tokenStr = r.Header.Get("auth_code")
+	} else {
+		tokenStr = keys[0]
+	}
+
+	if govalidator.IsNull(tokenStr) {
+		bearToken := r.Header.Get("Authorization")
+		strArr := strings.Split(bearToken, " ")
+		if len(strArr) == 1 {
+			tokenStr = strArr[0]
+		} else if len(strArr) == 2 {
+			tokenStr = strArr[1]
+		}
+	}
+
+	if govalidator.IsNull(tokenStr) {
+		return "", errors.New("auth_code is required")
+	}
+	return tokenStr, nil
 }
 
 //GenerateAuthCode : generate and return authcode
