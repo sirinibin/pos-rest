@@ -37,6 +37,7 @@ func main() {
 
 	//Business
 	router.HandleFunc("/v1/business", controller.CreateBusiness).Methods("POST")
+	router.HandleFunc("/v1/business", controller.ListBusiness).Methods("GET")
 
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))
