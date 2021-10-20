@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -15,20 +14,20 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Business : Business structure
-type Business struct {
+//Customer : Customer structure
+type Customer struct {
 	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name            string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic    string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	VATNo           string             `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
+	VATNoInArabic   string             `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
+	Phone           string             `bson:"phone,omitempty" json:"phone,omitempty"`
+	PhoneInArabic   string             `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
 	Title           string             `bson:"title,omitempty" json:"title,omitempty`
 	TitleInArabic   string             `bson:"title_in_arabic,omitempty" json:"title_in_arabic"`
 	Email           string             `bson:"email,omitempty" json:"email,omitempty"`
-	Phone           string             `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic   string             `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
 	Address         string             `bson:"address,omitempty" json:"address,omitempty"`
 	AddressInArabic string             `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	VATNo           string             `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
-	VATNoInArabic   string             `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
 	Deleted         bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy       primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt       time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -38,31 +37,7 @@ type Business struct {
 	UpdatedBy       primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 }
 
-type SearchCriterias struct {
-	Page     int                    `bson:"page,omitempty" json:"page,omitempty"`
-	Size     int                    `bson:"size,omitempty" json:"size,omitempty"`
-	SearchBy map[string]interface{} `bson:"search_by,omitempty" json:"search_by,omitempty"`
-	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
-}
-
-func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
-	sortFieldWithOrder := strings.Fields(sortString)
-	sortBy = map[string]interface{}{}
-
-	if len(sortFieldWithOrder) == 2 {
-		if sortFieldWithOrder[1] == "1" {
-			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
-		} else if sortFieldWithOrder[1] == "-1" {
-			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Descending order
-		}
-	} else if len(sortFieldWithOrder) == 1 {
-		sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
-	}
-
-	return sortBy
-}
-
-func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Business, criterias SearchCriterias, err error) {
+func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Customer, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -97,7 +72,7 @@ func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Busine
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -112,7 +87,7 @@ func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Busine
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return businesses, criterias, errors.New("Error fetching businesses:" + err.Error())
+		return customers, criterias, errors.New("Error fetching Customers:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -121,30 +96,30 @@ func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Busine
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return businesses, criterias, errors.New("Cursor error:" + err.Error())
+			return customers, criterias, errors.New("Cursor error:" + err.Error())
 		}
-		business := Business{}
-		err = cur.Decode(&business)
+		customer := Customer{}
+		err = cur.Decode(&customer)
 		if err != nil {
-			return businesses, criterias, errors.New("Cursor decode error:" + err.Error())
+			return customers, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
-		businesses = append(businesses, business)
+		customers = append(customers, customer)
 	} //end for loop
 
-	return businesses, criterias, nil
+	return customers, criterias, nil
 
 }
 
-func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
 
 	if scenario == "update" {
-		if business.ID.IsZero() {
+		if customer.ID.IsZero() {
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsBusinessExists(business.ID)
+		exists, err := IsCustomerExists(customer.ID)
 		if err != nil || !exists {
 			errs["id"] = err.Error()
 			return errs
@@ -152,32 +127,24 @@ func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	}
 
-	if govalidator.IsNull(business.Name) {
+	if govalidator.IsNull(customer.Name) {
 		errs["name"] = "Name is required"
 	}
 
-	if govalidator.IsNull(business.Email) {
-		errs["email"] = "E-mail is required"
-	}
-
-	if govalidator.IsNull(business.Address) {
-		errs["address"] = "Address is required"
-	}
-
-	if govalidator.IsNull(business.Phone) {
+	if govalidator.IsNull(customer.Phone) {
 		errs["phone"] = "Phone is required"
 	}
 
-	emailExists, err := business.IsEmailExists()
+	phoneExists, err := customer.IsPhoneExists()
 	if err != nil {
-		errs["email"] = err.Error()
+		errs["phone"] = err.Error()
 	}
 
-	if emailExists {
-		errs["email"] = "E-mail is Already in use"
+	if phoneExists {
+		errs["phone"] = "Phone No. Already exists."
 	}
 
-	if emailExists {
+	if phoneExists {
 		w.WriteHeader(http.StatusConflict)
 	} else if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -186,28 +153,28 @@ func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scena
 	return errs
 }
 
-func (business *Business) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (customer *Customer) Insert() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	business.ID = primitive.NewObjectID()
-	_, err := collection.InsertOne(ctx, &business)
+	customer.ID = primitive.NewObjectID()
+	_, err := collection.InsertOne(ctx, &customer)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (business *Business) Update() (*Business, error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (customer *Customer) Update() (*Customer, error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 	updateResult, err := collection.UpdateOne(
 		ctx,
-		bson.M{"_id": business.ID},
-		bson.M{"$set": business},
+		bson.M{"_id": customer.ID},
+		bson.M{"$set": customer},
 		updateOptions,
 	)
 	if err != nil {
@@ -215,13 +182,13 @@ func (business *Business) Update() (*Business, error) {
 	}
 
 	if updateResult.MatchedCount > 0 {
-		return business, nil
+		return customer, nil
 	}
 	return nil, nil
 }
 
-func (business *Business) DeleteBusiness(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -232,14 +199,14 @@ func (business *Business) DeleteBusiness(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
-	business.Deleted = true
-	business.DeletedBy = userID
-	business.DeletedAt = time.Now().Local()
+	customer.Deleted = true
+	customer.DeletedBy = userID
+	customer.DeletedAt = time.Now().Local()
 
 	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": business.ID},
-		bson.M{"$set": business},
+		bson.M{"_id": customer.ID},
+		bson.M{"$set": customer},
 		updateOptions,
 	)
 	if err != nil {
@@ -249,43 +216,63 @@ func (business *Business) DeleteBusiness(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindBusinessByID(ID primitive.ObjectID) (business *Business, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func FindCustomerByID(ID primitive.ObjectID) (customer *Customer, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	err = collection.FindOne(ctx,
 		bson.M{"_id": ID}).
-		Decode(&business)
+		Decode(&customer)
 	if err != nil {
 		return nil, err
 	}
 
-	return business, err
+	return customer, err
 }
 
-func (business *Business) IsEmailExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (customer *Customer) IsEmailExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
 
-	if business.ID.IsZero() {
+	if customer.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": business.Email,
+			"email": customer.Email,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": business.Email,
-			"_id":   bson.M{"$ne": business.ID},
+			"email": customer.Email,
+			"_id":   bson.M{"$ne": customer.ID},
 		})
 	}
 
 	return (count == 1), err
 }
 
-func IsBusinessExists(ID primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (customer *Customer) IsPhoneExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if customer.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"phone": customer.Phone,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"phone": customer.Phone,
+			"_id":   bson.M{"$ne": customer.ID},
+		})
+	}
+
+	return (count == 1), err
+}
+
+func IsCustomerExists(ID primitive.ObjectID) (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)

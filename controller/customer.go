@@ -11,8 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// ListBusiness : handler for GET /business
-func ListBusiness(w http.ResponseWriter, r *http.Request) {
+// ListCustomer : handler for GET /customer
+func ListCustomer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -26,30 +26,30 @@ func ListBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	businesses := []models.Business{}
+	Customers := []models.Customer{}
 
-	businesses, criterias, err := models.SearchBusiness(w, r)
+	Customers, criterias, err := models.SearchCustomer(w, r)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Unable to find businesses:" + err.Error()
+		response.Errors["find"] = "Unable to find Customers:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
 	response.Criterias = criterias
-	if len(businesses) == 0 {
+	if len(Customers) == 0 {
 		response.Result = []interface{}{}
 	} else {
-		response.Result = businesses
+		response.Result = Customers
 	}
 
 	json.NewEncoder(w).Encode(response)
 
 }
 
-// CreateBusiness : handler for POST /business
-func CreateBusiness(w http.ResponseWriter, r *http.Request) {
+// CreateCustomer : handler for POST /customer
+func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -63,9 +63,9 @@ func CreateBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var business *models.Business
+	var customer *models.Customer
 	// Decode data
-	if !utils.Decode(w, r, &business) {
+	if !utils.Decode(w, r, &customer) {
 		return
 	}
 
@@ -77,20 +77,20 @@ func CreateBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	business.CreatedBy = userID
-	business.UpdatedBy = userID
-	business.CreatedAt = time.Now().Local()
-	business.UpdatedAt = time.Now().Local()
+	customer.CreatedBy = userID
+	customer.UpdatedBy = userID
+	customer.CreatedAt = time.Now().Local()
+	customer.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := business.Validate(w, r, "create"); len(errs) > 0 {
+	if errs := customer.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	err = business.Insert()
+	err = customer.Insert()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -102,14 +102,14 @@ func CreateBusiness(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
-	response.Result = business
+	response.Result = customer
 
 	json.NewEncoder(w).Encode(response)
 
 }
 
-// UpdateBusiness : handler function for PUT /v1/business call
-func UpdateBusiness(w http.ResponseWriter, r *http.Request) {
+// UpdateCustomer : handler function for PUT /v1/customer call
+func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -123,9 +123,9 @@ func UpdateBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var business *models.Business
+	var customer *models.Customer
 	// Decode data
-	if !utils.Decode(w, r, &business) {
+	if !utils.Decode(w, r, &customer) {
 		return
 	}
 
@@ -137,18 +137,18 @@ func UpdateBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	business.UpdatedBy = userID
-	business.UpdatedAt = time.Now().Local()
+	customer.UpdatedBy = userID
+	customer.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := business.Validate(w, r, "update"); len(errs) > 0 {
+	if errs := customer.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	business, err = business.Update()
+	customer, err = customer.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -159,22 +159,22 @@ func UpdateBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	business, err = models.FindBusinessByID(business.ID)
+	customer, err = models.FindCustomerByID(customer.ID)
 	if err != nil {
 		response.Status = false
-		response.Errors["view"] = "Unable to find business:" + err.Error()
+		response.Errors["view"] = "Unable to find customer:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
-	response.Result = business
+	response.Result = customer
 
 	json.NewEncoder(w).Encode(response)
 }
 
-// ViewBusiness : handler function for GET /v1/business/<id> call
-func ViewBusiness(w http.ResponseWriter, r *http.Request) {
+// ViewCustomer : handler function for GET /v1/customer/<id> call
+func ViewCustomer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -190,17 +190,17 @@ func ViewBusiness(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	businessID, err := primitive.ObjectIDFromHex(params["id"])
+	customerID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["business_id"] = "Invalid Business ID:" + err.Error()
+		response.Errors["customer_id"] = "Invalid Customer ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	var business *models.Business
+	var customer *models.Customer
 
-	business, err = models.FindBusinessByID(businessID)
+	customer, err = models.FindCustomerByID(customerID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -209,14 +209,14 @@ func ViewBusiness(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
-	response.Result = business
+	response.Result = customer
 
 	json.NewEncoder(w).Encode(response)
 
 }
 
-// DeleteBusiness : handler function for DELETE /v1/business/<id> call
-func DeleteBusiness(w http.ResponseWriter, r *http.Request) {
+// DeleteCustomer : handler function for DELETE /v1/customer/<id> call
+func DeleteCustomer(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -232,15 +232,15 @@ func DeleteBusiness(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	businessID, err := primitive.ObjectIDFromHex(params["id"])
+	customerID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["business_id"] = "Invalid Business ID:" + err.Error()
+		response.Errors["customer_id"] = "Invalid Customer ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	business, err := models.FindBusinessByID(businessID)
+	customer, err := models.FindCustomerByID(customerID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -248,7 +248,7 @@ func DeleteBusiness(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = business.DeleteBusiness(tokenClaims)
+	err = customer.DeleteCustomer(tokenClaims)
 	if err != nil {
 		response.Status = false
 		response.Errors["delete"] = "Unable to delete:" + err.Error()
