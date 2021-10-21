@@ -49,6 +49,13 @@ func main() {
 	router.HandleFunc("/v1/customer", controller.UpdateCustomer).Methods("PUT")
 	router.HandleFunc("/v1/customer/{id}", controller.DeleteCustomer).Methods("DELETE")
 
+	//Product
+	router.HandleFunc("/v1/product", controller.CreateProduct).Methods("POST")
+	router.HandleFunc("/v1/product", controller.ListProduct).Methods("GET")
+	router.HandleFunc("/v1/product/{id}", controller.ViewProduct).Methods("GET")
+	router.HandleFunc("/v1/product", controller.UpdateProduct).Methods("PUT")
+	router.HandleFunc("/v1/product/{id}", controller.DeleteProduct).Methods("DELETE")
+
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))
 	}()
