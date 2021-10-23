@@ -38,6 +38,14 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "customer")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of customers:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if len(Customers) == 0 {
 		response.Result = []interface{}{}
 	} else {

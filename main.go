@@ -56,6 +56,20 @@ func main() {
 	router.HandleFunc("/v1/product", controller.UpdateProduct).Methods("PUT")
 	router.HandleFunc("/v1/product/{id}", controller.DeleteProduct).Methods("DELETE")
 
+	//User
+	router.HandleFunc("/v1/user", controller.CreateUser).Methods("POST")
+	router.HandleFunc("/v1/user", controller.ListUser).Methods("GET")
+	router.HandleFunc("/v1/user/{id}", controller.ViewUser).Methods("GET")
+	router.HandleFunc("/v1/user", controller.UpdateUser).Methods("PUT")
+	router.HandleFunc("/v1/user/{id}", controller.DeleteUser).Methods("DELETE")
+
+	//Signature
+	router.HandleFunc("/v1/signature", controller.CreateSignature).Methods("POST")
+	router.HandleFunc("/v1/signature", controller.ListSignature).Methods("GET")
+	router.HandleFunc("/v1/signature/{id}", controller.ViewSignature).Methods("GET")
+	router.HandleFunc("/v1/signature", controller.UpdateSignature).Methods("PUT")
+	router.HandleFunc("/v1/signature/{id}", controller.DeleteSignature).Methods("DELETE")
+
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))
 	}()

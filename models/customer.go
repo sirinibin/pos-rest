@@ -23,7 +23,7 @@ type Customer struct {
 	VATNoInArabic   string             `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
 	Phone           string             `bson:"phone,omitempty" json:"phone,omitempty"`
 	PhoneInArabic   string             `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
-	Title           string             `bson:"title,omitempty" json:"title,omitempty`
+	Title           string             `bson:"title,omitempty" json:"title,omitempty"`
 	TitleInArabic   string             `bson:"title_in_arabic,omitempty" json:"title_in_arabic"`
 	Email           string             `bson:"email,omitempty" json:"email,omitempty"`
 	Address         string             `bson:"address,omitempty" json:"address,omitempty"`

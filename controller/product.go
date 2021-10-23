@@ -38,6 +38,14 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if len(products) == 0 {
 		response.Result = []interface{}{}
 	} else {

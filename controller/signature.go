@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// ListUser : handler for GET /user
-func ListUser(w http.ResponseWriter, r *http.Request) {
+// ListSignature : handler for GET /signature
+func ListSignature(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -27,38 +26,38 @@ func ListUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users := []models.User{}
+	signatures := []models.Signature{}
 
-	users, criterias, err := models.SearchUser(w, r)
+	signatures, criterias, err := models.SearchSignature(w, r)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Unable to find users:" + err.Error()
+		response.Errors["find"] = "Unable to find signatures:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "user")
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "signature")
 	if err != nil {
 		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of users:" + err.Error()
+		response.Errors["total_count"] = "Unable to find total count of signatures:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	if len(users) == 0 {
+	if len(signatures) == 0 {
 		response.Result = []interface{}{}
 	} else {
-		response.Result = users
+		response.Result = signatures
 	}
 
 	json.NewEncoder(w).Encode(response)
 
 }
 
-// CreateUser : handler for POST /user
-func CreateUser(w http.ResponseWriter, r *http.Request) {
+// CreateSignature : handler for POST /signature
+func CreateSignature(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -72,9 +71,9 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var user *models.User
+	var signature *models.Signature
 	// Decode data
-	if !utils.Decode(w, r, &user) {
+	if !utils.Decode(w, r, &signature) {
 		return
 	}
 
@@ -86,20 +85,20 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.CreatedBy = userID
-	user.UpdatedBy = userID
-	user.CreatedAt = time.Now().Local()
-	user.UpdatedAt = time.Now().Local()
+	signature.CreatedBy = userID
+	signature.UpdatedBy = userID
+	signature.CreatedAt = time.Now().Local()
+	signature.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
+	if errs := signature.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	err = user.Insert()
+	err = signature.Insert()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -111,14 +110,13 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
-	response.Result = user
+	response.Result = signature
 
 	json.NewEncoder(w).Encode(response)
-
 }
 
-// UpdateUser : handler function for PUT /v1/user call
-func UpdateUser(w http.ResponseWriter, r *http.Request) {
+// UpdateSignature : handler function for PUT /v1/signature call
+func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -132,9 +130,9 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var user *models.User
+	var signature *models.Signature
 	// Decode data
-	if !utils.Decode(w, r, &user) {
+	if !utils.Decode(w, r, &signature) {
 		return
 	}
 
@@ -146,18 +144,18 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.UpdatedBy = userID
-	user.UpdatedAt = time.Now().Local()
+	signature.UpdatedBy = userID
+	signature.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := user.Validate(w, r, "update"); len(errs) > 0 {
+	if errs := signature.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	user, err = user.Update()
+	signature, err = signature.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -168,22 +166,21 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err = models.FindUserByID(user.ID)
+	signature, err = models.FindSignatureByID(signature.ID)
 	if err != nil {
 		response.Status = false
-		response.Errors["view"] = "Unable to find user:" + err.Error()
+		response.Errors["view"] = "Unable to find signature:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
-	response.Result = user
-
+	response.Result = signature
 	json.NewEncoder(w).Encode(response)
 }
 
-// ViewUser : handler function for GET /v1/user/<id> call
-func ViewUser(w http.ResponseWriter, r *http.Request) {
+// ViewSignature : handler function for GET /v1/signature/<id> call
+func ViewSignature(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -199,17 +196,17 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	customerID, err := primitive.ObjectIDFromHex(params["id"])
+	signatureID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["customer_id"] = "Invalid User ID:" + err.Error()
+		response.Errors["product_id"] = "Invalid Signature ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	var user *models.User
+	var signature *models.Signature
 
-	user, err = models.FindUserByID(customerID)
+	signature, err = models.FindSignatureByID(signatureID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -217,16 +214,14 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.Password = ""
 	response.Status = true
-	response.Result = user
+	response.Result = signature
 
 	json.NewEncoder(w).Encode(response)
-
 }
 
-// DeleteUser : handler function for DELETE /v1/user/<id> call
-func DeleteUser(w http.ResponseWriter, r *http.Request) {
+// DeleteSignature : handler function for DELETE /v1/signature/<id> call
+func DeleteSignature(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -242,15 +237,15 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	userID, err := primitive.ObjectIDFromHex(params["id"])
+	signatureID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["customer_id"] = "Invalid User ID:" + err.Error()
+		response.Errors["product_id"] = "Invalid Signature ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	user, err := models.FindUserByID(userID)
+	signature, err := models.FindSignatureByID(signatureID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -258,7 +253,7 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = user.DeleteUser(tokenClaims)
+	err = signature.DeleteSignature(tokenClaims)
 	if err != nil {
 		response.Status = false
 		response.Errors["delete"] = "Unable to delete:" + err.Error()
@@ -270,115 +265,4 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	response.Result = "Deleted successfully"
 
 	json.NewEncoder(w).Encode(response)
-
-}
-
-// LogOut : handler for DELETE /logout
-func LogOut(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var response models.Response
-	response.Errors = make(map[string]string)
-
-	tokenClaims, err := models.AuthenticateByAccessToken(r)
-	if err != nil {
-		response.Status = false
-		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	deleted, err := db.RedisClient.Del(tokenClaims.AccessUUID).Result()
-	if err != nil || deleted == 0 {
-		response.Status = false
-		response.Errors["access_token"] = err.Error()
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(response)
-		return
-
-	}
-	response.Status = true
-	response.Result = "Successfully logged out"
-
-	json.NewEncoder(w).Encode(response)
-
-}
-
-// Me : handler function for /v1/me call
-func Me(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var response models.Response
-	response.Errors = make(map[string]string)
-
-	tokenClaims, err := models.AuthenticateByAccessToken(r)
-	if err != nil {
-		response.Status = false
-		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
-	if err != nil {
-		response.Status = false
-		response.Errors["user_id"] = "Invalid UserID:" + err.Error()
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	user, err := models.FindUserByID(userID)
-	if err != nil {
-		response.Status = false
-		response.Errors["find_user"] = err.Error()
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-	user.Password = ""
-
-	response.Status = true
-	response.Result = user
-
-	json.NewEncoder(w).Encode(response)
-}
-
-// Register : Register a new user account
-func Register(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var response models.Response
-
-	var user *models.User
-
-	// Decode data
-	if !utils.Decode(w, r, &user) {
-		return
-	}
-
-	// Validate data
-	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
-		response.Status = false
-		response.Errors = errs
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err := user.Insert()
-	if err != nil {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["insert"] = "Unable to Insert to db:" + err.Error()
-
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	response.Status = true
-	user.Password = ""
-	response.Result = user
-
-	json.NewEncoder(w).Encode(response)
-
 }

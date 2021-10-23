@@ -20,7 +20,7 @@ type Business struct {
 	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name            string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic    string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	Title           string             `bson:"title,omitempty" json:"title,omitempty`
+	Title           string             `bson:"title,omitempty" json:"title,omitempty"`
 	TitleInArabic   string             `bson:"title_in_arabic,omitempty" json:"title_in_arabic"`
 	Email           string             `bson:"email,omitempty" json:"email,omitempty"`
 	Phone           string             `bson:"phone,omitempty" json:"phone,omitempty"`
