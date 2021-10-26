@@ -24,7 +24,7 @@ type ProductUnitPrice struct {
 
 type ProductStock struct {
 	BusinessID  primitive.ObjectID `json:"business_id,omitempty" bson:"business_id,omitempty"`
-	RetailPrice int                `bson:"stock,omitempty" json:"stock,omitempty"`
+	RetailPrice float32            `bson:"stock,omitempty" json:"stock,omitempty"`
 }
 
 //Product : Product structure
@@ -185,6 +185,10 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["business_id"] = "Invalid business_id:" + stock.BusinessID.Hex() + " in stock"
 			return errs
 		}
+	}
+
+	if len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 	}
 
 	return errs

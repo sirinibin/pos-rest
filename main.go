@@ -70,6 +70,13 @@ func main() {
 	router.HandleFunc("/v1/signature", controller.UpdateSignature).Methods("PUT")
 	router.HandleFunc("/v1/signature/{id}", controller.DeleteSignature).Methods("DELETE")
 
+	//Quotation
+	router.HandleFunc("/v1/quotation", controller.CreateQuotation).Methods("POST")
+	router.HandleFunc("/v1/quotation", controller.ListQuotation).Methods("GET")
+	router.HandleFunc("/v1/quotation/{id}", controller.ViewQuotation).Methods("GET")
+	router.HandleFunc("/v1/quotation", controller.UpdateQuotation).Methods("PUT")
+	router.HandleFunc("/v1/quotation/{id}", controller.DeleteQuotation).Methods("DELETE")
+
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))
 	}()

@@ -124,6 +124,9 @@ func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, sce
 		errs["name"] = "Name is required"
 	}
 
+	if len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+	}
 	return errs
 }
 
