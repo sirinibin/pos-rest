@@ -232,7 +232,6 @@ func (product *Product) Insert() error {
 				break
 			}
 		}
-
 	}
 
 	_, err := collection.InsertOne(ctx, &product)
