@@ -33,6 +33,7 @@ type Product struct {
 	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	CategoryID   primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
 	UnitPrices   []ProductUnitPrice `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Stock        []ProductStock     `bson:"stock,omitempty" json:"stock,omitempty"`
 	Deleted      bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -126,13 +127,19 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 
 	if scenario == "update" {
 		if product.ID.IsZero() {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
 		exists, err := IsProductExists(product.ID)
-		if err != nil || !exists {
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
 			return errs
+		}
+
+		if !exists {
+			errs["id"] = "Invalid Product:" + product.ID.Hex()
 		}
 
 	}
@@ -183,6 +190,21 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 
 		if !exists {
 			errs["business_id"] = "Invalid business_id:" + stock.BusinessID.Hex() + " in stock"
+			return errs
+		}
+	}
+
+	if product.CategoryID.IsZero() {
+		errs["category_id"] = "Category is required"
+	} else {
+		exists, err := IsProductCategoryExists(product.CategoryID)
+		if err != nil {
+			errs["category_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["category_id"] = "Invalid category:" + product.CategoryID.Hex()
 			return errs
 		}
 	}

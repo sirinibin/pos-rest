@@ -27,6 +27,8 @@ type Quotation struct {
 	Products               []QuotationProduct `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy            primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	DeliveredBySignatureID primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
+	VatPercent             *float32           `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Discount               float32            `bson:"discount,omitempty" json:"discount,omitempty"`
 	Deleted                bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy              primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt              time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -131,13 +133,19 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	if scenario == "update" {
 		if quotation.ID.IsZero() {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
 		exists, err := IsQuotationExists(quotation.ID)
-		if err != nil || !exists {
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
 			return errs
+		}
+
+		if !exists {
+			errs["id"] = "Invalid Quotation:" + quotation.ID.Hex()
 		}
 
 	}
@@ -220,6 +228,10 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["quantity"] = "Quantity is required"
 		}
 
+	}
+
+	if quotation.VatPercent == nil {
+		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
 	if len(errs) > 0 {

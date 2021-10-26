@@ -116,13 +116,19 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	if scenario == "update" {
 		if customer.ID.IsZero() {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
 		exists, err := IsCustomerExists(customer.ID)
-		if err != nil || !exists {
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
 			return errs
+		}
+
+		if !exists {
+			errs["id"] = "Invalid Customer:" + customer.ID.Hex()
 		}
 
 	}

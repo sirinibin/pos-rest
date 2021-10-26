@@ -56,6 +56,13 @@ func main() {
 	router.HandleFunc("/v1/product", controller.UpdateProduct).Methods("PUT")
 	router.HandleFunc("/v1/product/{id}", controller.DeleteProduct).Methods("DELETE")
 
+	//ProductCategory
+	router.HandleFunc("/v1/product-category", controller.CreateProductCategory).Methods("POST")
+	router.HandleFunc("/v1/product-category", controller.ListProductCategory).Methods("GET")
+	router.HandleFunc("/v1/product-category/{id}", controller.ViewProductCategory).Methods("GET")
+	router.HandleFunc("/v1/product-category", controller.UpdateProductCategory).Methods("PUT")
+	router.HandleFunc("/v1/product-category/{id}", controller.DeleteProductCategory).Methods("DELETE")
+
 	//User
 	router.HandleFunc("/v1/user", controller.CreateUser).Methods("POST")
 	router.HandleFunc("/v1/user", controller.ListUser).Methods("GET")

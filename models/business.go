@@ -29,6 +29,7 @@ type Business struct {
 	AddressInArabic string             `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
 	VATNo           string             `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
 	VATNoInArabic   string             `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
+	VatPercent      *float32           `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	Deleted         bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy       primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt       time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -141,13 +142,19 @@ func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	if scenario == "update" {
 		if business.ID.IsZero() {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
 		exists, err := IsBusinessExists(business.ID)
-		if err != nil || !exists {
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
 			return errs
+		}
+
+		if !exists {
+			errs["id"] = "Invalid Business:" + business.ID.Hex()
 		}
 
 	}
@@ -166,6 +173,10 @@ func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	if govalidator.IsNull(business.Phone) {
 		errs["phone"] = "Phone is required"
+	}
+
+	if business.VatPercent == nil {
+		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
 	emailExists, err := business.IsEmailExists()

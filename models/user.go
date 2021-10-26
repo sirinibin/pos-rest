@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -51,13 +50,19 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	if scenario == "update" {
 		if user.ID.IsZero() {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
 		exists, err := IsUserExists(user.ID)
-		if err != nil || !exists {
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
 			return errs
+		}
+
+		if !exists {
+			errs["id"] = "Invalid User:" + user.ID.Hex()
 		}
 
 	}
@@ -79,7 +84,7 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 	}
 
 	emailExists, err := user.IsEmailExists()
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil {
 		errs["email"] = err.Error()
 	}
 

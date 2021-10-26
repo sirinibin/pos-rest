@@ -14,11 +14,10 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Signature : Signature structure
-type Signature struct {
+//ProductCategory : ProductCategory structure
+type ProductCategory struct {
 	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name      string             `bson:"name,omitempty" json:"name,omitempty"`
-	Signature string             `bson:"signature,omitempty" json:"signature,omitempty"`
 	Deleted   bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -28,7 +27,7 @@ type Signature struct {
 	UpdatedBy primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 }
 
-func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signature, criterias SearchCriterias, err error) {
+func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCategories []ProductCategory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -58,7 +57,7 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -73,7 +72,7 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return signatures, criterias, errors.New("Error fetching signatures:" + err.Error())
+		return productCategories, criterias, errors.New("Error fetching product categories:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -82,38 +81,30 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return signatures, criterias, errors.New("Cursor error:" + err.Error())
+			return productCategories, criterias, errors.New("Cursor error:" + err.Error())
 		}
-		signature := Signature{}
-		err = cur.Decode(&signature)
+		productCategory := ProductCategory{}
+		err = cur.Decode(&productCategory)
 		if err != nil {
-			return signatures, criterias, errors.New("Cursor decode error:" + err.Error())
+			return productCategories, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
-		signatures = append(signatures, signature)
+		productCategories = append(productCategories, productCategory)
 	} //end for loop
 
-	return signatures, criterias, nil
+	return productCategories, criterias, nil
 }
 
-func GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return collection.CountDocuments(ctx, filter)
-}
-
-func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (productCategory *ProductCategory) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
 
 	if scenario == "update" {
-		if signature.ID.IsZero() {
+		if productCategory.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsSignatureExists(signature.ID)
+		exists, err := IsProductCategoryExists(productCategory.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -121,43 +112,75 @@ func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, sce
 		}
 
 		if !exists {
-			errs["id"] = "Invalid Signature:" + signature.ID.Hex()
+			errs["id"] = "Invalid Product Category:" + productCategory.ID.Hex()
 		}
 
 	}
 
-	if govalidator.IsNull(signature.Name) {
+	if govalidator.IsNull(productCategory.Name) {
 		errs["name"] = "Name is required"
 	}
 
-	if len(errs) > 0 {
+	nameExists, err := productCategory.IsNameExists()
+	if err != nil {
+		errs["name"] = err.Error()
+	}
+
+	if nameExists {
+		errs["name"] = "Name is Already in use"
+	}
+
+	if nameExists {
+		w.WriteHeader(http.StatusConflict)
+	} else if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
+
 	return errs
 }
 
-func (signature *Signature) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
+func (productCategory *ProductCategory) IsNameExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	signature.ID = primitive.NewObjectID()
-	_, err := collection.InsertOne(ctx, &signature)
+	count := int64(0)
+
+	if productCategory.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"name": productCategory.Name,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"name": productCategory.Name,
+			"_id":  bson.M{"$ne": productCategory.ID},
+		})
+	}
+
+	return (count == 1), err
+}
+
+func (productCategory *ProductCategory) Insert() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	productCategory.ID = primitive.NewObjectID()
+	_, err := collection.InsertOne(ctx, &productCategory)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (signature *Signature) Update() (*Signature, error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
+func (productCategory *ProductCategory) Update() (*ProductCategory, error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 	updateResult, err := collection.UpdateOne(
 		ctx,
-		bson.M{"_id": signature.ID},
-		bson.M{"$set": signature},
+		bson.M{"_id": productCategory.ID},
+		bson.M{"$set": productCategory},
 		updateOptions,
 	)
 	if err != nil {
@@ -165,13 +188,13 @@ func (signature *Signature) Update() (*Signature, error) {
 	}
 
 	if updateResult.MatchedCount > 0 {
-		return signature, nil
+		return productCategory, nil
 	}
 	return nil, nil
 }
 
-func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
+func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenClaims) (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -182,14 +205,14 @@ func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error)
 		return err
 	}
 
-	signature.Deleted = true
-	signature.DeletedBy = userID
-	signature.DeletedAt = time.Now().Local()
+	productCategory.Deleted = true
+	productCategory.DeletedBy = userID
+	productCategory.DeletedAt = time.Now().Local()
 
 	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": signature.ID},
-		bson.M{"$set": signature},
+		bson.M{"_id": productCategory.ID},
+		bson.M{"$set": productCategory},
 		updateOptions,
 	)
 	if err != nil {
@@ -199,23 +222,23 @@ func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error)
 	return nil
 }
 
-func FindSignatureByID(ID primitive.ObjectID) (signature *Signature, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
+func FindProductCategoryByID(ID primitive.ObjectID) (productCategory *ProductCategory, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	err = collection.FindOne(ctx,
 		bson.M{"_id": ID}).
-		Decode(&signature)
+		Decode(&productCategory)
 	if err != nil {
 		return nil, err
 	}
 
-	return signature, err
+	return productCategory, err
 }
 
-func IsSignatureExists(ID primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
+func IsProductCategoryExists(ID primitive.ObjectID) (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
