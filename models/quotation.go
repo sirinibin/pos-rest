@@ -25,7 +25,7 @@ type QuotationProduct struct {
 type Quotation struct {
 	ID                     primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Code                   string             `bson:"code,omitempty" json:"code,omitempty"`
-	BusinessID             primitive.ObjectID `json:"business_id,omitempty" bson:"business_id,omitempty"`
+	StoreID                primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID             primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Products               []QuotationProduct `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy            primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
@@ -51,13 +51,13 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 
 	criterias.SearchBy = make(map[string]interface{})
 
-	keys, ok := r.URL.Query()["search[business_id]"]
+	keys, ok := r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
-		businessID, err := primitive.ObjectIDFromHex(keys[0])
+		storeID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
 			return quotations, criterias, err
 		}
-		criterias.SearchBy["business_id"] = businessID
+		criterias.SearchBy["store_id"] = storeID
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
@@ -153,17 +153,17 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	}
 
-	if quotation.BusinessID.IsZero() {
-		errs["business_id"] = "Business is required"
+	if quotation.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
 	} else {
-		exists, err := IsBusinessExists(quotation.BusinessID)
+		exists, err := IsStoreExists(quotation.StoreID)
 		if err != nil {
-			errs["business_id"] = err.Error()
+			errs["store_id"] = err.Error()
 			return errs
 		}
 
 		if !exists {
-			errs["business_id"] = "Invalid business:" + quotation.BusinessID.Hex()
+			errs["store_id"] = "Invalid store:" + quotation.StoreID.Hex()
 			return errs
 		}
 	}

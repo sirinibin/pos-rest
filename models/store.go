@@ -15,8 +15,8 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Business : Business structure
-type Business struct {
+//Store : Store structure
+type Store struct {
 	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name            string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic    string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
@@ -63,7 +63,7 @@ func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
 	return sortBy
 }
 
-func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Business, criterias SearchCriterias, err error) {
+func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -98,7 +98,7 @@ func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Busine
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -113,7 +113,7 @@ func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Busine
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return businesses, criterias, errors.New("Error fetching businesses:" + err.Error())
+		return storees, criterias, errors.New("Error fetching storees:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -122,31 +122,31 @@ func SearchBusiness(w http.ResponseWriter, r *http.Request) (businesses []Busine
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return businesses, criterias, errors.New("Cursor error:" + err.Error())
+			return storees, criterias, errors.New("Cursor error:" + err.Error())
 		}
-		business := Business{}
-		err = cur.Decode(&business)
+		store := Store{}
+		err = cur.Decode(&store)
 		if err != nil {
-			return businesses, criterias, errors.New("Cursor decode error:" + err.Error())
+			return storees, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
-		businesses = append(businesses, business)
+		storees = append(storees, store)
 	} //end for loop
 
-	return businesses, criterias, nil
+	return storees, criterias, nil
 
 }
 
-func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
 
 	if scenario == "update" {
-		if business.ID.IsZero() {
+		if store.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsBusinessExists(business.ID)
+		exists, err := IsStoreExists(store.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -154,32 +154,32 @@ func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 
 		if !exists {
-			errs["id"] = "Invalid Business:" + business.ID.Hex()
+			errs["id"] = "Invalid Store:" + store.ID.Hex()
 		}
 
 	}
 
-	if govalidator.IsNull(business.Name) {
+	if govalidator.IsNull(store.Name) {
 		errs["name"] = "Name is required"
 	}
 
-	if govalidator.IsNull(business.Email) {
+	if govalidator.IsNull(store.Email) {
 		errs["email"] = "E-mail is required"
 	}
 
-	if govalidator.IsNull(business.Address) {
+	if govalidator.IsNull(store.Address) {
 		errs["address"] = "Address is required"
 	}
 
-	if govalidator.IsNull(business.Phone) {
+	if govalidator.IsNull(store.Phone) {
 		errs["phone"] = "Phone is required"
 	}
 
-	if business.VatPercent == nil {
+	if store.VatPercent == nil {
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	emailExists, err := business.IsEmailExists()
+	emailExists, err := store.IsEmailExists()
 	if err != nil {
 		errs["email"] = err.Error()
 	}
@@ -197,28 +197,28 @@ func (business *Business) Validate(w http.ResponseWriter, r *http.Request, scena
 	return errs
 }
 
-func (business *Business) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (store *Store) Insert() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	business.ID = primitive.NewObjectID()
-	_, err := collection.InsertOne(ctx, &business)
+	store.ID = primitive.NewObjectID()
+	_, err := collection.InsertOne(ctx, &store)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (business *Business) Update() (*Business, error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (store *Store) Update() (*Store, error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 	updateResult, err := collection.UpdateOne(
 		ctx,
-		bson.M{"_id": business.ID},
-		bson.M{"$set": business},
+		bson.M{"_id": store.ID},
+		bson.M{"$set": store},
 		updateOptions,
 	)
 	if err != nil {
@@ -226,13 +226,13 @@ func (business *Business) Update() (*Business, error) {
 	}
 
 	if updateResult.MatchedCount > 0 {
-		return business, nil
+		return store, nil
 	}
 	return nil, nil
 }
 
-func (business *Business) DeleteBusiness(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -243,14 +243,14 @@ func (business *Business) DeleteBusiness(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
-	business.Deleted = true
-	business.DeletedBy = userID
-	business.DeletedAt = time.Now().Local()
+	store.Deleted = true
+	store.DeletedBy = userID
+	store.DeletedAt = time.Now().Local()
 
 	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": business.ID},
-		bson.M{"$set": business},
+		bson.M{"_id": store.ID},
+		bson.M{"$set": store},
 		updateOptions,
 	)
 	if err != nil {
@@ -260,43 +260,43 @@ func (business *Business) DeleteBusiness(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindBusinessByID(ID primitive.ObjectID) (business *Business, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func FindStoreByID(ID primitive.ObjectID) (store *Store, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	err = collection.FindOne(ctx,
 		bson.M{"_id": ID}).
-		Decode(&business)
+		Decode(&store)
 	if err != nil {
 		return nil, err
 	}
 
-	return business, err
+	return store, err
 }
 
-func (business *Business) IsEmailExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func (store *Store) IsEmailExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
 
-	if business.ID.IsZero() {
+	if store.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": business.Email,
+			"email": store.Email,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": business.Email,
-			"_id":   bson.M{"$ne": business.ID},
+			"email": store.Email,
+			"_id":   bson.M{"$ne": store.ID},
 		})
 	}
 
 	return (count == 1), err
 }
 
-func IsBusinessExists(ID primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("business")
+func IsStoreExists(ID primitive.ObjectID) (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)

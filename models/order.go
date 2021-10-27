@@ -25,7 +25,7 @@ type OrderProduct struct {
 type Order struct {
 	ID                     primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Code                   string             `bson:"code,omitempty" json:"code,omitempty"`
-	BusinessID             primitive.ObjectID `json:"business_id,omitempty" bson:"business_id,omitempty"`
+	StoreID                primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID             primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Products               []OrderProduct     `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy            primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
@@ -51,13 +51,13 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 
 	criterias.SearchBy = make(map[string]interface{})
 
-	keys, ok := r.URL.Query()["search[business_id]"]
+	keys, ok := r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
-		businessID, err := primitive.ObjectIDFromHex(keys[0])
+		storeID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
 			return orders, criterias, err
 		}
-		criterias.SearchBy["business_id"] = businessID
+		criterias.SearchBy["store_id"] = storeID
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
@@ -153,17 +153,17 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	}
 
-	if order.BusinessID.IsZero() {
-		errs["business_id"] = "Business is required"
+	if order.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
 	} else {
-		exists, err := IsBusinessExists(order.BusinessID)
+		exists, err := IsStoreExists(order.StoreID)
 		if err != nil {
-			errs["business_id"] = err.Error()
+			errs["store_id"] = err.Error()
 			return errs
 		}
 
 		if !exists {
-			errs["business_id"] = "Invalid business:" + order.BusinessID.Hex()
+			errs["store_id"] = "Invalid store:" + order.StoreID.Hex()
 			return errs
 		}
 	}
@@ -231,6 +231,27 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["quantity"] = "Quantity is required"
 		}
 
+		stock, err := GetProductStockInStore(product.ProductID, order.StoreID, product.Quantity)
+		if err != nil {
+			errs["quantity"] = err.Error()
+			return errs
+		}
+
+		if stock < product.Quantity {
+			productObject, err := FindProductByID(product.ProductID)
+			if err != nil {
+				errs["product"] = err.Error()
+				return errs
+			}
+
+			storeObject, err := FindStoreByID(order.StoreID)
+			if err != nil {
+				errs["store"] = err.Error()
+				return errs
+			}
+
+			errs["product_"+product.ProductID.Hex()] = "Product: " + productObject.Name + " stock is only " + strconv.Itoa(stock) + " in Store: " + storeObject.Name
+		}
 	}
 
 	if order.VatPercent == nil {
@@ -241,6 +262,45 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		w.WriteHeader(http.StatusBadRequest)
 	}
 	return errs
+}
+
+func GetProductStockInStore(productID primitive.ObjectID, storeID primitive.ObjectID, orderQuantity int) (stock int, err error) {
+	product, err := FindProductByID(productID)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, stock := range product.Stock {
+		if stock.StoreID.Hex() == storeID.Hex() {
+			return stock.Stock, nil
+		}
+	}
+
+	return 0, err
+}
+
+func (order *Order) DecreaseProductStockInStore() (err error) {
+	for _, orderProduct := range order.Products {
+		product, err := FindProductByID(orderProduct.ProductID)
+		if err != nil {
+			return err
+		}
+
+		for k, stock := range product.Stock {
+			if stock.StoreID.Hex() == order.StoreID.Hex() {
+				product.Stock[k].Stock -= orderProduct.Quantity
+				break
+			}
+		}
+
+		product, err = product.Update()
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
 }
 
 func (order *Order) Insert() error {
@@ -264,6 +324,15 @@ func (order *Order) Insert() error {
 	if err != nil {
 		return err
 	}
+
+	err = order.DecreaseProductStockInStore()
+	if err != nil {
+		err = order.HardDelete()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -344,6 +413,18 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
+	return nil
+}
+
+func (order *Order) HardDelete() (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = collection.DeleteOne(ctx, bson.M{"_id": order.ID})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -17,14 +17,14 @@ import (
 )
 
 type ProductUnitPrice struct {
-	BusinessID     primitive.ObjectID `json:"business_id,omitempty" bson:"business_id,omitempty"`
+	StoreID        primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	WholeSalePrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 	RetailPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 }
 
 type ProductStock struct {
-	BusinessID  primitive.ObjectID `json:"business_id,omitempty" bson:"business_id,omitempty"`
-	RetailPrice float32            `bson:"stock,omitempty" json:"stock,omitempty"`
+	StoreID primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	Stock   int                `bson:"stock,omitempty" json:"stock"`
 }
 
 //Product : Product structure
@@ -161,35 +161,35 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 	}
 
 	for _, price := range product.UnitPrices {
-		if price.BusinessID.IsZero() {
-			errs["id"] = "business_id is required for unit price"
+		if price.StoreID.IsZero() {
+			errs["id"] = "store_id is required for unit price"
 			return errs
 		}
-		exists, err := IsBusinessExists(price.BusinessID)
+		exists, err := IsStoreExists(price.StoreID)
 		if err != nil {
 			errs["id"] = err.Error()
 			return errs
 		}
 
 		if !exists {
-			errs["business_id"] = "Invalid business_id:" + price.BusinessID.Hex() + " in unit_price"
+			errs["store_id"] = "Invalid store_id:" + price.StoreID.Hex() + " in unit_price"
 			return errs
 		}
 	}
 
 	for _, stock := range product.Stock {
-		if stock.BusinessID.IsZero() {
-			errs["id"] = "business_id is required for stock"
+		if stock.StoreID.IsZero() {
+			errs["id"] = "store_id is required for stock"
 			return errs
 		}
-		exists, err := IsBusinessExists(stock.BusinessID)
+		exists, err := IsStoreExists(stock.StoreID)
 		if err != nil {
 			errs["id"] = err.Error()
 			return errs
 		}
 
 		if !exists {
-			errs["business_id"] = "Invalid business_id:" + stock.BusinessID.Hex() + " in stock"
+			errs["store_id"] = "Invalid store_id:" + stock.StoreID.Hex() + " in stock"
 			return errs
 		}
 	}

@@ -35,12 +35,12 @@ func main() {
 	// Logout
 	router.HandleFunc("/v1/logout", controller.LogOut).Methods("DELETE")
 
-	//Business
-	router.HandleFunc("/v1/business", controller.CreateBusiness).Methods("POST")
-	router.HandleFunc("/v1/business", controller.ListBusiness).Methods("GET")
-	router.HandleFunc("/v1/business/{id}", controller.ViewBusiness).Methods("GET")
-	router.HandleFunc("/v1/business", controller.UpdateBusiness).Methods("PUT")
-	router.HandleFunc("/v1/business/{id}", controller.DeleteBusiness).Methods("DELETE")
+	//Store
+	router.HandleFunc("/v1/store", controller.CreateStore).Methods("POST")
+	router.HandleFunc("/v1/store", controller.ListStore).Methods("GET")
+	router.HandleFunc("/v1/store/{id}", controller.ViewStore).Methods("GET")
+	router.HandleFunc("/v1/store", controller.UpdateStore).Methods("PUT")
+	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
 
 	//Customer
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")
