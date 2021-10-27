@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"math/rand"
 	"net/http"
@@ -36,6 +38,7 @@ type Product struct {
 	CategoryID   primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
 	UnitPrices   []ProductUnitPrice `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Stock        []ProductStock     `bson:"stock,omitempty" json:"stock,omitempty"`
+	Images       []string           `bson:"images,omitempty" json:"images,omitempty"`
 	Deleted      bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy    primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt    time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -234,11 +237,48 @@ func (product *Product) Insert() error {
 		}
 	}
 
+	if len(product.Images) > 0 {
+		err := product.SaveImages()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err := collection.InsertOne(ctx, &product)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (product *Product) SaveImages() error {
+
+	for k, image := range product.Images {
+		content, err := base64.StdEncoding.DecodeString(image)
+		if err != nil {
+			return err
+		}
+
+		extension, err := GetFileExtensionFromBase64(content)
+		if err != nil {
+			return err
+		}
+
+		filename := "images/products/" + GenerateFileName("product_", extension)
+		err = SaveBase64File(filename, content)
+		if err != nil {
+			return err
+		}
+		product.Images[k] = filename
+	}
+
+	return nil
+}
+
+func GenerateFileName(prefix, suffix string) string {
+	randBytes := make([]byte, 16)
+	rand.Read(randBytes)
+	return prefix + hex.EncodeToString(randBytes) + suffix
 }
 
 func GenerateItemCode(n int) string {

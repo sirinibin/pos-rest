@@ -3,9 +3,7 @@ package models
 import (
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
-	"math/rand"
 	"mime"
 	"net/http"
 	"os"
@@ -188,11 +186,6 @@ func (signature *Signature) SaveSignatureFile() error {
 	}
 	signature.Signature = filename
 	return nil
-}
-func GenerateFileName(prefix, suffix string) string {
-	randBytes := make([]byte, 16)
-	rand.Read(randBytes)
-	return prefix + hex.EncodeToString(randBytes) + suffix
 }
 
 func SaveBase64File(filename string, content []byte) error {
