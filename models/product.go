@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -31,21 +32,22 @@ type ProductStock struct {
 
 //Product : Product structure
 type Product struct {
-	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	CategoryID   primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
-	UnitPrices   []ProductUnitPrice `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	Stock        []ProductStock     `bson:"stock,omitempty" json:"stock,omitempty"`
-	Images       []string           `bson:"images,omitempty" json:"images,omitempty"`
-	Deleted      bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy    primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt    time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt    time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt    time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy    primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy    primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID            primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Name          string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic  string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode      string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	CategoryID    primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
+	UnitPrices    []ProductUnitPrice `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Stock         []ProductStock     `bson:"stock,omitempty" json:"stock,omitempty"`
+	Images        []string           `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent []string           `json:"images_content,omitempty"`
+	Deleted       bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedAt     time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 }
 
 func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, criterias SearchCriterias, err error) {
@@ -212,11 +214,27 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
+	for k, imageContent := range product.ImagesContent {
+		valid, err := IsStringBase64(imageContent)
+		if err != nil {
+			errs["images_content"] = err.Error()
+			return errs
+		}
+
+		if !valid {
+			errs["images_"+strconv.Itoa(k)] = "Invalid base64 string"
+		}
+	}
+
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
 	return errs
+}
+
+func IsStringBase64(content string) (bool, error) {
+	return regexp.MatchString(`^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$`, content)
 }
 
 func (product *Product) Insert() error {
@@ -237,7 +255,7 @@ func (product *Product) Insert() error {
 		}
 	}
 
-	if len(product.Images) > 0 {
+	if len(product.ImagesContent) > 0 {
 		err := product.SaveImages()
 		if err != nil {
 			return err
@@ -253,8 +271,8 @@ func (product *Product) Insert() error {
 
 func (product *Product) SaveImages() error {
 
-	for k, image := range product.Images {
-		content, err := base64.StdEncoding.DecodeString(image)
+	for _, imageContent := range product.ImagesContent {
+		content, err := base64.StdEncoding.DecodeString(imageContent)
 		if err != nil {
 			return err
 		}
@@ -269,8 +287,9 @@ func (product *Product) SaveImages() error {
 		if err != nil {
 			return err
 		}
-		product.Images[k] = filename
+		product.Images = append(product.Images, filename)
 	}
+	product.ImagesContent = []string{}
 
 	return nil
 }
@@ -296,6 +315,14 @@ func (product *Product) Update() (*Product, error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	if len(product.ImagesContent) > 0 {
+		err := product.SaveImages()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": product.ID},

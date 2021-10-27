@@ -131,7 +131,25 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var product *models.Product
-	// Decode data
+
+	params := mux.Vars(r)
+
+	productID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid Product ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	product, err = models.FindProductByID(productID)
+	if err != nil {
+		response.Status = false
+		response.Errors["product"] = "Unable to find product:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if !utils.Decode(w, r, &product) {
 		return
 	}

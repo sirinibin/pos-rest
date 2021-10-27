@@ -84,6 +84,7 @@ func CreateSignature(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	//models.UserID = tokenClaims.UserID
 
 	signature.CreatedBy = userID
 	signature.UpdatedBy = userID
@@ -131,6 +132,25 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var signature *models.Signature
+
+	params := mux.Vars(r)
+
+	signatureID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid Signature ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	signature, err = models.FindSignatureByID(signatureID)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &signature) {
 		return

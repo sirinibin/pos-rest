@@ -131,6 +131,27 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var productCategory *models.ProductCategory
+
+	params := mux.Vars(r)
+
+	productCategoryID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_category_id"] = "Invalid Product Category ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productCategory, err = models.FindProductCategoryByID(productCategoryID)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &productCategory) {
 		return

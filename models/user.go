@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strconv"
@@ -16,18 +17,20 @@ import (
 ) //import "encoding/json"
 
 type User struct {
-	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name      string             `bson:"name" json:"name"`
-	Email     string             `bson:"email" json:"email"`
-	Mob       string             `bson:"mob" json:"mob"`
-	Password  string             `bson:"password" json:"password,omitempty"`
-	Deleted   bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Name         string             `bson:"name" json:"name"`
+	Email        string             `bson:"email" json:"email"`
+	Mob          string             `bson:"mob" json:"mob"`
+	Password     string             `bson:"password" json:"password,omitempty"`
+	Photo        string             `bson:"photo,omitempty" json:"photo,omitempty"`
+	PhotoContent string             `json:"photo_content,omitempty"`
+	Deleted      bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy    primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedAt    time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt    time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt    time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy    primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy    primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 }
 
 func FindUserByEmail(email string) (user *User, err error) {
@@ -81,6 +84,17 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	if govalidator.IsNull(user.Password) {
 		errs["password"] = "Password is required"
+	}
+
+	if !govalidator.IsNull(user.PhotoContent) {
+		valid, err := IsStringBase64(user.PhotoContent)
+		if err != nil {
+			errs["photo_content"] = err.Error()
+		}
+
+		if !valid {
+			errs["photo_content"] = "Invalid base64 string"
+		}
 	}
 
 	emailExists, err := user.IsEmailExists()
@@ -187,10 +201,38 @@ func (user *User) Insert() error {
 	// Insert new record
 	user.Password = HashPassword(user.Password)
 
+	if !govalidator.IsNull(user.PhotoContent) {
+		err := user.SavePhoto()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err := collection.InsertOne(ctx, &user)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (user *User) SavePhoto() error {
+	content, err := base64.StdEncoding.DecodeString(user.PhotoContent)
+	if err != nil {
+		return err
+	}
+
+	extension, err := GetFileExtensionFromBase64(content)
+	if err != nil {
+		return err
+	}
+
+	filename := "images/users/user_" + user.ID.Hex() + extension
+	err = SaveBase64File(filename, content)
+	if err != nil {
+		return err
+	}
+	user.Photo = filename
+	user.PhotoContent = ""
 	return nil
 }
 
@@ -205,6 +247,13 @@ func (user *User) Update() (*User, error) {
 
 	if !govalidator.IsNull(user.Password) {
 		user.Password = HashPassword(user.Password)
+	}
+
+	if !govalidator.IsNull(user.PhotoContent) {
+		err := user.SavePhoto()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	updateResult, err := collection.UpdateOne(

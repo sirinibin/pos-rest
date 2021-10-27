@@ -19,16 +19,17 @@ import (
 
 //Signature : Signature structure
 type Signature struct {
-	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name      string             `bson:"name,omitempty" json:"name,omitempty"`
-	Signature string             `bson:"signature,omitempty" json:"signature,omitempty"`
-	Deleted   bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID               primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
+	Signature        string             `bson:"signature,omitempty" json:"signature,omitempty"`
+	SignatureContent string             `json:"signature_content,omitempty"`
+	Deleted          bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy        primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedAt        time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt        time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt        time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy        primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy        primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 }
 
 func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signature, criterias SearchCriterias, err error) {
@@ -133,10 +134,60 @@ func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, sce
 		errs["name"] = "Name is required"
 	}
 
-	if len(errs) > 0 {
+	if signature.ID.IsZero() && govalidator.IsNull(signature.SignatureContent) {
+		errs["signature_content"] = "Signature is required"
+	}
+
+	if !govalidator.IsNull(signature.SignatureContent) {
+		valid, err := IsStringBase64(signature.SignatureContent)
+		if err != nil {
+			errs["signature_content"] = err.Error()
+			return errs
+		}
+
+		if !valid {
+			errs["signature_content"] = "Invalid base64 string"
+		}
+	}
+
+	nameExists, err := signature.IsNameExists()
+	if err != nil {
+		errs["name"] = err.Error()
+	}
+
+	if nameExists {
+		errs["name"] = "Name is Already in use"
+	}
+
+	if nameExists {
+		w.WriteHeader(http.StatusConflict)
+	} else if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
+
 	return errs
+}
+
+func (signature *Signature) IsNameExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if signature.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"name":       signature.Name,
+			"created_by": signature.CreatedBy,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"name":       signature.Name,
+			"_id":        bson.M{"$ne": signature.ID},
+			"created_by": signature.CreatedBy,
+		})
+	}
+
+	return (count > 0), err
 }
 
 func GetFileExtensionFromBase64(content []byte) (ext string, err error) {
@@ -154,7 +205,8 @@ func (signature *Signature) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	signature.ID = primitive.NewObjectID()
-	if !govalidator.IsNull(signature.Signature) {
+
+	if !govalidator.IsNull(signature.SignatureContent) {
 		err := signature.SaveSignatureFile()
 		if err != nil {
 			return err
@@ -169,7 +221,7 @@ func (signature *Signature) Insert() error {
 }
 
 func (signature *Signature) SaveSignatureFile() error {
-	content, err := base64.StdEncoding.DecodeString(signature.Signature)
+	content, err := base64.StdEncoding.DecodeString(signature.SignatureContent)
 	if err != nil {
 		return err
 	}
@@ -185,6 +237,7 @@ func (signature *Signature) SaveSignatureFile() error {
 		return err
 	}
 	signature.Signature = filename
+	signature.SignatureContent = ""
 	return nil
 }
 
@@ -214,6 +267,14 @@ func (signature *Signature) Update() (*Signature, error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	if !govalidator.IsNull(signature.SignatureContent) {
+		err := signature.SaveSignatureFile()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": signature.ID},

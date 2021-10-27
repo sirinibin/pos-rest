@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strconv"
@@ -30,6 +31,8 @@ type Store struct {
 	VATNo           string             `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
 	VATNoInArabic   string             `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
 	VatPercent      *float32           `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Logo            string             `bson:"logo,omitempty" json:"logo,omitempty"`
+	LogoContent     string             `json:"logo_content,omitempty"`
 	Deleted         bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy       primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt       time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -179,6 +182,23 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
+	if store.ID.IsZero() {
+		if govalidator.IsNull(store.LogoContent) {
+			errs["logo_content"] = "Logo is required"
+		}
+	}
+
+	if !govalidator.IsNull(store.LogoContent) {
+		valid, err := IsStringBase64(store.LogoContent)
+		if err != nil {
+			errs["logo_content"] = err.Error()
+		}
+
+		if !valid {
+			errs["logo_content"] = "Invalid base64 string"
+		}
+	}
+
 	emailExists, err := store.IsEmailExists()
 	if err != nil {
 		errs["email"] = err.Error()
@@ -202,10 +222,39 @@ func (store *Store) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	store.ID = primitive.NewObjectID()
+
+	if !govalidator.IsNull(store.LogoContent) {
+		err := store.SaveLogoFile()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err := collection.InsertOne(ctx, &store)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (store *Store) SaveLogoFile() error {
+	content, err := base64.StdEncoding.DecodeString(store.LogoContent)
+	if err != nil {
+		return err
+	}
+
+	extension, err := GetFileExtensionFromBase64(content)
+	if err != nil {
+		return err
+	}
+
+	filename := "images/store/logo_" + store.ID.Hex() + extension
+	err = SaveBase64File(filename, content)
+	if err != nil {
+		return err
+	}
+	store.Logo = filename
+	store.LogoContent = ""
 	return nil
 }
 
@@ -215,6 +264,15 @@ func (store *Store) Update() (*Store, error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	if !govalidator.IsNull(store.LogoContent) {
+		err := store.SaveLogoFile()
+		if err != nil {
+			return nil, err
+		}
+	}
+	store.LogoContent = ""
+
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": store.ID},

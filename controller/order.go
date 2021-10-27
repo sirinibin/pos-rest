@@ -131,6 +131,27 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var order *models.Order
+
+	params := mux.Vars(r)
+
+	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["order_id"] = "Invalid Order ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err = models.FindOrderByID(orderID)
+	if err != nil {
+		response.Status = false
+		response.Errors["find_order"] = "Unable to find order:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &order) {
 		return

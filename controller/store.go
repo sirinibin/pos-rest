@@ -132,6 +132,25 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var store *models.Store
+
+	params := mux.Vars(r)
+
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err = models.FindStoreByID(storeID)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &store) {
 		return

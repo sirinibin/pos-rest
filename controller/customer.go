@@ -132,6 +132,25 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var customer *models.Customer
+
+	params := mux.Vars(r)
+
+	customerID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["customer_id"] = "Invalid Customer ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customer, err = models.FindCustomerByID(customerID)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &customer) {
 		return
@@ -268,5 +287,4 @@ func DeleteCustomer(w http.ResponseWriter, r *http.Request) {
 	response.Result = "Deleted successfully"
 
 	json.NewEncoder(w).Encode(response)
-
 }

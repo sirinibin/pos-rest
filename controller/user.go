@@ -133,6 +133,25 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user *models.User
+
+	params := mux.Vars(r)
+
+	customerID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["customer_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	user, err = models.FindUserByID(customerID)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &user) {
 		return

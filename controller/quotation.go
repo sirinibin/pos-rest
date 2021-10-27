@@ -131,6 +131,27 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var quotation *models.Quotation
+
+	params := mux.Vars(r)
+
+	quotationID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid Quotation ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	quotation, err = models.FindQuotationByID(quotationID)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &quotation) {
 		return
