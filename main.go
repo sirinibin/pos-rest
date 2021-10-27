@@ -91,6 +91,8 @@ func main() {
 	router.HandleFunc("/v1/order", controller.UpdateOrder).Methods("PUT")
 	router.HandleFunc("/v1/order/{id}", controller.DeleteOrder).Methods("DELETE")
 
+	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
+
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))
 	}()

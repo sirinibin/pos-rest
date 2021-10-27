@@ -2,8 +2,13 @@ package models
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
+	"math/rand"
+	"mime"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -136,15 +141,77 @@ func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, sce
 	return errs
 }
 
+func GetFileExtensionFromBase64(content []byte) (ext string, err error) {
+	filetype := http.DetectContentType(content)
+	extensions, err := mime.ExtensionsByType(filetype)
+	if err != nil {
+		return "", err
+	}
+
+	return extensions[len(extensions)-1], nil
+}
+
 func (signature *Signature) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	signature.ID = primitive.NewObjectID()
+	if !govalidator.IsNull(signature.Signature) {
+		err := signature.SaveSignatureFile()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err := collection.InsertOne(ctx, &signature)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (signature *Signature) SaveSignatureFile() error {
+	content, err := base64.StdEncoding.DecodeString(signature.Signature)
+	if err != nil {
+		return err
+	}
+
+	extension, err := GetFileExtensionFromBase64(content)
+	if err != nil {
+		return err
+	}
+
+	filename := "images/signatures/signature_" + signature.ID.Hex() + extension
+	err = SaveBase64File(filename, content)
+	if err != nil {
+		return err
+	}
+	signature.Signature = filename
+	return nil
+}
+func GenerateFileName(prefix, suffix string) string {
+	randBytes := make([]byte, 16)
+	rand.Read(randBytes)
+	return prefix + hex.EncodeToString(randBytes) + suffix
+}
+
+func SaveBase64File(filename string, content []byte) error {
+
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(content); err != nil {
+		if err != nil {
+			return err
+		}
+	}
+	if err := f.Sync(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
