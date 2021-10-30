@@ -514,7 +514,7 @@ func FindOrderByID(ID primitive.ObjectID) (order *Order, err error) {
 	defer cancel()
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}).
+		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
 		Decode(&order)
 	if err != nil {
 		return nil, err

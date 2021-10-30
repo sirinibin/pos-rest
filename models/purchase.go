@@ -493,7 +493,7 @@ func FindPurchaseByID(ID primitive.ObjectID) (purchase *Purchase, err error) {
 	defer cancel()
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}).
+		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
 		Decode(&purchase)
 	if err != nil {
 		return nil, err

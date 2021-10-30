@@ -361,6 +361,19 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if purchase.Status == "delivered" && !purchase.Deleted {
+		err = purchase.RemoveStock()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	response.Status = true
 	response.Result = "Deleted successfully"
 
