@@ -36,6 +36,7 @@ func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCateg
 	}
 
 	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
@@ -228,7 +229,7 @@ func FindProductCategoryByID(ID primitive.ObjectID) (productCategory *ProductCat
 	defer cancel()
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}).
+		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
 		Decode(&productCategory)
 	if err != nil {
 		return nil, err

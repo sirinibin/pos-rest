@@ -51,6 +51,7 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 	}
 
 	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	keys, ok := r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
@@ -354,7 +355,7 @@ func FindQuotationByID(ID primitive.ObjectID) (quotation *Quotation, err error) 
 	defer cancel()
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}).
+		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
 		Decode(&quotation)
 	if err != nil {
 		return nil, err

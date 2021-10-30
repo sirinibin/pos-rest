@@ -75,6 +75,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 	}
 
 	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
@@ -324,7 +325,7 @@ func FindStoreByID(ID primitive.ObjectID) (store *Store, err error) {
 	defer cancel()
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}).
+		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
 		Decode(&store)
 	if err != nil {
 		return nil, err

@@ -41,6 +41,7 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 	}
 
 	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
@@ -326,7 +327,7 @@ func FindSignatureByID(ID primitive.ObjectID) (signature *Signature, err error) 
 	defer cancel()
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}).
+		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
 		Decode(&signature)
 	if err != nil {
 		return nil, err

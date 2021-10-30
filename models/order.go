@@ -53,6 +53,7 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 	}
 
 	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	keys, ok := r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
