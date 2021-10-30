@@ -91,6 +91,20 @@ func main() {
 	router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 	router.HandleFunc("/v1/order/{id}", controller.DeleteOrder).Methods("DELETE")
 
+	//Vendor
+	router.HandleFunc("/v1/vendor", controller.CreateVendor).Methods("POST")
+	router.HandleFunc("/v1/vendor", controller.ListVendor).Methods("GET")
+	router.HandleFunc("/v1/vendor/{id}", controller.ViewVendor).Methods("GET")
+	router.HandleFunc("/v1/vendor/{id}", controller.UpdateVendor).Methods("PUT")
+	router.HandleFunc("/v1/vendor/{id}", controller.DeleteVendor).Methods("DELETE")
+
+	//Purchase
+	router.HandleFunc("/v1/purchase", controller.CreatePurchase).Methods("POST")
+	router.HandleFunc("/v1/purchase", controller.ListPurchase).Methods("GET")
+	router.HandleFunc("/v1/purchase/{id}", controller.ViewPurchase).Methods("GET")
+	router.HandleFunc("/v1/purchase/{id}", controller.UpdatePurchase).Methods("PUT")
+	router.HandleFunc("/v1/purchase/{id}", controller.DeletePurchase).Methods("DELETE")
+
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 
 	go func() {

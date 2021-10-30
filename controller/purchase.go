@@ -11,8 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// ListOrder : handler for GET /order
-func ListOrder(w http.ResponseWriter, r *http.Request) {
+// ListPurchase : handler for GET /purchase
+func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -26,38 +26,38 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orders := []models.Order{}
+	purchases := []models.Purchase{}
 
-	orders, criterias, err := models.SearchOrder(w, r)
+	purchases, criterias, err := models.SearchPurchase(w, r)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Unable to find orders:" + err.Error()
+		response.Errors["find"] = "Unable to find purchases:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "order")
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchase")
 	if err != nil {
 		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
+		response.Errors["total_count"] = "Unable to find total count of purchases:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	if len(orders) == 0 {
+	if len(purchases) == 0 {
 		response.Result = []interface{}{}
 	} else {
-		response.Result = orders
+		response.Result = purchases
 	}
 
 	json.NewEncoder(w).Encode(response)
 
 }
 
-// CreateOrder : handler for POST /order
-func CreateOrder(w http.ResponseWriter, r *http.Request) {
+// CreatePurchase : handler for POST /purchase
+func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -71,9 +71,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var order *models.Order
+	var purchase *models.Purchase
 	// Decode data
-	if !utils.Decode(w, r, &order) {
+	if !utils.Decode(w, r, &purchase) {
 		return
 	}
 
@@ -85,20 +85,20 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.CreatedBy = userID
-	order.UpdatedBy = userID
-	order.CreatedAt = time.Now().Local()
-	order.UpdatedAt = time.Now().Local()
+	purchase.CreatedBy = userID
+	purchase.UpdatedBy = userID
+	purchase.CreatedAt = time.Now().Local()
+	purchase.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
+	if errs := purchase.Validate(w, r, "create", nil); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	err = order.Insert()
+	err = purchase.Insert()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -109,27 +109,40 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.Status == "delivered" || order.Status == "dispatched" {
-		err = order.RemoveStock()
+	if purchase.Status == "delivered" {
+		err = purchase.AddStock()
 		if err != nil {
 			response.Status = false
 			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
+			response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
 
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return
+
+		}
+
+		err = purchase.UpdateProductUnitPriceInStore()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["product_unit_price"] = "Unable to update product unit price:" + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+
 		}
 	}
 
 	response.Status = true
-	response.Result = order
+	response.Result = purchase
 
 	json.NewEncoder(w).Encode(response)
 }
 
-// UpdateOrder : handler function for PUT /v1/order call
-func UpdateOrder(w http.ResponseWriter, r *http.Request) {
+// UpdatePurchase : handler function for PUT /v1/purchase call
+func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -143,39 +156,40 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var order *models.Order
-	var oldOrder *models.Order
+	var purchase *models.Purchase
+	var oldPurchase *models.Purchase
 
 	params := mux.Vars(r)
 
-	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	purchaseID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["order_id"] = "Invalid Order ID:" + err.Error()
+		response.Errors["purchase_id"] = "Invalid Purchase ID:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	order, err = models.FindOrderByID(orderID)
+	oldPurchase, err = models.FindPurchaseByID(purchaseID)
 	if err != nil {
 		response.Status = false
-		response.Errors["find_order"] = "Unable to find order:" + err.Error()
+		response.Errors["find_purchase"] = "Unable to find purchase:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	oldOrder, err = models.FindOrderByID(orderID)
+	purchase, err = models.FindPurchaseByID(purchaseID)
 	if err != nil {
 		response.Status = false
-		response.Errors["find_order"] = "Unable to find order:" + err.Error()
+		response.Errors["find_purchase"] = "Unable to find purchase:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	if !utils.Decode(w, r, &order) {
+	// Decode data
+	if !utils.Decode(w, r, &purchase) {
 		return
 	}
 
@@ -187,18 +201,18 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.UpdatedBy = userID
-	order.UpdatedAt = time.Now().Local()
+	purchase.UpdatedBy = userID
+	purchase.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := order.Validate(w, r, "update", oldOrder); len(errs) > 0 {
+	if errs := purchase.Validate(w, r, "update", oldPurchase); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	order, err = order.Update()
+	purchase, err = purchase.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -209,8 +223,8 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.Status == "delivered" || order.Status == "dispatched" {
-		err = oldOrder.AddStock()
+	if purchase.Status == "delivered" {
+		err = oldPurchase.RemoveStock()
 		if err != nil {
 			response.Status = false
 			response.Errors = make(map[string]string)
@@ -219,35 +233,49 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return
+
 		}
 
-		err = order.RemoveStock()
+		err = purchase.AddStock()
 		if err != nil {
 			response.Status = false
 			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
+			response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
 
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return
+
+		}
+
+		err = purchase.UpdateProductUnitPriceInStore()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["product_unit_price"] = "Unable to update product unit price:" + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+
 		}
 	}
 
-	order, err = models.FindOrderByID(order.ID)
+	purchase, err = models.FindPurchaseByID(purchase.ID)
 	if err != nil {
 		response.Status = false
-		response.Errors["view"] = "Unable to find order:" + err.Error()
+		response.Errors["view"] = "Unable to find purchase:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
-	response.Result = order
+	response.Result = purchase
 	json.NewEncoder(w).Encode(response)
 }
 
-// ViewOrder : handler function for GET /v1/order/<id> call
-func ViewOrder(w http.ResponseWriter, r *http.Request) {
+// ViewPurchase : handler function for GET /v1/purchase/<id> call
+func ViewPurchase(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -263,18 +291,18 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	purchaseID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["product_id"] = "Invalid Order ID:" + err.Error()
+		response.Errors["product_id"] = "Invalid Purchase ID:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	var order *models.Order
+	var purchase *models.Purchase
 
-	order, err = models.FindOrderByID(orderID)
+	purchase, err = models.FindPurchaseByID(purchaseID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -284,13 +312,13 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
-	response.Result = order
+	response.Result = purchase
 
 	json.NewEncoder(w).Encode(response)
 }
 
-// DeleteOrder : handler function for DELETE /v1/order/<id> call
-func DeleteOrder(w http.ResponseWriter, r *http.Request) {
+// DeletePurchase : handler function for DELETE /v1/purchase/<id> call
+func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -306,16 +334,16 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	purchaseID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["quotation_id"] = "Invalid Order ID:" + err.Error()
+		response.Errors["quotation_id"] = "Invalid Purchase ID:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	order, err := models.FindOrderByID(orderID)
+	purchase, err := models.FindPurchaseByID(purchaseID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -324,7 +352,7 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = order.DeleteOrder(tokenClaims)
+	err = purchase.DeletePurchase(tokenClaims)
 	if err != nil {
 		response.Status = false
 		response.Errors["delete"] = "Unable to delete:" + err.Error()

@@ -11,8 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// ListOrder : handler for GET /order
-func ListOrder(w http.ResponseWriter, r *http.Request) {
+// ListVendor : handler for GET /vendor
+func ListVendor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -26,38 +26,38 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orders := []models.Order{}
+	vendors := []models.Vendor{}
 
-	orders, criterias, err := models.SearchOrder(w, r)
+	vendors, criterias, err := models.SearchVendor(w, r)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Unable to find orders:" + err.Error()
+		response.Errors["find"] = "Unable to find vendors:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "order")
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "vendor")
 	if err != nil {
 		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
+		response.Errors["total_count"] = "Unable to find total count of vendors:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	if len(orders) == 0 {
+	if len(vendors) == 0 {
 		response.Result = []interface{}{}
 	} else {
-		response.Result = orders
+		response.Result = vendors
 	}
 
 	json.NewEncoder(w).Encode(response)
 
 }
 
-// CreateOrder : handler for POST /order
-func CreateOrder(w http.ResponseWriter, r *http.Request) {
+// CreateVendor : handler for POST /vendor
+func CreateVendor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -71,9 +71,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var order *models.Order
+	var vendor *models.Vendor
 	// Decode data
-	if !utils.Decode(w, r, &order) {
+	if !utils.Decode(w, r, &vendor) {
 		return
 	}
 
@@ -85,20 +85,20 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.CreatedBy = userID
-	order.UpdatedBy = userID
-	order.CreatedAt = time.Now().Local()
-	order.UpdatedAt = time.Now().Local()
+	vendor.CreatedBy = userID
+	vendor.UpdatedBy = userID
+	vendor.CreatedAt = time.Now().Local()
+	vendor.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
+	if errs := vendor.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	err = order.Insert()
+	err = vendor.Insert()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -109,27 +109,15 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.Status == "delivered" || order.Status == "dispatched" {
-		err = order.RemoveStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	}
-
 	response.Status = true
-	response.Result = order
+	response.Result = vendor
 
 	json.NewEncoder(w).Encode(response)
+
 }
 
-// UpdateOrder : handler function for PUT /v1/order call
-func UpdateOrder(w http.ResponseWriter, r *http.Request) {
+// UpdateVendor : handler function for PUT /v1/vendor call
+func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -143,39 +131,28 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var order *models.Order
-	var oldOrder *models.Order
+	var vendor *models.Vendor
 
 	params := mux.Vars(r)
 
-	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	vendorID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["order_id"] = "Invalid Order ID:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
+		response.Errors["vendor_id"] = "Invalid Vendor ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	order, err = models.FindOrderByID(orderID)
+	vendor, err = models.FindVendorByID(vendorID)
 	if err != nil {
 		response.Status = false
-		response.Errors["find_order"] = "Unable to find order:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
+		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	oldOrder, err = models.FindOrderByID(orderID)
-	if err != nil {
-		response.Status = false
-		response.Errors["find_order"] = "Unable to find order:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	if !utils.Decode(w, r, &order) {
+	// Decode data
+	if !utils.Decode(w, r, &vendor) {
 		return
 	}
 
@@ -187,18 +164,18 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.UpdatedBy = userID
-	order.UpdatedAt = time.Now().Local()
+	vendor.UpdatedBy = userID
+	vendor.UpdatedAt = time.Now().Local()
 
 	// Validate data
-	if errs := order.Validate(w, r, "update", oldOrder); len(errs) > 0 {
+	if errs := vendor.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	order, err = order.Update()
+	vendor, err = vendor.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -209,45 +186,22 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.Status == "delivered" || order.Status == "dispatched" {
-		err = oldOrder.AddStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		err = order.RemoveStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	}
-
-	order, err = models.FindOrderByID(order.ID)
+	vendor, err = models.FindVendorByID(vendor.ID)
 	if err != nil {
 		response.Status = false
-		response.Errors["view"] = "Unable to find order:" + err.Error()
+		response.Errors["view"] = "Unable to find vendor:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
-	response.Result = order
+	response.Result = vendor
+
 	json.NewEncoder(w).Encode(response)
 }
 
-// ViewOrder : handler function for GET /v1/order/<id> call
-func ViewOrder(w http.ResponseWriter, r *http.Request) {
+// ViewVendor : handler function for GET /v1/vendor/<id> call
+func ViewVendor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -263,34 +217,33 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	vendorID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["product_id"] = "Invalid Order ID:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
+		response.Errors["vendor_id"] = "Invalid Vendor ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	var order *models.Order
+	var vendor *models.Vendor
 
-	order, err = models.FindOrderByID(orderID)
+	vendor, err = models.FindVendorByID(vendorID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
-	response.Result = order
+	response.Result = vendor
 
 	json.NewEncoder(w).Encode(response)
+
 }
 
-// DeleteOrder : handler function for DELETE /v1/order/<id> call
-func DeleteOrder(w http.ResponseWriter, r *http.Request) {
+// DeleteVendor : handler function for DELETE /v1/vendor/<id> call
+func DeleteVendor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -306,29 +259,26 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	vendorID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["quotation_id"] = "Invalid Order ID:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
+		response.Errors["vendor_id"] = "Invalid Vendor ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	order, err := models.FindOrderByID(orderID)
+	vendor, err := models.FindVendorByID(vendorID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	err = order.DeleteOrder(tokenClaims)
+	err = vendor.DeleteVendor(tokenClaims)
 	if err != nil {
 		response.Status = false
 		response.Errors["delete"] = "Unable to delete:" + err.Error()
-		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -337,4 +287,5 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 	response.Result = "Deleted successfully"
 
 	json.NewEncoder(w).Encode(response)
+
 }

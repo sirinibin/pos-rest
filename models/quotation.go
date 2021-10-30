@@ -32,6 +32,7 @@ type Quotation struct {
 	DeliveredBySignatureID primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
 	VatPercent             *float32           `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	Discount               float32            `bson:"discount,omitempty" json:"discount,omitempty"`
+	Status                 string             `bson:"status,omitempty" json:"status,omitempty"`
 	Deleted                bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy              primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt              time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`

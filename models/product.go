@@ -287,7 +287,7 @@ func (product *Product) SaveImages() error {
 		if err != nil {
 			return err
 		}
-		product.Images = append(product.Images, filename)
+		product.Images = append(product.Images, "/"+filename)
 	}
 	product.ImagesContent = []string{}
 

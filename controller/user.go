@@ -136,7 +136,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	customerID, err := primitive.ObjectIDFromHex(params["id"])
+	userID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
 		response.Errors["customer_id"] = "Invalid User ID:" + err.Error()
@@ -144,7 +144,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err = models.FindUserByID(customerID)
+	user, err = models.FindUserByID(userID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -157,7 +157,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	accessingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
@@ -165,7 +165,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.UpdatedBy = userID
+	user.UpdatedBy = accessingUserID
 	user.UpdatedAt = time.Now().Local()
 
 	// Validate data
@@ -218,7 +218,7 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	customerID, err := primitive.ObjectIDFromHex(params["id"])
+	userID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
 		response.Errors["customer_id"] = "Invalid User ID:" + err.Error()
@@ -228,7 +228,7 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 
 	var user *models.User
 
-	user, err = models.FindUserByID(customerID)
+	user, err = models.FindUserByID(userID)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -382,6 +382,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	user.UpdatedAt = time.Now().Local()
+	user.CreatedAt = time.Now().Local()
 
 	err := user.Insert()
 	if err != nil {

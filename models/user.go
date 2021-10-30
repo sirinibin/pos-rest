@@ -231,7 +231,7 @@ func (user *User) SavePhoto() error {
 	if err != nil {
 		return err
 	}
-	user.Photo = filename
+	user.Photo = "/" + filename
 	user.PhotoContent = ""
 	return nil
 }

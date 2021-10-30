@@ -236,7 +236,7 @@ func (signature *Signature) SaveSignatureFile() error {
 	if err != nil {
 		return err
 	}
-	signature.Signature = filename
+	signature.Signature = "/" + filename
 	signature.SignatureContent = ""
 	return nil
 }

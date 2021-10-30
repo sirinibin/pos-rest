@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -32,6 +33,8 @@ type Order struct {
 	DeliveredBySignatureID primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
 	VatPercent             *float32           `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	Discount               float32            `bson:"discount,omitempty" json:"discount,omitempty"`
+	Status                 string             `bson:"status,omitempty" json:"status,omitempty"`
+	StockRemoved           bool               `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
 	Deleted                bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy              primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt              time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -130,9 +133,13 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 	return orders, criterias, nil
 }
 
-func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldOrder *Order) (errs map[string]string) {
 
 	errs = make(map[string]string)
+
+	if govalidator.IsNull(order.Status) {
+		errs["status"] = "Status is required"
+	}
 
 	if scenario == "update" {
 		if order.ID.IsZero() {
@@ -151,6 +158,13 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["id"] = "Invalid Order:" + order.ID.Hex()
 		}
 
+		if oldOrder != nil {
+			if oldOrder.Status == "delivered" || oldOrder.Status == "dispatched" {
+				if order.Status == "pending" || order.Status == "cancelled" || order.Status == "order_placed" {
+					errs["status"] = "Can't change the status from delivered/dispatched to pending/cancelled/order_placed"
+				}
+			}
+		}
 	}
 
 	if order.StoreID.IsZero() {
@@ -279,7 +293,11 @@ func GetProductStockInStore(productID primitive.ObjectID, storeID primitive.Obje
 	return 0, err
 }
 
-func (order *Order) DecreaseProductStockInStore() (err error) {
+func (order *Order) RemoveStock() (err error) {
+	if len(order.Products) == 0 {
+		return nil
+	}
+
 	for _, orderProduct := range order.Products {
 		product, err := FindProductByID(orderProduct.ProductID)
 		if err != nil {
@@ -298,6 +316,54 @@ func (order *Order) DecreaseProductStockInStore() (err error) {
 			return err
 		}
 
+	}
+
+	order.StockRemoved = true
+	_, err = order.Update()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (order *Order) AddStock() (err error) {
+	if len(order.Products) == 0 {
+		return nil
+	}
+
+	for _, orderProduct := range order.Products {
+		product, err := FindProductByID(orderProduct.ProductID)
+		if err != nil {
+			return err
+		}
+
+		storeExistInProductStock := false
+		for k, stock := range product.Stock {
+			if stock.StoreID.Hex() == order.StoreID.Hex() {
+				product.Stock[k].Stock += orderProduct.Quantity
+				storeExistInProductStock = true
+				break
+			}
+		}
+
+		if !storeExistInProductStock {
+			productStock := ProductStock{
+				StoreID: order.StoreID,
+				Stock:   orderProduct.Quantity,
+			}
+			product.Stock = append(product.Stock, productStock)
+		}
+
+		product, err = product.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	order.StockRemoved = false
+	_, err = order.Update()
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -323,14 +389,6 @@ func (order *Order) Insert() error {
 	_, err := collection.InsertOne(ctx, &order)
 	if err != nil {
 		return err
-	}
-
-	err = order.DecreaseProductStockInStore()
-	if err != nil {
-		err = order.HardDelete()
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -363,6 +421,28 @@ func GenerateOrderCode(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
+}
+
+func (order *Order) UpdateOrderStatus(status string) (*Order, error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+	updateResult, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": order.ID},
+		bson.M{"$set": bson.M{"status": status}},
+		updateOptions,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if updateResult.MatchedCount > 0 {
+		return order, nil
+	}
+	return nil, nil
 }
 
 func (order *Order) Update() (*Order, error) {

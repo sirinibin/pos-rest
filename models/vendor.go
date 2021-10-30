@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -16,13 +15,13 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Store : Store structure
-type Store struct {
+//Vendor : Vendor structure
+type Vendor struct {
 	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name            string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic    string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	Title           string             `bson:"title,omitempty" json:"title,omitempty"`
-	TitleInArabic   string             `bson:"title_in_arabic,omitempty" json:"title_in_arabic"`
+	TitleInArabic   string             `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
 	Email           string             `bson:"email,omitempty" json:"email,omitempty"`
 	Phone           string             `bson:"phone,omitempty" json:"phone,omitempty"`
 	PhoneInArabic   string             `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
@@ -42,31 +41,7 @@ type Store struct {
 	UpdatedBy       primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 }
 
-type SearchCriterias struct {
-	Page     int                    `bson:"page,omitempty" json:"page,omitempty"`
-	Size     int                    `bson:"size,omitempty" json:"size,omitempty"`
-	SearchBy map[string]interface{} `bson:"search_by,omitempty" json:"search_by,omitempty"`
-	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
-}
-
-func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
-	sortFieldWithOrder := strings.Fields(sortString)
-	sortBy = map[string]interface{}{}
-
-	if len(sortFieldWithOrder) == 2 {
-		if sortFieldWithOrder[1] == "1" {
-			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
-		} else if sortFieldWithOrder[1] == "-1" {
-			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Descending order
-		}
-	} else if len(sortFieldWithOrder) == 1 {
-		sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
-	}
-
-	return sortBy
-}
-
-func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, criterias SearchCriterias, err error) {
+func SearchVendor(w http.ResponseWriter, r *http.Request) (vendores []Vendor, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -101,7 +76,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -116,7 +91,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return storees, criterias, errors.New("Error fetching storees:" + err.Error())
+		return vendores, criterias, errors.New("Error fetching vendores:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -125,31 +100,31 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return storees, criterias, errors.New("Cursor error:" + err.Error())
+			return vendores, criterias, errors.New("Cursor error:" + err.Error())
 		}
-		store := Store{}
-		err = cur.Decode(&store)
+		vendor := Vendor{}
+		err = cur.Decode(&vendor)
 		if err != nil {
-			return storees, criterias, errors.New("Cursor decode error:" + err.Error())
+			return vendores, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
-		storees = append(storees, store)
+		vendores = append(vendores, vendor)
 	} //end for loop
 
-	return storees, criterias, nil
+	return vendores, criterias, nil
 
 }
 
-func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
 
 	if scenario == "update" {
-		if store.ID.IsZero() {
+		if vendor.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsStoreExists(store.ID)
+		exists, err := IsVendorExists(vendor.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -157,39 +132,39 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 
 		if !exists {
-			errs["id"] = "Invalid Store:" + store.ID.Hex()
+			errs["id"] = "Invalid Vendor:" + vendor.ID.Hex()
 		}
 
 	}
 
-	if govalidator.IsNull(store.Name) {
+	if govalidator.IsNull(vendor.Name) {
 		errs["name"] = "Name is required"
 	}
 
-	if govalidator.IsNull(store.Email) {
+	if govalidator.IsNull(vendor.Email) {
 		errs["email"] = "E-mail is required"
 	}
 
-	if govalidator.IsNull(store.Address) {
+	if govalidator.IsNull(vendor.Address) {
 		errs["address"] = "Address is required"
 	}
 
-	if govalidator.IsNull(store.Phone) {
+	if govalidator.IsNull(vendor.Phone) {
 		errs["phone"] = "Phone is required"
 	}
 
-	if store.VatPercent == nil {
+	if vendor.VatPercent == nil {
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if store.ID.IsZero() {
-		if govalidator.IsNull(store.LogoContent) {
+	if vendor.ID.IsZero() {
+		if govalidator.IsNull(vendor.LogoContent) {
 			errs["logo_content"] = "Logo is required"
 		}
 	}
 
-	if !govalidator.IsNull(store.LogoContent) {
-		valid, err := IsStringBase64(store.LogoContent)
+	if !govalidator.IsNull(vendor.LogoContent) {
+		valid, err := IsStringBase64(vendor.LogoContent)
 		if err != nil {
 			errs["logo_content"] = err.Error()
 		}
@@ -199,7 +174,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	emailExists, err := store.IsEmailExists()
+	emailExists, err := vendor.IsEmailExists()
 	if err != nil {
 		errs["email"] = err.Error()
 	}
@@ -217,28 +192,28 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	return errs
 }
 
-func (store *Store) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+func (vendor *Vendor) Insert() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	store.ID = primitive.NewObjectID()
+	vendor.ID = primitive.NewObjectID()
 
-	if !govalidator.IsNull(store.LogoContent) {
-		err := store.SaveLogoFile()
+	if !govalidator.IsNull(vendor.LogoContent) {
+		err := vendor.SaveLogoFile()
 		if err != nil {
 			return err
 		}
 	}
 
-	_, err := collection.InsertOne(ctx, &store)
+	_, err := collection.InsertOne(ctx, &vendor)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (store *Store) SaveLogoFile() error {
-	content, err := base64.StdEncoding.DecodeString(store.LogoContent)
+func (vendor *Vendor) SaveLogoFile() error {
+	content, err := base64.StdEncoding.DecodeString(vendor.LogoContent)
 	if err != nil {
 		return err
 	}
@@ -248,35 +223,35 @@ func (store *Store) SaveLogoFile() error {
 		return err
 	}
 
-	filename := "images/store/logo_" + store.ID.Hex() + extension
+	filename := "images/vendor/logo_" + vendor.ID.Hex() + extension
 	err = SaveBase64File(filename, content)
 	if err != nil {
 		return err
 	}
-	store.Logo = "/" + filename
-	store.LogoContent = ""
+	vendor.Logo = "/" + filename
+	vendor.LogoContent = ""
 	return nil
 }
 
-func (store *Store) Update() (*Store, error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+func (vendor *Vendor) Update() (*Vendor, error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
-	if !govalidator.IsNull(store.LogoContent) {
-		err := store.SaveLogoFile()
+	if !govalidator.IsNull(vendor.LogoContent) {
+		err := vendor.SaveLogoFile()
 		if err != nil {
 			return nil, err
 		}
 	}
-	store.LogoContent = ""
+	vendor.LogoContent = ""
 
 	updateResult, err := collection.UpdateOne(
 		ctx,
-		bson.M{"_id": store.ID},
-		bson.M{"$set": store},
+		bson.M{"_id": vendor.ID},
+		bson.M{"$set": vendor},
 		updateOptions,
 	)
 	if err != nil {
@@ -284,13 +259,13 @@ func (store *Store) Update() (*Store, error) {
 	}
 
 	if updateResult.MatchedCount > 0 {
-		return store, nil
+		return vendor, nil
 	}
 	return nil, nil
 }
 
-func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -301,14 +276,14 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
-	store.Deleted = true
-	store.DeletedBy = userID
-	store.DeletedAt = time.Now().Local()
+	vendor.Deleted = true
+	vendor.DeletedBy = userID
+	vendor.DeletedAt = time.Now().Local()
 
 	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": store.ID},
-		bson.M{"$set": store},
+		bson.M{"_id": vendor.ID},
+		bson.M{"$set": vendor},
 		updateOptions,
 	)
 	if err != nil {
@@ -318,43 +293,43 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindStoreByID(ID primitive.ObjectID) (store *Store, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+func FindVendorByID(ID primitive.ObjectID) (vendor *Vendor, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	err = collection.FindOne(ctx,
 		bson.M{"_id": ID}).
-		Decode(&store)
+		Decode(&vendor)
 	if err != nil {
 		return nil, err
 	}
 
-	return store, err
+	return vendor, err
 }
 
-func (store *Store) IsEmailExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+func (vendor *Vendor) IsEmailExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
 
-	if store.ID.IsZero() {
+	if vendor.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": store.Email,
+			"email": vendor.Email,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": store.Email,
-			"_id":   bson.M{"$ne": store.ID},
+			"email": vendor.Email,
+			"_id":   bson.M{"$ne": vendor.ID},
 		})
 	}
 
 	return (count == 1), err
 }
 
-func IsStoreExists(ID primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+func IsVendorExists(ID primitive.ObjectID) (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
