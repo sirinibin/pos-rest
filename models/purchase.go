@@ -40,6 +40,7 @@ type Purchase struct {
 	Discount                 float32             `bson:"discount,omitempty" json:"discount,omitempty"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockAdded               bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
+	NetTotal                 float32             `json:"net_total"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -50,6 +51,17 @@ type Purchase struct {
 	UpdatedBy                *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser            *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
+}
+
+func (purchase Purchase) FindNetTotal() float32 {
+	netTotal := float32(0.0)
+	for _, product := range purchase.Products {
+		netTotal += (float32(product.Quantity) * product.UnitPrice)
+	}
+
+	netTotal += netTotal * (*purchase.VatPercent / float32(100))
+	netTotal -= purchase.Discount
+	return netTotal
 }
 
 func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchase, criterias SearchCriterias, err error) {
@@ -209,6 +221,7 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 			purchase.DeletedByUser, _ = FindUserByID(purchase.DeletedBy, deletedByUserSelectFields)
 		}
 
+		purchase.NetTotal = purchase.FindNetTotal()
 		purchases = append(purchases, purchase)
 	} //end for loop
 

@@ -39,6 +39,7 @@ type Order struct {
 	Discount               float32             `bson:"discount,omitempty" json:"discount,omitempty"`
 	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockRemoved           bool                `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
+	NetTotal               float32             `json:"net_total,omitempty"`
 	Deleted                bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy              *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser          *User               `json:"deleted_by_user,omitempty"`
@@ -49,6 +50,16 @@ type Order struct {
 	UpdatedBy              *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser          *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
+}
+
+func (order Order) FindNetTotal() float32 {
+	netTotal := float32(0.0)
+	for _, product := range order.Products {
+		netTotal += (float32(product.Quantity) * product.Price)
+	}
+
+	netTotal += netTotal * (*order.VatPercent / float32(100))
+	return netTotal
 }
 
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
@@ -188,6 +199,7 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 			order.DeletedByUser, _ = FindUserByID(order.DeletedBy, deletedByUserSelectFields)
 		}
 
+		order.NetTotal = order.FindNetTotal()
 		orders = append(orders, order)
 	} //end for loop
 
