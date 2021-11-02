@@ -100,6 +100,8 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	quotation.FindNetTotal()
+
 	err = quotation.Insert()
 	if err != nil {
 		response.Status = false
@@ -178,6 +180,8 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	quotation.FindNetTotal()
 
 	quotation, err = quotation.Update()
 	if err != nil {

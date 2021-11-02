@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -40,7 +41,7 @@ type Purchase struct {
 	Discount                 float32             `bson:"discount,omitempty" json:"discount,omitempty"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockAdded               bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
-	NetTotal                 float32             `json:"net_total"`
+	NetTotal                 float32             `bson:"net_total" json:"net_total"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -53,15 +54,18 @@ type Purchase struct {
 	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
 }
 
-func (purchase Purchase) FindNetTotal() float32 {
+func (purchase *Purchase) FindNetTotal() {
 	netTotal := float32(0.0)
 	for _, product := range purchase.Products {
 		netTotal += (float32(product.Quantity) * product.UnitPrice)
 	}
 
-	netTotal += netTotal * (*purchase.VatPercent / float32(100))
+	if purchase.VatPercent != nil {
+		netTotal += netTotal * (*purchase.VatPercent / float32(100))
+	}
+
 	netTotal -= purchase.Discount
-	return netTotal
+	purchase.NetTotal = float32(math.Ceil(float64(netTotal*100)) / float64(100))
 }
 
 func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchase, criterias SearchCriterias, err error) {
@@ -220,8 +224,6 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
 			purchase.DeletedByUser, _ = FindUserByID(purchase.DeletedBy, deletedByUserSelectFields)
 		}
-
-		purchase.NetTotal = purchase.FindNetTotal()
 		purchases = append(purchases, purchase)
 	} //end for loop
 

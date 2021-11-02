@@ -100,6 +100,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	order.FindNetTotal()
+
 	err = order.Insert()
 	if err != nil {
 		response.Status = false
@@ -200,6 +202,8 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	order.FindNetTotal()
 
 	order, err = order.Update()
 	if err != nil {

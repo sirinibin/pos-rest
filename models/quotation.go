@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -38,7 +39,7 @@ type Quotation struct {
 	VatPercent             *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	Discount               float32             `bson:"discount,omitempty" json:"discount,omitempty"`
 	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
-	NetTotal               float32             `json:"net_total,omitempty"`
+	NetTotal               float32             `bson:"net_total" json:"net_total"`
 	Deleted                bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy              *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser          *User               `json:"deleted_by_user,omitempty"`
@@ -51,15 +52,18 @@ type Quotation struct {
 	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
 }
 
-func (quotation Quotation) FindNetTotal() float32 {
+func (quotation *Quotation) FindNetTotal() {
 	netTotal := float32(0.0)
 	for _, product := range quotation.Products {
 		netTotal += (float32(product.Quantity) * product.Price)
 	}
 
-	netTotal += netTotal * (*quotation.VatPercent / float32(100))
+	if quotation.VatPercent != nil {
+		netTotal += netTotal * (*quotation.VatPercent / float32(100))
+	}
+
 	netTotal -= quotation.Discount
-	return netTotal
+	quotation.NetTotal = float32(math.Ceil(float64(netTotal*100)) / float64(100))
 }
 
 func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quotation, criterias SearchCriterias, err error) {
@@ -200,7 +204,6 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 			quotation.DeletedByUser, _ = FindUserByID(quotation.DeletedBy, deletedByUserSelectFields)
 		}
 
-		quotation.NetTotal = quotation.FindNetTotal()
 		quotations = append(quotations, quotation)
 	} //end for loop
 

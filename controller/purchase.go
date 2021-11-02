@@ -100,6 +100,8 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	purchase.FindNetTotal()
+
 	err = purchase.Insert()
 	if err != nil {
 		response.Status = false
@@ -214,6 +216,8 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchase.FindNetTotal()
 
 	purchase, err = purchase.Update()
 	if err != nil {
