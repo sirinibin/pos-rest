@@ -10,6 +10,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListUser : handler for GET /user
@@ -86,10 +87,11 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.CreatedBy = userID
-	user.UpdatedBy = userID
-	user.CreatedAt = time.Now().Local()
-	user.UpdatedAt = time.Now().Local()
+	user.CreatedBy = &userID
+	user.UpdatedBy = &userID
+	now := time.Now().Local()
+	user.CreatedAt = &now
+	user.UpdatedAt = &now
 
 	// Validate data
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
@@ -144,7 +146,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err = models.FindUserByID(userID)
+	user, err = models.FindUserByID(&userID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -165,8 +167,9 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.UpdatedBy = accessingUserID
-	user.UpdatedAt = time.Now().Local()
+	user.UpdatedBy = &accessingUserID
+	now := time.Now().Local()
+	user.UpdatedAt = &now
 
 	// Validate data
 	if errs := user.Validate(w, r, "update"); len(errs) > 0 {
@@ -187,7 +190,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err = models.FindUserByID(user.ID)
+	user, err = models.FindUserByID(&user.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find user:" + err.Error()
@@ -228,7 +231,13 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 
 	var user *models.User
 
-	user, err = models.FindUserByID(userID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	user, err = models.FindUserByID(&userID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -269,7 +278,7 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := models.FindUserByID(userID)
+	user, err := models.FindUserByID(&userID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -347,7 +356,7 @@ func Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := models.FindUserByID(userID)
+	user, err := models.FindUserByID(&userID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_user"] = err.Error()
@@ -383,8 +392,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.UpdatedAt = time.Now().Local()
-	user.CreatedAt = time.Now().Local()
+	now := time.Now().Local()
+	user.UpdatedAt = &now
+	user.CreatedAt = &now
 
 	err := user.Insert()
 	if err != nil {

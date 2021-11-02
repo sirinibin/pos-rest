@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListProductCategory : handler for GET /product-category
@@ -85,10 +86,11 @@ func CreateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory.CreatedBy = userID
-	productCategory.UpdatedBy = userID
-	productCategory.CreatedAt = time.Now().Local()
-	productCategory.UpdatedAt = time.Now().Local()
+	productCategory.CreatedBy = &userID
+	productCategory.UpdatedBy = &userID
+	now := time.Now().Local()
+	productCategory.CreatedAt = &now
+	productCategory.UpdatedAt = &now
 
 	// Validate data
 	if errs := productCategory.Validate(w, r, "create"); len(errs) > 0 {
@@ -143,7 +145,7 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory, err = models.FindProductCategoryByID(productCategoryID)
+	productCategory, err = models.FindProductCategoryByID(&productCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -165,8 +167,9 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory.UpdatedBy = userID
-	productCategory.UpdatedAt = time.Now().Local()
+	productCategory.UpdatedBy = &userID
+	now := time.Now().Local()
+	productCategory.UpdatedAt = &now
 
 	// Validate data
 	if errs := productCategory.Validate(w, r, "update"); len(errs) > 0 {
@@ -187,7 +190,7 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory, err = models.FindProductCategoryByID(productCategory.ID)
+	productCategory, err = models.FindProductCategoryByID(&productCategory.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find product category:" + err.Error()
@@ -228,7 +231,13 @@ func ViewProductCategory(w http.ResponseWriter, r *http.Request) {
 
 	var productCategory *models.ProductCategory
 
-	productCategory, err = models.FindProductCategoryByID(productCategoryID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	productCategory, err = models.FindProductCategoryByID(&productCategoryID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -269,7 +278,7 @@ func DeleteProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory, err := models.FindProductCategoryByID(productCategoryID)
+	productCategory, err := models.FindProductCategoryByID(&productCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListOrder : handler for GET /order
@@ -85,10 +86,11 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.CreatedBy = userID
-	order.UpdatedBy = userID
-	order.CreatedAt = time.Now().Local()
-	order.UpdatedAt = time.Now().Local()
+	order.CreatedBy = &userID
+	order.UpdatedBy = &userID
+	now := time.Now().Local()
+	order.CreatedAt = &now
+	order.UpdatedAt = &now
 
 	// Validate data
 	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
@@ -157,7 +159,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err = models.FindOrderByID(orderID)
+	order, err = models.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_order"] = "Unable to find order:" + err.Error()
@@ -166,7 +168,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldOrder, err = models.FindOrderByID(orderID)
+	oldOrder, err = models.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_order"] = "Unable to find order:" + err.Error()
@@ -187,8 +189,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.UpdatedBy = userID
-	order.UpdatedAt = time.Now().Local()
+	order.UpdatedBy = &userID
+	now := time.Now().Local()
+	order.UpdatedAt = &now
 
 	// Validate data
 	if errs := order.Validate(w, r, "update", oldOrder); len(errs) > 0 {
@@ -233,7 +236,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	order, err = models.FindOrderByID(order.ID)
+	order, err = models.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find order:" + err.Error()
@@ -274,7 +277,13 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 
 	var order *models.Order
 
-	order, err = models.FindOrderByID(orderID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	order, err = models.FindOrderByID(&orderID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -315,7 +324,7 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := models.FindOrderByID(orderID)
+	order, err := models.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

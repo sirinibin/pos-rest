@@ -25,24 +25,31 @@ type PurchaseProduct struct {
 
 //Purchase : Purchase structure
 type Purchase struct {
-	ID                       primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Code                     string             `bson:"code,omitempty" json:"code,omitempty"`
-	StoreID                  primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	VendorID                 primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
-	Products                 []PurchaseProduct  `bson:"products,omitempty" json:"products,omitempty"`
-	OrderPlacedBy            primitive.ObjectID `json:"order_placed_by,omitempty" bson:"order_placed,omitempty"`
-	OrderPlacedBySignatureID primitive.ObjectID `json:"order_placed_by_signature_id,omitempty" bson:"order_placed_signature_id,omitempty"`
-	VatPercent               *float32           `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Discount                 float32            `bson:"discount,omitempty" json:"discount,omitempty"`
-	Status                   string             `bson:"status,omitempty" json:"status,omitempty"`
-	StockAdded               bool               `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
-	Deleted                  bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy                primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt                time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt                time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt                time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy                primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy                primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID                       primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Code                     string              `bson:"code,omitempty" json:"code,omitempty"`
+	StoreID                  *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	VendorID                 *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	Store                    *Store              `json:"store,omitempty"`
+	Vendor                   *Vendor             `json:"vendor,omitempty"`
+	Products                 []PurchaseProduct   `bson:"products,omitempty" json:"products,omitempty"`
+	OrderPlacedBy            *primitive.ObjectID `json:"order_placed_by,omitempty" bson:"order_placed,omitempty"`
+	OrderPlacedBySignatureID *primitive.ObjectID `json:"order_placed_by_signature_id,omitempty" bson:"order_placed_signature_id,omitempty"`
+	OrderPlacedByUser        *User               `json:"order_placed_by_user,omitempty"`
+	OrderPlacedBySignature   *Signature          `json:"order_placed_by_signature,omitempty"`
+	VatPercent               *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Discount                 float32             `bson:"discount,omitempty" json:"discount,omitempty"`
+	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
+	StockAdded               bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
+	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt                *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser            *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
 }
 
 func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchase, criterias SearchCriterias, err error) {
@@ -106,6 +113,52 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 
+	storeSelectFields := map[string]interface{}{}
+	vendorSelectFields := map[string]interface{}{}
+	orderPlacedByUserSelectFields := map[string]interface{}{}
+	orderPlacedBySignatureSelectFields := map[string]interface{}{}
+	createdByUserSelectFields := map[string]interface{}{}
+	updatedByUserSelectFields := map[string]interface{}{}
+	deletedByUserSelectFields := map[string]interface{}{}
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+		if _, ok := criterias.Select["store.id"]; ok {
+			storeSelectFields = ParseRelationalSelectString(keys[0], "store")
+		}
+
+		if _, ok := criterias.Select["vendor.id"]; ok {
+			vendorSelectFields = ParseRelationalSelectString(keys[0], "vendor")
+		}
+
+		if _, ok := criterias.Select["order_placed_by_user.id"]; ok {
+			orderPlacedByUserSelectFields = ParseRelationalSelectString(keys[0], "order_placed_by_user")
+		}
+
+		if _, ok := criterias.Select["order_placed_signature.id"]; ok {
+			orderPlacedBySignatureSelectFields = ParseRelationalSelectString(keys[0], "order_placed_signature")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+		}
+
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+		}
+
+	}
+
+	if criterias.Select != nil {
+		findOptions.SetProjection(criterias.Select)
+	}
+
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here
 	as it is using mongodb cursor and record fetching will
@@ -129,6 +182,33 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 		if err != nil {
 			return purchases, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		if _, ok := criterias.Select["store.id"]; ok {
+			purchase.Store, _ = FindStoreByID(purchase.StoreID, storeSelectFields)
+		}
+
+		if _, ok := criterias.Select["vendor.id"]; ok {
+			purchase.Vendor, _ = FindVendorByID(purchase.VendorID, vendorSelectFields)
+		}
+
+		if _, ok := criterias.Select["order_placed_by_user.id"]; ok {
+			purchase.OrderPlacedByUser, _ = FindUserByID(purchase.OrderPlacedBy, orderPlacedByUserSelectFields)
+		}
+
+		if _, ok := criterias.Select["order_placed_by_signature.id"]; ok {
+			purchase.OrderPlacedBySignature, _ = FindSignatureByID(purchase.OrderPlacedBySignatureID, orderPlacedBySignatureSelectFields)
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			purchase.CreatedByUser, _ = FindUserByID(purchase.CreatedBy, createdByUserSelectFields)
+		}
+		if _, ok := criterias.Select["updated_by_user.id"]; ok {
+			purchase.UpdatedByUser, _ = FindUserByID(purchase.UpdatedBy, updatedByUserSelectFields)
+		}
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			purchase.DeletedByUser, _ = FindUserByID(purchase.DeletedBy, deletedByUserSelectFields)
+		}
+
 		purchases = append(purchases, purchase)
 	} //end for loop
 
@@ -154,7 +234,7 @@ func (purchase *Purchase) Validate(
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsPurchaseExists(purchase.ID)
+		exists, err := IsPurchaseExists(&purchase.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -242,7 +322,7 @@ func (purchase *Purchase) Validate(
 		if product.ProductID.IsZero() {
 			errs["product_id"] = "Product is required for purchase"
 		} else {
-			exists, err := IsProductExists(product.ProductID)
+			exists, err := IsProductExists(&product.ProductID)
 			if err != nil {
 				errs["product_id"] = err.Error()
 				return errs
@@ -278,7 +358,7 @@ func (purchase *Purchase) Validate(
 
 func (purchase *Purchase) AddStock() (err error) {
 	for _, purchaseProduct := range purchase.Products {
-		product, err := FindProductByID(purchaseProduct.ProductID)
+		product, err := FindProductByID(&purchaseProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -294,7 +374,7 @@ func (purchase *Purchase) AddStock() (err error) {
 
 		if !storeExistInProductStock {
 			productStock := ProductStock{
-				StoreID: purchase.StoreID,
+				StoreID: *purchase.StoreID,
 				Stock:   purchaseProduct.Quantity,
 			}
 			product.Stock = append(product.Stock, productStock)
@@ -316,7 +396,7 @@ func (purchase *Purchase) AddStock() (err error) {
 
 func (purchase *Purchase) RemoveStock() (err error) {
 	for _, purchaseProduct := range purchase.Products {
-		product, err := FindProductByID(purchaseProduct.ProductID)
+		product, err := FindProductByID(&purchaseProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -339,7 +419,7 @@ func (purchase *Purchase) RemoveStock() (err error) {
 func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 
 	for _, purchaseProduct := range purchase.Products {
-		product, err := FindProductByID(purchaseProduct.ProductID)
+		product, err := FindProductByID(&purchaseProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -356,7 +436,7 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 
 		if !storeExistInProductUnitPrice {
 			productUnitPrice := ProductUnitPrice{
-				StoreID:        purchase.StoreID,
+				StoreID:        *purchase.StoreID,
 				WholeSalePrice: purchaseProduct.UnitPrice,
 				RetailPrice:    purchaseProduct.SellingUnitPrice,
 			}
@@ -460,8 +540,9 @@ func (purchase *Purchase) DeletePurchase(tokenClaims TokenClaims) (err error) {
 	}
 
 	purchase.Deleted = true
-	purchase.DeletedBy = userID
-	purchase.DeletedAt = time.Now().Local()
+	purchase.DeletedBy = &userID
+	now := time.Now().Local()
+	purchase.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -488,22 +569,56 @@ func (purchase *Purchase) HardDelete() (err error) {
 	return nil
 }
 
-func FindPurchaseByID(ID primitive.ObjectID) (purchase *Purchase, err error) {
+func FindPurchaseByID(
+	ID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (purchase *Purchase, err error) {
+
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
+		bson.M{"_id": ID}, findOneOptions).
 		Decode(&purchase)
 	if err != nil {
 		return nil, err
 	}
 
+	if _, ok := selectFields["order_placed_by.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "order_placed_by")
+		purchase.OrderPlacedByUser, _ = FindUserByID(purchase.OrderPlacedBy, fields)
+	}
+
+	if _, ok := selectFields["order_placed_by_signature.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "order_placed_by_signature")
+		purchase.OrderPlacedBySignature, _ = FindSignatureByID(purchase.OrderPlacedBySignatureID, fields)
+	}
+
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		purchase.CreatedByUser, _ = FindUserByID(purchase.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		purchase.UpdatedByUser, _ = FindUserByID(purchase.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		purchase.DeletedByUser, _ = FindUserByID(purchase.DeletedBy, fields)
+	}
+
 	return purchase, err
 }
 
-func IsPurchaseExists(ID primitive.ObjectID) (exists bool, err error) {
+func IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

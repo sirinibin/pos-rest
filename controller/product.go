@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListProduct : handler for GET /product
@@ -85,10 +86,11 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product.CreatedBy = userID
-	product.UpdatedBy = userID
-	product.CreatedAt = time.Now().Local()
-	product.UpdatedAt = time.Now().Local()
+	product.CreatedBy = &userID
+	product.UpdatedBy = &userID
+	now := time.Now().Local()
+	product.CreatedAt = &now
+	product.UpdatedAt = &now
 
 	// Validate data
 	if errs := product.Validate(w, r, "create"); len(errs) > 0 {
@@ -142,7 +144,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, err = models.FindProductByID(productID)
+	product, err = models.FindProductByID(&productID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["product"] = "Unable to find product:" + err.Error()
@@ -162,8 +164,9 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product.UpdatedBy = userID
-	product.UpdatedAt = time.Now().Local()
+	product.UpdatedBy = &userID
+	now := time.Now().Local()
+	product.UpdatedAt = &now
 
 	// Validate data
 	if errs := product.Validate(w, r, "update"); len(errs) > 0 {
@@ -184,7 +187,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, err = models.FindProductByID(product.ID)
+	product, err = models.FindProductByID(&product.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find product:" + err.Error()
@@ -224,7 +227,13 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 
 	var product *models.Product
 
-	product, err = models.FindProductByID(productID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	product, err = models.FindProductByID(&productID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -263,7 +272,7 @@ func DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, err := models.FindProductByID(productID)
+	product, err := models.FindProductByID(&productID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

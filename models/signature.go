@@ -19,17 +19,20 @@ import (
 
 //Signature : Signature structure
 type Signature struct {
-	ID               primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
-	Signature        string             `bson:"signature,omitempty" json:"signature,omitempty"`
-	SignatureContent string             `json:"signature_content,omitempty"`
-	Deleted          bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy        primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt        time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt        time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt        time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy        primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy        primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID               primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Name             string              `bson:"name,omitempty" json:"name,omitempty"`
+	Signature        string              `bson:"signature,omitempty" json:"signature,omitempty"`
+	SignatureContent string              `json:"signature_content,omitempty"`
+	Deleted          bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy        *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser    *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt        *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt        *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt        *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy        *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy        *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser    *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser    *User               `json:"updated_by_user,omitempty"`
 }
 
 func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signature, criterias SearchCriterias, err error) {
@@ -71,6 +74,32 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 
+	createdByUserSelectFields := map[string]interface{}{}
+	updatedByUserSelectFields := map[string]interface{}{}
+	deletedByUserSelectFields := map[string]interface{}{}
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+		}
+
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+		}
+	}
+
+	if criterias.Select != nil {
+		findOptions.SetProjection(criterias.Select)
+	}
+
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here
 	as it is using mongodb cursor and record fetching will
@@ -94,6 +123,17 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 		if err != nil {
 			return signatures, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			signature.CreatedByUser, _ = FindUserByID(signature.CreatedBy, createdByUserSelectFields)
+		}
+		if _, ok := criterias.Select["updated_by_user.id"]; ok {
+			signature.UpdatedByUser, _ = FindUserByID(signature.UpdatedBy, updatedByUserSelectFields)
+		}
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			signature.DeletedByUser, _ = FindUserByID(signature.DeletedBy, deletedByUserSelectFields)
+		}
+
 		signatures = append(signatures, signature)
 	} //end for loop
 
@@ -118,7 +158,7 @@ func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsSignatureExists(signature.ID)
+		exists, err := IsSignatureExists(&signature.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -305,8 +345,9 @@ func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error)
 	}
 
 	signature.Deleted = true
-	signature.DeletedBy = userID
-	signature.DeletedAt = time.Now().Local()
+	signature.DeletedBy = &userID
+	now := time.Now().Local()
+	signature.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -321,22 +362,46 @@ func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error)
 	return nil
 }
 
-func FindSignatureByID(ID primitive.ObjectID) (signature *Signature, err error) {
+func FindSignatureByID(
+	ID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (signature *Signature, err error) {
+
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
+		bson.M{"_id": ID}, findOneOptions).
 		Decode(&signature)
 	if err != nil {
 		return nil, err
 	}
 
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		signature.CreatedByUser, _ = FindUserByID(signature.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		signature.UpdatedByUser, _ = FindUserByID(signature.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		signature.DeletedByUser, _ = FindUserByID(signature.DeletedBy, fields)
+	}
+
 	return signature, err
 }
 
-func IsSignatureExists(ID primitive.ObjectID) (exists bool, err error) {
+func IsSignatureExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

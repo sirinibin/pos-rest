@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListPurchase : handler for GET /purchase
@@ -85,10 +86,11 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase.CreatedBy = userID
-	purchase.UpdatedBy = userID
-	purchase.CreatedAt = time.Now().Local()
-	purchase.UpdatedAt = time.Now().Local()
+	purchase.CreatedBy = &userID
+	purchase.UpdatedBy = &userID
+	now := time.Now().Local()
+	purchase.CreatedAt = &now
+	purchase.UpdatedAt = &now
 
 	// Validate data
 	if errs := purchase.Validate(w, r, "create", nil); len(errs) > 0 {
@@ -170,7 +172,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldPurchase, err = models.FindPurchaseByID(purchaseID)
+	oldPurchase, err = models.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_purchase"] = "Unable to find purchase:" + err.Error()
@@ -179,7 +181,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase, err = models.FindPurchaseByID(purchaseID)
+	purchase, err = models.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_purchase"] = "Unable to find purchase:" + err.Error()
@@ -201,8 +203,9 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase.UpdatedBy = userID
-	purchase.UpdatedAt = time.Now().Local()
+	purchase.UpdatedBy = &userID
+	now := time.Now().Local()
+	purchase.UpdatedAt = &now
 
 	// Validate data
 	if errs := purchase.Validate(w, r, "update", oldPurchase); len(errs) > 0 {
@@ -261,7 +264,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	purchase, err = models.FindPurchaseByID(purchase.ID)
+	purchase, err = models.FindPurchaseByID(&purchase.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find purchase:" + err.Error()
@@ -302,7 +305,13 @@ func ViewPurchase(w http.ResponseWriter, r *http.Request) {
 
 	var purchase *models.Purchase
 
-	purchase, err = models.FindPurchaseByID(purchaseID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	purchase, err = models.FindPurchaseByID(&purchaseID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -343,7 +352,7 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase, err := models.FindPurchaseByID(purchaseID)
+	purchase, err := models.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListQuotation : handler for GET /quotation
@@ -85,10 +86,11 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.CreatedBy = userID
-	quotation.UpdatedBy = userID
-	quotation.CreatedAt = time.Now().Local()
-	quotation.UpdatedAt = time.Now().Local()
+	quotation.CreatedBy = &userID
+	quotation.UpdatedBy = &userID
+	now := time.Now().Local()
+	quotation.CreatedAt = &now
+	quotation.UpdatedAt = &now
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "create"); len(errs) > 0 {
@@ -143,7 +145,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation, err = models.FindQuotationByID(quotationID)
+	quotation, err = models.FindQuotationByID(&quotationID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -165,8 +167,9 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.UpdatedBy = userID
-	quotation.UpdatedAt = time.Now().Local()
+	quotation.UpdatedBy = &userID
+	now := time.Now().Local()
+	quotation.UpdatedAt = &now
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "update"); len(errs) > 0 {
@@ -187,7 +190,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation, err = models.FindQuotationByID(quotation.ID)
+	quotation, err = models.FindQuotationByID(&quotation.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find quotation:" + err.Error()
@@ -228,7 +231,13 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 
 	var quotation *models.Quotation
 
-	quotation, err = models.FindQuotationByID(quotationID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	quotation, err = models.FindQuotationByID(&quotationID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -269,7 +278,7 @@ func DeleteQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation, err := models.FindQuotationByID(quotationID)
+	quotation, err := models.FindQuotationByID(&quotationID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

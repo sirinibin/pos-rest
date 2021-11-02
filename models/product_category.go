@@ -16,15 +16,18 @@ import (
 
 //ProductCategory : ProductCategory structure
 type ProductCategory struct {
-	ID        primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name      string             `bson:"name,omitempty" json:"name,omitempty"`
-	Deleted   bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
+	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 }
 
 func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCategories []ProductCategory, criterias SearchCriterias, err error) {
@@ -66,6 +69,33 @@ func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCateg
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 
+	createdByUserSelectFields := map[string]interface{}{}
+	updatedByUserSelectFields := map[string]interface{}{}
+	deletedByUserSelectFields := map[string]interface{}{}
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+		}
+
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+		}
+
+	}
+
+	if criterias.Select != nil {
+		findOptions.SetProjection(criterias.Select)
+	}
+
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here
 	as it is using mongodb cursor and record fetching will
@@ -89,6 +119,17 @@ func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCateg
 		if err != nil {
 			return productCategories, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			productCategory.CreatedByUser, _ = FindUserByID(productCategory.CreatedBy, createdByUserSelectFields)
+		}
+		if _, ok := criterias.Select["updated_by_user.id"]; ok {
+			productCategory.UpdatedByUser, _ = FindUserByID(productCategory.UpdatedBy, updatedByUserSelectFields)
+		}
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			productCategory.DeletedByUser, _ = FindUserByID(productCategory.DeletedBy, deletedByUserSelectFields)
+		}
+
 		productCategories = append(productCategories, productCategory)
 	} //end for loop
 
@@ -105,7 +146,7 @@ func (productCategory *ProductCategory) Validate(w http.ResponseWriter, r *http.
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsProductCategoryExists(productCategory.ID)
+		exists, err := IsProductCategoryExists(&productCategory.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -207,8 +248,9 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 	}
 
 	productCategory.Deleted = true
-	productCategory.DeletedBy = userID
-	productCategory.DeletedAt = time.Now().Local()
+	productCategory.DeletedBy = &userID
+	now := time.Now().Local()
+	productCategory.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -223,22 +265,46 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 	return nil
 }
 
-func FindProductCategoryByID(ID primitive.ObjectID) (productCategory *ProductCategory, err error) {
+func FindProductCategoryByID(
+	ID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (productCategory *ProductCategory, err error) {
+
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
+		bson.M{"_id": ID}, findOneOptions).
 		Decode(&productCategory)
 	if err != nil {
 		return nil, err
 	}
 
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		productCategory.CreatedByUser, _ = FindUserByID(productCategory.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		productCategory.UpdatedByUser, _ = FindUserByID(productCategory.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		productCategory.DeletedByUser, _ = FindUserByID(productCategory.DeletedBy, fields)
+	}
+
 	return productCategory, err
 }
 
-func IsProductCategoryExists(ID primitive.ObjectID) (exists bool, err error) {
+func IsProductCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

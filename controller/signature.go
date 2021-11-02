@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListSignature : handler for GET /signature
@@ -86,10 +87,11 @@ func CreateSignature(w http.ResponseWriter, r *http.Request) {
 	}
 	//models.UserID = tokenClaims.UserID
 
-	signature.CreatedBy = userID
-	signature.UpdatedBy = userID
-	signature.CreatedAt = time.Now().Local()
-	signature.UpdatedAt = time.Now().Local()
+	signature.CreatedBy = &userID
+	signature.UpdatedBy = &userID
+	now := time.Now().Local()
+	signature.CreatedAt = &now
+	signature.UpdatedAt = &now
 
 	// Validate data
 	if errs := signature.Validate(w, r, "create"); len(errs) > 0 {
@@ -143,7 +145,7 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err = models.FindSignatureByID(signatureID)
+	signature, err = models.FindSignatureByID(&signatureID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -164,8 +166,9 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature.UpdatedBy = userID
-	signature.UpdatedAt = time.Now().Local()
+	signature.UpdatedBy = &userID
+	now := time.Now().Local()
+	signature.UpdatedAt = &now
 
 	// Validate data
 	if errs := signature.Validate(w, r, "update"); len(errs) > 0 {
@@ -186,7 +189,7 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err = models.FindSignatureByID(signature.ID)
+	signature, err = models.FindSignatureByID(&signature.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find signature:" + err.Error()
@@ -226,7 +229,13 @@ func ViewSignature(w http.ResponseWriter, r *http.Request) {
 
 	var signature *models.Signature
 
-	signature, err = models.FindSignatureByID(signatureID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	signature, err = models.FindSignatureByID(&signatureID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -265,7 +274,7 @@ func DeleteSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err := models.FindSignatureByID(signatureID)
+	signature, err := models.FindSignatureByID(&signatureID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

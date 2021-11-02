@@ -17,20 +17,23 @@ import (
 ) //import "encoding/json"
 
 type User struct {
-	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name         string             `bson:"name" json:"name"`
-	Email        string             `bson:"email" json:"email"`
-	Mob          string             `bson:"mob" json:"mob"`
-	Password     string             `bson:"password" json:"password,omitempty"`
-	Photo        string             `bson:"photo,omitempty" json:"photo,omitempty"`
-	PhotoContent string             `json:"photo_content,omitempty"`
-	Deleted      bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy    primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt    time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt    time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt    time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy    primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy    primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
+	Email         string              `bson:"email,omitempty" json:"email,omitempty"`
+	Mob           string              `bson:"mob,omitempty" json:"mob,omitempty"`
+	Password      string              `bson:"password,omitempty" json:"password,omitempty"`
+	Photo         string              `bson:"photo,omitempty" json:"photo,omitempty"`
+	PhotoContent  string              `json:"photo_content,omitempty"`
+	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 }
 
 func FindUserByEmail(email string) (user *User, err error) {
@@ -57,7 +60,7 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsUserExists(user.ID)
+		exists, err := IsUserExists(&user.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -164,6 +167,33 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 
+	createdByUserSelectFields := map[string]interface{}{}
+	updatedByUserSelectFields := map[string]interface{}{}
+	deletedByUserSelectFields := map[string]interface{}{}
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+		}
+
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+		}
+
+	}
+
+	if criterias.Select != nil {
+		findOptions.SetProjection(criterias.Select)
+	}
+
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here
 	as it is using mongodb cursor and record fetching will
@@ -187,6 +217,17 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 		if err != nil {
 			return users, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			user.CreatedByUser, _ = FindUserByID(user.CreatedBy, createdByUserSelectFields)
+		}
+		if _, ok := criterias.Select["updated_by_user.id"]; ok {
+			user.UpdatedByUser, _ = FindUserByID(user.UpdatedBy, updatedByUserSelectFields)
+		}
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			user.DeletedByUser, _ = FindUserByID(user.DeletedBy, deletedByUserSelectFields)
+		}
+
 		users = append(users, user)
 	} //end for loop
 
@@ -244,7 +285,8 @@ func (user *User) Update() (*User, error) {
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
-	user.UpdatedAt = time.Now().Local()
+	now := time.Now().Local()
+	user.UpdatedAt = &now
 
 	if !govalidator.IsNull(user.Password) {
 		user.Password = HashPassword(user.Password)
@@ -286,8 +328,9 @@ func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
 	}
 
 	user.Deleted = true
-	user.DeletedBy = userID
-	user.DeletedAt = time.Now().Local()
+	user.DeletedBy = &userID
+	now := time.Now().Local()
+	user.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -302,16 +345,39 @@ func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindUserByID(ID primitive.ObjectID) (user *User, err error) {
+func FindUserByID(
+	ID *primitive.ObjectID,
+	selectFields bson.M,
+) (user *User, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
+		bson.M{"_id": ID}, findOneOptions).
 		Decode(&user)
 	if err != nil {
 		return nil, err
+	}
+
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		user.CreatedByUser, _ = FindUserByID(user.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		user.UpdatedByUser, _ = FindUserByID(user.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		user.DeletedByUser, _ = FindUserByID(user.DeletedBy, fields)
 	}
 
 	return user, err
@@ -357,7 +423,7 @@ func (user *User) IsPhoneExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func IsUserExists(ID primitive.ObjectID) (exists bool, err error) {
+func IsUserExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

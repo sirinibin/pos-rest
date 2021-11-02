@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -23,23 +24,30 @@ type QuotationProduct struct {
 
 //Quotation : Quotation structure
 type Quotation struct {
-	ID                     primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Code                   string             `bson:"code,omitempty" json:"code,omitempty"`
-	StoreID                primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID             primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Products               []QuotationProduct `bson:"products,omitempty" json:"products,omitempty"`
-	DeliveredBy            primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	DeliveredBySignatureID primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
-	VatPercent             *float32           `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Discount               float32            `bson:"discount,omitempty" json:"discount,omitempty"`
-	Status                 string             `bson:"status,omitempty" json:"status,omitempty"`
-	Deleted                bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy              primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt              time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt              time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt              time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy              primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy              primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID                     primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Code                   string              `bson:"code,omitempty" json:"code,omitempty"`
+	StoreID                *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID             *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Store                  *Store              `json:"store,omitempty"`
+	Customer               *Customer           `json:"customer,omitempty"`
+	Products               []QuotationProduct  `bson:"products,omitempty" json:"products,omitempty"`
+	DeliveredBy            *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	DeliveredBySignatureID *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
+	DeliveredByUser        *User               `json:"delivered_by_user,omitempty"`
+	DeliveredBySignature   *Signature          `json:"delivered_by_signature,omitempty"`
+	VatPercent             *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Discount               float32             `bson:"discount,omitempty" json:"discount,omitempty"`
+	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
+	Deleted                bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy              *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser          *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt              *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt              *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt              *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy              *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy              *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser          *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
 }
 
 func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quotation, criterias SearchCriterias, err error) {
@@ -51,6 +59,7 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 	}
 
 	criterias.SearchBy = make(map[string]interface{})
+
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	keys, ok := r.URL.Query()["search[store_id]"]
@@ -103,6 +112,42 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 
+	storeSelectFields := map[string]interface{}{}
+	customerSelectFields := map[string]interface{}{}
+	createdByUserSelectFields := map[string]interface{}{}
+	updatedByUserSelectFields := map[string]interface{}{}
+	deletedByUserSelectFields := map[string]interface{}{}
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+		if _, ok := criterias.Select["store.id"]; ok {
+			storeSelectFields = ParseRelationalSelectString(keys[0], "store")
+		}
+
+		if _, ok := criterias.Select["customer.id"]; ok {
+			customerSelectFields = ParseRelationalSelectString(keys[0], "customer")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+		}
+
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+		}
+
+	}
+
+	if criterias.Select != nil {
+		findOptions.SetProjection(criterias.Select)
+	}
+
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here
 	as it is using mongodb cursor and record fetching will
@@ -126,6 +171,23 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 		if err != nil {
 			return quotations, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		if _, ok := criterias.Select["store.id"]; ok {
+			quotation.Store, _ = FindStoreByID(quotation.StoreID, storeSelectFields)
+		}
+		if _, ok := criterias.Select["customer.id"]; ok {
+			quotation.Customer, _ = FindCustomerByID(quotation.CustomerID, customerSelectFields)
+		}
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			quotation.CreatedByUser, _ = FindUserByID(quotation.CreatedBy, createdByUserSelectFields)
+		}
+		if _, ok := criterias.Select["updated_by_user.id"]; ok {
+			quotation.UpdatedByUser, _ = FindUserByID(quotation.UpdatedBy, updatedByUserSelectFields)
+		}
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			quotation.DeletedByUser, _ = FindUserByID(quotation.DeletedBy, deletedByUserSelectFields)
+		}
+
 		quotations = append(quotations, quotation)
 	} //end for loop
 
@@ -136,13 +198,17 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	errs = make(map[string]string)
 
+	if govalidator.IsNull(quotation.Status) {
+		errs["status"] = "Status is required"
+	}
+
 	if scenario == "update" {
 		if quotation.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsQuotationExists(quotation.ID)
+		exists, err := IsQuotationExists(&quotation.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -218,7 +284,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		if product.ProductID.IsZero() {
 			errs["product_id"] = "Product is required for quotation"
 		} else {
-			exists, err := IsProductExists(product.ProductID)
+			exists, err := IsProductExists(&product.ProductID)
 			if err != nil {
 				errs["product_id"] = err.Error()
 				return errs
@@ -333,8 +399,9 @@ func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error)
 	}
 
 	quotation.Deleted = true
-	quotation.DeletedBy = userID
-	quotation.DeletedAt = time.Now().Local()
+	quotation.DeletedBy = &userID
+	now := time.Now().Local()
+	quotation.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -349,22 +416,55 @@ func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error)
 	return nil
 }
 
-func FindQuotationByID(ID primitive.ObjectID) (quotation *Quotation, err error) {
+func FindQuotationByID(
+	ID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (quotation *Quotation, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
+		bson.M{"_id": ID}, findOneOptions).
 		Decode(&quotation)
 	if err != nil {
 		return nil, err
 	}
 
+	if _, ok := selectFields["store.id"]; ok {
+		storeSelectFields := ParseRelationalSelectString(selectFields, "store")
+		quotation.Store, _ = FindStoreByID(quotation.StoreID, storeSelectFields)
+	}
+
+	if _, ok := selectFields["customer.id"]; ok {
+		customerSelectFields := ParseRelationalSelectString(selectFields, "customer")
+		quotation.Customer, _ = FindCustomerByID(quotation.CustomerID, customerSelectFields)
+	}
+
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		quotation.CreatedByUser, _ = FindUserByID(quotation.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		quotation.UpdatedByUser, _ = FindUserByID(quotation.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		quotation.DeletedByUser, _ = FindUserByID(quotation.DeletedBy, fields)
+	}
+
 	return quotation, err
 }
 
-func IsQuotationExists(ID primitive.ObjectID) (exists bool, err error) {
+func IsQuotationExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

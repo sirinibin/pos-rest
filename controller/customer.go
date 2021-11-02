@@ -85,10 +85,11 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer.CreatedBy = userID
-	customer.UpdatedBy = userID
-	customer.CreatedAt = time.Now().Local()
-	customer.UpdatedAt = time.Now().Local()
+	customer.CreatedBy = &userID
+	customer.UpdatedBy = &userID
+	now := time.Now().Local()
+	customer.CreatedAt = &now
+	customer.UpdatedAt = &now
 
 	// Validate data
 	if errs := customer.Validate(w, r, "create"); len(errs) > 0 {
@@ -143,7 +144,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, err = models.FindCustomerByID(customerID)
+	customer, err = models.FindCustomerByID(&customerID, nil)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -164,8 +165,9 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer.UpdatedBy = userID
-	customer.UpdatedAt = time.Now().Local()
+	customer.UpdatedBy = &userID
+	now := time.Now().Local()
+	customer.UpdatedAt = &now
 
 	// Validate data
 	if errs := customer.Validate(w, r, "update"); len(errs) > 0 {
@@ -186,7 +188,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, err = models.FindCustomerByID(customer.ID)
+	customer, err = models.FindCustomerByID(&customer.ID, nil)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find customer:" + err.Error()
@@ -227,7 +229,13 @@ func ViewCustomer(w http.ResponseWriter, r *http.Request) {
 
 	var customer *models.Customer
 
-	customer, err = models.FindCustomerByID(customerID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	customer, err = models.FindCustomerByID(&customerID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -267,7 +275,7 @@ func DeleteCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, err := models.FindCustomerByID(customerID)
+	customer, err := models.FindCustomerByID(&customerID, nil)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

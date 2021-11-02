@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListStore : handler for GET /store
@@ -85,10 +86,11 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store.CreatedBy = userID
-	store.UpdatedBy = userID
-	store.CreatedAt = time.Now().Local()
-	store.UpdatedAt = time.Now().Local()
+	store.CreatedBy = &userID
+	store.UpdatedBy = &userID
+	now := time.Now().Local()
+	store.CreatedAt = &now
+	store.UpdatedAt = &now
 
 	// Validate data
 	if errs := store.Validate(w, r, "create"); len(errs) > 0 {
@@ -143,7 +145,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store, err = models.FindStoreByID(storeID)
+	store, err = models.FindStoreByID(&storeID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -164,8 +166,9 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store.UpdatedBy = userID
-	store.UpdatedAt = time.Now().Local()
+	store.UpdatedBy = &userID
+	now := time.Now().Local()
+	store.UpdatedAt = &now
 
 	// Validate data
 	if errs := store.Validate(w, r, "update"); len(errs) > 0 {
@@ -186,7 +189,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store, err = models.FindStoreByID(store.ID)
+	store, err = models.FindStoreByID(&store.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find store:" + err.Error()
@@ -227,7 +230,13 @@ func ViewStore(w http.ResponseWriter, r *http.Request) {
 
 	var store *models.Store
 
-	store, err = models.FindStoreByID(storeID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	store, err = models.FindStoreByID(&storeID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -235,6 +244,7 @@ func ViewStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//store.MarshalJSON()
 	response.Status = true
 	response.Result = store
 
@@ -267,7 +277,7 @@ func DeleteStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store, err := models.FindStoreByID(storeID)
+	store, err := models.FindStoreByID(&storeID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

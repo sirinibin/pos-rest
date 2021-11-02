@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 // ListVendor : handler for GET /vendor
@@ -85,10 +86,11 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor.CreatedBy = userID
-	vendor.UpdatedBy = userID
-	vendor.CreatedAt = time.Now().Local()
-	vendor.UpdatedAt = time.Now().Local()
+	vendor.CreatedBy = &userID
+	vendor.UpdatedBy = &userID
+	now := time.Now().Local()
+	vendor.CreatedAt = &now
+	vendor.UpdatedAt = &now
 
 	// Validate data
 	if errs := vendor.Validate(w, r, "create"); len(errs) > 0 {
@@ -143,7 +145,7 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, err = models.FindVendorByID(vendorID)
+	vendor, err = models.FindVendorByID(&vendorID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -164,8 +166,9 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor.UpdatedBy = userID
-	vendor.UpdatedAt = time.Now().Local()
+	vendor.UpdatedBy = &userID
+	now := time.Now().Local()
+	vendor.UpdatedAt = &now
 
 	// Validate data
 	if errs := vendor.Validate(w, r, "update"); len(errs) > 0 {
@@ -186,7 +189,7 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, err = models.FindVendorByID(vendor.ID)
+	vendor, err = models.FindVendorByID(&vendor.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find vendor:" + err.Error()
@@ -227,7 +230,13 @@ func ViewVendor(w http.ResponseWriter, r *http.Request) {
 
 	var vendor *models.Vendor
 
-	vendor, err = models.FindVendorByID(vendorID)
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	vendor, err = models.FindVendorByID(&vendorID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -267,7 +276,7 @@ func DeleteVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, err := models.FindVendorByID(vendorID)
+	vendor, err := models.FindVendorByID(&vendorID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

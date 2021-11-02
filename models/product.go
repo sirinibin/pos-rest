@@ -32,22 +32,26 @@ type ProductStock struct {
 
 //Product : Product structure
 type Product struct {
-	ID            primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name          string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic  string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode      string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	CategoryID    primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
-	UnitPrices    []ProductUnitPrice `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	Stock         []ProductStock     `bson:"stock,omitempty" json:"stock,omitempty"`
-	Images        []string           `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent []string           `json:"images_content,omitempty"`
-	Deleted       bool               `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedAt     time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt     time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic  string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode      string              `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	CategoryID    *primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
+	Category      *ProductCategory    `json:"category,omitempty"`
+	UnitPrices    []ProductUnitPrice  `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Stock         []ProductStock      `bson:"stock,omitempty" json:"stock,omitempty"`
+	Images        []string            `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent []string            `json:"images_content,omitempty"`
+	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 }
 
 func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, criterias SearchCriterias, err error) {
@@ -97,6 +101,38 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 
+	categorySelectFields := map[string]interface{}{}
+	createdByUserSelectFields := map[string]interface{}{}
+	updatedByUserSelectFields := map[string]interface{}{}
+	deletedByUserSelectFields := map[string]interface{}{}
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+
+		if _, ok := criterias.Select["category.id"]; ok {
+			categorySelectFields = ParseRelationalSelectString(keys[0], "category")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+		}
+
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+		}
+
+	}
+
+	if criterias.Select != nil {
+		findOptions.SetProjection(criterias.Select)
+	}
+
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here
 	as it is using mongodb cursor and record fetching will
@@ -120,6 +156,23 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		if _, ok := criterias.Select["category.id"]; ok {
+			product.Category, _ = FindProductCategoryByID(product.CategoryID, categorySelectFields)
+		}
+
+		if _, ok := criterias.Select["created_by_user.id"]; ok {
+			product.CreatedByUser, _ = FindUserByID(product.CreatedBy, createdByUserSelectFields)
+		}
+
+		if _, ok := criterias.Select["updated_by_user.id"]; ok {
+			product.UpdatedByUser, _ = FindUserByID(product.UpdatedBy, updatedByUserSelectFields)
+		}
+
+		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+			product.DeletedByUser, _ = FindUserByID(product.DeletedBy, deletedByUserSelectFields)
+		}
+
 		products = append(products, product)
 	} //end for loop
 
@@ -137,7 +190,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsProductExists(product.ID)
+		exists, err := IsProductExists(&product.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -171,7 +224,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "store_id is required for unit price"
 			return errs
 		}
-		exists, err := IsStoreExists(price.StoreID)
+		exists, err := IsStoreExists(&price.StoreID)
 		if err != nil {
 			errs["id"] = err.Error()
 			return errs
@@ -188,7 +241,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "store_id is required for stock"
 			return errs
 		}
-		exists, err := IsStoreExists(stock.StoreID)
+		exists, err := IsStoreExists(&stock.StoreID)
 		if err != nil {
 			errs["id"] = err.Error()
 			return errs
@@ -353,8 +406,9 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	}
 
 	product.Deleted = true
-	product.DeletedBy = userID
-	product.DeletedAt = time.Now().Local()
+	product.DeletedBy = &userID
+	now := time.Now().Local()
+	product.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -369,16 +423,45 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindProductByID(ID primitive.ObjectID) (product *Product, err error) {
+func FindProductByID(
+	ID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (product *Product, err error) {
+
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID, "deleted": bson.M{"$ne": true}}).
+		bson.M{"_id": ID}, findOneOptions).
 		Decode(&product)
 	if err != nil {
 		return nil, err
+	}
+
+	if _, ok := selectFields["category.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "category")
+		product.Category, _ = FindProductCategoryByID(product.CategoryID, fields)
+	}
+
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		product.CreatedByUser, _ = FindUserByID(product.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		product.UpdatedByUser, _ = FindUserByID(product.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		product.DeletedByUser, _ = FindUserByID(product.DeletedBy, fields)
 	}
 
 	return product, err
@@ -404,7 +487,7 @@ func (product *Product) IsItemCodeExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func IsProductExists(ID primitive.ObjectID) (exists bool, err error) {
+func IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
