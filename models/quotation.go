@@ -87,13 +87,47 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 		criterias.SearchBy["store_id"] = storeID
 	}
 
-	keys, ok = r.URL.Query()["search[customer_id]"]
+	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
-		customerID, err := primitive.ObjectIDFromHex(keys[0])
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[net_total]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseFloat(keys[0], 32)
 		if err != nil {
 			return quotations, criterias, err
 		}
-		criterias.SearchBy["customer_id"] = customerID
+
+		criterias.SearchBy["net_total"] = float32(value)
+	}
+
+	keys, ok = r.URL.Query()["search[customer_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		customerIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range customerIds {
+			customerID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return quotations, criterias, err
+			}
+			objecIds = append(objecIds, customerID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[status]"]
+	if ok && len(keys[0]) >= 1 {
+		statusList := strings.Split(keys[0], ",")
+		if len(statusList) > 0 {
+			criterias.SearchBy["status"] = bson.M{"$in": statusList}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[delivered_by]"]
