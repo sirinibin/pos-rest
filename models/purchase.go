@@ -52,6 +52,65 @@ type Purchase struct {
 	UpdatedBy                *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser            *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
+	OrderPlacedByName        string              `json:"order_placed_by_name,omitempty" bson:"order_placed_by_name,omitempty"`
+	VendorName               string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	StoreName                string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName            string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName            string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (purchase *Purchase) UpdateForeignLabelFields() error {
+
+	if purchase.StoreID != nil {
+		store, err := FindStoreByID(purchase.StoreID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		purchase.StoreName = store.Name
+	}
+
+	if purchase.VendorID != nil {
+		vendor, err := FindVendorByID(purchase.VendorID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		purchase.VendorName = vendor.Name
+	}
+
+	if purchase.OrderPlacedBy != nil {
+		orderPlacedByUser, err := FindUserByID(purchase.OrderPlacedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		purchase.OrderPlacedByName = orderPlacedByUser.Name
+	}
+
+	if purchase.CreatedBy != nil {
+		createdByUser, err := FindUserByID(purchase.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		purchase.CreatedByName = createdByUser.Name
+	}
+
+	if purchase.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(purchase.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		purchase.UpdatedByName = updatedByUser.Name
+	}
+
+	if purchase.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(purchase.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		purchase.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func (purchase *Purchase) FindNetTotal() {
@@ -395,13 +454,13 @@ func (purchase *Purchase) AddStock() (err error) {
 			product.Stock = append(product.Stock, productStock)
 		}
 
-		product, err = product.Update()
+		err = product.Update()
 		if err != nil {
 			return err
 		}
 	}
 	purchase.StockAdded = true
-	_, err = purchase.Update()
+	err = purchase.Update()
 	if err != nil {
 		return err
 	}
@@ -423,7 +482,7 @@ func (purchase *Purchase) RemoveStock() (err error) {
 			}
 		}
 
-		product, err = product.Update()
+		err = product.Update()
 		if err != nil {
 			return err
 		}
@@ -457,7 +516,7 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 			}
 			product.UnitPrices = append(product.UnitPrices, productUnitPrice)
 		}
-		_, err = product.Update()
+		err = product.Update()
 		if err != nil {
 			return err
 		}
@@ -470,6 +529,12 @@ func (purchase *Purchase) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	err := purchase.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	purchase.ID = primitive.NewObjectID()
 	if len(purchase.Code) == 0 {
 		for true {
@@ -483,7 +548,7 @@ func (purchase *Purchase) Insert() error {
 			}
 		}
 	}
-	_, err := collection.InsertOne(ctx, &purchase)
+	_, err = collection.InsertOne(ctx, &purchase)
 	if err != nil {
 		return err
 	}
@@ -520,26 +585,29 @@ func GeneratePurchaseCode(n int) string {
 	return string(b)
 }
 
-func (purchase *Purchase) Update() (*Purchase, error) {
+func (purchase *Purchase) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
-	updateResult, err := collection.UpdateOne(
+
+	err := purchase.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": purchase.ID},
 		bson.M{"$set": purchase},
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if updateResult.MatchedCount > 0 {
-		return purchase, nil
-	}
-	return nil, nil
+	return nil
 }
 
 func (purchase *Purchase) DeletePurchase(tokenClaims TokenClaims) (err error) {
@@ -548,6 +616,11 @@ func (purchase *Purchase) DeletePurchase(tokenClaims TokenClaims) (err error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = purchase.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

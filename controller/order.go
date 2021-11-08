@@ -205,7 +205,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.FindNetTotal()
 
-	order, err = order.Update()
+	err = order.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

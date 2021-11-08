@@ -51,6 +51,65 @@ type Order struct {
 	UpdatedBy              *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser          *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
+	DeliveredByName        string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CustomerName           string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	StoreName              string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName          string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (order *Order) UpdateForeignLabelFields() error {
+
+	if order.StoreID != nil {
+		store, err := FindStoreByID(order.StoreID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		order.StoreName = store.Name
+	}
+
+	if order.CustomerID != nil {
+		customer, err := FindCustomerByID(order.CustomerID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		order.CustomerName = customer.Name
+	}
+
+	if order.DeliveredBy != nil {
+		deliveredByUser, err := FindUserByID(order.DeliveredBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		order.DeliveredByName = deliveredByUser.Name
+	}
+
+	if order.CreatedBy != nil {
+		createdByUser, err := FindUserByID(order.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		order.CreatedByName = createdByUser.Name
+	}
+
+	if order.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(order.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		order.UpdatedByName = updatedByUser.Name
+	}
+
+	if order.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(order.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		order.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func (order *Order) FindNetTotal() {
@@ -391,7 +450,7 @@ func (order *Order) RemoveStock() (err error) {
 			}
 		}
 
-		product, err = product.Update()
+		err = product.Update()
 		if err != nil {
 			return err
 		}
@@ -399,7 +458,7 @@ func (order *Order) RemoveStock() (err error) {
 	}
 
 	order.StockRemoved = true
-	_, err = order.Update()
+	err = order.Update()
 	if err != nil {
 		return err
 	}
@@ -434,14 +493,14 @@ func (order *Order) AddStock() (err error) {
 			product.Stock = append(product.Stock, productStock)
 		}
 
-		product, err = product.Update()
+		err = product.Update()
 		if err != nil {
 			return err
 		}
 	}
 
 	order.StockRemoved = false
-	_, err = order.Update()
+	err = order.Update()
 	if err != nil {
 		return err
 	}
@@ -453,6 +512,12 @@ func (order *Order) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	err := order.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	order.ID = primitive.NewObjectID()
 	if len(order.Code) == 0 {
 		for true {
@@ -466,7 +531,7 @@ func (order *Order) Insert() error {
 			}
 		}
 	}
-	_, err := collection.InsertOne(ctx, &order)
+	_, err = collection.InsertOne(ctx, &order)
 	if err != nil {
 		return err
 	}
@@ -525,12 +590,18 @@ func (order *Order) UpdateOrderStatus(status string) (*Order, error) {
 	return nil, nil
 }
 
-func (order *Order) Update() (*Order, error) {
+func (order *Order) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err := order.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": order.ID},
@@ -538,13 +609,13 @@ func (order *Order) Update() (*Order, error) {
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if updateResult.MatchedCount > 0 {
-		return order, nil
+		return nil
 	}
-	return nil, nil
+	return nil
 }
 
 func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
@@ -553,6 +624,11 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = order.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

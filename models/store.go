@@ -43,18 +43,64 @@ type Store struct {
 	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser   *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
+	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 }
 
-/*
-func (store Store) MarshalJSON() ([]byte, error) {
+func (store *Store) AttributesValueChangeEvent(storeOld *Store) error {
 
-	if store.DeletedAt.IsZero() {
-		return nil, nil // Exclude zero value from fields with `omitempty`
+	if store.Name != storeOld.Name {
+		usedInCollections := []string{
+			"order",
+			"purchase",
+			"quotation",
+		}
+
+		for _, collectionName := range usedInCollections {
+			err := UpdateManyByCollectionName(
+				collectionName,
+				bson.M{"store_id": store.ID},
+				bson.M{"store_name": store.Name},
+			)
+			if err != nil {
+				return nil
+			}
+		}
 	}
 
-	return json.Marshal(store.DeletedAt)
+	return nil
 }
-*/
+
+func (store *Store) UpdateForeignLabelFields() error {
+
+	if store.CreatedBy != nil {
+		createdByUser, err := FindUserByID(store.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		store.CreatedByName = createdByUser.Name
+	}
+
+	if store.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(store.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		store.UpdatedByName = updatedByUser.Name
+	}
+
+	if store.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(store.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		store.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
+}
+
 func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
 	sortFieldWithOrder := strings.Fields(sortString)
 	sortBy = map[string]interface{}{}
@@ -268,6 +314,11 @@ func (store *Store) Insert() error {
 	defer cancel()
 	store.ID = primitive.NewObjectID()
 
+	err := store.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	if !govalidator.IsNull(store.LogoContent) {
 		err := store.SaveLogoFile()
 		if err != nil {
@@ -275,7 +326,7 @@ func (store *Store) Insert() error {
 		}
 	}
 
-	_, err := collection.InsertOne(ctx, &store)
+	_, err = collection.InsertOne(ctx, &store)
 	if err != nil {
 		return err
 	}
@@ -303,35 +354,36 @@ func (store *Store) SaveLogoFile() error {
 	return nil
 }
 
-func (store *Store) Update() (*Store, error) {
+func (store *Store) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
+	err := store.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	if !govalidator.IsNull(store.LogoContent) {
 		err := store.SaveLogoFile()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	store.LogoContent = ""
 
-	updateResult, err := collection.UpdateOne(
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": store.ID},
 		bson.M{"$set": store},
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	if updateResult.MatchedCount > 0 {
-		return store, nil
-	}
-	return nil, nil
+	return nil
 }
 
 func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
@@ -340,6 +392,11 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = store.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

@@ -179,7 +179,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err = user.Update()
+	err = user.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

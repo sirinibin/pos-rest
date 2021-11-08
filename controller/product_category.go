@@ -133,6 +133,7 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var productCategory *models.ProductCategory
+	var productCategoryOld *models.ProductCategory
 
 	params := mux.Vars(r)
 
@@ -146,6 +147,15 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	productCategory, err = models.FindProductCategoryByID(&productCategoryID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productCategoryOld, err = models.FindProductCategoryByID(&productCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -179,11 +189,22 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory, err = productCategory.Update()
+	err = productCategory.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = productCategory.AttributesValueChangeEvent(productCategoryOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)

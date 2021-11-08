@@ -178,7 +178,7 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err = signature.Update()
+	err = signature.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

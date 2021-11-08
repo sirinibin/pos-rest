@@ -134,6 +134,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var store *models.Store
+	var storeOld *models.Store
 
 	params := mux.Vars(r)
 
@@ -141,6 +142,14 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	storeOld, err = models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -178,11 +187,22 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	store, err = store.Update()
+	err = store.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = store.AttributesValueChangeEvent(storeOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)

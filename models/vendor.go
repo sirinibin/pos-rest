@@ -42,6 +42,60 @@ type Vendor struct {
 	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser   *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
+	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
+
+	if vendor.Name != vendorOld.Name {
+		usedInCollections := []string{
+			"purchase",
+		}
+
+		for _, collectionName := range usedInCollections {
+			err := UpdateManyByCollectionName(
+				collectionName,
+				bson.M{"vendor_id": vendor.ID},
+				bson.M{"vendor_name": vendor.Name},
+			)
+			if err != nil {
+				return nil
+			}
+		}
+	}
+
+	return nil
+}
+
+func (vendor *Vendor) UpdateForeignLabelFields() error {
+
+	if vendor.CreatedBy != nil {
+		createdByUser, err := FindUserByID(vendor.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		vendor.CreatedByName = createdByUser.Name
+	}
+
+	if vendor.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(vendor.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		vendor.UpdatedByName = updatedByUser.Name
+	}
+
+	if vendor.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(vendor.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		vendor.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func SearchVendor(w http.ResponseWriter, r *http.Request) (vendores []Vendor, criterias SearchCriterias, err error) {
@@ -240,6 +294,11 @@ func (vendor *Vendor) Insert() error {
 	defer cancel()
 	vendor.ID = primitive.NewObjectID()
 
+	err := vendor.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	if !govalidator.IsNull(vendor.LogoContent) {
 		err := vendor.SaveLogoFile()
 		if err != nil {
@@ -247,7 +306,7 @@ func (vendor *Vendor) Insert() error {
 		}
 	}
 
-	_, err := collection.InsertOne(ctx, &vendor)
+	_, err = collection.InsertOne(ctx, &vendor)
 	if err != nil {
 		return err
 	}
@@ -275,35 +334,37 @@ func (vendor *Vendor) SaveLogoFile() error {
 	return nil
 }
 
-func (vendor *Vendor) Update() (*Vendor, error) {
+func (vendor *Vendor) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
+	err := vendor.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	if !govalidator.IsNull(vendor.LogoContent) {
 		err := vendor.SaveLogoFile()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	vendor.LogoContent = ""
 
-	updateResult, err := collection.UpdateOne(
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": vendor.ID},
 		bson.M{"$set": vendor},
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if updateResult.MatchedCount > 0 {
-		return vendor, nil
-	}
-	return nil, nil
+	return nil
 }
 
 func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
@@ -312,6 +373,11 @@ func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = vendor.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

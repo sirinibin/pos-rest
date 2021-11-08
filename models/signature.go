@@ -33,6 +33,38 @@ type Signature struct {
 	UpdatedBy        *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser    *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser    *User               `json:"updated_by_user,omitempty"`
+	CreatedByName    string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName    string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName    string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (signature *Signature) UpdateForeignLabelFields() error {
+
+	if signature.CreatedBy != nil {
+		createdByUser, err := FindUserByID(signature.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		signature.CreatedByName = createdByUser.Name
+	}
+
+	if signature.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(signature.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		signature.UpdatedByName = updatedByUser.Name
+	}
+
+	if signature.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(signature.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		signature.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signature, criterias SearchCriterias, err error) {
@@ -245,6 +277,12 @@ func (signature *Signature) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	err := signature.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	signature.ID = primitive.NewObjectID()
 
 	if !govalidator.IsNull(signature.SignatureContent) {
@@ -254,7 +292,7 @@ func (signature *Signature) Insert() error {
 		}
 	}
 
-	_, err := collection.InsertOne(ctx, &signature)
+	_, err = collection.InsertOne(ctx, &signature)
 	if err != nil {
 		return err
 	}
@@ -302,34 +340,36 @@ func SaveBase64File(filename string, content []byte) error {
 	return nil
 }
 
-func (signature *Signature) Update() (*Signature, error) {
+func (signature *Signature) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
+	err := signature.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	if !govalidator.IsNull(signature.SignatureContent) {
 		err := signature.SaveSignatureFile()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	updateResult, err := collection.UpdateOne(
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": signature.ID},
 		bson.M{"$set": signature},
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if updateResult.MatchedCount > 0 {
-		return signature, nil
-	}
-	return nil, nil
+	return nil
 }
 
 func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error) {
@@ -338,6 +378,11 @@ func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = signature.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

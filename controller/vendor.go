@@ -145,6 +145,14 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	vendorOld, err := models.FindVendorByID(&vendorID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	vendor, err = models.FindVendorByID(&vendorID, bson.M{})
 	if err != nil {
 		response.Status = false
@@ -178,11 +186,22 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, err = vendor.Update()
+	err = vendor.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = vendor.AttributesValueChangeEvent(vendorOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)

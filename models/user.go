@@ -34,6 +34,107 @@ type User struct {
 	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (user *User) AttributesValueChangeEvent(userOld *User) error {
+
+	if user.Name != userOld.Name {
+
+		err := UpdateManyByCollectionName(
+			"quotation",
+			bson.M{"delivered_by": user.ID},
+			bson.M{"delivered_by_name": user.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = UpdateManyByCollectionName(
+			"purchase",
+			bson.M{"order_placed_by": user.ID},
+			bson.M{"order_placed_by_name": user.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		usedInCollections := []string{
+			"order",
+			"customer",
+			"purchase",
+			"product_category",
+			"product",
+			"quotation",
+			"signature",
+			"store",
+			"vendor",
+		}
+
+		for _, collectionName := range usedInCollections {
+
+			err := UpdateManyByCollectionName(
+				collectionName,
+				bson.M{"created_by": user.ID},
+				bson.M{"created_by_name": user.Name},
+			)
+			if err != nil {
+				return nil
+			}
+
+			err = UpdateManyByCollectionName(
+				collectionName,
+				bson.M{"updated_by": user.ID},
+				bson.M{"updated_by_name": user.Name},
+			)
+			if err != nil {
+				return nil
+			}
+
+			err = UpdateManyByCollectionName(
+				collectionName,
+				bson.M{"deleted_by": user.ID},
+				bson.M{"deleted_by_name": user.Name},
+			)
+			if err != nil {
+				return nil
+			}
+		}
+
+	}
+
+	return nil
+}
+
+func (user *User) UpdateForeignLabelFields() error {
+
+	if user.CreatedBy != nil {
+		createdByUser, err := FindUserByID(user.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		user.CreatedByName = createdByUser.Name
+	}
+
+	if user.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(user.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		user.UpdatedByName = updatedByUser.Name
+	}
+
+	if user.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(user.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		user.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func FindUserByEmail(email string) (user *User, err error) {
@@ -239,6 +340,12 @@ func (user *User) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	err := user.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	user.ID = primitive.NewObjectID()
 	// Insert new record
 	user.Password = HashPassword(user.Password)
@@ -250,7 +357,7 @@ func (user *User) Insert() error {
 		}
 	}
 
-	_, err := collection.InsertOne(ctx, &user)
+	_, err = collection.InsertOne(ctx, &user)
 	if err != nil {
 		return err
 	}
@@ -278,12 +385,17 @@ func (user *User) SavePhoto() error {
 	return nil
 }
 
-func (user *User) Update() (*User, error) {
+func (user *User) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err := user.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	now := time.Now().Local()
 	user.UpdatedAt = &now
@@ -295,24 +407,21 @@ func (user *User) Update() (*User, error) {
 	if !govalidator.IsNull(user.PhotoContent) {
 		err := user.SavePhoto()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	updateResult, err := collection.UpdateOne(
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": user.ID},
 		bson.M{"$set": user},
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if updateResult.MatchedCount > 0 {
-		return user, nil
-	}
-	return nil, nil
+	return nil
 }
 
 func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
@@ -321,6 +430,11 @@ func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = user.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

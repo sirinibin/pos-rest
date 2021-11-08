@@ -183,7 +183,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	quotation.FindNetTotal()
 
-	quotation, err = quotation.Update()
+	err = quotation.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

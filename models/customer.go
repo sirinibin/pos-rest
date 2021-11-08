@@ -38,6 +38,86 @@ type Customer struct {
 	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser   *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
+	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) error {
+
+	if customer.Name != customerOld.Name {
+		err := UpdateManyByCollectionName(
+			"order",
+			bson.M{"customer_id": customer.ID},
+			bson.M{"customer_name": customer.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = UpdateManyByCollectionName(
+			"quotation",
+			bson.M{"customer_id": customer.ID},
+			bson.M{"customer_name": customer.Name},
+		)
+		if err != nil {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func UpdateManyByCollectionName(
+	collectionName string,
+	filter bson.M,
+	updateValues bson.M,
+) error {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	defer cancel()
+
+	_, err := collection.UpdateMany(
+		ctx,
+		filter,
+		bson.M{"$set": updateValues},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (customer *Customer) UpdateForeignLabelFields() error {
+
+	if customer.CreatedBy != nil {
+		createdByUser, err := FindUserByID(customer.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		customer.CreatedByName = createdByUser.Name
+	}
+
+	if customer.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(customer.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		customer.UpdatedByName = updatedByUser.Name
+	}
+
+	if customer.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(customer.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		customer.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Customer, criterias SearchCriterias, err error) {
@@ -205,34 +285,43 @@ func (customer *Customer) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	customer.ID = primitive.NewObjectID()
-	_, err := collection.InsertOne(ctx, &customer)
+
+	err := customer.UpdateForeignLabelFields()
 	if err != nil {
 		return err
 	}
+
+	customer.ID = primitive.NewObjectID()
+	_, err = collection.InsertOne(ctx, &customer)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (customer *Customer) Update() (*Customer, error) {
+func (customer *Customer) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
-	updateResult, err := collection.UpdateOne(
+
+	err := customer.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": customer.ID},
 		bson.M{"$set": customer},
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	if updateResult.MatchedCount > 0 {
-		return customer, nil
-	}
-	return nil, nil
+	return nil
 }
 
 func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
@@ -241,6 +330,11 @@ func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = customer.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

@@ -219,7 +219,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	purchase.FindNetTotal()
 
-	purchase, err = purchase.Update()
+	err = purchase.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

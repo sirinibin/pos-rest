@@ -28,6 +28,67 @@ type ProductCategory struct {
 	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (productCategory *ProductCategory) AttributesValueChangeEvent(productCategoryOld *ProductCategory) error {
+
+	if productCategory.Name != productCategoryOld.Name {
+		err := UpdateManyByCollectionName(
+			"product",
+			bson.M{"category_id": productCategory.ID},
+			bson.M{"$pull": bson.M{
+				"customer_name": productCategoryOld.Name,
+			}},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = UpdateManyByCollectionName(
+			"product",
+			bson.M{"category_id": productCategory.ID},
+			bson.M{"$push": bson.M{
+				"customer_name": productCategory.Name,
+			}},
+		)
+		if err != nil {
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func (productCategory *ProductCategory) UpdateForeignLabelFields() error {
+
+	if productCategory.CreatedBy != nil {
+		createdByUser, err := FindUserByID(productCategory.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		productCategory.CreatedByName = createdByUser.Name
+	}
+
+	if productCategory.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(productCategory.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		productCategory.UpdatedByName = updatedByUser.Name
+	}
+
+	if productCategory.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(productCategory.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		productCategory.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCategories []ProductCategory, criterias SearchCriterias, err error) {
@@ -205,34 +266,39 @@ func (productCategory *ProductCategory) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	err := productCategory.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	productCategory.ID = primitive.NewObjectID()
-	_, err := collection.InsertOne(ctx, &productCategory)
+	_, err = collection.InsertOne(ctx, &productCategory)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (productCategory *ProductCategory) Update() (*ProductCategory, error) {
+func (productCategory *ProductCategory) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
-	updateResult, err := collection.UpdateOne(
+
+	err := productCategory.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": productCategory.ID},
 		bson.M{"$set": productCategory},
 		updateOptions,
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	if updateResult.MatchedCount > 0 {
-		return productCategory, nil
-	}
-	return nil, nil
+	return err
 }
 
 func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenClaims) (err error) {
@@ -241,6 +307,11 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = productCategory.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

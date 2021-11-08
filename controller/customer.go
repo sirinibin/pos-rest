@@ -133,6 +133,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var customer *models.Customer
+	var customerOld *models.Customer
 
 	params := mux.Vars(r)
 
@@ -140,6 +141,14 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["customer_id"] = "Invalid Customer ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerOld, err = models.FindCustomerByID(&customerID, nil)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -177,11 +186,22 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, err = customer.Update()
+	err = customer.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customer.AttributesValueChangeEvent(customerOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)

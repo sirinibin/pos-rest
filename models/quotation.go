@@ -50,6 +50,65 @@ type Quotation struct {
 	UpdatedBy              *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser          *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
+	CustomerName           string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	StoreName              string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	DeliveredByName        string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName          string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (quotation *Quotation) UpdateForeignLabelFields() error {
+
+	if quotation.StoreID != nil {
+		store, err := FindStoreByID(quotation.StoreID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		quotation.StoreName = store.Name
+	}
+
+	if quotation.CustomerID != nil {
+		customer, err := FindCustomerByID(quotation.CustomerID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		quotation.CustomerName = customer.Name
+	}
+
+	if quotation.DeliveredBy != nil {
+		deliveredByUser, err := FindUserByID(quotation.DeliveredBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		quotation.DeliveredByName = deliveredByUser.Name
+	}
+
+	if quotation.CreatedBy != nil {
+		createdByUser, err := FindUserByID(quotation.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		quotation.CreatedByName = createdByUser.Name
+	}
+
+	if quotation.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(quotation.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		quotation.UpdatedByName = updatedByUser.Name
+	}
+
+	if quotation.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(quotation.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		quotation.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func (quotation *Quotation) FindNetTotal() {
@@ -119,6 +178,26 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_by]"]
+	if ok && len(keys[0]) >= 1 {
+
+		userIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range userIds {
+			userID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return quotations, criterias, err
+			}
+			objecIds = append(objecIds, userID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
 		}
 	}
 
@@ -365,6 +444,12 @@ func (quotation *Quotation) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	err := quotation.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	quotation.ID = primitive.NewObjectID()
 	if len(quotation.Code) == 0 {
 		for true {
@@ -378,7 +463,7 @@ func (quotation *Quotation) Insert() error {
 			}
 		}
 	}
-	_, err := collection.InsertOne(ctx, &quotation)
+	_, err = collection.InsertOne(ctx, &quotation)
 	if err != nil {
 		return err
 	}
@@ -414,26 +499,28 @@ func GenerateQuotationCode(n int) string {
 	return string(b)
 }
 
-func (quotation *Quotation) Update() (*Quotation, error) {
+func (quotation *Quotation) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
-	updateResult, err := collection.UpdateOne(
+
+	err := quotation.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": quotation.ID},
 		bson.M{"$set": quotation},
 		updateOptions,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	if updateResult.MatchedCount > 0 {
-		return quotation, nil
-	}
-	return nil, nil
+	return nil
 }
 
 func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error) {
@@ -442,6 +529,11 @@ func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = quotation.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

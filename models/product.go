@@ -32,26 +32,68 @@ type ProductStock struct {
 
 //Product : Product structure
 type Product struct {
-	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic  string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode      string              `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	CategoryID    *primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
-	Category      *ProductCategory    `json:"category,omitempty"`
-	UnitPrices    []ProductUnitPrice  `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	Stock         []ProductStock      `bson:"stock,omitempty" json:"stock,omitempty"`
-	Images        []string            `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent []string            `json:"images_content,omitempty"`
-	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
+	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	CategoryID    []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
+	Category      []*ProductCategory    `json:"category,omitempty"`
+	UnitPrices    []ProductUnitPrice    `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
+	Images        []string              `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent []string              `json:"images_content,omitempty"`
+	Deleted       bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User                 `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser *User                 `json:"created_by_user,omitempty"`
+	UpdatedByUser *User                 `json:"updated_by_user,omitempty"`
+	CategoryName  []string              `json:"category_name,omitempty" bson:"category_name,omitempty"`
+	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+}
+
+func (product *Product) UpdateForeignLabelFields() error {
+
+	product.CategoryName = []string{}
+	for _, category := range product.Category {
+		productCategory, err := FindProductCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		product.CategoryName = append(product.CategoryName, productCategory.Name)
+	}
+
+	if product.CreatedBy != nil {
+		createdByUser, err := FindUserByID(product.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		product.CreatedByName = createdByUser.Name
+	}
+
+	if product.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(product.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		product.UpdatedByName = updatedByUser.Name
+	}
+
+	if product.DeletedBy != nil {
+		deletedByUser, err := FindUserByID(product.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		product.DeletedByName = deletedByUser.Name
+	}
+
+	return nil
 }
 
 func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, criterias SearchCriterias, err error) {
@@ -76,6 +118,26 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	keys, ok = r.URL.Query()["search[item_code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["item_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[category_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		categoryIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range categoryIds {
+			categoryID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return products, criterias, err
+			}
+			objecIds = append(objecIds, categoryID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["category_id"] = bson.M{"$in": objecIds}
+		}
 	}
 
 	keys, ok = r.URL.Query()["limit"]
@@ -158,7 +220,10 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		}
 
 		if _, ok := criterias.Select["category.id"]; ok {
-			product.Category, _ = FindProductCategoryByID(product.CategoryID, categorySelectFields)
+			for _, categoryID := range product.CategoryID {
+				category, _ := FindProductCategoryByID(categoryID, categorySelectFields)
+				product.Category = append(product.Category, category)
+			}
 		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
@@ -253,19 +318,22 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
-	if product.CategoryID.IsZero() {
-		errs["category_id"] = "Category is required"
+	if len(product.CategoryID) == 0 {
+		errs["category_id"] = "Atleast 1 category is required"
 	} else {
-		exists, err := IsProductCategoryExists(product.CategoryID)
-		if err != nil {
-			errs["category_id"] = err.Error()
-			return errs
+		for _, categoryID := range product.CategoryID {
+			exists, err := IsProductCategoryExists(categoryID)
+			if err != nil {
+				errs["category_id"] = err.Error()
+				return errs
+			}
+
+			if !exists {
+				errs["category_id"] = "Invalid category:" + categoryID.Hex()
+				return errs
+			}
 		}
 
-		if !exists {
-			errs["category_id"] = "Invalid category:" + product.CategoryID.Hex()
-			return errs
-		}
 	}
 
 	for k, imageContent := range product.ImagesContent {
@@ -316,7 +384,12 @@ func (product *Product) Insert() error {
 		}
 	}
 
-	_, err := collection.InsertOne(ctx, &product)
+	err := product.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.InsertOne(ctx, &product)
 	if err != nil {
 		return err
 	}
@@ -363,7 +436,7 @@ func GenerateItemCode(n int) string {
 	return string(b)
 }
 
-func (product *Product) Update() (*Product, error) {
+func (product *Product) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
@@ -373,24 +446,22 @@ func (product *Product) Update() (*Product, error) {
 	if len(product.ImagesContent) > 0 {
 		err := product.SaveImages()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	updateResult, err := collection.UpdateOne(
+	err := product.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": product.ID},
 		bson.M{"$set": product},
 		updateOptions,
 	)
-	if err != nil {
-		return nil, err
-	}
-
-	if updateResult.MatchedCount > 0 {
-		return product, nil
-	}
-	return nil, nil
+	return err
 }
 
 func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
@@ -399,6 +470,11 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
+
+	err = product.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -446,7 +522,11 @@ func FindProductByID(
 
 	if _, ok := selectFields["category.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "category")
-		product.Category, _ = FindProductCategoryByID(product.CategoryID, fields)
+		for _, categoryID := range product.CategoryID {
+			category, _ := FindProductCategoryByID(categoryID, fields)
+			product.Category = append(product.Category, category)
+		}
+
 	}
 
 	if _, ok := selectFields["created_by_user.id"]; ok {
