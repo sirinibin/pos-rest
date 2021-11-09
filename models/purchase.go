@@ -104,6 +104,25 @@ func (purchase *Purchase) AttributesValueChangeEvent(purchaseOld *Purchase) erro
 			purchaseOld.Status,
 			purchase.Status,
 		)
+
+		if purchase.Status == "delivered" {
+			/*
+				err := purchaseOld.RemoveStock()
+				if err != nil {
+					return err
+				}
+			*/
+
+			err := purchase.AddStock()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.UpdateProductUnitPriceInStore()
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
