@@ -56,6 +56,45 @@ type Product struct {
 	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog     []ChangeLog           `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (product *Product) SetChangeLog(
+	event string,
+	name, oldValue, newValue interface{},
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && name != nil {
+		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
+	} else if event == "remove_stock" && name != nil {
+		description = "Stock reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int)) + " by " + UserObject.Name
+	} else if event == "add_stock" && name != nil {
+		description = "Stock raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int)) + " by " + UserObject.Name
+	} else if event == "add_image" {
+		description = "Added " + strconv.Itoa(newValue.(int)) + " new images by " + UserObject.Name
+	} else if event == "remove_image" {
+		description = "Removed " + strconv.Itoa(newValue.(int)) + " images by " + UserObject.Name
+	}
+
+	product.ChangeLog = append(
+		product.ChangeLog,
+		ChangeLog{
+			Event:         event,
+			Description:   description,
+			CreatedBy:     &UserObject.ID,
+			CreatedByName: UserObject.Name,
+			CreatedAt:     &now,
+		},
+	)
 }
 
 func (product *Product) UpdateForeignLabelFields() error {
@@ -389,6 +428,8 @@ func (product *Product) Insert() error {
 		return err
 	}
 
+	product.SetChangeLog("create", nil, nil, nil)
+
 	_, err = collection.InsertOne(ctx, &product)
 	if err != nil {
 		return err
@@ -397,6 +438,8 @@ func (product *Product) Insert() error {
 }
 
 func (product *Product) SaveImages() error {
+
+	oldImagesCount := len(product.Images)
 
 	for _, imageContent := range product.ImagesContent {
 		content, err := base64.StdEncoding.DecodeString(imageContent)
@@ -416,6 +459,14 @@ func (product *Product) SaveImages() error {
 		}
 		product.Images = append(product.Images, "/"+filename)
 	}
+
+	product.SetChangeLog(
+		"add_image",
+		"images",
+		oldImagesCount,
+		len(product.Images),
+	)
+
 	product.ImagesContent = []string{}
 
 	return nil
@@ -455,6 +506,8 @@ func (product *Product) Update() error {
 		return err
 	}
 
+	product.SetChangeLog("update", nil, nil, nil)
+
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": product.ID},
@@ -485,6 +538,8 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	product.DeletedBy = &userID
 	now := time.Now().Local()
 	product.DeletedAt = &now
+
+	product.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

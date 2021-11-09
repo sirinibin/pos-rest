@@ -14,6 +14,14 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+type ChangeLog struct {
+	Event         string              `bson:"event,omitempty" json:"event,omitempty"`
+	Description   string              `bson:"description,omitempty" json:"description,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+}
+
 //Customer : Customer structure
 type Customer struct {
 	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
@@ -41,6 +49,37 @@ type Customer struct {
 	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog       []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (customer *Customer) SetChangeLog(
+	event string,
+	attribute, oldValue, newValue *string,
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && attribute != nil {
+		description = *attribute + " changed from " + *oldValue + " to " + *newValue + " by " + UserObject.Name
+	}
+
+	customer.ChangeLog = append(
+		customer.ChangeLog,
+		ChangeLog{
+			Event:         event,
+			Description:   description,
+			CreatedBy:     &UserObject.ID,
+			CreatedByName: UserObject.Name,
+			CreatedAt:     &now,
+		},
+	)
 }
 
 func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) error {
@@ -54,6 +93,13 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		if err != nil {
 			return nil
 		}
+		attribute := "name"
+		customer.SetChangeLog(
+			"attribute_value_change",
+			&attribute,
+			&customerOld.Name,
+			&customer.Name,
+		)
 
 		err = UpdateManyByCollectionName(
 			"quotation",
@@ -291,6 +337,14 @@ func (customer *Customer) Insert() error {
 		return err
 	}
 
+	customer.CreatedBy = &UserObject.ID
+	customer.UpdatedBy = &UserObject.ID
+	now := time.Now().Local()
+	customer.CreatedAt = &now
+	customer.UpdatedAt = &now
+
+	customer.SetChangeLog("create", nil, nil, nil)
+
 	customer.ID = primitive.NewObjectID()
 	_, err = collection.InsertOne(ctx, &customer)
 	if err != nil {
@@ -311,6 +365,12 @@ func (customer *Customer) Update() error {
 	if err != nil {
 		return err
 	}
+
+	customer.UpdatedBy = &UserObject.ID
+	now := time.Now().Local()
+	customer.UpdatedAt = &now
+
+	customer.SetChangeLog("update", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -345,6 +405,8 @@ func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
 	customer.DeletedBy = &userID
 	now := time.Now().Local()
 	customer.DeletedAt = &now
+
+	customer.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

@@ -46,6 +46,37 @@ type Store struct {
 	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog       []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (store *Store) SetChangeLog(
+	event string,
+	name, oldValue, newValue interface{},
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && name != nil {
+		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
+	}
+
+	store.ChangeLog = append(
+		store.ChangeLog,
+		ChangeLog{
+			Event:         event,
+			Description:   description,
+			CreatedBy:     &UserObject.ID,
+			CreatedByName: UserObject.Name,
+			CreatedAt:     &now,
+		},
+	)
 }
 
 func (store *Store) AttributesValueChangeEvent(storeOld *Store) error {
@@ -326,6 +357,8 @@ func (store *Store) Insert() error {
 		}
 	}
 
+	store.SetChangeLog("create", nil, nil, nil)
+
 	_, err = collection.InsertOne(ctx, &store)
 	if err != nil {
 		return err
@@ -374,6 +407,8 @@ func (store *Store) Update() error {
 	}
 	store.LogoContent = ""
 
+	store.SetChangeLog("update", nil, nil, nil)
+
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": store.ID},
@@ -407,6 +442,8 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 	store.DeletedBy = &userID
 	now := time.Now().Local()
 	store.DeletedAt = &now
+
+	store.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

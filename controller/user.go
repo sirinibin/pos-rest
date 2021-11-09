@@ -245,6 +245,8 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user.SetChangeLog("view", nil, nil, nil)
+
 	user.Password = ""
 	response.Status = true
 	response.Result = user

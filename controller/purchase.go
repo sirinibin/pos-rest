@@ -161,7 +161,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var purchase *models.Purchase
-	var oldPurchase *models.Purchase
+	var purchaseOld *models.Purchase
 
 	params := mux.Vars(r)
 
@@ -174,7 +174,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldPurchase, err = models.FindPurchaseByID(&purchaseID, bson.M{})
+	purchaseOld, err = models.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_purchase"] = "Unable to find purchase:" + err.Error()
@@ -210,7 +210,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.UpdatedAt = &now
 
 	// Validate data
-	if errs := purchase.Validate(w, r, "update", oldPurchase); len(errs) > 0 {
+	if errs := purchase.Validate(w, r, "update", purchaseOld); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -231,7 +231,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if purchase.Status == "delivered" {
-		err = oldPurchase.RemoveStock()
+		err = purchaseOld.RemoveStock()
 		if err != nil {
 			response.Status = false
 			response.Errors = make(map[string]string)
@@ -266,6 +266,17 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 			return
 
 		}
+	}
+
+	err = purchase.AttributesValueChangeEvent(purchaseOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	purchase, err = models.FindPurchaseByID(&purchase.ID, bson.M{})

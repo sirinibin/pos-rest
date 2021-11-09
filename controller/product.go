@@ -241,6 +241,8 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	product.SetChangeLog("view", nil, nil, nil)
+
 	response.Status = true
 	response.Result = product
 

@@ -148,7 +148,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var order *models.Order
-	var oldOrder *models.Order
+	var orderOld *models.Order
 
 	params := mux.Vars(r)
 
@@ -161,7 +161,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err = models.FindOrderByID(&orderID, bson.M{})
+	orderOld, err = models.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_order"] = "Unable to find order:" + err.Error()
@@ -170,7 +170,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldOrder, err = models.FindOrderByID(&orderID, bson.M{})
+	order, err = models.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_order"] = "Unable to find order:" + err.Error()
@@ -196,7 +196,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.UpdatedAt = &now
 
 	// Validate data
-	if errs := order.Validate(w, r, "update", oldOrder); len(errs) > 0 {
+	if errs := order.Validate(w, r, "update", orderOld); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -216,28 +216,15 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.Status == "delivered" || order.Status == "dispatched" {
-		err = oldOrder.AddStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
+	err = order.AttributesValueChangeEvent(orderOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		err = order.RemoveStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	order, err = models.FindOrderByID(&order.ID, bson.M{})
@@ -295,6 +282,8 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	order.SetChangeLog("view", nil, nil, nil)
 
 	response.Status = true
 	response.Result = order

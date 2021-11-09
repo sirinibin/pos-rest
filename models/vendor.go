@@ -45,6 +45,37 @@ type Vendor struct {
 	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog       []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (vendor *Vendor) SetChangeLog(
+	event string,
+	name, oldValue, newValue interface{},
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && name != nil {
+		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
+	}
+
+	vendor.ChangeLog = append(
+		vendor.ChangeLog,
+		ChangeLog{
+			Event:         event,
+			Description:   description,
+			CreatedBy:     &UserObject.ID,
+			CreatedByName: UserObject.Name,
+			CreatedAt:     &now,
+		},
+	)
 }
 
 func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
@@ -306,6 +337,8 @@ func (vendor *Vendor) Insert() error {
 		}
 	}
 
+	vendor.SetChangeLog("create", nil, nil, nil)
+
 	_, err = collection.InsertOne(ctx, &vendor)
 	if err != nil {
 		return err
@@ -354,6 +387,8 @@ func (vendor *Vendor) Update() error {
 	}
 	vendor.LogoContent = ""
 
+	vendor.SetChangeLog("update", nil, nil, nil)
+
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": vendor.ID},
@@ -388,6 +423,8 @@ func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
 	vendor.DeletedBy = &userID
 	now := time.Now().Local()
 	vendor.DeletedAt = &now
+
+	vendor.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

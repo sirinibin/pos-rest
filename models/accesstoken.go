@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"gopkg.in/mgo.v2/bson"
 )
 
 //AccesstokenRequest : Access token request structure
@@ -91,10 +93,22 @@ func AuthenticateByAccessToken(r *http.Request) (tokenClaims TokenClaims, err er
 	if tokenClaims.Type != "access_token" {
 		return tokenClaims, errors.New("Invalid access token.")
 	}
+	TokenClaimsObject = tokenClaims
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		return tokenClaims, err
+	}
+
+	UserObject, err = FindUserByID(&userID, bson.M{"id": 1, "name": 1})
+	if err != nil {
+		return tokenClaims, err
+	}
 
 	return tokenClaims, nil
-
 }
+
+var TokenClaimsObject TokenClaims
+var UserObject *User
 
 func AuthenticateByRefreshToken(r *http.Request) (tokenClaims TokenClaims, err error) {
 	tokenStr, err := ParseRefreshTokenFromRequest(r)

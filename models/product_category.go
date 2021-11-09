@@ -31,6 +31,37 @@ type ProductCategory struct {
 	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog     []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (productCategory *ProductCategory) SetChangeLog(
+	event string,
+	name, oldValue, newValue interface{},
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && name != nil {
+		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
+	}
+
+	productCategory.ChangeLog = append(
+		productCategory.ChangeLog,
+		ChangeLog{
+			Event:         event,
+			Description:   description,
+			CreatedBy:     &UserObject.ID,
+			CreatedByName: UserObject.Name,
+			CreatedAt:     &now,
+		},
+	)
 }
 
 func (productCategory *ProductCategory) AttributesValueChangeEvent(productCategoryOld *ProductCategory) error {
@@ -57,6 +88,12 @@ func (productCategory *ProductCategory) AttributesValueChangeEvent(productCatego
 		if err != nil {
 			return nil
 		}
+		productCategory.SetChangeLog(
+			"attribute_value_change",
+			"name",
+			productCategoryOld.Name,
+			productCategory.Name,
+		)
 	}
 
 	return nil
@@ -272,6 +309,8 @@ func (productCategory *ProductCategory) Insert() error {
 		return err
 	}
 
+	productCategory.SetChangeLog("create", nil, nil, nil)
+
 	productCategory.ID = primitive.NewObjectID()
 	_, err = collection.InsertOne(ctx, &productCategory)
 	if err != nil {
@@ -291,6 +330,8 @@ func (productCategory *ProductCategory) Update() error {
 	if err != nil {
 		return err
 	}
+
+	productCategory.SetChangeLog("update", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -322,6 +363,8 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 	productCategory.DeletedBy = &userID
 	now := time.Now().Local()
 	productCategory.DeletedAt = &now
+
+	productCategory.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

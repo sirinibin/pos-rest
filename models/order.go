@@ -57,6 +57,69 @@ type Order struct {
 	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName          string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog              []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (order *Order) SetChangeLog(
+	event string,
+	name, oldValue, newValue interface{},
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && name != nil {
+		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
+	} else if event == "remove_stock" && name != nil {
+		description = "Stock of product: " + name.(string) + " reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+	} else if event == "add_stock" && name != nil {
+		description = "Stock of product: " + name.(string) + " raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+	}
+
+	order.ChangeLog = append(
+		order.ChangeLog,
+		ChangeLog{
+			Event:         event,
+			Description:   description,
+			CreatedBy:     &UserObject.ID,
+			CreatedByName: UserObject.Name,
+			CreatedAt:     &now,
+		},
+	)
+}
+
+func (order *Order) AttributesValueChangeEvent(orderOld *Order) error {
+
+	if order.Status != orderOld.Status {
+		order.SetChangeLog(
+			"attribute_value_change",
+			"status",
+			orderOld.Status,
+			order.Status,
+		)
+
+		if order.Status == "delivered" || order.Status == "dispatched" {
+			/*
+				err := orderOld.AddStock()
+				if err != nil {
+					return err
+				}
+			*/
+
+			err := order.RemoveStock()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (order *Order) UpdateForeignLabelFields() error {
@@ -445,7 +508,23 @@ func (order *Order) RemoveStock() (err error) {
 
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == order.StoreID.Hex() {
+
+				order.SetChangeLog(
+					"remove_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock - orderProduct.Quantity),
+				)
+
+				product.SetChangeLog(
+					"remove_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock - orderProduct.Quantity),
+				)
+
 				product.Stock[k].Stock -= orderProduct.Quantity
+				order.StockRemoved = true
 				break
 			}
 		}
@@ -457,7 +536,6 @@ func (order *Order) RemoveStock() (err error) {
 
 	}
 
-	order.StockRemoved = true
 	err = order.Update()
 	if err != nil {
 		return err
@@ -479,6 +557,20 @@ func (order *Order) AddStock() (err error) {
 		storeExistInProductStock := false
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == order.StoreID.Hex() {
+				order.SetChangeLog(
+					"add_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock + orderProduct.Quantity),
+				)
+
+				product.SetChangeLog(
+					"add_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock + orderProduct.Quantity),
+				)
+
 				product.Stock[k].Stock += orderProduct.Quantity
 				storeExistInProductStock = true
 				break
@@ -531,6 +623,9 @@ func (order *Order) Insert() error {
 			}
 		}
 	}
+
+	order.SetChangeLog("create", nil, nil, nil)
+
 	_, err = collection.InsertOne(ctx, &order)
 	if err != nil {
 		return err
@@ -602,6 +697,8 @@ func (order *Order) Update() error {
 		return err
 	}
 
+	order.SetChangeLog("update", nil, nil, nil)
+
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": order.ID},
@@ -639,6 +736,8 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 	order.DeletedBy = &userID
 	now := time.Now().Local()
 	order.DeletedAt = &now
+
+	order.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

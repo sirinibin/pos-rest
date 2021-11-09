@@ -58,6 +58,55 @@ type Purchase struct {
 	CreatedByName            string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName            string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (purchase *Purchase) SetChangeLog(
+	event string,
+	name, oldValue, newValue interface{},
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && name != nil {
+		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
+	} else if event == "remove_stock" && name != nil {
+		description = "Stock of product: " + name.(string) + " reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+	} else if event == "add_stock" && name != nil {
+		description = "Stock of product: " + name.(string) + " raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+	}
+
+	purchase.ChangeLog = append(
+		purchase.ChangeLog,
+		ChangeLog{
+			Event:         event,
+			Description:   description,
+			CreatedBy:     &UserObject.ID,
+			CreatedByName: UserObject.Name,
+			CreatedAt:     &now,
+		},
+	)
+}
+
+func (purchase *Purchase) AttributesValueChangeEvent(purchaseOld *Purchase) error {
+
+	if purchase.Status != purchaseOld.Status {
+		purchase.SetChangeLog(
+			"attribute_value_change",
+			"status",
+			purchaseOld.Status,
+			purchase.Status,
+		)
+	}
+
+	return nil
 }
 
 func (purchase *Purchase) UpdateForeignLabelFields() error {
@@ -440,6 +489,20 @@ func (purchase *Purchase) AddStock() (err error) {
 		storeExistInProductStock := false
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == purchase.StoreID.Hex() {
+				purchase.SetChangeLog(
+					"add_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock + purchaseProduct.Quantity),
+				)
+
+				product.SetChangeLog(
+					"add_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock + purchaseProduct.Quantity),
+				)
+
 				product.Stock[k].Stock += purchaseProduct.Quantity
 				storeExistInProductStock = true
 				break
@@ -477,6 +540,20 @@ func (purchase *Purchase) RemoveStock() (err error) {
 
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == purchase.StoreID.Hex() {
+				purchase.SetChangeLog(
+					"remove_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock - purchaseProduct.Quantity),
+				)
+
+				product.SetChangeLog(
+					"remove_stock",
+					product.Name,
+					product.Stock[k].Stock,
+					(product.Stock[k].Stock - purchaseProduct.Quantity),
+				)
+
 				product.Stock[k].Stock -= purchaseProduct.Quantity
 				break
 			}
@@ -548,6 +625,9 @@ func (purchase *Purchase) Insert() error {
 			}
 		}
 	}
+
+	purchase.SetChangeLog("create", nil, nil, nil)
+
 	_, err = collection.InsertOne(ctx, &purchase)
 	if err != nil {
 		return err
@@ -597,6 +677,8 @@ func (purchase *Purchase) Update() error {
 		return err
 	}
 
+	purchase.SetChangeLog("update", nil, nil, nil)
+
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": purchase.ID},
@@ -631,6 +713,8 @@ func (purchase *Purchase) DeletePurchase(tokenClaims TokenClaims) (err error) {
 	purchase.DeletedBy = &userID
 	now := time.Now().Local()
 	purchase.DeletedAt = &now
+
+	purchase.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

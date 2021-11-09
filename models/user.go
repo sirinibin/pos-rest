@@ -37,6 +37,42 @@ type User struct {
 	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog     []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func (user *User) SetChangeLog(
+	event string,
+	name, oldValue, newValue interface{},
+) {
+	now := time.Now().Local()
+	description := ""
+	if event == "create" {
+		description = "Created by" + UserObject.Name
+	} else if event == "update" {
+		description = "Updated by" + UserObject.Name
+	} else if event == "delete" {
+		description = "Deleted by" + UserObject.Name
+	} else if event == "view" {
+		description = "Viewed by" + UserObject.Name
+	} else if event == "attribute_value_change" && name != nil {
+		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
+	}
+
+	changeLog := ChangeLog{
+		Event:       event,
+		Description: description,
+		CreatedAt:   &now,
+	}
+
+	if !UserObject.ID.IsZero() {
+		changeLog.CreatedBy = &UserObject.ID
+		changeLog.CreatedByName = UserObject.Name
+	}
+
+	user.ChangeLog = append(
+		user.ChangeLog,
+		changeLog,
+	)
 }
 
 func (user *User) AttributesValueChangeEvent(userOld *User) error {
@@ -101,6 +137,16 @@ func (user *User) AttributesValueChangeEvent(userOld *User) error {
 			if err != nil {
 				return nil
 			}
+
+			err = UpdateManyByCollectionName(
+				collectionName,
+				bson.M{"change_logs.created_by": user.ID},
+				bson.M{"change_logs.$.created_by_name": user.Name},
+			)
+			if err != nil {
+				return nil
+			}
+
 		}
 
 	}
@@ -357,6 +403,8 @@ func (user *User) Insert() error {
 		}
 	}
 
+	user.SetChangeLog("create", nil, nil, nil)
+
 	_, err = collection.InsertOne(ctx, &user)
 	if err != nil {
 		return err
@@ -411,6 +459,8 @@ func (user *User) Update() error {
 		}
 	}
 
+	user.SetChangeLog("update", nil, nil, nil)
+
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": user.ID},
@@ -445,6 +495,8 @@ func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
 	user.DeletedBy = &userID
 	now := time.Now().Local()
 	user.DeletedAt = &now
+
+	user.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,
