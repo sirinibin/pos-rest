@@ -26,6 +26,8 @@ type OrderProduct struct {
 //Order : Order structure
 type Order struct {
 	ID                     primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date                   *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                string              `json:"date_str,omitempty"`
 	Code                   string              `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID                *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID             *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
@@ -105,14 +107,13 @@ func (order *Order) AttributesValueChangeEvent(orderOld *Order) error {
 		)
 
 		if order.Status == "delivered" || order.Status == "dispatched" {
-			/*
-				err := orderOld.AddStock()
-				if err != nil {
-					return err
-				}
-			*/
 
-			err := order.RemoveStock()
+			err := orderOld.AddStock()
+			if err != nil {
+				return err
+			}
+
+			err = order.RemoveStock()
 			if err != nil {
 				return err
 			}
@@ -164,7 +165,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 		order.UpdatedByName = updatedByUser.Name
 	}
 
-	if order.DeletedBy != nil {
+	if order.DeletedBy != nil && !order.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(order.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
@@ -337,6 +338,17 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if govalidator.IsNull(order.Status) {
 		errs["status"] = "Status is required"
+	}
+
+	if govalidator.IsNull(order.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		const shortForm = "Jan 02 2006"
+		date, err := time.Parse(shortForm, order.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		order.Date = &date
 	}
 
 	if scenario == "update" {
@@ -557,19 +569,20 @@ func (order *Order) AddStock() (err error) {
 		storeExistInProductStock := false
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == order.StoreID.Hex() {
-				order.SetChangeLog(
-					"add_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock + orderProduct.Quantity),
-				)
+				/*
+					order.SetChangeLog(
+						"add_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock + orderProduct.Quantity),
+					)
 
-				product.SetChangeLog(
-					"add_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock + orderProduct.Quantity),
-				)
+					product.SetChangeLog(
+						"add_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock + orderProduct.Quantity),
+					)*/
 
 				product.Stock[k].Stock += orderProduct.Quantity
 				storeExistInProductStock = true

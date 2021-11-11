@@ -87,7 +87,7 @@ func (signature *Signature) UpdateForeignLabelFields() error {
 		signature.UpdatedByName = updatedByUser.Name
 	}
 
-	if signature.DeletedBy != nil {
+	if signature.DeletedBy != nil && !signature.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(signature.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err

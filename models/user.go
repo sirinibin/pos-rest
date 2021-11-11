@@ -172,7 +172,7 @@ func (user *User) UpdateForeignLabelFields() error {
 		user.UpdatedByName = updatedByUser.Name
 	}
 
-	if user.DeletedBy != nil {
+	if user.DeletedBy != nil && !user.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(user.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err

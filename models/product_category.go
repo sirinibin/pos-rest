@@ -117,7 +117,7 @@ func (productCategory *ProductCategory) UpdateForeignLabelFields() error {
 		productCategory.UpdatedByName = updatedByUser.Name
 	}
 
-	if productCategory.DeletedBy != nil {
+	if productCategory.DeletedBy != nil && !productCategory.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(productCategory.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err

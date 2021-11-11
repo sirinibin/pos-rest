@@ -155,7 +155,7 @@ func (customer *Customer) UpdateForeignLabelFields() error {
 		customer.UpdatedByName = updatedByUser.Name
 	}
 
-	if customer.DeletedBy != nil {
+	if customer.DeletedBy != nil && !customer.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(customer.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err

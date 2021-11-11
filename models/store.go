@@ -121,7 +121,7 @@ func (store *Store) UpdateForeignLabelFields() error {
 		store.UpdatedByName = updatedByUser.Name
 	}
 
-	if store.DeletedBy != nil {
+	if store.DeletedBy != nil && !store.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(store.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err

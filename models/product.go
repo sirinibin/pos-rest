@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"log"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -66,13 +67,13 @@ func (product *Product) SetChangeLog(
 	now := time.Now().Local()
 	description := ""
 	if event == "create" {
-		description = "Created by" + UserObject.Name
+		description = "Created by " + UserObject.Name
 	} else if event == "update" {
-		description = "Updated by" + UserObject.Name
+		description = "Updated by " + UserObject.Name
 	} else if event == "delete" {
-		description = "Deleted by" + UserObject.Name
+		description = "Deleted by " + UserObject.Name
 	} else if event == "view" {
-		description = "Viewed by" + UserObject.Name
+		description = "Viewed by " + UserObject.Name
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
@@ -103,7 +104,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	for _, category := range product.Category {
 		productCategory, err := FindProductCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("Error Finding product category id:" + category.ID.Hex() + ",error:" + err.Error())
 		}
 		product.CategoryName = append(product.CategoryName, productCategory.Name)
 	}
@@ -124,7 +125,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 		product.UpdatedByName = updatedByUser.Name
 	}
 
-	if product.DeletedBy != nil {
+	if product.DeletedBy != nil && !product.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(product.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
@@ -491,8 +492,10 @@ func (product *Product) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
+
+	log.Print("product.ID1:" + product.ID.Hex())
 
 	if len(product.ImagesContent) > 0 {
 		err := product.SaveImages()
@@ -501,13 +504,17 @@ func (product *Product) Update() error {
 		}
 	}
 
+	log.Print("product.ID2:" + product.ID.Hex())
+
 	err := product.UpdateForeignLabelFields()
 	if err != nil {
 		return err
 	}
+	log.Print("product.ID3:" + product.ID.Hex())
 
 	product.SetChangeLog("update", nil, nil, nil)
 
+	log.Print("product.ID:" + product.ID.Hex())
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": product.ID},

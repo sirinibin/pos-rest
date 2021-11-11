@@ -27,6 +27,8 @@ type PurchaseProduct struct {
 //Purchase : Purchase structure
 type Purchase struct {
 	ID                       primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date                     *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                  string              `json:"date_str,omitempty"`
 	Code                     string              `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID                  *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	VendorID                 *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
@@ -106,14 +108,13 @@ func (purchase *Purchase) AttributesValueChangeEvent(purchaseOld *Purchase) erro
 		)
 
 		if purchase.Status == "delivered" {
-			/*
-				err := purchaseOld.RemoveStock()
-				if err != nil {
-					return err
-				}
-			*/
 
-			err := purchase.AddStock()
+			err := purchaseOld.RemoveStock()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.AddStock()
 			if err != nil {
 				return err
 			}
@@ -170,7 +171,7 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 		purchase.UpdatedByName = updatedByUser.Name
 	}
 
-	if purchase.DeletedBy != nil {
+	if purchase.DeletedBy != nil && !purchase.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(purchase.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
@@ -370,6 +371,17 @@ func (purchase *Purchase) Validate(
 		errs["status"] = "Status is required"
 	}
 
+	if govalidator.IsNull(purchase.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		const shortForm = "Jan 02 2006"
+		date, err := time.Parse(shortForm, purchase.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		purchase.Date = &date
+	}
+
 	if scenario == "update" {
 		if purchase.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
@@ -559,19 +571,21 @@ func (purchase *Purchase) RemoveStock() (err error) {
 
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == purchase.StoreID.Hex() {
-				purchase.SetChangeLog(
-					"remove_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock - purchaseProduct.Quantity),
-				)
+				/*
+					purchase.SetChangeLog(
+						"remove_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock - purchaseProduct.Quantity),
+					)
 
-				product.SetChangeLog(
-					"remove_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock - purchaseProduct.Quantity),
-				)
+					product.SetChangeLog(
+						"remove_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock - purchaseProduct.Quantity),
+					)
+				*/
 
 				product.Stock[k].Stock -= purchaseProduct.Quantity
 				break

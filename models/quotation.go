@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -27,6 +28,8 @@ type QuotationProduct struct {
 type Quotation struct {
 	ID                     primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Code                   string              `bson:"code,omitempty" json:"code,omitempty"`
+	Date                   *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                string              `json:"date_str,omitempty"`
 	StoreID                *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID             *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Store                  *Store              `json:"store,omitempty"`
@@ -145,7 +148,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		quotation.UpdatedByName = updatedByUser.Name
 	}
 
-	if quotation.DeletedBy != nil {
+	if quotation.DeletedBy != nil && !quotation.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(quotation.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
@@ -182,7 +185,20 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	keys, ok := r.URL.Query()["search[store_id]"]
+	keys, ok := r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		log.Print(keys[0])
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return quotations, criterias, err
+		}
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
 		storeID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
@@ -198,12 +214,32 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 
 	keys, ok = r.URL.Query()["search[net_total]"]
 	if ok && len(keys[0]) >= 1 {
+		operator := ""
+		if strings.HasPrefix(keys[0], "<=") {
+			keys[0] = strings.TrimPrefix(keys[0], "<=")
+			operator = "$lte"
+		} else if strings.HasPrefix(keys[0], "<") {
+			keys[0] = strings.TrimPrefix(keys[0], "<")
+			operator = "$lt"
+		} else if strings.HasPrefix(keys[0], ">=") {
+			keys[0] = strings.TrimPrefix(keys[0], ">=")
+			operator = "$gte"
+		} else if strings.HasPrefix(keys[0], ">") {
+			keys[0] = strings.TrimPrefix(keys[0], ">")
+			operator = "$gt"
+		}
+
 		value, err := strconv.ParseFloat(keys[0], 32)
 		if err != nil {
 			return quotations, criterias, err
 		}
 
-		criterias.SearchBy["net_total"] = float32(value)
+		if operator != "" {
+			criterias.SearchBy["net_total"] = bson.M{operator: float32(value)}
+		} else {
+			criterias.SearchBy["net_total"] = float32(value)
+		}
+
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
@@ -374,6 +410,17 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	if govalidator.IsNull(quotation.Status) {
 		errs["status"] = "Status is required"
+	}
+
+	if govalidator.IsNull(quotation.DateStr) {
+		errs["date_str"] = "date_str is required"
+	} else {
+		const shortForm = "Jan 02 2006"
+		date, err := time.Parse(shortForm, quotation.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		quotation.Date = &date
 	}
 
 	if scenario == "update" {
