@@ -67,7 +67,7 @@ func (purchase *Purchase) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -744,7 +744,7 @@ func (purchase *Purchase) DeletePurchase(tokenClaims TokenClaims) (err error) {
 
 	purchase.Deleted = true
 	purchase.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	purchase.DeletedAt = &now
 
 	purchase.SetChangeLog("delete", nil, nil, nil)

@@ -43,7 +43,7 @@ func (signature *Signature) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -201,14 +201,6 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 	} //end for loop
 
 	return signatures, criterias, nil
-}
-
-func GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return collection.CountDocuments(ctx, filter)
 }
 
 func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
@@ -426,7 +418,7 @@ func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error)
 
 	signature.Deleted = true
 	signature.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	signature.DeletedAt = &now
 
 	signature.SetChangeLog("delete", nil, nil, nil)

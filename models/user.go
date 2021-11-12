@@ -44,7 +44,7 @@ func (user *User) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -445,7 +445,7 @@ func (user *User) Update() error {
 		return err
 	}
 
-	now := time.Now().Local()
+	now := time.Now()
 	user.UpdatedAt = &now
 
 	if !govalidator.IsNull(user.Password) {
@@ -493,7 +493,7 @@ func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
 
 	user.Deleted = true
 	user.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	user.DeletedAt = &now
 
 	user.SetChangeLog("delete", nil, nil, nil)

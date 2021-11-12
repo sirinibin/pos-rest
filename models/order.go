@@ -66,7 +66,7 @@ func (order *Order) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -747,7 +747,7 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 
 	order.Deleted = true
 	order.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	order.DeletedAt = &now
 
 	order.SetChangeLog("delete", nil, nil, nil)

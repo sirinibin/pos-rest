@@ -88,7 +88,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	quotation.CreatedBy = &userID
 	quotation.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	quotation.CreatedAt = &now
 	quotation.UpdatedAt = &now
 
@@ -180,7 +180,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	quotation.UpdatedAt = &now
 
 	// Validate data

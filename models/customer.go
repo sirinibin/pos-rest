@@ -56,7 +56,7 @@ func (customer *Customer) SetChangeLog(
 	event string,
 	attribute, oldValue, newValue *string,
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -339,7 +339,7 @@ func (customer *Customer) Insert() error {
 
 	customer.CreatedBy = &UserObject.ID
 	customer.UpdatedBy = &UserObject.ID
-	now := time.Now().Local()
+	now := time.Now()
 	customer.CreatedAt = &now
 	customer.UpdatedAt = &now
 
@@ -367,7 +367,7 @@ func (customer *Customer) Update() error {
 	}
 
 	customer.UpdatedBy = &UserObject.ID
-	now := time.Now().Local()
+	now := time.Now()
 	customer.UpdatedAt = &now
 
 	customer.SetChangeLog("update", nil, nil, nil)
@@ -403,7 +403,7 @@ func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
 
 	customer.Deleted = true
 	customer.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	customer.DeletedAt = &now
 
 	customer.SetChangeLog("delete", nil, nil, nil)

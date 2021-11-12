@@ -38,7 +38,7 @@ func (productCategory *ProductCategory) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -361,7 +361,7 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 
 	productCategory.Deleted = true
 	productCategory.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	productCategory.DeletedAt = &now
 
 	productCategory.SetChangeLog("delete", nil, nil, nil)

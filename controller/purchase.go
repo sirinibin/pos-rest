@@ -88,7 +88,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	purchase.CreatedBy = &userID
 	purchase.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	purchase.CreatedAt = &now
 	purchase.UpdatedAt = &now
 
@@ -206,7 +206,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	purchase.UpdatedAt = &now
 
 	// Validate data

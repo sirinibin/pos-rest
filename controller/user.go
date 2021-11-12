@@ -89,7 +89,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	user.CreatedBy = &userID
 	user.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	user.CreatedAt = &now
 	user.UpdatedAt = &now
 
@@ -168,7 +168,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user.UpdatedBy = &accessingUserID
-	now := time.Now().Local()
+	now := time.Now()
 	user.UpdatedAt = &now
 
 	// Validate data
@@ -394,7 +394,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now().Local()
+	now := time.Now()
 	user.UpdatedAt = &now
 	user.CreatedAt = &now
 

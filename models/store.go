@@ -53,7 +53,7 @@ func (store *Store) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -143,7 +143,13 @@ func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
 			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Descending order
 		}
 	} else if len(sortFieldWithOrder) == 1 {
-		sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
+		if strings.HasPrefix(sortFieldWithOrder[0], "-") {
+			sortFieldWithOrder[0] = strings.TrimPrefix(sortFieldWithOrder[0], "-")
+			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Ascending order
+		} else {
+			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
+		}
+
 	}
 
 	return sortBy
@@ -440,7 +446,7 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 
 	store.Deleted = true
 	store.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	store.DeletedAt = &now
 
 	store.SetChangeLog("delete", nil, nil, nil)

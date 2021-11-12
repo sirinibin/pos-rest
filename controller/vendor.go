@@ -88,7 +88,7 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 
 	vendor.CreatedBy = &userID
 	vendor.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	vendor.CreatedAt = &now
 	vendor.UpdatedAt = &now
 
@@ -175,7 +175,7 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vendor.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	vendor.UpdatedAt = &now
 
 	// Validate data

@@ -89,7 +89,7 @@ func CreateSignature(w http.ResponseWriter, r *http.Request) {
 
 	signature.CreatedBy = &userID
 	signature.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	signature.CreatedAt = &now
 	signature.UpdatedAt = &now
 
@@ -167,7 +167,7 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 	}
 
 	signature.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	signature.UpdatedAt = &now
 
 	// Validate data

@@ -1,7 +1,11 @@
 package models
 
 import (
+	"context"
 	"strings"
+	"time"
+
+	"github.com/sirinibin/pos-rest/db"
 )
 
 type SearchCriterias struct {
@@ -10,6 +14,44 @@ type SearchCriterias struct {
 	Select   map[string]interface{} `bson:"select,omitempty" json:"select,omitempty"`
 	SearchBy map[string]interface{} `bson:"search_by,omitempty" json:"search_by,omitempty"`
 	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
+}
+
+func GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, filter)
+}
+
+func TrimLogicalOperatorPrefix(str string) string {
+	if strings.HasPrefix(str, "<=") {
+		str = strings.TrimPrefix(str, "<=")
+
+	} else if strings.HasPrefix(str, "<") {
+		str = strings.TrimPrefix(str, "<")
+
+	} else if strings.HasPrefix(str, ">=") {
+		str = strings.TrimPrefix(str, ">=")
+
+	} else if strings.HasPrefix(str, ">") {
+		str = strings.TrimPrefix(str, ">")
+	}
+	return str
+}
+
+func GetMongoLogicalOperator(str string) (operator string) {
+	operator = ""
+	if strings.HasPrefix(str, "<=") {
+		operator = "$lte"
+	} else if strings.HasPrefix(str, "<") {
+		operator = "$lt"
+	} else if strings.HasPrefix(str, ">=") {
+		operator = "$gte"
+	} else if strings.HasPrefix(str, ">") {
+		operator = "$gt"
+	}
+	return operator
 }
 
 func ParseSelectString(selectStr string) (fields map[string]interface{}) {

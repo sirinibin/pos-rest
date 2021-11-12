@@ -64,7 +64,7 @@ func (product *Product) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by " + UserObject.Name
@@ -543,7 +543,7 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 
 	product.Deleted = true
 	product.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	product.DeletedAt = &now
 
 	product.SetChangeLog("delete", nil, nil, nil)

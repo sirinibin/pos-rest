@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -66,7 +65,7 @@ func (quotation *Quotation) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -187,7 +186,6 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 
 	keys, ok := r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
-		log.Print(keys[0])
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
@@ -196,6 +194,80 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
 		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return quotations, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return quotations, criterias, err
+		}
+
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return quotations, criterias, err
+		}
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return quotations, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return quotations, criterias, err
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
 	keys, ok = r.URL.Query()["search[store_id]"]
@@ -214,20 +286,8 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 
 	keys, ok = r.URL.Query()["search[net_total]"]
 	if ok && len(keys[0]) >= 1 {
-		operator := ""
-		if strings.HasPrefix(keys[0], "<=") {
-			keys[0] = strings.TrimPrefix(keys[0], "<=")
-			operator = "$lte"
-		} else if strings.HasPrefix(keys[0], "<") {
-			keys[0] = strings.TrimPrefix(keys[0], "<")
-			operator = "$lt"
-		} else if strings.HasPrefix(keys[0], ">=") {
-			keys[0] = strings.TrimPrefix(keys[0], ">=")
-			operator = "$gte"
-		} else if strings.HasPrefix(keys[0], ">") {
-			keys[0] = strings.TrimPrefix(keys[0], ">")
-			operator = "$gt"
-		}
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
 		value, err := strconv.ParseFloat(keys[0], 32)
 		if err != nil {
@@ -639,7 +699,7 @@ func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error)
 
 	quotation.Deleted = true
 	quotation.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	quotation.DeletedAt = &now
 
 	quotation.SetChangeLog("delete", nil, nil, nil)

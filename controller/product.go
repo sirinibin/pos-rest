@@ -88,7 +88,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 
 	product.CreatedBy = &userID
 	product.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	product.CreatedAt = &now
 	product.UpdatedAt = &now
 
@@ -165,7 +165,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	product.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	product.UpdatedAt = &now
 
 	// Validate data

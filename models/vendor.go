@@ -52,7 +52,7 @@ func (vendor *Vendor) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
-	now := time.Now().Local()
+	now := time.Now()
 	description := ""
 	if event == "create" {
 		description = "Created by" + UserObject.Name
@@ -421,7 +421,7 @@ func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
 
 	vendor.Deleted = true
 	vendor.DeletedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	vendor.DeletedAt = &now
 
 	vendor.SetChangeLog("delete", nil, nil, nil)

@@ -88,7 +88,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.CreatedBy = &userID
 	order.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	order.CreatedAt = &now
 	order.UpdatedAt = &now
 
@@ -192,7 +192,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	order.UpdatedAt = &now
 
 	// Validate data

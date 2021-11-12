@@ -88,7 +88,7 @@ func CreateProductCategory(w http.ResponseWriter, r *http.Request) {
 
 	productCategory.CreatedBy = &userID
 	productCategory.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	productCategory.CreatedAt = &now
 	productCategory.UpdatedAt = &now
 
@@ -178,7 +178,7 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	productCategory.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	productCategory.UpdatedAt = &now
 
 	// Validate data

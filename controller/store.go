@@ -88,7 +88,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 
 	store.CreatedBy = &userID
 	store.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	store.CreatedAt = &now
 	store.UpdatedAt = &now
 
@@ -176,7 +176,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store.UpdatedBy = &userID
-	now := time.Now().Local()
+	now := time.Now()
 	store.UpdatedAt = &now
 
 	// Validate data
