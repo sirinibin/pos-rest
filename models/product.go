@@ -53,6 +53,7 @@ type Product struct {
 	UpdatedBy     *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser *User                 `json:"created_by_user,omitempty"`
 	UpdatedByUser *User                 `json:"updated_by_user,omitempty"`
+	BrandName     string                `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
 	CategoryName  []string              `json:"category_name,omitempty" bson:"category_name,omitempty"`
 	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`

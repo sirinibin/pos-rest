@@ -17,7 +17,9 @@ import (
 //ProductCategory : ProductCategory structure
 type ProductCategory struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	ParentID      *primitive.ObjectID `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
 	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
+	ParentName    string              `bson:"parent_name,omitempty" json:"parent_name,omitempty"`
 	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
@@ -100,6 +102,14 @@ func (productCategory *ProductCategory) AttributesValueChangeEvent(productCatego
 }
 
 func (productCategory *ProductCategory) UpdateForeignLabelFields() error {
+
+	if productCategory.ParentID != nil && !productCategory.ParentID.IsZero() {
+		parentCategory, err := FindProductCategoryByID(productCategory.ParentID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		productCategory.ParentName = parentCategory.Name
+	}
 
 	if productCategory.CreatedBy != nil {
 		createdByUser, err := FindUserByID(productCategory.CreatedBy, bson.M{"id": 1, "name": 1})
