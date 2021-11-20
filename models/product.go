@@ -39,7 +39,7 @@ type Product struct {
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	CategoryID    []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
 	Category      []*ProductCategory    `json:"category,omitempty"`
-	UnitPrices    []ProductUnitPrice    `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
 	Images        []string              `bson:"images,omitempty" json:"images,omitempty"`
 	ImagesContent []string              `json:"images_content,omitempty"`

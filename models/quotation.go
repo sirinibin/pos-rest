@@ -20,7 +20,7 @@ import (
 type QuotationProduct struct {
 	ProductID primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	Quantity  int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Price     float32            `bson:"price,omitempty" json:"price,omitempty"`
+	UnitPrice float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 }
 
 //Quotation : Quotation structure
@@ -161,7 +161,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 func (quotation *Quotation) FindNetTotal() {
 	netTotal := float32(0.0)
 	for _, product := range quotation.Products {
-		netTotal += (float32(product.Quantity) * product.Price)
+		netTotal += (float32(product.Quantity) * product.UnitPrice)
 	}
 
 	if quotation.VatPercent != nil {
