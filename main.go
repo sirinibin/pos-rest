@@ -13,6 +13,7 @@ import (
 
 func main() {
 	fmt.Println("A GoLang / Myql Microservice [OAuth2,Redis & JWT used for token management]!")
+	db.Client()
 	db.InitRedis()
 
 	router := mux.NewRouter()

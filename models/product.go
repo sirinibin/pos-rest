@@ -61,6 +61,20 @@ type Product struct {
 	ChangeLog     []ChangeLog           `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+func (product *Product) AttributesValueChangeEvent(productOld *Product) error {
+
+	if product.Name != productOld.Name {
+		product.SetChangeLog(
+			"attribute_value_change",
+			"name",
+			productOld.Name,
+			product.Name,
+		)
+	}
+
+	return nil
+}
+
 func (product *Product) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
@@ -113,7 +127,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	if product.CreatedBy != nil {
 		createdByUser, err := FindUserByID(product.CreatedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("Error findind created_by user:"+err.Error())
 		}
 		product.CreatedByName = createdByUser.Name
 	}
@@ -121,7 +135,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	if product.UpdatedBy != nil {
 		updatedByUser, err := FindUserByID(product.UpdatedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("Error findind updated_by user:"+err.Error())
 		}
 		product.UpdatedByName = updatedByUser.Name
 	}
@@ -129,7 +143,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	if product.DeletedBy != nil && !product.DeletedBy.IsZero() {
 		deletedByUser, err := FindUserByID(product.DeletedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("Error findind deleted_by user:"+err.Error())
 		}
 		product.DeletedByName = deletedByUser.Name
 	}

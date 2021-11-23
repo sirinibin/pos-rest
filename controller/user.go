@@ -101,6 +101,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user.SetChangeLog("create", nil, nil, nil)
 	err = user.Insert()
 	if err != nil {
 		response.Status = false
@@ -398,6 +399,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.UpdatedAt = &now
 	user.CreatedAt = &now
 
+	user.SetChangeLog("register", nil, nil, nil)
 	err := user.Insert()
 	if err != nil {
 		response.Status = false

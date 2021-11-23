@@ -133,6 +133,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var product *models.Product
+	var productOld *models.Product
 
 	params := mux.Vars(r)
 
@@ -140,6 +141,15 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["product_id"] = "Invalid Product ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productOld, err = models.FindProductByID(&productID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["product"] = "Unable to find product:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -181,6 +191,17 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = product.AttributesValueChangeEvent(productOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
