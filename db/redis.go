@@ -16,7 +16,7 @@ func InitRedis() {
 		dsn = "localhost:6379"
 	}
 	RedisClient = redis.NewClient(&redis.Options{
-		Addr:     dsn, //redis port
+		Addr: dsn, //redis port
 		//Password: "123",
 	})
 	_, err := RedisClient.Ping().Result()

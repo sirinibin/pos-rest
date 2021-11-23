@@ -508,12 +508,10 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		exists, err := IsStoreExists(quotation.StoreID)
 		if err != nil {
 			errs["store_id"] = err.Error()
-			return errs
 		}
 
 		if !exists {
 			errs["store_id"] = "Invalid store:" + quotation.StoreID.Hex()
-			return errs
 		}
 	}
 
@@ -523,7 +521,6 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		exists, err := IsCustomerExists(quotation.CustomerID)
 		if err != nil {
 			errs["customer_id"] = err.Error()
-			return errs
 		}
 
 		if !exists {
