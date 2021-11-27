@@ -113,18 +113,18 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.Status == "delivered" || order.Status == "dispatched" {
-		err = order.RemoveStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
+	//if order.Status == "delivered" || order.Status == "dispatched" {
+	err = order.RemoveStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
 
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
 	}
+	//}
 
 	response.Status = true
 	response.Result = order

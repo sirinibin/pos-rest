@@ -113,18 +113,18 @@ func (order *Order) AttributesValueChangeEvent(orderOld *Order) error {
 			order.Status,
 		)
 
-		if order.Status == "delivered" || order.Status == "dispatched" {
+		//if order.Status == "delivered" || order.Status == "dispatched" {
 
-			err := orderOld.AddStock()
-			if err != nil {
-				return err
-			}
-
-			err = order.RemoveStock()
-			if err != nil {
-				return err
-			}
+		err := orderOld.AddStock()
+		if err != nil {
+			return err
 		}
+
+		err = order.RemoveStock()
+		if err != nil {
+			return err
+		}
+		//}
 	}
 
 	return nil
