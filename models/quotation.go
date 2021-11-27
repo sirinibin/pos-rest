@@ -502,7 +502,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	}
 
-	if quotation.StoreID.IsZero() {
+	if quotation.StoreID == nil || quotation.StoreID.IsZero() {
 		errs["store_id"] = "Store is required"
 	} else {
 		exists, err := IsStoreExists(quotation.StoreID)
@@ -515,7 +515,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		}
 	}
 
-	if quotation.CustomerID.IsZero() {
+	if quotation.CustomerID == nil || quotation.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {
 		exists, err := IsCustomerExists(quotation.CustomerID)
@@ -528,7 +528,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		}
 	}
 
-	if quotation.DeliveredBy.IsZero() {
+	if quotation.DeliveredBy == nil || quotation.DeliveredBy.IsZero() {
 		errs["delivered_by"] = "Delivered By is required"
 	} else {
 		exists, err := IsUserExists(quotation.DeliveredBy)
@@ -543,10 +543,10 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 	}
 
 	if len(quotation.Products) == 0 {
-		errs["products"] = "Atleast 1 product is required for quotation"
+		errs["product_id"] = "Atleast 1 product is required for quotation"
 	}
 
-	if !quotation.DeliveredBySignatureID.IsZero() {
+	if quotation.DeliveredBySignatureID != nil && !quotation.DeliveredBySignatureID.IsZero() {
 		exists, err := IsSignatureExists(quotation.DeliveredBySignatureID)
 		if err != nil {
 			errs["delivered_by_signature_id"] = err.Error()
