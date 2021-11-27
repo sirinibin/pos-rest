@@ -43,8 +43,8 @@ type Purchase struct {
 	OrderPlacedBySignatureName string              `json:"order_placed_by_signature_name,omitempty" bson:"order_placed_by_signature_name,omitempty"`
 	OrderPlacedByUser          *User               `json:"order_placed_by_user,omitempty"`
 	OrderPlacedBySignature     *Signature          `json:"order_placed_by_signature,omitempty"`
-	VatPercent                 *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Discount                   float32             `bson:"discount,omitempty" json:"discount,omitempty"`
+	VatPercent                 *float32            `bson:"vat_percent" json:"vat_percent"`
+	Discount                   float32             `bson:"discount" json:"discount"`
 	Status                     string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockAdded                 bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
 	NetTotal                   float32             `bson:"net_total" json:"net_total"`
@@ -229,22 +229,179 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	keys, ok := r.URL.Query()["search[store_id]"]
+	keys, ok := r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return purchases, criterias, err
+		}
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return purchases, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return purchases, criterias, err
+		}
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return purchases, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	keys, ok = r.URL.Query()["search[code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[net_total]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_total"] = bson.M{operator: float32(value)}
+		} else {
+			criterias.SearchBy["net_total"] = float32(value)
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[vendor_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		vendorIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range vendorIds {
+			vendorID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return purchases, criterias, err
+			}
+			objecIds = append(objecIds, vendorID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["vendor_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_by]"]
+	if ok && len(keys[0]) >= 1 {
+
+		userIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range userIds {
+			userID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return purchases, criterias, err
+			}
+			objecIds = append(objecIds, userID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[status]"]
+	if ok && len(keys[0]) >= 1 {
+		statusList := strings.Split(keys[0], ",")
+		if len(statusList) > 0 {
+			criterias.SearchBy["status"] = bson.M{"$in": statusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[delivered_by]"]
+	if ok && len(keys[0]) >= 1 {
+		deliveredByID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return purchases, criterias, err
+		}
+		criterias.SearchBy["delivered_by"] = deliveredByID
+	}
+
+	keys, ok = r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
 		storeID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
 			return purchases, criterias, err
 		}
 		criterias.SearchBy["store_id"] = storeID
-	}
-
-	keys, ok = r.URL.Query()["search[vendor_id]"]
-	if ok && len(keys[0]) >= 1 {
-		vendorID, err := primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			return purchases, criterias, err
-		}
-		criterias.SearchBy["vendor_id"] = vendorID
 	}
 
 	keys, ok = r.URL.Query()["search[order_placed_by]"]
@@ -435,7 +592,7 @@ func (purchase *Purchase) Validate(
 
 	}
 
-	if purchase.StoreID.IsZero() {
+	if purchase.StoreID == nil || purchase.StoreID.IsZero() {
 		errs["store_id"] = "Store is required"
 	} else {
 		exists, err := IsStoreExists(purchase.StoreID)
@@ -450,7 +607,7 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
-	if purchase.VendorID.IsZero() {
+	if purchase.VendorID == nil || purchase.VendorID.IsZero() {
 		errs["vendor_id"] = "Vendor is required"
 	} else {
 		exists, err := IsVendorExists(purchase.VendorID)
@@ -464,7 +621,7 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
-	if purchase.OrderPlacedBy.IsZero() {
+	if purchase.OrderPlacedBy == nil || purchase.OrderPlacedBy.IsZero() {
 		errs["order_placed_by"] = "Order Placed By is required"
 	} else {
 		exists, err := IsUserExists(purchase.OrderPlacedBy)
@@ -478,7 +635,7 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
-	if !purchase.OrderPlacedBySignatureID.IsZero() {
+	if purchase.OrderPlacedBySignatureID != nil && !purchase.OrderPlacedBySignatureID.IsZero() {
 		exists, err := IsSignatureExists(purchase.OrderPlacedBySignatureID)
 		if err != nil {
 			errs["order_placed_by_signature_id"] = err.Error()
@@ -491,7 +648,7 @@ func (purchase *Purchase) Validate(
 	}
 
 	if len(purchase.Products) == 0 {
-		errs["products"] = "Atleast 1 product is required for purchase"
+		errs["product_id"] = "Atleast 1 product is required for purchase"
 	}
 
 	for _, product := range purchase.Products {

@@ -42,7 +42,7 @@ type Quotation struct {
 	DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
 	DeliveredByUser          *User               `json:"delivered_by_user,omitempty"`
 	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
-	VatPercent               *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float32             `bson:"discount" json:"discount"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`

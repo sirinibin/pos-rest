@@ -42,8 +42,8 @@ type Order struct {
 	DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
 	DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
 	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
-	VatPercent               *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Discount                 float32             `bson:"discount,omitempty" json:"discount,omitempty"`
+	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
+	Discount                 float32             `bson:"discount" json:"discount"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockRemoved             bool                `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`
