@@ -47,14 +47,14 @@ func (user *User) SetChangeLog(
 	now := time.Now()
 	description := ""
 	if event == "create" {
-		description = "Created by" + UserObject.Name
+		description = "Created by " + UserObject.Name
 	} else if event == "update" {
-		description = "Updated by" + UserObject.Name
+		description = "Updated by " + UserObject.Name
 	} else if event == "delete" {
-		description = "Deleted by" + UserObject.Name
+		description = "Deleted by " + UserObject.Name
 	} else if event == "view" {
-		description = "Viewed by" + UserObject.Name
-	}else if event == "register" {
+		description = "Viewed by " + UserObject.Name
+	} else if event == "register" {
 		description = "Registered"
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
@@ -66,7 +66,7 @@ func (user *User) SetChangeLog(
 		CreatedAt:   &now,
 	}
 
-	if UserObject!=nil && !UserObject.ID.IsZero() {
+	if UserObject != nil && !UserObject.ID.IsZero() {
 		changeLog.CreatedBy = &UserObject.ID
 		changeLog.CreatedByName = UserObject.Name
 	}

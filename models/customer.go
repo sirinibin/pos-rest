@@ -59,13 +59,13 @@ func (customer *Customer) SetChangeLog(
 	now := time.Now()
 	description := ""
 	if event == "create" {
-		description = "Created by" + UserObject.Name
+		description = "Created by " + UserObject.Name
 	} else if event == "update" {
-		description = "Updated by" + UserObject.Name
+		description = "Updated by " + UserObject.Name
 	} else if event == "delete" {
-		description = "Deleted by" + UserObject.Name
+		description = "Deleted by " + UserObject.Name
 	} else if event == "view" {
-		description = "Viewed by" + UserObject.Name
+		description = "Viewed by " + UserObject.Name
 	} else if event == "attribute_value_change" && attribute != nil {
 		description = *attribute + " changed from " + *oldValue + " to " + *newValue + " by " + UserObject.Name
 	}
