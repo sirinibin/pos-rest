@@ -19,6 +19,9 @@ import (
 
 type PurchaseProduct struct {
 	ProductID        primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	Quantity         int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice        float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	SellingUnitPrice float32            `bson:"selling_unit_price,omitempty" json:"selling_unit_price,omitempty"`
@@ -26,41 +29,42 @@ type PurchaseProduct struct {
 
 //Purchase : Purchase structure
 type Purchase struct {
-	ID                       primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date                     *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr                  string              `json:"date_str,omitempty"`
-	Code                     string              `bson:"code,omitempty" json:"code,omitempty"`
-	StoreID                  *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	VendorID                 *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
-	Store                    *Store              `json:"store,omitempty"`
-	Vendor                   *Vendor             `json:"vendor,omitempty"`
-	Products                 []PurchaseProduct   `bson:"products,omitempty" json:"products,omitempty"`
-	OrderPlacedBy            *primitive.ObjectID `json:"order_placed_by,omitempty" bson:"order_placed,omitempty"`
-	OrderPlacedBySignatureID *primitive.ObjectID `json:"order_placed_by_signature_id,omitempty" bson:"order_placed_signature_id,omitempty"`
-	OrderPlacedByUser        *User               `json:"order_placed_by_user,omitempty"`
-	OrderPlacedBySignature   *Signature          `json:"order_placed_by_signature,omitempty"`
-	VatPercent               *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Discount                 float32             `bson:"discount,omitempty" json:"discount,omitempty"`
-	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
-	StockAdded               bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
-	NetTotal                 float32             `bson:"net_total" json:"net_total"`
-	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt                *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt                *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt                *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy                *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy                *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser            *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
-	OrderPlacedByName        string              `json:"order_placed_by_name,omitempty" bson:"order_placed_by_name,omitempty"`
-	VendorName               string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
-	StoreName                string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName            string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName            string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date                       *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                    string              `json:"date_str,omitempty"`
+	Code                       string              `bson:"code,omitempty" json:"code,omitempty"`
+	StoreID                    *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	VendorID                   *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	Store                      *Store              `json:"store,omitempty"`
+	Vendor                     *Vendor             `json:"vendor,omitempty"`
+	Products                   []PurchaseProduct   `bson:"products,omitempty" json:"products,omitempty"`
+	OrderPlacedBy              *primitive.ObjectID `json:"order_placed_by,omitempty" bson:"order_placed,omitempty"`
+	OrderPlacedBySignatureID   *primitive.ObjectID `json:"order_placed_by_signature_id,omitempty" bson:"order_placed_signature_id,omitempty"`
+	OrderPlacedBySignatureName string              `json:"order_placed_by_signature_name,omitempty" bson:"order_placed_by_signature_name,omitempty"`
+	OrderPlacedByUser          *User               `json:"order_placed_by_user,omitempty"`
+	OrderPlacedBySignature     *Signature          `json:"order_placed_by_signature,omitempty"`
+	VatPercent                 *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Discount                   float32             `bson:"discount,omitempty" json:"discount,omitempty"`
+	Status                     string              `bson:"status,omitempty" json:"status,omitempty"`
+	StockAdded                 bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
+	NetTotal                   float32             `bson:"net_total" json:"net_total"`
+	Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser              *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt                  *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                  *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                  *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                  *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                  *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser              *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser              *User               `json:"updated_by_user,omitempty"`
+	OrderPlacedByName          string              `json:"order_placed_by_name,omitempty" bson:"order_placed_by_name,omitempty"`
+	VendorName                 string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	StoreName                  string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName              string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName              string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName              string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
 func (purchase *Purchase) SetChangeLog(
@@ -155,6 +159,14 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 		purchase.OrderPlacedByName = orderPlacedByUser.Name
 	}
 
+	if purchase.OrderPlacedBySignatureID != nil {
+		orderPlacedBySignature, err := FindSignatureByID(purchase.OrderPlacedBySignatureID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		purchase.OrderPlacedBySignatureName = orderPlacedBySignature.Name
+	}
+
 	if purchase.CreatedBy != nil {
 		createdByUser, err := FindUserByID(purchase.CreatedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
@@ -177,6 +189,16 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 			return err
 		}
 		purchase.DeletedByName = deletedByUser.Name
+	}
+
+	for i, product := range purchase.Products {
+		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1})
+		if err != nil {
+			return err
+		}
+		purchase.Products[i].Name = productObject.Name
+		purchase.Products[i].NameInArabic = productObject.NameInArabic
+		purchase.Products[i].ItemCode = productObject.ItemCode
 	}
 
 	return nil

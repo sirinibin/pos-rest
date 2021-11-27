@@ -18,47 +18,51 @@ import (
 )
 
 type QuotationProduct struct {
-	ProductID primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Quantity  int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	UnitPrice float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	ProductID    primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	Quantity     int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 }
 
 //Quotation : Quotation structure
 type Quotation struct {
-	ID                     primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Code                   string              `bson:"code,omitempty" json:"code,omitempty"`
-	Date                   *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr                string              `json:"date_str,omitempty"`
-	StoreID                *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID             *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Store                  *Store              `json:"store,omitempty"`
-	Customer               *Customer           `json:"customer,omitempty"`
-	Products               []QuotationProduct  `bson:"products,omitempty" json:"products,omitempty"`
-	DeliveredBy            *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	DeliveredBySignatureID *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
-	DeliveredByUser        *User               `json:"delivered_by_user,omitempty"`
-	DeliveredBySignature   *Signature          `json:"delivered_by_signature,omitempty"`
-	VatPercent             *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Discount               float32             `bson:"discount,omitempty" json:"discount,omitempty"`
-	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
-	NetTotal               float32             `bson:"net_total" json:"net_total"`
-	Deleted                bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy              *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser          *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt              *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt              *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt              *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy              *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy              *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser          *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
-	CustomerName           string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	StoreName              string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	DeliveredByName        string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName          string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog              []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	ID                       primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Code                     string              `bson:"code,omitempty" json:"code,omitempty"`
+	Date                     *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                  string              `json:"date_str,omitempty"`
+	StoreID                  *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID               *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Store                    *Store              `json:"store,omitempty"`
+	Customer                 *Customer           `json:"customer,omitempty"`
+	Products                 []QuotationProduct  `bson:"products,omitempty" json:"products,omitempty"`
+	DeliveredBy              *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
+	DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
+	DeliveredByUser          *User               `json:"delivered_by_user,omitempty"`
+	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
+	VatPercent               *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Discount                 float32             `bson:"discount" json:"discount"`
+	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
+	NetTotal                 float32             `bson:"net_total" json:"net_total"`
+	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt                *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser            *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
+	CustomerName             string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	StoreName                string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	DeliveredByName          string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CreatedByName            string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName            string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
 func (quotation *Quotation) SetChangeLog(
@@ -131,6 +135,14 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		quotation.DeliveredByName = deliveredByUser.Name
 	}
 
+	if quotation.DeliveredBySignatureID != nil {
+		deliveredBySignature, err := FindSignatureByID(quotation.DeliveredBySignatureID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		quotation.DeliveredBySignatureName = deliveredBySignature.Name
+	}
+
 	if quotation.CreatedBy != nil {
 		createdByUser, err := FindUserByID(quotation.CreatedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
@@ -153,6 +165,16 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 			return err
 		}
 		quotation.DeletedByName = deletedByUser.Name
+	}
+
+	for i, product := range quotation.Products {
+		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1})
+		if err != nil {
+			return err
+		}
+		quotation.Products[i].Name = productObject.Name
+		quotation.Products[i].NameInArabic = productObject.NameInArabic
+		quotation.Products[i].ItemCode = productObject.ItemCode
 	}
 
 	return nil
