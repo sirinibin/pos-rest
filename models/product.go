@@ -392,7 +392,15 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 	}
 
 	for k, imageContent := range product.ImagesContent {
-		valid, err := IsStringBase64(imageContent)
+		splits := strings.Split(imageContent, ",")
+
+		if len(splits) == 2 {
+			product.ImagesContent[k] = splits[1]
+		} else if len(splits) == 1 {
+			product.ImagesContent[k] = splits[0]
+		}
+
+		valid, err := IsStringBase64(product.ImagesContent[k])
 		if err != nil {
 			errs["images_content"] = err.Error()
 			return errs

@@ -294,6 +294,10 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["name"] = "Name is required"
 	}
 
+	if govalidator.IsNull(store.NameInArabic) {
+		errs["name_in_arabic"] = "Name in Arabic is required"
+	}
+
 	if govalidator.IsNull(store.Email) {
 		errs["email"] = "E-mail is required"
 	}
@@ -302,8 +306,24 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["address"] = "Address is required"
 	}
 
+	if govalidator.IsNull(store.AddressInArabic) {
+		errs["address_in_arabic"] = "Address in Arabic is required"
+	}
+
 	if govalidator.IsNull(store.Phone) {
 		errs["phone"] = "Phone is required"
+	}
+
+	if govalidator.IsNull(store.PhoneInArabic) {
+		errs["phone_in_arabic"] = "Phone in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.VATNoInArabic) {
+		errs["vat_no_in"] = "VAT NO. is required"
+	}
+
+	if govalidator.IsNull(store.VATNoInArabic) {
+		errs["vat_no_in_arabic"] = "VAT NO. is required"
 	}
 
 	if store.VatPercent == nil {
@@ -317,6 +337,14 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	if !govalidator.IsNull(store.LogoContent) {
+		splits := strings.Split(store.LogoContent, ",")
+
+		if len(splits) == 2 {
+			store.LogoContent = splits[1]
+		} else if len(splits) == 1 {
+			store.LogoContent = splits[0]
+		}
+
 		valid, err := IsStringBase64(store.LogoContent)
 		if err != nil {
 			errs["logo_content"] = err.Error()

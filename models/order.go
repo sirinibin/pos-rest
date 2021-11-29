@@ -655,7 +655,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				return errs
 			}
 
-			errs["product_"+product.ProductID.Hex()] = "Product: " + productObject.Name + " stock is only " + strconv.Itoa(stock) + " in Store: " + storeObject.Name
+			errs["product_id"] = "Product: " + productObject.Name + " stock is only " + strconv.Itoa(stock) + " in Store: " + storeObject.Name
 		}
 	}
 

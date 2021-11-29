@@ -113,31 +113,31 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if purchase.Status == "delivered" {
-		err = purchase.AddStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
+	//if purchase.Status == "delivered" {
+	err = purchase.AddStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
 
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
 
-		}
-
-		err = purchase.UpdateProductUnitPriceInStore()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["product_unit_price"] = "Unable to update product unit price:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-
-		}
 	}
+
+	err = purchase.UpdateProductUnitPriceInStore()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["product_unit_price"] = "Unable to update product unit price:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+
+	}
+	//}
 
 	response.Status = true
 	response.Result = purchase

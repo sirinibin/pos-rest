@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -29,7 +30,7 @@ type Vendor struct {
 	AddressInArabic string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
 	VATNo           string              `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
 	VATNoInArabic   string              `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	VatPercent      *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPercent      *float32            `bson:"vat_percent" json:"vat_percent"`
 	Logo            string              `bson:"logo,omitempty" json:"logo,omitempty"`
 	LogoContent     string              `json:"logo_content,omitempty"`
 	Deleted         bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -129,7 +130,7 @@ func (vendor *Vendor) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchVendor(w http.ResponseWriter, r *http.Request) (vendores []Vendor, criterias SearchCriterias, err error) {
+func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -140,7 +141,51 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendores []Vendor, cr
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	keys, ok := r.URL.Query()["search[name]"]
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok := r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return vendors, criterias, err
+		}
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return vendors, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return vendors, criterias, err
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
@@ -207,7 +252,7 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendores []Vendor, cr
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return vendores, criterias, errors.New("Error fetching vendores:" + err.Error())
+		return vendors, criterias, errors.New("Error fetching vendores:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -216,12 +261,12 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendores []Vendor, cr
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return vendores, criterias, errors.New("Cursor error:" + err.Error())
+			return vendors, criterias, errors.New("Cursor error:" + err.Error())
 		}
 		vendor := Vendor{}
 		err = cur.Decode(&vendor)
 		if err != nil {
-			return vendores, criterias, errors.New("Cursor decode error:" + err.Error())
+			return vendors, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
@@ -234,10 +279,10 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendores []Vendor, cr
 			vendor.DeletedByUser, _ = FindUserByID(vendor.DeletedBy, deletedByUserSelectFields)
 		}
 
-		vendores = append(vendores, vendor)
+		vendors = append(vendors, vendor)
 	} //end for loop
 
-	return vendores, criterias, nil
+	return vendors, criterias, nil
 
 }
 
@@ -268,6 +313,10 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		errs["name"] = "Name is required"
 	}
 
+	if govalidator.IsNull(vendor.NameInArabic) {
+		errs["name_in_arabic"] = "Name in Arabic is required"
+	}
+
 	if govalidator.IsNull(vendor.Email) {
 		errs["email"] = "E-mail is required"
 	}
@@ -276,21 +325,47 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		errs["address"] = "Address is required"
 	}
 
+	if govalidator.IsNull(vendor.AddressInArabic) {
+		errs["address_in_arabic"] = "Address in Arabic is required"
+	}
+
 	if govalidator.IsNull(vendor.Phone) {
 		errs["phone"] = "Phone is required"
+	}
+
+	if govalidator.IsNull(vendor.PhoneInArabic) {
+		errs["phone_in_arabic"] = "Phone in Arabic is required"
 	}
 
 	if vendor.VatPercent == nil {
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if vendor.ID.IsZero() {
-		if govalidator.IsNull(vendor.LogoContent) {
-			errs["logo_content"] = "Logo is required"
-		}
+	if govalidator.IsNull(vendor.VATNo) {
+		errs["vat_no"] = "VAT NO. is required"
 	}
 
+	if govalidator.IsNull(vendor.VATNoInArabic) {
+		errs["vat_no_in_arabic"] = "VAT NO. is required"
+	}
+
+	/*
+		if vendor.ID.IsZero() {
+			if govalidator.IsNull(vendor.LogoContent) {
+				//errs["logo_content"] = "Logo is required"
+			}
+		}
+	*/
+
 	if !govalidator.IsNull(vendor.LogoContent) {
+		splits := strings.Split(vendor.LogoContent, ",")
+
+		if len(splits) == 2 {
+			vendor.LogoContent = splits[1]
+		} else if len(splits) == 1 {
+			vendor.LogoContent = splits[0]
+		}
+
 		valid, err := IsStringBase64(vendor.LogoContent)
 		if err != nil {
 			errs["logo_content"] = err.Error()

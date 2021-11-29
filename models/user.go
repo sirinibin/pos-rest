@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -239,6 +240,14 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 	}
 
 	if !govalidator.IsNull(user.PhotoContent) {
+		splits := strings.Split(user.PhotoContent, ",")
+
+		if len(splits) == 2 {
+			user.PhotoContent = splits[1]
+		} else if len(splits) == 1 {
+			user.PhotoContent = splits[0]
+		}
+
 		valid, err := IsStringBase64(user.PhotoContent)
 		if err != nil {
 			errs["photo_content"] = err.Error()

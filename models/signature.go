@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -235,6 +236,14 @@ func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, sce
 	}
 
 	if !govalidator.IsNull(signature.SignatureContent) {
+		splits := strings.Split(signature.SignatureContent, ",")
+
+		if len(splits) == 2 {
+			signature.SignatureContent = splits[1]
+		} else if len(splits) == 1 {
+			signature.SignatureContent = splits[0]
+		}
+
 		valid, err := IsStringBase64(signature.SignatureContent)
 		if err != nil {
 			errs["signature_content"] = err.Error()
