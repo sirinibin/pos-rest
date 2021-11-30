@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -152,6 +153,75 @@ func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCateg
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[parent_name]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["parent_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[created_by]"]
+	if ok && len(keys[0]) >= 1 {
+
+		userIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range userIds {
+			userID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return productCategories, criterias, err
+			}
+			objecIds = append(objecIds, userID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return productCategories, criterias, err
+		}
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return productCategories, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return productCategories, criterias, err
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
 	keys, ok = r.URL.Query()["limit"]
