@@ -21,14 +21,18 @@ import (
 )
 
 type ProductUnitPrice struct {
-	StoreID        primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	WholeSalePrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	RetailPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	StoreID           primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName         string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	WholeSalePrice    float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	RetailPrice       float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 }
 
 type ProductStock struct {
-	StoreID primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	Stock   int                `bson:"stock,omitempty" json:"stock"`
+	StoreID           primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName         string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	Stock             int                `bson:"stock,omitempty" json:"stock"`
 }
 
 //Product : Product structure
@@ -37,7 +41,7 @@ type Product struct {
 	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	CategoryID    []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
+	CategoryID    []*primitive.ObjectID `json:"category_id" bson:"category_id"`
 	Category      []*ProductCategory    `json:"category,omitempty"`
 	UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
@@ -54,7 +58,7 @@ type Product struct {
 	CreatedByUser *User                 `json:"created_by_user,omitempty"`
 	UpdatedByUser *User                 `json:"updated_by_user,omitempty"`
 	BrandName     string                `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
-	CategoryName  []string              `json:"category_name,omitempty" bson:"category_name,omitempty"`
+	CategoryName  []string              `json:"category_name" bson:"category_name"`
 	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
@@ -116,6 +120,35 @@ func (product *Product) SetChangeLog(
 func (product *Product) UpdateForeignLabelFields() error {
 
 	product.CategoryName = []string{}
+
+	for i, unitPrice := range product.UnitPrices {
+		store, err := FindStoreByID(&unitPrice.StoreID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error Finding store:" + unitPrice.StoreID.Hex() + ",error:" + err.Error())
+		}
+
+		product.UnitPrices[i].StoreName = store.Name
+		product.UnitPrices[i].StoreNameInArabic = store.NameInArabic
+	}
+
+	for i, stock := range product.Stock {
+		store, err := FindStoreByID(&stock.StoreID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error Finding store:" + stock.StoreID.Hex() + ",error:" + err.Error())
+		}
+
+		product.Stock[i].StoreName = store.Name
+		product.Stock[i].StoreNameInArabic = store.NameInArabic
+	}
+
+	for _, categoryID := range product.CategoryID {
+		productCategory, err := FindProductCategoryByID(categoryID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error Finding product category id:" + categoryID.Hex() + ",error:" + err.Error())
+		}
+		product.CategoryName = append(product.CategoryName, productCategory.Name)
+	}
+
 	for _, category := range product.Category {
 		productCategory, err := FindProductCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
 		if err != nil {
@@ -193,6 +226,70 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["category_id"] = bson.M{"$in": objecIds}
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_by]"]
+	if ok && len(keys[0]) >= 1 {
+
+		userIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range userIds {
+			userID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return products, criterias, err
+			}
+			objecIds = append(objecIds, userID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
 	keys, ok = r.URL.Query()["limit"]
