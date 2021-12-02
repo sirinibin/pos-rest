@@ -617,7 +617,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	for _, product := range order.Products {
+	for index, product := range order.Products {
 		if product.ProductID.IsZero() {
 			errs["product_id"] = "Product is required for order"
 		} else {
@@ -655,7 +655,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				return errs
 			}
 
-			errs["product_id"] = "Product: " + productObject.Name + " stock is only " + strconv.Itoa(stock) + " in Store: " + storeObject.Name
+			errs["quantity_"+strconv.Itoa(index)] = "Product: " + productObject.Name + " stock is only " + strconv.Itoa(stock) + " in Store: " + storeObject.Name
 		}
 	}
 
