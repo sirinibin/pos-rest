@@ -101,6 +101,9 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.FindNetTotal()
+	purchase.FindTotal()
+	purchase.FindTotalQuantity()
+	purchase.FindVatPrice()
 
 	err = purchase.Insert()
 	if err != nil {
@@ -218,6 +221,9 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.FindNetTotal()
+	purchase.FindTotal()
+	purchase.FindTotalQuantity()
+	purchase.FindVatPrice()
 
 	err = purchase.Update()
 	if err != nil {

@@ -22,6 +22,7 @@ type QuotationProduct struct {
 	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PartNumber   string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	Quantity     int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 }
@@ -40,11 +41,16 @@ type Quotation struct {
 	DeliveredBy              *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
 	DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
+	SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
+	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
 	DeliveredByUser          *User               `json:"delivered_by_user,omitempty"`
 	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
 	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float32             `bson:"discount" json:"discount"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
+	TotalQuantity            int                 `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
+	Total                    float32             `bson:"total" json:"total"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -191,7 +197,30 @@ func (quotation *Quotation) FindNetTotal() {
 	}
 
 	netTotal -= quotation.Discount
-	quotation.NetTotal = float32(math.Ceil(float64(netTotal*100)) / float64(100))
+	quotation.NetTotal = float32(math.Floor(float64(netTotal*100)) / float64(100))
+}
+
+func (quotation *Quotation) FindTotal() {
+	total := float32(0.0)
+	for _, product := range quotation.Products {
+		total += (float32(product.Quantity) * product.UnitPrice)
+	}
+
+	quotation.Total = float32(math.Floor(float64(total*100)) / 100)
+}
+
+func (quotation *Quotation) FindTotalQuantity() {
+	totalQuantity := 0
+	for _, product := range quotation.Products {
+		totalQuantity += product.Quantity
+	}
+	quotation.TotalQuantity = totalQuantity
+}
+
+func (quotation *Quotation) FindVatPrice() {
+	vatPrice := ((*quotation.VatPercent / 100) * quotation.Total)
+	vatPrice = float32(math.Floor(float64(vatPrice*100)) / 100)
+	quotation.VatPrice = vatPrice
 }
 
 func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quotation, criterias SearchCriterias, err error) {
@@ -505,6 +534,15 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		quotation.Date = &date
 	}
 
+	if !govalidator.IsNull(quotation.SignatureDateStr) {
+		const shortForm = "Jan 02 2006"
+		date, err := time.Parse(shortForm, quotation.SignatureDateStr)
+		if err != nil {
+			errs["signature_date_str"] = "Invalid date format"
+		}
+		quotation.SignatureDate = &date
+	}
+
 	if scenario == "update" {
 		if quotation.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
@@ -665,7 +703,8 @@ func (quotation *Quotation) IsCodeExists() (exists bool, err error) {
 }
 
 func GenerateQuotationCode(n int) string {
-	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+	//letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+	letterRunes := []rune("0123456789")
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]

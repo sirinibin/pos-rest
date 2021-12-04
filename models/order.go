@@ -46,6 +46,9 @@ type Order struct {
 	Discount                 float32             `bson:"discount" json:"discount"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockRemoved             bool                `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
+	TotalQuantity            int                 `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
+	Total                    float32             `bson:"total" json:"total"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`
 	PartiaPaymentAmount      float32             `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
@@ -212,7 +215,30 @@ func (order *Order) FindNetTotal() {
 	}
 
 	netTotal -= order.Discount
-	order.NetTotal = float32(math.Ceil(float64(netTotal*100)) / float64(100))
+	order.NetTotal = float32(math.Floor(float64(netTotal*100)) / float64(100))
+}
+
+func (order *Order) FindTotal() {
+	total := float32(0.0)
+	for _, product := range order.Products {
+		total += (float32(product.Quantity) * product.UnitPrice)
+	}
+
+	order.Total = float32(math.Floor(float64(total*100)) / 100)
+}
+
+func (order *Order) FindTotalQuantity() {
+	totalQuantity := 0
+	for _, product := range order.Products {
+		totalQuantity += product.Quantity
+	}
+	order.TotalQuantity = totalQuantity
+}
+
+func (order *Order) FindVatPrice() {
+	vatPrice := ((*order.VatPercent / 100) * order.Total)
+	vatPrice = float32(math.Floor(float64(vatPrice*100)) / 100)
+	order.VatPrice = vatPrice
 }
 
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
@@ -853,7 +879,8 @@ func (order *Order) IsCodeExists() (exists bool, err error) {
 }
 
 func GenerateOrderCode(n int) string {
-	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+	//letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
+	letterRunes := []rune("0123456789")
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]

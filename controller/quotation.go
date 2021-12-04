@@ -101,6 +101,9 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.FindNetTotal()
+	quotation.FindTotal()
+	quotation.FindTotalQuantity()
+	quotation.FindVatPrice()
 
 	err = quotation.Insert()
 	if err != nil {
@@ -192,6 +195,9 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.FindNetTotal()
+	quotation.FindTotal()
+	quotation.FindTotalQuantity()
+	quotation.FindVatPrice()
 
 	err = quotation.Update()
 	if err != nil {

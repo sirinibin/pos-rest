@@ -101,6 +101,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.FindNetTotal()
+	order.FindTotal()
+	order.FindTotalQuantity()
+	order.FindVatPrice()
 
 	err = order.Insert()
 	if err != nil {
@@ -204,6 +207,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.FindNetTotal()
+	order.FindTotal()
+	order.FindTotalQuantity()
+	order.FindVatPrice()
 
 	err = order.Update()
 	if err != nil {

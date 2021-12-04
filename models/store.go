@@ -18,35 +18,39 @@ import (
 
 //Store : Store structure
 type Store struct {
-	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name            string              `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic    string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	Title           string              `bson:"title,omitempty" json:"title,omitempty"`
-	TitleInArabic   string              `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
-	Email           string              `bson:"email,omitempty" json:"email,omitempty"`
-	Phone           string              `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic   string              `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
-	Address         string              `bson:"address,omitempty" json:"address,omitempty"`
-	AddressInArabic string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	VATNo           string              `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
-	VATNoInArabic   string              `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	VatPercent      *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Logo            string              `bson:"logo,omitempty" json:"logo,omitempty"`
-	LogoContent     string              `json:"logo_content,omitempty"`
-	Deleted         bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy       *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser   *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
-	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog       []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                       string              `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic               string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	Title                      string              `bson:"title,omitempty" json:"title,omitempty"`
+	TitleInArabic              string              `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
+	RegistrationNumber         string              `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
+	RegistrationNumberInArabic string              `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
+	Email                      string              `bson:"email,omitempty" json:"email,omitempty"`
+	Phone                      string              `bson:"phone,omitempty" json:"phone,omitempty"`
+	PhoneInArabic              string              `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	Address                    string              `bson:"address,omitempty" json:"address,omitempty"`
+	AddressInArabic            string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
+	ZipCode                    string              `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
+	ZipCodeInArabic            string              `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
+	VATNo                      string              `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
+	VATNoInArabic              string              `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
+	VatPercent                 *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Logo                       string              `bson:"logo,omitempty" json:"logo,omitempty"`
+	LogoContent                string              `json:"logo_content,omitempty"`
+	Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser              *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt                  *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                  *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                  *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                  *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                  *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser              *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser              *User               `json:"updated_by_user,omitempty"`
+	CreatedByName              string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName              string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName              string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
 func (store *Store) SetChangeLog(
@@ -176,6 +180,11 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 		criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[registration_number]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["registration_number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["limit"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.Size, _ = strconv.Atoi(keys[0])
@@ -296,6 +305,22 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if govalidator.IsNull(store.NameInArabic) {
 		errs["name_in_arabic"] = "Name in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.Name) {
+		errs["registration_number"] = "Registration Number/C.R NO. is required"
+	}
+
+	if govalidator.IsNull(store.NameInArabic) {
+		errs["registration_number_in_arabic"] = "Registration Number/C.R NO. in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.Name) {
+		errs["zipcode"] = "ZIP/PIN Code is required"
+	}
+
+	if govalidator.IsNull(store.NameInArabic) {
+		errs["zipcode_in_arabic"] = "ZIP/PIN Code in Arabic is required"
 	}
 
 	if govalidator.IsNull(store.Email) {
