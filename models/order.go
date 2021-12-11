@@ -42,6 +42,8 @@ type Order struct {
 	DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
 	DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
 	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
+	SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
+	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
 	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float32             `bson:"discount" json:"discount"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
@@ -556,6 +558,15 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["date_str"] = "Invalid date format"
 		}
 		order.Date = &date
+	}
+
+	if !govalidator.IsNull(order.SignatureDateStr) {
+		const shortForm = "Jan 02 2006"
+		date, err := time.Parse(shortForm, order.SignatureDateStr)
+		if err != nil {
+			errs["signature_date_str"] = "Invalid date format"
+		}
+		order.SignatureDate = &date
 	}
 
 	if scenario == "update" {
