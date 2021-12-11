@@ -43,6 +43,8 @@ type Purchase struct {
 	OrderPlacedBySignatureName string              `json:"order_placed_by_signature_name,omitempty" bson:"order_placed_by_signature_name,omitempty"`
 	OrderPlacedByUser          *User               `json:"order_placed_by_user,omitempty"`
 	OrderPlacedBySignature     *Signature          `json:"order_placed_by_signature,omitempty"`
+	SignatureDate              *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
+	SignatureDateStr           string              `json:"signature_date_str,omitempty"`
 	VatPercent                 *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                   float32             `bson:"discount" json:"discount"`
 	Status                     string              `bson:"status,omitempty" json:"status,omitempty"`
@@ -585,6 +587,15 @@ func (purchase *Purchase) Validate(
 			errs["date_str"] = "Invalid date format"
 		}
 		purchase.Date = &date
+	}
+
+	if !govalidator.IsNull(purchase.SignatureDateStr) {
+		const shortForm = "Jan 02 2006"
+		date, err := time.Parse(shortForm, purchase.SignatureDateStr)
+		if err != nil {
+			errs["signature_date_str"] = "Invalid date format"
+		}
+		purchase.SignatureDate = &date
 	}
 
 	if scenario == "update" {
