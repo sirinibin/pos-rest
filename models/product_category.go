@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,9 +19,9 @@ import (
 //ProductCategory : ProductCategory structure
 type ProductCategory struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	ParentID      *primitive.ObjectID `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
+	ParentID      *primitive.ObjectID `json:"parent_id" bson:"parent_id"`
 	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
-	ParentName    string              `bson:"parent_name,omitempty" json:"parent_name,omitempty"`
+	ParentName    string              `bson:"parent_name" json:"parent_name"`
 	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
@@ -110,6 +111,9 @@ func (productCategory *ProductCategory) UpdateForeignLabelFields() error {
 			return err
 		}
 		productCategory.ParentName = parentCategory.Name
+	} else {
+		log.Print("Setting category name as null")
+		productCategory.ParentName = ""
 	}
 
 	if productCategory.CreatedBy != nil {
