@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	wkhtml "github.com/SebastiaanKlippert/go-wkhtmltopdf"
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -71,6 +73,32 @@ type Quotation struct {
 	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+func (quotation *Quotation) generatePDF() {
+
+	pdfg, err := wkhtml.NewPDFGenerator()
+	if err != nil {
+		return
+	}
+	htmlStr := `<html><body><h1 style="color:red;">This is an html
+from pdf to test color<h1><img src="http://api.qrserver.com/v1/create-qr-
+code/?data=HelloWorld" alt="img" height="42" width="42"></img></body></html>`
+
+	pdfg.AddPage(wkhtml.NewPageReader(strings.NewReader(htmlStr)))
+
+	// Create PDF document in internal buffer
+	err = pdfg.Create()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	filename := "pdfs/quotations/quotation_" + quotation.Code + ".pdf"
+
+	//Your Pdf Name
+	err = pdfg.WriteFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 func (quotation *Quotation) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
