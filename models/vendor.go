@@ -352,9 +352,11 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	*/
 
-	if govalidator.IsNull(vendor.VATNo) {
-		errs["vat_no"] = "VAT NO. is required"
-	}
+	/*
+		if govalidator.IsNull(vendor.VATNo) {
+			errs["vat_no"] = "VAT NO. is required"
+		}
+	*/
 
 	/*
 		if govalidator.IsNull(vendor.VATNoInArabic) {
