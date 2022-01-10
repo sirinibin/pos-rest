@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -11,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	wkhtml "github.com/SebastiaanKlippert/go-wkhtmltopdf"
 	"github.com/asaskevich/govalidator"
+	"github.com/jung-kurt/gofpdf"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -73,22 +72,62 @@ type Quotation struct {
 	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
-func (quotation *Quotation) generatePDF() {
+func (quotation *Quotation) GeneratePDF() error {
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetFont("Arial", "B", 8)
+	//pdf.Cell(float64(10), float64(5), "GULF UNION OZONE CO.")
+	pdf.CellFormat(50, 7, "GULF UNION OZONE CO.", "1", 0, "LM", false, 0, "")
+	pdf.AddLayer("layer1", true)
+	//pdf.Rect(float64(5), float64(5), float64(201), float64(286), "")
+	pdf.SetCreator("Sirin K", true)
+	pdf.SetMargins(float64(2), float64(2), float64(2))
+	pdf.Rect(float64(5), float64(5), float64(201), float64(286), "")
+	pdf.AddPage()
+	pdf.Cell(40, 10, "Hello, world2")
+
+	filename := "pdfs/quotations/quotation_" + quotation.Code + ".pdf"
+
+	return pdf.OutputFileAndClose(filename)
+}
+
+/*
+func (quotation *Quotation) GeneratePDF() error {
 
 	pdfg, err := wkhtml.NewPDFGenerator()
 	if err != nil {
-		return
+		return err
 	}
-	htmlStr := `<html><body><h1 style="color:red;">This is an html
-from pdf to test color<h1><img src="http://api.qrserver.com/v1/create-qr-
-code/?data=HelloWorld" alt="img" height="42" width="42"></img></body></html>`
 
-	pdfg.AddPage(wkhtml.NewPageReader(strings.NewReader(htmlStr)))
+	//	htmlStr := quotation.getHTML()
+
+	html, err := ioutil.ReadFile("html-templates/quotation.html")
+	//html, err := ioutil.ReadFile("html-templates/test.html")
+
+	if err != nil {
+		return err
+	}
+
+	//log.Print(html)
+
+	//page := wkhtmltopdf.NewPageReader(bytes.NewReader(html))
+	//pdfg.AddPage(page)
+	//	page.NoBackground.Set(true)
+	//	page.DisableExternalLinks.Set(false)
+
+	// create a new instance of the PDF generator
+
+
+	//pdfg.AddPage(wkhtml.NewPageReader(strings.NewReader(htmlStr)))
+
+	//pageReader.PageOptions.EnableLocalFileAccess.Set(true)
+	pdfg.Cover.EnableLocalFileAccess.Set(true)
+	pdfg.AddPage(wkhtml.NewPageReader(bytes.NewReader(html)))
 
 	// Create PDF document in internal buffer
 	err = pdfg.Create()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	filename := "pdfs/quotations/quotation_" + quotation.Code + ".pdf"
@@ -96,9 +135,12 @@ code/?data=HelloWorld" alt="img" height="42" width="42"></img></body></html>`
 	//Your Pdf Name
 	err = pdfg.WriteFile(filename)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+	return nil
 }
+*/
+
 func (quotation *Quotation) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
@@ -753,6 +795,11 @@ func (quotation *Quotation) Update() error {
 	}
 
 	quotation.SetChangeLog("update", nil, nil, nil)
+
+	err = quotation.GeneratePDF()
+	if err != nil {
+		return err
+	}
 
 	_, err = collection.UpdateOne(
 		ctx,

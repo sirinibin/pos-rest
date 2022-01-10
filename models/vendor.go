@@ -306,48 +306,61 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		if !exists {
 			errs["id"] = "Invalid Vendor:" + vendor.ID.Hex()
 		}
-
 	}
 
 	if govalidator.IsNull(vendor.Name) {
 		errs["name"] = "Name is required"
 	}
 
-	if govalidator.IsNull(vendor.NameInArabic) {
-		errs["name_in_arabic"] = "Name in Arabic is required"
-	}
+	/*
+		if govalidator.IsNull(vendor.NameInArabic) {
+			errs["name_in_arabic"] = "Name in Arabic is required"
+		}
+	*/
 
-	if govalidator.IsNull(vendor.Email) {
-		errs["email"] = "E-mail is required"
-	}
+	/*
+		if govalidator.IsNull(vendor.Email) {
+			errs["email"] = "E-mail is required"
+		}
+	*/
 
-	if govalidator.IsNull(vendor.Address) {
-		errs["address"] = "Address is required"
-	}
+	/*
+		if govalidator.IsNull(vendor.Address) {
+			errs["address"] = "Address is required"
+		}
+	*/
 
-	if govalidator.IsNull(vendor.AddressInArabic) {
-		errs["address_in_arabic"] = "Address in Arabic is required"
-	}
+	/*
+		if govalidator.IsNull(vendor.AddressInArabic) {
+			errs["address_in_arabic"] = "Address in Arabic is required"
+		}
+	*/
 
 	if govalidator.IsNull(vendor.Phone) {
 		errs["phone"] = "Phone is required"
 	}
 
-	if govalidator.IsNull(vendor.PhoneInArabic) {
-		errs["phone_in_arabic"] = "Phone in Arabic is required"
-	}
+	/*
+		if govalidator.IsNull(vendor.PhoneInArabic) {
+			errs["phone_in_arabic"] = "Phone in Arabic is required"
+		}
+	*/
 
-	if vendor.VatPercent == nil {
-		errs["vat_percent"] = "VAT Percentage is required"
-	}
+	/*
+		if vendor.VatPercent == nil {
+			errs["vat_percent"] = "VAT Percentage is required"
+		}
+	*/
 
 	if govalidator.IsNull(vendor.VATNo) {
 		errs["vat_no"] = "VAT NO. is required"
 	}
 
-	if govalidator.IsNull(vendor.VATNoInArabic) {
-		errs["vat_no_in_arabic"] = "VAT NO. is required"
-	}
+	/*
+		if govalidator.IsNull(vendor.VATNoInArabic) {
+			errs["vat_no_in_arabic"] = "VAT NO. is required"
+		}
+	*/
 
 	/*
 		if vendor.ID.IsZero() {
@@ -376,20 +389,18 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	}
 
-	emailExists, err := vendor.IsEmailExists()
-	if err != nil {
-		errs["email"] = err.Error()
+	if !govalidator.IsNull(vendor.Email) {
+		emailExists, err := vendor.IsEmailExists()
+		if err != nil {
+			errs["email"] = err.Error()
+		}
+
+		if emailExists {
+			errs["email"] = "E-mail is Already in use"
+		}
 	}
 
-	if emailExists {
-		errs["email"] = "E-mail is Already in use"
-	}
-
-	if emailExists {
-		w.WriteHeader(http.StatusConflict)
-	} else if len(errs) > 0 {
-		w.WriteHeader(http.StatusBadRequest)
-	}
+	w.WriteHeader(http.StatusBadRequest)
 
 	return errs
 }
