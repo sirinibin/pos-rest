@@ -402,7 +402,9 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	}
 
-	w.WriteHeader(http.StatusBadRequest)
+	if len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+	}
 
 	return errs
 }
