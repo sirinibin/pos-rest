@@ -717,10 +717,11 @@ func (purchase *Purchase) Validate(
 				errs["retail_unit_price_"+strconv.Itoa(i)] = "Retail Unit Price is required"
 			}
 		*/
-
-		if product.WholesaleUnitPrice == 0 {
-			errs["wholesale_unit_price_"+strconv.Itoa(i)] = "Wholesale Unit Price is required"
-		}
+		/*
+			if product.WholesaleUnitPrice == 0 {
+				errs["wholesale_unit_price_"+strconv.Itoa(i)] = "Wholesale Unit Price is required"
+			}
+		*/
 	}
 
 	if purchase.VatPercent == nil {
