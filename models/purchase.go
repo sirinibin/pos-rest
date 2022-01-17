@@ -18,13 +18,14 @@ import (
 )
 
 type PurchaseProduct struct {
-	ProductID        primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity         int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	UnitPrice        float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	SellingUnitPrice float32            `bson:"selling_unit_price,omitempty" json:"selling_unit_price,omitempty"`
+	ProductID          primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name               string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic       string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode           string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	Quantity           int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	PurchaseUnitPrice  float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	RetailUnitPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	WholesaleUnitPrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 }
 
 //Purchase : Purchase structure
@@ -212,7 +213,7 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 func (purchase *Purchase) FindNetTotal() {
 	netTotal := float32(0.0)
 	for _, product := range purchase.Products {
-		netTotal += (float32(product.Quantity) * product.UnitPrice)
+		netTotal += (float32(product.Quantity) * product.PurchaseUnitPrice)
 	}
 
 	if purchase.VatPercent != nil {
@@ -226,7 +227,7 @@ func (purchase *Purchase) FindNetTotal() {
 func (purchase *Purchase) FindTotal() {
 	total := float32(0.0)
 	for _, product := range purchase.Products {
-		total += (float32(product.Quantity) * product.UnitPrice)
+		total += (float32(product.Quantity) * product.PurchaseUnitPrice)
 	}
 
 	purchase.Total = float32(math.Floor(float64(total*100)) / 100)
@@ -688,31 +689,35 @@ func (purchase *Purchase) Validate(
 		errs["product_id"] = "Atleast 1 product is required for purchase"
 	}
 
-	for _, product := range purchase.Products {
+	for i, product := range purchase.Products {
 		if product.ProductID.IsZero() {
-			errs["product_id"] = "Product is required for purchase"
+			errs["product_id_"+strconv.Itoa(i)] = "Product is required for purchase"
 		} else {
 			exists, err := IsProductExists(&product.ProductID)
 			if err != nil {
-				errs["product_id"] = err.Error()
+				errs["product_id_"+strconv.Itoa(i)] = err.Error()
 				return errs
 			}
 
 			if !exists {
-				errs["product_id"] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
+				errs["product_id_"+strconv.Itoa(i)] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
 			}
 		}
 
 		if product.Quantity == 0 {
-			errs["quantity"] = "Quantity is required"
+			errs["quantity_"+strconv.Itoa(i)] = "Quantity is required"
 		}
 
-		if product.UnitPrice == 0 {
-			errs["unit_price"] = "Unit Price is required"
+		if product.PurchaseUnitPrice == 0 {
+			errs["purchase_unit_price_"+strconv.Itoa(i)] = "Purchase Unit Price is required"
 		}
 
-		if product.SellingUnitPrice == 0 {
-			errs["selling_unit_price"] = "Selling Unit Price is required"
+		if product.RetailUnitPrice == 0 {
+			errs["retail_unit_price_"+strconv.Itoa(i)] = "Retail Unit Price is required"
+		}
+
+		if product.WholesaleUnitPrice == 0 {
+			errs["wholesale_unit_price_"+strconv.Itoa(i)] = "Wholesale Unit Price is required"
 		}
 	}
 
@@ -827,8 +832,9 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 		storeExistInProductUnitPrice := false
 		for k, unitPrice := range product.UnitPrices {
 			if unitPrice.StoreID.Hex() == purchase.StoreID.Hex() {
-				product.UnitPrices[k].WholeSalePrice = purchaseProduct.UnitPrice
-				product.UnitPrices[k].RetailPrice = purchaseProduct.SellingUnitPrice
+				product.UnitPrices[k].PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
+				product.UnitPrices[k].WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+				product.UnitPrices[k].RetailUnitPrice = purchaseProduct.RetailUnitPrice
 				storeExistInProductUnitPrice = true
 				break
 			}
@@ -836,9 +842,10 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 
 		if !storeExistInProductUnitPrice {
 			productUnitPrice := ProductUnitPrice{
-				StoreID:        *purchase.StoreID,
-				WholeSalePrice: purchaseProduct.UnitPrice,
-				RetailPrice:    purchaseProduct.SellingUnitPrice,
+				StoreID:            *purchase.StoreID,
+				PurchaseUnitPrice:  purchaseProduct.PurchaseUnitPrice,
+				WholesaleUnitPrice: purchaseProduct.WholesaleUnitPrice,
+				RetailUnitPrice:    purchaseProduct.RetailUnitPrice,
 			}
 			product.UnitPrices = append(product.UnitPrices, productUnitPrice)
 		}

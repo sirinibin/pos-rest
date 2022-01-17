@@ -21,11 +21,12 @@ import (
 )
 
 type ProductUnitPrice struct {
-	StoreID           primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName         string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
-	StoreNameInArabic string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	WholeSalePrice    float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	RetailPrice       float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	StoreID            primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName          string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic  string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	PurchaseUnitPrice  float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	WholesaleUnitPrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	RetailUnitPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 }
 
 type ProductStock struct {
