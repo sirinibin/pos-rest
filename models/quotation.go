@@ -24,7 +24,7 @@ type QuotationProduct struct {
 	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	PartNumber   string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity     int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Quantity     float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 }
 
@@ -49,7 +49,7 @@ type Quotation struct {
 	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float32             `bson:"discount" json:"discount"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
-	TotalQuantity            int                 `bson:"total_quantity" json:"total_quantity"`
+	TotalQuantity            float32             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
 	Total                    float32             `bson:"total" json:"total"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`
@@ -280,7 +280,7 @@ func (quotation *Quotation) FindTotal() {
 }
 
 func (quotation *Quotation) FindTotalQuantity() {
-	totalQuantity := 0
+	totalQuantity := float32(0)
 	for _, product := range quotation.Products {
 		totalQuantity += product.Quantity
 	}

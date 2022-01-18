@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
@@ -22,8 +23,10 @@ type OrderProduct struct {
 	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity     int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Quantity     float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Profit       float32            `bson:"profit,omitempty" json:"profit,omitempty"`
+	Loss         float32            `bson:"loss,omitempty" json:"loss,omitempty"`
 }
 
 //Order : Order structure
@@ -48,13 +51,15 @@ type Order struct {
 	Discount                 float32             `bson:"discount" json:"discount"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockRemoved             bool                `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
-	TotalQuantity            int                 `bson:"total_quantity" json:"total_quantity"`
+	TotalQuantity            float32             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
 	Total                    float32             `bson:"total" json:"total"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`
 	PartiaPaymentAmount      float32             `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
 	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
+	Profit                   float32             `bson:"profit,omitempty" json:"profit,omitempty"`
+	Loss                     float32             `bson:"loss,omitempty" json:"loss,omitempty"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -91,9 +96,9 @@ func (order *Order) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%f", oldValue.(float32)) + " to " + fmt.Sprintf("%f", newValue.(float32))
 	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%f", oldValue.(float32)) + " to " + fmt.Sprintf("%f", newValue.(float32))
 	}
 
 	order.ChangeLog = append(
@@ -230,7 +235,7 @@ func (order *Order) FindTotal() {
 }
 
 func (order *Order) FindTotalQuantity() {
-	totalQuantity := 0
+	totalQuantity := float32(0.0)
 	for _, product := range order.Products {
 		totalQuantity += product.Quantity
 	}
@@ -673,7 +678,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["quantity"] = "Quantity is required"
 		}
 
-		stock, err := GetProductStockInStore(&product.ProductID, order.StoreID, product.Quantity)
+		stock, err := GetProductStockInStore(&product.ProductID, order.StoreID)
 		if err != nil {
 			errs["quantity"] = err.Error()
 			return errs
@@ -692,7 +697,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				return errs
 			}
 
-			errs["quantity_"+strconv.Itoa(index)] = "Product: " + productObject.Name + " stock is only " + strconv.Itoa(stock) + " in Store: " + storeObject.Name
+			errs["quantity_"+strconv.Itoa(index)] = "Product: " + productObject.Name + " stock is only " + fmt.Sprintf("%f", stock) + " in Store: " + storeObject.Name
 		}
 	}
 
@@ -709,8 +714,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 func GetProductStockInStore(
 	productID *primitive.ObjectID,
 	storeID *primitive.ObjectID,
-	orderQuantity int,
-) (stock int, err error) {
+) (stock float32, err error) {
 	product, err := FindProductByID(productID, bson.M{})
 	if err != nil {
 		return 0, err
@@ -835,6 +839,42 @@ func (order *Order) AddStock() (err error) {
 	return nil
 }
 
+func (order *Order) CalculateOrderProfit() error {
+	totalProfit := float32(0.0)
+	totalLoss := float32(0.0)
+	for i, orderProduct := range order.Products {
+		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+		salesPrice := orderProduct.Quantity * orderProduct.UnitPrice
+
+		purchaseUnitPrice := float32(0.0)
+		for _, unitPrice := range product.UnitPrices {
+			if unitPrice.StoreID == *order.StoreID {
+				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+				break
+			}
+		}
+
+		profit := salesPrice - (orderProduct.Quantity * purchaseUnitPrice)
+
+		if profit >= 0 {
+			order.Products[i].Profit = profit
+			order.Products[i].Loss = 0.0
+			totalProfit += order.Products[i].Profit
+		} else {
+			order.Products[i].Profit = 0
+			order.Products[i].Loss = profit
+			totalLoss += order.Products[i].Loss
+		}
+
+	}
+	order.Profit = totalProfit
+	order.Loss = totalLoss
+	return nil
+}
+
 func (order *Order) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -860,6 +900,11 @@ func (order *Order) Insert() error {
 	}
 
 	order.SetChangeLog("create", nil, nil, nil)
+
+	err = order.CalculateOrderProfit()
+	if err != nil {
+		return err
+	}
 
 	_, err = collection.InsertOne(ctx, &order)
 	if err != nil {

@@ -89,6 +89,11 @@ func main() {
 	router.HandleFunc("/v1/order", controller.CreateOrder).Methods("POST")
 	router.HandleFunc("/v1/order", controller.ListOrder).Methods("GET")
 	router.HandleFunc("/v1/order/{id}", controller.ViewOrder).Methods("GET")
+
+	//SalesReturn
+	router.HandleFunc("/v1/sales-return", controller.CreateSalesReturn).Methods("POST")
+	router.HandleFunc("/v1/sales-return", controller.ListSalesReturn).Methods("GET")
+	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
 	/*
 		router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 		router.HandleFunc("/v1/order/{id}", controller.DeleteOrder).Methods("DELETE")

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -33,7 +34,7 @@ type ProductStock struct {
 	StoreID           primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName         string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
 	StoreNameInArabic string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	Stock             int                `bson:"stock,omitempty" json:"stock"`
+	Stock             float32            `bson:"stock,omitempty" json:"stock"`
 }
 
 //Product : Product structure
@@ -98,9 +99,9 @@ func (product *Product) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int)) + " by " + UserObject.Name
+		description = "Stock reduced from " + fmt.Sprintf("%f", oldValue.(float32)) + " to " + fmt.Sprintf("%f", newValue.(float32)) + " by " + UserObject.Name
 	} else if event == "add_stock" && name != nil {
-		description = "Stock raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int)) + " by " + UserObject.Name
+		description = "Stock raised from " + strconv.Itoa(oldValue.(int)) + " to " + fmt.Sprintf("%f", newValue.(float32)) + " by " + UserObject.Name
 	} else if event == "add_image" {
 		description = "Added " + strconv.Itoa(newValue.(int)) + " new images by " + UserObject.Name
 	} else if event == "remove_image" {

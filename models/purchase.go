@@ -22,7 +22,7 @@ type PurchaseProduct struct {
 	Name               string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic       string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode           string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity           int                `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Quantity           float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	PurchaseUnitPrice  float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	RetailUnitPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 	WholesaleUnitPrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
@@ -50,7 +50,7 @@ type Purchase struct {
 	Discount                   float32             `bson:"discount" json:"discount"`
 	Status                     string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockAdded                 bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
-	TotalQuantity              int                 `bson:"total_quantity" json:"total_quantity"`
+	TotalQuantity              float32             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                   float32             `bson:"vat_price" json:"vat_price"`
 	Total                      float32             `bson:"total" json:"total"`
 	NetTotal                   float32             `bson:"net_total" json:"net_total"`
@@ -234,7 +234,7 @@ func (purchase *Purchase) FindTotal() {
 }
 
 func (purchase *Purchase) FindTotalQuantity() {
-	totalQuantity := 0
+	totalQuantity := float32(0)
 	for _, product := range purchase.Products {
 		totalQuantity += product.Quantity
 	}
