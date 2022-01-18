@@ -25,6 +25,7 @@ type QuotationProduct struct {
 	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	PartNumber   string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	Quantity     float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 }
 

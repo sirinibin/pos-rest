@@ -25,6 +25,7 @@ type OrderProduct struct {
 	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	Quantity     float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	Profit       float32            `bson:"profit,omitempty" json:"profit,omitempty"`
 	Loss         float32            `bson:"loss,omitempty" json:"loss,omitempty"`
 }

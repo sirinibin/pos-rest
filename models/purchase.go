@@ -23,6 +23,7 @@ type PurchaseProduct struct {
 	NameInArabic       string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode           string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	Quantity           float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit               string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	PurchaseUnitPrice  float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	RetailUnitPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 	WholesaleUnitPrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
