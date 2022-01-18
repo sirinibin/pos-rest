@@ -87,6 +87,7 @@ func (product *Product) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
+
 	now := time.Now()
 	description := ""
 	if event == "create" {
