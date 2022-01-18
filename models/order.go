@@ -368,6 +368,42 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 
 	}
 
+	keys, ok = r.URL.Query()["search[profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["profit"] = bson.M{operator: float32(value)}
+		} else {
+			criterias.SearchBy["profit"] = float32(value)
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["loss"] = bson.M{operator: float32(value)}
+		} else {
+			criterias.SearchBy["loss"] = float32(value)
+		}
+
+	}
+
 	keys, ok = r.URL.Query()["search[customer_id]"]
 	if ok && len(keys[0]) >= 1 {
 
