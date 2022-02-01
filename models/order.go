@@ -19,15 +19,16 @@ import (
 )
 
 type OrderProduct struct {
-	ProductID    primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity     float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	Profit       float32            `bson:"profit,omitempty" json:"profit,omitempty"`
-	Loss         float32            `bson:"loss,omitempty" json:"loss,omitempty"`
+	ProductID        primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	Quantity         float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	UnitPrice        float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	Profit           float32            `bson:"profit" json:"profit"`
+	Loss             float32            `bson:"loss" json:"loss"`
+	ReturnedQuantity float32            `json:"returned_quantity" bson:"returned_quantity"`
 }
 
 //Order : Order structure
@@ -59,8 +60,8 @@ type Order struct {
 	PartiaPaymentAmount      float32             `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
 	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
-	Profit                   float32             `bson:"profit,omitempty" json:"profit,omitempty"`
-	Loss                     float32             `bson:"loss,omitempty" json:"loss,omitempty"`
+	Profit                   float32             `bson:"profit" json:"profit"`
+	Loss                     float32             `bson:"loss" json:"loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -884,7 +885,9 @@ func (order *Order) CalculateOrderProfit() error {
 		if err != nil {
 			return err
 		}
-		salesPrice := orderProduct.Quantity * orderProduct.UnitPrice
+		quantity := (orderProduct.Quantity - orderProduct.ReturnedQuantity)
+
+		salesPrice := quantity * orderProduct.UnitPrice
 
 		purchaseUnitPrice := float32(0.0)
 		for _, unitPrice := range product.UnitPrices {
@@ -894,7 +897,7 @@ func (order *Order) CalculateOrderProfit() error {
 			}
 		}
 
-		profit := salesPrice - (orderProduct.Quantity * purchaseUnitPrice)
+		profit := salesPrice - (quantity * purchaseUnitPrice)
 
 		if profit >= 0 {
 			order.Products[i].Profit = profit

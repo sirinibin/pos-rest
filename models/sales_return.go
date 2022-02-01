@@ -3,6 +3,8 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -29,51 +31,52 @@ type SalesReturnProduct struct {
 
 //SalesReturn : SalesReturn structure
 type SalesReturn struct {
-	ID                       primitive.ObjectID   `json:"id,omitempty" bson:"_id,omitempty"`
-	OrderID                  primitive.ObjectID   `json:"order_id,omitempty" bson:"order_id,omitempty"`
-	Date                     *time.Time           `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr                  string               `json:"date_str,omitempty"`
-	Code                     string               `bson:"code,omitempty" json:"code,omitempty"`
-	StoreID                  *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID               *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Store                    *Store               `json:"store,omitempty"`
-	Customer                 *Customer            `json:"customer,omitempty"`
-	Products                 []SalesReturnProduct `bson:"products,omitempty" json:"products,omitempty"`
-	DeliveredBy              *primitive.ObjectID  `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	DeliveredByUser          *User                `json:"delivered_by_user,omitempty"`
-	DeliveredBySignatureID   *primitive.ObjectID  `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
-	DeliveredBySignatureName string               `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
-	DeliveredBySignature     *Signature           `json:"delivered_by_signature,omitempty"`
-	SignatureDate            *time.Time           `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
-	SignatureDateStr         string               `json:"signature_date_str,omitempty"`
-	VatPercent               *float32             `bson:"vat_percent" json:"vat_percent"`
-	Discount                 float32              `bson:"discount" json:"discount"`
-	Status                   string               `bson:"status,omitempty" json:"status,omitempty"`
-	StockRemoved             bool                 `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
-	TotalQuantity            float32              `bson:"total_quantity" json:"total_quantity"`
-	VatPrice                 float32              `bson:"vat_price" json:"vat_price"`
-	Total                    float32              `bson:"total" json:"total"`
-	NetTotal                 float32              `bson:"net_total" json:"net_total"`
-	PartiaPaymentAmount      float32              `bson:"partial_payment_amount" json:"partial_payment_amount"`
-	PaymentMethod            string               `bson:"payment_method" json:"payment_method"`
-	PaymentStatus            string               `bson:"payment_status" json:"payment_status"`
-	Deleted                  bool                 `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy                *primitive.ObjectID  `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser            *User                `json:"deleted_by_user,omitempty"`
-	DeletedAt                *time.Time           `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt                *time.Time           `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt                *time.Time           `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy                *primitive.ObjectID  `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy                *primitive.ObjectID  `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser            *User                `json:"created_by_user,omitempty"`
-	UpdatedByUser            *User                `json:"updated_by_user,omitempty"`
-	DeliveredByName          string               `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CustomerName             string               `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	StoreName                string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName            string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName            string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName            string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog                []ChangeLog          `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	ID                      primitive.ObjectID   `json:"id,omitempty" bson:"_id,omitempty"`
+	OrderID                 *primitive.ObjectID  `json:"order_id,omitempty" bson:"order_id,omitempty"`
+	Date                    *time.Time           `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                 string               `json:"date_str,omitempty"`
+	Code                    string               `bson:"code,omitempty" json:"code,omitempty"`
+	OrderCode               string               `bson:"order_code,omitempty" json:"order_code,omitempty"`
+	StoreID                 *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID              *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Store                   *Store               `json:"store,omitempty"`
+	Customer                *Customer            `json:"customer,omitempty"`
+	Products                []SalesReturnProduct `bson:"products,omitempty" json:"products,omitempty"`
+	ReceivedBy              *primitive.ObjectID  `json:"received_by,omitempty" bson:"received_by,omitempty"`
+	ReceivedByUser          *User                `json:"received_by_user,omitempty"`
+	ReceivedBySignatureID   *primitive.ObjectID  `json:"received_by_signature_id,omitempty" bson:"received_by_signature_id,omitempty"`
+	ReceivedBySignatureName string               `json:"received_by_signature_name,omitempty" bson:"received_by_signature_name,omitempty"`
+	ReceivedBySignature     *Signature           `json:"received_by_signature,omitempty"`
+	SignatureDate           *time.Time           `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
+	SignatureDateStr        string               `json:"signature_date_str,omitempty"`
+	VatPercent              *float32             `bson:"vat_percent" json:"vat_percent"`
+	Discount                float32              `bson:"discount" json:"discount"`
+	Status                  string               `bson:"status,omitempty" json:"status,omitempty"`
+	StockAdded              bool                 `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
+	TotalQuantity           float32              `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                float32              `bson:"vat_price" json:"vat_price"`
+	Total                   float32              `bson:"total" json:"total"`
+	NetTotal                float32              `bson:"net_total" json:"net_total"`
+	PartiaPaymentAmount     float32              `bson:"partial_payment_amount" json:"partial_payment_amount"`
+	PaymentMethod           string               `bson:"payment_method" json:"payment_method"`
+	PaymentStatus           string               `bson:"payment_status" json:"payment_status"`
+	Deleted                 bool                 `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy               *primitive.ObjectID  `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser           *User                `json:"deleted_by_user,omitempty"`
+	DeletedAt               *time.Time           `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt               *time.Time           `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt               *time.Time           `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy               *primitive.ObjectID  `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy               *primitive.ObjectID  `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser           *User                `json:"created_by_user,omitempty"`
+	UpdatedByUser           *User                `json:"updated_by_user,omitempty"`
+	ReceivedByName          string               `json:"received_by_name,omitempty" bson:"received_by_name,omitempty"`
+	CustomerName            string               `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	StoreName               string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName           string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName           string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName           string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog               []ChangeLog          `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
 func (salesreturn *SalesReturn) SetChangeLog(
@@ -127,10 +130,12 @@ func (salesreturn *SalesReturn) AttributesValueChangeEvent(salesreturnOld *Sales
 			return err
 		}
 
-		err = salesreturn.RemoveStock()
-		if err != nil {
-			return err
-		}
+		/*
+			err = salesreturn.RemoveStock()
+			if err != nil {
+				return err
+			}
+		*/
 		//}
 	}
 
@@ -155,20 +160,20 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		salesreturn.CustomerName = customer.Name
 	}
 
-	if salesreturn.DeliveredBy != nil {
-		deliveredByUser, err := FindUserByID(salesreturn.DeliveredBy, bson.M{"id": 1, "name": 1})
+	if salesreturn.ReceivedBy != nil {
+		receivedByUser, err := FindUserByID(salesreturn.ReceivedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
-		salesreturn.DeliveredByName = deliveredByUser.Name
+		salesreturn.ReceivedByName = receivedByUser.Name
 	}
 
-	if salesreturn.DeliveredBySignatureID != nil {
-		deliveredBySignature, err := FindSignatureByID(salesreturn.DeliveredBySignatureID, bson.M{"id": 1, "name": 1})
+	if salesreturn.ReceivedBySignatureID != nil {
+		receivedBySignature, err := FindSignatureByID(salesreturn.ReceivedBySignatureID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
-		salesreturn.DeliveredBySignatureName = deliveredBySignature.Name
+		salesreturn.ReceivedBySignatureName = receivedBySignature.Name
 	}
 
 	if salesreturn.CreatedBy != nil {
@@ -347,6 +352,11 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[order_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["order_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[net_total]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -413,13 +423,13 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 		}
 	}
 
-	keys, ok = r.URL.Query()["search[delivered_by]"]
+	keys, ok = r.URL.Query()["search[received_by]"]
 	if ok && len(keys[0]) >= 1 {
-		deliveredByID, err := primitive.ObjectIDFromHex(keys[0])
+		receivedByID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
 			return salesreturns, criterias, err
 		}
-		criterias.SearchBy["delivered_by"] = deliveredByID
+		criterias.SearchBy["received_by"] = receivedByID
 	}
 
 	keys, ok = r.URL.Query()["search[store_id]"]
@@ -539,6 +549,21 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	errs = make(map[string]string)
 
+	if salesreturn.OrderID == nil || salesreturn.OrderID.IsZero() {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["order_id"] = "Order ID is required"
+		return errs
+	}
+
+	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["order_id"] = err.Error()
+		return errs
+	}
+
+	salesreturn.OrderCode = order.Code
+
 	if govalidator.IsNull(salesreturn.Status) {
 		errs["status"] = "Status is required"
 	}
@@ -626,17 +651,17 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	if salesreturn.DeliveredBy == nil || salesreturn.DeliveredBy.IsZero() {
-		errs["delivered_by"] = "Delivered By is required"
+	if salesreturn.ReceivedBy == nil || salesreturn.ReceivedBy.IsZero() {
+		errs["received_by"] = "Received By is required"
 	} else {
-		exists, err := IsUserExists(salesreturn.DeliveredBy)
+		exists, err := IsUserExists(salesreturn.ReceivedBy)
 		if err != nil {
-			errs["delivered_by"] = err.Error()
+			errs["received_by"] = err.Error()
 			return errs
 		}
 
 		if !exists {
-			errs["delivered_by"] = "Invalid Delivered By:" + salesreturn.DeliveredBy.Hex()
+			errs["received_by"] = "Invalid Received By:" + salesreturn.ReceivedBy.Hex()
 		}
 	}
 
@@ -644,35 +669,49 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["product_id"] = "Atleast 1 product is required for salesreturn"
 	}
 
-	if salesreturn.DeliveredBySignatureID != nil && !salesreturn.DeliveredBySignatureID.IsZero() {
-		exists, err := IsSignatureExists(salesreturn.DeliveredBySignatureID)
+	if salesreturn.ReceivedBySignatureID != nil && !salesreturn.ReceivedBySignatureID.IsZero() {
+		exists, err := IsSignatureExists(salesreturn.ReceivedBySignatureID)
 		if err != nil {
-			errs["delivered_by_signature_id"] = err.Error()
+			errs["received_by_signature_id"] = err.Error()
 			return errs
 		}
 
 		if !exists {
-			errs["delivered_by_signature_id"] = "Invalid Delivered By Signature:" + salesreturn.DeliveredBySignatureID.Hex()
+			errs["received_by_signature_id"] = "Invalid Received By Signature:" + salesreturn.ReceivedBySignatureID.Hex()
 		}
 	}
 
-	for index, product := range salesreturn.Products {
-		if product.ProductID.IsZero() {
+	for index, salesReturnProduct := range salesreturn.Products {
+		if salesReturnProduct.ProductID.IsZero() {
 			errs["product_id"] = "Product is required for Sales Return"
 		} else {
-			exists, err := IsProductExists(&product.ProductID)
+			exists, err := IsProductExists(&salesReturnProduct.ProductID)
 			if err != nil {
 				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
 			}
 
 			if !exists {
-				errs["product_id_"+strconv.Itoa(index)] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
+				errs["product_id_"+strconv.Itoa(index)] = "Invalid product_id:" + salesReturnProduct.ProductID.Hex() + " in products"
 			}
 		}
 
-		if product.Quantity == 0 {
+		if salesReturnProduct.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		}
+
+		for _, orderProduct := range order.Products {
+			if orderProduct.ProductID == salesReturnProduct.ProductID {
+				purchasedQty := float32(math.Floor(float64((orderProduct.Quantity-orderProduct.ReturnedQuantity)*100)) / float64(100))
+				log.Print("purchasedQty")
+				log.Print(purchasedQty)
+				//purchasedQty := math.Floor(float64((orderProduct.Quantity-orderProduct.ReturnedQuantity)*100) / 100)
+				if purchasedQty == 0 {
+					errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
+				} else if salesReturnProduct.Quantity > float32(purchasedQty) {
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", purchasedQty) + " " + orderProduct.Unit
+				}
+			}
 		}
 
 		/*
@@ -710,6 +749,31 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	return errs
 }
 
+func (salesreturn *SalesReturn) UpdateReturnedQuantityInProductOrder() error {
+	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
+	if err != nil {
+		return err
+	}
+	for _, salesReturnProduct := range salesreturn.Products {
+		for index2, orderProduct := range order.Products {
+			if orderProduct.ProductID == salesReturnProduct.ProductID {
+				order.Products[index2].ReturnedQuantity += salesReturnProduct.Quantity
+			}
+		}
+	}
+	err = order.CalculateOrderProfit()
+	if err != nil {
+		return err
+	}
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 /*
 func GetProductStockInStore(
 	productID *primitive.ObjectID,
@@ -735,6 +799,7 @@ func GetProductStockInStore(
 }
 */
 
+/*
 func (salesreturn *SalesReturn) RemoveStock() (err error) {
 	if len(salesreturn.Products) == 0 {
 		return nil
@@ -764,7 +829,7 @@ func (salesreturn *SalesReturn) RemoveStock() (err error) {
 				)
 
 				product.Stock[k].Stock -= salesreturnProduct.Quantity
-				salesreturn.StockRemoved = true
+				salesreturn.StockAdded = true
 				break
 			}
 		}
@@ -782,6 +847,7 @@ func (salesreturn *SalesReturn) RemoveStock() (err error) {
 	}
 	return nil
 }
+*/
 
 func (salesreturn *SalesReturn) AddStock() (err error) {
 	if len(salesreturn.Products) == 0 {
@@ -832,7 +898,7 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 		}
 	}
 
-	salesreturn.StockRemoved = false
+	salesreturn.StockAdded = false
 	err = salesreturn.Update()
 	if err != nil {
 		return err

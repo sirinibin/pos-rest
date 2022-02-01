@@ -116,18 +116,27 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//if salesreturn.Status == "delivered" || salesreturn.Status == "dispatched" {
-	err = salesreturn.RemoveStock()
+	err = salesreturn.AddStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
-		response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
+		response.Errors["add_stock"] = "Unable to update stock:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	//}
+
+	err = salesreturn.UpdateReturnedQuantityInProductOrder()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["update_returned_quantity"] = "Unable to update returned quantity:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	response.Status = true
 	response.Result = salesreturn
