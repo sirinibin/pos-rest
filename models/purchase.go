@@ -927,6 +927,11 @@ func (purchase *Purchase) Insert() error {
 		return err
 	}
 
+	err = purchase.AddProductsPurchaseSummary()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

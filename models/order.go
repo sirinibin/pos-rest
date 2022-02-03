@@ -952,6 +952,11 @@ func (order *Order) Insert() error {
 		return err
 	}
 
+	err = order.AddProductsSalesSummary()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -21,6 +21,97 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+type ProductSalesSummary struct {
+	ID           primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	ProductID    primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	CustomerID   *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerName string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	OrderID      *primitive.ObjectID `json:"order_id,omitempty" bson:"order_id,omitempty"`
+	OrderCode    string              `json:"order_code,omitempty" bson:"order_code,omitempty"`
+	Quantity     float32             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	UnitPrice    float32             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Unit         string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	CreatedAt    *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt    *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+func (order *Order) AddProductsSalesSummary() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_summary")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for _, orderProduct := range order.Products {
+
+		summary := ProductSalesSummary{
+			ProductID:    orderProduct.ProductID,
+			CustomerID:   order.CustomerID,
+			CustomerName: order.CustomerName,
+			OrderID:      &order.ID,
+			OrderCode:    order.Code,
+			Quantity:     orderProduct.Quantity,
+			UnitPrice:    orderProduct.UnitPrice,
+			Unit:         orderProduct.Unit,
+		}
+		summary.ID = primitive.NewObjectID()
+
+		now := time.Now()
+		summary.CreatedAt = &now
+		summary.UpdatedAt = &now
+
+		_, err := collection.InsertOne(ctx, &summary)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type ProductPurchaseSummary struct {
+	ID           primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	ProductID    primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	VendorID     *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	VendorName   string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	PurchaseID   *primitive.ObjectID `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
+	PurchaseCode string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
+	Quantity     float32             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	UnitPrice    float32             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Unit         string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	CreatedAt    *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt    *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+func (purchase *Purchase) AddProductsPurchaseSummary() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_summary")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for _, purchaseProduct := range purchase.Products {
+
+		summary := ProductPurchaseSummary{
+			ProductID:    purchaseProduct.ProductID,
+			VendorID:     purchase.VendorID,
+			VendorName:   purchase.VendorName,
+			PurchaseID:   &purchase.ID,
+			PurchaseCode: purchase.Code,
+			Quantity:     purchaseProduct.Quantity,
+			UnitPrice:    purchaseProduct.PurchaseUnitPrice,
+			Unit:         purchaseProduct.Unit,
+		}
+		summary.ID = primitive.NewObjectID()
+
+		now := time.Now()
+		summary.CreatedAt = &now
+		summary.UpdatedAt = &now
+
+		_, err := collection.InsertOne(ctx, &summary)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type ProductUnitPrice struct {
 	StoreID            primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName          string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
