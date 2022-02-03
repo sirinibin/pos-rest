@@ -113,6 +113,13 @@ func main() {
 	router.HandleFunc("/v1/purchase/{id}", controller.UpdatePurchase).Methods("PUT")
 	router.HandleFunc("/v1/purchase/{id}", controller.DeletePurchase).Methods("DELETE")
 
+	//Purchase Return
+	router.HandleFunc("/v1/purchase-return", controller.CreatePurchaseReturn).Methods("POST")
+	router.HandleFunc("/v1/purchase-return", controller.ListPurchaseReturn).Methods("GET")
+	router.HandleFunc("/v1/purchase-return/{id}", controller.ViewPurchaseReturn).Methods("GET")
+	router.HandleFunc("/v1/purchase-return/{id}", controller.UpdatePurchaseReturn).Methods("PUT")
+	router.HandleFunc("/v1/purchase-return/{id}", controller.DeletePurchaseReturn).Methods("DELETE")
+
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -702,14 +701,11 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 		for _, orderProduct := range order.Products {
 			if orderProduct.ProductID == salesReturnProduct.ProductID {
-				purchasedQty := float32(math.Floor(float64((orderProduct.Quantity-orderProduct.ReturnedQuantity)*100)) / float64(100))
-				log.Print("purchasedQty")
-				log.Print(purchasedQty)
-				//purchasedQty := math.Floor(float64((orderProduct.Quantity-orderProduct.ReturnedQuantity)*100) / 100)
-				if purchasedQty == 0 {
-					errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
-				} else if salesReturnProduct.Quantity > float32(purchasedQty) {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", purchasedQty) + " " + orderProduct.Unit
+				soldQty := float32(math.Floor(float64((orderProduct.Quantity-orderProduct.QuantityReturned)*100)) / float64(100))
+				if soldQty == 0 {
+					errs["quantity_"+strconv.Itoa(index)] = "Already returned all sold quantities"
+				} else if salesReturnProduct.Quantity > float32(soldQty) {
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + orderProduct.Unit
 				}
 			}
 		}
@@ -749,7 +745,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	return errs
 }
 
-func (salesreturn *SalesReturn) UpdateReturnedQuantityInProductOrder() error {
+func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct() error {
 	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
 	if err != nil {
 		return err
@@ -757,7 +753,7 @@ func (salesreturn *SalesReturn) UpdateReturnedQuantityInProductOrder() error {
 	for _, salesReturnProduct := range salesreturn.Products {
 		for index2, orderProduct := range order.Products {
 			if orderProduct.ProductID == salesReturnProduct.ProductID {
-				order.Products[index2].ReturnedQuantity += salesReturnProduct.Quantity
+				order.Products[index2].QuantityReturned += salesReturnProduct.Quantity
 			}
 		}
 	}

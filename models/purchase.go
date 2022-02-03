@@ -3,6 +3,8 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -18,15 +20,18 @@ import (
 )
 
 type PurchaseProduct struct {
-	ProductID          primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name               string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic       string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode           string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity           float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit               string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	PurchaseUnitPrice  float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	RetailUnitPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
-	WholesaleUnitPrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	ProductID               primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name                    string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic            string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode                string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	Quantity                float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned        float32            `json:"quantity_returned" bson:"quantity_returned"`
+	Unit                    string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	PurchaseUnitPrice       float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	RetailUnitPrice         float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	WholesaleUnitPrice      float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	ExpectedRetailProfit    float32            `bson:"retail_profit" json:"retail_profit"`
+	ExpectedWholesaleProfit float32            `bson:"wholesale_profit" json:"wholesale_profit"`
 }
 
 //Purchase : Purchase structure
@@ -50,11 +55,12 @@ type Purchase struct {
 	VatPercent                 *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                   float32             `bson:"discount" json:"discount"`
 	Status                     string              `bson:"status,omitempty" json:"status,omitempty"`
-	StockAdded                 bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
 	TotalQuantity              float32             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                   float32             `bson:"vat_price" json:"vat_price"`
 	Total                      float32             `bson:"total" json:"total"`
 	NetTotal                   float32             `bson:"net_total" json:"net_total"`
+	ExpectedRetailProfit       float32             `bson:"retail_profit" json:"retail_profit"`
+	ExpectedWholesaleProfit    float32             `bson:"wholesale_profit" json:"wholesale_profit"`
 	Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser              *User               `json:"deleted_by_user,omitempty"`
@@ -74,6 +80,32 @@ type Purchase struct {
 	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
+	totalRetailProfit := float32(0.0)
+	totalWholesaleProfit := float32(0.0)
+	for index, purchaseProduct := range purchase.Products {
+		quantity := (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
+
+		purchasePrice := quantity * purchaseProduct.PurchaseUnitPrice
+		retailPrice := quantity * purchaseProduct.RetailUnitPrice
+		wholesalePrice := quantity * purchaseProduct.WholesaleUnitPrice
+
+		expectedRetailProfit := retailPrice - purchasePrice
+		expectedWholesaleProfit := wholesalePrice - purchasePrice
+
+		purchase.Products[index].ExpectedRetailProfit = expectedRetailProfit
+		purchase.Products[index].ExpectedWholesaleProfit = expectedWholesaleProfit
+
+		totalRetailProfit += expectedRetailProfit
+		totalWholesaleProfit += expectedWholesaleProfit
+	}
+
+	purchase.ExpectedRetailProfit = totalRetailProfit
+	purchase.ExpectedWholesaleProfit = totalWholesaleProfit
+
+	return nil
+}
+
 func (purchase *Purchase) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
@@ -91,9 +123,9 @@ func (purchase *Purchase) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
 	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
+		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
 	}
 
 	purchase.ChangeLog = append(
@@ -117,24 +149,23 @@ func (purchase *Purchase) AttributesValueChangeEvent(purchaseOld *Purchase) erro
 			purchaseOld.Status,
 			purchase.Status,
 		)
+		/*
 
-		//if purchase.Status == "delivered" {
+				err := purchaseOld.RemoveStock()
+				if err != nil {
+					return err
+				}
 
-		err := purchaseOld.RemoveStock()
-		if err != nil {
-			return err
-		}
+				err = purchase.AddStock()
+				if err != nil {
+					return err
+				}
 
-		err = purchase.AddStock()
-		if err != nil {
-			return err
-		}
-
-		err = purchase.UpdateProductUnitPriceInStore()
-		if err != nil {
-			return err
-		}
-		//}
+			err := purchase.UpdateProductUnitPriceInStore()
+			if err != nil {
+				return err
+			}
+		*/
 	}
 
 	return nil
@@ -747,17 +778,17 @@ func (purchase *Purchase) AddStock() (err error) {
 					"add_stock",
 					product.Name,
 					product.Stock[k].Stock,
-					(product.Stock[k].Stock + purchaseProduct.Quantity),
+					(product.Stock[k].Stock + (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)),
 				)
 
 				product.SetChangeLog(
 					"add_stock",
 					product.Name,
 					product.Stock[k].Stock,
-					(product.Stock[k].Stock + purchaseProduct.Quantity),
+					(product.Stock[k].Stock + (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)),
 				)
 
-				product.Stock[k].Stock += purchaseProduct.Quantity
+				product.Stock[k].Stock += (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
 				storeExistInProductStock = true
 				break
 			}
@@ -766,7 +797,7 @@ func (purchase *Purchase) AddStock() (err error) {
 		if !storeExistInProductStock {
 			productStock := ProductStock{
 				StoreID: *purchase.StoreID,
-				Stock:   purchaseProduct.Quantity,
+				Stock:   (purchaseProduct.Quantity - purchaseProduct.QuantityReturned),
 			}
 			product.Stock = append(product.Stock, productStock)
 		}
@@ -776,7 +807,6 @@ func (purchase *Purchase) AddStock() (err error) {
 			return err
 		}
 	}
-	purchase.StockAdded = true
 	err = purchase.Update()
 	if err != nil {
 		return err
@@ -810,7 +840,7 @@ func (purchase *Purchase) RemoveStock() (err error) {
 					)
 				*/
 
-				product.Stock[k].Stock -= purchaseProduct.Quantity
+				product.Stock[k].Stock -= (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
 				break
 			}
 		}
@@ -869,6 +899,7 @@ func (purchase *Purchase) Insert() error {
 	if err != nil {
 		return err
 	}
+	log.Print("After update foreing fields")
 
 	purchase.ID = primitive.NewObjectID()
 	if len(purchase.Code) == 0 {
@@ -885,6 +916,11 @@ func (purchase *Purchase) Insert() error {
 	}
 
 	purchase.SetChangeLog("create", nil, nil, nil)
+
+	err = purchase.CalculatePurchaseExpectedProfit()
+	if err != nil {
+		return err
+	}
 
 	_, err = collection.InsertOne(ctx, &purchase)
 	if err != nil {
@@ -938,12 +974,18 @@ func (purchase *Purchase) Update() error {
 
 	purchase.SetChangeLog("update", nil, nil, nil)
 
+	err = purchase.CalculatePurchaseExpectedProfit()
+	if err != nil {
+		return err
+	}
+
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": purchase.ID},
 		bson.M{"$set": purchase},
 		updateOptions,
 	)
+
 	if err != nil {
 		return err
 	}

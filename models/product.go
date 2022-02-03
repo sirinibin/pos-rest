@@ -101,9 +101,9 @@ func (product *Product) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock reduced from " + fmt.Sprintf("%f", oldValue.(float32)) + " to " + fmt.Sprintf("%f", newValue.(float32)) + " by " + UserObject.Name
+		description = "Stock reduced from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32)) + " by " + UserObject.Name
 	} else if event == "add_stock" && name != nil {
-		description = "Stock raised from " + strconv.Itoa(oldValue.(int)) + " to " + fmt.Sprintf("%f", newValue.(float32)) + " by " + UserObject.Name
+		description = "Stock raised from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32)) + " by " + UserObject.Name
 	} else if event == "add_image" {
 		description = "Added " + strconv.Itoa(newValue.(int)) + " new images by " + UserObject.Name
 	} else if event == "remove_image" {

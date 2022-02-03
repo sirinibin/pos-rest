@@ -12,8 +12,8 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-// ListSalesReturn : handler for GET /salesreturn
-func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
+// ListPurchaseReturn : handler for GET /purchasereturn
+func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -27,38 +27,38 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturns := []models.SalesReturn{}
+	purchasereturns := []models.PurchaseReturn{}
 
-	salesreturns, criterias, err := models.SearchSalesReturn(w, r)
+	purchasereturns, criterias, err := models.SearchPurchaseReturn(w, r)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Unable to find salesreturns:" + err.Error()
+		response.Errors["find"] = "Unable to find purchasereturns:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "salesreturn")
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchasereturn")
 	if err != nil {
 		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of salesreturns:" + err.Error()
+		response.Errors["total_count"] = "Unable to find total count of purchasereturns:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	if len(salesreturns) == 0 {
+	if len(purchasereturns) == 0 {
 		response.Result = []interface{}{}
 	} else {
-		response.Result = salesreturns
+		response.Result = purchasereturns
 	}
 
 	json.NewEncoder(w).Encode(response)
 
 }
 
-// CreateSalesReturn : handler for POST /salesreturn
-func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
+// CreatePurchaseReturn : handler for POST /purchasereturn
+func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -72,9 +72,9 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var salesreturn *models.SalesReturn
+	var purchasereturn *models.PurchaseReturn
 	// Decode data
-	if !utils.Decode(w, r, &salesreturn) {
+	if !utils.Decode(w, r, &purchasereturn) {
 		return
 	}
 
@@ -86,26 +86,26 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.CreatedBy = &userID
-	salesreturn.UpdatedBy = &userID
+	purchasereturn.CreatedBy = &userID
+	purchasereturn.UpdatedBy = &userID
 	now := time.Now()
-	salesreturn.CreatedAt = &now
-	salesreturn.UpdatedAt = &now
+	purchasereturn.CreatedAt = &now
+	purchasereturn.UpdatedAt = &now
 
 	// Validate data
-	if errs := salesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
+	if errs := purchasereturn.Validate(w, r, "create", nil); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	salesreturn.FindNetTotal()
-	salesreturn.FindTotal()
-	salesreturn.FindTotalQuantity()
-	salesreturn.FindVatPrice()
+	purchasereturn.FindNetTotal()
+	purchasereturn.FindTotal()
+	purchasereturn.FindTotalQuantity()
+	purchasereturn.FindVatPrice()
 
-	err = salesreturn.Insert()
+	err = purchasereturn.Insert()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -116,18 +116,18 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = salesreturn.AddStock()
+	err = purchasereturn.RemoveStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
-		response.Errors["add_stock"] = "Unable to update stock:" + err.Error()
+		response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	err = salesreturn.UpdateReturnedQuantityInOrderProduct()
+	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -139,13 +139,13 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
-	response.Result = salesreturn
+	response.Result = purchasereturn
 
 	json.NewEncoder(w).Encode(response)
 }
 
-// UpdateSalesReturn : handler function for PUT /v1/salesreturn call
-func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
+// UpdatePurchaseReturn : handler function for PUT /v1/purchasereturn call
+func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -159,39 +159,40 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var salesreturn *models.SalesReturn
-	var salesreturnOld *models.SalesReturn
+	var purchasereturn *models.PurchaseReturn
+	var purchasereturnOld *models.PurchaseReturn
 
 	params := mux.Vars(r)
 
-	salesreturnID, err := primitive.ObjectIDFromHex(params["id"])
+	purchasereturnID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["salesreturn_id"] = "Invalid SalesReturn ID:" + err.Error()
+		response.Errors["purchasereturn_id"] = "Invalid PurchaseReturn ID:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	salesreturnOld, err = models.FindSalesReturnByID(&salesreturnID, bson.M{})
+	purchasereturnOld, err = models.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {
 		response.Status = false
-		response.Errors["find_salesreturn"] = "Unable to find salesreturn:" + err.Error()
+		response.Errors["find_purchasereturn"] = "Unable to find purchasereturn:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	salesreturn, err = models.FindSalesReturnByID(&salesreturnID, bson.M{})
+	purchasereturn, err = models.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {
 		response.Status = false
-		response.Errors["find_salesreturn"] = "Unable to find salesreturn:" + err.Error()
+		response.Errors["find_purchasereturn"] = "Unable to find purchasereturn:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	if !utils.Decode(w, r, &salesreturn) {
+	// Decode data
+	if !utils.Decode(w, r, &purchasereturn) {
 		return
 	}
 
@@ -203,24 +204,24 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.UpdatedBy = &userID
+	purchasereturn.UpdatedBy = &userID
 	now := time.Now()
-	salesreturn.UpdatedAt = &now
+	purchasereturn.UpdatedAt = &now
 
 	// Validate data
-	if errs := salesreturn.Validate(w, r, "update", salesreturnOld); len(errs) > 0 {
+	if errs := purchasereturn.Validate(w, r, "update", purchasereturnOld); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	salesreturn.FindNetTotal()
-	salesreturn.FindTotal()
-	salesreturn.FindTotalQuantity()
-	salesreturn.FindVatPrice()
+	purchasereturn.FindNetTotal()
+	purchasereturn.FindTotal()
+	purchasereturn.FindTotalQuantity()
+	purchasereturn.FindVatPrice()
 
-	err = salesreturn.Update()
+	err = purchasereturn.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -231,7 +232,29 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = salesreturn.AttributesValueChangeEvent(salesreturnOld)
+	err = purchasereturnOld.AddStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["add_old_stock"] = "Unable to add old stock:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchasereturn.RemoveStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchasereturn.AttributesValueChangeEvent(purchasereturnOld)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -242,21 +265,21 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn, err = models.FindSalesReturnByID(&salesreturn.ID, bson.M{})
+	purchasereturn, err = models.FindPurchaseReturnByID(&purchasereturn.ID, bson.M{})
 	if err != nil {
 		response.Status = false
-		response.Errors["view"] = "Unable to find salesreturn:" + err.Error()
+		response.Errors["view"] = "Unable to find purchasereturn:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
-	response.Result = salesreturn
+	response.Result = purchasereturn
 	json.NewEncoder(w).Encode(response)
 }
 
-// ViewSalesReturn : handler function for GET /v1/salesreturn/<id> call
-func ViewSalesReturn(w http.ResponseWriter, r *http.Request) {
+// ViewPurchaseReturn : handler function for GET /v1/purchasereturn/<id> call
+func ViewPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -272,16 +295,16 @@ func ViewSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	salesreturnID, err := primitive.ObjectIDFromHex(params["id"])
+	purchasereturnID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["product_id"] = "Invalid SalesReturn ID:" + err.Error()
+		response.Errors["product_id"] = "Invalid PurchaseReturn ID:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	var salesreturn *models.SalesReturn
+	var purchasereturn *models.PurchaseReturn
 
 	selectFields := map[string]interface{}{}
 	keys, ok := r.URL.Query()["select"]
@@ -289,7 +312,7 @@ func ViewSalesReturn(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	salesreturn, err = models.FindSalesReturnByID(&salesreturnID, selectFields)
+	purchasereturn, err = models.FindPurchaseReturnByID(&purchasereturnID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -298,16 +321,14 @@ func ViewSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.SetChangeLog("view", nil, nil, nil)
-
 	response.Status = true
-	response.Result = salesreturn
+	response.Result = purchasereturn
 
 	json.NewEncoder(w).Encode(response)
 }
 
-// DeleteSalesReturn : handler function for DELETE /v1/salesreturn/<id> call
-func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
+// DeletePurchaseReturn : handler function for DELETE /v1/purchasereturn/<id> call
+func DeletePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -323,16 +344,16 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	params := mux.Vars(r)
 
-	salesreturnID, err := primitive.ObjectIDFromHex(params["id"])
+	purchasereturnID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Status = false
-		response.Errors["quotation_id"] = "Invalid SalesReturn ID:" + err.Error()
+		response.Errors["quotation_id"] = "Invalid PurchaseReturn ID:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	salesreturn, err := models.FindSalesReturnByID(&salesreturnID, bson.M{})
+	purchasereturn, err := models.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -341,7 +362,7 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = salesreturn.DeleteSalesReturn(tokenClaims)
+	err = purchasereturn.DeletePurchaseReturn(tokenClaims)
 	if err != nil {
 		response.Status = false
 		response.Errors["delete"] = "Unable to delete:" + err.Error()
@@ -350,12 +371,12 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if salesreturn.Status == "delivered" && !salesreturn.Deleted {
-		err = salesreturn.AddStock()
+	if purchasereturn.Status == "delivered" && !purchasereturn.Deleted {
+		err = purchasereturn.RemoveStock()
 		if err != nil {
 			response.Status = false
 			response.Errors = make(map[string]string)
-			response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
+			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
 
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)

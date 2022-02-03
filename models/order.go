@@ -24,11 +24,11 @@ type OrderProduct struct {
 	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	Quantity         float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned float32            `json:"quantity_returned" bson:"quantity_returned"`
 	UnitPrice        float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	Profit           float32            `bson:"profit" json:"profit"`
 	Loss             float32            `bson:"loss" json:"loss"`
-	ReturnedQuantity float32            `json:"returned_quantity" bson:"returned_quantity"`
 }
 
 //Order : Order structure
@@ -98,9 +98,9 @@ func (order *Order) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%f", oldValue.(float32)) + " to " + fmt.Sprintf("%f", newValue.(float32))
+		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
 	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%f", oldValue.(float32)) + " to " + fmt.Sprintf("%f", newValue.(float32))
+		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
 	}
 
 	order.ChangeLog = append(
@@ -126,16 +126,17 @@ func (order *Order) AttributesValueChangeEvent(orderOld *Order) error {
 		)
 
 		//if order.Status == "delivered" || order.Status == "dispatched" {
+		/*
+			err := orderOld.AddStock()
+			if err != nil {
+				return err
+			}
 
-		err := orderOld.AddStock()
-		if err != nil {
-			return err
-		}
-
-		err = order.RemoveStock()
-		if err != nil {
-			return err
-		}
+			err = order.RemoveStock()
+			if err != nil {
+				return err
+			}
+		*/
 		//}
 	}
 
@@ -735,7 +736,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				return errs
 			}
 
-			errs["quantity_"+strconv.Itoa(index)] = "Product: " + productObject.Name + " stock is only " + fmt.Sprintf("%f", stock) + " in Store: " + storeObject.Name
+			errs["quantity_"+strconv.Itoa(index)] = "Product: " + productObject.Name + " stock is only " + fmt.Sprintf("%.02f", stock) + " in Store: " + storeObject.Name
 		}
 	}
 
@@ -789,17 +790,17 @@ func (order *Order) RemoveStock() (err error) {
 					"remove_stock",
 					product.Name,
 					product.Stock[k].Stock,
-					(product.Stock[k].Stock - orderProduct.Quantity),
+					(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
 				)
 
 				product.SetChangeLog(
 					"remove_stock",
 					product.Name,
 					product.Stock[k].Stock,
-					(product.Stock[k].Stock - orderProduct.Quantity),
+					(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
 				)
 
-				product.Stock[k].Stock -= orderProduct.Quantity
+				product.Stock[k].Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
 				order.StockRemoved = true
 				break
 			}
@@ -885,7 +886,7 @@ func (order *Order) CalculateOrderProfit() error {
 		if err != nil {
 			return err
 		}
-		quantity := (orderProduct.Quantity - orderProduct.ReturnedQuantity)
+		quantity := (orderProduct.Quantity - orderProduct.QuantityReturned)
 
 		salesPrice := quantity * orderProduct.UnitPrice
 
