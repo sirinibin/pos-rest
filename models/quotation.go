@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -733,7 +732,11 @@ func (quotation *Quotation) Insert() error {
 	quotation.ID = primitive.NewObjectID()
 	if len(quotation.Code) == 0 {
 		for true {
-			quotation.Code = strings.ToUpper(GenerateQuotationCode(12))
+			code, err := GenerateCode(10000, "quotation")
+			if err != nil {
+				return err
+			}
+			quotation.Code = code
 			exists, err := quotation.IsCodeExists()
 			if err != nil {
 				return err
@@ -773,14 +776,13 @@ func (quotation *Quotation) IsCodeExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func GenerateQuotationCode(n int) string {
-	//letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
-	letterRunes := []rune("0123456789")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+func GenerateCode(startFrom int, collectionName string) (string, error) {
+	count, err := GetTotalCount(bson.M{}, collectionName)
+	if err != nil {
+		return "", err
 	}
-	return string(b)
+	code := startFrom + int(count)
+	return strconv.Itoa(code + 1), nil
 }
 
 func (quotation *Quotation) Update() error {

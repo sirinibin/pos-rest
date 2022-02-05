@@ -918,7 +918,11 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 	purchasereturn.ID = primitive.NewObjectID()
 	if len(purchasereturn.Code) == 0 {
 		for true {
-			purchasereturn.Code = strings.ToUpper(GeneratePurchaseReturnCode(12))
+			code, err := GenerateCode(40000, "purchasereturn")
+			if err != nil {
+				return err
+			}
+			purchasereturn.Code = code
 			exists, err := purchasereturn.IsCodeExists()
 			if err != nil {
 				return err

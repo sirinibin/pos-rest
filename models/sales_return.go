@@ -916,7 +916,11 @@ func (salesreturn *SalesReturn) Insert() error {
 	salesreturn.ID = primitive.NewObjectID()
 	if len(salesreturn.Code) == 0 {
 		for true {
-			salesreturn.Code = strings.ToUpper(GenerateSalesReturnCode(12))
+			code, err := GenerateCode(20000, "salesreturn")
+			if err != nil {
+				return err
+			}
+			salesreturn.Code = code
 			exists, err := salesreturn.IsCodeExists()
 			if err != nil {
 				return err

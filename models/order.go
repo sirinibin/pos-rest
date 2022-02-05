@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -929,7 +928,11 @@ func (order *Order) Insert() error {
 	order.ID = primitive.NewObjectID()
 	if len(order.Code) == 0 {
 		for true {
-			order.Code = strings.ToUpper(GenerateOrderCode(12))
+			code, err := GenerateCode(10000, "order")
+			if err != nil {
+				return err
+			}
+			order.Code = code
 			exists, err := order.IsCodeExists()
 			if err != nil {
 				return err
@@ -980,14 +983,23 @@ func (order *Order) IsCodeExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func GenerateOrderCode(n int) string {
+func GenerateOrderCode(startFrom int) (string, error) {
 	//letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
-	letterRunes := []rune("0123456789")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	/*
+		letterRunes := []rune("0123456789")
+		b := make([]rune, n)
+		for i := range b {
+			b[i] = letterRunes[rand.Intn(len(letterRunes))]
+		}
+		return string(b)
+	*/
+
+	count, err := GetTotalCount(bson.M{}, "order")
+	if err != nil {
+		return "", err
 	}
-	return string(b)
+	code := startFrom + int(count)
+	return strconv.Itoa(code + 1), nil
 }
 
 func (order *Order) UpdateOrderStatus(status string) (*Order, error) {

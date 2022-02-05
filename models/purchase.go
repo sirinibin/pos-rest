@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -904,7 +903,11 @@ func (purchase *Purchase) Insert() error {
 	purchase.ID = primitive.NewObjectID()
 	if len(purchase.Code) == 0 {
 		for true {
-			purchase.Code = strings.ToUpper(GeneratePurchaseCode(12))
+			code, err := GenerateCode(30000, "purchase")
+			if err != nil {
+				return err
+			}
+			purchase.Code = code
 			exists, err := purchase.IsCodeExists()
 			if err != nil {
 				return err
@@ -955,14 +958,14 @@ func (purchase *Purchase) IsCodeExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func GeneratePurchaseCode(n int) string {
-	//letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
-	letterRunes := []rune("0123456789")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+func GeneratePurchaseCode(startFrom int) (string, error) {
+
+	count, err := GetTotalCount(bson.M{}, "purchase")
+	if err != nil {
+		return "", err
 	}
-	return string(b)
+	code := startFrom + int(count)
+	return strconv.Itoa(code + 1), nil
 }
 
 func (purchase *Purchase) Update() error {
