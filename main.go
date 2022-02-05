@@ -5,16 +5,26 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
+	"github.com/sirinibin/pos-rest/env"
 )
 
 func main() {
 	fmt.Println("A GoLang / Myql Microservice [OAuth2,Redis & JWT used for token management]!")
 	db.Client()
 	db.InitRedis()
+
+	httpPort := env.Getenv("API_PORT", "2000")
+	httpsPort, err := strconv.Atoi(httpPort)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	httpsPort = httpsPort + 1
 
 	router := mux.NewRouter()
 
@@ -124,7 +134,7 @@ func main() {
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
 	go func() {
-		log.Fatal(http.ListenAndServeTLS(":2001", "localhost.cert.pem", "localhost.key.pem", router))
+		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", router))
 	}()
 
 	ifaces, _ := net.Interfaces()
@@ -138,10 +148,10 @@ func main() {
 			case *net.IPAddr:
 				ip = v.IP
 			}
-			log.Printf("Serving @ https://" + ip.String() + ":2001 /\n")
-			log.Printf("Serving @ http://" + ip.String() + ":2000 /\n")
+			log.Printf("Serving @ https://" + ip.String() + ":" + strconv.Itoa(httpsPort) + " /\n")
+			log.Printf("Serving @ http://" + ip.String() + ":" + httpPort + " /\n")
 		}
 	}
-	log.Fatal(http.ListenAndServe(":2000", router))
+	log.Fatal(http.ListenAndServe(":"+httpPort, router))
 
 }
