@@ -50,6 +50,7 @@ type Order struct {
 	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
 	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float32             `bson:"discount" json:"discount"`
+	DiscountPercent          float32             `bson:"discount_percent" json:"discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockRemoved             bool                `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
 	TotalQuantity            float32             `bson:"total_quantity" json:"total_quantity"`
@@ -613,29 +614,31 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	if scenario == "update" {
-		if order.ID.IsZero() {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = "ID is required"
-			return errs
-		}
-		exists, err := IsOrderExists(&order.ID)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = err.Error()
-			return errs
-		}
+		/*
+			if order.ID.IsZero() {
+				w.WriteHeader(http.StatusBadRequest)
+				errs["id"] = "ID is required"
+				return errs
+			}
+			exists, err := IsOrderExists(&order.ID)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				errs["id"] = err.Error()
+				return errs
+			}
 
-		if !exists {
-			errs["id"] = "Invalid Order:" + order.ID.Hex()
-		}
+			if !exists {
+				errs["id"] = "Invalid Order:" + order.ID.Hex()
+			}
 
-		if oldOrder != nil {
-			if oldOrder.Status == "delivered" || oldOrder.Status == "dispatched" {
-				if order.Status == "pending" || order.Status == "cancelled" || order.Status == "order_placed" {
-					errs["status"] = "Can't change the status from delivered/dispatched to pending/cancelled/order_placed"
+			if oldOrder != nil {
+				if oldOrder.Status == "delivered" || oldOrder.Status == "dispatched" {
+					if order.Status == "pending" || order.Status == "cancelled" || order.Status == "order_placed" {
+						errs["status"] = "Can't change the status from delivered/dispatched to pending/cancelled/order_placed"
+					}
 				}
 			}
-		}
+		*/
 	}
 
 	if order.StoreID == nil || order.StoreID.IsZero() {
