@@ -49,6 +49,7 @@ type Quotation struct {
 	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float32             `bson:"discount" json:"discount"`
 	DiscountPercent          float32             `bson:"discount_percent" json:"discount_percent"`
+	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	TotalQuantity            float32             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
