@@ -733,8 +733,9 @@ func (quotation *Quotation) Insert() error {
 
 	quotation.ID = primitive.NewObjectID()
 	if len(quotation.Code) == 0 {
+		startAt := 50000
 		for true {
-			code, err := GenerateCode(10000, "quotation")
+			code, err := GenerateCode(startAt, "quotation")
 			if err != nil {
 				return err
 			}
@@ -746,6 +747,7 @@ func (quotation *Quotation) Insert() error {
 			if !exists {
 				break
 			}
+			startAt++
 		}
 	}
 
