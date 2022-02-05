@@ -927,8 +927,10 @@ func (order *Order) Insert() error {
 
 	order.ID = primitive.NewObjectID()
 	if len(order.Code) == 0 {
+		startAt := 10000
 		for true {
-			code, err := GenerateCode(10000, "order")
+
+			code, err := GenerateCode(startAt, "order")
 			if err != nil {
 				return err
 			}
@@ -940,6 +942,7 @@ func (order *Order) Insert() error {
 			if !exists {
 				break
 			}
+			startAt++
 		}
 	}
 

@@ -917,8 +917,9 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 
 	purchasereturn.ID = primitive.NewObjectID()
 	if len(purchasereturn.Code) == 0 {
+		startAt := 40000
 		for true {
-			code, err := GenerateCode(40000, "purchasereturn")
+			code, err := GenerateCode(startAt, "purchasereturn")
 			if err != nil {
 				return err
 			}
@@ -930,6 +931,7 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 			if !exists {
 				break
 			}
+			startAt++
 		}
 	}
 

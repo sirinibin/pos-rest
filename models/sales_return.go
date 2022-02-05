@@ -915,8 +915,9 @@ func (salesreturn *SalesReturn) Insert() error {
 
 	salesreturn.ID = primitive.NewObjectID()
 	if len(salesreturn.Code) == 0 {
+		startAt := 20000
 		for true {
-			code, err := GenerateCode(20000, "salesreturn")
+			code, err := GenerateCode(startAt, "salesreturn")
 			if err != nil {
 				return err
 			}
@@ -928,6 +929,7 @@ func (salesreturn *SalesReturn) Insert() error {
 			if !exists {
 				break
 			}
+			startAt++
 		}
 	}
 
