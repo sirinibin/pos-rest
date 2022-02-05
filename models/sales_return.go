@@ -50,6 +50,7 @@ type SalesReturn struct {
 	SignatureDateStr        string               `json:"signature_date_str,omitempty"`
 	VatPercent              *float32             `bson:"vat_percent" json:"vat_percent"`
 	Discount                float32              `bson:"discount" json:"discount"`
+	DiscountPercent         float32              `bson:"discount_percent" json:"discount_percent"`
 	Status                  string               `bson:"status,omitempty" json:"status,omitempty"`
 	StockAdded              bool                 `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
 	TotalQuantity           float32              `bson:"total_quantity" json:"total_quantity"`
