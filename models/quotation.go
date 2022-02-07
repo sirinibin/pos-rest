@@ -133,12 +133,15 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 
 		salesPrice := quantity * quotationProduct.UnitPrice
 
-		purchaseUnitPrice := float32(0.0)
-		for _, unitPrice := range product.UnitPrices {
-			if unitPrice.StoreID == *quotation.StoreID {
-				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
-				quotation.Products[i].PurchaseUnitPrice = purchaseUnitPrice
-				break
+		purchaseUnitPrice := quotation.Products[i].PurchaseUnitPrice
+
+		if purchaseUnitPrice == 0 {
+			for _, unitPrice := range product.UnitPrices {
+				if unitPrice.StoreID == *quotation.StoreID {
+					purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+					quotation.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+					break
+				}
 			}
 		}
 
