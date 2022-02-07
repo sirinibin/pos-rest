@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"time"
 
@@ -46,6 +47,18 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	quotationStats, err := models.GetQuotationStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_sales"] = "Unable to find total amount of quotation:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["total_quotation"] = math.Floor(quotationStats.NetTotal)
 
 	if len(quotations) == 0 {
 		response.Result = []interface{}{}
