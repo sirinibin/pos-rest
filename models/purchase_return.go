@@ -81,7 +81,7 @@ type PurchaseReturnStats struct {
 	NetTotal float64             `json:"net_total" bson:"net_total"`
 }
 
-func GetPurchaseReturnStats(filter map[string]interface{}) (stats *PurchaseReturnStats, err error) {
+func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturnStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -100,18 +100,18 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats *PurchaseRetur
 
 	cur, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, err
+		return stats, err
 	}
 	defer cur.Close(ctx)
 
 	for cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
-			return nil, err
+			return stats, err
 		}
 		return stats, nil
 	}
-	return nil, nil
+	return stats, nil
 }
 
 func (purchasereturn *PurchaseReturn) SetChangeLog(

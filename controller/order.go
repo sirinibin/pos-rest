@@ -48,7 +48,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesStats, err := models.GetSalesStats(criterias.SearchBy, "order")
+	salesStats, err := models.GetSalesStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()

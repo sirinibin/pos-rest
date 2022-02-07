@@ -252,8 +252,8 @@ func (order *Order) FindVatPrice() {
 	order.VatPrice = vatPrice
 }
 
-func GetSalesStats(filter map[string]interface{}, collectionName string) (stats *SalesStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -273,18 +273,18 @@ func GetSalesStats(filter map[string]interface{}, collectionName string) (stats 
 
 	cur, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, err
+		return stats, err
 	}
 	defer cur.Close(ctx)
 
 	for cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
-			return nil, err
+			return stats, err
 		}
 		return stats, nil
 	}
-	return nil, nil
+	return stats, nil
 }
 
 // DiskQuotaUsageResult payload for disk quota usage

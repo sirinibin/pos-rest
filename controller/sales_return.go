@@ -48,7 +48,7 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesReturnStats, err := models.GetSalesStats(criterias.SearchBy, "salesreturn")
+	salesReturnStats, err := models.GetSalesStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_sales"] = "Unable to find total amount of sales return:" + err.Error()

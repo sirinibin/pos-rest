@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -79,7 +80,7 @@ type QuotationStats struct {
 	NetTotal float64             `json:"net_total" bson:"net_total"`
 }
 
-func GetQuotationStats(filter map[string]interface{}) (stats *QuotationStats, err error) {
+func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -98,18 +99,18 @@ func GetQuotationStats(filter map[string]interface{}) (stats *QuotationStats, er
 
 	cur, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, err
+		return stats, err
 	}
 	defer cur.Close(ctx)
 
 	for cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
-			return nil, err
+			return stats, err
 		}
 		return stats, nil
 	}
-	return nil, nil
+	return stats, nil
 }
 
 func (quotation *Quotation) GeneratePDF() error {
@@ -354,6 +355,8 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 		}
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
+		log.Print(startDate)
+		log.Print(endDate)
 		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
 	}
 

@@ -18,6 +18,7 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
+	response.Meta = make(map[string]interface{})
 
 	_, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
@@ -55,8 +56,6 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	response.Meta = map[string]interface{}{}
 
 	response.Meta["total_quotation"] = math.Floor(quotationStats.NetTotal)
 
