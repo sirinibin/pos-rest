@@ -58,6 +58,8 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Meta["total_quotation"] = math.Floor(quotationStats.NetTotal)
+	response.Meta["profit"] = math.Floor(quotationStats.Profit)
+	response.Meta["loss"] = math.Floor(quotationStats.Loss)
 
 	if len(quotations) == 0 {
 		response.Result = []interface{}{}

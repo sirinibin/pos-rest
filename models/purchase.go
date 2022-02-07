@@ -143,8 +143,8 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 		totalWholesaleProfit += expectedWholesaleProfit
 	}
 
-	purchase.ExpectedRetailProfit = totalRetailProfit
-	purchase.ExpectedWholesaleProfit = totalWholesaleProfit
+	purchase.ExpectedRetailProfit = totalRetailProfit + purchase.Discount
+	purchase.ExpectedWholesaleProfit = totalWholesaleProfit + purchase.Discount
 
 	return nil
 }

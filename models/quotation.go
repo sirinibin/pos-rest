@@ -19,14 +19,17 @@ import (
 )
 
 type QuotationProduct struct {
-	ProductID    primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PartNumber   string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity     float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitPrice    float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	ProductID         primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name              string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic      string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode          string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PartNumber        string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity          float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitPrice         float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	PurchaseUnitPrice float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Profit            float32            `bson:"profit" json:"profit"`
+	Loss              float32            `bson:"loss" json:"loss"`
 }
 
 //Quotation : Quotation structure
@@ -56,6 +59,8 @@ type Quotation struct {
 	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
 	Total                    float32             `bson:"total" json:"total"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`
+	Profit                   float32             `bson:"profit" json:"profit"`
+	Loss                     float32             `bson:"loss" json:"loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -78,6 +83,48 @@ type Quotation struct {
 type QuotationStats struct {
 	ID       *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal float64             `json:"net_total" bson:"net_total"`
+	Profit   float64             `json:"profit" bson:"profit"`
+	Loss     float64             `json:"loss" bson:"loss"`
+}
+
+func (quotation *Quotation) CalculateQuotationProfit() error {
+	totalProfit := float32(0.0)
+	totalLoss := float32(0.0)
+	for i, quotationProduct := range quotation.Products {
+		product, err := FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+		quantity := quotationProduct.Quantity
+
+		salesPrice := quantity * quotationProduct.UnitPrice
+
+		purchaseUnitPrice := float32(0.0)
+		for _, unitPrice := range product.UnitPrices {
+			if unitPrice.StoreID == *quotation.StoreID {
+				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+				quotation.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+				break
+			}
+		}
+
+		profit := salesPrice - (quantity * purchaseUnitPrice)
+
+		if profit >= 0 {
+			quotation.Products[i].Profit = profit
+			quotation.Products[i].Loss = 0.0
+			totalProfit += quotation.Products[i].Profit
+		} else {
+			quotation.Products[i].Profit = 0
+			quotation.Products[i].Loss = profit
+			totalLoss += quotation.Products[i].Loss
+		}
+
+	}
+
+	quotation.Profit = totalProfit - quotation.Discount
+	quotation.Loss = totalLoss
+	return nil
 }
 
 func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err error) {
@@ -93,6 +140,8 @@ func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err
 			"$group": bson.M{
 				"_id":       nil,
 				"net_total": bson.M{"$sum": "$net_total"},
+				"profit":    bson.M{"$sum": "$profit"},
+				"loss":      bson.M{"$sum": "$loss"},
 			},
 		},
 	}
@@ -792,7 +841,10 @@ func (quotation *Quotation) Insert() error {
 		}
 	}
 
-	quotation.SetChangeLog("create", nil, nil, nil)
+	err = quotation.CalculateQuotationProfit()
+	if err != nil {
+		return err
+	}
 
 	_, err = collection.InsertOne(ctx, &quotation)
 	if err != nil {
@@ -844,7 +896,14 @@ func (quotation *Quotation) Update() error {
 
 	quotation.SetChangeLog("update", nil, nil, nil)
 
-	err = quotation.GeneratePDF()
+	/*
+		err = quotation.GeneratePDF()
+		if err != nil {
+			return err
+		}
+	*/
+
+	err = quotation.CalculateQuotationProfit()
 	if err != nil {
 		return err
 	}

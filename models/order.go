@@ -18,16 +18,17 @@ import (
 )
 
 type OrderProduct struct {
-	ProductID        primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity         float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	QuantityReturned float32            `json:"quantity_returned" bson:"quantity_returned"`
-	UnitPrice        float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	Profit           float32            `bson:"profit" json:"profit"`
-	Loss             float32            `bson:"loss" json:"loss"`
+	ProductID         primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name              string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic      string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode          string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	Quantity          float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned  float32            `json:"quantity_returned" bson:"quantity_returned"`
+	UnitPrice         float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	PurchaseUnitPrice float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	Profit            float32            `bson:"profit" json:"profit"`
+	Loss              float32            `bson:"loss" json:"loss"`
 }
 
 //Order : Order structure
@@ -940,6 +941,7 @@ func (order *Order) CalculateOrderProfit() error {
 		for _, unitPrice := range product.UnitPrices {
 			if unitPrice.StoreID == *order.StoreID {
 				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+				order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
 				break
 			}
 		}
@@ -957,7 +959,7 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	order.Profit = totalProfit
+	order.Profit = totalProfit - order.Discount
 	order.Loss = totalLoss
 	return nil
 }
