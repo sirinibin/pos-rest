@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"time"
 
@@ -46,6 +47,25 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	salesStats, err := models.GetSalesStats(criterias.SearchBy, "order")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{
+		"total_sales": 0.00,
+	}
+
+	//log.Print("totalSales:", totalSales)
+	//response.Meta["total_sales"] = fmt.Sprintf("%.02f", totalSales)
+
+	response.Meta["total_sales"] = math.Floor(salesStats.NetTotal)
+	response.Meta["profit"] = math.Floor(salesStats.Profit)
+	response.Meta["loss"] = math.Floor(salesStats.Loss)
 
 	if len(orders) == 0 {
 		response.Result = []interface{}{}

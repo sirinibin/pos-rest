@@ -252,6 +252,49 @@ func (order *Order) FindVatPrice() {
 	order.VatPrice = vatPrice
 }
 
+func GetSalesStats(filter map[string]interface{}, collectionName string) (stats *SalesStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":       nil,
+				"net_total": bson.M{"$sum": "$net_total"},
+				"profit":    bson.M{"$sum": "$profit"},
+				"loss":      bson.M{"$sum": "$loss"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	for cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return nil, err
+		}
+		return stats, nil
+	}
+	return nil, nil
+}
+
+// DiskQuotaUsageResult payload for disk quota usage
+type SalesStats struct {
+	ID       *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal float64             `json:"net_total" bson:"net_total"`
+	Profit   float64             `json:"profit" bson:"profit"`
+	Loss     float64             `json:"loss" bson:"loss"`
+}
+
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
