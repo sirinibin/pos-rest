@@ -109,6 +109,7 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturn
 		if err != nil {
 			return stats, err
 		}
+		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
 		return stats, nil
 	}
 	return stats, nil

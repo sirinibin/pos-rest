@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"time"
 
@@ -58,9 +57,9 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 
 	response.Meta = map[string]interface{}{}
 
-	response.Meta["total_sales"] = math.Floor(salesStats.NetTotal)
-	response.Meta["profit"] = math.Floor(salesStats.Profit)
-	response.Meta["loss"] = math.Floor(salesStats.Loss)
+	response.Meta["total_sales"] = salesStats.NetTotal
+	response.Meta["profit"] = salesStats.NetProfit
+	response.Meta["loss"] = salesStats.Loss
 
 	if len(orders) == 0 {
 		response.Result = []interface{}{}

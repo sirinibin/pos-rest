@@ -81,6 +81,39 @@ type Purchase struct {
 	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+func UpdatePurchaseProfit() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := Purchase{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = model.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -111,6 +144,10 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 		if err != nil {
 			return stats, err
 		}
+		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
+		stats.RetailProfit = float64(math.Floor(stats.RetailProfit*100) / 100)
+		stats.WholesaleProfit = float64(math.Floor(stats.WholesaleProfit*100) / 100)
+
 		return stats, nil
 	}
 	return stats, nil
@@ -143,8 +180,8 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 		totalWholesaleProfit += expectedWholesaleProfit
 	}
 
-	purchase.ExpectedRetailProfit = totalRetailProfit + purchase.Discount
-	purchase.ExpectedWholesaleProfit = totalWholesaleProfit + purchase.Discount
+	purchase.ExpectedRetailProfit = float32(math.Floor(float64(totalRetailProfit+purchase.Discount)*100) / 100)
+	purchase.ExpectedWholesaleProfit = float32(math.Floor(float64(totalWholesaleProfit+purchase.Discount)*100) / 100)
 
 	return nil
 }
@@ -186,12 +223,14 @@ func (purchase *Purchase) SetChangeLog(
 func (purchase *Purchase) AttributesValueChangeEvent(purchaseOld *Purchase) error {
 
 	if purchase.Status != purchaseOld.Status {
-		purchase.SetChangeLog(
-			"attribute_value_change",
-			"status",
-			purchaseOld.Status,
-			purchase.Status,
-		)
+		/*
+			purchase.SetChangeLog(
+				"attribute_value_change",
+				"status",
+				purchaseOld.Status,
+				purchase.Status,
+			)
+		*/
 		/*
 
 				err := purchaseOld.RemoveStock()
@@ -817,19 +856,21 @@ func (purchase *Purchase) AddStock() (err error) {
 		storeExistInProductStock := false
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == purchase.StoreID.Hex() {
-				purchase.SetChangeLog(
-					"add_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock + (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)),
-				)
+				/*
+					purchase.SetChangeLog(
+						"add_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock + (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)),
+					)
 
-				product.SetChangeLog(
-					"add_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock + (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)),
-				)
+					product.SetChangeLog(
+						"add_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock + (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)),
+					)
+				*/
 
 				product.Stock[k].Stock += (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
 				storeExistInProductStock = true
@@ -964,8 +1005,6 @@ func (purchase *Purchase) Insert() error {
 		}
 	}
 
-	purchase.SetChangeLog("create", nil, nil, nil)
-
 	err = purchase.CalculatePurchaseExpectedProfit()
 	if err != nil {
 		return err
@@ -1026,8 +1065,6 @@ func (purchase *Purchase) Update() error {
 		return err
 	}
 
-	purchase.SetChangeLog("update", nil, nil, nil)
-
 	err = purchase.CalculatePurchaseExpectedProfit()
 	if err != nil {
 		return err
@@ -1068,8 +1105,6 @@ func (purchase *Purchase) DeletePurchase(tokenClaims TokenClaims) (err error) {
 	purchase.DeletedBy = &userID
 	now := time.Now()
 	purchase.DeletedAt = &now
-
-	purchase.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

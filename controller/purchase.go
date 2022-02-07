@@ -3,7 +3,6 @@ package controller
 import (
 	"encoding/json"
 	"log"
-	"math"
 	"net/http"
 	"time"
 
@@ -59,9 +58,9 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 
 	response.Meta = map[string]interface{}{}
 
-	response.Meta["total_purchase"] = math.Floor(purchaseStats.NetTotal)
-	response.Meta["retail_profit"] = math.Floor(purchaseStats.RetailProfit)
-	response.Meta["wholesale_profit"] = math.Floor(purchaseStats.WholesaleProfit)
+	response.Meta["total_purchase"] = purchaseStats.NetTotal
+	response.Meta["retail_profit"] = purchaseStats.RetailProfit
+	response.Meta["wholesale_profit"] = purchaseStats.WholesaleProfit
 
 	if len(purchases) == 0 {
 		response.Result = []interface{}{}

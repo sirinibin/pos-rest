@@ -108,6 +108,7 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 		if err != nil {
 			return stats, err
 		}
+		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
 		return stats, nil
 	}
 	return stats, nil

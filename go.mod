@@ -8,7 +8,9 @@ require (
 	github.com/abdullahdiaa/garabic v0.0.0-20210618210345-00e1a0d4b691 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/go-co-op/gocron v1.11.0 // indirect
 	github.com/go-redis/redis v6.15.9+incompatible
+	github.com/golang/glog v1.0.0 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/jameskeane/bcrypt v0.0.0-20120420032655-c3cd44c1e20f
 	github.com/jung-kurt/gofpdf v1.16.2 // indirect

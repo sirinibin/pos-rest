@@ -60,6 +60,7 @@ type Quotation struct {
 	Total                    float32             `bson:"total" json:"total"`
 	NetTotal                 float32             `bson:"net_total" json:"net_total"`
 	Profit                   float32             `bson:"profit" json:"profit"`
+	NetProfit                float32             `bson:"net_profit" json:"net_profit"`
 	Loss                     float32             `bson:"loss" json:"loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -80,11 +81,44 @@ type Quotation struct {
 	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+func UpdateQuotationProfit() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		quotation := Quotation{}
+		err = cur.Decode(&quotation)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = quotation.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 type QuotationStats struct {
-	ID       *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal float64             `json:"net_total" bson:"net_total"`
-	Profit   float64             `json:"profit" bson:"profit"`
-	Loss     float64             `json:"loss" bson:"loss"`
+	ID        *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal  float64             `json:"net_total" bson:"net_total"`
+	NetProfit float64             `json:"net_profit" bson:"net_profit"`
+	Loss      float64             `json:"loss" bson:"loss"`
 }
 
 func (quotation *Quotation) CalculateQuotationProfit() error {
@@ -109,6 +143,7 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 		}
 
 		profit := salesPrice - (quantity * purchaseUnitPrice)
+		profit = float32(math.Floor(float64(profit)*100) / 100)
 
 		if profit >= 0 {
 			quotation.Products[i].Profit = profit
@@ -122,7 +157,8 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 
 	}
 
-	quotation.Profit = totalProfit - quotation.Discount
+	quotation.Profit = float32(math.Floor(float64(totalProfit)*100) / 100)
+	quotation.NetProfit = float32(math.Floor(float64(totalProfit-quotation.Discount)*100) / 100)
 	quotation.Loss = totalLoss
 	return nil
 }
@@ -138,10 +174,10 @@ func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":       nil,
-				"net_total": bson.M{"$sum": "$net_total"},
-				"profit":    bson.M{"$sum": "$profit"},
-				"loss":      bson.M{"$sum": "$loss"},
+				"_id":        nil,
+				"net_total":  bson.M{"$sum": "$net_total"},
+				"net_profit": bson.M{"$sum": "$net_profit"},
+				"loss":       bson.M{"$sum": "$loss"},
 			},
 		},
 	}
@@ -157,6 +193,10 @@ func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err
 		if err != nil {
 			return stats, err
 		}
+		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
+		stats.NetProfit = float64(math.Floor(stats.NetProfit*100) / 100)
+		stats.Loss = float64(math.Floor(stats.Loss*100) / 100)
+
 		return stats, nil
 	}
 	return stats, nil
@@ -264,12 +304,14 @@ func (quotation *Quotation) SetChangeLog(
 func (quotation *Quotation) AttributesValueChangeEvent(quotationOld *Quotation) error {
 
 	if quotation.Status != quotationOld.Status {
-		quotation.SetChangeLog(
-			"attribute_value_change",
-			"status",
-			quotationOld.Status,
-			quotation.Status,
-		)
+		/*
+			quotation.SetChangeLog(
+				"attribute_value_change",
+				"status",
+				quotationOld.Status,
+				quotation.Status,
+			)
+		*/
 	}
 
 	return nil
@@ -894,8 +936,6 @@ func (quotation *Quotation) Update() error {
 		return err
 	}
 
-	quotation.SetChangeLog("update", nil, nil, nil)
-
 	/*
 		err = quotation.GeneratePDF()
 		if err != nil {
@@ -941,8 +981,6 @@ func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error)
 	quotation.DeletedBy = &userID
 	now := time.Now()
 	quotation.DeletedAt = &now
-
-	quotation.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

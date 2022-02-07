@@ -63,6 +63,7 @@ type Order struct {
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
 	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
 	Profit                   float32             `bson:"profit" json:"profit"`
+	NetProfit                float32             `bson:"net_profit" json:"net_profit"`
 	Loss                     float32             `bson:"loss" json:"loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -81,6 +82,43 @@ type Order struct {
 	UpdatedByName            string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+}
+
+func UpdateOrderProfit() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		order := Order{}
+		err = cur.Decode(&order)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = order.CalculateOrderProfit()
+		if err != nil {
+			return err
+		}
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (order *Order) SetChangeLog(
@@ -120,12 +158,14 @@ func (order *Order) SetChangeLog(
 func (order *Order) AttributesValueChangeEvent(orderOld *Order) error {
 
 	if order.Status != orderOld.Status {
-		order.SetChangeLog(
-			"attribute_value_change",
-			"status",
-			orderOld.Status,
-			order.Status,
-		)
+		/*
+			order.SetChangeLog(
+				"attribute_value_change",
+				"status",
+				orderOld.Status,
+				order.Status,
+			)
+		*/
 
 		//if order.Status == "delivered" || order.Status == "dispatched" {
 		/*
@@ -264,10 +304,10 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":       nil,
-				"net_total": bson.M{"$sum": "$net_total"},
-				"profit":    bson.M{"$sum": "$profit"},
-				"loss":      bson.M{"$sum": "$loss"},
+				"_id":        nil,
+				"net_total":  bson.M{"$sum": "$net_total"},
+				"net_profit": bson.M{"$sum": "$net_profit"},
+				"loss":       bson.M{"$sum": "$loss"},
 			},
 		},
 	}
@@ -283,6 +323,9 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 		if err != nil {
 			return stats, err
 		}
+		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
+		stats.NetProfit = float64(math.Floor(stats.NetProfit*100) / 100)
+		stats.Loss = float64(math.Floor(stats.Loss*100) / 100)
 		return stats, nil
 	}
 	return stats, nil
@@ -290,10 +333,10 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 
 // DiskQuotaUsageResult payload for disk quota usage
 type SalesStats struct {
-	ID       *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal float64             `json:"net_total" bson:"net_total"`
-	Profit   float64             `json:"profit" bson:"profit"`
-	Loss     float64             `json:"loss" bson:"loss"`
+	ID        *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal  float64             `json:"net_total" bson:"net_total"`
+	NetProfit float64             `json:"net_profit" bson:"net_profit"`
+	Loss      float64             `json:"loss" bson:"loss"`
 }
 
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
@@ -833,19 +876,21 @@ func (order *Order) RemoveStock() (err error) {
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == order.StoreID.Hex() {
 
-				order.SetChangeLog(
-					"remove_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
-				)
+				/*
+					order.SetChangeLog(
+						"remove_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
+					)
 
-				product.SetChangeLog(
-					"remove_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
-				)
+					product.SetChangeLog(
+						"remove_stock",
+						product.Name,
+						product.Stock[k].Stock,
+						(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
+					)
+				*/
 
 				product.Stock[k].Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
 				order.StockRemoved = true
@@ -947,6 +992,7 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 		profit := salesPrice - (quantity * purchaseUnitPrice)
+		profit = float32(math.Floor(float64(profit)*100) / 100)
 
 		if profit >= 0 {
 			order.Products[i].Profit = profit
@@ -959,7 +1005,8 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	order.Profit = totalProfit - order.Discount
+	order.Profit = float32(math.Floor(float64(totalProfit)*100) / 100)
+	order.NetProfit = float32(math.Floor(float64(totalProfit-order.Discount)*100) / 100)
 	order.Loss = totalLoss
 	return nil
 }
@@ -994,8 +1041,6 @@ func (order *Order) Insert() error {
 			startAt++
 		}
 	}
-
-	order.SetChangeLog("create", nil, nil, nil)
 
 	err = order.CalculateOrderProfit()
 	if err != nil {
@@ -1088,8 +1133,6 @@ func (order *Order) Update() error {
 		return err
 	}
 
-	order.SetChangeLog("update", nil, nil, nil)
-
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": order.ID},
@@ -1127,8 +1170,6 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 	order.DeletedBy = &userID
 	now := time.Now()
 	order.DeletedAt = &now
-
-	order.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"time"
 
@@ -57,9 +56,9 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Meta["total_quotation"] = math.Floor(quotationStats.NetTotal)
-	response.Meta["profit"] = math.Floor(quotationStats.Profit)
-	response.Meta["loss"] = math.Floor(quotationStats.Loss)
+	response.Meta["total_quotation"] = quotationStats.NetTotal
+	response.Meta["profit"] = quotationStats.NetProfit
+	response.Meta["loss"] = quotationStats.Loss
 
 	if len(quotations) == 0 {
 		response.Result = []interface{}{}

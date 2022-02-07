@@ -6,11 +6,14 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/go-co-op/gocron"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 )
 
 func main() {
@@ -133,8 +136,17 @@ func main() {
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
+	models.UpdatePurchaseProfit()
+	models.UpdateOrderProfit()
+	models.UpdateQuotationProfit()
+
+	s := gocron.NewScheduler(time.UTC)
+	s.Every(1).Hour().Do(cronJobsEveryHour)
+	s.StartAsync()
+
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", router))
+
 	}()
 
 	ifaces, _ := net.Interfaces()
@@ -154,4 +166,12 @@ func main() {
 	}
 	log.Fatal(http.ListenAndServe(":"+httpPort, router))
 
+}
+
+func cronJobsEveryHour() {
+	log.Print("Inside Cron job")
+
+	models.UpdatePurchaseProfit()
+	models.UpdateOrderProfit()
+	models.UpdateQuotationProfit()
 }

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 	"time"
 
@@ -58,7 +57,7 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	response.Meta = map[string]interface{}{}
 
-	response.Meta["total_sales_return"] = math.Floor(salesReturnStats.NetTotal)
+	response.Meta["total_sales_return"] = salesReturnStats.NetTotal
 
 	if len(salesreturns) == 0 {
 		response.Result = []interface{}{}
