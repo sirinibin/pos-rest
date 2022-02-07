@@ -80,6 +80,45 @@ type SalesReturn struct {
 	ChangeLog               []ChangeLog          `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+func GetSalesReturnStats(filter map[string]interface{}, collectionName string) (stats *SalesReturnStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":       nil,
+				"net_total": bson.M{"$sum": "$net_total"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	for cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return nil, err
+		}
+		return stats, nil
+	}
+	return nil, nil
+}
+
+// DiskQuotaUsageResult payload for disk quota usage
+type SalesReturnStats struct {
+	ID       *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal float64             `json:"net_total" bson:"net_total"`
+}
+
 func (salesreturn *SalesReturn) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
@@ -117,12 +156,6 @@ func (salesreturn *SalesReturn) SetChangeLog(
 func (salesreturn *SalesReturn) AttributesValueChangeEvent(salesreturnOld *SalesReturn) error {
 
 	if salesreturn.Status != salesreturnOld.Status {
-		salesreturn.SetChangeLog(
-			"attribute_value_change",
-			"status",
-			salesreturnOld.Status,
-			salesreturn.Status,
-		)
 
 		//if salesreturn.Status == "delivered" || salesreturn.Status == "dispatched" {
 

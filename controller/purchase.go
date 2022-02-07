@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"time"
 
@@ -47,6 +48,20 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchaseStats, err := models.GetPurchaseStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["purchase_stats"] = "Unable to find purchase stats:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["total_purchase"] = math.Floor(purchaseStats.NetTotal)
+	response.Meta["retail_profit"] = math.Floor(purchaseStats.RetailProfit)
+	response.Meta["wholesale_profit"] = math.Floor(purchaseStats.WholesaleProfit)
 
 	if len(purchases) == 0 {
 		response.Result = []interface{}{}

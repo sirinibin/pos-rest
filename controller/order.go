@@ -56,12 +56,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Meta = map[string]interface{}{
-		"total_sales": 0.00,
-	}
-
-	//log.Print("totalSales:", totalSales)
-	//response.Meta["total_sales"] = fmt.Sprintf("%.02f", totalSales)
+	response.Meta = map[string]interface{}{}
 
 	response.Meta["total_sales"] = math.Floor(salesStats.NetTotal)
 	response.Meta["profit"] = math.Floor(salesStats.Profit)

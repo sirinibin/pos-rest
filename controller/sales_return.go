@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"time"
 
@@ -46,6 +47,18 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	salesReturnStats, err := models.GetSalesStats(criterias.SearchBy, "salesreturn")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_sales"] = "Unable to find total amount of sales return:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["total_sales_return"] = math.Floor(salesReturnStats.NetTotal)
 
 	if len(salesreturns) == 0 {
 		response.Result = []interface{}{}

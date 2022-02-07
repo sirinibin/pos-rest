@@ -76,6 +76,44 @@ type PurchaseReturn struct {
 	ChangeLog                       []ChangeLog             `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+type PurchaseReturnStats struct {
+	ID       *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal float64             `json:"net_total" bson:"net_total"`
+}
+
+func GetPurchaseReturnStats(filter map[string]interface{}) (stats *PurchaseReturnStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":       nil,
+				"net_total": bson.M{"$sum": "$net_total"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	for cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return nil, err
+		}
+		return stats, nil
+	}
+	return nil, nil
+}
+
 func (purchasereturn *PurchaseReturn) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},

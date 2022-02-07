@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"time"
 
@@ -46,6 +47,18 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchaseReturnStats, err := models.GetPurchaseReturnStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["purchase_return_stats"] = "Unable to find purchase return stats:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["total_purchase_return"] = math.Floor(purchaseReturnStats.NetTotal)
 
 	if len(purchasereturns) == 0 {
 		response.Result = []interface{}{}

@@ -81,6 +81,48 @@ type Purchase struct {
 	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+func GetPurchaseStats(filter map[string]interface{}) (stats *PurchaseStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":              nil,
+				"net_total":        bson.M{"$sum": "$net_total"},
+				"retail_profit":    bson.M{"$sum": "$retail_profit"},
+				"wholesale_profit": bson.M{"$sum": "$wholesale_profit"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	for cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return nil, err
+		}
+		return stats, nil
+	}
+	return nil, nil
+}
+
+type PurchaseStats struct {
+	ID              *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal        float64             `json:"net_total" bson:"net_total"`
+	RetailProfit    float64             `json:"retail_profit" bson:"retail_profit"`
+	WholesaleProfit float64             `json:"wholesale_profit" bson:"wholesale_profit"`
+}
+
 func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	totalRetailProfit := float32(0.0)
 	totalWholesaleProfit := float32(0.0)
