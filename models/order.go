@@ -1000,7 +1000,7 @@ func (order *Order) CalculateOrderProfit() error {
 			totalProfit += order.Products[i].Profit
 		} else {
 			order.Products[i].Profit = 0
-			order.Products[i].Loss = profit
+			order.Products[i].Loss = (profit * -1)
 			totalLoss += order.Products[i].Loss
 		}
 

@@ -154,7 +154,7 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 			totalProfit += quotation.Products[i].Profit
 		} else {
 			quotation.Products[i].Profit = 0
-			quotation.Products[i].Loss = profit
+			quotation.Products[i].Loss = (profit * -1)
 			totalLoss += quotation.Products[i].Loss
 		}
 
