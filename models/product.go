@@ -134,6 +134,7 @@ type Product struct {
 	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	SearchLabel   string                `json:"search_label"`
 	PartNumber    string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	CategoryID    []*primitive.ObjectID `json:"category_id" bson:"category_id"`
 	Category      []*ProductCategory    `json:"category,omitempty"`
@@ -294,8 +295,8 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["$or"] = []bson.M{
-			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"item_code": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
 	}
 
@@ -471,6 +472,8 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		product.SearchLabel = product.Name + " (CODE:" + product.ItemCode + ")"
 
 		if _, ok := criterias.Select["category.id"]; ok {
 			for _, categoryID := range product.CategoryID {
