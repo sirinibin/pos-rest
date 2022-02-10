@@ -31,6 +31,8 @@ type PurchaseProduct struct {
 	WholesaleUnitPrice      float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 	ExpectedRetailProfit    float32            `bson:"retail_profit" json:"retail_profit"`
 	ExpectedWholesaleProfit float32            `bson:"wholesale_profit" json:"wholesale_profit"`
+	ExpectedWholesaleLoss   float32            `bson:"wholesale_loss" json:"wholesale_loss"`
+	ExpectedRetailLoss      float32            `bson:"retail_loss" json:"retail_loss"`
 }
 
 //Purchase : Purchase structure
@@ -62,6 +64,9 @@ type Purchase struct {
 	NetTotal                   float32             `bson:"net_total" json:"net_total"`
 	ExpectedRetailProfit       float32             `bson:"retail_profit" json:"retail_profit"`
 	ExpectedWholesaleProfit    float32             `bson:"wholesale_profit" json:"wholesale_profit"`
+	ExpectedWholesaleLoss      float32             `bson:"wholesale_loss" json:"wholesale_loss"`
+	ExpectedRetailLoss         float32             `bson:"retail_loss" json:"retail_loss"`
+	ReturnedAll                bool                `json:"returned_all"`
 	Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser              *User               `json:"deleted_by_user,omitempty"`
@@ -163,8 +168,18 @@ type PurchaseStats struct {
 func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	totalRetailProfit := float32(0.0)
 	totalWholesaleProfit := float32(0.0)
+
+	totalRetailLoss := float32(0.0)
+	totalWholesaleLoss := float32(0.0)
+
+	purchase.ReturnedAll = true
+
 	for index, purchaseProduct := range purchase.Products {
 		quantity := (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
+
+		if quantity > 0 {
+			purchase.ReturnedAll = false
+		}
 
 		purchasePrice := quantity * purchaseProduct.PurchaseUnitPrice
 		retailPrice := quantity * purchaseProduct.RetailUnitPrice
@@ -173,15 +188,35 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 		expectedRetailProfit := retailPrice - purchasePrice
 		expectedWholesaleProfit := wholesalePrice - purchasePrice
 
-		purchase.Products[index].ExpectedRetailProfit = expectedRetailProfit
-		purchase.Products[index].ExpectedWholesaleProfit = expectedWholesaleProfit
+		if expectedRetailProfit > 0 {
+			purchase.Products[index].ExpectedRetailProfit = expectedRetailProfit
+			totalRetailProfit += expectedRetailProfit
+		} else {
+			purchase.Products[index].ExpectedRetailLoss = expectedRetailProfit * (-1)
+			totalRetailLoss += expectedRetailProfit * (-1)
+		}
 
-		totalRetailProfit += expectedRetailProfit
-		totalWholesaleProfit += expectedWholesaleProfit
+		if expectedWholesaleProfit > 0 {
+			purchase.Products[index].ExpectedWholesaleProfit = expectedWholesaleProfit
+			totalWholesaleProfit += expectedWholesaleProfit
+		} else {
+			purchase.Products[index].ExpectedWholesaleLoss = expectedWholesaleProfit * (-1)
+			totalWholesaleLoss += expectedWholesaleProfit * (-1)
+		}
+
 	}
 
-	purchase.ExpectedRetailProfit = float32(math.Floor(float64(totalRetailProfit+purchase.Discount)*100) / 100)
-	purchase.ExpectedWholesaleProfit = float32(math.Floor(float64(totalWholesaleProfit+purchase.Discount)*100) / 100)
+	if purchase.ReturnedAll {
+		purchase.ExpectedRetailProfit = float32(math.Floor(float64(0.00)*100) / 100)
+		purchase.ExpectedWholesaleProfit = float32(math.Floor(float64(0.00)*100) / 100)
+		purchase.ExpectedRetailLoss = float32(math.Floor(float64(0.00)*100) / 100)
+		purchase.ExpectedWholesaleLoss = float32(math.Floor(float64(0.00)*100) / 100)
+	} else {
+		purchase.ExpectedRetailProfit = float32(math.Floor(float64(totalRetailProfit)*100) / 100)
+		purchase.ExpectedWholesaleProfit = float32(math.Floor(float64(totalWholesaleProfit)*100) / 100)
+		purchase.ExpectedRetailLoss = float32(math.Floor(float64(totalRetailLoss)*100) / 100)
+		purchase.ExpectedWholesaleLoss = float32(math.Floor(float64(totalWholesaleLoss)*100) / 100)
+	}
 
 	return nil
 }
