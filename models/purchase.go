@@ -57,6 +57,7 @@ type Purchase struct {
 	Discount                   float32             `bson:"discount" json:"discount"`
 	DiscountPercent            float32             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent          bool                `bson:"is_discount_percent" json:"is_discount_percent"`
+	DiscountProfit             float32             `bson:"discount_profit" json:"discount_profit"`
 	Status                     string              `bson:"status,omitempty" json:"status,omitempty"`
 	TotalQuantity              float32             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                   float32             `bson:"vat_price" json:"vat_price"`
@@ -217,6 +218,8 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 		purchase.ExpectedRetailLoss = float32(math.Floor(float64(totalRetailLoss)*100) / 100)
 		purchase.ExpectedWholesaleLoss = float32(math.Floor(float64(totalWholesaleLoss)*100) / 100)
 	}
+
+	//purchase.DiscountProfit = purchase.Discount
 
 	return nil
 }
