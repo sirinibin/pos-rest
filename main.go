@@ -67,6 +67,7 @@ func main() {
 	router.HandleFunc("/v1/product", controller.CreateProduct).Methods("POST")
 	router.HandleFunc("/v1/product", controller.ListProduct).Methods("GET")
 	router.HandleFunc("/v1/product/{id}", controller.ViewProduct).Methods("GET")
+	router.HandleFunc("/v1/product/code/{code}", controller.ViewProductByItemCode).Methods("GET")
 	router.HandleFunc("/v1/product/{id}", controller.UpdateProduct).Methods("PUT")
 	router.HandleFunc("/v1/product/{id}", controller.DeleteProduct).Methods("DELETE")
 

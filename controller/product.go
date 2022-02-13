@@ -262,7 +262,53 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product.SetChangeLog("view", nil, nil, nil)
+	response.Status = true
+	response.Result = product
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// ViewProduct : handler function for GET /v1/product/code/<code> call
+func ViewProductByItemCode(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	itemCode := params["code"]
+	if itemCode == "" {
+		response.Status = false
+		response.Errors["item_code"] = "Invalid Item Code:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var product *models.Product
+
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	product, err = models.FindProductByItemCode(itemCode, selectFields)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	response.Status = true
 	response.Result = product

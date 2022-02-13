@@ -532,61 +532,53 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		exists, err := product.IsItemCodeExists()
 		if err != nil {
 			errs["item_code"] = err.Error()
-			return errs
 		}
+
 		if exists {
 			errs["item_code"] = "Item Code Already Exists"
-			return errs
 		}
 	}
 
-	for _, price := range product.UnitPrices {
+	for i, price := range product.UnitPrices {
 		if price.StoreID.IsZero() {
-			errs["id"] = "store_id is required for unit price"
+			errs["store_id_"+strconv.Itoa(i)] = "store_id is required for unit price"
 			return errs
 		}
 		exists, err := IsStoreExists(&price.StoreID)
 		if err != nil {
-			errs["id"] = err.Error()
-			return errs
+			errs["store_id_"+strconv.Itoa(i)] = err.Error()
 		}
 
 		if !exists {
-			errs["store_id"] = "Invalid store_id:" + price.StoreID.Hex() + " in unit_price"
-			return errs
+			errs["store_id"+strconv.Itoa(i)] = "Invalid store_id:" + price.StoreID.Hex() + " in unit_price"
 		}
 	}
 
-	for _, stock := range product.Stock {
+	for i, stock := range product.Stock {
 		if stock.StoreID.IsZero() {
-			errs["id"] = "store_id is required for stock"
-			return errs
+			errs["store_id_"+strconv.Itoa(i)] = "store_id is required for stock"
 		}
 		exists, err := IsStoreExists(&stock.StoreID)
 		if err != nil {
-			errs["id"] = err.Error()
-			return errs
+			errs["store_id_"] = err.Error()
 		}
 
 		if !exists {
-			errs["store_id"] = "Invalid store_id:" + stock.StoreID.Hex() + " in stock"
-			return errs
+			errs["store_id_"+strconv.Itoa(i)] = "Invalid store_id:" + stock.StoreID.Hex() + " in stock"
 		}
 	}
 
 	if len(product.CategoryID) == 0 {
 		errs["category_id"] = "Atleast 1 category is required"
 	} else {
-		for _, categoryID := range product.CategoryID {
+		for i, categoryID := range product.CategoryID {
 			exists, err := IsProductCategoryExists(categoryID)
 			if err != nil {
-				errs["category_id"] = err.Error()
-				return errs
+				errs["category_id_"+strconv.Itoa(i)] = err.Error()
 			}
 
 			if !exists {
-				errs["category_id"] = "Invalid category:" + categoryID.Hex()
-				return errs
+				errs["category_id_"+strconv.Itoa(i)] = "Invalid category:" + categoryID.Hex()
 			}
 		}
 
@@ -604,7 +596,6 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		valid, err := IsStringBase64(product.ImagesContent[k])
 		if err != nil {
 			errs["images_content"] = err.Error()
-			return errs
 		}
 
 		if !valid {
@@ -783,6 +774,32 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	}
 
 	return nil
+}
+
+func FindProductByItemCode(
+	itemCode string,
+	selectFields map[string]interface{},
+) (product *Product, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{"item_code": itemCode}, findOneOptions).
+		Decode(&product)
+	if err != nil {
+		return nil, err
+	}
+
+	product.SearchLabel = product.Name + " (CODE:" + product.ItemCode + ")"
+
+	return product, err
 }
 
 func FindProductByID(
