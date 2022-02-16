@@ -135,6 +135,7 @@ type Product struct {
 	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	SearchLabel   string                `json:"search_label"`
+	Rack          string                `bson:"rack,omitempty" json:"rack,omitempty"`
 	PartNumber    string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	CategoryID    []*primitive.ObjectID `json:"category_id" bson:"category_id"`
 	Category      []*ProductCategory    `json:"category,omitempty"`
@@ -298,6 +299,11 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			{"item_code": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[rack]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["rack"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[item_code]"]
