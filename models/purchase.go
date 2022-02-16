@@ -1012,6 +1012,15 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 	return nil
 }
 
+func (purchase *Purchase) GenerateCode(startFrom int, storeCode string) (string, error) {
+	count, err := GetTotalCount(bson.M{"store_id": purchase.StoreID}, "purchase")
+	if err != nil {
+		return "", err
+	}
+	code := startFrom + int(count)
+	return storeCode + "-" + strconv.Itoa(code+1), nil
+}
+
 func (purchase *Purchase) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1023,11 +1032,16 @@ func (purchase *Purchase) Insert() error {
 	}
 	log.Print("After update foreing fields")
 
+	store, err := FindStoreByID(purchase.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	purchase.ID = primitive.NewObjectID()
 	if len(purchase.Code) == 0 {
-		startAt := 30000
+		startAt := 300000
 		for true {
-			code, err := GenerateCode(startAt, "purchase")
+			code, err := purchase.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
 			}

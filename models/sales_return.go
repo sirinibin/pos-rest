@@ -939,6 +939,15 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 	return nil
 }
 
+func (salesreturn *SalesReturn) GenerateCode(startFrom int, storeCode string) (string, error) {
+	count, err := GetTotalCount(bson.M{"store_id": salesreturn.StoreID}, "salesreturn")
+	if err != nil {
+		return "", err
+	}
+	code := startFrom + int(count)
+	return storeCode + "-" + strconv.Itoa(code+1), nil
+}
+
 func (salesreturn *SalesReturn) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -949,11 +958,16 @@ func (salesreturn *SalesReturn) Insert() error {
 		return err
 	}
 
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	salesreturn.ID = primitive.NewObjectID()
 	if len(salesreturn.Code) == 0 {
-		startAt := 20000
+		startAt := 200000
 		for true {
-			code, err := GenerateCode(startAt, "salesreturn")
+			code, err := salesreturn.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
 			}

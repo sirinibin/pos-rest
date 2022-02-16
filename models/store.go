@@ -21,6 +21,7 @@ type Store struct {
 	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Name                       string              `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic               string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	Code                       string              `bson:"code" json:"code"`
 	Title                      string              `bson:"title,omitempty" json:"title,omitempty"`
 	TitleInArabic              string              `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
 	RegistrationNumber         string              `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
@@ -176,6 +177,11 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[email]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
@@ -302,6 +308,10 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if govalidator.IsNull(store.Name) {
 		errs["name"] = "Name is required"
+	}
+
+	if govalidator.IsNull(store.Code) {
+		errs["code"] = "Code is required"
 	}
 
 	if govalidator.IsNull(store.NameInArabic) {

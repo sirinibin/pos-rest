@@ -946,6 +946,15 @@ func (purchasereturn *PurchaseReturn) UpdateProductUnitPriceInStore() (err error
 	return nil
 }
 
+func (purchasereturn *PurchaseReturn) GenerateCode(startFrom int, storeCode string) (string, error) {
+	count, err := GetTotalCount(bson.M{"store_id": purchasereturn.StoreID}, "purchasereturn")
+	if err != nil {
+		return "", err
+	}
+	code := startFrom + int(count)
+	return storeCode + "-" + strconv.Itoa(code+1), nil
+}
+
 func (purchasereturn *PurchaseReturn) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -956,11 +965,16 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 		return err
 	}
 
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	purchasereturn.ID = primitive.NewObjectID()
 	if len(purchasereturn.Code) == 0 {
-		startAt := 40000
+		startAt := 400000
 		for true {
-			code, err := GenerateCode(startAt, "purchasereturn")
+			code, err := purchasereturn.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
 			}

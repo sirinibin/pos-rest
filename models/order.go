@@ -1011,6 +1011,15 @@ func (order *Order) CalculateOrderProfit() error {
 	return nil
 }
 
+func (order *Order) GenerateCode(startFrom int, storeCode string) (string, error) {
+	count, err := GetTotalCount(bson.M{"store_id": order.StoreID}, "order")
+	if err != nil {
+		return "", err
+	}
+	code := startFrom + int(count)
+	return storeCode + "-" + strconv.Itoa(code+1), nil
+}
+
 func (order *Order) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1021,12 +1030,16 @@ func (order *Order) Insert() error {
 		return err
 	}
 
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	order.ID = primitive.NewObjectID()
 	if len(order.Code) == 0 {
-		startAt := 10000
+		startAt := 100000
 		for true {
-
-			code, err := GenerateCode(startAt, "order")
+			code, err := order.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
 			}
