@@ -27,14 +27,6 @@ func ListProductJson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/*
-		b, _ := json.MarshalIndent(products, "", "    ")
-		dst := &bytes.Buffer{}
-		if err := json.Indent(dst, b, "", "  "); err != nil {
-			panic(err)
-		}
-	*/
-
 	json.NewEncoder(w).Encode(products)
 
 }
