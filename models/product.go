@@ -113,12 +113,13 @@ func (purchase *Purchase) AddProductsPurchaseSummary() error {
 }
 
 type ProductUnitPrice struct {
-	StoreID            primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName          string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
-	StoreNameInArabic  string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	PurchaseUnitPrice  float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	WholesaleUnitPrice float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	RetailUnitPrice    float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	PurchaseUnitPrice       float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
+	WholesaleUnitPrice      float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	RetailUnitPrice         float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 }
 
 type ProductStock struct {
@@ -284,11 +285,12 @@ func (product *Product) UpdateForeignLabelFields() error {
 }
 
 type BarTenderProductData struct {
-	StoreName   string `json:"storename"`
-	ProductName string `json:"productname"`
-	Price       string `json:"price"`
-	BarCode     string `json:"barcode"`
-	Rack        string `json:"rack"`
+	StoreName               string `json:"storename"`
+	ProductName             string `json:"productname"`
+	Price                   string `json:"price"`
+	BarCode                 string `json:"barcode"`
+	Rack                    string `json:"rack"`
+	PurchaseUnitPriceSecret string `json:"purchase_unit_price_secret"`
 }
 
 func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err error) {
@@ -349,24 +351,36 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 		}
 
 		productPrice := "0.00"
+		purchaseUnitPriceSecret := ""
 		if len(product.UnitPrices) > 0 {
-			for _, unitPrice := range product.UnitPrices {
+			for i, unitPrice := range product.UnitPrices {
 				if unitPrice.StoreID == store.ID {
+					if len(unitPrice.PurchaseUnitPriceSecret) == 0 {
+						product.UnitPrices[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.UnitPrices[i].PurchaseUnitPrice))
+						err = product.Update()
+						if err != nil {
+							return products, err
+						}
+					}
+					purchaseUnitPriceSecret = product.UnitPrices[i].PurchaseUnitPriceSecret
+
 					price := float64(unitPrice.RetailUnitPrice)
 					vatPrice := (float64(float64(unitPrice.RetailUnitPrice) * float64(float64(*store.VatPercent)/float64(100))))
 					price += vatPrice
 					price = math.Round(price*100) / 100
 					productPrice = fmt.Sprintf("%.2f", price)
+					break
 				}
 			}
 		}
 
 		barTenderProduct := BarTenderProductData{
-			StoreName:   store.Name,
-			ProductName: product.Name,
-			BarCode:     product.BarCode,
-			Price:       productPrice,
-			Rack:        product.Rack,
+			StoreName:               store.Name,
+			ProductName:             product.Name,
+			BarCode:                 product.BarCode,
+			Price:                   productPrice,
+			Rack:                    product.Rack,
+			PurchaseUnitPriceSecret: purchaseUnitPriceSecret,
 		}
 		products = append(products, barTenderProduct)
 	}
@@ -605,6 +619,44 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 }
 
+func GenerateSecretCode(n int) string {
+	if n == 0 {
+		return ""
+	}
+
+	str := ""
+
+	strN := strconv.Itoa(n)
+	i := 0
+	for i < len(strN) {
+		intN, _ := strconv.Atoi(string(strN[i]))
+		switch intN {
+		case 1:
+			str = str + "K"
+		case 2:
+			str = str + "L"
+		case 3:
+			str = str + "M"
+		case 4:
+			str = str + "N"
+		case 5:
+			str = str + "O"
+		case 6:
+			str = str + "P"
+		case 7:
+			str = str + "Q"
+		case 8:
+			str = str + "R"
+		case 9:
+			str = str + "S"
+		case 0:
+			str = str + "T"
+		}
+		i++
+	}
+	return str
+}
+
 func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
@@ -656,6 +708,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		if !exists {
 			errs["store_id"+strconv.Itoa(i)] = "Invalid store_id:" + price.StoreID.Hex() + " in unit_price"
 		}
+		product.UnitPrices[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.UnitPrices[i].PurchaseUnitPrice))
 	}
 
 	for i, stock := range product.Stock {
@@ -753,6 +806,8 @@ func (product *Product) Insert() (err error) {
 			}
 		}
 	}
+
+	//barcode, err := product.Generate(barcodeStartAt)
 
 	if len(product.BarCode) == 0 {
 		barcodeStartAt := 100
