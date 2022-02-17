@@ -13,6 +13,25 @@ import (
 )
 
 // ListProduct : handler for GET /product
+func ListProductJson(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	products, err := models.GetBarTenderProducts(r)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["find"] = "Unable to find products:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	json.NewEncoder(w).Encode(products)
+
+}
+
+// ListProduct : handler for GET /product
 func ListProduct(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response

@@ -528,6 +528,44 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
+func FindStoreByCode(
+	Code string,
+	selectFields map[string]interface{},
+) (store *Store, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{"code": Code}, findOneOptions).
+		Decode(&store)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		store.CreatedByUser, _ = FindUserByID(store.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		store.UpdatedByUser, _ = FindUserByID(store.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		store.DeletedByUser, _ = FindUserByID(store.DeletedBy, fields)
+	}
+
+	return store, err
+}
+
 func FindStoreByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},

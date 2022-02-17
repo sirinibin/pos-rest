@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -281,6 +281,97 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	return nil
+}
+
+type BarTenderProductData struct {
+	StoreName   string `json:"storename"`
+	ProductName string `json:"productname"`
+	Price       string `json:"price"`
+	BarCode     string `json:"barcode"`
+	Rack        string `json:"rack"`
+}
+
+func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err error) {
+	products = []BarTenderProductData{}
+
+	criterias := SearchCriterias{
+		SortBy: map[string]interface{}{"updated_at": -1},
+	}
+
+	storeCode := ""
+	keys, ok := r.URL.Query()["store_code"]
+	if ok && len(keys[0]) >= 1 {
+		storeCode = keys[0]
+	}
+
+	if storeCode == "" {
+		return products, errors.New("store_code is required")
+	}
+
+	store, err := FindStoreByCode(storeCode, bson.M{})
+	if err != nil {
+		return products, err
+	}
+
+	criterias.Select = ParseSelectString("id,name,barcode,unit_prices,rack")
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetSort(criterias.SortBy)
+	findOptions.SetProjection(criterias.Select)
+	findOptions.SetNoCursorTimeout(true)
+
+	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
+	if err != nil {
+		return products, errors.New("Error fetching products:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return products, errors.New("Cursor error:" + err.Error())
+		}
+		product := Product{}
+		err = cur.Decode(&product)
+		if err != nil {
+			return products, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		if len(product.BarCode) == 0 {
+			err = product.Update()
+			if err != nil {
+				return products, err
+			}
+		}
+
+		productPrice := "0.00"
+		if len(product.UnitPrices) > 0 {
+			for _, unitPrice := range product.UnitPrices {
+				if unitPrice.StoreID == store.ID {
+					price := float64(unitPrice.RetailUnitPrice)
+					vatPrice := (float64(float64(unitPrice.RetailUnitPrice) * float64(float64(*store.VatPercent)/float64(100))))
+					price += vatPrice
+					price = math.Round(price*100) / 100
+					productPrice = fmt.Sprintf("%.2f", price)
+				}
+			}
+		}
+
+		barTenderProduct := BarTenderProductData{
+			StoreName:   store.Name,
+			ProductName: product.Name,
+			BarCode:     product.BarCode,
+			Price:       productPrice,
+			Rack:        product.Rack,
+		}
+		products = append(products, barTenderProduct)
+	}
+
+	return products, nil
 }
 
 func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, criterias SearchCriterias, err error) {
@@ -749,16 +840,12 @@ func (product *Product) Update() error {
 	updateOptions.SetUpsert(false)
 	defer cancel()
 
-	log.Print("product.ID1:" + product.ID.Hex())
-
 	if len(product.ImagesContent) > 0 {
 		err := product.SaveImages()
 		if err != nil {
 			return err
 		}
 	}
-
-	log.Print("product.ID2:" + product.ID.Hex())
 
 	err := product.UpdateForeignLabelFields()
 	if err != nil {
@@ -784,7 +871,6 @@ func (product *Product) Update() error {
 		}
 	}
 
-	log.Print("product.ID:" + product.ID.Hex())
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": product.ID},
@@ -933,16 +1019,16 @@ func (product *Product) IsBarCodeExists() (exists bool, err error) {
 
 	if product.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"bar_code": product.ItemCode,
+			"bar_code": product.BarCode,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"bar_code": product.ItemCode,
+			"bar_code": product.BarCode,
 			"_id":      bson.M{"$ne": product.ID},
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
