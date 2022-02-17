@@ -134,6 +134,7 @@ type Product struct {
 	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	BarCode       string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
 	SearchLabel   string                `json:"search_label"`
 	Rack          string                `bson:"rack,omitempty" json:"rack,omitempty"`
 	PartNumber    string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
@@ -297,6 +298,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["$or"] = []bson.M{
 			{"item_code": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"bar_code": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
 	}
@@ -309,6 +311,11 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	keys, ok = r.URL.Query()["search[item_code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["item_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[bar_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["bar_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[part_number]"]
@@ -620,7 +627,25 @@ func IsStringBase64(content string) (bool, error) {
 	return regexp.MatchString(`^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$`, content)
 }
 
-func (product *Product) Insert() error {
+func GenerateItemCode(n int) string {
+	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func (product *Product) GenerateBarCode(startFrom int) (string, error) {
+	count, err := GetTotalCount(bson.M{}, "product")
+	if err != nil {
+		return "", err
+	}
+	code := startFrom + int(count)
+	return strconv.Itoa(code + 1), nil
+}
+
+func (product *Product) Insert() (err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -638,6 +663,25 @@ func (product *Product) Insert() error {
 		}
 	}
 
+	if len(product.BarCode) == 0 {
+		barcodeStartAt := 100
+		for true {
+			barcode, err := product.GenerateBarCode(barcodeStartAt)
+			if err != nil {
+				return err
+			}
+			product.BarCode = strings.ToUpper(barcode)
+			exists, err := product.IsBarCodeExists()
+			if err != nil {
+				return err
+			}
+			if !exists {
+				break
+			}
+			barcodeStartAt++
+		}
+	}
+
 	if len(product.ImagesContent) > 0 {
 		err := product.SaveImages()
 		if err != nil {
@@ -645,12 +689,10 @@ func (product *Product) Insert() error {
 		}
 	}
 
-	err := product.UpdateForeignLabelFields()
+	err = product.UpdateForeignLabelFields()
 	if err != nil {
 		return err
 	}
-
-	product.SetChangeLog("create", nil, nil, nil)
 
 	_, err = collection.InsertOne(ctx, &product)
 	if err != nil {
@@ -700,15 +742,6 @@ func GenerateFileName(prefix, suffix string) string {
 	return prefix + hex.EncodeToString(randBytes) + suffix
 }
 
-func GenerateItemCode(n int) string {
-	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func (product *Product) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -731,9 +764,25 @@ func (product *Product) Update() error {
 	if err != nil {
 		return err
 	}
-	log.Print("product.ID3:" + product.ID.Hex())
 
-	product.SetChangeLog("update", nil, nil, nil)
+	if len(product.BarCode) == 0 {
+		barcodeStartAt := 100
+		for true {
+			barcode, err := product.GenerateBarCode(barcodeStartAt)
+			if err != nil {
+				return err
+			}
+			product.BarCode = strings.ToUpper(barcode)
+			exists, err := product.IsBarCodeExists()
+			if err != nil {
+				return err
+			}
+			if !exists {
+				break
+			}
+			barcodeStartAt++
+		}
+	}
 
 	log.Print("product.ID:" + product.ID.Hex())
 	_, err = collection.UpdateOne(
@@ -870,6 +919,26 @@ func (product *Product) IsItemCodeExists() (exists bool, err error) {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"item_code": product.ItemCode,
 			"_id":       bson.M{"$ne": product.ID},
+		})
+	}
+
+	return (count == 1), err
+}
+
+func (product *Product) IsBarCodeExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if product.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"bar_code": product.ItemCode,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"bar_code": product.ItemCode,
+			"_id":      bson.M{"$ne": product.ID},
 		})
 	}
 

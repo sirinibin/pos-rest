@@ -856,6 +856,15 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 	return errs
 }
 
+func (quotation *Quotation) GenerateCode(startFrom int, storeCode string) (string, error) {
+	count, err := GetTotalCount(bson.M{"store_id": quotation.StoreID}, "quotation")
+	if err != nil {
+		return "", err
+	}
+	code := startFrom + int(count)
+	return storeCode + "-" + strconv.Itoa(code+1), nil
+}
+
 func (quotation *Quotation) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -866,11 +875,16 @@ func (quotation *Quotation) Insert() error {
 		return err
 	}
 
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	quotation.ID = primitive.NewObjectID()
 	if len(quotation.Code) == 0 {
 		startAt := 50000
 		for true {
-			code, err := GenerateCode(startAt, "quotation")
+			code, err := quotation.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
 			}
@@ -916,15 +930,6 @@ func (quotation *Quotation) IsCodeExists() (exists bool, err error) {
 	}
 
 	return (count == 1), err
-}
-
-func GenerateCode(startFrom int, collectionName string) (string, error) {
-	count, err := GetTotalCount(bson.M{}, collectionName)
-	if err != nil {
-		return "", err
-	}
-	code := startFrom + int(count)
-	return strconv.Itoa(code + 1), nil
 }
 
 func (quotation *Quotation) Update() error {
