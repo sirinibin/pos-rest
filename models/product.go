@@ -137,7 +137,7 @@ type Product struct {
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	BarCode       string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
 	SearchLabel   string                `json:"search_label"`
-	Rack          string                `bson:"rack,omitempty" json:"rack,omitempty"`
+	Rack          string                `bson:"rack,omitempty" json:"rack"`
 	PartNumber    string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	CategoryID    []*primitive.ObjectID `json:"category_id" bson:"category_id"`
 	Category      []*ProductCategory    `json:"category,omitempty"`
