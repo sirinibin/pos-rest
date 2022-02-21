@@ -409,10 +409,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
+		searchWord := strings.Replace(keys[0], "(", `\(`, -1)
+		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
+
 		criterias.SearchBy["$or"] = []bson.M{
-			{"item_code": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"bar_code": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"item_code": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"bar_code": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
 		}
 	}
 
