@@ -58,8 +58,9 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total_sales"] = salesStats.NetTotal
-	response.Meta["profit"] = salesStats.NetProfit
+	response.Meta["net_profit"] = salesStats.NetProfit
 	response.Meta["loss"] = salesStats.Loss
+	response.Meta["vat_price"] = salesStats.VatPrice
 
 	if len(orders) == 0 {
 		response.Result = []interface{}{}

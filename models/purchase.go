@@ -23,16 +23,16 @@ type PurchaseProduct struct {
 	Name                    string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic            string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode                string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity                float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	QuantityReturned        float32            `json:"quantity_returned" bson:"quantity_returned"`
+	Quantity                float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned        float64            `json:"quantity_returned" bson:"quantity_returned"`
 	Unit                    string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	PurchaseUnitPrice       float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	RetailUnitPrice         float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
-	WholesaleUnitPrice      float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	ExpectedRetailProfit    float32            `bson:"retail_profit" json:"retail_profit"`
-	ExpectedWholesaleProfit float32            `bson:"wholesale_profit" json:"wholesale_profit"`
-	ExpectedWholesaleLoss   float32            `bson:"wholesale_loss" json:"wholesale_loss"`
-	ExpectedRetailLoss      float32            `bson:"retail_loss" json:"retail_loss"`
+	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	ExpectedRetailProfit    float64            `bson:"retail_profit" json:"retail_profit"`
+	ExpectedWholesaleProfit float64            `bson:"wholesale_profit" json:"wholesale_profit"`
+	ExpectedWholesaleLoss   float64            `bson:"wholesale_loss" json:"wholesale_loss"`
+	ExpectedRetailLoss      float64            `bson:"retail_loss" json:"retail_loss"`
 }
 
 //Purchase : Purchase structure
@@ -53,20 +53,20 @@ type Purchase struct {
 	OrderPlacedBySignature     *Signature          `json:"order_placed_by_signature,omitempty"`
 	SignatureDate              *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	SignatureDateStr           string              `json:"signature_date_str,omitempty"`
-	VatPercent                 *float32            `bson:"vat_percent" json:"vat_percent"`
-	Discount                   float32             `bson:"discount" json:"discount"`
-	DiscountPercent            float32             `bson:"discount_percent" json:"discount_percent"`
+	VatPercent                 *float64            `bson:"vat_percent" json:"vat_percent"`
+	Discount                   float64             `bson:"discount" json:"discount"`
+	DiscountPercent            float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent          bool                `bson:"is_discount_percent" json:"is_discount_percent"`
-	DiscountProfit             float32             `bson:"discount_profit" json:"discount_profit"`
+	DiscountProfit             float64             `bson:"discount_profit" json:"discount_profit"`
 	Status                     string              `bson:"status,omitempty" json:"status,omitempty"`
-	TotalQuantity              float32             `bson:"total_quantity" json:"total_quantity"`
-	VatPrice                   float32             `bson:"vat_price" json:"vat_price"`
-	Total                      float32             `bson:"total" json:"total"`
-	NetTotal                   float32             `bson:"net_total" json:"net_total"`
-	ExpectedRetailProfit       float32             `bson:"retail_profit" json:"retail_profit"`
-	ExpectedWholesaleProfit    float32             `bson:"wholesale_profit" json:"wholesale_profit"`
-	ExpectedWholesaleLoss      float32             `bson:"wholesale_loss" json:"wholesale_loss"`
-	ExpectedRetailLoss         float32             `bson:"retail_loss" json:"retail_loss"`
+	TotalQuantity              float64             `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                   float64             `bson:"vat_price" json:"vat_price"`
+	Total                      float64             `bson:"total" json:"total"`
+	NetTotal                   float64             `bson:"net_total" json:"net_total"`
+	ExpectedRetailProfit       float64             `bson:"retail_profit" json:"retail_profit"`
+	ExpectedWholesaleProfit    float64             `bson:"wholesale_profit" json:"wholesale_profit"`
+	ExpectedWholesaleLoss      float64             `bson:"wholesale_loss" json:"wholesale_loss"`
+	ExpectedRetailLoss         float64             `bson:"retail_loss" json:"retail_loss"`
 	ReturnedAll                bool                `json:"returned_all"`
 	Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -145,16 +145,14 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 	}
 	defer cur.Close(ctx)
 
-	for cur.Next(ctx) {
+	if cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
-		stats.RetailProfit = float64(math.Floor(stats.RetailProfit*100) / 100)
-		stats.WholesaleProfit = float64(math.Floor(stats.WholesaleProfit*100) / 100)
-
-		return stats, nil
+		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
+		stats.RetailProfit = math.Round(stats.RetailProfit*100) / 100
+		stats.WholesaleProfit = math.Round(stats.WholesaleProfit*100) / 100
 	}
 	return stats, nil
 }
@@ -167,11 +165,11 @@ type PurchaseStats struct {
 }
 
 func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
-	totalRetailProfit := float32(0.0)
-	totalWholesaleProfit := float32(0.0)
+	totalRetailProfit := float64(0.0)
+	totalWholesaleProfit := float64(0.0)
 
-	totalRetailLoss := float32(0.0)
-	totalWholesaleLoss := float32(0.0)
+	totalRetailLoss := float64(0.0)
+	totalWholesaleLoss := float64(0.0)
 
 	purchase.ReturnedAll = true
 
@@ -208,15 +206,15 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	}
 
 	if purchase.ReturnedAll {
-		purchase.ExpectedRetailProfit = float32(math.Floor(float64(0.00)*100) / 100)
-		purchase.ExpectedWholesaleProfit = float32(math.Floor(float64(0.00)*100) / 100)
-		purchase.ExpectedRetailLoss = float32(math.Floor(float64(0.00)*100) / 100)
-		purchase.ExpectedWholesaleLoss = float32(math.Floor(float64(0.00)*100) / 100)
+		purchase.ExpectedRetailProfit = math.Round(0.00*100) / 100
+		purchase.ExpectedWholesaleProfit = math.Round(0.00*100) / 100
+		purchase.ExpectedRetailLoss = math.Round(0.00*100) / 100
+		purchase.ExpectedWholesaleLoss = math.Round(0.00*100) / 100
 	} else {
-		purchase.ExpectedRetailProfit = float32(math.Floor(float64(totalRetailProfit)*100) / 100)
-		purchase.ExpectedWholesaleProfit = float32(math.Floor(float64(totalWholesaleProfit)*100) / 100)
-		purchase.ExpectedRetailLoss = float32(math.Floor(float64(totalRetailLoss)*100) / 100)
-		purchase.ExpectedWholesaleLoss = float32(math.Floor(float64(totalWholesaleLoss)*100) / 100)
+		purchase.ExpectedRetailProfit = math.Round(totalRetailProfit*100) / 100
+		purchase.ExpectedWholesaleProfit = math.Round(totalWholesaleProfit*100) / 100
+		purchase.ExpectedRetailLoss = math.Round(totalRetailLoss*100) / 100
+		purchase.ExpectedWholesaleLoss = math.Round(totalWholesaleLoss*100) / 100
 	}
 
 	//purchase.DiscountProfit = purchase.Discount
@@ -241,9 +239,9 @@ func (purchase *Purchase) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
+		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64))
 	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
+		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64))
 	}
 
 	purchase.ChangeLog = append(
@@ -363,30 +361,30 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 }
 
 func (purchase *Purchase) FindNetTotal() {
-	netTotal := float32(0.0)
+	netTotal := float64(0.0)
 	for _, product := range purchase.Products {
-		netTotal += (float32(product.Quantity) * product.PurchaseUnitPrice)
+		netTotal += (float64(product.Quantity) * product.PurchaseUnitPrice)
 	}
 
 	if purchase.VatPercent != nil {
-		netTotal += netTotal * (*purchase.VatPercent / float32(100))
+		netTotal += netTotal * (*purchase.VatPercent / float64(100))
 	}
 
 	netTotal -= purchase.Discount
-	purchase.NetTotal = float32(math.Floor(float64(netTotal*100)) / float64(100))
+	purchase.NetTotal = math.Round(netTotal*100) / 100
 }
 
 func (purchase *Purchase) FindTotal() {
-	total := float32(0.0)
+	total := float64(0.0)
 	for _, product := range purchase.Products {
-		total += (float32(product.Quantity) * product.PurchaseUnitPrice)
+		total += (float64(product.Quantity) * product.PurchaseUnitPrice)
 	}
 
-	purchase.Total = float32(math.Floor(float64(total*100)) / 100)
+	purchase.Total = math.Round(total*100) / 100
 }
 
 func (purchase *Purchase) FindTotalQuantity() {
-	totalQuantity := float32(0)
+	totalQuantity := float64(0)
 	for _, product := range purchase.Products {
 		totalQuantity += product.Quantity
 	}
@@ -395,7 +393,7 @@ func (purchase *Purchase) FindTotalQuantity() {
 
 func (purchase *Purchase) FindVatPrice() {
 	vatPrice := ((*purchase.VatPercent / 100) * purchase.Total)
-	vatPrice = float32(math.Floor(float64(vatPrice*100)) / 100)
+	vatPrice = math.Round(vatPrice*100) / 100
 	purchase.VatPrice = vatPrice
 }
 
@@ -512,9 +510,9 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 		}
 
 		if operator != "" {
-			criterias.SearchBy["net_total"] = bson.M{operator: float32(value)}
+			criterias.SearchBy["net_total"] = bson.M{operator: float64(value)}
 		} else {
-			criterias.SearchBy["net_total"] = float32(value)
+			criterias.SearchBy["net_total"] = float64(value)
 		}
 
 	}
@@ -1067,7 +1065,7 @@ func (purchase *Purchase) Insert() error {
 		return err
 	}
 
-	err = purchase.AddProductsPurchaseSummary()
+	err = purchase.AddProductsPurchaseHistory()
 	if err != nil {
 		return err
 	}

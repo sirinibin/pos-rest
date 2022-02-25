@@ -23,9 +23,9 @@ type PurchaseReturnProduct struct {
 	Name                    string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic            string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode                string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity                float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Quantity                float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	Unit                    string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	PurchaseReturnUnitPrice float32            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
+	PurchaseReturnUnitPrice float64            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
 }
 
 //PurchaseReturn : PurchaseReturn structure
@@ -48,15 +48,15 @@ type PurchaseReturn struct {
 	PurchaseReturnedBySignature     *Signature              `json:"purchase_returned_by_signature,omitempty"`
 	SignatureDate                   *time.Time              `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	SignatureDateStr                string                  `json:"signature_date_str,omitempty"`
-	VatPercent                      *float32                `bson:"vat_percent" json:"vat_percent"`
-	Discount                        float32                 `bson:"discount" json:"discount"`
-	DiscountPercent                 float32                 `bson:"discount_percent" json:"discount_percent"`
+	VatPercent                      *float64                `bson:"vat_percent" json:"vat_percent"`
+	Discount                        float64                 `bson:"discount" json:"discount"`
+	DiscountPercent                 float64                 `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent               bool                    `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                          string                  `bson:"status,omitempty" json:"status,omitempty"`
-	TotalQuantity                   float32                 `bson:"total_quantity" json:"total_quantity"`
-	VatPrice                        float32                 `bson:"vat_price" json:"vat_price"`
-	Total                           float32                 `bson:"total" json:"total"`
-	NetTotal                        float32                 `bson:"net_total" json:"net_total"`
+	TotalQuantity                   float64                 `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                        float64                 `bson:"vat_price" json:"vat_price"`
+	Total                           float64                 `bson:"total" json:"total"`
+	NetTotal                        float64                 `bson:"net_total" json:"net_total"`
 	Deleted                         bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                       *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser                   *User                   `json:"deleted_by_user,omitempty"`
@@ -104,13 +104,12 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturn
 	}
 	defer cur.Close(ctx)
 
-	for cur.Next(ctx) {
+	if cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
-		return stats, nil
+		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
 	}
 	return stats, nil
 }
@@ -255,30 +254,30 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 }
 
 func (purchasereturn *PurchaseReturn) FindNetTotal() {
-	netTotal := float32(0.0)
+	netTotal := float64(0.0)
 	for _, product := range purchasereturn.Products {
-		netTotal += (float32(product.Quantity) * product.PurchaseReturnUnitPrice)
+		netTotal += (float64(product.Quantity) * product.PurchaseReturnUnitPrice)
 	}
 
 	if purchasereturn.VatPercent != nil {
-		netTotal += netTotal * (*purchasereturn.VatPercent / float32(100))
+		netTotal += netTotal * (*purchasereturn.VatPercent / float64(100))
 	}
 
 	netTotal -= purchasereturn.Discount
-	purchasereturn.NetTotal = float32(math.Floor(float64(netTotal*100)) / float64(100))
+	purchasereturn.NetTotal = math.Round(netTotal*100) / 100
 }
 
 func (purchasereturn *PurchaseReturn) FindTotal() {
-	total := float32(0.0)
+	total := float64(0.0)
 	for _, product := range purchasereturn.Products {
-		total += (float32(product.Quantity) * product.PurchaseReturnUnitPrice)
+		total += product.Quantity * product.PurchaseReturnUnitPrice
 	}
 
-	purchasereturn.Total = float32(math.Floor(float64(total*100)) / 100)
+	purchasereturn.Total = math.Round(total*100) / 100
 }
 
 func (purchasereturn *PurchaseReturn) FindTotalQuantity() {
-	totalQuantity := float32(0)
+	totalQuantity := float64(0.00)
 	for _, product := range purchasereturn.Products {
 		totalQuantity += product.Quantity
 	}
@@ -287,7 +286,7 @@ func (purchasereturn *PurchaseReturn) FindTotalQuantity() {
 
 func (purchasereturn *PurchaseReturn) FindVatPrice() {
 	vatPrice := ((*purchasereturn.VatPercent / 100) * purchasereturn.Total)
-	vatPrice = float32(math.Floor(float64(vatPrice*100)) / 100)
+	vatPrice = math.Round(vatPrice*100) / 100
 	purchasereturn.VatPrice = vatPrice
 }
 
@@ -403,15 +402,15 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return purchasereturns, criterias, err
 		}
 
 		if operator != "" {
-			criterias.SearchBy["net_total"] = bson.M{operator: float32(value)}
+			criterias.SearchBy["net_total"] = bson.M{operator: value}
 		} else {
-			criterias.SearchBy["net_total"] = float32(value)
+			criterias.SearchBy["net_total"] = value
 		}
 
 	}
@@ -774,10 +773,10 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 		for _, purchaseProduct := range purchase.Products {
 			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
-				purchasedQty := float32(math.Floor(float64((purchaseProduct.Quantity-purchaseProduct.QuantityReturned)*100)) / float64(100))
+				purchasedQty := math.Round((purchaseProduct.Quantity-purchaseProduct.QuantityReturned)*100) / float64(100)
 				if purchasedQty == 0 {
 					errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
-				} else if purchaseReturnProduct.Quantity > float32(purchasedQty) {
+				} else if purchaseReturnProduct.Quantity > float64(purchasedQty) {
 					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", purchasedQty) + " " + purchaseProduct.Unit
 				}
 			}

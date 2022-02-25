@@ -22,13 +22,13 @@ type OrderProduct struct {
 	Name              string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic      string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode          string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	Quantity          float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	QuantityReturned  float32            `json:"quantity_returned" bson:"quantity_returned"`
-	UnitPrice         float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	PurchaseUnitPrice float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Quantity          float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned  float64            `json:"quantity_returned" bson:"quantity_returned"`
+	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	Profit            float32            `bson:"profit" json:"profit"`
-	Loss              float32            `bson:"loss" json:"loss"`
+	Profit            float64            `bson:"profit" json:"profit"`
+	Loss              float64            `bson:"loss" json:"loss"`
 }
 
 //Order : Order structure
@@ -49,22 +49,23 @@ type Order struct {
 	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
 	SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
-	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
-	Discount                 float32             `bson:"discount" json:"discount"`
-	DiscountPercent          float32             `bson:"discount_percent" json:"discount_percent"`
+	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
+	Discount                 float64             `bson:"discount" json:"discount"`
+	DiscountReturned         float64             `bson:"discount_returned" json:"discount_returned"`
+	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	StockRemoved             bool                `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
-	TotalQuantity            float32             `bson:"total_quantity" json:"total_quantity"`
-	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
-	Total                    float32             `bson:"total" json:"total"`
-	NetTotal                 float32             `bson:"net_total" json:"net_total"`
-	PartiaPaymentAmount      float32             `bson:"partial_payment_amount" json:"partial_payment_amount"`
+	TotalQuantity            float64             `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                 float64             `bson:"vat_price" json:"vat_price"`
+	Total                    float64             `bson:"total" json:"total"`
+	NetTotal                 float64             `bson:"net_total" json:"net_total"`
+	PartiaPaymentAmount      float64             `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
 	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
-	Profit                   float32             `bson:"profit" json:"profit"`
-	NetProfit                float32             `bson:"net_profit" json:"net_profit"`
-	Loss                     float32             `bson:"loss" json:"loss"`
+	Profit                   float64             `bson:"profit" json:"profit"`
+	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
+	Loss                     float64             `bson:"loss" json:"loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -138,9 +139,9 @@ func (order *Order) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
+		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64))
 	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32))
+		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64))
 	}
 
 	order.ChangeLog = append(
@@ -257,30 +258,30 @@ func (order *Order) UpdateForeignLabelFields() error {
 }
 
 func (order *Order) FindNetTotal() {
-	netTotal := float32(0.0)
+	netTotal := float64(0.0)
 	for _, product := range order.Products {
-		netTotal += (float32(product.Quantity) * product.UnitPrice)
+		netTotal += (float64(product.Quantity) * product.UnitPrice)
 	}
 
 	if order.VatPercent != nil {
-		netTotal += netTotal * (*order.VatPercent / float32(100))
+		netTotal += netTotal * (*order.VatPercent / float64(100))
 	}
 
 	netTotal -= order.Discount
-	order.NetTotal = float32(math.Floor(float64(netTotal*100)) / float64(100))
+	order.NetTotal = math.Round(netTotal*100) / 100
 }
 
 func (order *Order) FindTotal() {
-	total := float32(0.0)
+	total := float64(0.0)
 	for _, product := range order.Products {
-		total += (float32(product.Quantity) * product.UnitPrice)
+		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	order.Total = float32(math.Floor(float64(total*100)) / 100)
+	order.Total = math.Round(total*100) / 100
 }
 
 func (order *Order) FindTotalQuantity() {
-	totalQuantity := float32(0.0)
+	totalQuantity := float64(0.0)
 	for _, product := range order.Products {
 		totalQuantity += product.Quantity
 	}
@@ -289,7 +290,7 @@ func (order *Order) FindTotalQuantity() {
 
 func (order *Order) FindVatPrice() {
 	vatPrice := ((*order.VatPercent / 100) * order.Total)
-	vatPrice = float32(math.Floor(float64(vatPrice*100)) / 100)
+	vatPrice = math.Round(vatPrice*100) / 100
 	order.VatPrice = vatPrice
 }
 
@@ -308,6 +309,7 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 				"net_total":  bson.M{"$sum": "$net_total"},
 				"net_profit": bson.M{"$sum": "$net_profit"},
 				"loss":       bson.M{"$sum": "$loss"},
+				"vat_price":  bson.M{"$sum": "$vat_price"},
 			},
 		},
 	}
@@ -318,15 +320,14 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 	}
 	defer cur.Close(ctx)
 
-	for cur.Next(ctx) {
+	if cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
-		stats.NetProfit = float64(math.Floor(stats.NetProfit*100) / 100)
-		stats.Loss = float64(math.Floor(stats.Loss*100) / 100)
-		return stats, nil
+		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
+		stats.NetProfit = math.Round(stats.NetProfit*100) / 100
+		stats.Loss = math.Round(stats.Loss*100) / 100
 	}
 	return stats, nil
 }
@@ -337,6 +338,7 @@ type SalesStats struct {
 	NetTotal  float64             `json:"net_total" bson:"net_total"`
 	NetProfit float64             `json:"net_profit" bson:"net_profit"`
 	Loss      float64             `json:"loss" bson:"loss"`
+	VatPrice  float64             `json:"vat_price" bson:"vat_price"`
 }
 
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
@@ -452,9 +454,9 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		}
 
 		if operator != "" {
-			criterias.SearchBy["net_total"] = bson.M{operator: float32(value)}
+			criterias.SearchBy["net_total"] = bson.M{operator: float64(value)}
 		} else {
-			criterias.SearchBy["net_total"] = float32(value)
+			criterias.SearchBy["net_total"] = float64(value)
 		}
 
 	}
@@ -470,9 +472,9 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		}
 
 		if operator != "" {
-			criterias.SearchBy["profit"] = bson.M{operator: float32(value)}
+			criterias.SearchBy["profit"] = bson.M{operator: float64(value)}
 		} else {
-			criterias.SearchBy["profit"] = float32(value)
+			criterias.SearchBy["profit"] = float64(value)
 		}
 
 	}
@@ -488,9 +490,9 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		}
 
 		if operator != "" {
-			criterias.SearchBy["loss"] = bson.M{operator: float32(value)}
+			criterias.SearchBy["loss"] = bson.M{operator: float64(value)}
 		} else {
-			criterias.SearchBy["loss"] = float32(value)
+			criterias.SearchBy["loss"] = float64(value)
 		}
 
 	}
@@ -843,7 +845,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 func GetProductStockInStore(
 	productID *primitive.ObjectID,
 	storeID *primitive.ObjectID,
-) (stock float32, err error) {
+) (stock float64, err error) {
 	product, err := FindProductByID(productID, bson.M{})
 	if err != nil {
 		return 0, err
@@ -971,8 +973,8 @@ func (order *Order) AddStock() (err error) {
 }
 
 func (order *Order) CalculateOrderProfit() error {
-	totalProfit := float32(0.0)
-	totalLoss := float32(0.0)
+	totalProfit := float64(0.0)
+	totalLoss := float64(0.0)
 	for i, orderProduct := range order.Products {
 		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
 		if err != nil {
@@ -982,7 +984,7 @@ func (order *Order) CalculateOrderProfit() error {
 
 		salesPrice := quantity * orderProduct.UnitPrice
 
-		purchaseUnitPrice := float32(0.0)
+		purchaseUnitPrice := float64(0.0)
 		for _, unitPrice := range product.UnitPrices {
 			if unitPrice.StoreID == *order.StoreID {
 				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
@@ -992,7 +994,7 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 		profit := salesPrice - (quantity * purchaseUnitPrice)
-		profit = float32(math.Floor(float64(profit)*100) / 100)
+		profit = math.Round(profit*100) / 100
 
 		if profit >= 0 {
 			order.Products[i].Profit = profit
@@ -1005,8 +1007,8 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	order.Profit = float32(math.Floor(float64(totalProfit)*100) / 100)
-	order.NetProfit = float32(math.Floor(float64(totalProfit-order.Discount)*100) / 100)
+	order.Profit = math.Round(totalProfit) * 100 / 100
+	order.NetProfit = math.Round((totalProfit-order.Discount)*100) / 100
 	order.Loss = totalLoss
 	return nil
 }
@@ -1065,7 +1067,7 @@ func (order *Order) Insert() error {
 		return err
 	}
 
-	err = order.AddProductsSalesSummary()
+	err = order.AddProductsSalesHistory()
 	if err != nil {
 		return err
 	}

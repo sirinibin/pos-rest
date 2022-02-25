@@ -21,28 +21,28 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-type ProductSalesSummary struct {
+type ProductSalesHistory struct {
 	ID           primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	ProductID    primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	CustomerID   *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	CustomerName string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	OrderID      *primitive.ObjectID `json:"order_id,omitempty" bson:"order_id,omitempty"`
 	OrderCode    string              `json:"order_code,omitempty" bson:"order_code,omitempty"`
-	Quantity     float32             `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	UnitPrice    float32             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Quantity     float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	UnitPrice    float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Unit         string              `bson:"unit,omitempty" json:"unit,omitempty"`
 	CreatedAt    *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt    *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
-func (order *Order) AddProductsSalesSummary() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_summary")
+func (order *Order) AddProductsSalesHistory() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	for _, orderProduct := range order.Products {
 
-		summary := ProductSalesSummary{
+		history := ProductSalesHistory{
 			ProductID:    orderProduct.ProductID,
 			CustomerID:   order.CustomerID,
 			CustomerName: order.CustomerName,
@@ -52,13 +52,13 @@ func (order *Order) AddProductsSalesSummary() error {
 			UnitPrice:    orderProduct.UnitPrice,
 			Unit:         orderProduct.Unit,
 		}
-		summary.ID = primitive.NewObjectID()
+		history.ID = primitive.NewObjectID()
 
 		now := time.Now()
-		summary.CreatedAt = &now
-		summary.UpdatedAt = &now
+		history.CreatedAt = &now
+		history.UpdatedAt = &now
 
-		_, err := collection.InsertOne(ctx, &summary)
+		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -67,28 +67,28 @@ func (order *Order) AddProductsSalesSummary() error {
 	return nil
 }
 
-type ProductPurchaseSummary struct {
+type ProductPurchaseHistory struct {
 	ID           primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	ProductID    primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	VendorID     *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorName   string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
 	PurchaseID   *primitive.ObjectID `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
 	PurchaseCode string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
-	Quantity     float32             `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	UnitPrice    float32             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Quantity     float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	UnitPrice    float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Unit         string              `bson:"unit,omitempty" json:"unit,omitempty"`
 	CreatedAt    *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt    *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
-func (purchase *Purchase) AddProductsPurchaseSummary() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_summary")
+func (purchase *Purchase) AddProductsPurchaseHistory() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	for _, purchaseProduct := range purchase.Products {
 
-		summary := ProductPurchaseSummary{
+		history := ProductPurchaseHistory{
 			ProductID:    purchaseProduct.ProductID,
 			VendorID:     purchase.VendorID,
 			VendorName:   purchase.VendorName,
@@ -98,13 +98,13 @@ func (purchase *Purchase) AddProductsPurchaseSummary() error {
 			UnitPrice:    purchaseProduct.PurchaseUnitPrice,
 			Unit:         purchaseProduct.Unit,
 		}
-		summary.ID = primitive.NewObjectID()
+		history.ID = primitive.NewObjectID()
 
 		now := time.Now()
-		summary.CreatedAt = &now
-		summary.UpdatedAt = &now
+		history.CreatedAt = &now
+		history.UpdatedAt = &now
 
-		_, err := collection.InsertOne(ctx, &summary)
+		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -116,17 +116,17 @@ type ProductUnitPrice struct {
 	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
 	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	PurchaseUnitPrice       float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
-	WholesaleUnitPrice      float32            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	RetailUnitPrice         float32            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 }
 
 type ProductStock struct {
 	StoreID           primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName         string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
 	StoreNameInArabic string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	Stock             float32            `bson:"stock,omitempty" json:"stock"`
+	Stock             float64            `bson:"stock" json:"stock"`
 }
 
 //Product : Product structure
@@ -204,9 +204,9 @@ func (product *Product) SetChangeLog(
 	} else if event == "attribute_value_change" && name != nil {
 		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
 	} else if event == "remove_stock" && name != nil {
-		description = "Stock reduced from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32)) + " by " + UserObject.Name
+		description = "Stock reduced from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64)) + " by " + UserObject.Name
 	} else if event == "add_stock" && name != nil {
-		description = "Stock raised from " + fmt.Sprintf("%.02f", oldValue.(float32)) + " to " + fmt.Sprintf("%.02f", newValue.(float32)) + " by " + UserObject.Name
+		description = "Stock raised from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64)) + " by " + UserObject.Name
 	} else if event == "add_image" {
 		description = "Added " + strconv.Itoa(newValue.(int)) + " new images by " + UserObject.Name
 	} else if event == "remove_image" {

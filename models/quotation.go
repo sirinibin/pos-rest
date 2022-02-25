@@ -24,12 +24,12 @@ type QuotationProduct struct {
 	NameInArabic      string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode          string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	PartNumber        string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity          float32            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Quantity          float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitPrice         float32            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	PurchaseUnitPrice float32            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	Profit            float32            `bson:"profit" json:"profit"`
-	Loss              float32            `bson:"loss" json:"loss"`
+	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Profit            float64            `bson:"profit" json:"profit"`
+	Loss              float64            `bson:"loss" json:"loss"`
 }
 
 //Quotation : Quotation structure
@@ -50,18 +50,18 @@ type Quotation struct {
 	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
 	DeliveredByUser          *User               `json:"delivered_by_user,omitempty"`
 	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
-	VatPercent               *float32            `bson:"vat_percent" json:"vat_percent"`
-	Discount                 float32             `bson:"discount" json:"discount"`
-	DiscountPercent          float32             `bson:"discount_percent" json:"discount_percent"`
+	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
+	Discount                 float64             `bson:"discount" json:"discount"`
+	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
-	TotalQuantity            float32             `bson:"total_quantity" json:"total_quantity"`
-	VatPrice                 float32             `bson:"vat_price" json:"vat_price"`
-	Total                    float32             `bson:"total" json:"total"`
-	NetTotal                 float32             `bson:"net_total" json:"net_total"`
-	Profit                   float32             `bson:"profit" json:"profit"`
-	NetProfit                float32             `bson:"net_profit" json:"net_profit"`
-	Loss                     float32             `bson:"loss" json:"loss"`
+	TotalQuantity            float64             `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                 float64             `bson:"vat_price" json:"vat_price"`
+	Total                    float64             `bson:"total" json:"total"`
+	NetTotal                 float64             `bson:"net_total" json:"net_total"`
+	Profit                   float64             `bson:"profit" json:"profit"`
+	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
+	Loss                     float64             `bson:"loss" json:"loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -122,8 +122,8 @@ type QuotationStats struct {
 }
 
 func (quotation *Quotation) CalculateQuotationProfit() error {
-	totalProfit := float32(0.0)
-	totalLoss := float32(0.0)
+	totalProfit := float64(0.0)
+	totalLoss := float64(0.0)
 	for i, quotationProduct := range quotation.Products {
 		product, err := FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
 		if err != nil {
@@ -146,7 +146,7 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 		}
 
 		profit := salesPrice - (quantity * purchaseUnitPrice)
-		profit = float32(math.Floor(float64(profit)*100) / 100)
+		profit = math.Round(profit*100) / 100
 
 		if profit >= 0 {
 			quotation.Products[i].Profit = profit
@@ -160,8 +160,8 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 
 	}
 
-	quotation.Profit = float32(math.Floor(float64(totalProfit)*100) / 100)
-	quotation.NetProfit = float32(math.Floor(float64(totalProfit-quotation.Discount)*100) / 100)
+	quotation.Profit = math.Round(totalProfit*100) / 100
+	quotation.NetProfit = math.Round((totalProfit-quotation.Discount)*100) / 100
 	quotation.Loss = totalLoss
 	return nil
 }
@@ -191,14 +191,14 @@ func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err
 	}
 	defer cur.Close(ctx)
 
-	for cur.Next(ctx) {
+	if cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = float64(math.Floor(stats.NetTotal*100) / 100)
-		stats.NetProfit = float64(math.Floor(stats.NetProfit*100) / 100)
-		stats.Loss = float64(math.Floor(stats.Loss*100) / 100)
+		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
+		stats.NetProfit = math.Round(stats.NetProfit*100) / 100
+		stats.Loss = math.Round(stats.Loss*100) / 100
 
 		return stats, nil
 	}
@@ -392,30 +392,30 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 }
 
 func (quotation *Quotation) FindNetTotal() {
-	netTotal := float32(0.0)
+	netTotal := float64(0.0)
 	for _, product := range quotation.Products {
-		netTotal += (float32(product.Quantity) * product.UnitPrice)
+		netTotal += (float64(product.Quantity) * product.UnitPrice)
 	}
 
 	if quotation.VatPercent != nil {
-		netTotal += netTotal * (*quotation.VatPercent / float32(100))
+		netTotal += netTotal * (*quotation.VatPercent / float64(100))
 	}
 
 	netTotal -= quotation.Discount
-	quotation.NetTotal = float32(math.Floor(float64(netTotal*100)) / float64(100))
+	quotation.NetTotal = math.Round(netTotal*100) / 100
 }
 
 func (quotation *Quotation) FindTotal() {
-	total := float32(0.0)
+	total := float64(0.0)
 	for _, product := range quotation.Products {
-		total += (float32(product.Quantity) * product.UnitPrice)
+		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	quotation.Total = float32(math.Floor(float64(total*100)) / 100)
+	quotation.Total = math.Round(total*100) / 100
 }
 
 func (quotation *Quotation) FindTotalQuantity() {
-	totalQuantity := float32(0)
+	totalQuantity := float64(0)
 	for _, product := range quotation.Products {
 		totalQuantity += product.Quantity
 	}
@@ -424,7 +424,7 @@ func (quotation *Quotation) FindTotalQuantity() {
 
 func (quotation *Quotation) FindVatPrice() {
 	vatPrice := ((*quotation.VatPercent / 100) * quotation.Total)
-	vatPrice = float32(math.Floor(float64(vatPrice*100)) / 100)
+	vatPrice = math.Round(vatPrice*100) / 100
 	quotation.VatPrice = vatPrice
 }
 
@@ -553,9 +553,9 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 		}
 
 		if operator != "" {
-			criterias.SearchBy["net_total"] = bson.M{operator: float32(value)}
+			criterias.SearchBy["net_total"] = bson.M{operator: float64(value)}
 		} else {
-			criterias.SearchBy["net_total"] = float32(value)
+			criterias.SearchBy["net_total"] = float64(value)
 		}
 
 	}
