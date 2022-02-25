@@ -55,6 +55,7 @@ type Purchase struct {
 	SignatureDateStr           string              `json:"signature_date_str,omitempty"`
 	VatPercent                 *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount                   float64             `bson:"discount" json:"discount"`
+	ReturnDiscount             float64             `bson:"return_discount" json:"return_discount"`
 	DiscountPercent            float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent          bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	DiscountProfit             float64             `bson:"discount_profit" json:"discount_profit"`
@@ -65,6 +66,8 @@ type Purchase struct {
 	NetTotal                   float64             `bson:"net_total" json:"net_total"`
 	ExpectedRetailProfit       float64             `bson:"retail_profit" json:"retail_profit"`
 	ExpectedWholesaleProfit    float64             `bson:"wholesale_profit" json:"wholesale_profit"`
+	ExpectedNetRetailProfit    float64             `bson:"net_retail_profit" json:"net_retail_profit"`
+	ExpectedNetWholesaleProfit float64             `bson:"net_wholesale_profit" json:"net_wholesale_profit"`
 	ExpectedWholesaleLoss      float64             `bson:"wholesale_loss" json:"wholesale_loss"`
 	ExpectedRetailLoss         float64             `bson:"retail_loss" json:"retail_loss"`
 	ReturnedAll                bool                `json:"returned_all"`
@@ -131,10 +134,10 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":              nil,
-				"net_total":        bson.M{"$sum": "$net_total"},
-				"retail_profit":    bson.M{"$sum": "$retail_profit"},
-				"wholesale_profit": bson.M{"$sum": "$wholesale_profit"},
+				"_id":                  nil,
+				"net_total":            bson.M{"$sum": "$net_total"},
+				"net_retail_profit":    bson.M{"$sum": "$net_retail_profit"},
+				"net_wholesale_profit": bson.M{"$sum": "$net_wholesale_profit"},
 			},
 		},
 	}
@@ -151,25 +154,25 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 			return stats, err
 		}
 		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
-		stats.RetailProfit = math.Round(stats.RetailProfit*100) / 100
-		stats.WholesaleProfit = math.Round(stats.WholesaleProfit*100) / 100
+		stats.NetRetailProfit = math.Round(stats.NetRetailProfit*100) / 100
+		stats.NetWholesaleProfit = math.Round(stats.NetWholesaleProfit*100) / 100
 	}
 	return stats, nil
 }
 
 type PurchaseStats struct {
-	ID              *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal        float64             `json:"net_total" bson:"net_total"`
-	RetailProfit    float64             `json:"retail_profit" bson:"retail_profit"`
-	WholesaleProfit float64             `json:"wholesale_profit" bson:"wholesale_profit"`
+	ID                 *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal           float64             `json:"net_total" bson:"net_total"`
+	NetRetailProfit    float64             `json:"net_retail_net_profit" bson:"net_retail_profit"`
+	NetWholesaleProfit float64             `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
 }
 
 func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
-	totalRetailProfit := float64(0.0)
-	totalWholesaleProfit := float64(0.0)
+	totalRetailProfit := 0.0
+	totalWholesaleProfit := 0.0
 
-	totalRetailLoss := float64(0.0)
-	totalWholesaleLoss := float64(0.0)
+	totalRetailLoss := 0.0
+	totalWholesaleLoss := 0.0
 
 	purchase.ReturnedAll = true
 
@@ -208,16 +211,20 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	if purchase.ReturnedAll {
 		purchase.ExpectedRetailProfit = math.Round(0.00*100) / 100
 		purchase.ExpectedWholesaleProfit = math.Round(0.00*100) / 100
+		purchase.ExpectedNetRetailProfit = math.Round(0.00*100) / 100
+		purchase.ExpectedNetWholesaleProfit = math.Round(0.00*100) / 100
 		purchase.ExpectedRetailLoss = math.Round(0.00*100) / 100
 		purchase.ExpectedWholesaleLoss = math.Round(0.00*100) / 100
 	} else {
-		purchase.ExpectedRetailProfit = math.Round(totalRetailProfit*100) / 100
-		purchase.ExpectedWholesaleProfit = math.Round(totalWholesaleProfit*100) / 100
+		purchase.ExpectedRetailProfit = math.Round((totalRetailProfit)*100) / 100
+		purchase.ExpectedWholesaleProfit = math.Round((totalWholesaleProfit)*100) / 100
+
+		purchase.ExpectedNetRetailProfit = math.Round((totalRetailProfit+purchase.Discount-purchase.ReturnDiscount)*100) / 100
+		purchase.ExpectedNetWholesaleProfit = math.Round((totalWholesaleProfit+purchase.Discount-purchase.ReturnDiscount)*100) / 100
+
 		purchase.ExpectedRetailLoss = math.Round(totalRetailLoss*100) / 100
 		purchase.ExpectedWholesaleLoss = math.Round(totalWholesaleLoss*100) / 100
 	}
-
-	//purchase.DiscountProfit = purchase.Discount
 
 	return nil
 }

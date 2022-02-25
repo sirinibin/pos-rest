@@ -991,7 +991,7 @@ func (salesreturn *SalesReturn) Insert() error {
 		return err
 	}
 
-	err = salesreturn.UpdateOrderDiscountReturned()
+	err = salesreturn.UpdateOrderReturnDiscount()
 	if err != nil {
 		return err
 	}
@@ -999,7 +999,7 @@ func (salesreturn *SalesReturn) Insert() error {
 	return nil
 }
 
-func (salesreturn *SalesReturn) UpdateOrderDiscountReturned() error {
+func (salesreturn *SalesReturn) UpdateOrderReturnDiscount() error {
 	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
 	if err != nil {
 		return err

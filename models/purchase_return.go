@@ -636,6 +636,10 @@ func (purchasereturn *PurchaseReturn) Validate(
 		return errs
 	}
 
+	if purchasereturn.Discount > (purchase.Discount - purchase.ReturnDiscount) {
+		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (purchase.Discount-purchase.ReturnDiscount))
+	}
+
 	purchasereturn.PurchaseCode = purchase.Code
 
 	if govalidator.IsNull(purchasereturn.Status) {
@@ -996,7 +1000,21 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 		return err
 	}
 
+	err = purchasereturn.UpdatePurchaseReturnDiscount()
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (purchasereturn *PurchaseReturn) UpdatePurchaseReturnDiscount() error {
+	purchase, err := FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+	if err != nil {
+		return err
+	}
+	purchase.ReturnDiscount += purchasereturn.Discount
+	return purchase.Update()
 }
 
 func (purchasereturn *PurchaseReturn) IsCodeExists() (exists bool, err error) {
