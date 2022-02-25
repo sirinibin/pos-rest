@@ -51,7 +51,7 @@ type Order struct {
 	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
 	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float64             `bson:"discount" json:"discount"`
-	DiscountReturned         float64             `bson:"discount_returned" json:"discount_returned"`
+	ReturnDiscount           float64             `bson:"return_discount" json:"return_discount"`
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
@@ -984,7 +984,7 @@ func (order *Order) CalculateOrderProfit() error {
 
 		salesPrice := quantity * orderProduct.UnitPrice
 
-		purchaseUnitPrice := float64(0.0)
+		purchaseUnitPrice := 0.0
 		for _, unitPrice := range product.UnitPrices {
 			if unitPrice.StoreID == *order.StoreID {
 				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
@@ -1008,7 +1008,7 @@ func (order *Order) CalculateOrderProfit() error {
 
 	}
 	order.Profit = math.Round(totalProfit) * 100 / 100
-	order.NetProfit = math.Round((totalProfit-order.Discount)*100) / 100
+	order.NetProfit = math.Round((totalProfit-order.Discount+order.ReturnDiscount)*100) / 100
 	order.Loss = totalLoss
 	return nil
 }

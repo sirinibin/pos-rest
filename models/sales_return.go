@@ -596,8 +596,8 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		return errs
 	}
 
-	if salesreturn.Discount > (order.Discount - order.DiscountReturned) {
-		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (order.Discount-order.DiscountReturned))
+	if salesreturn.Discount > (order.Discount - order.ReturnDiscount) {
+		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (order.Discount-order.ReturnDiscount))
 	}
 
 	salesreturn.OrderCode = order.Code
@@ -1004,7 +1004,7 @@ func (salesreturn *SalesReturn) UpdateOrderDiscountReturned() error {
 	if err != nil {
 		return err
 	}
-	order.DiscountReturned += salesreturn.Discount
+	order.ReturnDiscount += salesreturn.Discount
 	return order.Update()
 }
 
