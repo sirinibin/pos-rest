@@ -173,7 +173,9 @@ func main() {
 func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 
-	models.UpdatePurchaseProfit()
-	models.UpdateOrderProfit()
-	models.UpdateQuotationProfit()
+	models.ProcessPurchases()
+	models.ProcessPurchaseReturns()
+	models.ProcessOrders()
+	models.ProcessSalesReturns()
+	models.ProcessQuotations()
 }

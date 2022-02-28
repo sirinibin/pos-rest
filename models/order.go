@@ -294,6 +294,15 @@ func (order *Order) FindVatPrice() {
 	order.VatPrice = vatPrice
 }
 
+// DiskQuotaUsageResult payload for disk quota usage
+type SalesStats struct {
+	ID        *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal  float64             `json:"net_total" bson:"net_total"`
+	NetProfit float64             `json:"net_profit" bson:"net_profit"`
+	Loss      float64             `json:"loss" bson:"loss"`
+	VatPrice  float64             `json:"vat_price" bson:"vat_price"`
+}
+
 func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -330,15 +339,6 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 		stats.Loss = math.Round(stats.Loss*100) / 100
 	}
 	return stats, nil
-}
-
-// DiskQuotaUsageResult payload for disk quota usage
-type SalesStats struct {
-	ID        *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal  float64             `json:"net_total" bson:"net_total"`
-	NetProfit float64             `json:"net_profit" bson:"net_profit"`
-	Loss      float64             `json:"loss" bson:"loss"`
-	VatPrice  float64             `json:"vat_price" bson:"vat_price"`
 }
 
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
@@ -1271,4 +1271,47 @@ func IsOrderExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func ProcessOrders() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		order := Order{}
+		err = cur.Decode(&order)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = order.CalculateOrderProfit()
+		if err != nil {
+			return err
+		}
+
+		err = order.AddProductsSalesHistory()
+		if err != nil {
+			return err
+		}
+
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

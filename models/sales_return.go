@@ -93,6 +93,7 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 			"$group": bson.M{
 				"_id":       nil,
 				"net_total": bson.M{"$sum": "$net_total"},
+				"vat_price": bson.M{"$sum": "$vat_price"},
 			},
 		},
 	}
@@ -117,6 +118,7 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 type SalesReturnStats struct {
 	ID       *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal float64             `json:"net_total" bson:"net_total"`
+	VatPrice float64             `json:"vat_price" bson:"vat_price"`
 }
 
 func (salesreturn *SalesReturn) SetChangeLog(
@@ -996,6 +998,11 @@ func (salesreturn *SalesReturn) Insert() error {
 		return err
 	}
 
+	err = salesreturn.AddProductsSalesReturnHistory()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1199,4 +1206,37 @@ func IsSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func ProcessSalesReturns() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		salesReturn := SalesReturn{}
+		err = cur.Decode(&salesReturn)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = salesReturn.AddProductsSalesReturnHistory()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

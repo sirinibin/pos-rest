@@ -1063,3 +1063,41 @@ func IsQuotationExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 	return (count == 1), err
 }
+
+func ProcessQuotations() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		quotation := Quotation{}
+		err = cur.Decode(&quotation)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = quotation.AddProductsQuotationHistory()
+		if err != nil {
+			return err
+		}
+
+		err = quotation.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

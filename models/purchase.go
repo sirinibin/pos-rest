@@ -1249,3 +1249,41 @@ func IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 	return (count == 1), err
 }
+
+func ProcessPurchases() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := Purchase{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = model.AddProductsPurchaseHistory()
+		if err != nil {
+			return err
+		}
+
+		err = model.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

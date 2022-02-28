@@ -1005,6 +1005,11 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 		return err
 	}
 
+	err = purchasereturn.AddProductsPurchaseReturnHistory()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1183,4 +1188,37 @@ func IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func ProcessPurchaseReturns() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := PurchaseReturn{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = model.AddProductsPurchaseReturnHistory()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
