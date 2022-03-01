@@ -11,6 +11,8 @@ import (
 
 type ProductPurchaseReturnHistory struct {
 	ID                 primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	StoreID            *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	ProductID          primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	VendorID           *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorName         string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
@@ -41,6 +43,8 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
 
 		history := ProductPurchaseReturnHistory{
+			StoreID:            purchaseReturn.StoreID,
+			StoreName:          purchaseReturn.StoreName,
 			ProductID:          purchaseReturnProduct.ProductID,
 			VendorID:           purchaseReturn.VendorID,
 			VendorName:         purchaseReturn.VendorName,
@@ -49,12 +53,10 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 			Quantity:           purchaseReturnProduct.Quantity,
 			UnitPrice:          purchaseReturnProduct.PurchaseReturnUnitPrice,
 			Unit:               purchaseReturnProduct.Unit,
+			CreatedAt:          purchaseReturn.CreatedAt,
+			UpdatedAt:          purchaseReturn.UpdatedAt,
 		}
 		history.ID = primitive.NewObjectID()
-
-		now := time.Now()
-		history.CreatedAt = &now
-		history.UpdatedAt = &now
 
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {

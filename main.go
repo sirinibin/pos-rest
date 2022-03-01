@@ -173,6 +173,7 @@ func main() {
 func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 
+	models.ClearHistory()
 	models.ProcessPurchases()
 	models.ProcessPurchaseReturns()
 	models.ProcessOrders()

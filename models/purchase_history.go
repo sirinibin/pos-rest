@@ -11,6 +11,8 @@ import (
 
 type ProductPurchaseHistory struct {
 	ID           primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	StoreID      *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName    string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	ProductID    primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	VendorID     *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorName   string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
@@ -41,6 +43,8 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 	for _, purchaseProduct := range purchase.Products {
 
 		history := ProductPurchaseHistory{
+			StoreID:      purchase.StoreID,
+			StoreName:    purchase.StoreName,
 			ProductID:    purchaseProduct.ProductID,
 			VendorID:     purchase.VendorID,
 			VendorName:   purchase.VendorName,
@@ -49,12 +53,10 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 			Quantity:     purchaseProduct.Quantity,
 			UnitPrice:    purchaseProduct.PurchaseUnitPrice,
 			Unit:         purchaseProduct.Unit,
+			CreatedAt:    purchase.CreatedAt,
+			UpdatedAt:    purchase.UpdatedAt,
 		}
 		history.ID = primitive.NewObjectID()
-
-		now := time.Now()
-		history.CreatedAt = &now
-		history.UpdatedAt = &now
 
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sirinibin/pos-rest/db"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type SearchCriterias struct {
@@ -117,4 +118,39 @@ func ParseRelationalSelectString(selectFields interface{}, prefix string) (field
 	}
 
 	return fields
+}
+
+func ClearHistory() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	_, err = collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	_, err = collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("product_purchase_return_history")
+	_, err = collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	_, err = collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
