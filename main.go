@@ -142,6 +142,7 @@ func main() {
 	models.UpdateOrderProfit()
 	models.UpdateQuotationProfit()
 
+	cronJobsEveryHour()
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Hour().Do(cronJobsEveryHour)
 	s.StartAsync()
