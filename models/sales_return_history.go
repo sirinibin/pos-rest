@@ -20,7 +20,13 @@ type ProductSalesReturnHistory struct {
 	SalesReturnCode string              `json:"sales_return_code,omitempty" bson:"sales_return_code,omitempty"`
 	Quantity        float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
+	NetPrice        float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
+	VatPercent      float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPrice        float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
 	Unit            string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	Store           *Store              `json:"store,omitempty"`
+	Customer        *Customer           `json:"customer,omitempty"`
 	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }

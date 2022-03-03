@@ -141,21 +141,6 @@ func main() {
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
-	/*
-		models.UpdatePurchaseProfit()
-		models.UpdateOrderProfit()
-		models.UpdateQuotationProfit()
-	*/
-
-	//models.ClearHistory()
-	//models.ProcessOrders()
-	/*
-		models.ProcessPurchases()
-		models.ProcessPurchaseReturns()
-		models.ProcessOrders()
-		models.ProcessSalesReturns()
-		models.ProcessQuotations()
-	*/
 	//cronJobsEveryHour()
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Hour().Do(cronJobsEveryHour)
@@ -187,9 +172,19 @@ func main() {
 
 func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
+	var err error
+	err = models.ClearSalesHistory()
+	if err != nil {
+		log.Print(err)
+	}
+	/*
+		err = models.ClearHistory()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
-	//models.ClearHistory()
-	err := models.ProcessPurchases()
+	err = models.ProcessPurchases()
 	if err != nil {
 		log.Print(err)
 	}
@@ -213,4 +208,5 @@ func cronJobsEveryHour() {
 	if err != nil {
 		log.Print(err)
 	}
+
 }

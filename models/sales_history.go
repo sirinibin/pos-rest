@@ -46,6 +46,7 @@ type SalesHistoryStats struct {
 	TotalSales  float64             `json:"total_sales" bson:"total_sales"`
 	TotalProfit float64             `json:"total_profit" bson:"total_profit"`
 	TotalLoss   float64             `json:"total_loss" bson:"total_loss"`
+	TotalVat    float64             `json:"total_vat" bson:"total_vat"`
 }
 
 func GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStats, err error) {
@@ -63,6 +64,7 @@ func GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStat
 				"total_sales":  bson.M{"$sum": "$net_price"},
 				"total_profit": bson.M{"$sum": "$profit"},
 				"total_loss":   bson.M{"$sum": "$loss"},
+				"total_vat":    bson.M{"$sum": "$vat_price"},
 			},
 		},
 	}
@@ -80,7 +82,10 @@ func GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStat
 		}
 		stats.TotalSales = math.Round(stats.TotalSales*100) / 100
 		stats.TotalProfit = math.Round(stats.TotalProfit*100) / 100
+		stats.TotalLoss = math.Round(stats.TotalLoss*100) / 100
+		stats.TotalVat = math.Round(stats.TotalVat*100) / 100
 	}
+
 	return stats, nil
 }
 
@@ -401,14 +406,8 @@ func (order *Order) AddProductsSalesHistory() error {
 
 		history.UnitPrice = math.Round(orderProduct.UnitPrice*100) / 100
 		history.Price = math.Round((orderProduct.UnitPrice*orderProduct.Quantity)*100) / 100
-		profit := (orderProduct.UnitPrice - orderProduct.PurchaseUnitPrice) * orderProduct.Quantity
-		history.Profit = math.Round(profit*100) / 100
-		if history.Profit < 0.00 {
-			history.Loss = history.Profit * (-1)
-			history.Profit = 0.00
-		} else {
-			history.Loss = 0.0
-		}
+		history.Profit = math.Round(orderProduct.Profit*100) / 100
+		history.Loss = math.Round(orderProduct.Loss*100) / 100
 
 		history.VatPercent = math.Round(*order.VatPercent*100) / 100
 		history.VatPrice = math.Round((history.Price*(history.VatPercent/100))*100) / 100
