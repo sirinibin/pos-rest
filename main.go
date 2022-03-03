@@ -107,6 +107,8 @@ func main() {
 
 	//SalesHistory
 	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")
+	//SalesReturnHistory
+	router.HandleFunc("/v1/sales-return/history", controller.ListSalesReturnHistory).Methods("GET")
 
 	//SalesReturn
 	router.HandleFunc("/v1/sales-return", controller.CreateSalesReturn).Methods("POST")
@@ -177,12 +179,21 @@ func cronJobsEveryHour() {
 	if err != nil {
 		log.Print(err)
 	}
-	/*
-		err = models.ClearHistory()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
+
+	err = models.ProcessOrders()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ClearSalesReturnHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
 	err = models.ProcessPurchases()
 	if err != nil {
@@ -190,16 +201,6 @@ func cronJobsEveryHour() {
 	}
 
 	err = models.ProcessPurchaseReturns()
-	if err != nil {
-		log.Print(err)
-	}
-
-	err = models.ProcessOrders()
-	if err != nil {
-		log.Print(err)
-	}
-
-	err = models.ProcessSalesReturns()
 	if err != nil {
 		log.Print(err)
 	}
