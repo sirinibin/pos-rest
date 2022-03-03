@@ -155,8 +155,8 @@ func main() {
 	models.ProcessQuotations()
 	*/
 
-	models.ClearHistory()
-	models.ProcessOrders()
+	//models.ClearHistory()
+	//models.ProcessOrders()
 
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Hour().Do(cronJobsEveryHour)
