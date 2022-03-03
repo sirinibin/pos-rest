@@ -31,8 +31,8 @@ type ProductSalesHistory struct {
 	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
 	Price             float64             `bson:"price,omitempty" json:"price,omitempty"`
 	NetPrice          float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
-	Profit            float64             `bson:"profit,omitempty" json:"profit,omitempty"`
-	Loss              float64             `bson:"loss,omitempty" json:"loss,omitempty"`
+	Profit            float64             `bson:"profit" json:"profit"`
+	Loss              float64             `bson:"loss" json:"loss"`
 	VatPercent        float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	VatPrice          float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
 	Store             *Store              `json:"store,omitempty"`
@@ -45,7 +45,7 @@ type SalesHistoryStats struct {
 	ID          *primitive.ObjectID `json:"id" bson:"_id"`
 	TotalSales  float64             `json:"total_sales" bson:"total_sales"`
 	TotalProfit float64             `json:"total_profit" bson:"total_profit"`
-	TotalLoss   float64             `json:"total_profit" bson:"total_loss"`
+	TotalLoss   float64             `json:"total_loss" bson:"total_loss"`
 }
 
 func GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStats, err error) {
@@ -378,14 +378,11 @@ func (order *Order) AddProductsSalesHistory() error {
 		return nil
 	}
 
-	log.Print("Not Exists")
-
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	for _, orderProduct := range order.Products {
-		log.Print("Inside for")
 
 		history := ProductSalesHistory{
 			StoreID:           order.StoreID,
@@ -404,10 +401,11 @@ func (order *Order) AddProductsSalesHistory() error {
 
 		history.UnitPrice = math.Round(orderProduct.UnitPrice*100) / 100
 		history.Price = math.Round((orderProduct.UnitPrice*orderProduct.Quantity)*100) / 100
-		history.Profit = math.Round(((orderProduct.UnitPrice-orderProduct.PurchaseUnitPrice)*orderProduct.Quantity)*100) / 100
-		if history.Profit < 0 {
-			history.Profit = 0.00
+		profit := (orderProduct.UnitPrice - orderProduct.PurchaseUnitPrice) * orderProduct.Quantity
+		history.Profit = math.Round(profit*100) / 100
+		if history.Profit < 0.00 {
 			history.Loss = history.Profit * (-1)
+			history.Profit = 0.00
 		} else {
 			history.Loss = 0.0
 		}
@@ -418,13 +416,11 @@ func (order *Order) AddProductsSalesHistory() error {
 
 		history.ID = primitive.NewObjectID()
 
-		log.Print("Inserting")
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
 			log.Print(err)
 			return err
 		}
-		log.Print("Inserted")
 	}
 
 	return nil

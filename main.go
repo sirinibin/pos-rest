@@ -147,17 +147,16 @@ func main() {
 		models.UpdateQuotationProfit()
 	*/
 
-	/*models.ClearHistory()
-	models.ProcessPurchases()
-	models.ProcessPurchaseReturns()
+	models.ClearHistory()
 	models.ProcessOrders()
-	models.ProcessSalesReturns()
-	models.ProcessQuotations()
+	/*
+		models.ProcessPurchases()
+		models.ProcessPurchaseReturns()
+		models.ProcessOrders()
+		models.ProcessSalesReturns()
+		models.ProcessQuotations()
 	*/
-
-	//models.ClearHistory()
-	//models.ProcessOrders()
-
+	//cronJobsEveryHour()
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Hour().Do(cronJobsEveryHour)
 	s.StartAsync()
@@ -189,7 +188,7 @@ func main() {
 func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 
-	//models.ClearHistory()
+	models.ClearHistory()
 	err := models.ProcessPurchases()
 	if err != nil {
 		log.Print(err)

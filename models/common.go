@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -121,6 +122,7 @@ func ParseRelationalSelectString(selectFields interface{}, prefix string) (field
 }
 
 func ClearHistory() error {
+	log.Print("Clearing hsitory")
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{})
