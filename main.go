@@ -93,6 +93,9 @@ func main() {
 	router.HandleFunc("/v1/signature/{id}", controller.UpdateSignature).Methods("PUT")
 	router.HandleFunc("/v1/signature/{id}", controller.DeleteSignature).Methods("DELETE")
 
+	//QuotationHistory
+	router.HandleFunc("/v1/quotation/history", controller.ListQuotationHistory).Methods("GET")
+
 	//Quotation
 	router.HandleFunc("/v1/quotation", controller.CreateQuotation).Methods("POST")
 	router.HandleFunc("/v1/quotation", controller.ListQuotation).Methods("GET")
@@ -109,6 +112,10 @@ func main() {
 	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")
 	//SalesReturnHistory
 	router.HandleFunc("/v1/sales-return/history", controller.ListSalesReturnHistory).Methods("GET")
+	//PurchaseHistory
+	router.HandleFunc("/v1/purchase/history", controller.ListPurchaseHistory).Methods("GET")
+	//PurchaseReturnHistory
+	router.HandleFunc("/v1/purchase-return/history", controller.ListPurchaseReturnHistory).Methods("GET")
 
 	//SalesReturn
 	router.HandleFunc("/v1/sales-return", controller.CreateSalesReturn).Methods("POST")
@@ -176,6 +183,26 @@ func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 	var err error
 	err = models.ClearSalesHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ClearSalesReturnHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ClearPurchaseHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ClearPurchaseReturnHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ClearQuotationHistory()
 	if err != nil {
 		log.Print(err)
 	}
