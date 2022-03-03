@@ -294,7 +294,6 @@ func (order *Order) FindVatPrice() {
 	order.VatPrice = vatPrice
 }
 
-// DiskQuotaUsageResult payload for disk quota usage
 type SalesStats struct {
 	ID        *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal  float64             `json:"net_total" bson:"net_total"`

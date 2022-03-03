@@ -105,6 +105,9 @@ func main() {
 	router.HandleFunc("/v1/order", controller.ListOrder).Methods("GET")
 	router.HandleFunc("/v1/order/{id}", controller.ViewOrder).Methods("GET")
 
+	//SalesHistory
+	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")
+
 	//SalesReturn
 	router.HandleFunc("/v1/sales-return", controller.CreateSalesReturn).Methods("POST")
 	router.HandleFunc("/v1/sales-return", controller.ListSalesReturn).Methods("GET")
@@ -138,9 +141,22 @@ func main() {
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
-	models.UpdatePurchaseProfit()
-	models.UpdateOrderProfit()
-	models.UpdateQuotationProfit()
+	/*
+		models.UpdatePurchaseProfit()
+		models.UpdateOrderProfit()
+		models.UpdateQuotationProfit()
+	*/
+
+	/*models.ClearHistory()
+	models.ProcessPurchases()
+	models.ProcessPurchaseReturns()
+	models.ProcessOrders()
+	models.ProcessSalesReturns()
+	models.ProcessQuotations()
+	*/
+
+	//models.ClearHistory()
+	//models.ProcessOrders()
 
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Hour().Do(cronJobsEveryHour)
@@ -174,9 +190,28 @@ func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 
 	//models.ClearHistory()
-	models.ProcessPurchases()
-	models.ProcessPurchaseReturns()
-	models.ProcessOrders()
-	models.ProcessSalesReturns()
-	models.ProcessQuotations()
+	err := models.ProcessPurchases()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessPurchaseReturns()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessOrders()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessQuotations()
+	if err != nil {
+		log.Print(err)
+	}
 }
