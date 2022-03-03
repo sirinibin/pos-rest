@@ -147,8 +147,8 @@ func main() {
 		models.UpdateQuotationProfit()
 	*/
 
-	models.ClearHistory()
-	models.ProcessOrders()
+	//models.ClearHistory()
+	//models.ProcessOrders()
 	/*
 		models.ProcessPurchases()
 		models.ProcessPurchaseReturns()
@@ -188,7 +188,7 @@ func main() {
 func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 
-	models.ClearHistory()
+	//models.ClearHistory()
 	err := models.ProcessPurchases()
 	if err != nil {
 		log.Print(err)
