@@ -76,7 +76,9 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		}
 
 		vatPercent = store.VatPercent
-		price = fmt.Sprintf("%.02f", retailUnitPriceWithTax)
+		if retailUnitPrice > 0 {
+			price = fmt.Sprintf("%.02f", retailUnitPriceWithTax)
+		}
 	}
 
 	addLabel(img1, 10*scale, 92*scale, "SAR: "+price, color.Black, 14*float64(scale), true)
