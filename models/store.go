@@ -35,7 +35,7 @@ type Store struct {
 	ZipCodeInArabic            string              `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
 	VATNo                      string              `bson:"vat_no" json:"vat_no"`
 	VATNoInArabic              string              `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	VatPercent                 *float32            `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPercent                 float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	Logo                       string              `bson:"logo,omitempty" json:"logo,omitempty"`
 	LogoContent                string              `json:"logo_content,omitempty"`
 	NationalAddresss           NationalAddresss    `bson:"national_address,omitempty" json:"national_address,omitempty"`
@@ -362,7 +362,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["vat_no_in_arabic"] = "VAT NO. is required"
 	}
 
-	if store.VatPercent == nil {
+	if store.VatPercent == 0 {
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 

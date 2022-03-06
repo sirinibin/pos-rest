@@ -71,6 +71,25 @@ type Product struct {
 	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog     []ChangeLog           `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	BarcodeBase64 string                `json:"barcode_base64"`
+}
+
+func (product *Product) getRetailUnitPriceByStoreID(storeID primitive.ObjectID) (retailUnitPrice float64, err error) {
+	for _, unitPrice := range product.UnitPrices {
+		if unitPrice.StoreID == storeID {
+			return unitPrice.RetailUnitPrice, nil
+		}
+	}
+	return retailUnitPrice, err
+}
+
+func (product *Product) getPurchaseUnitPriceSecretByStoreID(storeID primitive.ObjectID) (secret string, err error) {
+	for _, unitPrice := range product.UnitPrices {
+		if unitPrice.StoreID == storeID {
+			return unitPrice.PurchaseUnitPriceSecret, nil
+		}
+	}
+	return secret, err
 }
 
 func (product *Product) AttributesValueChangeEvent(productOld *Product) error {
@@ -282,7 +301,7 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 					purchaseUnitPriceSecret = product.UnitPrices[i].PurchaseUnitPriceSecret
 
 					price := float64(unitPrice.RetailUnitPrice)
-					vatPrice := (float64(float64(unitPrice.RetailUnitPrice) * float64(float64(*store.VatPercent)/float64(100))))
+					vatPrice := (float64(float64(unitPrice.RetailUnitPrice) * float64(store.VatPercent/float64(100))))
 					price += vatPrice
 					price = math.Round(price*100) / 100
 					productPrice = fmt.Sprintf("%.2f", price)

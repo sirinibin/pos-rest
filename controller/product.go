@@ -244,11 +244,11 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 func ViewProduct(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
+	response.Status = false
 	response.Errors = make(map[string]string)
 
 	_, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
-		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(response)
@@ -259,7 +259,6 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 
 	productID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
-		response.Status = false
 		response.Errors["product_id"] = "Invalid Product ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
@@ -275,8 +274,26 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 
 	product, err = models.FindProductByID(&productID, selectFields)
 	if err != nil {
-		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var storeID primitive.ObjectID
+
+	keys, ok = r.URL.Query()["store_id"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			response.Errors["store_id"] = "Invalid store_id" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	err = product.GenerateBarCodeBase64ByStoreID(storeID)
+	if err != nil {
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

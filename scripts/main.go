@@ -1,14 +1,23 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
+	"image/jpeg"
 	"image/png"
 	"io/ioutil"
 	"log"
+	"math"
+	"net/http"
 	"os"
 
 	arabic "github.com/abdullahdiaa/garabic"
+	"github.com/boombuler/barcode"
+	"github.com/boombuler/barcode/code128"
 	"github.com/jung-kurt/gofpdf"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -16,9 +25,272 @@ import (
 )
 
 func main() {
-	log.Print("Cool")
 
-	GeneratePDF()
+	drawAnImage()
+	//GenerateBarcode()
+	//GeneratePDF()
+}
+
+var img = image.NewRGBA(image.Rect(0, 0, 100, 100))
+var col color.Color
+
+// HLine draws a horizontal line
+func HLine(x1, y, x2 int) {
+	for ; x1 <= x2; x1++ {
+		img.Set(x1, y, col)
+	}
+}
+
+// VLine draws a veritcal line
+func VLine(x, y1, y2 int) {
+	for ; y1 <= y2; y1++ {
+		img.Set(x, y1, col)
+	}
+}
+
+// Rect draws a rectangle utilizing HLine() and VLine()
+func Rect(x1, y1, x2, y2 int) {
+	HLine(x1, y1, x2)
+	HLine(x1, y2, x2)
+	VLine(x1, y1, y2)
+	VLine(x2, y1, y2)
+}
+
+func GetStringFontSize(str string) float64 {
+	size := 8.0
+	i := 27
+	sizeOffset := 1.00
+	for {
+		if i < len(str) {
+			size -= sizeOffset
+		} else {
+			break
+		}
+		i += 10
+	}
+	return math.Round(size*100) / 100
+}
+
+func drawAnImage() {
+
+	new_png_file := "two_rectangles.png" // output image lives here
+	scale := 6
+
+	img1 := image.NewRGBA(image.Rect(0, 0, 144*scale, 106*scale)) // x1,y1,  x2,y2 of background rectangle
+	//mygreen := color.RGBA{0, 100, 0, 255}                //  R, G, B, Alpha
+	whiteColor := color.RGBA{255, 255, 255, 255} //  R, G, B, Alpha
+	// backfill entire background surface with color mygreen
+	draw.Draw(img1, img1.Bounds(), &image.Uniform{whiteColor}, image.Point{}, draw.Src)
+
+	productName := "KANA SCRE UGjbh IHB IUJHB IUBIIgy B yYJGHB UHV Y IU"
+	productNameSize := 8.0
+
+	for {
+		width := addLabel(img1, 10*scale, 23*scale, productName, color.Black, productNameSize*float64(scale), true)
+		if width <= 127*scale {
+			break
+		}
+		productNameSize -= 0.20
+		img1 = image.NewRGBA(image.Rect(0, 0, 144*scale, 106*scale)) // x1,y1,  x2,y2 of background rectangle
+		draw.Draw(img1, img1.Bounds(), &image.Uniform{whiteColor}, image.Point{}, draw.Src)
+	}
+	addLabel(img1, 10*scale, 15*scale, "GULF UNION OZONE CO.", color.Black, 10*float64(scale), true)
+
+	addLabel(img1, 10*scale, 92*scale, "SAR: 11.50 ", color.Black, 14*float64(scale), true)
+	addLabel(img1, 10*scale, 100*scale, "(INCLUDES 15% VAT)", color.Black, 8*float64(scale), true)
+	addLabel(img1, 10*scale, 80*scale, "4613563332343", color.Black, 8*float64(scale), true)
+	addLabel(img1, 95*scale, 100*scale, "KLMN", color.Black, 10*float64(scale), true)
+
+	b, _ := makeBarcode()
+
+	/*
+		red_rect_f, err := os.Open("./barcode_new.png")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		red_rect2, _, err := image.Decode(red_rect_f)
+		if err != nil {
+			fmt.Println(err)
+		}
+	*/
+
+	red_rect := image.Rect(10*scale, 30*scale, 135*scale, 70*scale) //  geometry of 2nd rectangle which we draw atop above rectangle
+	//myred := color.RGBA{200, 0, 0, 255}
+
+	// create a red rectangle atop the green surface //&image.Uniform{myred}
+	draw.Draw(img1, red_rect, b, image.Point{}, draw.Src)
+
+	// create buffer
+	buff := new(bytes.Buffer)
+
+	// encode image to buffer
+	err := png.Encode(buff, img1)
+	if err != nil {
+		fmt.Println("failed to create buffer", err)
+	}
+	base64Encoding := ""
+	mimeType := http.DetectContentType(buff.Bytes())
+	switch mimeType {
+	case "image/jpeg":
+		base64Encoding += "data:image/jpeg;base64,"
+	case "image/png":
+		base64Encoding += "data:image/png;base64,"
+	}
+
+	base64Encoding += ToBase64(buff.Bytes())
+	log.Print(base64Encoding)
+
+	//img1.
+	myfile, err := os.Create(new_png_file) // ... now lets save imag
+	if err != nil {
+		panic(err)
+	}
+	defer myfile.Close()
+	png.Encode(myfile, img1) // output file /tmp/two_rectangles.png
+}
+
+func ToBase64(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func makeBarcode() (barcode.Barcode, error) {
+	scale := 6
+	// Create the barcode
+	//barcode.
+	//qrCode, _ := qr.Encode("461", qr.M, qr.Auto)
+	qrCode, _ := code128.Encode("4613563332343")
+
+	// Scale the barcode to 200x200 pixels
+	barCode, _ := barcode.Scale(qrCode, 125*scale, 40*scale)
+
+	// create the output file
+	file, _ := os.Create("barcode_new.png")
+	defer file.Close()
+
+	// encode the barcode as png
+	return barCode, png.Encode(file, barCode)
+}
+
+func GenerateBarcode() error {
+
+	width := 144
+	height := 106
+	img1 := image.NewRGBA(image.Rect(0, 0, width, height))
+	addLabel(img1, 10, 15, "GULF UNION OZONE CO.", color.Black, 10, true)
+	addLabel(img1, 10, 23, "KANA SCREW DRIVER", color.Black, 8, true)
+	addLabel(img1, 10, 90, "SAR: 11.50 ", color.Black, 8, true)
+	addLabel(img1, 10, 100, "(INCLUDES 15% VAT)", color.Black, 8, true)
+
+	f, err := os.Create("./barcode.png")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := png.Encode(f, img1); err != nil {
+		return err
+	}
+
+	_, err = makeBarcode()
+	if err != nil {
+		return err
+	}
+
+	imgFile2, err := os.Open("./barcode.png")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	img2, _, err := image.Decode(imgFile2)
+	if err != nil {
+		return err
+	}
+
+	//img2.Se
+	//img2.Set(0, 0, color.White)
+
+	offset := image.Pt(20, 20)
+	b := img1.Bounds()
+	//image3 := image.NewRGBA(b)
+	image3 := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	//backGroundColor := image.Transparent
+
+	draw.Draw(image3, b, img2, image.ZP, draw.Src)
+	draw.Draw(image3, img1.Bounds().Add(offset), img1, image.Point{0, 0}, draw.Over)
+	//draw.Draw(image3, img1.Bounds().Add(offset), backGroundColor, image.Point{0, 0}, draw.Src)
+	image3.Set(0, 0, color.White)
+
+	third, err := os.Create("barcode_finale.jpg")
+	if err != nil {
+		log.Fatalf("failed to create: %s", err)
+	}
+	jpeg.Encode(third, image3, &jpeg.Options{jpeg.DefaultQuality})
+	defer third.Close()
+
+	/*
+		offset := image.Pt(30, 30)
+		b := img1.Bounds()
+		log.Print("b")
+		log.Print(b.String())
+
+		draw.Draw(img1, b.Add(offset), img2, image.ZP, draw.Src)
+	*/
+	/*
+
+		offset := image.Pt(30, 30)
+		b := img1.Bounds()
+		image3 := image.NewRGBA(b)
+		draw.Draw(image3, b, img2, image.ZP, draw.Src)
+		draw.Draw(image3, img2.Bounds().Add(offset), img1, image.ZP, draw.Over)
+	*/
+	//foreGroundColor := image.NewUniform(color.Black)
+	/*
+		backGroundColor := image.Transparent
+		backgroundWidth := 200
+		backgroundHeight := 290
+		background := image.NewRGBA(image.Rect(0, 0, backgroundWidth, backgroundHeight))
+
+		draw.Draw(background, background.Bounds(), backGroundColor, image.ZP, draw.Src)
+
+		third, err := os.Create("barcode_finale.jpg")
+		if err != nil {
+			log.Fatalf("failed to create: %s", err)
+		}
+		jpeg.Encode(third, background, &jpeg.Options{jpeg.DefaultQuality})
+		defer third.Close()
+
+	*/
+	/*
+
+	 */
+
+	/*
+		//img.Rect.Add()
+		//starting position of the second image (bottom left)
+		sp2 := image.Point{img.Bounds().Dx(), 0}
+
+		//new rectangle for the second image
+		r2 := image.Rectangle{sp2, sp2.Add(img2.Bounds().Size())}
+
+		//rectangle for the big image
+		r := image.Rectangle{image.Point{0, 0}, r2.Max}
+
+		rgba := image.NewRGBA(r)
+		draw.Draw(rgba, img.Bounds(), img, image.Point{0, 0}, draw.Src)
+		draw.Draw(rgba, r2, img2, image.Point{0, 0}, draw.Src)
+
+		out, err := os.Create("./barcode_final.jpg")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		var opt jpeg.Options
+		opt.Quality = 80
+
+		jpeg.Encode(out, rgba, &opt)
+	*/
+	return nil
 }
 
 func GeneratePDF() error {
@@ -177,7 +449,7 @@ func GeneratePDF() error {
 }
 func createArabicTextImage(arabicStr string, filename string, width int, color color.Color) error {
 	img := image.NewRGBA(image.Rect(0, 0, width, 150))
-	addLabel(img, 55, 95, arabic.Shape(arabicStr), color)
+	addLabel(img, 55, 95, arabic.Shape(arabicStr), color, 80, true)
 
 	f, err := os.Create(filename)
 	if err != nil {
@@ -190,26 +462,37 @@ func createArabicTextImage(arabicStr string, filename string, width int, color c
 	return nil
 }
 
-func addLabel(img *image.RGBA, x, y int, label string, color color.Color) {
+/*
+func addImage(img *image.RGBA, x, y int, newImg *image.RGBA) {
+}
+*/
+func addLabel(img *image.RGBA, x, y int, label string, color color.Color, size float64, bold bool) int {
 	//Load font file
 	//You can download amiri font from this link: https://fonts.google.com/specimen/Amiri?preview.text=%D8%A8%D9%90%D8%A7%D9%84%D8%B9%D9%8E%D8%B1%D9%8E%D8%A8%D9%90%D9%91%D9%8A&preview.text_type=custom#standard-styles
 	//b, err := ioutil.ReadFile("Amiri-Regular.ttf")
 	//b, err := ioutil.ReadFile("Katibeh-Regular.ttf")
-	b, err := ioutil.ReadFile("Amiri-Regular.ttf")
+	var err error
+	var b []byte
+	if bold {
+		b, err = ioutil.ReadFile("Amiri-Bold.ttf")
+	} else {
+		b, err = ioutil.ReadFile("Amiri-Regular.ttf")
+	}
+
 	//b, err := ioutil.ReadFile("mirza/Mirza-Regular.ttf")
 	if err != nil {
 		log.Println(err)
-		return
+		return 0.0
 	}
 
 	ttf, err := opentype.Parse(b)
 	if err != nil {
 		log.Println(err)
-		return
+		return 0.0
 	}
 	//Create Font.Face from font
 	face, err := opentype.NewFace(ttf, &opentype.FaceOptions{
-		Size:    80,
+		Size:    size,
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})
@@ -222,6 +505,8 @@ func addLabel(img *image.RGBA, x, y int, label string, color color.Color) {
 	}
 
 	d.DrawString(label)
+	w := d.MeasureString(label)
+	return w.Round()
 }
 
 func reverseString(s string) string {
