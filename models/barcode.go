@@ -56,9 +56,11 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	}
 
 	addLabel(img1, 10*scale, 15*scale, storeName, color.Black, 10*float64(scale), true)
+
 	retailUnitPriceWithTax := 0.00
 	purchaseUnitPriceSecret := ""
 	vatPercent := 15.00
+	price := "NO PRICE ADDED"
 
 	if !storeID.IsZero() {
 
@@ -74,9 +76,10 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		}
 
 		vatPercent = store.VatPercent
+		price = fmt.Sprintf("%.02f", retailUnitPriceWithTax)
 	}
 
-	addLabel(img1, 10*scale, 92*scale, "SAR: "+fmt.Sprintf("%.02f", retailUnitPriceWithTax), color.Black, 14*float64(scale), true)
+	addLabel(img1, 10*scale, 92*scale, "SAR: "+price, color.Black, 14*float64(scale), true)
 	addLabel(img1, 10*scale, 100*scale, "(INCLUDES "+fmt.Sprintf("%.02f", vatPercent)+"% VAT)", color.Black, 8*float64(scale), true)
 	addLabel(img1, 10*scale, 80*scale, product.BarCode, color.Black, 8*float64(scale), true)
 	addLabel(img1, 98*scale, 100*scale, purchaseUnitPriceSecret, color.Black, 10*float64(scale), true)
