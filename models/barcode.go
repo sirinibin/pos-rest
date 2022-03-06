@@ -60,7 +60,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	retailUnitPriceWithTax := 0.00
 	purchaseUnitPriceSecret := ""
 	vatPercent := 15.00
-	price := "NO PRICE ADDED"
+	price := "N/A"
 
 	if !storeID.IsZero() {
 
