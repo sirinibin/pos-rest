@@ -68,7 +68,8 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		if err != nil {
 			return err
 		}
-		retailUnitPriceWithTax = math.Round(retailUnitPrice+(retailUnitPrice*(store.VatPercent/100))*100) / 100
+
+		retailUnitPriceWithTax = math.Round((retailUnitPrice+(retailUnitPrice*(store.VatPercent/100)))*100) / 100
 
 		purchaseUnitPriceSecret, err = product.getPurchaseUnitPriceSecretByStoreID(storeID)
 		if err != nil {
