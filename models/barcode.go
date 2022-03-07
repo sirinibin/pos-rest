@@ -21,7 +21,7 @@ import (
 )
 
 func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectID) (err error) {
-	scale := 1
+	scale := 6
 	var store *Store
 	if !storeID.IsZero() {
 		store, err = FindStoreByID(&storeID, bson.M{})
