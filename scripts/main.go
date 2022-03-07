@@ -18,6 +18,7 @@ import (
 	arabic "github.com/abdullahdiaa/garabic"
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/code128"
+	"github.com/hennedo/escpos"
 	"github.com/jung-kurt/gofpdf"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -26,9 +27,88 @@ import (
 
 func main() {
 
-	drawAnImage()
+	PrintBarcode()
+	//drawAnImage()
+
 	//GenerateBarcode()
 	//GeneratePDF()
+}
+
+func getImageFromFilePath(filePath string) (image.Image, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	image, _, err := image.Decode(f)
+	return image, err
+}
+
+func PrintBarcode() {
+	/*
+		socket, err := net.Dial("tcp", "192.168.8.40:9100")
+		if err != nil {
+			println(err.Error())
+		}
+		defer socket.Close()
+	*/
+	f, err := os.OpenFile("/dev/usb/lp0", os.O_RDWR, 0)
+
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	p := escpos.New(f)
+	/*
+		barcode, err := getImageFromFilePath("./two_rectangles.png")
+		if err != nil {
+			panic(err)
+		}
+	*/
+
+	//log.Print(barcode)
+
+	//p.PrintImage(barcode)
+	/*
+		err = p.PrintAndCut()
+		if err != nil {
+			panic(err)
+		}
+	*/
+	//p.
+	//p.SetConfig(escpos.ConfigEpsonTMT20II)
+
+	p.Bold(true).Size(2, 2).Write("Hello World")
+	p.LineFeed()
+	p.Bold(false).Underline(2).Justify(escpos.JustifyCenter).Write("this is underlined")
+	p.LineFeed()
+	p.QRCode("https://github.com/hennedo/escpos", true, 10, escpos.QRCodeErrorCorrectionLevelH)
+
+	// You need to use either p.Print() or p.PrintAndCut() at the end to send the data to the printer.
+	err = p.PrintAndCut()
+	if err != nil {
+		panic(err)
+	}
+
+	/*
+		fmt.Println("Hello Would!")
+
+		//	f, err := os.Open("/dev/usb/lp0")
+		f, err := os.OpenFile("/dev/usb/lp0", os.O_RDWR, 0)
+
+		if err != nil {
+			panic(err)
+		}
+
+		defer f.Close()
+
+		n, err := f.Write([]byte("Hello world!"))
+		if err != nil {
+			panic(err)
+		}
+		log.Print(n)
+	*/
 }
 
 var img = image.NewRGBA(image.Rect(0, 0, 100, 100))

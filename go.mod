@@ -13,6 +13,7 @@ require (
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/gorilla/mux v1.8.0
+	github.com/hennedo/escpos v0.0.1 // indirect
 	github.com/jameskeane/bcrypt v0.0.0-20120420032655-c3cd44c1e20f
 	github.com/jung-kurt/gofpdf v1.16.2 // indirect
 	github.com/myesui/uuid v1.0.0 // indirect

@@ -92,7 +92,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		return err
 	}
 
-	barcodeRect := image.Rect(10*scale, 30*scale, 135*scale, 70*scale)
+	barcodeRect := image.Rect(10*scale, 30*scale, 135*scale, 50*scale)
 	draw.Draw(img1, barcodeRect, barCodeImage, image.Point{}, draw.Src)
 
 	// create buffer
