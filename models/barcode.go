@@ -84,7 +84,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	addLabel(img1, 10*scale, 92*scale, "SAR: "+price, color.Black, 14*float64(scale), true)
 	addLabel(img1, 10*scale, 100*scale, "(INCLUDES "+fmt.Sprintf("%.02f", vatPercent)+"% VAT)", color.Black, 8*float64(scale), true)
 	addLabel(img1, 10*scale, 80*scale, product.BarCode, color.Black, 8*float64(scale), true)
-	addLabel(img1, 98*scale, 100*scale, purchaseUnitPriceSecret, color.Black, 10*float64(scale), true)
+	addLabel(img1, 100*scale, 100*scale, purchaseUnitPriceSecret, color.Black, 10*float64(scale), true)
 
 	barCodeImage, err := makeBarcodeImage(product.BarCode, scale)
 	if err != nil {
