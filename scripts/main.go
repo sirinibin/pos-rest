@@ -45,21 +45,25 @@ func getImageFromFilePath(filePath string) (image.Image, error) {
 }
 
 func PrintBarcode() {
+
 	/*
-		socket, err := net.Dial("tcp", "192.168.8.40:9100")
+		socket, err := net.Dial("tcp", "localhost")
 		if err != nil {
 			println(err.Error())
 		}
 		defer socket.Close()
 	*/
-	f, err := os.OpenFile("/dev/usb/lp0", os.O_RDWR, 0)
+
+	socket, err := os.OpenFile("/dev/usb/lp0", os.O_RDWR, 0)
+	//socket, err := os.OpenFile("/devices/pci0000:00/0000:00:14.0/usb3/3-4", os.O_RDWR, 0)
+	//f, err := os.Open("/dev/usb/lp0")
 
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
+	defer socket.Close()
 
-	p := escpos.New(f)
+	p := escpos.New(socket)
 	/*
 		barcode, err := getImageFromFilePath("./two_rectangles.png")
 		if err != nil {
