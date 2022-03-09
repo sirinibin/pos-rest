@@ -344,6 +344,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 		criterias.SearchBy["$or"] = []bson.M{
 			{"item_code": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"bar_code": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
@@ -935,7 +936,7 @@ func FindProductByItemCode(
 		return nil, err
 	}
 
-	product.SearchLabel = product.Name + " (CODE:" + product.ItemCode + ")"
+	product.SearchLabel = product.Name + " (CODE:" + product.ItemCode + ", Part #" + product.PartNumber + ")"
 
 	return product, err
 }
