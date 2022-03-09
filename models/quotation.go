@@ -825,23 +825,31 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		}
 	}
 
-	for _, product := range quotation.Products {
+	for index, product := range quotation.Products {
 		if product.ProductID.IsZero() {
-			errs["product_id"] = "Product is required for quotation"
+			errs["product_id_"+strconv.Itoa(index)] = "Product is required for quotation"
 		} else {
 			exists, err := IsProductExists(&product.ProductID)
 			if err != nil {
-				errs["product_id"] = err.Error()
+				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
 			}
 
 			if !exists {
-				errs["product_id"] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
+				errs["product_id_"+strconv.Itoa(index)] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
 			}
 		}
 
 		if product.Quantity == 0 {
-			errs["quantity"] = "Quantity is required"
+			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		}
+
+		if product.UnitPrice == 0 {
+			errs["unit_price_"+strconv.Itoa(index)] = "Unit Price is required"
+		}
+
+		if product.PurchaseUnitPrice == 0 {
+			errs["purchase_unit_price_"+strconv.Itoa(index)] = "Purchase Unit Price is required"
 		}
 
 	}
