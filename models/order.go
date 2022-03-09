@@ -791,33 +791,37 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	for index, product := range order.Products {
 		if product.ProductID.IsZero() {
-			errs["product_id"] = "Product is required for order"
+			errs["product_id_"+strconv.Itoa(index)] = "Product is required for order"
 		} else {
 			exists, err := IsProductExists(&product.ProductID)
 			if err != nil {
-				errs["product_id"] = err.Error()
+				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
 			}
 
 			if !exists {
-				errs["product_id"] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
+				errs["product_id_"+strconv.Itoa(index)] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
 			}
 		}
 
 		if product.Quantity == 0 {
-			errs["quantity"] = "Quantity is required"
+			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		}
+
+		if product.UnitPrice == 0 {
+			errs["unit_price_"+strconv.Itoa(index)] = "Unit Price is required"
 		}
 
 		stock, err := GetProductStockInStore(&product.ProductID, order.StoreID)
 		if err != nil {
-			errs["quantity"] = err.Error()
+			errs["quantity_"+strconv.Itoa(index)] = err.Error()
 			return errs
 		}
 
 		if stock < product.Quantity {
 			productObject, err := FindProductByID(&product.ProductID, bson.M{})
 			if err != nil {
-				errs["product"] = err.Error()
+				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
 			}
 
