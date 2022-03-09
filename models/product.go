@@ -346,6 +346,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			{"item_code": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"bar_code": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
 		}
 	}
 
