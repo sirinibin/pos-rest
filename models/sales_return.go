@@ -238,7 +238,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range salesreturn.Products {
-		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1})
+		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
 		}
@@ -1081,8 +1081,6 @@ func (salesreturn *SalesReturn) Update() error {
 		return err
 	}
 
-	salesreturn.SetChangeLog("update", nil, nil, nil)
-
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": salesreturn.ID},
@@ -1235,6 +1233,10 @@ func ProcessSalesReturns() error {
 		}
 
 		err = salesReturn.AddProductsSalesReturnHistory()
+		if err != nil {
+			return err
+		}
+		err = salesReturn.Update()
 		if err != nil {
 			return err
 		}
