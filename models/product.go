@@ -638,6 +638,17 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
+	if !govalidator.IsNull(product.PartNumber) {
+		exists, err := product.IsPartNumberExists()
+		if err != nil {
+			errs["part_number"] = err.Error()
+		}
+
+		if exists {
+			errs["part_number"] = "Part Number Already Exists"
+		}
+	}
+
 	for i, price := range product.UnitPrices {
 		if price.StoreID.IsZero() {
 			errs["store_id_"+strconv.Itoa(i)] = "store_id is required for unit price"
@@ -723,6 +734,15 @@ func GenerateItemCode(n int) string {
 	return string(b)
 }
 
+func GeneratePartNumber(n int) string {
+	letterRunes := []rune("1234567890")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
 func (product *Product) GenerateBarCode(startFrom int) (string, error) {
 	count, err := GetTotalCount(bson.M{}, "product")
 	if err != nil {
@@ -738,9 +758,21 @@ func (product *Product) Insert() (err error) {
 	defer cancel()
 	product.ID = primitive.NewObjectID()
 	if len(product.ItemCode) == 0 {
-		for true {
+		for {
 			product.ItemCode = strings.ToUpper(GenerateItemCode(7))
 			exists, err := product.IsItemCodeExists()
+			if err != nil {
+				return err
+			}
+			if !exists {
+				break
+			}
+		}
+	}
+	if len(product.PartNumber) == 0 {
+		for {
+			product.PartNumber = strings.ToUpper(GeneratePartNumber(7))
+			exists, err := product.IsPartNumberExists()
 			if err != nil {
 				return err
 			}
@@ -754,7 +786,7 @@ func (product *Product) Insert() (err error) {
 
 	if len(product.BarCode) == 0 {
 		barcodeStartAt := 100
-		for true {
+		for {
 			barcode, err := product.GenerateBarCode(barcodeStartAt)
 			if err != nil {
 				return err
@@ -852,7 +884,7 @@ func (product *Product) Update() error {
 
 	if len(product.BarCode) == 0 {
 		barcodeStartAt := 100
-		for true {
+		for {
 			barcode, err := product.GenerateBarCode(barcodeStartAt)
 			if err != nil {
 				return err
@@ -866,6 +898,19 @@ func (product *Product) Update() error {
 				break
 			}
 			barcodeStartAt++
+		}
+	}
+
+	if len(product.PartNumber) == 0 {
+		for {
+			product.PartNumber = strings.ToUpper(GeneratePartNumber(7))
+			exists, err := product.IsPartNumberExists()
+			if err != nil {
+				return err
+			}
+			if !exists {
+				break
+			}
 		}
 	}
 
@@ -1006,7 +1051,27 @@ func (product *Product) IsItemCodeExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
+}
+
+func (product *Product) IsPartNumberExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if product.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"part_number": product.PartNumber,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"part_number": product.PartNumber,
+			"_id":         bson.M{"$ne": product.ID},
+		})
+	}
+
+	return (count > 0), err
 }
 
 func (product *Product) IsBarCodeExists() (exists bool, err error) {
@@ -1040,4 +1105,38 @@ func IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func ProcessProducts() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching products" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := Product{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = model.Update()
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
 }
