@@ -386,6 +386,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		quotation.Products[i].Name = productObject.Name
 		quotation.Products[i].NameInArabic = productObject.NameInArabic
 		quotation.Products[i].ItemCode = productObject.ItemCode
+		quotation.Products[i].PartNumber = productObject.PartNumber
 	}
 
 	return nil

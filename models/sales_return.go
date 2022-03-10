@@ -23,6 +23,7 @@ type SalesReturnProduct struct {
 	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PartNumber   string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	Quantity     float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	UnitPrice    float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
@@ -244,6 +245,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		salesreturn.Products[i].Name = productObject.Name
 		salesreturn.Products[i].NameInArabic = productObject.NameInArabic
 		salesreturn.Products[i].ItemCode = productObject.ItemCode
+		salesreturn.Products[i].PartNumber = productObject.PartNumber
 	}
 
 	return nil
