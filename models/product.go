@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -338,9 +337,6 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
-
-		log.Print("keys[0]:")
-		log.Print(keys[0])
 		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
 		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
 		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
@@ -355,11 +351,8 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		log.Print(searchWord)
 		criterias.SearchBy["$or"] = []bson.M{
-			{"item_code": bson.M{"$regex": searchWord, "$options": "$i"}},
 			{"part_number": bson.M{"$regex": searchWord, "$options": "$i"}},
-			{"bar_code": bson.M{"$regex": searchWord, "$options": "$i"}},
 			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "$i"}},
 		}
@@ -990,6 +983,32 @@ func FindProductByItemCode(
 
 	err = collection.FindOne(ctx,
 		bson.M{"item_code": itemCode}, findOneOptions).
+		Decode(&product)
+	if err != nil {
+		return nil, err
+	}
+
+	product.SearchLabel = product.Name + " (Part #" + product.PartNumber + ", Barcode:" + product.BarCode + ", Arabic: " + product.NameInArabic + ")"
+
+	return product, err
+}
+
+func FindProductByBarCode(
+	barCode string,
+	selectFields map[string]interface{},
+) (product *Product, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{"bar_code": barCode}, findOneOptions).
 		Decode(&product)
 	if err != nil {
 		return nil, err

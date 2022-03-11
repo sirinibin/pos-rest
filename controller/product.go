@@ -398,3 +398,51 @@ func DeleteProduct(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// ViewProduct : handler function for GET /v1/product/barcode/<barcode> call
+func ViewProductByBarCode(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	itemCode := params["barcode"]
+	if itemCode == "" {
+		response.Status = false
+		response.Errors["bar_code"] = "Invalid Bar Code:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var product *models.Product
+
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	product, err = models.FindProductByBarCode(itemCode, selectFields)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = product
+
+	json.NewEncoder(w).Encode(response)
+}
