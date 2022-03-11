@@ -341,6 +341,9 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
 		searchWord = strings.Replace(searchWord, "[", `\[`, -1)
 		searchWord = strings.Replace(searchWord, "]", `\]`, -1)
+		searchWord = strings.Replace(searchWord, "*", `\*`, -1)
+		searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
+		searchWord = strings.Replace(searchWord, "+", `\+`, -1)
 
 		criterias.SearchBy["$or"] = []bson.M{
 			{"item_code": bson.M{"$regex": searchWord, "$options": "i"}},
