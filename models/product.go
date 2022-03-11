@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -337,20 +338,30 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 	keys, ok := r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
-		searchWord := strings.Replace(keys[0], "(", `\(`, -1)
+
+		log.Print("keys[0]:")
+		log.Print(keys[0])
+		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
+		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
 		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
+		searchWord = strings.Replace(searchWord, "{", `\{`, -1)
+		searchWord = strings.Replace(searchWord, "}", `\}`, -1)
 		searchWord = strings.Replace(searchWord, "[", `\[`, -1)
 		searchWord = strings.Replace(searchWord, "]", `\]`, -1)
-		searchWord = strings.Replace(searchWord, "*", `\*`, -1)
-		searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
-		searchWord = strings.Replace(searchWord, "+", `\+`, -1)
+		searchWord = strings.Replace(searchWord, `*`, `\*`, -1)
 
+		searchWord = strings.Replace(searchWord, "_", `\_`, -1)
+		searchWord = strings.Replace(searchWord, "+", `\\+`, -1)
+		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
+		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
+
+		log.Print(searchWord)
 		criterias.SearchBy["$or"] = []bson.M{
-			{"item_code": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"bar_code": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"item_code": bson.M{"$regex": searchWord, "$options": "$i"}},
+			{"part_number": bson.M{"$regex": searchWord, "$options": "$i"}},
+			{"bar_code": bson.M{"$regex": searchWord, "$options": "$i"}},
 			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "$i"}},
 		}
 	}
 
