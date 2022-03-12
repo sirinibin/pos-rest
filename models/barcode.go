@@ -9,10 +9,11 @@ import (
 	"image/draw"
 	"image/png"
 	"io/ioutil"
+	"log"
 	"math"
 
 	"github.com/boombuler/barcode"
-	"github.com/boombuler/barcode/ean"
+	"github.com/boombuler/barcode/code128"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -123,14 +124,17 @@ func ToBase64(b []byte) string {
 
 func makeBarcodeImage(data string, scale int) (barCode barcode.Barcode, err error) {
 
-	qrCode, err := ean.Encode(data)
-	//qrCode, err := code128.Encode(data)
+	//qrCode, err := ean.Encode(data)
+	qrCode, err := code128.Encode(data)
 	if err != nil {
+		log.Print("1:")
+		log.Print(err)
 		return barCode, err
 	}
 
 	barCode, err = barcode.Scale(qrCode, 125*scale, 40*scale)
 	if err != nil {
+		log.Print(err)
 		return barCode, err
 	}
 	return barCode, nil
