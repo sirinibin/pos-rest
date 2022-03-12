@@ -766,7 +766,6 @@ func (product *Product) Insert() (err error) {
 	product.ID = primitive.NewObjectID()
 	if len(product.ItemCode) == 0 {
 		for {
-			product.ItemCode = strings.ToUpper(GenerateItemCode(7))
 			exists, err := product.IsItemCodeExists()
 			if err != nil {
 				return err
@@ -774,6 +773,7 @@ func (product *Product) Insert() (err error) {
 			if !exists {
 				break
 			}
+			product.ItemCode = strings.ToUpper(GenerateItemCode(7))
 		}
 	}
 	if len(product.PartNumber) == 0 {
@@ -792,13 +792,13 @@ func (product *Product) Insert() (err error) {
 	//barcode, err := product.Generate(barcodeStartAt)
 
 	if len(product.BarCode) == 0 {
-		barcodeStartAt := 100
+		barcodeStartAt := 100000000000
 		for {
 			barcode, err := product.GenerateBarCode(barcodeStartAt)
 			if err != nil {
 				return err
 			}
-			product.BarCode = strings.ToUpper(barcode)
+			product.BarCode = barcode
 			exists, err := product.IsBarCodeExists()
 			if err != nil {
 				return err
@@ -890,7 +890,7 @@ func (product *Product) Update() error {
 	}
 
 	if len(product.BarCode) == 0 {
-		barcodeStartAt := 100
+		barcodeStartAt := 100000000000
 		for {
 			barcode, err := product.GenerateBarCode(barcodeStartAt)
 			if err != nil {

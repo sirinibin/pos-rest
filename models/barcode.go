@@ -14,6 +14,7 @@ import (
 
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/code128"
+	"github.com/boombuler/barcode/ean"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -95,6 +96,9 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 
 	barCodeImage, err := makeBarcodeImage(product.BarCode, scale)
 	if err != nil {
+		if err.Error() == "checksum missmatch" || err.Error() == "invalid ean code data" {
+			return nil
+		}
 		return err
 	}
 
@@ -124,15 +128,22 @@ func ToBase64(b []byte) string {
 
 func makeBarcodeImage(data string, scale int) (barCode barcode.Barcode, err error) {
 
-	//qrCode, err := ean.Encode(data)
-	qrCode, err := code128.Encode(data)
+	var BarcodeIntCS barcode.BarcodeIntCS
+	if len(data) >= 7 {
+		log.Print("data:")
+		log.Print(data)
+		BarcodeIntCS, err = ean.Encode(data)
+	} else {
+		BarcodeIntCS, err = code128.Encode(data)
+	}
+
 	if err != nil {
 		log.Print("1:")
 		log.Print(err)
 		return barCode, err
 	}
 
-	barCode, err = barcode.Scale(qrCode, 125*scale, 40*scale)
+	barCode, err = barcode.Scale(BarcodeIntCS, 125*scale, 40*scale)
 	if err != nil {
 		log.Print(err)
 		return barCode, err
