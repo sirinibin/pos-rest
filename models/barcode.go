@@ -92,7 +92,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	}
 	addLabel(img1, 10*scale, 90*scale, "Part #"+product.PartNumber+rack, color.Black, 9*float64(scale), true)
 
-	barCodeImage, rect, err := makeBarcodeImage(product.BarCode, scale)
+	barCodeImage, _, err := makeBarcodeImage(product.BarCode, scale)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	//log.Print(barCodeImage.Metadata().Dimensions)
 	//	barCodeImage.
 	//barCodeImage.Bounds().Add(image.Point{X: 10 * scale, Y: 30 * scale})
-	barCodeRect := image.Rect(10*scale, 30*scale, rect.Bounds().Max.X*scale, 50*scale)
+	barCodeRect := image.Rect(10*scale, 30*scale, 135*scale, 50*scale)
 	draw.Draw(img1, barCodeRect, barCodeImage, image.Point{}, draw.Src)
 
 	// create buffer
@@ -130,7 +130,7 @@ func makeBarcodeImage(data string, scale int) (barCode barcode.Barcode, rect ima
 	rect = qrCode.Bounds()
 	//log.Print(rect)
 
-	barCode, err = barcode.Scale(qrCode, qrCode.Bounds().Max.X*scale, 50*scale)
+	barCode, err = barcode.Scale(qrCode, 135*scale, 50*scale)
 	if err != nil {
 		return barCode, rect, err
 	}
