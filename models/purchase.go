@@ -44,6 +44,7 @@ type Purchase struct {
 	Code                       string              `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID                    *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	VendorID                   *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	VendorInvoiceNumber        string              `bson:"vendor_invoice_no,omitempty" json:"vendor_invoice_no,omitempty"`
 	Store                      *Store              `json:"store,omitempty"`
 	Vendor                     *Vendor             `json:"vendor,omitempty"`
 	Products                   []PurchaseProduct   `bson:"products,omitempty" json:"products,omitempty"`
@@ -506,6 +507,11 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[vendor_invoice_no]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["vendor_invoice_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[net_total]"]

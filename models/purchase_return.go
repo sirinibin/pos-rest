@@ -39,6 +39,7 @@ type PurchaseReturn struct {
 	Code                            string                  `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID                         *primitive.ObjectID     `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	VendorID                        *primitive.ObjectID     `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	VendorInvoiceNumber             string                  `bson:"vendor_invoice_no,omitempty" json:"vendor_invoice_no,omitempty"`
 	Store                           *Store                  `json:"store,omitempty"`
 	Vendor                          *Vendor                 `json:"vendor,omitempty"`
 	Products                        []PurchaseReturnProduct `bson:"products,omitempty" json:"products,omitempty"`
