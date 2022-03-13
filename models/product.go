@@ -803,7 +803,7 @@ func (product *Product) Insert() (err error) {
 				return err
 			}
 			product.Ean12 = barcode
-			exists, err := product.IsBarCodeExists()
+			exists, err := product.IsEan12Exists()
 			if err != nil {
 				return err
 			}
@@ -901,7 +901,7 @@ func (product *Product) Update() error {
 				return err
 			}
 			product.Ean12 = strings.ToUpper(barcode)
-			exists, err := product.IsBarCodeExists()
+			exists, err := product.IsEan12Exists()
 			if err != nil {
 				return err
 			}
