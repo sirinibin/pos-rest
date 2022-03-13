@@ -893,30 +893,7 @@ func (product *Product) Update() error {
 		return err
 	}
 
-	/*
-		if len(product.BarCode) == 0 {
-			barcodeStartAt := 100000000000
-			for {
-				barcode, err := product.GenerateBarCode(barcodeStartAt)
-				if err != nil {
-					return err
-				}
-				product.BarCode = strings.ToUpper(barcode)
-				exists, err := product.IsBarCodeExists()
-				if err != nil {
-					return err
-				}
-				if !exists {
-					break
-				}
-				barcodeStartAt++
-			}
-		}
-	*/
-
-	if len(product.Ean12) == 0 && len(product.BarCode) == 12 {
-		product.Ean12 = product.BarCode
-	} else if len(product.Ean12) == 0 && len(product.BarCode) < 7 || (len(product.Ean12) == 0 && len(product.BarCode) == 0) || len(product.BarCode) > 12 {
+	if len(product.Ean12) == 0 {
 		barcodeStartAt := 100000000000
 		for {
 			barcode, err := product.GenerateBarCode(barcodeStartAt)
@@ -924,7 +901,7 @@ func (product *Product) Update() error {
 				return err
 			}
 			product.Ean12 = strings.ToUpper(barcode)
-			exists, err := product.IsEan12Exists()
+			exists, err := product.IsBarCodeExists()
 			if err != nil {
 				return err
 			}
