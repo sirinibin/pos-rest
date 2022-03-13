@@ -374,9 +374,9 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		criterias.SearchBy["bar_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
-	keys, ok = r.URL.Query()["search[ean12]"]
+	keys, ok = r.URL.Query()["search[ean_12]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["ean12"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["ean_12"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[part_number]"]

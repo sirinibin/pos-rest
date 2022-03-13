@@ -39,6 +39,7 @@ type User struct {
 	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog     []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	Admin         bool                `bson:"admin,omitempty" json:"admin,omitempty"`
 }
 
 func (user *User) SetChangeLog(
@@ -531,9 +532,6 @@ func (user *User) Update() error {
 			return err
 		}
 	}
-
-	user.SetChangeLog("update", nil, nil, nil)
-
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": user.ID},
