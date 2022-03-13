@@ -45,6 +45,7 @@ type Product struct {
 	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	BarCode       string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
+	Ean12         string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
 	SearchLabel   string                `json:"search_label"`
 	Rack          string                `bson:"rack,omitempty" json:"rack"`
 	PartNumber    string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
@@ -371,6 +372,11 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	keys, ok = r.URL.Query()["search[bar_code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["bar_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[ean12]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["ean12"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[part_number]"]
@@ -789,16 +795,14 @@ func (product *Product) Insert() (err error) {
 		}
 	}
 
-	//barcode, err := product.Generate(barcodeStartAt)
-
-	if len(product.BarCode) == 0 {
+	if len(product.Ean12) == 0 {
 		barcodeStartAt := 100000000000
 		for {
 			barcode, err := product.GenerateBarCode(barcodeStartAt)
 			if err != nil {
 				return err
 			}
-			product.BarCode = barcode
+			product.Ean12 = barcode
 			exists, err := product.IsBarCodeExists()
 			if err != nil {
 				return err
@@ -889,15 +893,38 @@ func (product *Product) Update() error {
 		return err
 	}
 
-	if len(product.BarCode) == 0 {
+	/*
+		if len(product.BarCode) == 0 {
+			barcodeStartAt := 100000000000
+			for {
+				barcode, err := product.GenerateBarCode(barcodeStartAt)
+				if err != nil {
+					return err
+				}
+				product.BarCode = strings.ToUpper(barcode)
+				exists, err := product.IsBarCodeExists()
+				if err != nil {
+					return err
+				}
+				if !exists {
+					break
+				}
+				barcodeStartAt++
+			}
+		}
+	*/
+
+	if len(product.Ean12) == 0 && len(product.BarCode) == 12 {
+		product.Ean12 = product.BarCode
+	} else if len(product.Ean12) == 0 && len(product.BarCode) < 7 || (len(product.Ean12) == 0 && len(product.BarCode) == 0) || len(product.BarCode) > 12 {
 		barcodeStartAt := 100000000000
 		for {
 			barcode, err := product.GenerateBarCode(barcodeStartAt)
 			if err != nil {
 				return err
 			}
-			product.BarCode = strings.ToUpper(barcode)
-			exists, err := product.IsBarCodeExists()
+			product.Ean12 = strings.ToUpper(barcode)
+			exists, err := product.IsEan12Exists()
 			if err != nil {
 				return err
 			}
@@ -1007,8 +1034,13 @@ func FindProductByBarCode(
 		findOneOptions.SetProjection(selectFields)
 	}
 
-	err = collection.FindOne(ctx,
-		bson.M{"bar_code": barCode}, findOneOptions).
+	criteria := make(map[string]interface{})
+	criteria["$or"] = []bson.M{
+		{"barcode": barCode},
+		{"ean_12": barCode},
+	}
+
+	err = collection.FindOne(ctx, criteria, findOneOptions).
 		Decode(&product)
 	if err != nil {
 		return nil, err
@@ -1121,6 +1153,26 @@ func (product *Product) IsBarCodeExists() (exists bool, err error) {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"bar_code": product.BarCode,
 			"_id":      bson.M{"$ne": product.ID},
+		})
+	}
+
+	return (count > 0), err
+}
+
+func (product *Product) IsEan12Exists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if product.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"ean_12": product.Ean12,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"ean_12": product.Ean12,
+			"_id":    bson.M{"$ne": product.ID},
 		})
 	}
 

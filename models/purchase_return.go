@@ -395,6 +395,11 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[vendor_invoice_no]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["vendor_invoice_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[purchase_code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["purchase_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
