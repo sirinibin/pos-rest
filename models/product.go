@@ -1013,7 +1013,7 @@ func FindProductByBarCode(
 
 	criteria := make(map[string]interface{})
 	criteria["$or"] = []bson.M{
-		{"barcode": barCode},
+		{"bar_code": barCode},
 		{"ean_12": barCode},
 	}
 
