@@ -352,9 +352,9 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
 		criterias.SearchBy["$or"] = []bson.M{
-			{"part_number": bson.M{"$regex": searchWord, "$options": "$i"}},
+			{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "$i"}},
+			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
 		}
 	}
 
@@ -541,7 +541,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		product.SearchLabel = product.Name + "(Part#" + product.PartNumber + ", Barcode:" + product.BarCode + ", Arabic:" + product.NameInArabic + ")"
+		product.SearchLabel = product.Name + "(Part#" + product.PartNumber + " Arabic:" + product.NameInArabic + ")"
 
 		if _, ok := criterias.Select["category.id"]; ok {
 			for _, categoryID := range product.CategoryID {
@@ -988,7 +988,7 @@ func FindProductByItemCode(
 		return nil, err
 	}
 
-	product.SearchLabel = product.Name + " (Part #" + product.PartNumber + ", Barcode:" + product.BarCode + ", Arabic: " + product.NameInArabic + ")"
+	product.SearchLabel = product.Name + " (Part #" + product.PartNumber + ", Arabic: " + product.NameInArabic + ")"
 
 	return product, err
 }
@@ -1014,7 +1014,7 @@ func FindProductByBarCode(
 		return nil, err
 	}
 
-	product.SearchLabel = product.Name + " (Part #" + product.PartNumber + ", Barcode:" + product.BarCode + ", Arabic: " + product.NameInArabic + ")"
+	product.SearchLabel = product.Name + " (Part #" + product.PartNumber + ", Arabic: " + product.NameInArabic + ")"
 
 	return product, err
 }
