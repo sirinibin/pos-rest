@@ -398,11 +398,12 @@ func (quotation *Quotation) FindNetTotal() {
 		netTotal += (float64(product.Quantity) * product.UnitPrice)
 	}
 
+	netTotal -= quotation.Discount
+
 	if quotation.VatPercent != nil {
 		netTotal += netTotal * (*quotation.VatPercent / float64(100))
 	}
 
-	netTotal -= quotation.Discount
 	quotation.NetTotal = math.Round(netTotal*100) / 100
 }
 
@@ -424,7 +425,7 @@ func (quotation *Quotation) FindTotalQuantity() {
 }
 
 func (quotation *Quotation) FindVatPrice() {
-	vatPrice := ((*quotation.VatPercent / 100) * quotation.Total)
+	vatPrice := ((*quotation.VatPercent / 100) * (quotation.Total - quotation.Discount))
 	vatPrice = math.Round(vatPrice*100) / 100
 	quotation.VatPrice = vatPrice
 }

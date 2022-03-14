@@ -265,11 +265,12 @@ func (order *Order) FindNetTotal() {
 		netTotal += (float64(product.Quantity) * product.UnitPrice)
 	}
 
+	netTotal -= order.Discount
+
 	if order.VatPercent != nil {
 		netTotal += netTotal * (*order.VatPercent / float64(100))
 	}
 
-	netTotal -= order.Discount
 	order.NetTotal = math.Round(netTotal*100) / 100
 }
 
@@ -291,7 +292,7 @@ func (order *Order) FindTotalQuantity() {
 }
 
 func (order *Order) FindVatPrice() {
-	vatPrice := ((*order.VatPercent / 100) * order.Total)
+	vatPrice := ((*order.VatPercent / 100) * float64(order.Total-order.Discount))
 	vatPrice = math.Round(vatPrice*100) / 100
 	order.VatPrice = vatPrice
 }

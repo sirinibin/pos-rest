@@ -257,11 +257,12 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 		netTotal += (float64(product.Quantity) * product.UnitPrice)
 	}
 
+	netTotal -= salesreturn.Discount
+
 	if salesreturn.VatPercent != nil {
 		netTotal += netTotal * (*salesreturn.VatPercent / float64(100))
 	}
 
-	netTotal -= salesreturn.Discount
 	salesreturn.NetTotal = math.Round(netTotal*100) / 100
 }
 
@@ -283,7 +284,7 @@ func (salesreturn *SalesReturn) FindTotalQuantity() {
 }
 
 func (salesreturn *SalesReturn) FindVatPrice() {
-	vatPrice := ((*salesreturn.VatPercent / 100) * salesreturn.Total)
+	vatPrice := ((*salesreturn.VatPercent / 100) * (salesreturn.Total - salesreturn.Discount))
 	vatPrice = math.Round(vatPrice*100) / 100
 	salesreturn.VatPrice = vatPrice
 }
