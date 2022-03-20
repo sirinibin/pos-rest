@@ -24,7 +24,7 @@ type PurchaseReturnProduct struct {
 	NameInArabic            string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode                string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	PartNumber              string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity                float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Quantity                float64            `json:"quantity" bson:"quantity"`
 	Unit                    string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	PurchaseReturnUnitPrice float64            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
 }
@@ -153,12 +153,14 @@ func (purchasereturn *PurchaseReturn) SetChangeLog(
 func (purchasereturn *PurchaseReturn) AttributesValueChangeEvent(purchasereturnOld *PurchaseReturn) error {
 
 	if purchasereturn.Status != purchasereturnOld.Status {
-		purchasereturn.SetChangeLog(
-			"attribute_value_change",
-			"status",
-			purchasereturnOld.Status,
-			purchasereturn.Status,
-		)
+		/*
+			purchasereturn.SetChangeLog(
+				"attribute_value_change",
+				"status",
+				purchasereturnOld.Status,
+				purchasereturn.Status,
+			)
+		*/
 
 		//if purchasereturn.Status == "delivered" {
 
@@ -645,8 +647,15 @@ func (purchasereturn *PurchaseReturn) Validate(
 		return errs
 	}
 
-	if purchasereturn.Discount > (purchase.Discount - purchase.ReturnDiscount) {
-		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (purchase.Discount-purchase.ReturnDiscount))
+	if scenario == "update" {
+		if purchasereturn.Discount > (purchase.Discount) {
+			errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (purchase.Discount))
+		}
+	} else {
+		if purchasereturn.Discount > (purchase.Discount - purchase.ReturnDiscount) {
+			errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (purchase.Discount-purchase.ReturnDiscount))
+		}
+
 	}
 
 	purchasereturn.PurchaseCode = purchase.Code
@@ -780,17 +789,29 @@ func (purchasereturn *PurchaseReturn) Validate(
 			}
 		}
 
-		if purchaseReturnProduct.Quantity == 0 {
-			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		if scenario != "update" {
+			if purchaseReturnProduct.Quantity == 0 {
+				errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+			}
 		}
 
 		for _, purchaseProduct := range purchase.Products {
 			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
-				purchasedQty := math.Round((purchaseProduct.Quantity-purchaseProduct.QuantityReturned)*100) / float64(100)
+				purchasedQty := 0.0
+				if scenario == "update" {
+					purchasedQty = math.Round((purchaseProduct.Quantity)*100) / float64(100)
+				} else {
+					purchasedQty = math.Round((purchaseProduct.Quantity-purchaseProduct.QuantityReturned)*100) / float64(100)
+				}
+
 				if purchasedQty == 0 {
 					errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
 				} else if purchaseReturnProduct.Quantity > float64(purchasedQty) {
 					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", purchasedQty) + " " + purchaseProduct.Unit
+				}
+
+				if purchaseReturnProduct.PurchaseReturnUnitPrice > purchaseProduct.PurchaseUnitPrice {
+					errs["purchasereturned_unit_price_"+strconv.Itoa(index)] = "Purchase Return Unit Price should not be greater than purchase Unit Price: " + fmt.Sprintf("%.02f", purchaseProduct.PurchaseUnitPrice)
 				}
 			}
 		}
@@ -810,7 +831,7 @@ func (purchasereturn *PurchaseReturn) Validate(
 	return errs
 }
 
-func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct() error {
+func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(replace bool) error {
 	purchase, err := FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
 	if err != nil {
 		return err
@@ -818,7 +839,12 @@ func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct() 
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
 		for index2, purchaseProduct := range purchase.Products {
 			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
-				purchase.Products[index2].QuantityReturned += purchaseReturnProduct.Quantity
+				if replace {
+					purchase.Products[index2].QuantityReturned = purchaseReturnProduct.Quantity
+				} else {
+					purchase.Products[index2].QuantityReturned += purchaseReturnProduct.Quantity
+				}
+
 			}
 		}
 	}
@@ -846,20 +872,6 @@ func (purchasereturn *PurchaseReturn) AddStock() (err error) {
 		storeExistInProductStock := false
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == purchasereturn.StoreID.Hex() {
-				purchasereturn.SetChangeLog(
-					"add_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock + purchasereturnProduct.Quantity),
-				)
-
-				product.SetChangeLog(
-					"add_stock",
-					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock + purchasereturnProduct.Quantity),
-				)
-
 				product.Stock[k].Stock += purchasereturnProduct.Quantity
 				storeExistInProductStock = true
 				break
@@ -879,11 +891,6 @@ func (purchasereturn *PurchaseReturn) AddStock() (err error) {
 			return err
 		}
 	}
-	err = purchasereturn.Update()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -896,22 +903,6 @@ func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
 
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == purchasereturn.StoreID.Hex() {
-				/*
-					purchasereturn.SetChangeLog(
-						"remove_stock",
-						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock - purchasereturnProduct.Quantity),
-					)
-
-					product.SetChangeLog(
-						"remove_stock",
-						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock - purchasereturnProduct.Quantity),
-					)
-				*/
-
 				product.Stock[k].Stock -= purchasereturnProduct.Quantity
 				break
 			}
@@ -985,7 +976,7 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 	purchasereturn.ID = primitive.NewObjectID()
 	if len(purchasereturn.Code) == 0 {
 		startAt := 400000
-		for true {
+		for {
 			code, err := purchasereturn.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
@@ -1002,14 +993,12 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 		}
 	}
 
-	purchasereturn.SetChangeLog("create", nil, nil, nil)
-
 	_, err = collection.InsertOne(ctx, &purchasereturn)
 	if err != nil {
 		return err
 	}
 
-	err = purchasereturn.UpdatePurchaseReturnDiscount()
+	err = purchasereturn.UpdatePurchaseReturnDiscount(false)
 	if err != nil {
 		return err
 	}
@@ -1022,12 +1011,41 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 	return nil
 }
 
-func (purchasereturn *PurchaseReturn) UpdatePurchaseReturnDiscount() error {
+func (purchasereturn *PurchaseReturn) Update() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	err := purchasereturn.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": purchasereturn.ID},
+		bson.M{"$set": purchasereturn},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (purchasereturn *PurchaseReturn) UpdatePurchaseReturnDiscount(replace bool) error {
 	purchase, err := FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
 	if err != nil {
 		return err
 	}
-	purchase.ReturnDiscount += purchasereturn.Discount
+	if replace {
+		purchase.ReturnDiscount = purchasereturn.Discount
+	} else {
+		purchase.ReturnDiscount += purchasereturn.Discount
+	}
+
 	return purchase.Update()
 }
 
@@ -1061,31 +1079,6 @@ func GeneratePurchaseReturnCode(n int) string {
 	return string(b)
 }
 
-func (purchasereturn *PurchaseReturn) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
-	defer cancel()
-
-	err := purchasereturn.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.UpdateOne(
-		ctx,
-		bson.M{"_id": purchasereturn.ID},
-		bson.M{"$set": purchasereturn},
-		updateOptions,
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (purchasereturn *PurchaseReturn) DeletePurchaseReturn(tokenClaims TokenClaims) (err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1107,8 +1100,6 @@ func (purchasereturn *PurchaseReturn) DeletePurchaseReturn(tokenClaims TokenClai
 	purchasereturn.DeletedBy = &userID
 	now := time.Now()
 	purchasereturn.DeletedAt = &now
-
-	purchasereturn.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -1225,10 +1216,12 @@ func ProcessPurchaseReturns() error {
 		if err != nil {
 			return err
 		}
+
 		err = model.Update()
 		if err != nil {
 			return err
 		}
+
 	}
 
 	return nil

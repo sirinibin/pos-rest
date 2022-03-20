@@ -376,7 +376,10 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 	keys, ok = r.URL.Query()["search[ean_12]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["ean_12"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$or"] = []bson.M{
+			{"ean_12": keys[0]},
+			{"bar_code": keys[0]},
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[part_number]"]
@@ -566,6 +569,10 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
 			product.DeletedByUser, _ = FindUserByID(product.DeletedBy, deletedByUserSelectFields)
+		}
+
+		if product.BarCode != "" {
+			product.Ean12 = product.Ean12 + "(Old:" + product.BarCode + ")"
 		}
 
 		products = append(products, product)

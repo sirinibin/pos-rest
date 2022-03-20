@@ -943,11 +943,6 @@ func (purchase *Purchase) AddStock() (err error) {
 			return err
 		}
 	}
-	err = purchase.Update()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

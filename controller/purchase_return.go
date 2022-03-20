@@ -139,7 +139,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct()
+	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct(false)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -244,6 +244,17 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = purchasereturn.UpdatePurchaseReturnDiscount(true)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["update_purchase_return"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = purchasereturnOld.AddStock()
 	if err != nil {
 		response.Status = false
@@ -266,16 +277,29 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturn.AttributesValueChangeEvent(purchasereturnOld)
+	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct(true)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
-		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
+		response.Errors["update_returned_quantity"] = "Unable to update returned quantity:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	/*
+		err = purchasereturn.AttributesValueChangeEvent(purchasereturnOld)
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	*/
 
 	purchasereturn, err = models.FindPurchaseReturnByID(&purchasereturn.ID, bson.M{})
 	if err != nil {

@@ -208,17 +208,17 @@ func cronJobsEveryHour() {
 		log.Print(err)
 	}
 
+	err = models.ClearSalesReturnHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
 	err = models.ProcessProducts()
 	if err != nil {
 		log.Print(err)
 	}
 
 	err = models.ProcessOrders()
-	if err != nil {
-		log.Print(err)
-	}
-
-	err = models.ClearSalesReturnHistory()
 	if err != nil {
 		log.Print(err)
 	}
