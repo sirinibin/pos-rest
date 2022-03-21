@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -27,7 +28,7 @@ type ProductSalesReturnHistory struct {
 	Quantity        float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
-	NetPrice        float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
+	NetPrice        float64             `bson:"net_price" json:"net_price"`
 	VatPercent      float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	VatPrice        float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
 	Unit            string              `bson:"unit,omitempty" json:"unit,omitempty"`
@@ -39,7 +40,7 @@ type ProductSalesReturnHistory struct {
 
 type SalesReturnHistoryStats struct {
 	ID               *primitive.ObjectID `json:"id" bson:"_id"`
-	TotalSalesReturn float64             `json:"total_sales" bson:"total_sales"`
+	TotalSalesReturn float64             `json:"total_sales_return" bson:"total_sales_return"`
 	TotalVatReturn   float64             `json:"total_vat_return" bson:"total_vat_return"`
 }
 
@@ -47,6 +48,8 @@ func GetSalesReturnHistoryStats(filter map[string]interface{}) (stats SalesRetur
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	log.Print(filter)
 
 	pipeline := []bson.M{
 		bson.M{

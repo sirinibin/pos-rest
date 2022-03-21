@@ -46,7 +46,8 @@ type PurchaseHistoryStats struct {
 	TotalPurchase        float64             `json:"total_purchase" bson:"total_purchase"`
 	TotalRetailProfit    float64             `json:"total_retail_profit" bson:"total_retail_profit"`
 	TotalWholesaleProfit float64             `json:"total_wholesale_profit" bson:"total_wholesale_profit"`
-	TotalLoss            float64             `json:"total_loss" bson:"total_loss"`
+	TotalRetailLoss      float64             `json:"total_retail_loss" bson:"total_retail_loss"`
+	TotalWholesaleLoss   float64             `json:"total_wholesale_loss" bson:"total_wholesale_loss"`
 	TotalVat             float64             `json:"total_vat" bson:"total_vat"`
 }
 
@@ -65,7 +66,8 @@ func GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHisto
 				"total_purchase":         bson.M{"$sum": "$net_price"},
 				"total_retail_profit":    bson.M{"$sum": "$retail_profit"},
 				"total_wholesale_profit": bson.M{"$sum": "$wholesale_profit"},
-				"total_loss":             bson.M{"$sum": "$loss"},
+				"total_retail_loss":      bson.M{"$sum": "$retail_loss"},
+				"total_wholesale_loss":   bson.M{"$sum": "$wholesale_loss"},
 				"total_vat":              bson.M{"$sum": "$vat_price"},
 			},
 		},
@@ -85,7 +87,8 @@ func GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHisto
 		stats.TotalPurchase = math.Round(stats.TotalPurchase*100) / 100
 		stats.TotalRetailProfit = math.Round(stats.TotalRetailProfit*100) / 100
 		stats.TotalWholesaleProfit = math.Round(stats.TotalWholesaleProfit*100) / 100
-		stats.TotalLoss = math.Round(stats.TotalLoss*100) / 100
+		stats.TotalRetailLoss = math.Round(stats.TotalRetailLoss*100) / 100
+		stats.TotalWholesaleLoss = math.Round(stats.TotalWholesaleLoss*100) / 100
 		stats.TotalVat = math.Round(stats.TotalVat*100) / 100
 	}
 
@@ -155,9 +158,9 @@ func SearchPurchaseHistory(w http.ResponseWriter, r *http.Request) (models []Pro
 		criterias.SearchBy["store_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
-	keys, ok = r.URL.Query()["search[customer_name]"]
+	keys, ok = r.URL.Query()["search[vendor_name]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["customer_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["vendor_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[price]"]

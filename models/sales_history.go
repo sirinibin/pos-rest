@@ -172,7 +172,6 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 		} else {
 			criterias.SearchBy["price"] = float64(value)
 		}
-
 	}
 
 	keys, ok = r.URL.Query()["search[unit_price]"]
