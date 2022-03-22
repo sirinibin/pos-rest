@@ -56,7 +56,7 @@ type Order struct {
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
-	StockRemoved             bool                `bson:"stock_removed,omitempty" json:"stock_removed,omitempty"`
+	ShippingOrHandlingFees   float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	TotalQuantity            float64             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                 float64             `bson:"vat_price" json:"vat_price"`
 	Total                    float64             `bson:"total" json:"total"`
@@ -901,7 +901,6 @@ func (order *Order) RemoveStock() (err error) {
 				*/
 
 				product.Stock[k].Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
-				order.StockRemoved = true
 				break
 			}
 		}
@@ -969,7 +968,6 @@ func (order *Order) AddStock() (err error) {
 		}
 	}
 
-	order.StockRemoved = false
 	err = order.Update()
 	if err != nil {
 		return err
