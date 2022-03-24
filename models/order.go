@@ -996,8 +996,11 @@ func (order *Order) CalculateOrderProfit() error {
 				break
 			}
 		}
+		profit := 0.0
+		if purchaseUnitPrice > 0 {
+			profit = salesPrice - (quantity * purchaseUnitPrice)
+		}
 
-		profit := salesPrice - (quantity * purchaseUnitPrice)
 		profit = math.Round(profit*100) / 100
 
 		if profit >= 0 {
