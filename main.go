@@ -153,7 +153,7 @@ func main() {
 
 	//cronJobsEveryHour()
 	s := gocron.NewScheduler(time.UTC)
-	s.Every(3).Hour().Do(cronJobsEveryHour)
+	s.Every(8).Hour().Do(cronJobsEveryHour)
 	s.StartAsync()
 
 	go func() {
