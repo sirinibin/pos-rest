@@ -884,25 +884,22 @@ func (order *Order) RemoveStock() (err error) {
 			return err
 		}
 
+		if len(product.Stock) == 0 {
+			store, err := FindStoreByID(order.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+			productStock := ProductStock{
+				StoreID:           *order.StoreID,
+				StoreName:         order.StoreName,
+				StoreNameInArabic: store.NameInArabic,
+				Stock:             float64(0),
+			}
+			product.Stock = []ProductStock{productStock}
+		}
+
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == order.StoreID.Hex() {
-
-				/*
-					order.SetChangeLog(
-						"remove_stock",
-						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
-					)
-
-					product.SetChangeLog(
-						"remove_stock",
-						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock - (orderProduct.Quantity - orderProduct.QuantityReturned)),
-					)
-				*/
-
 				product.Stock[k].Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
 				break
 			}
