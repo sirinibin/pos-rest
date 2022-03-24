@@ -266,6 +266,7 @@ func (order *Order) FindNetTotal() {
 	}
 
 	netTotal -= order.Discount
+	netTotal += order.ShippingOrHandlingFees
 
 	if order.VatPercent != nil {
 		netTotal += netTotal * (*order.VatPercent / float64(100))
@@ -292,7 +293,7 @@ func (order *Order) FindTotalQuantity() {
 }
 
 func (order *Order) FindVatPrice() {
-	vatPrice := ((*order.VatPercent / 100) * float64(order.Total-order.Discount))
+	vatPrice := ((*order.VatPercent / 100) * float64(order.Total-order.Discount+order.ShippingOrHandlingFees))
 	vatPrice = math.Round(vatPrice*100) / 100
 	order.VatPrice = vatPrice
 }
@@ -815,27 +816,29 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["unit_price_"+strconv.Itoa(index)] = "Unit Price is required"
 		}
 
-		stock, err := GetProductStockInStore(&product.ProductID, order.StoreID)
-		if err != nil {
-			errs["quantity_"+strconv.Itoa(index)] = err.Error()
-			return errs
-		}
-
-		if stock < product.Quantity {
-			productObject, err := FindProductByID(&product.ProductID, bson.M{})
+		/*
+			stock, err := GetProductStockInStore(&product.ProductID, order.StoreID)
 			if err != nil {
-				errs["product_id_"+strconv.Itoa(index)] = err.Error()
+				errs["quantity_"+strconv.Itoa(index)] = err.Error()
 				return errs
 			}
 
-			storeObject, err := FindStoreByID(order.StoreID, nil)
-			if err != nil {
-				errs["store"] = err.Error()
-				return errs
-			}
+			if stock < product.Quantity {
+				productObject, err := FindProductByID(&product.ProductID, bson.M{})
+				if err != nil {
+					errs["product_id_"+strconv.Itoa(index)] = err.Error()
+					return errs
+				}
 
-			errs["quantity_"+strconv.Itoa(index)] = "Product: " + productObject.Name + " stock is only " + fmt.Sprintf("%.02f", stock) + " in Store: " + storeObject.Name
-		}
+				storeObject, err := FindStoreByID(order.StoreID, nil)
+				if err != nil {
+					errs["store"] = err.Error()
+					return errs
+				}
+
+				errs["quantity_"+strconv.Itoa(index)] = "Product: " + productObject.Name + " stock is only " + fmt.Sprintf("%.02f", stock) + " in Store: " + storeObject.Name
+			}
+		*/
 	}
 
 	if order.VatPercent == nil {

@@ -137,8 +137,6 @@ func makeBarcodeImage(data string, scale int) (barCode barcode.Barcode, err erro
 
 	var BarcodeIntCS barcode.BarcodeIntCS
 	if len(data) >= 7 {
-		log.Print("data:")
-		log.Print(data)
 		BarcodeIntCS, err = ean.Encode(data)
 	} else {
 		BarcodeIntCS, err = code128.Encode(data)

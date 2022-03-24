@@ -59,6 +59,7 @@ type Quotation struct {
 	VatPrice                 float64             `bson:"vat_price" json:"vat_price"`
 	Total                    float64             `bson:"total" json:"total"`
 	NetTotal                 float64             `bson:"net_total" json:"net_total"`
+	ShippingOrHandlingFees   float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	Profit                   float64             `bson:"profit" json:"profit"`
 	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
 	Loss                     float64             `bson:"loss" json:"loss"`
@@ -399,6 +400,7 @@ func (quotation *Quotation) FindNetTotal() {
 	}
 
 	netTotal -= quotation.Discount
+	netTotal -= quotation.ShippingOrHandlingFees
 
 	if quotation.VatPercent != nil {
 		netTotal += netTotal * (*quotation.VatPercent / float64(100))
@@ -425,7 +427,7 @@ func (quotation *Quotation) FindTotalQuantity() {
 }
 
 func (quotation *Quotation) FindVatPrice() {
-	vatPrice := ((*quotation.VatPercent / 100) * (quotation.Total - quotation.Discount))
+	vatPrice := ((*quotation.VatPercent / 100) * (quotation.Total - quotation.Discount + quotation.ShippingOrHandlingFees))
 	vatPrice = math.Round(vatPrice*100) / 100
 	quotation.VatPrice = vatPrice
 }

@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -112,7 +111,6 @@ func (productCategory *ProductCategory) UpdateForeignLabelFields() error {
 		}
 		productCategory.ParentName = parentCategory.Name
 	} else {
-		log.Print("Setting category name as null")
 		productCategory.ParentName = ""
 	}
 

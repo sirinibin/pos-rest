@@ -66,6 +66,7 @@ type Purchase struct {
 	VatPrice                   float64             `bson:"vat_price" json:"vat_price"`
 	Total                      float64             `bson:"total" json:"total"`
 	NetTotal                   float64             `bson:"net_total" json:"net_total"`
+	ShippingOrHandlingFees     float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	ExpectedRetailProfit       float64             `bson:"retail_profit" json:"retail_profit"`
 	ExpectedWholesaleProfit    float64             `bson:"wholesale_profit" json:"wholesale_profit"`
 	ExpectedNetRetailProfit    float64             `bson:"net_retail_profit" json:"net_retail_profit"`
@@ -377,6 +378,7 @@ func (purchase *Purchase) FindNetTotal() {
 	}
 
 	netTotal -= purchase.Discount
+	netTotal += purchase.ShippingOrHandlingFees
 
 	if purchase.VatPercent != nil {
 		netTotal += netTotal * (*purchase.VatPercent / float64(100))
@@ -403,7 +405,7 @@ func (purchase *Purchase) FindTotalQuantity() {
 }
 
 func (purchase *Purchase) FindVatPrice() {
-	vatPrice := ((*purchase.VatPercent / 100) * (purchase.Total - purchase.Discount))
+	vatPrice := ((*purchase.VatPercent / 100) * (purchase.Total - purchase.Discount + purchase.ShippingOrHandlingFees))
 	vatPrice = math.Round(vatPrice*100) / 100
 	purchase.VatPrice = vatPrice
 }
