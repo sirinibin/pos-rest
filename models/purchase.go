@@ -66,6 +66,9 @@ type Purchase struct {
 	VatPrice                   float64             `bson:"vat_price" json:"vat_price"`
 	Total                      float64             `bson:"total" json:"total"`
 	NetTotal                   float64             `bson:"net_total" json:"net_total"`
+	PartiaPaymentAmount        float64             `bson:"partial_payment_amount" json:"partial_payment_amount"`
+	PaymentMethod              string              `bson:"payment_method" json:"payment_method"`
+	PaymentStatus              string              `bson:"payment_status" json:"payment_status"`
 	ShippingOrHandlingFees     float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	ExpectedRetailProfit       float64             `bson:"retail_profit" json:"retail_profit"`
 	ExpectedWholesaleProfit    float64             `bson:"wholesale_profit" json:"wholesale_profit"`
