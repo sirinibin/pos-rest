@@ -168,9 +168,21 @@ func ClearPurchaseReturnHistory() error {
 }
 
 func ClearQuotationHistory() error {
-	log.Print("Clearing Purchase Return hsitory")
+	log.Print("Clearing Quotation history")
 	ctx := context.Background()
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	_, err := collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ClearDeliveryNoteHistory() error {
+	log.Print("Clearing Delivery Note history")
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err

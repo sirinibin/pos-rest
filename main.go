@@ -104,6 +104,15 @@ func main() {
 	router.HandleFunc("/v1/quotation/{id}", controller.UpdateQuotation).Methods("PUT")
 	router.HandleFunc("/v1/quotation/{id}", controller.DeleteQuotation).Methods("DELETE")
 
+	//DeliveryHistory
+	router.HandleFunc("/v1/delivery-note/history", controller.ListDeliveryNoteHistory).Methods("GET")
+
+	//DeliveryNote
+	router.HandleFunc("/v1/delivery-note", controller.CreateDeliveryNote).Methods("POST")
+	router.HandleFunc("/v1/delivery-note", controller.ListDeliveryNote).Methods("GET")
+	router.HandleFunc("/v1/delivery-note/{id}", controller.ViewDeliveryNote).Methods("GET")
+	router.HandleFunc("/v1/delivery-note/{id}", controller.UpdateDeliveryNote).Methods("PUT")
+
 	//Order
 	router.HandleFunc("/v1/order", controller.CreateOrder).Methods("POST")
 	router.HandleFunc("/v1/order", controller.ListOrder).Methods("GET")
@@ -208,6 +217,11 @@ func cronJobsEveryHour() {
 		log.Print(err)
 	}
 
+	err = models.ClearDeliveryNoteHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
 	err = models.ClearSalesReturnHistory()
 	if err != nil {
 		log.Print(err)
@@ -239,6 +253,11 @@ func cronJobsEveryHour() {
 	}
 
 	err = models.ProcessQuotations()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessDeliveryNotes()
 	if err != nil {
 		log.Print(err)
 	}
