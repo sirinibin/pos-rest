@@ -120,6 +120,24 @@ func SearchSalesCashDiscount(w http.ResponseWriter, r *http.Request) (models []S
 		criterias.SearchBy["created_by_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["amount"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["amount"] = float64(value)
+		}
+
+	}
+
 	keys, ok = r.URL.Query()["search[updated_by_name]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["updated_by_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
