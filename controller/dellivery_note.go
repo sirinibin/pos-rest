@@ -28,8 +28,6 @@ func ListDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deliverynotes := []models.DeliveryNote{}
-
 	deliverynotes, criterias, err := models.SearchDeliveryNote(w, r)
 	if err != nil {
 		response.Status = false
@@ -40,7 +38,7 @@ func ListDeliveryNote(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "deliverynote")
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "delivery_note")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of deliverynotes:" + err.Error()

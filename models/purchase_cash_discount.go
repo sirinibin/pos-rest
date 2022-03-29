@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -18,7 +19,7 @@ import (
 //PurchaseCashDiscount : PurchaseCashDiscount structure
 type PurchaseCashDiscount struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	OrderID       *primitive.ObjectID `json:"order_id" bson:"order_id"`
+	PurchaseID    *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
 	Amount        float64             `json:"amount" bson:"amount"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -106,6 +107,24 @@ func SearchPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) (models 
 	keys, ok := r.URL.Query()["search[created_by_name]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["created_by_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["amount"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["amount"] = float64(value)
+		}
+
 	}
 
 	keys, ok = r.URL.Query()["search[updated_by_name]"]
@@ -277,6 +296,28 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 			errs["id"] = "Invalid purchase cash discount:" + purchaseCashDiscount.ID.Hex()
 		}
 
+	}
+
+	if purchaseCashDiscount.Amount == 0 {
+		errs["amount"] = "Amount is required"
+	}
+
+	if purchaseCashDiscount.Amount < 0 {
+		errs["amount"] = "Amount should be > 0"
+	}
+
+	salesCashDiscountStats, err := GetPurchaseCashDiscountStats(bson.M{"purchase_id": purchaseCashDiscount.PurchaseID})
+	if err != nil {
+		return errs
+	}
+
+	purchase, err := FindPurchaseByID(purchaseCashDiscount.PurchaseID, bson.M{})
+	if err != nil {
+		return errs
+	}
+
+	if (salesCashDiscountStats.TotalCashDiscount + purchaseCashDiscount.Amount) >= purchase.Total {
+		errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (purchase.Total-salesCashDiscountStats.TotalCashDiscount))
 	}
 
 	if len(errs) > 0 {

@@ -32,7 +32,7 @@ func ListDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product_deliverynote_history")
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product_delivery_note_history")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()

@@ -49,7 +49,7 @@ func ListSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 	salescashdiscountStats, err := models.GetSalesCashDiscountStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
-		response.Errors["total_sales"] = "Unable to find total amount of salescashdiscount:" + err.Error()
+		response.Errors["total_cash_discount"] = "Unable to find total amount of salescashdiscount:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
