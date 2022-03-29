@@ -20,6 +20,7 @@ import (
 type PurchaseCashDiscount struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	PurchaseID    *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
+	PurchaseCode  string              `json:"purchase_code" bson:"purchase_code"`
 	Amount        float64             `json:"amount" bson:"amount"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -72,6 +73,16 @@ func (purchaseCashDiscount *PurchaseCashDiscount) UpdateForeignLabelFields() err
 		purchaseCashDiscount.StoreName = store.Name
 	} else {
 		purchaseCashDiscount.StoreName = ""
+	}
+
+	if purchaseCashDiscount.PurchaseID != nil && !purchaseCashDiscount.PurchaseID.IsZero() {
+		purchase, err := FindPurchaseByID(purchaseCashDiscount.PurchaseID, bson.M{"id": 1, "code": 1})
+		if err != nil {
+			return err
+		}
+		purchaseCashDiscount.PurchaseCode = purchase.Code
+	} else {
+		purchaseCashDiscount.PurchaseCode = ""
 	}
 
 	if purchaseCashDiscount.CreatedBy != nil {
@@ -146,13 +157,13 @@ func SearchPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) (models 
 		criterias.SearchBy["store_id"] = storeID
 	}
 
-	keys, ok = r.URL.Query()["search[order_id]"]
+	keys, ok = r.URL.Query()["search[purchase_id]"]
 	if ok && len(keys[0]) >= 1 {
-		orderID, err := primitive.ObjectIDFromHex(keys[0])
+		purchaseID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
 			return models, criterias, err
 		}
-		criterias.SearchBy["order_id"] = orderID
+		criterias.SearchBy["purchase_id"] = purchaseID
 	}
 
 	keys, ok = r.URL.Query()["search[created_by]"]
@@ -279,6 +290,8 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 
 	errs = make(map[string]string)
 
+	var oldPurchaseCashDiscount *PurchaseCashDiscount
+
 	if scenario == "update" {
 		if purchaseCashDiscount.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
@@ -296,6 +309,12 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 			errs["id"] = "Invalid purchase cash discount:" + purchaseCashDiscount.ID.Hex()
 		}
 
+		oldPurchaseCashDiscount, err = FindPurchaseCashDiscountByID(&purchaseCashDiscount.ID, bson.M{})
+		if err != nil {
+			errs["sales_cash_discount"] = err.Error()
+			return errs
+		}
+
 	}
 
 	if purchaseCashDiscount.Amount == 0 {
@@ -306,7 +325,7 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	salesCashDiscountStats, err := GetPurchaseCashDiscountStats(bson.M{"purchase_id": purchaseCashDiscount.PurchaseID})
+	purchaseCashDiscountStats, err := GetPurchaseCashDiscountStats(bson.M{"purchase_id": purchaseCashDiscount.PurchaseID})
 	if err != nil {
 		return errs
 	}
@@ -315,9 +334,14 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 	if err != nil {
 		return errs
 	}
-
-	if (salesCashDiscountStats.TotalCashDiscount + purchaseCashDiscount.Amount) >= purchase.Total {
-		errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (purchase.Total-salesCashDiscountStats.TotalCashDiscount))
+	if scenario == "update" {
+		if ((purchaseCashDiscountStats.TotalCashDiscount - oldPurchaseCashDiscount.Amount) + purchaseCashDiscount.Amount) >= purchase.Total {
+			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (purchase.Total-(purchaseCashDiscountStats.TotalCashDiscount-oldPurchaseCashDiscount.Amount)))
+		}
+	} else {
+		if (purchaseCashDiscountStats.TotalCashDiscount + purchaseCashDiscount.Amount) >= purchase.Total {
+			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (purchase.Total-purchaseCashDiscountStats.TotalCashDiscount))
+		}
 	}
 
 	if len(errs) > 0 {

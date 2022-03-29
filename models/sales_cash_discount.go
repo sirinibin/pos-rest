@@ -295,6 +295,8 @@ func (salesCashDiscount *SalesCashDiscount) Validate(w http.ResponseWriter, r *h
 
 	errs = make(map[string]string)
 
+	var oldSalesCashDiscount *SalesCashDiscount
+
 	if scenario == "update" {
 		if salesCashDiscount.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
@@ -312,6 +314,11 @@ func (salesCashDiscount *SalesCashDiscount) Validate(w http.ResponseWriter, r *h
 			errs["id"] = "Invalid sales cash discount:" + salesCashDiscount.ID.Hex()
 		}
 
+		oldSalesCashDiscount, err = FindSalesCashDiscountByID(&salesCashDiscount.ID, bson.M{})
+		if err != nil {
+			errs["sales_cash_discount"] = err.Error()
+			return errs
+		}
 	}
 
 	if salesCashDiscount.Amount == 0 {
@@ -332,8 +339,14 @@ func (salesCashDiscount *SalesCashDiscount) Validate(w http.ResponseWriter, r *h
 		return errs
 	}
 
-	if (salescashdiscountStats.TotalCashDiscount + salesCashDiscount.Amount) >= order.Total {
-		errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (order.Total-salescashdiscountStats.TotalCashDiscount))
+	if scenario == "update" {
+		if ((salescashdiscountStats.TotalCashDiscount - oldSalesCashDiscount.Amount) + salesCashDiscount.Amount) >= order.Total {
+			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (order.Total-(salescashdiscountStats.TotalCashDiscount-oldSalesCashDiscount.Amount)))
+		}
+	} else {
+		if (salescashdiscountStats.TotalCashDiscount + salesCashDiscount.Amount) >= order.Total {
+			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (order.Total-salescashdiscountStats.TotalCashDiscount))
+		}
 	}
 
 	if len(errs) > 0 {
