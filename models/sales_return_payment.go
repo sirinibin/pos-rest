@@ -181,7 +181,7 @@ func SearchSalesReturnPayment(w http.ResponseWriter, r *http.Request) (models []
 		if err != nil {
 			return models, criterias, err
 		}
-		criterias.SearchBy["order_id"] = salesReturnID
+		criterias.SearchBy["sales_return_id"] = salesReturnID
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_code]"]
