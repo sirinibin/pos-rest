@@ -202,3 +202,15 @@ func ClearSalesReturnPayments() error {
 
 	return nil
 }
+
+func ClearPurchaseReturnPayments() error {
+	log.Print("Clearing Purchase Return payments")
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	_, err := collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

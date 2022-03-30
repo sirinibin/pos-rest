@@ -268,6 +268,11 @@ func cronJobsEveryHour() {
 		log.Print(err)
 	}
 
+	err = models.ClearPurchaseReturnPayments()
+	if err != nil {
+		log.Print(err)
+	}
+
 	err = models.ProcessProducts()
 	if err != nil {
 		log.Print(err)

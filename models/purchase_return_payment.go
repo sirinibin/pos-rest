@@ -12,6 +12,7 @@ import (
 
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -90,10 +91,13 @@ func (purchasereturnPayment *PurchaseReturnPayment) UpdateForeignLabelFields() e
 
 	if purchasereturnPayment.PurchaseID != nil && !purchasereturnPayment.PurchaseID.IsZero() {
 		purchase, err := FindPurchaseByID(purchasereturnPayment.PurchaseID, bson.M{"id": 1, "code": 1})
-		if err != nil {
+		if err != nil && err != mongo.ErrNoDocuments {
 			return err
 		}
-		purchasereturnPayment.PurchaseCode = purchase.Code
+		if err != mongo.ErrNoDocuments {
+			purchasereturnPayment.PurchaseCode = purchase.Code
+		}
+
 	} else {
 		purchasereturnPayment.PurchaseCode = ""
 	}
