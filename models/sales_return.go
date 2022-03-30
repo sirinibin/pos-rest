@@ -33,10 +33,10 @@ type SalesReturnProduct struct {
 type SalesReturn struct {
 	ID                      primitive.ObjectID   `json:"id,omitempty" bson:"_id,omitempty"`
 	OrderID                 *primitive.ObjectID  `json:"order_id,omitempty" bson:"order_id,omitempty"`
+	OrderCode               string               `bson:"order_code,omitempty" json:"order_code,omitempty"`
 	Date                    *time.Time           `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr                 string               `json:"date_str,omitempty"`
 	Code                    string               `bson:"code,omitempty" json:"code,omitempty"`
-	OrderCode               string               `bson:"order_code,omitempty" json:"order_code,omitempty"`
 	StoreID                 *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID              *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Store                   *Store               `json:"store,omitempty"`
@@ -1006,6 +1006,44 @@ func (salesreturn *SalesReturn) Insert() error {
 		return err
 	}
 
+	err = salesreturn.AddPayment()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (salesReturn *SalesReturn) AddPayment() error {
+	amount := float64(0.0)
+	if salesReturn.PaymentStatus == "paid" {
+		amount = salesReturn.NetTotal
+	} else if salesReturn.PaymentStatus == "paid_partially" {
+		amount = salesReturn.PartiaPaymentAmount
+	} else {
+		return nil
+	}
+
+	payment := SalesReturnPayment{
+		SalesReturnID:   &salesReturn.ID,
+		SalesReturnCode: salesReturn.Code,
+		OrderID:         salesReturn.OrderID,
+		OrderCode:       salesReturn.OrderCode,
+		Amount:          amount,
+		Method:          salesReturn.PaymentMethod,
+		CreatedAt:       salesReturn.CreatedAt,
+		UpdatedAt:       salesReturn.UpdatedAt,
+		CreatedBy:       salesReturn.CreatedBy,
+		CreatedByName:   salesReturn.CreatedByName,
+		UpdatedBy:       salesReturn.UpdatedBy,
+		UpdatedByName:   salesReturn.UpdatedByName,
+		StoreID:         salesReturn.StoreID,
+		StoreName:       salesReturn.StoreName,
+	}
+	err := payment.Insert()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1237,6 +1275,27 @@ func ProcessSalesReturns() error {
 		if err != nil {
 			return err
 		}
+
+		if salesReturn.PaymentStatus == "" {
+			salesReturn.PaymentStatus = "paid"
+		}
+
+		if salesReturn.PaymentMethod == "" {
+			salesReturn.PaymentMethod = "cash"
+		}
+
+		totalPaymentsCount, err := GetTotalCount(bson.M{"sales_return_id": salesReturn.ID}, "sales_return_payment")
+		if err != nil {
+			return err
+		}
+
+		if totalPaymentsCount == 0 {
+			err = salesReturn.AddPayment()
+			if err != nil {
+				return err
+			}
+		}
+
 		err = salesReturn.Update()
 		if err != nil {
 			return err

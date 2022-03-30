@@ -175,11 +175,23 @@ func main() {
 	router.HandleFunc("/v1/sales-payment/{id}", controller.ViewSalesPayment).Methods("GET")
 	router.HandleFunc("/v1/sales-payment/{id}", controller.UpdateSalesPayment).Methods("PUT")
 
+	//SalesReturnPayment
+	router.HandleFunc("/v1/sales-return-payment", controller.CreateSalesReturnPayment).Methods("POST")
+	router.HandleFunc("/v1/sales-return-payment", controller.ListSalesReturnPayment).Methods("GET")
+	router.HandleFunc("/v1/sales-return-payment/{id}", controller.ViewSalesReturnPayment).Methods("GET")
+	router.HandleFunc("/v1/sales-return-payment/{id}", controller.UpdateSalesReturnPayment).Methods("PUT")
+
 	//PurchasePayment
 	router.HandleFunc("/v1/purchase-payment", controller.CreatePurchasePayment).Methods("POST")
 	router.HandleFunc("/v1/purchase-payment", controller.ListPurchasePayment).Methods("GET")
 	router.HandleFunc("/v1/purchase-payment/{id}", controller.ViewPurchasePayment).Methods("GET")
 	router.HandleFunc("/v1/purchase-payment/{id}", controller.UpdatePurchasePayment).Methods("PUT")
+
+	//PurchasePayment
+	router.HandleFunc("/v1/purchase-return-payment", controller.CreatePurchaseReturnPayment).Methods("POST")
+	router.HandleFunc("/v1/purchase-return-payment", controller.ListPurchaseReturnPayment).Methods("GET")
+	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.ViewPurchaseReturnPayment).Methods("GET")
+	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.UpdatePurchaseReturnPayment).Methods("PUT")
 
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
@@ -247,6 +259,11 @@ func cronJobsEveryHour() {
 	}
 
 	err = models.ClearSalesReturnHistory()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ClearSalesReturnPayments()
 	if err != nil {
 		log.Print(err)
 	}

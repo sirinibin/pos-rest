@@ -59,6 +59,9 @@ type PurchaseReturn struct {
 	VatPrice                        float64                 `bson:"vat_price" json:"vat_price"`
 	Total                           float64                 `bson:"total" json:"total"`
 	NetTotal                        float64                 `bson:"net_total" json:"net_total"`
+	PartiaPaymentAmount             float64                 `bson:"partial_payment_amount" json:"partial_payment_amount"`
+	PaymentMethod                   string                  `bson:"payment_method" json:"payment_method"`
+	PaymentStatus                   string                  `bson:"payment_status" json:"payment_status"`
 	Deleted                         bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                       *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser                   *User                   `json:"deleted_by_user,omitempty"`
@@ -1008,6 +1011,44 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 		return err
 	}
 
+	err = purchasereturn.AddPayment()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (purchaseReturn *PurchaseReturn) AddPayment() error {
+	amount := float64(0.0)
+	if purchaseReturn.PaymentStatus == "paid" {
+		amount = purchaseReturn.NetTotal
+	} else if purchaseReturn.PaymentStatus == "paid_partially" {
+		amount = purchaseReturn.PartiaPaymentAmount
+	} else {
+		return nil
+	}
+
+	payment := PurchaseReturnPayment{
+		PurchaseReturnID:   &purchaseReturn.ID,
+		PurchaseReturnCode: purchaseReturn.Code,
+		PurchaseID:         purchaseReturn.PurchaseID,
+		PurchaseCode:       purchaseReturn.PurchaseCode,
+		Amount:             amount,
+		Method:             purchaseReturn.PaymentMethod,
+		CreatedAt:          purchaseReturn.CreatedAt,
+		UpdatedAt:          purchaseReturn.UpdatedAt,
+		CreatedBy:          purchaseReturn.CreatedBy,
+		CreatedByName:      purchaseReturn.CreatedByName,
+		UpdatedBy:          purchaseReturn.UpdatedBy,
+		UpdatedByName:      purchaseReturn.UpdatedByName,
+		StoreID:            purchaseReturn.StoreID,
+		StoreName:          purchaseReturn.StoreName,
+	}
+	err := payment.Insert()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1216,6 +1257,28 @@ func ProcessPurchaseReturns() error {
 		if err != nil {
 			return err
 		}
+
+		/*
+			if model.PaymentStatus == "" {
+				model.PaymentStatus = "paid"
+			}
+
+			if model.PaymentMethod == "" {
+				model.PaymentMethod = "cash"
+			}
+
+			totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_return_id": model.ID}, "purchase_return_payment")
+			if err != nil {
+				return err
+			}
+
+			if totalPaymentsCount == 0 {
+				err = model.AddPayment()
+				if err != nil {
+					return err
+				}
+			}
+		*/
 
 		err = model.Update()
 		if err != nil {

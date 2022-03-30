@@ -190,3 +190,15 @@ func ClearDeliveryNoteHistory() error {
 
 	return nil
 }
+
+func ClearSalesReturnPayments() error {
+	log.Print("Clearing Sales Return payments")
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	_, err := collection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
