@@ -1258,27 +1258,25 @@ func ProcessPurchaseReturns() error {
 			return err
 		}
 
-		/*
-			if model.PaymentStatus == "" {
-				model.PaymentStatus = "paid"
-			}
+		if model.PaymentStatus == "" {
+			model.PaymentStatus = "paid"
+		}
 
-			if model.PaymentMethod == "" {
-				model.PaymentMethod = "cash"
-			}
+		if model.PaymentMethod == "" {
+			model.PaymentMethod = "cash"
+		}
 
-			totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_return_id": model.ID}, "purchase_return_payment")
+		totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_return_id": model.ID}, "purchase_return_payment")
+		if err != nil {
+			return err
+		}
+
+		if totalPaymentsCount == 0 {
+			err = model.AddPayment()
 			if err != nil {
 				return err
 			}
-
-			if totalPaymentsCount == 0 {
-				err = model.AddPayment()
-				if err != nil {
-					return err
-				}
-			}
-		*/
+		}
 
 		err = model.Update()
 		if err != nil {

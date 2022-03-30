@@ -1276,27 +1276,25 @@ func ProcessSalesReturns() error {
 			return err
 		}
 
-		/*
-			if salesReturn.PaymentStatus == "" {
-				salesReturn.PaymentStatus = "paid"
-			}
+		if salesReturn.PaymentStatus == "" {
+			salesReturn.PaymentStatus = "paid"
+		}
 
-			if salesReturn.PaymentMethod == "" {
-				salesReturn.PaymentMethod = "cash"
-			}
+		if salesReturn.PaymentMethod == "" {
+			salesReturn.PaymentMethod = "cash"
+		}
 
-			totalPaymentsCount, err := GetTotalCount(bson.M{"sales_return_id": salesReturn.ID}, "sales_return_payment")
+		totalPaymentsCount, err := GetTotalCount(bson.M{"sales_return_id": salesReturn.ID}, "sales_return_payment")
+		if err != nil {
+			return err
+		}
+
+		if totalPaymentsCount == 0 {
+			err = salesReturn.AddPayment()
 			if err != nil {
 				return err
 			}
-
-			if totalPaymentsCount == 0 {
-				err = salesReturn.AddPayment()
-				if err != nil {
-					return err
-				}
-			}
-		*/
+		}
 
 		err = salesReturn.Update()
 		if err != nil {

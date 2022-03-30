@@ -185,7 +185,7 @@ func SearchPurchaseReturnPayment(w http.ResponseWriter, r *http.Request) (models
 		if err != nil {
 			return models, criterias, err
 		}
-		criterias.SearchBy["purchase_id"] = purchaseReturnID
+		criterias.SearchBy["purchase_return_id"] = purchaseReturnID
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_code]"]
