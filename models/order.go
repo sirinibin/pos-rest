@@ -1350,25 +1350,27 @@ func ProcessOrders() error {
 			return err
 		}
 
-		if order.PaymentStatus == "" {
-			order.PaymentStatus = "paid"
-		}
+		/*
+			if order.PaymentStatus == "" {
+				order.PaymentStatus = "paid"
+			}
 
-		if order.PaymentMethod == "" {
-			order.PaymentMethod = "cash"
-		}
+			if order.PaymentMethod == "" {
+				order.PaymentMethod = "cash"
+			}
 
-		totalPaymentsCount, err := GetTotalCount(bson.M{"order_id": order.ID}, "sales_payment")
-		if err != nil {
-			return err
-		}
-
-		if totalPaymentsCount == 0 {
-			err = order.AddPayment()
+			totalPaymentsCount, err := GetTotalCount(bson.M{"order_id": order.ID}, "sales_payment")
 			if err != nil {
 				return err
 			}
-		}
+
+			if totalPaymentsCount == 0 {
+				err = order.AddPayment()
+				if err != nil {
+					return err
+				}
+			}
+		*/
 
 		err = order.Update()
 		if err != nil {

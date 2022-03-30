@@ -1324,25 +1324,27 @@ func ProcessPurchases() error {
 			return err
 		}
 
-		if model.PaymentStatus == "" {
-			model.PaymentStatus = "paid"
-		}
+		/*
+			if model.PaymentStatus == "" {
+				model.PaymentStatus = "paid"
+			}
 
-		if model.PaymentMethod == "" {
-			model.PaymentMethod = "cash"
-		}
+			if model.PaymentMethod == "" {
+				model.PaymentMethod = "cash"
+			}
 
-		totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_id": model.ID}, "purchase_payment")
-		if err != nil {
-			return err
-		}
-
-		if totalPaymentsCount == 0 {
-			err = model.AddPayment()
+			totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_id": model.ID}, "purchase_payment")
 			if err != nil {
 				return err
 			}
-		}
+
+			if totalPaymentsCount == 0 {
+				err = model.AddPayment()
+				if err != nil {
+					return err
+				}
+			}
+		*/
 
 		err = model.Update()
 		if err != nil {
