@@ -164,10 +164,22 @@ func main() {
 	router.HandleFunc("/v1/purchase-return/{id}", controller.DeletePurchaseReturn).Methods("DELETE")
 
 	//SalesCashDiscount
-	router.HandleFunc("/v1/sales/cash-discount", controller.CreateSalesCashDiscount).Methods("POST")
-	router.HandleFunc("/v1/sales/cash-discount", controller.ListSalesCashDiscount).Methods("GET")
-	router.HandleFunc("/v1/sales/cash-discount/{id}", controller.ViewSalesCashDiscount).Methods("GET")
-	router.HandleFunc("/v1/sales/cash-discount/{id}", controller.UpdateSalesCashDiscount).Methods("PUT")
+	router.HandleFunc("/v1/sales-cash-discount", controller.CreateSalesCashDiscount).Methods("POST")
+	router.HandleFunc("/v1/sales-cash-discount", controller.ListSalesCashDiscount).Methods("GET")
+	router.HandleFunc("/v1/sales-cash-discount/{id}", controller.ViewSalesCashDiscount).Methods("GET")
+	router.HandleFunc("/v1/sales-cash-discount/{id}", controller.UpdateSalesCashDiscount).Methods("PUT")
+
+	//SalesPayment
+	router.HandleFunc("/v1/sales-payment", controller.CreateSalesPayment).Methods("POST")
+	router.HandleFunc("/v1/sales-payment", controller.ListSalesPayment).Methods("GET")
+	router.HandleFunc("/v1/sales-payment/{id}", controller.ViewSalesPayment).Methods("GET")
+	router.HandleFunc("/v1/sales-payment/{id}", controller.UpdateSalesPayment).Methods("PUT")
+
+	//PurchasePayment
+	router.HandleFunc("/v1/purchase-payment", controller.CreatePurchasePayment).Methods("POST")
+	router.HandleFunc("/v1/purchase-payment", controller.ListPurchasePayment).Methods("GET")
+	router.HandleFunc("/v1/purchase-payment/{id}", controller.ViewPurchasePayment).Methods("GET")
+	router.HandleFunc("/v1/purchase-payment/{id}", controller.UpdatePurchasePayment).Methods("PUT")
 
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))

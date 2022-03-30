@@ -1086,6 +1086,42 @@ func (purchase *Purchase) Insert() error {
 		return err
 	}
 
+	err = purchase.AddPayment()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (purchase *Purchase) AddPayment() error {
+	amount := float64(0.0)
+	if purchase.PaymentStatus == "paid" {
+		amount = purchase.NetTotal
+	} else if purchase.PaymentStatus == "paid_partially" {
+		amount = purchase.PartiaPaymentAmount
+	} else {
+		return nil
+	}
+
+	payment := PurchasePayment{
+		PurchaseID:    &purchase.ID,
+		PurchaseCode:  purchase.Code,
+		Amount:        amount,
+		Method:        purchase.PaymentMethod,
+		CreatedAt:     purchase.CreatedAt,
+		UpdatedAt:     purchase.UpdatedAt,
+		CreatedBy:     purchase.CreatedBy,
+		CreatedByName: purchase.CreatedByName,
+		UpdatedBy:     purchase.UpdatedBy,
+		UpdatedByName: purchase.UpdatedByName,
+		StoreID:       purchase.StoreID,
+		StoreName:     purchase.StoreName,
+	}
+	err := payment.Insert()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1286,6 +1322,26 @@ func ProcessPurchases() error {
 		err = model.AddProductsPurchaseHistory()
 		if err != nil {
 			return err
+		}
+
+		if model.PaymentStatus == "" {
+			model.PaymentStatus = "paid"
+		}
+
+		if model.PaymentMethod == "" {
+			model.PaymentMethod = "cash"
+		}
+
+		totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_id": model.ID}, "purchase_payment")
+		if err != nil {
+			return err
+		}
+
+		if totalPaymentsCount == 0 {
+			err = model.AddPayment()
+			if err != nil {
+				return err
+			}
 		}
 
 		err = model.Update()

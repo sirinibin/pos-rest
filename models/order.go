@@ -1047,7 +1047,7 @@ func (order *Order) Insert() error {
 	order.ID = primitive.NewObjectID()
 	if len(order.Code) == 0 {
 		startAt := 100000
-		for true {
+		for {
 			code, err := order.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
@@ -1079,6 +1079,42 @@ func (order *Order) Insert() error {
 		return err
 	}
 
+	err = order.AddPayment()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (order *Order) AddPayment() error {
+	amount := float64(0.0)
+	if order.PaymentStatus == "paid" {
+		amount = order.NetTotal
+	} else if order.PaymentStatus == "paid_partially" {
+		amount = order.PartiaPaymentAmount
+	} else {
+		return nil
+	}
+
+	payment := SalesPayment{
+		OrderID:       &order.ID,
+		OrderCode:     order.Code,
+		Amount:        amount,
+		Method:        order.PaymentMethod,
+		CreatedAt:     order.CreatedAt,
+		UpdatedAt:     order.UpdatedAt,
+		CreatedBy:     order.CreatedBy,
+		CreatedByName: order.CreatedByName,
+		UpdatedBy:     order.UpdatedBy,
+		UpdatedByName: order.UpdatedByName,
+		StoreID:       order.StoreID,
+		StoreName:     order.StoreName,
+	}
+	err := payment.Insert()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1312,6 +1348,26 @@ func ProcessOrders() error {
 		err = order.AddProductsSalesHistory()
 		if err != nil {
 			return err
+		}
+
+		if order.PaymentStatus == "" {
+			order.PaymentStatus = "paid"
+		}
+
+		if order.PaymentMethod == "" {
+			order.PaymentMethod = "cash"
+		}
+
+		totalPaymentsCount, err := GetTotalCount(bson.M{"order_id": order.ID}, "sales_payment")
+		if err != nil {
+			return err
+		}
+
+		if totalPaymentsCount == 0 {
+			err = order.AddPayment()
+			if err != nil {
+				return err
+			}
 		}
 
 		err = order.Update()
