@@ -222,7 +222,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	if product.StoreID != nil {
-		store, err := FindStoreByID(product.StoreID, bson.M{"id": 1, "name": 1})
+		store, err := FindStoreByID(product.StoreID, bson.M{"id": 1, "name": 1, "code": 1})
 		if err != nil {
 			return err
 		}
