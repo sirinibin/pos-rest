@@ -44,6 +44,8 @@ type Product struct {
 	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	StoreID       *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName     string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	BarCode       string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
 	Ean12         string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
 	SearchLabel   string                `json:"search_label"`
@@ -216,6 +218,14 @@ func (product *Product) UpdateForeignLabelFields() error {
 			return errors.New("Error findind deleted_by user:" + err.Error())
 		}
 		product.DeletedByName = deletedByUser.Name
+	}
+
+	if product.StoreID != nil {
+		store, err := FindStoreByID(product.StoreID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		product.StoreName = store.Name
 	}
 
 	return nil
@@ -1199,6 +1209,11 @@ func ProcessProducts() error {
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
+		store, err := FindStoreByCode("GUOJ", bson.M{})
+		if err != nil {
+			return errors.New("Error finding store:" + err.Error())
+		}
+		model.StoreID = &store.ID
 
 		err = model.Update()
 		if err != nil {
