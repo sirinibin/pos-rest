@@ -46,6 +46,7 @@ type Product struct {
 	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	StoreID       *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName     string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	StoreCode     string                `json:"store_code,omitempty" bson:"store_code,omitempty"`
 	BarCode       string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
 	Ean12         string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
 	SearchLabel   string                `json:"search_label"`
@@ -226,6 +227,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 			return err
 		}
 		product.StoreName = store.Name
+		product.StoreCode = store.Code
 	}
 
 	return nil
