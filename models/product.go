@@ -483,6 +483,15 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["store_id"] = storeID
+	}
+
 	keys, ok = r.URL.Query()["limit"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.Size, _ = strconv.Atoi(keys[0])
@@ -1211,11 +1220,14 @@ func ProcessProducts() error {
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
-		store, err := FindStoreByCode("GUOJ", bson.M{})
-		if err != nil {
-			return errors.New("Error finding store:" + err.Error())
-		}
-		model.StoreID = &store.ID
+
+		/*
+			store, err := FindStoreByCode("GUO", bson.M{})
+			if err != nil {
+				return errors.New("Error finding store:" + err.Error())
+			}
+			model.StoreID = &store.ID
+		*/
 
 		err = model.Update()
 		if err != nil {
