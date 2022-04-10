@@ -407,6 +407,7 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if err != nil {
 			return orders, criterias, err
 		}
+		startDate = startDate.UTC().Local()
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
 		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
@@ -419,6 +420,7 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if err != nil {
 			return orders, criterias, err
 		}
+		createdAtStartDate = startDate.UTC().Local()
 	}
 
 	keys, ok = r.URL.Query()["search[created_at_to]"]
@@ -428,6 +430,7 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if err != nil {
 			return orders, criterias, err
 		}
+		createdAtEndDate = startDate.UTC().Local()
 
 		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
 		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
