@@ -344,6 +344,10 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 	return stats, nil
 }
 
+func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {
+	return date.Add(time.Hour * time.Duration(timeZoneOffset))
+}
+
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
@@ -397,6 +401,15 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
 	}
 
+	timeZoneOffset := 0.0
+	keys, ok = r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+
+	}
+
 	var createdAtStartDate time.Time
 	var createdAtEndDate time.Time
 
@@ -407,7 +420,10 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if err != nil {
 			return orders, criterias, err
 		}
-		startDate = startDate.Add(-time.Hour * time.Duration(3))
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
 
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
@@ -421,7 +437,9 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if err != nil {
 			return orders, criterias, err
 		}
-		createdAtStartDate = createdAtStartDate.Add(-time.Hour * time.Duration(3))
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[created_at_to]"]
@@ -431,7 +449,10 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if err != nil {
 			return orders, criterias, err
 		}
-		createdAtEndDate = createdAtEndDate.Add(-time.Hour * time.Duration(3))
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
+		}
 
 		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
 		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
