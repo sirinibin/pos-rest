@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -1340,6 +1341,37 @@ func IsOrderExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 	return (count == 1), err
 }
+func (order *Order) HardDeleteOrder() error {
+	log.Print("Delete order")
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"_id": order.ID,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = order.HardDeleteSalesReturn()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (order *Order) HardDeleteSalesReturn() error {
+	log.Print("Delete sales Return")
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"order_id": order.ID,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func ProcessOrders() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
@@ -1430,6 +1462,13 @@ func ProcessOrders() error {
 		err = order.Update()
 		if err != nil {
 			return err
+		}
+
+		if order.Code == "GUOCJ-100005" {
+			err = order.HardDelete()
+			if err != nil {
+				return err
+			}
 		}
 	}
 
