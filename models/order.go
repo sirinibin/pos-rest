@@ -1365,6 +1365,19 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		if order.Code == "GUOJ-100100" {
+			for _, product := range order.Products {
+				if product.ItemCode == "BUF" {
+					product.Quantity = 2
+					product.UnitPrice = 3850
+				}
+			}
+			order.FindNetTotal()
+			order.FindTotal()
+			order.FindTotalQuantity()
+			order.FindVatPrice()
+		}
+
 		err = order.CalculateOrderProfit()
 		if err != nil {
 			return err
