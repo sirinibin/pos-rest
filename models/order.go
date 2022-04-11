@@ -1380,18 +1380,20 @@ func ProcessOrders() error {
 			}
 		*/
 
-		if order.Code == "GUOJ-100100" {
-			for k, product := range order.Products {
-				if product.PartNumber == "BUF" {
-					order.Products[k].Quantity = 2
-					order.Products[k].UnitPrice = 3850
+		/*
+			if order.Code == "GUOJ-100100" {
+				for k, product := range order.Products {
+					if product.PartNumber == "BUF" {
+						order.Products[k].Quantity = 2
+						order.Products[k].UnitPrice = 3850
+					}
 				}
+				order.FindNetTotal()
+				order.FindTotal()
+				order.FindTotalQuantity()
+				order.FindVatPrice()
 			}
-			order.FindNetTotal()
-			order.FindTotal()
-			order.FindTotalQuantity()
-			order.FindVatPrice()
-		}
+		*/
 
 		err = order.CalculateOrderProfit()
 		if err != nil {
