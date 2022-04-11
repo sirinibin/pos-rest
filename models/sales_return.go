@@ -1173,18 +1173,6 @@ func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err 
 	return nil
 }
 
-func (salesreturn *SalesReturn) HardDelete() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err = collection.DeleteOne(ctx, bson.M{"_id": salesreturn.ID})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func FindSalesReturnByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
@@ -1247,6 +1235,18 @@ func IsSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
+func (salesreturn *SalesReturn) HardDelete() (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = collection.DeleteOne(ctx, bson.M{"_id": salesreturn.ID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func ProcessSalesReturns() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
 	ctx := context.Background()
@@ -1302,6 +1302,14 @@ func ProcessSalesReturns() error {
 		if err != nil {
 			return err
 		}
+
+		if salesReturn.OrderCode == "GUOCJ-100005" {
+			err = salesReturn.HardDelete()
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	return nil

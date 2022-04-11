@@ -1268,18 +1268,6 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func (order *Order) HardDelete() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("order")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err = collection.DeleteOne(ctx, bson.M{"_id": order.ID})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func FindOrderByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
@@ -1341,7 +1329,7 @@ func IsOrderExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 	return (count == 1), err
 }
-func (order *Order) HardDeleteOrder() error {
+func (order *Order) HardDelete() error {
 	log.Print("Delete order")
 	ctx := context.Background()
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
@@ -1464,12 +1452,14 @@ func ProcessOrders() error {
 			return err
 		}
 
-		if order.Code == "GUOCJ-100005" {
-			err = order.HardDelete()
-			if err != nil {
-				return err
+		/*
+			if order.Code == "GUOCJ-100005" {
+				err = order.HardDelete()
+				if err != nil {
+					return err
+				}
 			}
-		}
+		*/
 	}
 
 	return nil
