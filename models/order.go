@@ -1366,10 +1366,10 @@ func ProcessOrders() error {
 		}
 
 		if order.Code == "GUOJ-100100" {
-			for _, product := range order.Products {
+			for k, product := range order.Products {
 				if product.ItemCode == "BUF" {
-					product.Quantity = 2
-					product.UnitPrice = 3850
+					order.Products[k].Quantity = 2
+					order.Products[k].UnitPrice = 3850
 				}
 			}
 			order.FindNetTotal()
