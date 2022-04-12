@@ -101,16 +101,29 @@ func SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []Pr
 
 	criterias.SearchBy = make(map[string]interface{})
 
+	timeZoneOffset := 0.0
+	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+	}
+
 	var createdAtStartDate time.Time
 	var createdAtEndDate time.Time
 
-	keys, ok := r.URL.Query()["search[created_at]"]
+	keys, ok = r.URL.Query()["search[created_at]"]
 	if ok && len(keys[0]) >= 1 {
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
 			return models, criterias, err
 		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
 		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
@@ -123,6 +136,10 @@ func SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []Pr
 		if err != nil {
 			return models, criterias, err
 		}
+
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[created_at_to]"]
@@ -131,6 +148,10 @@ func SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []Pr
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
 			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
 		}
 
 		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))

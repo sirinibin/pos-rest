@@ -116,7 +116,16 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	keys, ok := r.URL.Query()["search[created_by_name]"]
+	timeZoneOffset := 0.0
+	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[created_by_name]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["created_by_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
@@ -207,6 +216,11 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 		if err != nil {
 			return models, criterias, err
 		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
 		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
@@ -219,6 +233,10 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 		if err != nil {
 			return models, criterias, err
 		}
+
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[created_at_to]"]
@@ -227,6 +245,10 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
 			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
 		}
 
 		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))

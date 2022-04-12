@@ -310,7 +310,15 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	keys, ok := r.URL.Query()["search[date_str]"]
+	timeZoneOffset := 0.0
+	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
@@ -332,6 +340,10 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		if err != nil {
 			return purchasereturns, criterias, err
 		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[to_date]"]
@@ -340,6 +352,10 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		endDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
 			return purchasereturns, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
 		}
 
 	}
@@ -362,6 +378,11 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		if err != nil {
 			return purchasereturns, criterias, err
 		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
 		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
@@ -374,6 +395,10 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		if err != nil {
 			return purchasereturns, criterias, err
 		}
+
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[created_at_to]"]
@@ -382,6 +407,10 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
 			return purchasereturns, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
 		}
 
 		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
