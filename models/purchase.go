@@ -753,12 +753,21 @@ func (purchase *Purchase) Validate(
 	if govalidator.IsNull(purchase.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
-		const shortForm = "Jan 02 2006"
+		//const shortForm = "Jan 02 2006"
+		//const shortForm = "	January 02, 2006T3:04PM"
+		//from js:Thu Apr 14 2022 03:53:15 GMT+0300 (Arabian Standard Time)
+		//	const shortForm = "Monday Jan 02 2006 15:04:05 GMT-0700 (MST)"
+		//const shortForm = "Mon Jan 02 2006 15:04:05 GMT-0700 (MST)"
+		const shortForm = "2006-01-02T15:04:05Z07:00"
+		log.Print("purchase.DateStr:")
+		log.Print(purchase.DateStr)
 		date, err := time.Parse(shortForm, purchase.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
 		}
 		purchase.Date = &date
+		log.Print("purchase.Date:")
+		log.Print(purchase.Date)
 	}
 
 	if !govalidator.IsNull(purchase.SignatureDateStr) {
@@ -1044,7 +1053,6 @@ func (purchase *Purchase) Insert() error {
 	if err != nil {
 		return err
 	}
-	log.Print("After update foreing fields")
 
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
@@ -1054,7 +1062,7 @@ func (purchase *Purchase) Insert() error {
 	purchase.ID = primitive.NewObjectID()
 	if len(purchase.Code) == 0 {
 		startAt := 300000
-		for true {
+		for {
 			code, err := purchase.GenerateCode(startAt, store.Code)
 			if err != nil {
 				return err
