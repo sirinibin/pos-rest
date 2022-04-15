@@ -115,6 +115,7 @@ func main() {
 
 	//Order
 	router.HandleFunc("/v1/order", controller.CreateOrder).Methods("POST")
+	router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 	router.HandleFunc("/v1/order", controller.ListOrder).Methods("GET")
 	router.HandleFunc("/v1/order/{id}", controller.ViewOrder).Methods("GET")
 

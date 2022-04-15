@@ -746,31 +746,23 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	if scenario == "update" {
-		/*
-			if order.ID.IsZero() {
-				w.WriteHeader(http.StatusBadRequest)
-				errs["id"] = "ID is required"
-				return errs
-			}
-			exists, err := IsOrderExists(&order.ID)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				errs["id"] = err.Error()
-				return errs
-			}
 
-			if !exists {
-				errs["id"] = "Invalid Order:" + order.ID.Hex()
-			}
+		if order.ID.IsZero() {
+			w.WriteHeader(http.StatusBadRequest)
+			errs["id"] = "ID is required"
+			return errs
+		}
+		exists, err := IsOrderExists(&order.ID)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			errs["id"] = err.Error()
+			return errs
+		}
 
-			if oldOrder != nil {
-				if oldOrder.Status == "delivered" || oldOrder.Status == "dispatched" {
-					if order.Status == "pending" || order.Status == "cancelled" || order.Status == "order_placed" {
-						errs["status"] = "Can't change the status from delivered/dispatched to pending/cancelled/order_placed"
-					}
-				}
-			}
-		*/
+		if !exists {
+			errs["id"] = "Invalid Order:" + order.ID.Hex()
+		}
+
 	}
 
 	if order.StoreID == nil || order.StoreID.IsZero() {
@@ -972,21 +964,6 @@ func (order *Order) AddStock() (err error) {
 		storeExistInProductStock := false
 		for k, stock := range product.Stock {
 			if stock.StoreID.Hex() == order.StoreID.Hex() {
-				/*
-					order.SetChangeLog(
-						"add_stock",
-						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock + orderProduct.Quantity),
-					)
-
-					product.SetChangeLog(
-						"add_stock",
-						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock + orderProduct.Quantity),
-					)*/
-
 				product.Stock[k].Stock += orderProduct.Quantity
 				storeExistInProductStock = true
 				break
@@ -1066,6 +1043,39 @@ func (order *Order) GenerateCode(startFrom int, storeCode string) (string, error
 	}
 	code := startFrom + int(count)
 	return storeCode + "-" + strconv.Itoa(code+1), nil
+}
+
+func (order *Order) Update() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	err := order.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	err = order.CalculateOrderProfit()
+	if err != nil {
+		return err
+	}
+
+	updateResult, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": order.ID},
+		bson.M{"$set": order},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
+	if updateResult.MatchedCount > 0 {
+		return nil
+	}
+	return nil
 }
 
 func (order *Order) Insert() error {
@@ -1216,34 +1226,6 @@ func (order *Order) UpdateOrderStatus(status string) (*Order, error) {
 		return order, nil
 	}
 	return nil, nil
-}
-
-func (order *Order) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("order")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
-	defer cancel()
-
-	err := order.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	updateResult, err := collection.UpdateOne(
-		ctx,
-		bson.M{"_id": order.ID},
-		bson.M{"$set": order},
-		updateOptions,
-	)
-	if err != nil {
-		return err
-	}
-
-	if updateResult.MatchedCount > 0 {
-		return nil
-	}
-	return nil
 }
 
 func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
