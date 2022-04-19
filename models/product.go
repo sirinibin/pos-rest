@@ -805,11 +805,7 @@ func GeneratePartNumber(n int) string {
 	return string(b)
 }
 
-func (product *Product) GenerateBarCode(startFrom int) (string, error) {
-	count, err := GetTotalCount(bson.M{}, "product")
-	if err != nil {
-		return "", err
-	}
+func (product *Product) GenerateBarCode(startFrom int, count int64) (string, error) {
 	code := startFrom + int(count)
 	return strconv.Itoa(code + 1), nil
 }
@@ -846,11 +842,17 @@ func (product *Product) Insert() (err error) {
 
 	if len(product.Ean12) == 0 {
 		barcodeStartAt := 100000000000
+		count, err := GetTotalCount(bson.M{}, "product")
+		if err != nil {
+			return err
+		}
 		for {
-			barcode, err := product.GenerateBarCode(barcodeStartAt)
+			barcode, err := product.GenerateBarCode(barcodeStartAt, count)
 			if err != nil {
 				return err
 			}
+			//log.Print("barcode:")
+			//log.Print(barcode)
 			product.Ean12 = barcode
 			exists, err := product.IsEan12Exists()
 			if err != nil {
@@ -946,8 +948,12 @@ func (product *Product) Update() error {
 
 	if len(product.Ean12) == 0 {
 		barcodeStartAt := 100000000000
+		count, err := GetTotalCount(bson.M{}, "product")
+		if err != nil {
+			return err
+		}
 		for {
-			barcode, err := product.GenerateBarCode(barcodeStartAt)
+			barcode, err := product.GenerateBarCode(barcodeStartAt, count)
 			if err != nil {
 				return err
 			}
