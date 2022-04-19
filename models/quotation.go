@@ -918,28 +918,11 @@ func (quotation *Quotation) Insert() error {
 		return err
 	}
 
-	store, err := FindStoreByID(quotation.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
 	quotation.ID = primitive.NewObjectID()
 	if len(quotation.Code) == 0 {
-		startAt := 50000
-		for true {
-			code, err := quotation.GenerateCode(startAt, store.Code)
-			if err != nil {
-				return err
-			}
-			quotation.Code = code
-			exists, err := quotation.IsCodeExists()
-			if err != nil {
-				return err
-			}
-			if !exists {
-				break
-			}
-			startAt++
+		err = quotation.MakeCode()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -953,6 +936,78 @@ func (quotation *Quotation) Insert() error {
 		return err
 	}
 	return nil
+}
+
+func (quotation *Quotation) MakeCode() error {
+	lastQuotation, err := FindLastQuotationByStoreID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+	if lastQuotation == nil {
+		store, err := FindStoreByID(quotation.StoreID, bson.M{})
+		if err != nil {
+			return err
+		}
+		quotation.Code = store.Code + "-50000"
+	} else {
+		splits := strings.Split(lastQuotation.Code, "-")
+		if len(splits) == 2 {
+			storeCode := splits[0]
+			codeStr := splits[1]
+			codeInt, err := strconv.Atoi(codeStr)
+			if err != nil {
+				return err
+			}
+			codeInt++
+			quotation.Code = storeCode + "-" + strconv.Itoa(codeInt)
+		}
+	}
+
+	for {
+		exists, err := quotation.IsCodeExists()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			break
+		}
+
+		splits := strings.Split(lastQuotation.Code, "-")
+		storeCode := splits[0]
+		codeStr := splits[1]
+		codeInt, err := strconv.Atoi(codeStr)
+		if err != nil {
+			return err
+		}
+		codeInt++
+		quotation.Code = storeCode + "-" + strconv.Itoa(codeInt)
+	}
+
+	return nil
+}
+
+func FindLastQuotationByStoreID(
+	storeID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (quotation *Quotation, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+
+	err = collection.FindOne(ctx,
+		bson.M{"store_id": storeID}, findOneOptions).
+		Decode(&quotation)
+	if err != nil {
+		return nil, err
+	}
+
+	return quotation, err
 }
 
 func (quotation *Quotation) IsCodeExists() (exists bool, err error) {

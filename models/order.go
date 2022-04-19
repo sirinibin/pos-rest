@@ -1088,28 +1088,11 @@ func (order *Order) Insert() error {
 		return err
 	}
 
-	store, err := FindStoreByID(order.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
 	order.ID = primitive.NewObjectID()
 	if len(order.Code) == 0 {
-		startAt := 100000
-		for {
-			code, err := order.GenerateCode(startAt, store.Code)
-			if err != nil {
-				return err
-			}
-			order.Code = code
-			exists, err := order.IsCodeExists()
-			if err != nil {
-				return err
-			}
-			if !exists {
-				break
-			}
-			startAt++
+		err = order.MakeCode()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -1134,6 +1117,80 @@ func (order *Order) Insert() error {
 	}
 
 	return nil
+}
+
+func (order *Order) MakeCode() error {
+	lastOrder, err := FindLastOrderByStoreID(order.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+	if lastOrder == nil {
+		store, err := FindStoreByID(order.StoreID, bson.M{})
+		if err != nil {
+			return err
+		}
+		order.Code = store.Code + "-100000"
+	} else {
+		splits := strings.Split(lastOrder.Code, "-")
+		if len(splits) == 2 {
+			storeCode := splits[0]
+			codeStr := splits[1]
+			codeInt, err := strconv.Atoi(codeStr)
+			if err != nil {
+				return err
+			}
+			codeInt++
+			order.Code = storeCode + "-" + strconv.Itoa(codeInt)
+		}
+	}
+
+	for {
+		exists, err := order.IsCodeExists()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			break
+		}
+
+		splits := strings.Split(lastOrder.Code, "-")
+		storeCode := splits[0]
+		codeStr := splits[1]
+		codeInt, err := strconv.Atoi(codeStr)
+		if err != nil {
+			return err
+		}
+		codeInt++
+
+		order.Code = storeCode + "-" + strconv.Itoa(codeInt)
+	}
+
+	return nil
+}
+
+func FindLastOrderByStoreID(
+	storeID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (order *Order, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+
+	err = collection.FindOne(ctx,
+		bson.M{"store_id": storeID}, findOneOptions).
+		Decode(&order)
+	if err != nil {
+		return nil, err
+	}
+
+	return order, err
 }
 
 func (order *Order) AddPayment() error {

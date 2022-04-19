@@ -1087,31 +1087,13 @@ func (purchase *Purchase) Insert() error {
 		return err
 	}
 
-	store, err := FindStoreByID(purchase.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
 	purchase.ID = primitive.NewObjectID()
 	if len(purchase.Code) == 0 {
-		startAt := 300000
-		for {
-			code, err := purchase.GenerateCode(startAt, store.Code)
-			if err != nil {
-				return err
-			}
-			purchase.Code = code
-			exists, err := purchase.IsCodeExists()
-			if err != nil {
-				return err
-			}
-			if !exists {
-				break
-			}
-			startAt++
+		err = purchase.MakeCode()
+		if err != nil {
+			return err
 		}
 	}
-
 	err = purchase.CalculatePurchaseExpectedProfit()
 	if err != nil {
 		return err
@@ -1133,6 +1115,79 @@ func (purchase *Purchase) Insert() error {
 	}
 
 	return nil
+}
+
+func (purchase *Purchase) MakeCode() error {
+	lastPurchase, err := FindLastPurchaseByStoreID(purchase.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+	if lastPurchase == nil {
+		store, err := FindStoreByID(purchase.StoreID, bson.M{})
+		if err != nil {
+			return err
+		}
+		purchase.Code = store.Code + "-300000"
+	} else {
+		splits := strings.Split(lastPurchase.Code, "-")
+		if len(splits) == 2 {
+			storeCode := splits[0]
+			codeStr := splits[1]
+			codeInt, err := strconv.Atoi(codeStr)
+			if err != nil {
+				return err
+			}
+			codeInt++
+			purchase.Code = storeCode + "-" + strconv.Itoa(codeInt)
+		}
+	}
+
+	for {
+		exists, err := purchase.IsCodeExists()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			break
+		}
+
+		splits := strings.Split(lastPurchase.Code, "-")
+		storeCode := splits[0]
+		codeStr := splits[1]
+		codeInt, err := strconv.Atoi(codeStr)
+		if err != nil {
+			return err
+		}
+		codeInt++
+
+		purchase.Code = storeCode + "-" + strconv.Itoa(codeInt)
+	}
+
+	return nil
+}
+
+func FindLastPurchaseByStoreID(
+	storeID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (purchase *Purchase, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+
+	err = collection.FindOne(ctx,
+		bson.M{"store_id": storeID}, findOneOptions).
+		Decode(&purchase)
+	if err != nil {
+		return nil, err
+	}
+
+	return purchase, err
 }
 
 func (purchase *Purchase) AddPayment() error {
