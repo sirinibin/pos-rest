@@ -24,9 +24,20 @@ func main() {
 	fmt.Println("A GoLang / Myql Microservice [OAuth2,Redis & JWT used for token management]!")
 	db.Client()
 	db.InitRedis()
+	RemoveAllIndexes()
+
 	CreateIndex("product", "ean_12", true, false)
 	CreateIndex("product", "part_number", true, false)
 	CreateIndex("product", "name", false, true)
+
+	CreateIndex("order", "code", true, false)
+	CreateIndex("salesreturn", "code", true, false)
+	CreateIndex("salesreturn", "order_code", false, false)
+
+	CreateIndex("purchase", "code", true, false)
+	CreateIndex("purchasereturn", "code", true, false)
+	CreateIndex("purchasereturn", "purchase_code", false, false)
+	CreateIndex("quotation", "code", true, false)
 	//ListAllIndexes("product")
 
 	httpPort := env.Getenv("API_PORT", "2000")
@@ -257,25 +268,42 @@ func ListAllIndexes(collectionName string) {
 	}
 }
 
+func RemoveAllIndexes() {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("order")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("purchase")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection.Indexes().DropAll(context.Background())
+
+}
+
 // CreateIndex - creates an index for a specific field in a collection
 func CreateIndex(collectionName string, field string, unique bool, text bool) error {
 	log.Print("Inside Create Index")
 	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
-	//collection.Indexes().DropAll(context.Background())
+	collection.Indexes().DropAll(context.Background())
 
 	// 1. Lets define the keys for the index we want to create
 	var mod mongo.IndexModel
-	if unique {
-		mod = mongo.IndexModel{
-			Keys:    bson.M{field: 1}, // index in ascending order or -1 for descending order
-			Options: options.Index().SetUnique(unique),
-		}
-	} else if text {
+	if text {
 		mod = mongo.IndexModel{
 			Keys:    bson.M{field: "text"}, // index in ascending order or -1 for descending order
 			Options: options.Index().SetDefaultLanguage("english"),
 		}
-
+	} else {
+		mod = mongo.IndexModel{
+			Keys:    bson.M{field: 1}, // index in ascending order or -1 for descending order
+			Options: options.Index().SetUnique(unique),
+		}
 	}
 
 	// 2. Create the context for this operation
@@ -291,39 +319,12 @@ func CreateIndex(collectionName string, field string, unique bool, text bool) er
 		return err
 	}
 
-	log.Printf("Created Index:%s", indexName)
+	log.Printf("Created Index:%s for collection:%s", indexName, collectionName)
 
 	// 6. All went well, we return true
 	return nil
 }
 
-/*
-func CreateIndexes(collectionName string, fieldName string) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
-
-	CreateIndexesOptions := options.CreateIndexesOptions{}
-	CreateIndexesOptions.SetMaxTime(10 * time.Second)
-
-	indexOptions := options.IndexOptions{}
-	indexOptions.SetUnique(true)
-	indexOptions.SetSparse(true)
-	//	indexOptions.SetBackground(true)
-
-	index := mongo.IndexModel{
-		Keys: bsonx.Doc{
-			{Key: fieldName, Value: bsonx.Int32(1)},
-		},
-		Options: &indexOptions,
-	}
-
-	indexName, err := collection.Indexes().CreateOne(context.Background(), index, &CreateIndexesOptions)
-	if err != nil {
-		return fmt.Errorf("error setting up index for %s: %s", "product", err.Error())
-	}
-	log.Printf("Created Index:%s", indexName)
-	return nil
-}
-*/
 func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 	var err error
