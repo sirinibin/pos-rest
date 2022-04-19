@@ -23,17 +23,7 @@ func GetTotalCount(filter map[string]interface{}, collectionName string) (count 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	log.Print("filter:")
-	log.Print(filter)
-
-	filter["deleted"] = bson.M{"$ne": true}
-
-	if len(filter) == 0 {
-		return collection.CountDocuments(ctx, filter)
-	} else {
-		return collection.CountDocuments(ctx, filter)
-	}
-
+	return collection.CountDocuments(ctx, filter)
 }
 
 func TrimLogicalOperatorPrefix(str string) string {

@@ -810,6 +810,32 @@ func (product *Product) GenerateBarCode(startFrom int, count int64) (string, err
 	return strconv.Itoa(code + 1), nil
 }
 
+func FindLastProduct(
+	selectFields map[string]interface{},
+) (product *Product, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	//collection.Indexes().CreateOne()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+
+	err = collection.FindOne(ctx,
+		bson.M{}, findOneOptions).
+		Decode(&product)
+	if err != nil {
+		return nil, err
+	}
+
+	return product, err
+}
+
 func (product *Product) Insert() (err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	product.ID = primitive.NewObjectID()
@@ -841,18 +867,19 @@ func (product *Product) Insert() (err error) {
 	}
 
 	if len(product.Ean12) == 0 {
-		barcodeStartAt := 100000000000
-		count, err := GetTotalCount(bson.M{}, "product")
+		//barcodeStartAt := 100000000000
+		lastProduct, err := FindLastProduct(bson.M{})
 		if err != nil {
 			return err
 		}
+		lastEan12, err := strconv.Atoi(lastProduct.Ean12)
+		if err != nil {
+			return err
+		}
+		lastEan12++
+		barcode := strconv.Itoa(lastEan12)
+
 		for {
-			barcode, err := product.GenerateBarCode(barcodeStartAt, count)
-			if err != nil {
-				return err
-			}
-			//log.Print("barcode:")
-			//log.Print(barcode)
 			product.Ean12 = barcode
 			exists, err := product.IsEan12Exists()
 			if err != nil {
@@ -861,7 +888,14 @@ func (product *Product) Insert() (err error) {
 			if !exists {
 				break
 			}
-			barcodeStartAt++
+			lastEan12, err := strconv.Atoi(product.Ean12)
+			if err != nil {
+				return err
+			}
+			lastEan12++
+			barcode = strconv.Itoa(lastEan12)
+
+			//barcodeStartAt++
 		}
 	}
 
@@ -947,16 +981,19 @@ func (product *Product) Update() error {
 	}
 
 	if len(product.Ean12) == 0 {
-		barcodeStartAt := 100000000000
-		count, err := GetTotalCount(bson.M{}, "product")
+		//barcodeStartAt := 100000000000
+		lastProduct, err := FindLastProduct(bson.M{})
 		if err != nil {
 			return err
 		}
+		lastEan12, err := strconv.Atoi(lastProduct.Ean12)
+		if err != nil {
+			return err
+		}
+		lastEan12++
+		barcode := strconv.Itoa(lastEan12)
+
 		for {
-			barcode, err := product.GenerateBarCode(barcodeStartAt, count)
-			if err != nil {
-				return err
-			}
 			product.Ean12 = strings.ToUpper(barcode)
 			exists, err := product.IsEan12Exists()
 			if err != nil {
@@ -965,7 +1002,13 @@ func (product *Product) Update() error {
 			if !exists {
 				break
 			}
-			barcodeStartAt++
+
+			lastEan12, err := strconv.Atoi(product.Ean12)
+			if err != nil {
+				return err
+			}
+			lastEan12++
+			barcode = strconv.Itoa(lastEan12)
 		}
 	}
 
