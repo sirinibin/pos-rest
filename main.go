@@ -26,6 +26,7 @@ func main() {
 	db.InitRedis()
 	CreateIndex("product", "ean_12", true)
 	CreateIndex("product", "part_number", true)
+	CreateIndex("product", "name", false)
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
