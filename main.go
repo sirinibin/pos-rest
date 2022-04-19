@@ -27,7 +27,7 @@ func main() {
 	CreateIndex("product", "ean_12", true, false)
 	CreateIndex("product", "part_number", true, false)
 	CreateIndex("product", "name", false, true)
-	ListAllIndexes("product")
+	//ListAllIndexes("product")
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
