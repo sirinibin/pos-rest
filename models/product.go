@@ -816,21 +816,21 @@ func (product *Product) GenerateBarCode(startFrom int) (string, error) {
 
 func (product *Product) Insert() (err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
-	defer cancel()
 	product.ID = primitive.NewObjectID()
-	if len(product.ItemCode) == 0 {
-		for {
-			exists, err := product.IsItemCodeExists()
-			if err != nil {
-				return err
+	/*
+		if len(product.ItemCode) == 0 {
+			for {
+				exists, err := product.IsItemCodeExists()
+				if err != nil {
+					return err
+				}
+				if !exists {
+					break
+				}
+				product.ItemCode = strings.ToUpper(GenerateItemCode(7))
 			}
-			if !exists {
-				break
-			}
-			product.ItemCode = strings.ToUpper(GenerateItemCode(7))
 		}
-	}
+	*/
 	if len(product.PartNumber) == 0 {
 		for {
 			product.PartNumber = strings.ToUpper(GeneratePartNumber(7))
@@ -875,6 +875,8 @@ func (product *Product) Insert() (err error) {
 		return err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
 	_, err = collection.InsertOne(ctx, &product)
 	if err != nil {
 		return err
