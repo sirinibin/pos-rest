@@ -261,7 +261,7 @@ func ListAllIndexes(collectionName string) {
 func CreateIndex(collectionName string, field string, unique bool, text bool) error {
 	log.Print("Inside Create Index")
 	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
-	collection.Indexes().DropAll(context.Background())
+	//collection.Indexes().DropAll(context.Background())
 
 	// 1. Lets define the keys for the index we want to create
 	var mod mongo.IndexModel
