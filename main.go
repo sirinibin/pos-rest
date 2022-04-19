@@ -24,6 +24,8 @@ func main() {
 	fmt.Println("A GoLang / Myql Microservice [OAuth2,Redis & JWT used for token management]!")
 	db.Client()
 	db.InitRedis()
+	CreateIndex("product", "ean_12", true)
+	CreateIndex("product", "part_number", true)
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -205,9 +207,6 @@ func main() {
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(8).Hour().Do(cronJobsEveryHour)
 	s.StartAsync()
-
-	CreateIndex("product", "ean_12", true)
-	CreateIndex("product", "part_number", true)
 
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", router))
