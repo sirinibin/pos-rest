@@ -273,7 +273,7 @@ func CreateIndex(collectionName string, field string, unique bool, text bool) er
 	} else if text {
 		mod = mongo.IndexModel{
 			Keys:    bson.M{field: "text"}, // index in ascending order or -1 for descending order
-			Options: options.Index().SetUnique(unique),
+			Options: options.Index().SetDefaultLanguage("english"),
 		}
 
 	}
