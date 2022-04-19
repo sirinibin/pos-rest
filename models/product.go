@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -856,6 +857,8 @@ func (product *Product) Insert() (err error) {
 	if len(product.PartNumber) == 0 {
 		for {
 			product.PartNumber = strings.ToUpper(GeneratePartNumber(10))
+			log.Print("product.PartNumber:")
+			log.Print(product.PartNumber)
 			exists, err := product.IsPartNumberExists()
 			if err != nil {
 				return err
@@ -867,20 +870,26 @@ func (product *Product) Insert() (err error) {
 	}
 
 	if len(product.Ean12) == 0 {
-		//barcodeStartAt := 100000000000
 		lastProduct, err := FindLastProduct(bson.M{})
 		if err != nil {
 			return err
 		}
-		lastEan12, err := strconv.Atoi(lastProduct.Ean12)
-		if err != nil {
-			return err
+		barcode := ""
+		if lastProduct != nil {
+			lastEan12, err := strconv.Atoi(lastProduct.Ean12)
+			if err != nil {
+				return err
+			}
+			lastEan12++
+			barcode = strconv.Itoa(lastEan12)
+		} else {
+			barcode = "100000000000"
 		}
-		lastEan12++
-		barcode := strconv.Itoa(lastEan12)
 
 		for {
 			product.Ean12 = barcode
+			log.Print("product.Ean12:")
+			log.Print(product.Ean12)
 			exists, err := product.IsEan12Exists()
 			if err != nil {
 				return err

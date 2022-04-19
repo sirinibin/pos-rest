@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -14,6 +15,9 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
 	"github.com/sirinibin/pos-rest/models"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"gopkg.in/mgo.v2/bson"
 )
 
 func main() {
@@ -202,6 +206,9 @@ func main() {
 	s.Every(8).Hour().Do(cronJobsEveryHour)
 	s.StartAsync()
 
+	CreateIndex("product", "ean_12", true)
+	CreateIndex("product", "part_number", true)
+
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", router))
 
@@ -226,6 +233,63 @@ func main() {
 
 }
 
+// CreateIndex - creates an index for a specific field in a collection
+func CreateIndex(collectionName string, field string, unique bool) error {
+	log.Print("Inside Create Index")
+	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+
+	// 1. Lets define the keys for the index we want to create
+	mod := mongo.IndexModel{
+		Keys:    bson.M{field: 1}, // index in ascending order or -1 for descending order
+		Options: options.Index().SetUnique(unique),
+	}
+
+	// 2. Create the context for this operation
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 4. Create a single index
+	indexName, err := collection.Indexes().CreateOne(ctx, mod)
+	if err != nil {
+		// 5. Something went wrong, we log it and return false
+		log.Printf("Failed to create Index for field:%s", field)
+		fmt.Println(err.Error())
+		return err
+	}
+
+	log.Printf("Created Index:%s", indexName)
+
+	// 6. All went well, we return true
+	return nil
+}
+
+/*
+func CreateIndexes(collectionName string, fieldName string) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+
+	CreateIndexesOptions := options.CreateIndexesOptions{}
+	CreateIndexesOptions.SetMaxTime(10 * time.Second)
+
+	indexOptions := options.IndexOptions{}
+	indexOptions.SetUnique(true)
+	indexOptions.SetSparse(true)
+	//	indexOptions.SetBackground(true)
+
+	index := mongo.IndexModel{
+		Keys: bsonx.Doc{
+			{Key: fieldName, Value: bsonx.Int32(1)},
+		},
+		Options: &indexOptions,
+	}
+
+	indexName, err := collection.Indexes().CreateOne(context.Background(), index, &CreateIndexesOptions)
+	if err != nil {
+		return fmt.Errorf("error setting up index for %s: %s", "product", err.Error())
+	}
+	log.Printf("Created Index:%s", indexName)
+	return nil
+}
+*/
 func cronJobsEveryHour() {
 	log.Print("Inside Cron job")
 	var err error
