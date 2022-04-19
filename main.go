@@ -27,6 +27,7 @@ func main() {
 	CreateIndex("product", "ean_12", true)
 	CreateIndex("product", "part_number", true)
 	CreateIndex("product", "name", false)
+	ListAllIndexes("product")
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -231,6 +232,29 @@ func main() {
 	}
 	log.Fatal(http.ListenAndServe(":"+httpPort, router))
 
+}
+
+func ListAllIndexes(collectionName string) {
+	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	indexView := collection.Indexes()
+	opts := options.ListIndexes().SetMaxTime(2 * time.Second)
+	cursor, err := indexView.List(context.TODO(), opts)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var result []bson.M
+	if err = cursor.All(context.TODO(), &result); err != nil {
+		log.Fatal(err)
+	}
+
+	for _, v := range result {
+		for k1, v1 := range v {
+			fmt.Printf("%v: %v\n", k1, v1)
+		}
+		fmt.Println()
+	}
 }
 
 // CreateIndex - creates an index for a specific field in a collection
