@@ -833,7 +833,7 @@ func (product *Product) Insert() (err error) {
 	*/
 	if len(product.PartNumber) == 0 {
 		for {
-			product.PartNumber = strings.ToUpper(GeneratePartNumber(7))
+			product.PartNumber = strings.ToUpper(GeneratePartNumber(10))
 			exists, err := product.IsPartNumberExists()
 			if err != nil {
 				return err
