@@ -24,9 +24,9 @@ func main() {
 	fmt.Println("A GoLang / Myql Microservice [OAuth2,Redis & JWT used for token management]!")
 	db.Client()
 	db.InitRedis()
-	CreateIndex("product", "ean_12", true)
-	CreateIndex("product", "part_number", true)
-	CreateIndex("product", "name", false)
+	CreateIndex("product", "ean_12", true, false)
+	CreateIndex("product", "part_number", true, false)
+	CreateIndex("product", "name", false, true)
 	ListAllIndexes("product")
 
 	httpPort := env.Getenv("API_PORT", "2000")
@@ -258,14 +258,24 @@ func ListAllIndexes(collectionName string) {
 }
 
 // CreateIndex - creates an index for a specific field in a collection
-func CreateIndex(collectionName string, field string, unique bool) error {
+func CreateIndex(collectionName string, field string, unique bool, text bool) error {
 	log.Print("Inside Create Index")
 	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	collection.Indexes().DropAll(context.Background())
 
 	// 1. Lets define the keys for the index we want to create
-	mod := mongo.IndexModel{
-		Keys:    bson.M{field: 1}, // index in ascending order or -1 for descending order
-		Options: options.Index().SetUnique(unique),
+	var mod mongo.IndexModel
+	if unique {
+		mod = mongo.IndexModel{
+			Keys:    bson.M{field: 1}, // index in ascending order or -1 for descending order
+			Options: options.Index().SetUnique(unique),
+		}
+	} else if text {
+		mod = mongo.IndexModel{
+			Keys:    bson.M{field: "text"}, // index in ascending order or -1 for descending order
+			Options: options.Index().SetUnique(unique),
+		}
+
 	}
 
 	// 2. Create the context for this operation
