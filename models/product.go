@@ -816,7 +816,7 @@ func (product *Product) GenerateBarCode(startFrom int) (string, error) {
 
 func (product *Product) Insert() (err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 	product.ID = primitive.NewObjectID()
 	if len(product.ItemCode) == 0 {
