@@ -1504,12 +1504,14 @@ func ProcessOrders() error {
 			return err
 		}
 
-		if order.Code == "GUOCJ-100199" {
-			err = order.HardDelete()
-			if err != nil {
-				return err
+		/*
+			if order.Code == "GUOCJ-100199" {
+				err = order.HardDelete()
+				if err != nil {
+					return err
+				}
 			}
-		}
+		*/
 
 	}
 
