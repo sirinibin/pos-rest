@@ -808,7 +808,7 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 	for index, purchaseReturnProduct := range purchasereturn.Products {
 		if purchaseReturnProduct.ProductID.IsZero() {
-			errs["product_id_"+strconv.Itoa(index)] = "Product is required for purchasereturn"
+			errs["product_id_"+strconv.Itoa(index)] = "Product is required for purchase return"
 		} else {
 			exists, err := IsProductExists(&purchaseReturnProduct.ProductID)
 			if err != nil {
@@ -821,10 +821,8 @@ func (purchasereturn *PurchaseReturn) Validate(
 			}
 		}
 
-		if scenario != "update" {
-			if purchaseReturnProduct.Quantity == 0 {
-				errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
-			}
+		if purchaseReturnProduct.Quantity == 0 {
+			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
 		}
 
 		for _, purchaseProduct := range purchase.Products {
