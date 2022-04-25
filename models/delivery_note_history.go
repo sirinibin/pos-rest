@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,6 +28,45 @@ type ProductDeliveryNoteHistory struct {
 	Unit             string              `bson:"unit,omitempty" json:"unit,omitempty"`
 	CreatedAt        *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt        *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+type DeliveryNoteHistoryStats struct {
+	ID            *primitive.ObjectID `json:"id" bson:"_id"`
+	TotalQuantity float64             `json:"total_quantity" bson:"total_quantity"`
+}
+
+func GetDeliveryNoteHistoryStats(filter map[string]interface{}) (stats DeliveryNoteHistoryStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":            nil,
+				"total_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+		stats.TotalQuantity = math.Round(stats.TotalQuantity*100) / 100
+	}
+
+	return stats, nil
 }
 
 func SearchDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) (models []ProductDeliveryNoteHistory, criterias SearchCriterias, err error) {

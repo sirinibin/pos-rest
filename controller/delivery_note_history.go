@@ -40,6 +40,17 @@ func ListDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	deliveryNoteHistoryStats, err := models.GetDeliveryNoteHistoryStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_quantity"] = "Unable to find total quantity of delivery notes:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+	response.Meta["total_quantity"] = deliveryNoteHistoryStats.TotalQuantity
+
 	if len(histories) == 0 {
 		response.Result = []interface{}{}
 	} else {
