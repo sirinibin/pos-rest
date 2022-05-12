@@ -57,7 +57,7 @@ type Product struct {
 	Category      []*ProductCategory    `json:"category,omitempty"`
 	UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
-	Unit          string                `bson:"unit,omitempty" json:"unit,omitempty"`
+	Unit          string                `bson:"unit" json:"unit"`
 	Images        []string              `bson:"images,omitempty" json:"images,omitempty"`
 	ImagesContent []string              `json:"images_content,omitempty"`
 	Deleted       bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
