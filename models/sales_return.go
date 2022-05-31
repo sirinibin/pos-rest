@@ -1397,9 +1397,10 @@ func ProcessSalesReturns() error {
 			}
 		*/
 
-		d := salesReturn.Date.Add(time.Hour * time.Duration(-3))
-		salesReturn.Date = &d
-
+		/*
+			d := salesReturn.Date.Add(time.Hour * time.Duration(-3))
+			salesReturn.Date = &d
+		*/
 		err = salesReturn.Update()
 		if err != nil {
 			return err

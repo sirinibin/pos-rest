@@ -1371,9 +1371,10 @@ func ProcessPurchaseReturns() error {
 			}
 		*/
 
-		d := model.Date.Add(time.Hour * time.Duration(-3))
-		model.Date = &d
-
+		/*
+			d := model.Date.Add(time.Hour * time.Duration(-3))
+			model.Date = &d
+		*/
 		err = model.Update()
 		if err != nil {
 			return err
