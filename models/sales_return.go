@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -322,6 +323,9 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
+
+		//log.Printf("Start Date:%v", startDate)
+		//log.Printf("End Date:%v", endDate)
 		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
 	}
 
@@ -339,7 +343,7 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
 		}
-
+		log.Printf("Start Date:%v", startDate)
 	}
 
 	keys, ok = r.URL.Query()["search[to_date]"]
@@ -353,7 +357,7 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 		if timeZoneOffset != 0 {
 			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
 		}
-
+		log.Printf("End Date:%v", endDate)
 	}
 
 	if !startDate.IsZero() && !endDate.IsZero() {
@@ -653,7 +657,16 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	if govalidator.IsNull(salesreturn.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
-		const shortForm = "Jan 02 2006"
+		/*
+			const shortForm = "Jan 02 2006"
+			date, err := time.Parse(shortForm, salesreturn.DateStr)
+			if err != nil {
+				errs["date_str"] = "Invalid date format"
+			}
+			salesreturn.Date = &date
+		*/
+
+		const shortForm = "2006-01-02T15:04:05Z07:00"
 		date, err := time.Parse(shortForm, salesreturn.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
@@ -1383,6 +1396,9 @@ func ProcessSalesReturns() error {
 				}
 			}
 		*/
+
+		d := salesReturn.Date.Add(time.Hour * time.Duration(-3))
+		salesReturn.Date = &d
 
 		err = salesReturn.Update()
 		if err != nil {

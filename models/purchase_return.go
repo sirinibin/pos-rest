@@ -699,7 +699,16 @@ func (purchasereturn *PurchaseReturn) Validate(
 	if govalidator.IsNull(purchasereturn.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
-		const shortForm = "Jan 02 2006"
+		/*
+			const shortForm = "Jan 02 2006"
+			date, err := time.Parse(shortForm, purchasereturn.DateStr)
+			if err != nil {
+				errs["date_str"] = "Invalid date format"
+			}
+			purchasereturn.Date = &date
+		*/
+
+		const shortForm = "2006-01-02T15:04:05Z07:00"
 		date, err := time.Parse(shortForm, purchasereturn.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
@@ -1361,6 +1370,9 @@ func ProcessPurchaseReturns() error {
 				}
 			}
 		*/
+
+		d := model.Date.Add(time.Hour * time.Duration(-3))
+		model.Date = &d
 
 		err = model.Update()
 		if err != nil {

@@ -18,6 +18,10 @@ type SearchCriterias struct {
 	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
 }
 
+func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {
+	return date.Add(time.Hour * time.Duration(timeZoneOffset))
+}
+
 func GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

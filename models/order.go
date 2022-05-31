@@ -345,10 +345,6 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 	return stats, nil
 }
 
-func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {
-	return date.Add(time.Hour * time.Duration(timeZoneOffset))
-}
-
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
