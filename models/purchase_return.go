@@ -358,6 +358,8 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
 		}
 
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
 	}
 
 	if !startDate.IsZero() && !endDate.IsZero() {
@@ -1375,7 +1377,7 @@ func ProcessPurchaseReturns() error {
 			d := model.Date.Add(time.Hour * time.Duration(-3))
 			model.Date = &d
 		*/
-		model.Date = model.CreatedAt
+		//model.Date = model.CreatedAt
 		err = model.Update()
 		if err != nil {
 			return err

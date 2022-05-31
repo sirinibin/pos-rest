@@ -495,6 +495,8 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 		if timeZoneOffset != 0 {
 			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
 		}
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
 
 	}
 

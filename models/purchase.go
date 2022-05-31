@@ -477,6 +477,8 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
 		}
 
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
 	}
 
 	if !startDate.IsZero() && !endDate.IsZero() {

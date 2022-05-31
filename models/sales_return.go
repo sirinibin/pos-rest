@@ -357,6 +357,8 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 		if timeZoneOffset != 0 {
 			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
 		}
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
 		log.Printf("End Date:%v", endDate)
 	}
 
@@ -1401,7 +1403,7 @@ func ProcessSalesReturns() error {
 			d := salesReturn.Date.Add(time.Hour * time.Duration(-3))
 			salesReturn.Date = &d
 		*/
-		salesReturn.Date = salesReturn.CreatedAt
+		//salesReturn.Date = salesReturn.CreatedAt
 		err = salesReturn.Update()
 		if err != nil {
 			return err
