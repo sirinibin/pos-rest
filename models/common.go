@@ -2,7 +2,10 @@ package models
 
 import (
 	"context"
+	"encoding/hex"
 	"log"
+	"math/rand"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +19,25 @@ type SearchCriterias struct {
 	Select   map[string]interface{} `bson:"select,omitempty" json:"select,omitempty"`
 	SearchBy map[string]interface{} `bson:"search_by,omitempty" json:"search_by,omitempty"`
 	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
+}
+
+func GenerateFileName(prefix, suffix string) string {
+	randBytes := make([]byte, 16)
+	rand.Read(randBytes)
+	return prefix + hex.EncodeToString(randBytes) + suffix
+}
+
+func GenerateCode(n int) string {
+	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func IsStringBase64(content string) (bool, error) {
+	return regexp.MatchString(`^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$`, content)
 }
 
 func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {

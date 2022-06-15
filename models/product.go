@@ -3,14 +3,12 @@ package models
 import (
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"math/rand"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -784,19 +782,6 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 	return errs
 }
 
-func IsStringBase64(content string) (bool, error) {
-	return regexp.MatchString(`^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$`, content)
-}
-
-func GenerateItemCode(n int) string {
-	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func GeneratePartNumber(n int) string {
 	letterRunes := []rune("1234567890")
 	b := make([]rune, n)
@@ -962,12 +947,6 @@ func (product *Product) SaveImages() error {
 	product.ImagesContent = []string{}
 
 	return nil
-}
-
-func GenerateFileName(prefix, suffix string) string {
-	randBytes := make([]byte, 16)
-	rand.Read(randBytes)
-	return prefix + hex.EncodeToString(randBytes) + suffix
 }
 
 func (product *Product) Update() error {

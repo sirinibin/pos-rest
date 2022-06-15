@@ -92,12 +92,27 @@ func main() {
 	router.HandleFunc("/v1/product/{id}", controller.UpdateProduct).Methods("PUT")
 	router.HandleFunc("/v1/product/{id}", controller.DeleteProduct).Methods("DELETE")
 
+	//Expense
+	router.HandleFunc("/v1/expense", controller.CreateExpense).Methods("POST")
+	router.HandleFunc("/v1/expense", controller.ListExpense).Methods("GET")
+	router.HandleFunc("/v1/expense/{id}", controller.ViewExpense).Methods("GET")
+	router.HandleFunc("/v1/expense/code/{code}", controller.ViewExpenseByCode).Methods("GET")
+	router.HandleFunc("/v1/expense/{id}", controller.UpdateProduct).Methods("PUT")
+	router.HandleFunc("/v1/expense/{id}", controller.DeleteProduct).Methods("DELETE")
+
 	//ProductCategory
 	router.HandleFunc("/v1/product-category", controller.CreateProductCategory).Methods("POST")
 	router.HandleFunc("/v1/product-category", controller.ListProductCategory).Methods("GET")
 	router.HandleFunc("/v1/product-category/{id}", controller.ViewProductCategory).Methods("GET")
 	router.HandleFunc("/v1/product-category/{id}", controller.UpdateProductCategory).Methods("PUT")
 	router.HandleFunc("/v1/product-category/{id}", controller.DeleteProductCategory).Methods("DELETE")
+
+	//ExpenseCategory
+	router.HandleFunc("/v1/expense-category", controller.CreateExpenseCategory).Methods("POST")
+	router.HandleFunc("/v1/expense-category", controller.ListExpenseCategory).Methods("GET")
+	router.HandleFunc("/v1/expense-category/{id}", controller.ViewExpenseCategory).Methods("GET")
+	router.HandleFunc("/v1/expense-category/{id}", controller.UpdateExpenseCategory).Methods("PUT")
+	router.HandleFunc("/v1/expense-category/{id}", controller.DeleteExpenseCategory).Methods("DELETE")
 
 	//User
 	router.HandleFunc("/v1/user", controller.CreateUser).Methods("POST")
@@ -379,6 +394,13 @@ func cronJobsEveryHour() {
 	if err != nil {
 		log.Print(err)
 	}
+
+	/*
+		err = models.ProcessExpenses()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	err = models.ProcessOrders()
 	if err != nil {
