@@ -97,8 +97,8 @@ func main() {
 	router.HandleFunc("/v1/expense", controller.ListExpense).Methods("GET")
 	router.HandleFunc("/v1/expense/{id}", controller.ViewExpense).Methods("GET")
 	router.HandleFunc("/v1/expense/code/{code}", controller.ViewExpenseByCode).Methods("GET")
-	router.HandleFunc("/v1/expense/{id}", controller.UpdateProduct).Methods("PUT")
-	router.HandleFunc("/v1/expense/{id}", controller.DeleteProduct).Methods("DELETE")
+	router.HandleFunc("/v1/expense/{id}", controller.UpdateExpense).Methods("PUT")
+	router.HandleFunc("/v1/expense/{id}", controller.DeleteExpense).Methods("DELETE")
 
 	//ProductCategory
 	router.HandleFunc("/v1/product-category", controller.CreateProductCategory).Methods("POST")

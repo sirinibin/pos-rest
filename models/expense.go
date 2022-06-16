@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -21,6 +24,8 @@ type Expense struct {
 	Code          string                `bson:"code,omitempty" json:"code,omitempty"`
 	Amount        float64               `bson:"amount" json:"amount"`
 	Description   string                `bson:"description,omitempty" json:"description,omitempty"`
+	Date          *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr       string                `json:"date_str,omitempty"`
 	StoreID       *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName     string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	StoreCode     string                `json:"store_code,omitempty" bson:"store_code,omitempty"`
@@ -202,6 +207,63 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return expenses, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return expenses, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return expenses, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
 	}
 
 	var createdAtStartDate time.Time
@@ -401,6 +463,26 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 		errs["amount"] = "Amount is required"
 	}
 
+	if govalidator.IsNull(expense.Description) {
+		errs["description"] = "Description is required"
+	}
+
+	if govalidator.IsNull(expense.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		//const shortForm = "Jan 02 2006"
+		//const shortForm = "	January 02, 2006T3:04PM"
+		//from js:Thu Apr 14 2022 03:53:15 GMT+0300 (Arabian Standard Time)
+		//	const shortForm = "Monday Jan 02 2006 15:04:05 GMT-0700 (MST)"
+		//const shortForm = "Mon Jan 02 2006 15:04:05 GMT-0700 (MST)"
+		const shortForm = "2006-01-02T15:04:05Z07:00"
+		date, err := time.Parse(shortForm, expense.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		expense.Date = &date
+	}
+
 	if len(expense.CategoryID) == 0 {
 		errs["category_id"] = "Atleast 1 category is required"
 	} else {
@@ -496,7 +578,7 @@ func FindLastExpenseByStoreID(
 
 func (expense *Expense) MakeCode() error {
 	lastExpense, err := FindLastExpenseByStoreID(expense.StoreID, bson.M{})
-	if err != nil {
+	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
 	if lastExpense == nil {
@@ -550,6 +632,7 @@ func (expense *Expense) Insert() (err error) {
 	if len(expense.Code) == 0 {
 		err = expense.MakeCode()
 		if err != nil {
+			log.Print("Error making code")
 			return err
 		}
 	}
@@ -570,6 +653,7 @@ func (expense *Expense) Insert() (err error) {
 	defer cancel()
 	_, err = collection.InsertOne(ctx, &expense)
 	if err != nil {
+		log.Print(err)
 		return err
 	}
 	return nil
