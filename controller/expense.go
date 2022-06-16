@@ -47,6 +47,18 @@ func ListExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	expenseStats, err := models.GetExpenseStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total"] = "Unable to find total amount of expenses:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["total"] = expenseStats.Total
+
 	if len(expenses) == 0 {
 		response.Result = []interface{}{}
 	} else {

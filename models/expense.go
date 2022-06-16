@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -108,6 +109,44 @@ func (expense *Expense) UpdateForeignLabelFields() error {
 	}
 
 	return nil
+}
+
+type ExpenseStats struct {
+	ID    *primitive.ObjectID `json:"id" bson:"_id"`
+	Total float64             `json:"total" bson:"total"`
+}
+
+func GetExpenseStats(filter map[string]interface{}) (stats ExpenseStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":   nil,
+				"total": bson.M{"$sum": "$amount"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+		stats.Total = math.Round(stats.Total*100) / 100
+	}
+	return stats, nil
 }
 
 func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, criterias SearchCriterias, err error) {
