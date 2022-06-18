@@ -100,6 +100,46 @@ func main() {
 	router.HandleFunc("/v1/expense/{id}", controller.UpdateExpense).Methods("PUT")
 	router.HandleFunc("/v1/expense/{id}", controller.DeleteExpense).Methods("DELETE")
 
+	//CustomeDeposit
+	router.HandleFunc("/v1/customer-deposit", controller.CreateCustomerDeposit).Methods("POST")
+	router.HandleFunc("/v1/customer-deposit", controller.ListCustomerDeposit).Methods("GET")
+	router.HandleFunc("/v1/customer-deposit/{id}", controller.ViewCustomerDeposit).Methods("GET")
+	router.HandleFunc("/v1/customer-deposit/code/{code}", controller.ViewCustomerDepositByCode).Methods("GET")
+	router.HandleFunc("/v1/customer-deposit/{id}", controller.UpdateCustomerDeposit).Methods("PUT")
+	router.HandleFunc("/v1/customer-deposit/{id}", controller.DeleteCustomerDeposit).Methods("DELETE")
+
+	//CustomeWithdrawal
+	router.HandleFunc("/v1/customer-withdrawal", controller.CreateCustomerWithdrawal).Methods("POST")
+	router.HandleFunc("/v1/customer-withdrawal", controller.ListCustomerWithdrawal).Methods("GET")
+	router.HandleFunc("/v1/customer-withdrawal/{id}", controller.ViewCustomerWithdrawal).Methods("GET")
+	router.HandleFunc("/v1/customer-withdrawal/code/{code}", controller.ViewCustomerWithdrawalByCode).Methods("GET")
+	router.HandleFunc("/v1/customer-withdrawal/{id}", controller.UpdateCustomerWithdrawal).Methods("PUT")
+	router.HandleFunc("/v1/customer-withdrawal/{id}", controller.DeleteCustomerWithdrawal).Methods("DELETE")
+
+	//CapitalWithdrawal
+	router.HandleFunc("/v1/capital-withdrawal", controller.CreateCapitalWithdrawal).Methods("POST")
+	router.HandleFunc("/v1/capital-withdrawal", controller.ListCapitalWithdrawal).Methods("GET")
+	router.HandleFunc("/v1/capital-withdrawal/{id}", controller.ViewCapitalWithdrawal).Methods("GET")
+	router.HandleFunc("/v1/capital-withdrawal/code/{code}", controller.ViewCapitalWithdrawalByCode).Methods("GET")
+	router.HandleFunc("/v1/capital-withdrawal/{id}", controller.UpdateCapitalWithdrawal).Methods("PUT")
+	router.HandleFunc("/v1/capital-withdrawal/{id}", controller.DeleteCapitalWithdrawal).Methods("DELETE")
+
+	//Capital
+	router.HandleFunc("/v1/capital", controller.CreateCapital).Methods("POST")
+	router.HandleFunc("/v1/capital", controller.ListCapital).Methods("GET")
+	router.HandleFunc("/v1/capital/{id}", controller.ViewCapital).Methods("GET")
+	router.HandleFunc("/v1/capital/code/{code}", controller.ViewCapitalByCode).Methods("GET")
+	router.HandleFunc("/v1/capital/{id}", controller.UpdateCapital).Methods("PUT")
+	router.HandleFunc("/v1/capital/{id}", controller.DeleteCapital).Methods("DELETE")
+
+	//Divident
+	router.HandleFunc("/v1/divident", controller.CreateDivident).Methods("POST")
+	router.HandleFunc("/v1/divident", controller.ListDivident).Methods("GET")
+	router.HandleFunc("/v1/divident/{id}", controller.ViewDivident).Methods("GET")
+	router.HandleFunc("/v1/divident/code/{code}", controller.ViewDividentByCode).Methods("GET")
+	router.HandleFunc("/v1/divident/{id}", controller.UpdateDivident).Methods("PUT")
+	router.HandleFunc("/v1/divident/{id}", controller.DeleteDivident).Methods("DELETE")
+
 	//ProductCategory
 	router.HandleFunc("/v1/product-category", controller.CreateProductCategory).Methods("POST")
 	router.HandleFunc("/v1/product-category", controller.ListProductCategory).Methods("GET")

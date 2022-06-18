@@ -19,106 +19,98 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Expense : Expense structure
-type Expense struct {
-	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	Code          string                `bson:"code,omitempty" json:"code,omitempty"`
-	Amount        float64               `bson:"amount" json:"amount"`
-	Description   string                `bson:"description,omitempty" json:"description,omitempty"`
-	Date          *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr       string                `json:"date_str,omitempty"`
-	PaymentMethod string                `json:"payment_method" bson:"payment_method"`
-	StoreID       *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName     string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	StoreCode     string                `json:"store_code,omitempty" bson:"store_code,omitempty"`
-	CategoryID    []*primitive.ObjectID `json:"category_id" bson:"category_id"`
-	Category      []*ExpenseCategory    `json:"category,omitempty"`
-	Images        []string              `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent []string              `json:"images_content,omitempty"`
-	CreatedAt     *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User                 `json:"created_by_user,omitempty"`
-	UpdatedByUser *User                 `json:"updated_by_user,omitempty"`
-	CategoryName  []string              `json:"category_name" bson:"category_name"`
-	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Deleted       bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User                 `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+//Capital : Capital structure
+type Capital struct {
+	ID                 primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Code               string              `bson:"code,omitempty" json:"code,omitempty"`
+	Amount             float64             `bson:"amount" json:"amount"`
+	Description        string              `bson:"description,omitempty" json:"description,omitempty"`
+	Date               *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr            string              `json:"date_str,omitempty"`
+	InvestedByUserID   *primitive.ObjectID `json:"invested_by_user_id,omitempty" bson:"invested_by_user_id,omitempty"`
+	InvestedByUserName string              `json:"invested_by_user_name,omitempty" bson:"invested_by_user_name,omitempty"`
+	PaymentMethod      string              `json:"payment_method" bson:"payment_method"`
+	StoreID            *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	StoreCode          string              `json:"store_code,omitempty" bson:"store_code,omitempty"`
+	Images             []string            `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent      []string            `json:"images_content,omitempty"`
+	CreatedAt          *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy          *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy          *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser      *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser      *User               `json:"updated_by_user,omitempty"`
+	CategoryName       []string            `json:"category_name" bson:"category_name"`
+	CreatedByName      string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName      string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName      string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Deleted            bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy          *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser      *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt          *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 }
 
-func (expense *Expense) AttributesValueChangeEvent(expenseOld *Expense) error {
+func (capital *Capital) AttributesValueChangeEvent(capitalOld *Capital) error {
 
 	return nil
 }
 
-func (expense *Expense) UpdateForeignLabelFields() error {
+func (capital *Capital) UpdateForeignLabelFields() error {
 
-	expense.CategoryName = []string{}
+	capital.CategoryName = []string{}
 
-	for _, categoryID := range expense.CategoryID {
-		expenseCategory, err := FindExpenseCategoryByID(categoryID, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return errors.New("Error Finding expense category id:" + categoryID.Hex() + ",error:" + err.Error())
-		}
-		expense.CategoryName = append(expense.CategoryName, expenseCategory.Name)
-	}
-
-	for _, category := range expense.Category {
-		expenseCategory, err := FindExpenseCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return errors.New("Error Finding expense category id:" + category.ID.Hex() + ",error:" + err.Error())
-		}
-		expense.CategoryName = append(expense.CategoryName, expenseCategory.Name)
-	}
-
-	if expense.CreatedBy != nil {
-		createdByUser, err := FindUserByID(expense.CreatedBy, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return errors.New("Error findind created_by user:" + err.Error())
-		}
-		expense.CreatedByName = createdByUser.Name
-	}
-
-	if expense.UpdatedBy != nil {
-		updatedByUser, err := FindUserByID(expense.UpdatedBy, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return errors.New("Error findind updated_by user:" + err.Error())
-		}
-		expense.UpdatedByName = updatedByUser.Name
-	}
-
-	if expense.DeletedBy != nil && !expense.DeletedBy.IsZero() {
-		deletedByUser, err := FindUserByID(expense.DeletedBy, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return errors.New("Error findind deleted_by user:" + err.Error())
-		}
-		expense.DeletedByName = deletedByUser.Name
-	}
-
-	if expense.StoreID != nil {
-		store, err := FindStoreByID(expense.StoreID, bson.M{"id": 1, "name": 1, "code": 1})
+	if capital.InvestedByUserID != nil {
+		user, err := FindUserByID(capital.InvestedByUserID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
-		expense.StoreName = store.Name
-		expense.StoreCode = store.Code
+		capital.InvestedByUserName = user.Name
+	}
+
+	if capital.CreatedBy != nil {
+		createdByUser, err := FindUserByID(capital.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error findind created_by user:" + err.Error())
+		}
+		capital.CreatedByName = createdByUser.Name
+	}
+
+	if capital.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(capital.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error findind updated_by user:" + err.Error())
+		}
+		capital.UpdatedByName = updatedByUser.Name
+	}
+
+	if capital.DeletedBy != nil && !capital.DeletedBy.IsZero() {
+		deletedByUser, err := FindUserByID(capital.DeletedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error findind deleted_by user:" + err.Error())
+		}
+		capital.DeletedByName = deletedByUser.Name
+	}
+
+	if capital.StoreID != nil {
+		store, err := FindStoreByID(capital.StoreID, bson.M{"id": 1, "name": 1, "code": 1})
+		if err != nil {
+			return err
+		}
+		capital.StoreName = store.Name
+		capital.StoreCode = store.Code
 	}
 
 	return nil
 }
 
-type ExpenseStats struct {
+type CapitalStats struct {
 	ID    *primitive.ObjectID `json:"id" bson:"_id"`
 	Total float64             `json:"total" bson:"total"`
 }
 
-func GetExpenseStats(filter map[string]interface{}) (stats ExpenseStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func GetCapitalStats(filter map[string]interface{}) (stats CapitalStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -150,7 +142,7 @@ func GetExpenseStats(filter map[string]interface{}) (stats ExpenseStats, err err
 	return stats, nil
 }
 
-func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, criterias SearchCriterias, err error) {
+func SearchCapital(w http.ResponseWriter, r *http.Request) (capitals []Capital, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -177,7 +169,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 
 		value, err := strconv.ParseFloat(keys[0], 32)
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 
 		if operator != "" {
@@ -219,7 +211,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		for _, id := range categoryIds {
 			categoryID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return expenses, criterias, err
+				return capitals, criterias, err
 			}
 			objecIds = append(objecIds, categoryID)
 		}
@@ -239,7 +231,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		for _, id := range userIds {
 			userID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return expenses, criterias, err
+				return capitals, criterias, err
 			}
 			objecIds = append(objecIds, userID)
 		}
@@ -254,7 +246,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -274,7 +266,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		const shortForm = "Jan 02 2006"
 		startDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -287,7 +279,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		const shortForm = "Jan 02 2006"
 		endDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -314,7 +306,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
@@ -330,7 +322,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		const shortForm = "Jan 02 2006"
 		createdAtStartDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -343,7 +335,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		const shortForm = "Jan 02 2006"
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -366,7 +358,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 	if ok && len(keys[0]) >= 1 {
 		storeID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
-			return expenses, criterias, err
+			return capitals, criterias, err
 		}
 		criterias.SearchBy["store_id"] = storeID
 	}
@@ -386,7 +378,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -394,7 +386,6 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 
-	categorySelectFields := map[string]interface{}{}
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}
 	deletedByUserSelectFields := map[string]interface{}{}
@@ -403,10 +394,6 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 	if ok && len(keys[0]) >= 1 {
 		criterias.Select = ParseSelectString(keys[0])
 		//Relational Select Fields
-
-		if _, ok := criterias.Select["category.id"]; ok {
-			categorySelectFields = ParseRelationalSelectString(keys[0], "category")
-		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
 			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
@@ -433,7 +420,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return expenses, criterias, errors.New("Error fetching expenses:" + err.Error())
+		return capitals, criterias, errors.New("Error fetching capitals:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -442,51 +429,44 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return expenses, criterias, errors.New("Cursor error:" + err.Error())
+			return capitals, criterias, errors.New("Cursor error:" + err.Error())
 		}
-		expense := Expense{}
-		err = cur.Decode(&expense)
+		capital := Capital{}
+		err = cur.Decode(&capital)
 		if err != nil {
-			return expenses, criterias, errors.New("Cursor decode error:" + err.Error())
-		}
-
-		if _, ok := criterias.Select["category.id"]; ok {
-			for _, categoryID := range expense.CategoryID {
-				category, _ := FindExpenseCategoryByID(categoryID, categorySelectFields)
-				expense.Category = append(expense.Category, category)
-			}
+			return capitals, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			expense.CreatedByUser, _ = FindUserByID(expense.CreatedBy, createdByUserSelectFields)
+			capital.CreatedByUser, _ = FindUserByID(capital.CreatedBy, createdByUserSelectFields)
 		}
 
 		if _, ok := criterias.Select["updated_by_user.id"]; ok {
-			expense.UpdatedByUser, _ = FindUserByID(expense.UpdatedBy, updatedByUserSelectFields)
+			capital.UpdatedByUser, _ = FindUserByID(capital.UpdatedBy, updatedByUserSelectFields)
 		}
 
 		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			expense.DeletedByUser, _ = FindUserByID(expense.DeletedBy, deletedByUserSelectFields)
+			capital.DeletedByUser, _ = FindUserByID(capital.DeletedBy, deletedByUserSelectFields)
 		}
 
-		expenses = append(expenses, expense)
+		capitals = append(capitals, capital)
 	} //end for loop
 
-	return expenses, criterias, nil
+	return capitals, criterias, nil
 
 }
 
-func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (capital *Capital) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
 
 	if scenario == "update" {
-		if expense.ID.IsZero() {
+		if capital.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsExpenseExists(&expense.ID)
+		exists, err := IsCapitalExists(&capital.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -494,23 +474,38 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 
 		if !exists {
-			errs["id"] = "Invalid Expense:" + expense.ID.Hex()
+			errs["id"] = "Invalid Capital:" + capital.ID.Hex()
+		}
+
+	}
+
+	if capital.InvestedByUserID == nil || capital.InvestedByUserID.IsZero() {
+		errs["invested_by_user_id"] = "Invester is required"
+	} else {
+		exists, err := IsUserExists(capital.InvestedByUserID)
+		if err != nil {
+			errs["invested_by_user_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["invested_by_user_id"] = "Invalid Customer:" + capital.InvestedByUserID.Hex()
 		}
 	}
 
-	if govalidator.IsNull(expense.PaymentMethod) {
+	if govalidator.IsNull(capital.PaymentMethod) {
 		errs["payment_method"] = "Payment method is required"
 	}
 
-	if expense.Amount == 0 {
+	if capital.Amount == 0 {
 		errs["amount"] = "Amount is required"
 	}
 
-	if govalidator.IsNull(expense.Description) {
+	if govalidator.IsNull(capital.Description) {
 		errs["description"] = "Description is required"
 	}
 
-	if govalidator.IsNull(expense.DateStr) {
+	if govalidator.IsNull(capital.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
 		//const shortForm = "Jan 02 2006"
@@ -519,39 +514,23 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 		//	const shortForm = "Monday Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		//const shortForm = "Mon Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		const shortForm = "2006-01-02T15:04:05Z07:00"
-		date, err := time.Parse(shortForm, expense.DateStr)
+		date, err := time.Parse(shortForm, capital.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
 		}
-		expense.Date = &date
+		capital.Date = &date
 	}
 
-	if len(expense.CategoryID) == 0 {
-		errs["category_id"] = "Atleast 1 category is required"
-	} else {
-		for i, categoryID := range expense.CategoryID {
-			exists, err := IsExpenseCategoryExists(categoryID)
-			if err != nil {
-				errs["category_id_"+strconv.Itoa(i)] = err.Error()
-			}
-
-			if !exists {
-				errs["category_id_"+strconv.Itoa(i)] = "Invalid category:" + categoryID.Hex()
-			}
-		}
-
-	}
-
-	for k, imageContent := range expense.ImagesContent {
+	for k, imageContent := range capital.ImagesContent {
 		splits := strings.Split(imageContent, ",")
 
 		if len(splits) == 2 {
-			expense.ImagesContent[k] = splits[1]
+			capital.ImagesContent[k] = splits[1]
 		} else if len(splits) == 1 {
-			expense.ImagesContent[k] = splits[0]
+			capital.ImagesContent[k] = splits[0]
 		}
 
-		valid, err := IsStringBase64(expense.ImagesContent[k])
+		valid, err := IsStringBase64(capital.ImagesContent[k])
 		if err != nil {
 			errs["images_content"] = err.Error()
 		}
@@ -568,11 +547,11 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 	return errs
 }
 
-func FindLastExpense(
+func FindLastCapital(
 	selectFields map[string]interface{},
-) (expense *Expense, err error) {
+) (capital *Capital, err error) {
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -586,20 +565,20 @@ func FindLastExpense(
 
 	err = collection.FindOne(ctx,
 		bson.M{}, findOneOptions).
-		Decode(&expense)
+		Decode(&capital)
 	if err != nil {
 		return nil, err
 	}
 
-	return expense, err
+	return capital, err
 }
 
-func FindLastExpenseByStoreID(
+func FindLastCapitalByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
-) (expense *Expense, err error) {
+) (capital *Capital, err error) {
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -611,27 +590,27 @@ func FindLastExpenseByStoreID(
 
 	err = collection.FindOne(ctx,
 		bson.M{"store_id": storeID}, findOneOptions).
-		Decode(&expense)
+		Decode(&capital)
 	if err != nil {
 		return nil, err
 	}
 
-	return expense, err
+	return capital, err
 }
 
-func (expense *Expense) MakeCode() error {
-	lastExpense, err := FindLastExpenseByStoreID(expense.StoreID, bson.M{})
+func (capital *Capital) MakeCode() error {
+	lastCapital, err := FindLastCapitalByStoreID(capital.StoreID, bson.M{})
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
-	if lastExpense == nil {
-		store, err := FindStoreByID(expense.StoreID, bson.M{})
+	if lastCapital == nil {
+		store, err := FindStoreByID(capital.StoreID, bson.M{})
 		if err != nil {
 			return err
 		}
-		expense.Code = store.Code + "-100000"
+		capital.Code = store.Code + "-100000"
 	} else {
-		splits := strings.Split(lastExpense.Code, "-")
+		splits := strings.Split(lastCapital.Code, "-")
 		if len(splits) == 2 {
 			storeCode := splits[0]
 			codeStr := splits[1]
@@ -640,12 +619,12 @@ func (expense *Expense) MakeCode() error {
 				return err
 			}
 			codeInt++
-			expense.Code = storeCode + "-" + strconv.Itoa(codeInt)
+			capital.Code = storeCode + "-" + strconv.Itoa(codeInt)
 		}
 	}
 
 	for {
-		exists, err := expense.IsCodeExists()
+		exists, err := capital.IsCodeExists()
 		if err != nil {
 			return err
 		}
@@ -653,7 +632,7 @@ func (expense *Expense) MakeCode() error {
 			break
 		}
 
-		splits := strings.Split(lastExpense.Code, "-")
+		splits := strings.Split(lastCapital.Code, "-")
 		storeCode := splits[0]
 		codeStr := splits[1]
 		codeInt, err := strconv.Atoi(codeStr)
@@ -662,39 +641,39 @@ func (expense *Expense) MakeCode() error {
 		}
 		codeInt++
 
-		expense.Code = storeCode + "-" + strconv.Itoa(codeInt)
+		capital.Code = storeCode + "-" + strconv.Itoa(codeInt)
 	}
 
 	return nil
 }
 
-func (expense *Expense) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
-	expense.ID = primitive.NewObjectID()
+func (capital *Capital) Insert() (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	capital.ID = primitive.NewObjectID()
 
-	if len(expense.Code) == 0 {
-		err = expense.MakeCode()
+	if len(capital.Code) == 0 {
+		err = capital.MakeCode()
 		if err != nil {
 			log.Print("Error making code")
 			return err
 		}
 	}
 
-	if len(expense.ImagesContent) > 0 {
-		err := expense.SaveImages()
+	if len(capital.ImagesContent) > 0 {
+		err := capital.SaveImages()
 		if err != nil {
 			return err
 		}
 	}
 
-	err = expense.UpdateForeignLabelFields()
+	err = capital.UpdateForeignLabelFields()
 	if err != nil {
 		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
-	_, err = collection.InsertOne(ctx, &expense)
+	_, err = collection.InsertOne(ctx, &capital)
 	if err != nil {
 		log.Print(err)
 		return err
@@ -702,9 +681,9 @@ func (expense *Expense) Insert() (err error) {
 	return nil
 }
 
-func (expense *Expense) SaveImages() error {
+func (capital *Capital) SaveImages() error {
 
-	for _, imageContent := range expense.ImagesContent {
+	for _, imageContent := range capital.ImagesContent {
 		content, err := base64.StdEncoding.DecodeString(imageContent)
 		if err != nil {
 			return err
@@ -715,55 +694,55 @@ func (expense *Expense) SaveImages() error {
 			return err
 		}
 
-		filename := "images/expenses/" + GenerateFileName("expense_", extension)
+		filename := "images/capitals/" + GenerateFileName("capital_", extension)
 		err = SaveBase64File(filename, content)
 		if err != nil {
 			return err
 		}
-		expense.Images = append(expense.Images, "/"+filename)
+		capital.Images = append(capital.Images, "/"+filename)
 	}
 
-	expense.ImagesContent = []string{}
+	capital.ImagesContent = []string{}
 
 	return nil
 }
 
-func (expense *Expense) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func (capital *Capital) Update() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
 	defer cancel()
 
-	if len(expense.ImagesContent) > 0 {
-		err := expense.SaveImages()
+	if len(capital.ImagesContent) > 0 {
+		err := capital.SaveImages()
 		if err != nil {
 			return err
 		}
 	}
 
-	err := expense.UpdateForeignLabelFields()
+	err := capital.UpdateForeignLabelFields()
 	if err != nil {
 		return err
 	}
 
 	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": expense.ID},
-		bson.M{"$set": expense},
+		bson.M{"_id": capital.ID},
+		bson.M{"$set": capital},
 		updateOptions,
 	)
 	return err
 }
 
-func (expense *Expense) DeleteExpense(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func (capital *Capital) DeleteCapital(tokenClaims TokenClaims) (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
-	err = expense.UpdateForeignLabelFields()
+	err = capital.UpdateForeignLabelFields()
 	if err != nil {
 		return err
 	}
@@ -773,15 +752,15 @@ func (expense *Expense) DeleteExpense(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
-	expense.Deleted = true
-	expense.DeletedBy = &userID
+	capital.Deleted = true
+	capital.DeletedBy = &userID
 	now := time.Now()
-	expense.DeletedAt = &now
+	capital.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
-		bson.M{"_id": expense.ID},
-		bson.M{"$set": expense},
+		bson.M{"_id": capital.ID},
+		bson.M{"$set": capital},
 		updateOptions,
 	)
 	if err != nil {
@@ -791,12 +770,12 @@ func (expense *Expense) DeleteExpense(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindExpenseByCode(
+func FindCapitalByCode(
 	code string,
 	selectFields map[string]interface{},
-) (expense *Expense, err error) {
+) (capital *Capital, err error) {
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -807,20 +786,20 @@ func FindExpenseByCode(
 
 	err = collection.FindOne(ctx,
 		bson.M{"code": code}, findOneOptions).
-		Decode(&expense)
+		Decode(&capital)
 	if err != nil {
 		return nil, err
 	}
 
-	return expense, err
+	return capital, err
 }
 
-func FindExpenseByID(
+func FindCapitalByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
-) (expense *Expense, err error) {
+) (capital *Capital, err error) {
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -831,60 +810,51 @@ func FindExpenseByID(
 
 	err = collection.FindOne(ctx,
 		bson.M{"_id": ID}, findOneOptions).
-		Decode(&expense)
+		Decode(&capital)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, ok := selectFields["category.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "category")
-		for _, categoryID := range expense.CategoryID {
-			category, _ := FindExpenseCategoryByID(categoryID, fields)
-			expense.Category = append(expense.Category, category)
-		}
-
-	}
-
 	if _, ok := selectFields["created_by_user.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "created_by_user")
-		expense.CreatedByUser, _ = FindUserByID(expense.CreatedBy, fields)
+		capital.CreatedByUser, _ = FindUserByID(capital.CreatedBy, fields)
 	}
 
 	if _, ok := selectFields["updated_by_user.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
-		expense.UpdatedByUser, _ = FindUserByID(expense.UpdatedBy, fields)
+		capital.UpdatedByUser, _ = FindUserByID(capital.UpdatedBy, fields)
 	}
 
 	if _, ok := selectFields["deleted_by_user.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
-		expense.DeletedByUser, _ = FindUserByID(expense.DeletedBy, fields)
+		capital.DeletedByUser, _ = FindUserByID(capital.DeletedBy, fields)
 	}
 
-	return expense, err
+	return capital, err
 }
 
-func (expense *Expense) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func (capital *Capital) IsCodeExists() (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
 
-	if expense.ID.IsZero() {
+	if capital.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"code": expense.Code,
+			"code": capital.Code,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"code": expense.Code,
-			"_id":  bson.M{"$ne": expense.ID},
+			"code": capital.Code,
+			"_id":  bson.M{"$ne": capital.ID},
 		})
 	}
 
 	return (count > 0), err
 }
 
-func IsExpenseExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func IsCapitalExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -896,14 +866,14 @@ func IsExpenseExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessExpenses() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func ProcessCapitals() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx := context.Background()
 	findOptions := options.Find()
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
-		return errors.New("Error fetching expenses" + err.Error())
+		return errors.New("Error fetching capitals" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -914,7 +884,7 @@ func ProcessExpenses() error {
 		if err != nil {
 			return errors.New("Cursor error:" + err.Error())
 		}
-		model := Expense{}
+		model := Capital{}
 		err = cur.Decode(&model)
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
