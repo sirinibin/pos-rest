@@ -479,6 +479,21 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 
 	}
 
+	if customerdeposit.StoreID == nil || customerdeposit.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
+	} else {
+		exists, err := IsStoreExists(customerdeposit.StoreID)
+		if err != nil {
+			errs["store_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["store_id"] = "Invalid store:" + customerdeposit.StoreID.Hex()
+			return errs
+		}
+	}
+
 	if customerdeposit.CustomerID == nil || customerdeposit.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {

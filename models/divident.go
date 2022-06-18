@@ -478,6 +478,20 @@ func (divident *Divident) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 
 	}
+	if divident.StoreID == nil || divident.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
+	} else {
+		exists, err := IsStoreExists(divident.StoreID)
+		if err != nil {
+			errs["store_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["store_id"] = "Invalid store:" + divident.StoreID.Hex()
+			return errs
+		}
+	}
 
 	if divident.WithdrawnByUserID == nil || divident.WithdrawnByUserID.IsZero() {
 		errs["withdrawn_by_user_id"] = "Withdrawer is required"

@@ -201,14 +201,14 @@ func SearchCapital(w http.ResponseWriter, r *http.Request) (capitals []Capital, 
 		}
 	}
 
-	keys, ok = r.URL.Query()["search[category_id]"]
+	keys, ok = r.URL.Query()["search[invested_by_user_id]"]
 	if ok && len(keys[0]) >= 1 {
 
-		categoryIds := strings.Split(keys[0], ",")
+		userIds := strings.Split(keys[0], ",")
 
 		objecIds := []primitive.ObjectID{}
 
-		for _, id := range categoryIds {
+		for _, id := range userIds {
 			categoryID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
 				return capitals, criterias, err
@@ -217,7 +217,7 @@ func SearchCapital(w http.ResponseWriter, r *http.Request) (capitals []Capital, 
 		}
 
 		if len(objecIds) > 0 {
-			criterias.SearchBy["category_id"] = bson.M{"$in": objecIds}
+			criterias.SearchBy["invested_by_user_id"] = bson.M{"$in": objecIds}
 		}
 	}
 
@@ -477,6 +477,21 @@ func (capital *Capital) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "Invalid Capital:" + capital.ID.Hex()
 		}
 
+	}
+
+	if capital.StoreID == nil || capital.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
+	} else {
+		exists, err := IsStoreExists(capital.StoreID)
+		if err != nil {
+			errs["store_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["store_id"] = "Invalid store:" + capital.StoreID.Hex()
+			return errs
+		}
 	}
 
 	if capital.InvestedByUserID == nil || capital.InvestedByUserID.IsZero() {

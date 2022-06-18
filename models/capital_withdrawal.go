@@ -479,6 +479,21 @@ func (capitalwithdrawal *CapitalWithdrawal) Validate(w http.ResponseWriter, r *h
 
 	}
 
+	if capitalwithdrawal.StoreID == nil || capitalwithdrawal.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
+	} else {
+		exists, err := IsStoreExists(capitalwithdrawal.StoreID)
+		if err != nil {
+			errs["store_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["store_id"] = "Invalid store:" + capitalwithdrawal.StoreID.Hex()
+			return errs
+		}
+	}
+
 	if capitalwithdrawal.WithdrawnByUserID == nil || capitalwithdrawal.WithdrawnByUserID.IsZero() {
 		errs["withdrawn_by_user_id"] = "Withdrawer is required"
 	} else {
@@ -694,7 +709,7 @@ func (capitalwithdrawal *CapitalWithdrawal) SaveImages() error {
 			return err
 		}
 
-		filename := "images/capitalwithdrawals/" + GenerateFileName("capitalwithdrawal_", extension)
+		filename := "images/capital_withdrawals/" + GenerateFileName("capitalwithdrawal_", extension)
 		err = SaveBase64File(filename, content)
 		if err != nil {
 			return err

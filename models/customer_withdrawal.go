@@ -479,6 +479,21 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 
 	}
 
+	if customerwithdrawal.StoreID == nil || customerwithdrawal.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
+	} else {
+		exists, err := IsStoreExists(customerwithdrawal.StoreID)
+		if err != nil {
+			errs["store_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["store_id"] = "Invalid store:" + customerwithdrawal.StoreID.Hex()
+			return errs
+		}
+	}
+
 	if customerwithdrawal.CustomerID == nil || customerwithdrawal.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {

@@ -498,6 +498,21 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
+	if expense.StoreID == nil || expense.StoreID.IsZero() {
+		errs["store_id"] = "Store is required"
+	} else {
+		exists, err := IsStoreExists(expense.StoreID)
+		if err != nil {
+			errs["store_id"] = err.Error()
+			return errs
+		}
+
+		if !exists {
+			errs["store_id"] = "Invalid store:" + expense.StoreID.Hex()
+			return errs
+		}
+	}
+
 	if govalidator.IsNull(expense.PaymentMethod) {
 		errs["payment_method"] = "Payment method is required"
 	}
