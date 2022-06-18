@@ -694,7 +694,7 @@ func (customerwithdrawal *CustomerWithdrawal) SaveImages() error {
 			return err
 		}
 
-		filename := "images/customerwithdrawals/" + GenerateFileName("customerwithdrawal_", extension)
+		filename := "images/customer_withdrawals/" + GenerateFileName("customerwithdrawal_", extension)
 		err = SaveBase64File(filename, content)
 		if err != nil {
 			return err
