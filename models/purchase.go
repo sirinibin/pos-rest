@@ -579,6 +579,26 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 
 	}
 
+	keys, ok = r.URL.Query()["search[vat_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return purchases, criterias, err
+		}
+		log.Print("value:")
+		log.Print(value)
+
+		if operator != "" {
+			criterias.SearchBy["vat_price"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["vat_price"] = float64(value)
+		}
+
+	}
+
 	keys, ok = r.URL.Query()["search[vendor_id]"]
 	if ok && len(keys[0]) >= 1 {
 
