@@ -59,6 +59,7 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total_purchase"] = purchaseStats.NetTotal
+	response.Meta["vat_price"] = purchaseStats.VatPrice
 	response.Meta["net_retail_profit"] = purchaseStats.NetRetailProfit
 	response.Meta["net_wholesale_profit"] = purchaseStats.NetWholesaleProfit
 

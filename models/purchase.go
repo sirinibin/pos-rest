@@ -142,6 +142,7 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 			"$group": bson.M{
 				"_id":                  nil,
 				"net_total":            bson.M{"$sum": "$net_total"},
+				"vat_price":            bson.M{"$sum": "$vat_price"},
 				"net_retail_profit":    bson.M{"$sum": "$net_retail_profit"},
 				"net_wholesale_profit": bson.M{"$sum": "$net_wholesale_profit"},
 			},
@@ -169,6 +170,7 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 type PurchaseStats struct {
 	ID                 *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal           float64             `json:"net_total" bson:"net_total"`
+	VatPrice           float64             `json:"vat_price" bson:"vat_price"`
 	NetRetailProfit    float64             `json:"net_retail_net_profit" bson:"net_retail_profit"`
 	NetWholesaleProfit float64             `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
 }
