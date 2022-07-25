@@ -84,6 +84,8 @@ type PurchaseReturn struct {
 type PurchaseReturnStats struct {
 	ID       *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal float64             `json:"net_total" bson:"net_total"`
+	VatPrice float64             `json:"vat_price" bson:"vat_price"`
+	Discount float64             `json:"discount" bson:"discount"`
 }
 
 func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturnStats, err error) {
@@ -99,6 +101,8 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturn
 			"$group": bson.M{
 				"_id":       nil,
 				"net_total": bson.M{"$sum": "$net_total"},
+				"vat_price": bson.M{"$sum": "$vat_price"},
+				"discount":  bson.M{"$sum": "$discount"},
 			},
 		},
 	}

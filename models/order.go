@@ -300,11 +300,13 @@ func (order *Order) FindVatPrice() {
 }
 
 type SalesStats struct {
-	ID        *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal  float64             `json:"net_total" bson:"net_total"`
-	NetProfit float64             `json:"net_profit" bson:"net_profit"`
-	Loss      float64             `json:"loss" bson:"loss"`
-	VatPrice  float64             `json:"vat_price" bson:"vat_price"`
+	ID                     *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal               float64             `json:"net_total" bson:"net_total"`
+	NetProfit              float64             `json:"net_profit" bson:"net_profit"`
+	Loss                   float64             `json:"loss" bson:"loss"`
+	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
+	Discount               float64             `json:"discount" bson:"discount"`
+	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 }
 
 func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
@@ -318,11 +320,13 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":        nil,
-				"net_total":  bson.M{"$sum": "$net_total"},
-				"net_profit": bson.M{"$sum": "$net_profit"},
-				"loss":       bson.M{"$sum": "$loss"},
-				"vat_price":  bson.M{"$sum": "$vat_price"},
+				"_id":                    nil,
+				"net_total":              bson.M{"$sum": "$net_total"},
+				"net_profit":             bson.M{"$sum": "$net_profit"},
+				"loss":                   bson.M{"$sum": "$loss"},
+				"vat_price":              bson.M{"$sum": "$vat_price"},
+				"discount":               bson.M{"$sum": "$discount"},
+				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
 			},
 		},
 	}

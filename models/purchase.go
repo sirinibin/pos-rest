@@ -129,6 +129,16 @@ func UpdatePurchaseProfit() error {
 	return nil
 }
 
+type PurchaseStats struct {
+	ID                     *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal               float64             `json:"net_total" bson:"net_total"`
+	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
+	Discount               float64             `json:"discount" bson:"discount"`
+	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	NetRetailProfit        float64             `json:"net_retail_net_profit" bson:"net_retail_profit"`
+	NetWholesaleProfit     float64             `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
+}
+
 func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -140,11 +150,13 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":                  nil,
-				"net_total":            bson.M{"$sum": "$net_total"},
-				"vat_price":            bson.M{"$sum": "$vat_price"},
-				"net_retail_profit":    bson.M{"$sum": "$net_retail_profit"},
-				"net_wholesale_profit": bson.M{"$sum": "$net_wholesale_profit"},
+				"_id":                    nil,
+				"net_total":              bson.M{"$sum": "$net_total"},
+				"vat_price":              bson.M{"$sum": "$vat_price"},
+				"discount":               bson.M{"$sum": "$discount"},
+				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
+				"net_retail_profit":      bson.M{"$sum": "$net_retail_profit"},
+				"net_wholesale_profit":   bson.M{"$sum": "$net_wholesale_profit"},
 			},
 		},
 	}
@@ -165,14 +177,6 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 		stats.NetWholesaleProfit = math.Round(stats.NetWholesaleProfit*100) / 100
 	}
 	return stats, nil
-}
-
-type PurchaseStats struct {
-	ID                 *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal           float64             `json:"net_total" bson:"net_total"`
-	VatPrice           float64             `json:"vat_price" bson:"vat_price"`
-	NetRetailProfit    float64             `json:"net_retail_net_profit" bson:"net_retail_profit"`
-	NetWholesaleProfit float64             `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
 }
 
 func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {

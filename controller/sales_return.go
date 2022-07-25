@@ -59,6 +59,7 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	response.Meta["total_sales_return"] = salesReturnStats.NetTotal
 	response.Meta["vat_price"] = salesReturnStats.VatPrice
+	response.Meta["discount"] = salesReturnStats.Discount
 
 	if len(salesreturns) == 0 {
 		response.Result = []interface{}{}

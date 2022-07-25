@@ -58,6 +58,8 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total_purchase_return"] = purchaseReturnStats.NetTotal
+	response.Meta["vat_price"] = purchaseReturnStats.VatPrice
+	response.Meta["discount"] = purchaseReturnStats.Discount
 
 	if len(purchasereturns) == 0 {
 		response.Result = []interface{}{}

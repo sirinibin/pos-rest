@@ -82,6 +82,14 @@ type SalesReturn struct {
 	ChangeLog               []ChangeLog          `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
+// DiskQuotaUsageResult payload for disk quota usage
+type SalesReturnStats struct {
+	ID       *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal float64             `json:"net_total" bson:"net_total"`
+	VatPrice float64             `json:"vat_price" bson:"vat_price"`
+	Discount float64             `json:"discount" bson:"discount"`
+}
+
 func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -96,6 +104,7 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 				"_id":       nil,
 				"net_total": bson.M{"$sum": "$net_total"},
 				"vat_price": bson.M{"$sum": "$vat_price"},
+				"discount":  bson.M{"$sum": "$discount"},
 			},
 		},
 	}
@@ -114,13 +123,6 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
 	}
 	return stats, nil
-}
-
-// DiskQuotaUsageResult payload for disk quota usage
-type SalesReturnStats struct {
-	ID       *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal float64             `json:"net_total" bson:"net_total"`
-	VatPrice float64             `json:"vat_price" bson:"vat_price"`
 }
 
 func (salesreturn *SalesReturn) SetChangeLog(
