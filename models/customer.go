@@ -51,6 +51,7 @@ type Customer struct {
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog       []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	SearchLabel     string              `json:"search_label"`
 }
 
 func (customer *Customer) SetChangeLog(
@@ -189,7 +190,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 
 	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[phone]"]
@@ -350,6 +357,20 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		err = cur.Decode(&customer)
 		if err != nil {
 			return customers, criterias, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		customer.SearchLabel = customer.Name
+
+		if customer.NameInArabic != "" {
+			customer.SearchLabel += " / " + customer.NameInArabic
+		}
+
+		if customer.Phone != "" {
+			customer.SearchLabel += " Phone: " + customer.Phone
+		}
+
+		if customer.PhoneInArabic != "" {
+			customer.SearchLabel += " / " + customer.PhoneInArabic
 		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
