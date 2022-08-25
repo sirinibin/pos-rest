@@ -366,7 +366,7 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		}
 
 		if customer.Phone != "" {
-			customer.SearchLabel += " Phone: " + customer.Phone
+			customer.SearchLabel += " " + customer.Phone
 		}
 
 		if customer.PhoneInArabic != "" {

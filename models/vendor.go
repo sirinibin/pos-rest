@@ -326,7 +326,7 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		}
 
 		if vendor.Phone != "" {
-			vendor.SearchLabel += " Phone: " + vendor.Phone
+			vendor.SearchLabel += " " + vendor.Phone
 		}
 
 		if vendor.PhoneInArabic != "" {
