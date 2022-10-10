@@ -773,6 +773,7 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 
 		if _, ok := criterias.Select["vendor.id"]; ok {
 			purchase.Vendor, _ = FindVendorByID(purchase.VendorID, vendorSelectFields)
+			log.Print(purchase.Vendor.VATNo)
 		}
 
 		if _, ok := criterias.Select["order_placed_by_user.id"]; ok {
