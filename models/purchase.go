@@ -36,7 +36,7 @@ type PurchaseProduct struct {
 	ExpectedRetailLoss      float64            `bson:"retail_loss" json:"retail_loss"`
 }
 
-//Purchase : Purchase structure
+// Purchase : Purchase structure
 type Purchase struct {
 	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Date                       *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
@@ -821,8 +821,6 @@ func (purchase *Purchase) Validate(
 		//	const shortForm = "Monday Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		//const shortForm = "Mon Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		const shortForm = "2006-01-02T15:04:05Z07:00"
-		log.Print("purchase.DateStr:")
-		log.Print(purchase.DateStr)
 		date, err := time.Parse(shortForm, purchase.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
@@ -1421,6 +1419,7 @@ func IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func ProcessPurchases() error {
+	log.Print("Processing purchases")
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -1432,6 +1431,13 @@ func ProcessPurchases() error {
 	if cur != nil {
 		defer cur.Close(ctx)
 	}
+
+	/*
+		orders, err := GetAllOrders()
+		if err != nil {
+			return errors.New("Error fetching orders:" + err.Error())
+		}
+	*/
 
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
@@ -1448,6 +1454,28 @@ func ProcessPurchases() error {
 		if err != nil {
 			return err
 		}
+
+		//for _, purchaseProduct := range model.Products {
+
+		/*
+			for _, purchaseProduct := range model.Products {
+				for _, order := range orders {
+					for _, orderProduct := range order.Products {
+						if purchaseProduct.ProductID.Hex() == orderProduct.ProductID.Hex() {
+							if purchaseProduct.PurchaseUnitPrice < orderProduct.PurchaseUnitPrice && (orderProduct.PurchaseUnitPrice-purchaseProduct.PurchaseUnitPrice) > 50 {
+								fmt.Printf("\n\nPurchase ID: %s", model.Code)
+								fmt.Printf("\n\nOrder ID: %s", order.Code)
+								fmt.Printf("\nProduct Part Number: %s", orderProduct.PartNumber)
+								fmt.Printf("\nPurchase Unit Price: %f", purchaseProduct.PurchaseUnitPrice)
+								fmt.Printf("\nOrder Product Purchase Unit Price: %f", orderProduct.PurchaseUnitPrice)
+								fmt.Printf("\nProduct sold for unit Price : %f", orderProduct.UnitPrice)
+								fmt.Printf("\nOrder Product profit: %f", orderProduct.Profit)
+							}
+						}
+					}
+				}
+			}
+		*/
 
 		/*
 			if model.PaymentStatus == "" {

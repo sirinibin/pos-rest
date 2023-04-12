@@ -349,6 +349,43 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 	return stats, nil
 }
 
+func GetAllOrders() (orders []Order, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+
+	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
+	/* Note: Actual Record fetching will not happen here
+	as it is using mongodb cursor and record fetching will
+	start with we call cur.Next()
+	*/
+	filter := make(map[string]interface{})
+	cur, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return orders, errors.New("Error fetching orders:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return orders, errors.New("Cursor error:" + err.Error())
+		}
+		order := Order{}
+		err = cur.Decode(&order)
+		if err != nil {
+			return orders, errors.New("Cursor decode error:" + err.Error())
+		}
+		orders = append(orders, order)
+	} //end for loop
+
+	return orders, nil
+}
+
 func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
@@ -748,8 +785,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		*/
 
 		const shortForm = "2006-01-02T15:04:05Z07:00"
-		log.Print("purchase.DateStr:")
-		log.Print(order.DateStr)
 		date, err := time.Parse(shortForm, order.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
@@ -1018,25 +1053,29 @@ func (order *Order) CalculateOrderProfit() error {
 	totalProfit := float64(0.0)
 	totalLoss := float64(0.0)
 	for i, orderProduct := range order.Products {
-		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-		if err != nil {
-			return err
-		}
+		/*
+			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+			if err != nil {
+				return err
+			}
+		*/
 		quantity := (orderProduct.Quantity - orderProduct.QuantityReturned)
 
 		salesPrice := quantity * orderProduct.UnitPrice
 
-		purchaseUnitPrice := 0.0
-		for _, unitPrice := range product.UnitPrices {
-			if unitPrice.StoreID == *order.StoreID {
-				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
-				order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
-				break
+		/*
+			for _, unitPrice := range product.UnitPrices {
+				if unitPrice.StoreID == *order.StoreID {
+					purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+					order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+					break
+				}
 			}
-		}
+		*/
+
 		profit := 0.0
-		if purchaseUnitPrice > 0 {
-			profit = salesPrice - (quantity * purchaseUnitPrice)
+		if orderProduct.PurchaseUnitPrice > 0 {
+			profit = salesPrice - (quantity * orderProduct.PurchaseUnitPrice)
 		}
 
 		profit = math.Round(profit*100) / 100
@@ -1448,6 +1487,7 @@ func ProcessOrders() error {
 		defer cur.Close(ctx)
 	}
 
+	//productCount := 1
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
@@ -1459,6 +1499,21 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		/*
+			for _, orderProduct := range order.Products {
+				if orderProduct.Profit < 0 || orderProduct.Loss > 0 {
+					fmt.Printf("\nNo: %d", productCount)
+					fmt.Printf("\nOrder ID: %s", order.Code)
+					fmt.Printf("\nProduct Part#: %s", orderProduct.PartNumber)
+					fmt.Printf("\nProduct Name: %s", orderProduct.Name)
+					fmt.Printf("\nProduct Profit Recorded: %.02f", orderProduct.Profit)
+					fmt.Printf("\nProduct Loss Recorded: %.02f", orderProduct.Loss)
+					fmt.Printf("\nProduct Sold for Unit Price: %.02f", orderProduct.UnitPrice)
+					fmt.Printf("\nProduct Purchase Unit Price(Marked when sold): %.02f\n", orderProduct.PurchaseUnitPrice)
+					productCount++
+				}
+			}
+		*/
 		/*
 			if order.Code == "GUO-100050" {
 				for k, product := range order.Products {
