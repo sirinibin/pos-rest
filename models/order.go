@@ -1053,29 +1053,25 @@ func (order *Order) CalculateOrderProfit() error {
 	totalProfit := float64(0.0)
 	totalLoss := float64(0.0)
 	for i, orderProduct := range order.Products {
-		/*
-			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-			if err != nil {
-				return err
-			}
-		*/
+		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
 		quantity := (orderProduct.Quantity - orderProduct.QuantityReturned)
 
 		salesPrice := quantity * orderProduct.UnitPrice
 
-		/*
-			for _, unitPrice := range product.UnitPrices {
-				if unitPrice.StoreID == *order.StoreID {
-					purchaseUnitPrice = unitPrice.PurchaseUnitPrice
-					order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
-					break
-				}
+		purchaseUnitPrice := 0.0
+		for _, unitPrice := range product.UnitPrices {
+			if unitPrice.StoreID == *order.StoreID {
+				purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+				order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+				break
 			}
-		*/
-
+		}
 		profit := 0.0
-		if orderProduct.PurchaseUnitPrice > 0 {
-			profit = salesPrice - (quantity * orderProduct.PurchaseUnitPrice)
+		if purchaseUnitPrice > 0 {
+			profit = salesPrice - (quantity * purchaseUnitPrice)
 		}
 
 		profit = math.Round(profit*100) / 100
