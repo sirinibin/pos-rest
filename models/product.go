@@ -1295,13 +1295,13 @@ func ProcessProducts() error {
 				return errors.New("Error fetching sales history:" + err.Error())
 			}
 
-			if model.PartNumber == "WG971923002Q" {
-				//log.Printf("ID: %s", model.ID.Hex())
+			if model.PartNumber == "H424V" {
+				log.Printf("Part No: %s", model.PartNumber)
 				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
 			}
 
-			if len(salesHistories) > 0 {
-				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
+			if len(salesHistories) > 0 && model.PartNumber == "H424V" {
+				log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
 				for _, salesHistory := range salesHistories {
 					order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
 					if err != nil {
@@ -1312,7 +1312,7 @@ func ProcessProducts() error {
 						for _, unitPrice := range model.UnitPrices {
 							if unitPrice.StoreID == *order.StoreID &&
 								order.Products[k].ProductID.Hex() == model.ID.Hex() {
-								//log.Printf("Updating purchase unit price of order: %s", order.Code)
+								log.Printf("Updating purchase unit price of order: %s", order.Code)
 								order.Products[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
 							}
 

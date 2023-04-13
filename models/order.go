@@ -1475,6 +1475,7 @@ func (order *Order) HardDeleteSalesReturn() error {
 }
 
 func ProcessOrders() error {
+	log.Print("Processing orders")
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx := context.Background()
 	findOptions := options.Find()
