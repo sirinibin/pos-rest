@@ -1296,11 +1296,11 @@ func ProcessProducts() error {
 			}
 
 			if model.PartNumber == "H424V" {
-				log.Printf("Part No: %s", model.PartNumber)
+				//log.Printf("Part No: %s", model.PartNumber)
 				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
 			}
 
-			if len(salesHistories) > 0 && model.PartNumber == "H424V" {
+			if len(salesHistories) > 0 {
 				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
 				for _, salesHistory := range salesHistories {
 					order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
