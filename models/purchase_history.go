@@ -468,6 +468,50 @@ func IsPurchaseHistoryExistsByPurchaseID(ID *primitive.ObjectID) (exists bool, e
 	return (count > 0), err
 }
 
+func GetPurchaseHistoriesCountByProductID(productID *primitive.ObjectID) (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return collection.CountDocuments(ctx, bson.M{
+		"product_id": productID,
+	})
+}
+
+func GetPurchaseHistoriesByProductID(productID *primitive.ObjectID) (models []ProductPurchaseHistory, err error) {
+	var criterias SearchCriterias
+	criterias.SearchBy = make(map[string]interface{})
+
+	criterias.SearchBy["product_id"] = productID
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+
+	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching product sales history:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := ProductPurchaseHistory{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		models = append(models, model)
+	} //end for loop
+
+	return models, nil
+}
+
 /*
 func FindPurchaseHistoryByPurchaseID(
 	ID *primitive.ObjectID,

@@ -370,6 +370,7 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 	}
 
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		log.Print("Cool")
 		err := cur.Err()
 		if err != nil {
 			return models, criterias, errors.New("Cursor error:" + err.Error())
@@ -456,4 +457,48 @@ func IsSalesHistoryExistsByOrderID(ID *primitive.ObjectID) (exists bool, err err
 	})
 
 	return (count > 0), err
+}
+
+func GetSalesHistoriesCountByProductID(productID *primitive.ObjectID) (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return collection.CountDocuments(ctx, bson.M{
+		"product_id": productID,
+	})
+}
+
+func GetSalesHistoriesByProductID(productID *primitive.ObjectID) (models []ProductSalesHistory, err error) {
+	//log.Print("Fetching sales histories")
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	cur, err := collection.Find(ctx, bson.M{"product_id": productID}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching product sales history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		salesHistory := ProductSalesHistory{}
+		err = cur.Decode(&salesHistory)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		//log.Print("Pushing")
+		models = append(models, salesHistory)
+	} //end for loop
+
+	return models, nil
 }

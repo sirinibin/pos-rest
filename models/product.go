@@ -37,7 +37,7 @@ type ProductStock struct {
 	Stock             float64            `bson:"stock" json:"stock"`
 }
 
-//Product : Product structure
+// Product : Product structure
 type Product struct {
 	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
@@ -1258,6 +1258,7 @@ func IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func ProcessProducts() error {
+	log.Printf("Processing products")
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -1279,6 +1280,53 @@ func ProcessProducts() error {
 		err = cur.Decode(&model)
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		purchaseHistory, err := GetPurchaseHistoriesByProductID(&model.ID)
+		if err != nil {
+			return errors.New("Error fetching purchase history:" + err.Error())
+		}
+
+		if len(purchaseHistory) <= 1 {
+			//log.Printf("Purchase history is: %d for product: %s", len(purchaseHistory), model.Name)
+			//update unit pruchase value to all orders
+			salesHistories, err := GetSalesHistoriesByProductID(&model.ID)
+			if err != nil {
+				return errors.New("Error fetching sales history:" + err.Error())
+			}
+
+			if model.PartNumber == "WG971923002Q" {
+				//log.Printf("ID: %s", model.ID.Hex())
+				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
+			}
+
+			if len(salesHistories) > 0 {
+				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
+				for _, salesHistory := range salesHistories {
+					order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
+					if err != nil {
+						return errors.New("Error fetching order:" + err.Error())
+					}
+
+					for k, _ := range order.Products {
+						for _, unitPrice := range model.UnitPrices {
+							if unitPrice.StoreID == *order.StoreID &&
+								order.Products[k].ProductID.Hex() == model.ID.Hex() {
+								//log.Printf("Updating purchase unit price of order: %s", order.Code)
+								order.Products[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
+							}
+
+						}
+					}
+
+					err = order.Update()
+					if err != nil {
+						return errors.New("Error updating order:" + err.Error())
+					}
+				}
+
+			}
+
 		}
 
 		/*
