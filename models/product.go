@@ -1312,7 +1312,7 @@ func ProcessProducts() error {
 						for _, unitPrice := range model.UnitPrices {
 							if unitPrice.StoreID == *order.StoreID &&
 								order.Products[k].ProductID.Hex() == model.ID.Hex() &&
-								order.Products[k].Loss > 0 {
+								(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0) {
 								//log.Printf("Updating purchase unit price of order: %s", order.Code)
 								order.Products[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
 							}
