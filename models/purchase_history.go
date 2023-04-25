@@ -486,6 +486,7 @@ func GetPurchaseHistoriesByProductID(productID *primitive.ObjectID) (models []Pr
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetSort(map[string]interface{}{"created_at": -1})
 
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {

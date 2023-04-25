@@ -240,3 +240,26 @@ func ClearPurchaseReturnPayments() error {
 
 	return nil
 }
+
+func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
+	sortFieldWithOrder := strings.Fields(sortString)
+	sortBy = map[string]interface{}{}
+
+	if len(sortFieldWithOrder) == 2 {
+		if sortFieldWithOrder[1] == "1" {
+			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
+		} else if sortFieldWithOrder[1] == "-1" {
+			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Descending order
+		}
+	} else if len(sortFieldWithOrder) == 1 {
+		if strings.HasPrefix(sortFieldWithOrder[0], "-") {
+			sortFieldWithOrder[0] = strings.TrimPrefix(sortFieldWithOrder[0], "-")
+			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Ascending order
+		} else {
+			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
+		}
+
+	}
+
+	return sortBy
+}

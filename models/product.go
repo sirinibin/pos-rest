@@ -1276,59 +1276,72 @@ func ProcessProducts() error {
 		if err != nil {
 			return errors.New("Cursor error:" + err.Error())
 		}
-		model := Product{}
-		err = cur.Decode(&model)
+		product := Product{}
+		err = cur.Decode(&product)
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		purchaseHistory, err := GetPurchaseHistoriesByProductID(&model.ID)
+		/*
+			purchaseHistory, err := GetPurchaseHistoriesByProductID(&product.ID)
+			if err != nil {
+				return errors.New("Error fetching purchase history:" + err.Error())
+			}
+		*/
+
+		//if len(purchaseHistory) <= 1 {
+		//log.Printf("Purchase history is: %d for product: %s", len(purchaseHistory), model.Name)
+		//update unit pruchase value to all orders
+		salesHistories, err := GetSalesHistoriesByProductID(&product.ID)
 		if err != nil {
-			return errors.New("Error fetching purchase history:" + err.Error())
+			return errors.New("Error fetching sales history:" + err.Error())
 		}
 
-		if len(purchaseHistory) <= 1 {
-			//log.Printf("Purchase history is: %d for product: %s", len(purchaseHistory), model.Name)
-			//update unit pruchase value to all orders
-			salesHistories, err := GetSalesHistoriesByProductID(&model.ID)
-			if err != nil {
-				return errors.New("Error fetching sales history:" + err.Error())
-			}
+		if product.PartNumber == "90919-T1004" {
+			//log.Printf("Part No: %s", product.PartNumber)
+			//log.Printf("Sales history is: %d for product: %s", len(salesHistories), product.Name)
+			//log.Print(product.UnitPrices)
+		}
 
-			if model.PartNumber == "CWF" {
-				//log.Printf("Part No: %s", model.PartNumber)
-				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
-			}
+		if len(salesHistories) > 0 {
+			//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
+			for _, salesHistory := range salesHistories {
+				order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
+				if err != nil {
+					return errors.New("Error fetching order:" + err.Error())
+				}
 
-			if len(salesHistories) > 0 {
-				//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
-				for _, salesHistory := range salesHistories {
-					order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
-					if err != nil {
-						return errors.New("Error fetching order:" + err.Error())
-					}
+				for k, _ := range order.Products {
+					for _, unitPrice := range product.UnitPrices {
 
-					for k, _ := range order.Products {
-						for _, unitPrice := range model.UnitPrices {
-							if unitPrice.StoreID == *order.StoreID &&
-								order.Products[k].ProductID.Hex() == model.ID.Hex() &&
-								(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0) {
-								//log.Printf("Updating purchase unit price of order: %s", order.Code)
-								order.Products[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
-							}
-
+						if product.PartNumber == "90919-T1004" {
+							log.Printf("Part No: %s", product.PartNumber)
+							log.Printf("Sales history is: %d for product: %s", len(salesHistories), product.Name)
+							log.Print("order.Products[k].PurchaseUnitPrice:")
+							log.Print(order.Products[k].PurchaseUnitPrice)
 						}
-					}
 
-					err = order.Update()
-					if err != nil {
-						return errors.New("Error updating order:" + err.Error())
+						if unitPrice.StoreID == *order.StoreID &&
+							order.Products[k].ProductID.Hex() == product.ID.Hex() &&
+							(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0) &&
+							order.Products[k].PurchaseUnitPrice == 0 &&
+							unitPrice.PurchaseUnitPrice > 0 {
+							//log.Printf("Updating purchase unit price of order: %s", order.Code)
+							order.Products[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
+						}
+
 					}
 				}
 
+				err = order.Update()
+				if err != nil {
+					return errors.New("Error updating order:" + err.Error())
+				}
 			}
 
 		}
+
+		//}
 
 		/*
 			store, err := FindStoreByCode("GUO", bson.M{})
@@ -1338,7 +1351,7 @@ func ProcessProducts() error {
 			model.StoreID = &store.ID
 		*/
 
-		err = model.Update()
+		err = product.Update()
 		if err != nil {
 			return err
 		}
