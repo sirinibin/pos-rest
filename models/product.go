@@ -1315,10 +1315,10 @@ func ProcessProducts() error {
 					for _, unitPrice := range product.UnitPrices {
 
 						if product.PartNumber == "90919-T1004" {
-							log.Printf("Part No: %s", product.PartNumber)
-							log.Printf("Sales history is: %d for product: %s", len(salesHistories), product.Name)
-							log.Print("order.Products[k].PurchaseUnitPrice:")
-							log.Print(order.Products[k].PurchaseUnitPrice)
+							//log.Printf("Part No: %s", product.PartNumber)
+							//log.Printf("Sales history is: %d for product: %s", len(salesHistories), product.Name)
+							//log.Print("order.Products[k].PurchaseUnitPrice:")
+							//log.Print(order.Products[k].PurchaseUnitPrice)
 						}
 
 						if unitPrice.StoreID == *order.StoreID &&
