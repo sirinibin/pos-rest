@@ -1323,8 +1323,7 @@ func ProcessProducts() error {
 
 						if unitPrice.StoreID == *order.StoreID &&
 							order.Products[k].ProductID.Hex() == product.ID.Hex() &&
-							(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0) &&
-							order.Products[k].PurchaseUnitPrice == 0 &&
+							(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0 || order.Products[k].PurchaseUnitPrice == 0) &&
 							unitPrice.PurchaseUnitPrice > 0 {
 							//log.Printf("Updating purchase unit price of order: %s", order.Code)
 							order.Products[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
