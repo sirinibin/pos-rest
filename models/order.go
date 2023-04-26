@@ -1064,7 +1064,9 @@ func (order *Order) CalculateOrderProfit() error {
 		salesPrice := quantity * orderProduct.UnitPrice
 		purchaseUnitPrice := orderProduct.PurchaseUnitPrice
 
-		if purchaseUnitPrice == 0 {
+		if purchaseUnitPrice == 0 ||
+			order.Products[i].Loss > 0 ||
+			order.Products[i].Profit <= 0 {
 			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
 			if err != nil {
 				return err
