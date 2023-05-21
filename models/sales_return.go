@@ -1065,10 +1065,20 @@ func (salesreturn *SalesReturn) Insert() error {
 func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 	totalProfit := float64(0.0)
 	totalLoss := float64(0.0)
+	order, err := FindOrderByID(salesReturn.OrderID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
 	for i, product := range salesReturn.Products {
 		quantity := product.Quantity
 		salesPrice := quantity * product.UnitPrice
 		purchaseUnitPrice := product.PurchaseUnitPrice
+		for _, orderProduct := range order.Products {
+			if orderProduct.ProductID.Hex() == product.ProductID.Hex() {
+				purchaseUnitPrice = orderProduct.PurchaseUnitPrice
+			}
+		}
 
 		if purchaseUnitPrice == 0 ||
 			salesReturn.Products[i].Loss > 0 ||
