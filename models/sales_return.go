@@ -1153,7 +1153,7 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 		}
 
 	}
-	salesReturn.Profit = math.Round(totalProfit) * 100 / 100
+	salesReturn.Profit = math.Round(totalProfit*100) / 100
 	salesReturn.NetProfit = math.Round((totalProfit-salesReturn.Discount)*100) / 100
 	salesReturn.Loss = totalLoss
 	return nil

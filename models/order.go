@@ -1099,7 +1099,7 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	order.Profit = math.Round(totalProfit) * 100 / 100
+	order.Profit = math.Round(totalProfit*100) / 100
 	order.NetProfit = math.Round((totalProfit-order.Discount)*100) / 100
 	order.Loss = totalLoss
 	return nil
