@@ -1536,7 +1536,7 @@ func ProcessSalesReturns() error {
 			return err
 		}
 
-		if salesReturn.OrderCode == "GUOCJ-100005" {
+		if salesReturn.OrderCode == "GUOJ-200042" {
 			err = salesReturn.HardDelete()
 			if err != nil {
 				return err
