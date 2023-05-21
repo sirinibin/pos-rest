@@ -1585,10 +1585,19 @@ func ProcessOrders() error {
 			}
 		*/
 
+		if order.Code == "GUOJ-101457" {
+			for i, product := range order.Products {
+				if product.PartNumber == "CRB" {
+					order.Products[i].QuantityReturned = 0
+				}
+			}
+		}
+
 		err = order.Update()
 		if err != nil {
 			return err
 		}
+
 		/*
 			if order.Code == "GUOJ-100199" {
 				err = order.HardDelete()
