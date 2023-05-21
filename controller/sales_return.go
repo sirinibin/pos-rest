@@ -58,6 +58,8 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total_sales_return"] = salesReturnStats.NetTotal
+	response.Meta["net_profit"] = salesReturnStats.NetProfit
+	response.Meta["loss"] = salesReturnStats.Loss
 	response.Meta["vat_price"] = salesReturnStats.VatPrice
 	response.Meta["discount"] = salesReturnStats.Discount
 

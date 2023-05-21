@@ -1059,7 +1059,7 @@ func (order *Order) CalculateOrderProfit() error {
 				return err
 			}
 		*/
-		quantity := (orderProduct.Quantity - orderProduct.QuantityReturned)
+		quantity := orderProduct.Quantity
 
 		salesPrice := quantity * orderProduct.UnitPrice
 		purchaseUnitPrice := orderProduct.PurchaseUnitPrice

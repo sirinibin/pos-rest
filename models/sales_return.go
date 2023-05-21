@@ -20,17 +20,20 @@ import (
 )
 
 type SalesReturnProduct struct {
-	ProductID    primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PartNumber   string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity     float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitPrice    float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	ProductID         primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name              string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic      string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode          string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PartNumber        string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity          float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Profit            float64            `bson:"profit" json:"profit"`
+	Loss              float64            `bson:"loss" json:"loss"`
 }
 
-//SalesReturn : SalesReturn structure
+// SalesReturn : SalesReturn structure
 type SalesReturn struct {
 	ID                      primitive.ObjectID   `json:"id,omitempty" bson:"_id,omitempty"`
 	OrderID                 *primitive.ObjectID  `json:"order_id,omitempty" bson:"order_id,omitempty"`
@@ -80,14 +83,19 @@ type SalesReturn struct {
 	UpdatedByName           string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName           string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog               []ChangeLog          `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	Profit                  float64              `bson:"profit" json:"profit"`
+	NetProfit               float64              `bson:"net_profit" json:"net_profit"`
+	Loss                    float64              `bson:"loss" json:"loss"`
 }
 
 // DiskQuotaUsageResult payload for disk quota usage
 type SalesReturnStats struct {
-	ID       *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal float64             `json:"net_total" bson:"net_total"`
-	VatPrice float64             `json:"vat_price" bson:"vat_price"`
-	Discount float64             `json:"discount" bson:"discount"`
+	ID        *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal  float64             `json:"net_total" bson:"net_total"`
+	VatPrice  float64             `json:"vat_price" bson:"vat_price"`
+	Discount  float64             `json:"discount" bson:"discount"`
+	NetProfit float64             `json:"net_profit" bson:"net_profit"`
+	Loss      float64             `json:"loss" bson:"loss"`
 }
 
 func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
@@ -101,10 +109,12 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":       nil,
-				"net_total": bson.M{"$sum": "$net_total"},
-				"vat_price": bson.M{"$sum": "$vat_price"},
-				"discount":  bson.M{"$sum": "$discount"},
+				"_id":        nil,
+				"net_total":  bson.M{"$sum": "$net_total"},
+				"vat_price":  bson.M{"$sum": "$vat_price"},
+				"discount":   bson.M{"$sum": "$discount"},
+				"net_profit": bson.M{"$sum": "$net_profit"},
+				"loss":       bson.M{"$sum": "$loss"},
 			},
 		},
 	}
@@ -121,6 +131,8 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 			return stats, err
 		}
 		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
+		stats.NetProfit = math.Round(stats.NetProfit*100) / 100
+		stats.Loss = math.Round(stats.Loss*100) / 100
 	}
 	return stats, nil
 }
@@ -1022,6 +1034,11 @@ func (salesreturn *SalesReturn) Insert() error {
 		}
 	}
 
+	err = salesreturn.CalculateSalesReturnProfit()
+	if err != nil {
+		return err
+	}
+
 	_, err = collection.InsertOne(ctx, &salesreturn)
 	if err != nil {
 		return err
@@ -1042,6 +1059,55 @@ func (salesreturn *SalesReturn) Insert() error {
 		return err
 	}
 
+	return nil
+}
+
+func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
+	totalProfit := float64(0.0)
+	totalLoss := float64(0.0)
+	for i, product := range salesReturn.Products {
+		quantity := product.Quantity
+		salesPrice := quantity * product.UnitPrice
+		purchaseUnitPrice := product.PurchaseUnitPrice
+
+		if purchaseUnitPrice == 0 ||
+			salesReturn.Products[i].Loss > 0 ||
+			salesReturn.Products[i].Profit <= 0 {
+			product, err := FindProductByID(&product.ProductID, map[string]interface{}{})
+			if err != nil {
+				return err
+			}
+			for _, unitPrice := range product.UnitPrices {
+				if unitPrice.StoreID == *salesReturn.StoreID {
+					purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+					salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+					break
+				}
+			}
+
+		}
+
+		profit := 0.0
+		if purchaseUnitPrice > 0 {
+			profit = salesPrice - (quantity * purchaseUnitPrice)
+		}
+
+		profit = math.Round(profit*100) / 100
+
+		if profit >= 0 {
+			salesReturn.Products[i].Profit = profit
+			salesReturn.Products[i].Loss = 0.0
+			totalProfit += salesReturn.Products[i].Profit
+		} else {
+			salesReturn.Products[i].Profit = 0
+			salesReturn.Products[i].Loss = (profit * -1)
+			totalLoss += salesReturn.Products[i].Loss
+		}
+
+	}
+	salesReturn.Profit = math.Round(totalProfit) * 100 / 100
+	salesReturn.NetProfit = math.Round((totalProfit-salesReturn.Discount)*100) / 100
+	salesReturn.Loss = totalLoss
 	return nil
 }
 
@@ -1223,6 +1289,11 @@ func (salesreturn *SalesReturn) Update() error {
 		return err
 	}
 
+	err = salesreturn.CalculateSalesReturnProfit()
+	if err != nil {
+		return err
+	}
+
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": salesreturn.ID},
@@ -1351,6 +1422,7 @@ func (salesreturn *SalesReturn) HardDelete() (err error) {
 }
 
 func ProcessSalesReturns() error {
+	log.Print("Processing sales returns")
 	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -1372,6 +1444,11 @@ func ProcessSalesReturns() error {
 		err = cur.Decode(&salesReturn)
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = salesReturn.CalculateSalesReturnProfit()
+		if err != nil {
+			return err
 		}
 
 		err = salesReturn.AddProductsSalesReturnHistory()
