@@ -542,7 +542,7 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 
 	}
 
-	keys, ok = r.URL.Query()["search[profit]"]
+	keys, ok = r.URL.Query()["search[net_profit]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
@@ -553,9 +553,9 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		}
 
 		if operator != "" {
-			criterias.SearchBy["profit"] = bson.M{operator: float64(value)}
+			criterias.SearchBy["net_profit"] = bson.M{operator: float64(value)}
 		} else {
-			criterias.SearchBy["profit"] = float64(value)
+			criterias.SearchBy["net_profit"] = float64(value)
 		}
 
 	}

@@ -465,6 +465,42 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 
 	}
 
+	keys, ok = r.URL.Query()["search[net_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_profit"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_profit"] = float64(value)
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 32)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["loss"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["loss"] = float64(value)
+		}
+
+	}
+
 	keys, ok = r.URL.Query()["search[customer_id]"]
 	if ok && len(keys[0]) >= 1 {
 
