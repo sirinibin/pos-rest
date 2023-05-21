@@ -1077,8 +1077,10 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 		for _, orderProduct := range order.Products {
 			if orderProduct.ProductID.Hex() == product.ProductID.Hex() {
 				purchaseUnitPrice = orderProduct.PurchaseUnitPrice
+				break
 			}
 		}
+		salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
 
 		if purchaseUnitPrice == 0 ||
 			salesReturn.Products[i].Loss > 0 ||
