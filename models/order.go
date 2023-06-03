@@ -529,15 +529,15 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return orders, criterias, err
 		}
 
 		if operator != "" {
-			criterias.SearchBy["net_total"] = bson.M{operator: float64(value)}
+			criterias.SearchBy["net_total"] = bson.M{operator: value}
 		} else {
-			criterias.SearchBy["net_total"] = float64(value)
+			criterias.SearchBy["net_total"] = value
 		}
 
 	}

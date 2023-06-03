@@ -379,6 +379,191 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		}
 	}
 
+	var storeID primitive.ObjectID
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[stock]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		stockValue, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		stockElement := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				stockElement["$elemMatch"] = bson.M{
+					"stock": bson.M{
+						operator: stockValue,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				stockElement["$elemMatch"] = bson.M{
+					"stock": bson.M{
+						operator: stockValue,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				stockElement["$elemMatch"] = bson.M{
+					"stock":    stockValue,
+					"store_id": storeID,
+				}
+			} else {
+				stockElement["$elemMatch"] = bson.M{
+					"stock": stockValue,
+				}
+			}
+		}
+
+		criterias.SearchBy["stock"] = stockElement
+	}
+
+	keys, ok = r.URL.Query()["search[retail_unit_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		element := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_price": bson.M{
+						operator: value,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_price": bson.M{
+						operator: value,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_price": value,
+					"store_id":          storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_price": value,
+				}
+			}
+		}
+
+		criterias.SearchBy["unit_prices"] = element
+	}
+
+	keys, ok = r.URL.Query()["search[wholesale_unit_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		element := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_price": bson.M{
+						operator: value,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_price": bson.M{
+						operator: value,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_price": value,
+					"store_id":             storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_price": value,
+				}
+			}
+		}
+
+		criterias.SearchBy["unit_prices"] = element
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_unit_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		element := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"purchase_unit_price": bson.M{
+						operator: value,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"purchase_unit_price": bson.M{
+						operator: value,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"purchase_unit_price": value,
+					"store_id":            storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"purchase_unit_price": value,
+				}
+			}
+		}
+
+		criterias.SearchBy["unit_prices"] = element
+	}
+
 	keys, ok = r.URL.Query()["search[rack]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["rack"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
