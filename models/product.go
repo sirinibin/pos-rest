@@ -77,6 +77,177 @@ type Product struct {
 	BarcodeBase64 string                `json:"barcode_base64"`
 }
 
+type ProductStats struct {
+	ID                  *primitive.ObjectID `json:"id" bson:"_id"`
+	Stock               float64             `json:"stock" bson:"stock"`
+	RetailStockValue    float64             `json:"retail_stock_value" bson:"retail_stock_value"`
+	WholesaleStockValue float64             `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
+	PurchaseStockValue  float64             `json:"purchase_stock_value" bson:"purchase_stock_value"`
+}
+
+func GetProductStats(
+	filter map[string]interface{},
+	storeID primitive.ObjectID,
+) (stats ProductStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stock_StoreCond := []interface{}{1, 1}
+	retailStockvalue_StoreCond := []interface{}{1, 1}
+	retailStockValueStock_StoreCond := []interface{}{"$$stockItem.store_id", "$$unitPrice.store_id"}
+
+	if !storeID.IsZero() {
+		stock_StoreCond = []interface{}{
+			"$$stockItem.store_id", storeID,
+		}
+
+		retailStockvalue_StoreCond = []interface{}{
+			"$$unitPrice.store_id", storeID,
+		}
+
+		retailStockValueStock_StoreCond = []interface{}{
+			"$$stockItem.store_id", storeID,
+		}
+
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id": nil,
+				"stock": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$stock",
+						"as":    "stockItem",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$eq": stock_StoreCond},
+								"$$stockItem.stock",
+								0,
+							},
+						},
+					},
+				}}},
+				"retail_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$unit_prices",
+						"as":    "unitPrice",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$eq": retailStockvalue_StoreCond},
+								bson.M{"$multiply": []interface{}{
+									"$$unitPrice.retail_unit_price",
+									bson.M{"$sum": bson.M{"$sum": bson.M{
+										"$map": bson.M{
+											"input": "$stock",
+											"as":    "stockItem",
+											"in": bson.M{
+												"$cond": []interface{}{
+													bson.M{"$and": []interface{}{
+														bson.M{"$eq": retailStockValueStock_StoreCond},
+														bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
+													}},
+													"$$stockItem.stock",
+													0,
+												},
+											},
+										},
+									}}},
+								}},
+								0,
+							},
+						},
+					},
+				}}},
+				"wholesale_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$unit_prices",
+						"as":    "unitPrice",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$eq": retailStockvalue_StoreCond},
+								bson.M{"$multiply": []interface{}{
+									"$$unitPrice.wholesale_unit_price",
+									bson.M{"$sum": bson.M{"$sum": bson.M{
+										"$map": bson.M{
+											"input": "$stock",
+											"as":    "stockItem",
+											"in": bson.M{
+												"$cond": []interface{}{
+													bson.M{"$and": []interface{}{
+														bson.M{"$eq": retailStockValueStock_StoreCond},
+														bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
+													}},
+													"$$stockItem.stock",
+													0,
+												},
+											},
+										},
+									}}},
+								}},
+								0,
+							},
+						},
+					},
+				}}},
+				"purchase_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$unit_prices",
+						"as":    "unitPrice",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$eq": retailStockvalue_StoreCond},
+								bson.M{"$multiply": []interface{}{
+									"$$unitPrice.purchase_unit_price",
+									bson.M{"$sum": bson.M{"$sum": bson.M{
+										"$map": bson.M{
+											"input": "$stock",
+											"as":    "stockItem",
+											"in": bson.M{
+												"$cond": []interface{}{
+													bson.M{"$and": []interface{}{
+														bson.M{"$eq": retailStockValueStock_StoreCond},
+														bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
+													}},
+													"$$stockItem.stock",
+													0,
+												},
+											},
+										},
+									}}},
+								}},
+								0,
+							},
+						},
+					},
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+		stats.Stock = math.Round(stats.Stock*100) / 100
+		stats.RetailStockValue = math.Round(stats.RetailStockValue*100) / 100
+		stats.WholesaleStockValue = math.Round(stats.WholesaleStockValue*100) / 100
+		stats.PurchaseStockValue = math.Round(stats.PurchaseStockValue*100) / 100
+	}
+	return stats, nil
+}
+
 func (product *Product) getRetailUnitPriceByStoreID(storeID primitive.ObjectID) (retailUnitPrice float64, err error) {
 	for _, unitPrice := range product.UnitPrices {
 		if unitPrice.StoreID == storeID {
@@ -378,7 +549,6 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
 		}
 	}
-
 	var storeID primitive.ObjectID
 	keys, ok = r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
@@ -688,14 +858,16 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
-	keys, ok = r.URL.Query()["search[store_id]"]
-	if ok && len(keys[0]) >= 1 {
-		storeID, err := primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			return products, criterias, err
+	/*
+		keys, ok = r.URL.Query()["search[store_id]"]
+		if ok && len(keys[0]) >= 1 {
+			storeID, err := primitive.ObjectIDFromHex(keys[0])
+			if err != nil {
+				return products, criterias, err
+			}
+			criterias.SearchBy["store_id"] = storeID
 		}
-		criterias.SearchBy["store_id"] = storeID
-	}
+	*/
 
 	keys, ok = r.URL.Query()["limit"]
 	if ok && len(keys[0]) >= 1 {

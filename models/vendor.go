@@ -16,7 +16,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Vendor : Vendor structure
+// Vendor : Vendor structure
 type Vendor struct {
 	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Name                       string              `bson:"name" json:"name"`

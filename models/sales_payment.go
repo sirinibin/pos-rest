@@ -16,7 +16,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//SalesPayment : SalesPayment structure
+// SalesPayment : SalesPayment structure
 type SalesPayment struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	OrderID       *primitive.ObjectID `json:"order_id" bson:"order_id"`
@@ -139,7 +139,7 @@ func SearchSalesPayment(w http.ResponseWriter, r *http.Request) (models []SalesP
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return models, criterias, err
 		}

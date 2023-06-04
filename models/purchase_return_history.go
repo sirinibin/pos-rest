@@ -174,7 +174,7 @@ func SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) (models
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return models, criterias, err
 		}
@@ -192,7 +192,7 @@ func SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) (models
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return models, criterias, err
 		}
@@ -210,7 +210,7 @@ func SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) (models
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return models, criterias, err
 		}

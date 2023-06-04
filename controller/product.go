@@ -66,6 +66,33 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var storeID primitive.ObjectID
+	keys, ok := r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			response.Status = false
+			response.Errors["store_id"] = "Invalid store_id:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	productStats, err := models.GetProductStats(criterias.SearchBy, storeID)
+	if err != nil {
+		response.Status = false
+		response.Errors["product_stats"] = "Unable to find product stats:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["stock"] = productStats.Stock
+	response.Meta["retail_stock_value"] = productStats.RetailStockValue
+	response.Meta["wholesale_stock_value"] = productStats.WholesaleStockValue
+	response.Meta["purchase_stock_value"] = productStats.PurchaseStockValue
+
 	if len(products) == 0 {
 		response.Result = []interface{}{}
 	} else {

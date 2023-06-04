@@ -19,7 +19,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//CapitalWithdrawal : CapitalWithdrawal structure
+// CapitalWithdrawal : CapitalWithdrawal structure
 type CapitalWithdrawal struct {
 	ID                  primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Code                string              `bson:"code,omitempty" json:"code,omitempty"`
@@ -167,7 +167,7 @@ func SearchCapitalWithdrawal(w http.ResponseWriter, r *http.Request) (capitalwit
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return capitalwithdrawals, criterias, err
 		}

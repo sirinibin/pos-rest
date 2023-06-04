@@ -19,7 +19,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//CustomerDeposit : CustomerDeposit structure
+// CustomerDeposit : CustomerDeposit structure
 type CustomerDeposit struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Code          string              `bson:"code,omitempty" json:"code,omitempty"`
@@ -167,7 +167,7 @@ func SearchCustomerDeposit(w http.ResponseWriter, r *http.Request) (customerdepo
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return customerdeposits, criterias, err
 		}

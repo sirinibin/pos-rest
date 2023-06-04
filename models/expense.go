@@ -19,7 +19,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Expense : Expense structure
+// Expense : Expense structure
 type Expense struct {
 	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	Code          string                `bson:"code,omitempty" json:"code,omitempty"`
@@ -175,7 +175,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseFloat(keys[0], 32)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return expenses, criterias, err
 		}
