@@ -125,7 +125,10 @@ func GetProductStats(
 						"as":    "stockItem",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$eq": stock_StoreCond},
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": stock_StoreCond},
+									bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
+								}},
 								"$$stockItem.stock",
 								0,
 							},
@@ -858,16 +861,14 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
-	/*
-		keys, ok = r.URL.Query()["search[store_id]"]
-		if ok && len(keys[0]) >= 1 {
-			storeID, err := primitive.ObjectIDFromHex(keys[0])
-			if err != nil {
-				return products, criterias, err
-			}
-			criterias.SearchBy["store_id"] = storeID
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return products, criterias, err
 		}
-	*/
+		criterias.SearchBy["store_id"] = storeID
+	}
 
 	keys, ok = r.URL.Query()["limit"]
 	if ok && len(keys[0]) >= 1 {
