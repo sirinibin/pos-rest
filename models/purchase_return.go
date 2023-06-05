@@ -29,7 +29,7 @@ type PurchaseReturnProduct struct {
 	PurchaseReturnUnitPrice float64            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
 }
 
-//PurchaseReturn : PurchaseReturn structure
+// PurchaseReturn : PurchaseReturn structure
 type PurchaseReturn struct {
 	ID                              primitive.ObjectID      `json:"id,omitempty" bson:"_id,omitempty"`
 	PurchaseID                      *primitive.ObjectID     `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
@@ -914,21 +914,21 @@ func (purchasereturn *PurchaseReturn) AddStock() (err error) {
 			return err
 		}
 
-		storeExistInProductStock := false
-		for k, stock := range product.Stock {
-			if stock.StoreID.Hex() == purchasereturn.StoreID.Hex() {
-				product.Stock[k].Stock += purchasereturnProduct.Quantity
-				storeExistInProductStock = true
+		storeExistInProductStore := false
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == purchasereturn.StoreID.Hex() {
+				product.Stores[k].Stock += purchasereturnProduct.Quantity
+				storeExistInProductStore = true
 				break
 			}
 		}
 
-		if !storeExistInProductStock {
-			productStock := ProductStock{
+		if !storeExistInProductStore {
+			productStore := ProductStore{
 				StoreID: *purchasereturn.StoreID,
 				Stock:   purchasereturnProduct.Quantity,
 			}
-			product.Stock = append(product.Stock, productStock)
+			product.Stores = append(product.Stores, productStore)
 		}
 
 		err = product.Update()
@@ -946,9 +946,9 @@ func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
 			return err
 		}
 
-		for k, stock := range product.Stock {
-			if stock.StoreID.Hex() == purchasereturn.StoreID.Hex() {
-				product.Stock[k].Stock -= purchasereturnProduct.Quantity
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == purchasereturn.StoreID.Hex() {
+				product.Stores[k].Stock -= purchasereturnProduct.Quantity
 				break
 			}
 		}
@@ -970,20 +970,20 @@ func (purchasereturn *PurchaseReturn) UpdateProductUnitPriceInStore() (err error
 		}
 
 		storeExistInProductUnitPrice := false
-		for k, unitPrice := range product.UnitPrices {
-			if unitPrice.StoreID.Hex() == purchasereturn.StoreID.Hex() {
-				product.UnitPrices[k].PurchaseUnitPrice = purchasereturnProduct.PurchaseReturnUnitPrice
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == purchasereturn.StoreID.Hex() {
+				product.Stores[k].PurchaseUnitPrice = purchasereturnProduct.PurchaseReturnUnitPrice
 				storeExistInProductUnitPrice = true
 				break
 			}
 		}
 
 		if !storeExistInProductUnitPrice {
-			productUnitPrice := ProductUnitPrice{
+			productStore := ProductStore{
 				StoreID:           *purchasereturn.StoreID,
 				PurchaseUnitPrice: purchasereturnProduct.PurchaseReturnUnitPrice,
 			}
-			product.UnitPrices = append(product.UnitPrices, productUnitPrice)
+			product.Stores = append(product.Stores, productStore)
 		}
 		err = product.Update()
 		if err != nil {

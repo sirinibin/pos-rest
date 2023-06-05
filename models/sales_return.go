@@ -925,9 +925,9 @@ func GetProductStockInStore(
 		return 0, err
 	}
 
-	for _, stock := range product.Stock {
-		if stock.StoreID.Hex() == storeID.Hex() {
-			return stock.Stock, nil
+	for _, productStore := range product.Stores {
+		if productStore.StoreID.Hex() == storeID.Hex() {
+			return productStore.Stock, nil
 		}
 	}
 
@@ -947,24 +947,24 @@ func (salesreturn *SalesReturn) RemoveStock() (err error) {
 			return err
 		}
 
-		for k, stock := range product.Stock {
-			if stock.StoreID.Hex() == salesreturn.StoreID.Hex() {
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == salesreturn.StoreID.Hex() {
 
 				salesreturn.SetChangeLog(
 					"remove_stock",
 					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock - salesreturnProduct.Quantity),
+					product.Stores[k].Stock,
+					(product.Stores[k].Stock - salesreturnProduct.Quantity),
 				)
 
 				product.SetChangeLog(
 					"remove_stock",
 					product.Name,
-					product.Stock[k].Stock,
-					(product.Stock[k].Stock - salesreturnProduct.Quantity),
+					product.Stores[k].Stock,
+					(product.Stores[k].Stock - salesreturnProduct.Quantity),
 				)
 
-				product.Stock[k].Stock -= salesreturnProduct.Quantity
+				product.Stores[k].Stock -= salesreturnProduct.Quantity
 				salesreturn.StockAdded = true
 				break
 			}
@@ -996,36 +996,36 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 			return err
 		}
 
-		storeExistInProductStock := false
-		for k, stock := range product.Stock {
-			if stock.StoreID.Hex() == salesreturn.StoreID.Hex() {
+		storeExistInProductStore := false
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == salesreturn.StoreID.Hex() {
 				/*
 					salesreturn.SetChangeLog(
 						"add_stock",
 						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock + salesreturnProduct.Quantity),
+						product.Stores[k].Stock,
+						(product.Stores[k].Stock + salesreturnProduct.Quantity),
 					)
 
 					product.SetChangeLog(
 						"add_stock",
 						product.Name,
-						product.Stock[k].Stock,
-						(product.Stock[k].Stock + salesreturnProduct.Quantity),
+						product.Stores[k].Stock,
+						(product.Stores[k].Stock + salesreturnProduct.Quantity),
 					)*/
 
-				product.Stock[k].Stock += salesreturnProduct.Quantity
-				storeExistInProductStock = true
+				product.Stores[k].Stock += salesreturnProduct.Quantity
+				storeExistInProductStore = true
 				break
 			}
 		}
 
-		if !storeExistInProductStock {
-			productStock := ProductStock{
+		if !storeExistInProductStore {
+			productStore := ProductStore{
 				StoreID: *salesreturn.StoreID,
 				Stock:   salesreturnProduct.Quantity,
 			}
-			product.Stock = append(product.Stock, productStock)
+			product.Stores = append(product.Stores, productStore)
 		}
 
 		err = product.Update()
@@ -1125,9 +1125,9 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 			if err != nil {
 				return err
 			}
-			for _, unitPrice := range product.UnitPrices {
-				if unitPrice.StoreID == *salesReturn.StoreID {
-					purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+			for _, productStore := range product.Stores {
+				if productStore.StoreID == *salesReturn.StoreID {
+					purchaseUnitPrice = productStore.PurchaseUnitPrice
 					salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
 					break
 				}

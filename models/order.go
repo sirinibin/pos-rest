@@ -952,9 +952,9 @@ func GetProductStockInStore(
 		return 0, err
 	}
 
-	for _, stock := range product.Stock {
-		if stock.StoreID.Hex() == storeID.Hex() {
-			return stock.Stock, nil
+	for _, productStore := range product.Stores {
+		if productStore.StoreID.Hex() == storeID.Hex() {
+			return productStore.Stock, nil
 		}
 	}
 
@@ -972,23 +972,23 @@ func (order *Order) RemoveStock() (err error) {
 			return err
 		}
 
-		if len(product.Stock) == 0 {
+		if len(product.Stores) == 0 {
 			store, err := FindStoreByID(order.StoreID, bson.M{})
 			if err != nil {
 				return err
 			}
-			productStock := ProductStock{
+			productStore := ProductStore{
 				StoreID:           *order.StoreID,
 				StoreName:         order.StoreName,
 				StoreNameInArabic: store.NameInArabic,
 				Stock:             float64(0),
 			}
-			product.Stock = []ProductStock{productStock}
+			product.Stores = []ProductStore{productStore}
 		}
 
-		for k, stock := range product.Stock {
-			if stock.StoreID.Hex() == order.StoreID.Hex() {
-				product.Stock[k].Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == order.StoreID.Hex() {
+				product.Stores[k].Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
 				break
 			}
 		}
@@ -1018,21 +1018,21 @@ func (order *Order) AddStock() (err error) {
 			return err
 		}
 
-		storeExistInProductStock := false
-		for k, stock := range product.Stock {
-			if stock.StoreID.Hex() == order.StoreID.Hex() {
-				product.Stock[k].Stock += orderProduct.Quantity
-				storeExistInProductStock = true
+		storeExistInProductStore := false
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == order.StoreID.Hex() {
+				product.Stores[k].Stock += orderProduct.Quantity
+				storeExistInProductStore = true
 				break
 			}
 		}
 
-		if !storeExistInProductStock {
-			productStock := ProductStock{
+		if !storeExistInProductStore {
+			productStore := ProductStore{
 				StoreID: *order.StoreID,
 				Stock:   orderProduct.Quantity,
 			}
-			product.Stock = append(product.Stock, productStock)
+			product.Stores = append(product.Stores, productStore)
 		}
 
 		err = product.Update()
@@ -1071,9 +1071,9 @@ func (order *Order) CalculateOrderProfit() error {
 			if err != nil {
 				return err
 			}
-			for _, unitPrice := range product.UnitPrices {
-				if unitPrice.StoreID == *order.StoreID {
-					purchaseUnitPrice = unitPrice.PurchaseUnitPrice
+			for _, store := range product.Stores {
+				if store.StoreID == *order.StoreID {
+					purchaseUnitPrice = store.PurchaseUnitPrice
 					order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
 					break
 				}

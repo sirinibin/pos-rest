@@ -37,6 +37,17 @@ type ProductStock struct {
 	Stock             float64            `bson:"stock" json:"stock"`
 }
 
+type ProductStore struct {
+	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
+	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	Stock                   float64            `bson:"stock,omitempty" json:"stock,omitempty"`
+}
+
 // Product : Product structure
 type Product struct {
 	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
@@ -55,6 +66,7 @@ type Product struct {
 	Category      []*ProductCategory    `json:"category,omitempty"`
 	UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
+	Stores        []ProductStore        `bson:"stores,omitempty" json:"stores,omitempty"`
 	Unit          string                `bson:"unit" json:"unit"`
 	Images        []string              `bson:"images,omitempty" json:"images,omitempty"`
 	ImagesContent []string              `json:"images_content,omitempty"`
@@ -93,24 +105,44 @@ func GetProductStats(
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	stock_StoreCond := []interface{}{1, 1}
-	retailStockvalue_StoreCond := []interface{}{1, 1}
-	retailStockValueStock_StoreCond := []interface{}{"$$stockItem.store_id", "$$unitPrice.store_id"}
+	stock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
+	retailStockvalue_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
+	//retailStockValueStock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
 
 	if !storeID.IsZero() {
 		stock_StoreCond = []interface{}{
-			"$$stockItem.store_id", storeID,
+			"$$store.store_id", storeID,
 		}
 
 		retailStockvalue_StoreCond = []interface{}{
-			"$$unitPrice.store_id", storeID,
+			"$$store.store_id", storeID,
 		}
 
-		retailStockValueStock_StoreCond = []interface{}{
-			"$$stockItem.store_id", storeID,
-		}
+		/*
+			retailStockValueStock_StoreCond = []interface{}{
+				"$$store.store_id", storeID,
+			}
+		*/
 
 	}
+	/*
+		bson.M{"$sum": bson.M{"$sum": bson.M{
+											"$map": bson.M{
+												"input": "$stock",
+												"as":    "stockItem",
+												"in": bson.M{
+													"$cond": []interface{}{
+														bson.M{"$and": []interface{}{
+															bson.M{"$eq": retailStockValueStock_StoreCond},
+															bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
+														}},
+														"$$stockItem.stock",
+														0,
+													},
+												},
+											},
+										}}},
+	*/
 
 	pipeline := []bson.M{
 		bson.M{
@@ -121,15 +153,15 @@ func GetProductStats(
 				"_id": nil,
 				"stock": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
-						"input": "$stock",
-						"as":    "stockItem",
+						"input": "$stores",
+						"as":    "store",
 						"in": bson.M{
 							"$cond": []interface{}{
 								bson.M{"$and": []interface{}{
 									bson.M{"$eq": stock_StoreCond},
-									bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
+									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
 								}},
-								"$$stockItem.stock",
+								"$$store.stock",
 								0,
 							},
 						},
@@ -137,29 +169,17 @@ func GetProductStats(
 				}}},
 				"retail_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
-						"input": "$unit_prices",
-						"as":    "unitPrice",
+						"input": "$stores",
+						"as":    "store",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$eq": retailStockvalue_StoreCond},
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": retailStockvalue_StoreCond},
+									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+								}},
 								bson.M{"$multiply": []interface{}{
-									"$$unitPrice.retail_unit_price",
-									bson.M{"$sum": bson.M{"$sum": bson.M{
-										"$map": bson.M{
-											"input": "$stock",
-											"as":    "stockItem",
-											"in": bson.M{
-												"$cond": []interface{}{
-													bson.M{"$and": []interface{}{
-														bson.M{"$eq": retailStockValueStock_StoreCond},
-														bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
-													}},
-													"$$stockItem.stock",
-													0,
-												},
-											},
-										},
-									}}},
+									"$$store.retail_unit_price",
+									"$$store.stock",
 								}},
 								0,
 							},
@@ -168,29 +188,17 @@ func GetProductStats(
 				}}},
 				"wholesale_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
-						"input": "$unit_prices",
-						"as":    "unitPrice",
+						"input": "$stores",
+						"as":    "store",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$eq": retailStockvalue_StoreCond},
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": retailStockvalue_StoreCond},
+									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+								}},
 								bson.M{"$multiply": []interface{}{
-									"$$unitPrice.wholesale_unit_price",
-									bson.M{"$sum": bson.M{"$sum": bson.M{
-										"$map": bson.M{
-											"input": "$stock",
-											"as":    "stockItem",
-											"in": bson.M{
-												"$cond": []interface{}{
-													bson.M{"$and": []interface{}{
-														bson.M{"$eq": retailStockValueStock_StoreCond},
-														bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
-													}},
-													"$$stockItem.stock",
-													0,
-												},
-											},
-										},
-									}}},
+									"$$store.wholesale_unit_price",
+									"$$store.stock",
 								}},
 								0,
 							},
@@ -199,29 +207,17 @@ func GetProductStats(
 				}}},
 				"purchase_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
-						"input": "$unit_prices",
-						"as":    "unitPrice",
+						"input": "$stores",
+						"as":    "store",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$eq": retailStockvalue_StoreCond},
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": retailStockvalue_StoreCond},
+									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+								}},
 								bson.M{"$multiply": []interface{}{
-									"$$unitPrice.purchase_unit_price",
-									bson.M{"$sum": bson.M{"$sum": bson.M{
-										"$map": bson.M{
-											"input": "$stock",
-											"as":    "stockItem",
-											"in": bson.M{
-												"$cond": []interface{}{
-													bson.M{"$and": []interface{}{
-														bson.M{"$eq": retailStockValueStock_StoreCond},
-														bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
-													}},
-													"$$stockItem.stock",
-													0,
-												},
-											},
-										},
-									}}},
+									"$$store.purchase_unit_price",
+									"$$store.stock",
 								}},
 								0,
 							},
@@ -252,18 +248,18 @@ func GetProductStats(
 }
 
 func (product *Product) getRetailUnitPriceByStoreID(storeID primitive.ObjectID) (retailUnitPrice float64, err error) {
-	for _, unitPrice := range product.UnitPrices {
-		if unitPrice.StoreID == storeID {
-			return unitPrice.RetailUnitPrice, nil
+	for _, store := range product.Stores {
+		if store.StoreID == storeID {
+			return store.RetailUnitPrice, nil
 		}
 	}
 	return retailUnitPrice, err
 }
 
 func (product *Product) getPurchaseUnitPriceSecretByStoreID(storeID primitive.ObjectID) (secret string, err error) {
-	for _, unitPrice := range product.UnitPrices {
-		if unitPrice.StoreID == storeID {
-			return unitPrice.PurchaseUnitPriceSecret, nil
+	for _, productStore := range product.Stores {
+		if productStore.StoreID == storeID {
+			return productStore.PurchaseUnitPriceSecret, nil
 		}
 	}
 	return secret, err
@@ -334,24 +330,24 @@ func (product *Product) UpdateForeignLabelFields() error {
 
 	product.CategoryName = []string{}
 
-	for i, unitPrice := range product.UnitPrices {
-		store, err := FindStoreByID(&unitPrice.StoreID, bson.M{"id": 1, "name": 1})
+	for i, productStore := range product.Stores {
+		store, err := FindStoreByID(&productStore.StoreID, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return errors.New("Error Finding store:" + unitPrice.StoreID.Hex() + ",error:" + err.Error())
+			return errors.New("Error Finding store:" + productStore.StoreID.Hex() + ",error:" + err.Error())
 		}
 
-		product.UnitPrices[i].StoreName = store.Name
-		product.UnitPrices[i].StoreNameInArabic = store.NameInArabic
+		product.Stores[i].StoreName = store.Name
+		product.Stores[i].StoreNameInArabic = store.NameInArabic
 	}
 
-	for i, stock := range product.Stock {
-		store, err := FindStoreByID(&stock.StoreID, bson.M{"id": 1, "name": 1})
+	for i, productStore := range product.Stores {
+		store, err := FindStoreByID(&productStore.StoreID, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return errors.New("Error Finding store:" + stock.StoreID.Hex() + ",error:" + err.Error())
+			return errors.New("Error Finding store:" + productStore.StoreID.Hex() + ",error:" + err.Error())
 		}
 
-		product.Stock[i].StoreName = store.Name
-		product.Stock[i].StoreNameInArabic = store.NameInArabic
+		product.Stores[i].StoreName = store.Name
+		product.Stores[i].StoreNameInArabic = store.NameInArabic
 	}
 
 	for _, categoryID := range product.CategoryID {
@@ -474,20 +470,20 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 
 		productPrice := "0.00"
 		purchaseUnitPriceSecret := ""
-		if len(product.UnitPrices) > 0 {
-			for i, unitPrice := range product.UnitPrices {
-				if unitPrice.StoreID == store.ID {
-					if len(unitPrice.PurchaseUnitPriceSecret) == 0 {
-						product.UnitPrices[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.UnitPrices[i].PurchaseUnitPrice))
+		if len(product.Stores) > 0 {
+			for i, productStore := range product.Stores {
+				if productStore.StoreID == store.ID {
+					if len(productStore.PurchaseUnitPriceSecret) == 0 {
+						product.Stores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
 						err = product.Update()
 						if err != nil {
 							return products, err
 						}
 					}
-					purchaseUnitPriceSecret = product.UnitPrices[i].PurchaseUnitPriceSecret
+					purchaseUnitPriceSecret = product.Stores[i].PurchaseUnitPriceSecret
 
-					price := float64(unitPrice.RetailUnitPrice)
-					vatPrice := (float64(float64(unitPrice.RetailUnitPrice) * float64(store.VatPercent/float64(100))))
+					price := float64(productStore.RetailUnitPrice)
+					vatPrice := (float64(float64(productStore.RetailUnitPrice) * float64(store.VatPercent/float64(100))))
 					price += vatPrice
 					price = math.Round(price*100) / 100
 					productPrice = fmt.Sprintf("%.2f", price)
@@ -602,7 +598,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			}
 		}
 
-		criterias.SearchBy["stock"] = stockElement
+		criterias.SearchBy["stores"] = stockElement
 	}
 
 	keys, ok = r.URL.Query()["search[retail_unit_price]"]
@@ -646,7 +642,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			}
 		}
 
-		criterias.SearchBy["unit_prices"] = element
+		criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[wholesale_unit_price]"]
@@ -690,7 +686,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			}
 		}
 
-		criterias.SearchBy["unit_prices"] = element
+		criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_unit_price]"]
@@ -734,7 +730,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			}
 		}
 
-		criterias.SearchBy["unit_prices"] = element
+		criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[rack]"]
@@ -861,14 +857,16 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
-	keys, ok = r.URL.Query()["search[store_id]"]
-	if ok && len(keys[0]) >= 1 {
-		storeID, err := primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			return products, criterias, err
+	/*
+		keys, ok = r.URL.Query()["search[store_id]"]
+		if ok && len(keys[0]) >= 1 {
+			storeID, err := primitive.ObjectIDFromHex(keys[0])
+			if err != nil {
+				return products, criterias, err
+			}
+			criterias.SearchBy["store_id"] = storeID
 		}
-		criterias.SearchBy["store_id"] = storeID
-	}
+	*/
 
 	keys, ok = r.URL.Query()["limit"]
 	if ok && len(keys[0]) >= 1 {
@@ -1068,34 +1066,20 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
-	for i, price := range product.UnitPrices {
-		if price.StoreID.IsZero() {
+	for i, productStore := range product.Stores {
+		if productStore.StoreID.IsZero() {
 			errs["store_id_"+strconv.Itoa(i)] = "store_id is required for unit price"
 			return errs
 		}
-		exists, err := IsStoreExists(&price.StoreID)
+		exists, err := IsStoreExists(&productStore.StoreID)
 		if err != nil {
 			errs["store_id_"+strconv.Itoa(i)] = err.Error()
 		}
 
 		if !exists {
-			errs["store_id"+strconv.Itoa(i)] = "Invalid store_id:" + price.StoreID.Hex() + " in unit_price"
+			errs["store_id"+strconv.Itoa(i)] = "Invalid store_id:" + productStore.StoreID.Hex() + " in stores"
 		}
-		product.UnitPrices[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.UnitPrices[i].PurchaseUnitPrice))
-	}
-
-	for i, stock := range product.Stock {
-		if stock.StoreID.IsZero() {
-			errs["store_id_"+strconv.Itoa(i)] = "store_id is required for stock"
-		}
-		exists, err := IsStoreExists(&stock.StoreID)
-		if err != nil {
-			errs["store_id_"] = err.Error()
-		}
-
-		if !exists {
-			errs["store_id_"+strconv.Itoa(i)] = "Invalid store_id:" + stock.StoreID.Hex() + " in stock"
-		}
+		product.Stores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
 	}
 
 	if len(product.CategoryID) == 0 {
@@ -1640,6 +1624,42 @@ func ProcessProducts() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		length := 0
+		if len(product.UnitPrices) > len(product.Stock) {
+			length = len(product.UnitPrices)
+		} else {
+			length = len(product.Stock)
+		}
+
+		if len(product.Stores) == 0 {
+			product.Stores = make([]ProductStore, length)
+		}
+
+		//product.Stores = []ProductStore{}
+		//product.Stores = make([]ProductStore, 0)
+
+		for k, unitPrice := range product.UnitPrices {
+			//product.Stores[unitPrice.StoreID.Hex()][unitPrice.StoreID] = unitPrice.StoreID
+			if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == unitPrice.StoreID.Hex()) {
+				product.Stores[k].StoreID = unitPrice.StoreID
+				product.Stores[k].StoreName = unitPrice.StoreName
+				product.Stores[k].StoreNameInArabic = unitPrice.StoreNameInArabic
+				product.Stores[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
+				product.Stores[k].RetailUnitPrice = unitPrice.RetailUnitPrice
+				product.Stores[k].WholesaleUnitPrice = unitPrice.WholesaleUnitPrice
+				product.Stores[k].PurchaseUnitPriceSecret = unitPrice.PurchaseUnitPriceSecret
+			}
+		}
+
+		for k, stock := range product.Stock {
+			if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == stock.StoreID.Hex()) {
+				product.Stores[k].StoreID = stock.StoreID
+				product.Stores[k].StoreName = stock.StoreName
+				product.Stores[k].StoreNameInArabic = stock.StoreNameInArabic
+				product.Stores[k].Stock = stock.Stock
+			}
+		}
+
 		/*
 			purchaseHistory, err := GetPurchaseHistoriesByProductID(&product.ID)
 			if err != nil {
@@ -1658,7 +1678,6 @@ func ProcessProducts() error {
 		if product.PartNumber == "90919-T1004" {
 			//log.Printf("Part No: %s", product.PartNumber)
 			//log.Printf("Sales history is: %d for product: %s", len(salesHistories), product.Name)
-			//log.Print(product.UnitPrices)
 		}
 
 		if len(salesHistories) > 0 {
@@ -1670,7 +1689,7 @@ func ProcessProducts() error {
 				}
 
 				for k, _ := range order.Products {
-					for _, unitPrice := range product.UnitPrices {
+					for _, store := range product.Stores {
 
 						if product.PartNumber == "90919-T1004" {
 							//log.Printf("Part No: %s", product.PartNumber)
@@ -1679,12 +1698,12 @@ func ProcessProducts() error {
 							//log.Print(order.Products[k].PurchaseUnitPrice)
 						}
 
-						if unitPrice.StoreID == *order.StoreID &&
+						if store.StoreID == *order.StoreID &&
 							order.Products[k].ProductID.Hex() == product.ID.Hex() &&
 							(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0 || order.Products[k].PurchaseUnitPrice == 0) &&
-							unitPrice.PurchaseUnitPrice > 0 {
+							store.PurchaseUnitPrice > 0 {
 							//log.Printf("Updating purchase unit price of order: %s", order.Code)
-							order.Products[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
+							order.Products[k].PurchaseUnitPrice = store.PurchaseUnitPrice
 						}
 
 					}
@@ -1707,6 +1726,10 @@ func ProcessProducts() error {
 			}
 			model.StoreID = &store.ID
 		*/
+
+		if product.PartNumber == "WG971923002Q" {
+			log.Printf("Product: %v", product.Stores)
+		}
 
 		err = product.Update()
 		if err != nil {
