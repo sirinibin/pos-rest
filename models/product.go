@@ -20,6 +20,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+/*
 type ProductUnitPrice struct {
 	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
@@ -36,6 +37,7 @@ type ProductStock struct {
 	StoreNameInArabic string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
 	Stock             float64            `bson:"stock" json:"stock"`
 }
+*/
 
 type ProductStore struct {
 	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
