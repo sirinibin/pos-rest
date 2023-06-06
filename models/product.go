@@ -45,7 +45,7 @@ type ProductStore struct {
 	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
 	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
-	Stock                   float64            `bson:"stock,omitempty" json:"stock,omitempty"`
+	Stock                   float64            `bson:"stock" json:"stock"`
 }
 
 // Product : Product structure
@@ -1622,38 +1622,36 @@ func ProcessProducts() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		/*
-			length := 0
-			if len(product.UnitPrices) > len(product.Stock) {
-				length = len(product.UnitPrices)
-			} else {
-				length = len(product.Stock)
-			}
+		length := 0
+		if len(product.UnitPrices) > len(product.Stock) {
+			length = len(product.UnitPrices)
+		} else {
+			length = len(product.Stock)
+		}
 
-			product.Stores = make([]ProductStore, length)
+		product.Stores = make([]ProductStore, length)
 
-			for k, unitPrice := range product.UnitPrices {
-				//product.Stores[unitPrice.StoreID.Hex()][unitPrice.StoreID] = unitPrice.StoreID
-				if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == unitPrice.StoreID.Hex()) {
-					product.Stores[k].StoreID = unitPrice.StoreID
-					product.Stores[k].StoreName = unitPrice.StoreName
-					product.Stores[k].StoreNameInArabic = unitPrice.StoreNameInArabic
-					product.Stores[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
-					product.Stores[k].RetailUnitPrice = unitPrice.RetailUnitPrice
-					product.Stores[k].WholesaleUnitPrice = unitPrice.WholesaleUnitPrice
-					product.Stores[k].PurchaseUnitPriceSecret = unitPrice.PurchaseUnitPriceSecret
-				}
+		for k, unitPrice := range product.UnitPrices {
+			//product.Stores[unitPrice.StoreID.Hex()][unitPrice.StoreID] = unitPrice.StoreID
+			if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == unitPrice.StoreID.Hex()) {
+				product.Stores[k].StoreID = unitPrice.StoreID
+				product.Stores[k].StoreName = unitPrice.StoreName
+				product.Stores[k].StoreNameInArabic = unitPrice.StoreNameInArabic
+				product.Stores[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
+				product.Stores[k].RetailUnitPrice = unitPrice.RetailUnitPrice
+				product.Stores[k].WholesaleUnitPrice = unitPrice.WholesaleUnitPrice
+				product.Stores[k].PurchaseUnitPriceSecret = unitPrice.PurchaseUnitPriceSecret
 			}
+		}
 
-			for k, stock := range product.Stock {
-				if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == stock.StoreID.Hex()) {
-					product.Stores[k].StoreID = stock.StoreID
-					product.Stores[k].StoreName = stock.StoreName
-					product.Stores[k].StoreNameInArabic = stock.StoreNameInArabic
-					product.Stores[k].Stock = stock.Stock
-				}
+		for k, stock := range product.Stock {
+			if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == stock.StoreID.Hex()) {
+				product.Stores[k].StoreID = stock.StoreID
+				product.Stores[k].StoreName = stock.StoreName
+				product.Stores[k].StoreNameInArabic = stock.StoreNameInArabic
+				product.Stores[k].Stock = stock.Stock
 			}
-		*/
+		}
 
 		/*
 			purchaseHistory, err := GetPurchaseHistoriesByProductID(&product.ID)
