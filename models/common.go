@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"log"
+	"math"
 	"math/rand"
 	"regexp"
 	"strings"
@@ -41,7 +42,9 @@ func IsStringBase64(content string) (bool, error) {
 }
 
 func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {
-	return date.Add(time.Hour * time.Duration(timeZoneOffset))
+	hrs, mins := math.Modf(timeZoneOffset)
+	mins = 60 * mins
+	return date.Add(time.Hour*time.Duration(hrs) + time.Minute*time.Duration(mins))
 }
 
 func GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {

@@ -794,7 +794,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["date_str"] = "Invalid date format"
 		}
 		order.Date = &date
-		order.CreatedAt = &date
+		//order.CreatedAt = &date
 	}
 
 	if !govalidator.IsNull(order.SignatureDateStr) {
@@ -1599,6 +1599,7 @@ func ProcessOrders() error {
 			}
 		}
 
+		order.Date = order.CreatedAt
 		err = order.Update()
 		if err != nil {
 			return err
