@@ -1599,7 +1599,7 @@ func ProcessOrders() error {
 			}
 		}
 
-		order.Date = order.CreatedAt
+		//order.Date = order.CreatedAt
 		err = order.Update()
 		if err != nil {
 			return err
