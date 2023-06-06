@@ -801,7 +801,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["date_str"] = "Invalid date format"
 		}
 		quotation.Date = &date
-		quotation.CreatedAt = &date
+		//quotation.CreatedAt = &date
 	}
 
 	if !govalidator.IsNull(quotation.SignatureDateStr) {
@@ -1221,6 +1221,7 @@ func ProcessQuotations() error {
 			return err
 		}
 
+		quotation.Date = quotation.CreatedAt
 		err = quotation.Update()
 		if err != nil {
 			return err
