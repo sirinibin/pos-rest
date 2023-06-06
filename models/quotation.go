@@ -1221,7 +1221,7 @@ func ProcessQuotations() error {
 			return err
 		}
 
-		quotation.Date = quotation.CreatedAt
+		//quotation.Date = quotation.CreatedAt
 		err = quotation.Update()
 		if err != nil {
 			return err
