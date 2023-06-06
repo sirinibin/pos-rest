@@ -50,43 +50,43 @@ type ProductStore struct {
 
 // Product : Product structure
 type Product struct {
-	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic  string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode      string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	StoreID       *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName     string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	StoreCode     string                `json:"store_code,omitempty" bson:"store_code,omitempty"`
-	BarCode       string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
-	Ean12         string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
-	SearchLabel   string                `json:"search_label"`
-	Rack          string                `bson:"rack,omitempty" json:"rack"`
-	PartNumber    string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	CategoryID    []*primitive.ObjectID `json:"category_id" bson:"category_id"`
-	Category      []*ProductCategory    `json:"category,omitempty"`
-	UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
-	Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
-	Stores        []ProductStore        `bson:"stores,omitempty" json:"stores,omitempty"`
-	Unit          string                `bson:"unit" json:"unit"`
-	Images        []string              `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent []string              `json:"images_content,omitempty"`
-	Deleted       bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User                 `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt     *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User                 `json:"created_by_user,omitempty"`
-	UpdatedByUser *User                 `json:"updated_by_user,omitempty"`
-	BrandName     string                `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
-	CategoryName  []string              `json:"category_name" bson:"category_name"`
-	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog     []ChangeLog           `json:"change_log,omitempty" bson:"change_log,omitempty"`
-	BarcodeBase64 string                `json:"barcode_base64"`
+	ID           primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name         string                `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode     string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	StoreID      *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName    string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	StoreCode    string                `json:"store_code,omitempty" bson:"store_code,omitempty"`
+	BarCode      string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
+	Ean12        string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
+	SearchLabel  string                `json:"search_label"`
+	Rack         string                `bson:"rack,omitempty" json:"rack"`
+	PartNumber   string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	CategoryID   []*primitive.ObjectID `json:"category_id" bson:"category_id"`
+	Category     []*ProductCategory    `json:"category,omitempty"`
+	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
+	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
+	Stores        []ProductStore      `bson:"stores,omitempty" json:"stores,omitempty"`
+	Unit          string              `bson:"unit" json:"unit"`
+	Images        []string            `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent []string            `json:"images_content,omitempty"`
+	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
+	BrandName     string              `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
+	CategoryName  []string            `json:"category_name" bson:"category_name"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog     []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	BarcodeBase64 string              `json:"barcode_base64"`
 }
 
 type ProductStats struct {
