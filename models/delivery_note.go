@@ -25,7 +25,7 @@ type DeliveryNoteProduct struct {
 	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
 }
 
-//DeliveryNote : DeliveryNote structure
+// DeliveryNote : DeliveryNote structure
 type DeliveryNote struct {
 	ID              primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	Code            string                `bson:"code,omitempty" json:"code,omitempty"`
@@ -344,6 +344,7 @@ func SearchDeliveryNote(w http.ResponseWriter, r *http.Request) (deliverynotes [
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {

@@ -890,6 +890,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	categorySelectFields := map[string]interface{}{}
 	createdByUserSelectFields := map[string]interface{}{}

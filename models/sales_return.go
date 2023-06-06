@@ -589,6 +589,7 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	storeSelectFields := map[string]interface{}{}
 	customerSelectFields := map[string]interface{}{}

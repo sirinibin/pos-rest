@@ -285,6 +285,7 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {

@@ -252,6 +252,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}

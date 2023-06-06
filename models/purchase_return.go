@@ -561,6 +561,7 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	storeSelectFields := map[string]interface{}{}
 	vendorSelectFields := map[string]interface{}{}

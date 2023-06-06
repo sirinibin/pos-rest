@@ -15,7 +15,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//ExpenseCategory : ExpenseCategory structure
+// ExpenseCategory : ExpenseCategory structure
 type ExpenseCategory struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	ParentID      *primitive.ObjectID `json:"parent_id" bson:"parent_id"`
@@ -232,6 +232,7 @@ func SearchExpenseCategory(w http.ResponseWriter, r *http.Request) (expenseCateg
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}

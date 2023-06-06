@@ -23,7 +23,7 @@ type ChangeLog struct {
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 }
 
-//Customer : Customer structure
+// Customer : Customer structure
 type Customer struct {
 	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Name            string              `bson:"name,omitempty" json:"name,omitempty"`
@@ -307,6 +307,7 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}

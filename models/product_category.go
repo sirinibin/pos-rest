@@ -15,7 +15,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//ProductCategory : ProductCategory structure
+// ProductCategory : ProductCategory structure
 type ProductCategory struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	ParentID      *primitive.ObjectID `json:"parent_id" bson:"parent_id"`
@@ -269,6 +269,7 @@ func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCateg
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}

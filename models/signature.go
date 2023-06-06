@@ -18,7 +18,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//Signature : Signature structure
+// Signature : Signature structure
 type Signature struct {
 	ID               primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Name             string              `bson:"name,omitempty" json:"name,omitempty"`
@@ -198,6 +198,7 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}

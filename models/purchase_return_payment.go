@@ -17,7 +17,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//PurchaseReturnPayment : PurchaseReturnPayment structure
+// PurchaseReturnPayment : PurchaseReturnPayment structure
 type PurchaseReturnPayment struct {
 	ID                 primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	PurchaseReturnID   *primitive.ObjectID `json:"purchase_return_id" bson:"purchase_return_id"`
@@ -314,6 +314,7 @@ func SearchPurchaseReturnPayment(w http.ResponseWriter, r *http.Request) (models
 	findOptions.SetLimit(int64(criterias.Size))
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {
