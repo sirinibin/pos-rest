@@ -1629,9 +1629,12 @@ func ProcessProducts() error {
 			length = len(product.Stock)
 		}
 
-		if len(product.Stores) == 0 {
-			product.Stores = make([]ProductStore, length)
-		}
+		/*
+			if len(product.Stores) == 0 {
+				product.Stores = make([]ProductStore, length)
+			}
+		*/
+		product.Stores = make([]ProductStore, length)
 
 		for k, unitPrice := range product.UnitPrices {
 			//product.Stores[unitPrice.StoreID.Hex()][unitPrice.StoreID] = unitPrice.StoreID
