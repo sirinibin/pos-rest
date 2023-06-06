@@ -768,15 +768,38 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		errs["status"] = "Status is required"
 	}
 
+	/*
+		if govalidator.IsNull(quotation.DateStr) {
+			errs["date_str"] = "date_str is required"
+		} else {
+			const shortForm = "Jan 02 2006"
+			date, err := time.Parse(shortForm, quotation.DateStr)
+			if err != nil {
+				errs["date_str"] = "Invalid date format"
+			}
+			quotation.Date = &date
+		}
+	*/
+
 	if govalidator.IsNull(quotation.DateStr) {
-		errs["date_str"] = "date_str is required"
+		errs["date_str"] = "Date is required"
 	} else {
-		const shortForm = "Jan 02 2006"
+		/*
+			const shortForm = "Jan 02 2006"
+			date, err := time.Parse(shortForm, order.DateStr)
+			if err != nil {
+				errs["date_str"] = "Invalid date format"
+			}
+			order.Date = &date
+		*/
+
+		const shortForm = "2006-01-02T15:04:05Z07:00"
 		date, err := time.Parse(shortForm, quotation.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
 		}
 		quotation.Date = &date
+		quotation.CreatedAt = &date
 	}
 
 	if !govalidator.IsNull(quotation.SignatureDateStr) {
