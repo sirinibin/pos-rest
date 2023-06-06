@@ -1331,6 +1331,8 @@ func ProcessPurchaseReturns() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
 	ctx := context.Background()
 	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {

@@ -443,6 +443,7 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetProjection(criterias.Select)
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
@@ -1605,6 +1606,8 @@ func ProcessProducts() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx := context.Background()
 	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
@@ -1724,10 +1727,6 @@ func ProcessProducts() error {
 			}
 			model.StoreID = &store.ID
 		*/
-
-		if product.PartNumber == "WG971923002Q" {
-			log.Printf("Product: %v", product.Stores)
-		}
 
 		err = product.Update()
 		if err != nil {

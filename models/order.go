@@ -91,6 +91,8 @@ func UpdateOrderProfit() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx := context.Background()
 	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
@@ -355,6 +357,7 @@ func GetAllOrders() (orders []Order, err error) {
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here
@@ -1488,6 +1491,8 @@ func ProcessOrders() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx := context.Background()
 	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {

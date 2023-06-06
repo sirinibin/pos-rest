@@ -475,6 +475,8 @@ func GetSalesHistoriesByProductID(productID *primitive.ObjectID) (models []Produ
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
 	ctx := context.Background()
 	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
 
 	cur, err := collection.Find(ctx, bson.M{"product_id": productID}, findOptions)
 	if err != nil {
