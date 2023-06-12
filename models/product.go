@@ -1808,13 +1808,15 @@ func ProcessProducts() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		for i, store := range product.Stores {
-			product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
-			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
+		/*
+			for i, store := range product.Stores {
+				product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
+				product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
 
-			product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
-			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
-		}
+				product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
+				product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
+			}
+		*/
 
 		/*
 			length := 0
