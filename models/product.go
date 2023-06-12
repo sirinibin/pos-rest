@@ -48,6 +48,10 @@ type ProductStore struct {
 	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 	Stock                   float64            `bson:"stock" json:"stock"`
+	RetailUnitProfit        float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
+	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
+	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
+	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
 }
 
 // Product : Product structure
@@ -558,6 +562,182 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[retail_unit_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		element := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit": bson.M{
+						operator: value,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit": bson.M{
+						operator: value,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit": value,
+					"store_id":           storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit": value,
+				}
+			}
+		}
+
+		criterias.SearchBy["stores"] = element
+	}
+
+	keys, ok = r.URL.Query()["search[retail_unit_profit_perc]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		element := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit_perc": bson.M{
+						operator: value,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit_perc": bson.M{
+						operator: value,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit_perc": value,
+					"store_id":                storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"retail_unit_profit_perc": value,
+				}
+			}
+		}
+
+		criterias.SearchBy["stores"] = element
+	}
+
+	keys, ok = r.URL.Query()["search[wholesale_unit_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		element := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit": bson.M{
+						operator: value,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit": bson.M{
+						operator: value,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit": value,
+					"store_id":              storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit": value,
+				}
+			}
+		}
+
+		criterias.SearchBy["stores"] = element
+	}
+
+	keys, ok = r.URL.Query()["search[wholesale_unit_profit_perc]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		element := bson.M{"$elemMatch": bson.M{}}
+
+		if operator != "" {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit_perc": bson.M{
+						operator: value,
+					},
+					"store_id": storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit_perc": bson.M{
+						operator: value,
+					},
+				}
+			}
+
+		} else {
+			if !storeID.IsZero() {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit_perc": value,
+					"store_id":                   storeID,
+				}
+			} else {
+				element["$elemMatch"] = bson.M{
+					"wholesale_unit_profit_perc": value,
+				}
+			}
+		}
+
+		criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[stock]"]
@@ -1626,6 +1806,14 @@ func ProcessProducts() error {
 		err = cur.Decode(&product)
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		for i, store := range product.Stores {
+			product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
+			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
+
+			product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
+			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
 		}
 
 		/*
