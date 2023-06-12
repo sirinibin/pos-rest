@@ -1429,6 +1429,22 @@ func (product *Product) Insert() (err error) {
 		return err
 	}
 
+	for i, store := range product.Stores {
+		product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
+		if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
+			product.Stores[i].RetailUnitProfitPerc = 0
+		} else {
+			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
+		}
+
+		product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
+		if store.PurchaseUnitPrice == 0 || product.Stores[i].WholesaleUnitProfit == 0 {
+			product.Stores[i].WholesaleUnitProfitPerc = 0
+		} else {
+			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 	_, err = collection.InsertOne(ctx, &product)
@@ -1534,6 +1550,22 @@ func (product *Product) Update() error {
 			if !exists {
 				break
 			}
+		}
+	}
+
+	for i, store := range product.Stores {
+		product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
+		if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
+			product.Stores[i].RetailUnitProfitPerc = 0
+		} else {
+			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
+		}
+
+		product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
+		if store.PurchaseUnitPrice == 0 || product.Stores[i].WholesaleUnitProfit == 0 {
+			product.Stores[i].WholesaleUnitProfitPerc = 0
+		} else {
+			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
 		}
 	}
 
@@ -1808,22 +1840,23 @@ func ProcessProducts() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		for i, store := range product.Stores {
-			product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
-			if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
-				product.Stores[i].RetailUnitProfitPerc = 0
-			} else {
-				product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
-			}
+		/*
+			for i, store := range product.Stores {
+				product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
+				if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
+					product.Stores[i].RetailUnitProfitPerc = 0
+				} else {
+					product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
+				}
 
-			product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
-			if store.PurchaseUnitPrice == 0 || product.Stores[i].WholesaleUnitProfit == 0 {
-				product.Stores[i].WholesaleUnitProfitPerc = 0
-			} else {
-				product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
+				product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
+				if store.PurchaseUnitPrice == 0 || product.Stores[i].WholesaleUnitProfit == 0 {
+					product.Stores[i].WholesaleUnitProfitPerc = 0
+				} else {
+					product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
+				}
 			}
-
-		}
+		*/
 
 		/*
 			length := 0
