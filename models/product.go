@@ -1554,6 +1554,7 @@ func (product *Product) Update() error {
 	}
 
 	for i, store := range product.Stores {
+
 		if store.PurchaseUnitPrice == 0 {
 			product.Stores[i].PurchaseUnitPrice = 0
 		}
