@@ -43,15 +43,15 @@ type ProductStore struct {
 	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
 	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPrice       float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
 	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
-	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
+	RetailUnitPrice         float64            `bson:"retail_unit_price" json:"retail_unit_price"`
 	Stock                   float64            `bson:"stock" json:"stock"`
-	RetailUnitProfit        float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
-	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
-	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
-	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
+	RetailUnitProfit        float64            `bson:"retail_unit_profit" json:"retail_unit_profit"`
+	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc" json:"retail_unit_profit_perc"`
+	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit" json:"wholesale_unit_profit"`
+	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc" json:"wholesale_unit_profit_perc"`
 }
 
 // Product : Product structure
@@ -1429,19 +1429,34 @@ func (product *Product) Insert() (err error) {
 		return err
 	}
 
-	for i, store := range product.Stores {
-		product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
-		if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
-			product.Stores[i].RetailUnitProfitPerc = 0
-		} else {
-			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
+	if len(product.Stores) == 0 {
+		product.Stores = make([]ProductStore, 1)
+		product.Stores[0] = ProductStore{
+			StoreID:            *product.StoreID,
+			StoreName:          product.StoreName,
+			RetailUnitPrice:    0,
+			WholesaleUnitPrice: 0,
+			PurchaseUnitPrice:  0,
+		}
+	}
+
+	for i, _ := range product.Stores {
+
+		product.Stores[i].RetailUnitProfit = product.Stores[i].RetailUnitPrice - product.Stores[i].PurchaseUnitPrice
+		product.Stores[i].WholesaleUnitProfit = product.Stores[i].WholesaleUnitPrice - product.Stores[i].PurchaseUnitPrice
+		product.Stores[i].RetailUnitProfitPerc = 0
+		product.Stores[i].WholesaleUnitProfitPerc = 0
+
+		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].RetailUnitProfit > 0 {
+			product.Stores[i].RetailUnitProfitPerc = 100
+		} else if product.Stores[i].PurchaseUnitPrice != 0 {
+			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
 		}
 
-		product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
-		if store.PurchaseUnitPrice == 0 || product.Stores[i].WholesaleUnitProfit == 0 {
-			product.Stores[i].WholesaleUnitProfitPerc = 0
-		} else {
-			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
+		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].WholesaleUnitProfit > 0 {
+			product.Stores[i].WholesaleUnitProfitPerc = 100
+		} else if product.Stores[i].PurchaseUnitPrice != 0 {
+			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
 		}
 	}
 
@@ -1553,24 +1568,34 @@ func (product *Product) Update() error {
 		}
 	}
 
-	for i, store := range product.Stores {
+	if len(product.Stores) == 0 {
+		product.Stores = make([]ProductStore, 1)
+		product.Stores[0] = ProductStore{
+			StoreID:            *product.StoreID,
+			StoreName:          product.StoreName,
+			RetailUnitPrice:    0,
+			WholesaleUnitPrice: 0,
+			PurchaseUnitPrice:  0,
+		}
+	}
 
-		if store.PurchaseUnitPrice == 0 {
-			product.Stores[i].PurchaseUnitPrice = 0
+	for i, _ := range product.Stores {
+
+		product.Stores[i].RetailUnitProfit = product.Stores[i].RetailUnitPrice - product.Stores[i].PurchaseUnitPrice
+		product.Stores[i].WholesaleUnitProfit = product.Stores[i].WholesaleUnitPrice - product.Stores[i].PurchaseUnitPrice
+		product.Stores[i].RetailUnitProfitPerc = 0
+		product.Stores[i].WholesaleUnitProfitPerc = 0
+
+		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].RetailUnitProfit > 0 {
+			product.Stores[i].RetailUnitProfitPerc = 100
+		} else if product.Stores[i].PurchaseUnitPrice != 0 {
+			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
 		}
 
-		product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
-		if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
-			product.Stores[i].RetailUnitProfitPerc = 0
-		} else {
-			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
-		}
-
-		product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
-		if store.PurchaseUnitPrice == 0 || product.Stores[i].WholesaleUnitProfit == 0 {
-			product.Stores[i].WholesaleUnitProfitPerc = 0
-		} else {
-			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
+		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].WholesaleUnitProfit > 0 {
+			product.Stores[i].WholesaleUnitProfitPerc = 100
+		} else if product.Stores[i].PurchaseUnitPrice != 0 {
+			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
 		}
 	}
 
@@ -1847,18 +1872,34 @@ func ProcessProducts() error {
 
 		/*
 			for i, store := range product.Stores {
-				product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
-				if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
-					product.Stores[i].RetailUnitProfitPerc = 0
-				} else {
-					product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / store.PurchaseUnitPrice) * 100
+				zeroValue := 0.00
+
+				if store.PurchaseUnitPrice == nil {
+					product.Stores[i].PurchaseUnitPrice = &zeroValue
 				}
 
-				product.Stores[i].WholesaleUnitProfit = store.WholesaleUnitPrice - store.PurchaseUnitPrice
-				if store.PurchaseUnitPrice == 0 || product.Stores[i].WholesaleUnitProfit == 0 {
-					product.Stores[i].WholesaleUnitProfitPerc = 0
+				if store.WholesaleUnitPrice == nil {
+					product.Stores[i].WholesaleUnitPrice = &zeroValue
+				}
+
+				if store.RetailUnitPrice == nil {
+					product.Stores[i].RetailUnitPrice = &zeroValue
+				}
+
+				product.Stores[i].RetailUnitProfit = *product.Stores[i].RetailUnitPrice - *product.Stores[i].PurchaseUnitPrice
+
+				if product.Stores[i].PurchaseUnitPrice == nil || *product.Stores[i].PurchaseUnitPrice == 0 {
+					product.Stores[i].RetailUnitProfitPerc = 100
 				} else {
-					product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / store.PurchaseUnitPrice) * 100
+					product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / *product.Stores[i].PurchaseUnitPrice) * 100
+				}
+
+				product.Stores[i].WholesaleUnitProfit = *product.Stores[i].WholesaleUnitPrice - *product.Stores[i].PurchaseUnitPrice
+
+				if product.Stores[i].PurchaseUnitPrice == nil || *product.Stores[i].PurchaseUnitPrice == 0 {
+					product.Stores[i].WholesaleUnitProfitPerc = 100
+				} else {
+					product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / *product.Stores[i].PurchaseUnitPrice) * 100
 				}
 			}
 		*/
