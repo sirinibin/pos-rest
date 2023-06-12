@@ -1554,6 +1554,10 @@ func (product *Product) Update() error {
 	}
 
 	for i, store := range product.Stores {
+		if store.PurchaseUnitPrice == 0 {
+			product.Stores[i].PurchaseUnitPrice = 0
+		}
+
 		product.Stores[i].RetailUnitProfit = store.RetailUnitPrice - store.PurchaseUnitPrice
 		if store.PurchaseUnitPrice == 0 || product.Stores[i].RetailUnitProfit == 0 {
 			product.Stores[i].RetailUnitProfitPerc = 0
