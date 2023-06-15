@@ -26,170 +26,175 @@ func main() {
 	RemoveAllIndexes()
 
 	fields := bson.M{"ean_12": 1}
-	CreateIndex("product", fields, true, false)
+	CreateIndex("product", fields, true, false, "")
 
 	fields = bson.M{"part_number": 1}
-	CreateIndex("product", fields, true, false)
+	CreateIndex("product", fields, true, false, "")
 
 	fields = bson.M{"name": "text"}
-	CreateIndex("product", fields, false, true)
+	CreateIndex("product", fields, false, true, "")
+
+	/*
+		fields = bson.M{"name": "text", "name_in_arabic": "text"}
+		CreateIndex("product", fields, false, true, "arabic")
+	*/
 
 	fields = bson.M{"created_at": -1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"created_at": -1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"store_id": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 	fields = bson.M{"store_id": 1}
-	CreateIndex("salesreturn", fields, false, false)
+	CreateIndex("salesreturn", fields, false, false, "")
 
 	fields = bson.M{"store_id": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 	fields = bson.M{"stores.store_id": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.purchase_unit_price": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.wholesale_unit_price": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.retail_unit_price": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.wholesale_unit_profit": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.retail_unit_profit": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.wholesale_unit_profit_perc": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.retail_unit_profit_perc": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"stores.stock": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"category_id": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"created_by": 1}
-	CreateIndex("product", fields, false, false)
+	CreateIndex("product", fields, false, false, "")
 
 	fields = bson.M{"store_id": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 	fields = bson.M{"store_id": 1}
-	CreateIndex("purchasereturn", fields, false, false)
+	CreateIndex("purchasereturn", fields, false, false, "")
 
 	fields = bson.M{"created_by": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"customer_id": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"discount": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"discount_percent": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"date": -1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"code": 1}
-	CreateIndex("order", fields, true, false)
+	CreateIndex("order", fields, true, false, "")
 
 	fields = bson.M{"date": -1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"net_total": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"payment_status": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"net_profit": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"loss": 1}
-	CreateIndex("order", fields, false, false)
+	CreateIndex("order", fields, false, false, "")
 
 	fields = bson.M{"date": -1}
-	CreateIndex("expense", fields, false, false)
+	CreateIndex("expense", fields, false, false, "")
 
 	fields = bson.M{"amount": 1}
-	CreateIndex("expense", fields, false, false)
+	CreateIndex("expense", fields, false, false, "")
 
 	fields = bson.M{"vendor_invoice_no": "text"}
-	CreateIndex("purchase", fields, false, true)
+	CreateIndex("purchase", fields, false, true, "")
 
 	fields = bson.M{"vendor_id": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"discount": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"vat_price": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"net_retail_profit": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"net_wholesale_profit": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"created_by": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"created_at": -1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"date": -1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	fields = bson.M{"net_total": 1}
-	CreateIndex("purchase", fields, false, false)
+	CreateIndex("purchase", fields, false, false, "")
 
 	//Sales Return indexes
 	fields = bson.M{"date": -1}
-	CreateIndex("salesreturn", fields, false, false)
+	CreateIndex("salesreturn", fields, false, false, "")
 
 	fields = bson.M{"net_total": 1}
-	CreateIndex("salesreturn", fields, false, false)
+	CreateIndex("salesreturn", fields, false, false, "")
 
 	fields = bson.M{"net_profit": 1}
-	CreateIndex("salesreturn", fields, false, false)
+	CreateIndex("salesreturn", fields, false, false, "")
 
 	fields = bson.M{"loss": 1}
-	CreateIndex("salesreturn", fields, false, false)
+	CreateIndex("salesreturn", fields, false, false, "")
 
 	fields = bson.M{"code": 1}
-	CreateIndex("salesreturn", fields, true, false)
+	CreateIndex("salesreturn", fields, true, false, "")
 
 	fields = bson.M{"order_code": 1}
-	CreateIndex("salesreturn", fields, false, false)
+	CreateIndex("salesreturn", fields, false, false, "")
 
 	fields = bson.M{"code": 1}
-	CreateIndex("purchase", fields, true, false)
+	CreateIndex("purchase", fields, true, false, "")
 
 	fields = bson.M{"code": 1}
-	CreateIndex("purchasereturn", fields, true, false)
+	CreateIndex("purchasereturn", fields, true, false, "")
 
 	fields = bson.M{"date": -1}
-	CreateIndex("purchasereturn", fields, false, false)
+	CreateIndex("purchasereturn", fields, false, false, "")
 
 	fields = bson.M{"net_total": 1}
-	CreateIndex("purchasereturn", fields, false, false)
+	CreateIndex("purchasereturn", fields, false, false, "")
 
 	fields = bson.M{"purchase_code": 1}
-	CreateIndex("purchasereturn", fields, false, false)
+	CreateIndex("purchasereturn", fields, false, false, "")
 
 	fields = bson.M{"code": 1}
-	CreateIndex("quotation", fields, true, false)
+	CreateIndex("quotation", fields, true, false, "")
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -494,22 +499,28 @@ func RemoveAllIndexes() {
 }
 
 // CreateIndex - creates an index for a specific field in a collection
-func CreateIndex(collectionName string, fields bson.M, unique bool, text bool) error {
+func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, overrideLang string) error {
 	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
 	//collection.Indexes().DropAll(context.Background())
 
-	// 1. Lets define the keys for the index we want to create
-	var mod mongo.IndexModel
+	indexOptions := options.Index()
 	if text {
-		mod = mongo.IndexModel{
-			Keys:    fields, // index in ascending order or -1 for descending order
-			Options: options.Index().SetDefaultLanguage("english"),
-		}
-	} else {
-		mod = mongo.IndexModel{
-			Keys:    fields, // index in ascending order or -1 for descending order
-			Options: options.Index().SetUnique(unique),
-		}
+		indexOptions.SetDefaultLanguage("english")
+	}
+
+	if unique {
+		indexOptions.SetUnique(true)
+	}
+
+	if overrideLang != "" {
+		indexOptions.SetLanguageOverride(overrideLang)
+	}
+
+	// 1. Lets define the keys for the index we want to create
+	//var mod mongo.IndexModel
+	mod := mongo.IndexModel{
+		Keys:    fields, // index in ascending order or -1 for descending order
+		Options: indexOptions,
 	}
 
 	// 2. Create the context for this operation
