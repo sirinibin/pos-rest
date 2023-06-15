@@ -38,6 +38,20 @@ func main() {
 	fields = bson.M{"created_at": -1}
 	CreateIndex("product", fields, false, false)
 
+	fields = bson.M{"created_at": -1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"store_id": 1}
+	CreateIndex("order", fields, false, false)
+	fields = bson.M{"store_id": 1}
+	CreateIndex("salesreturn", fields, false, false)
+	fields = bson.M{"store_id": 1}
+	CreateIndex("product", fields, false, false)
+	fields = bson.M{"store_id": 1}
+	CreateIndex("purchase", fields, false, false)
+	fields = bson.M{"store_id": 1}
+	CreateIndex("purchasereturn", fields, false, false)
+
 	fields = bson.M{"code": 1}
 	CreateIndex("order", fields, true, false)
 
@@ -61,6 +75,9 @@ func main() {
 
 	fields = bson.M{"amount": 1}
 	CreateIndex("expense", fields, false, false)
+
+	fields = bson.M{"created_at": -1}
+	CreateIndex("purchase", fields, false, false)
 
 	fields = bson.M{"date": -1}
 	CreateIndex("purchase", fields, false, false)
