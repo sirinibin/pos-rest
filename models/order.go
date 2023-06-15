@@ -1145,6 +1145,16 @@ func (order *Order) Update() error {
 		return err
 	}
 
+	err = order.ClearProductsSalesHistory()
+	if err != nil {
+		return err
+	}
+
+	err = order.CreateProductsSalesHistory()
+	if err != nil {
+		return err
+	}
+
 	if updateResult.MatchedCount > 0 {
 		return nil
 	}
@@ -1179,7 +1189,7 @@ func (order *Order) Insert() error {
 		return err
 	}
 
-	err = order.AddProductsSalesHistory()
+	err = order.CreateProductsSalesHistory()
 	if err != nil {
 		return err
 	}
@@ -1514,106 +1524,25 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		/*
-			for _, orderProduct := range order.Products {
-				if orderProduct.Profit < 0 || orderProduct.Loss > 0 {
-					fmt.Printf("\nNo: %d", productCount)
-					fmt.Printf("\nOrder ID: %s", order.Code)
-					fmt.Printf("\nProduct Part#: %s", orderProduct.PartNumber)
-					fmt.Printf("\nProduct Name: %s", orderProduct.Name)
-					fmt.Printf("\nProduct Profit Recorded: %.02f", orderProduct.Profit)
-					fmt.Printf("\nProduct Loss Recorded: %.02f", orderProduct.Loss)
-					fmt.Printf("\nProduct Sold for Unit Price: %.02f", orderProduct.UnitPrice)
-					fmt.Printf("\nProduct Purchase Unit Price(Marked when sold): %.02f\n", orderProduct.PurchaseUnitPrice)
-					productCount++
-				}
-			}
-		*/
-		/*
-			if order.Code == "GUO-100050" {
-				for k, product := range order.Products {
-					if product.ItemCode == "BUF" {
-						order.Products[k].Quantity = 2
-						order.Products[k].UnitPrice = 3850
-					}
-				}
-				order.FindNetTotal()
-				order.FindTotal()
-				order.FindTotalQuantity()
-				order.FindVatPrice()
-			}
-		*/
-
-		/*
-			if order.Code == "GUOJ-100100" {
-				for k, product := range order.Products {
-					if product.PartNumber == "BUF" {
-						order.Products[k].Quantity = 2
-						order.Products[k].UnitPrice = 3850
-					}
-				}
-				order.FindNetTotal()
-				order.FindTotal()
-				order.FindTotalQuantity()
-				order.FindVatPrice()
-			}
-		*/
-
 		err = order.CalculateOrderProfit()
 		if err != nil {
 			return err
 		}
 
-		err = order.AddProductsSalesHistory()
+		err = order.ClearProductsSalesHistory()
 		if err != nil {
 			return err
 		}
 
-		/*
-			if order.PaymentStatus == "" {
-				order.PaymentStatus = "paid"
-			}
-
-			if order.PaymentMethod == "" {
-				order.PaymentMethod = "cash"
-			}
-
-			totalPaymentsCount, err := GetTotalCount(bson.M{"order_id": order.ID}, "sales_payment")
-			if err != nil {
-				return err
-			}
-
-			if totalPaymentsCount == 0 {
-				err = order.AddPayment()
-				if err != nil {
-					return err
-				}
-			}
-		*/
-
-		if order.Code == "GUOJ-101457" {
-			for i, product := range order.Products {
-				if product.PartNumber == "CRB" {
-					order.Products[i].QuantityReturned = 0
-				}
-			}
+		err = order.CreateProductsSalesHistory()
+		if err != nil {
+			return err
 		}
 
-		//order.Date = order.CreatedAt
 		err = order.Update()
 		if err != nil {
 			return err
 		}
-
-		/*
-			if order.Code == "GUOJ-100199" {
-				err = order.HardDelete()
-				if err != nil {
-					return err
-				}
-			}
-		*/
-
 	}
 
 	return nil

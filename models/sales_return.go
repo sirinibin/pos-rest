@@ -1507,33 +1507,6 @@ func ProcessSalesReturns() error {
 			return err
 		}
 
-		/*
-			if salesReturn.PaymentStatus == "" {
-				salesReturn.PaymentStatus = "paid"
-			}
-
-			if salesReturn.PaymentMethod == "" {
-				salesReturn.PaymentMethod = "cash"
-			}
-
-			totalPaymentsCount, err := GetTotalCount(bson.M{"sales_return_id": salesReturn.ID}, "sales_return_payment")
-			if err != nil {
-				return err
-			}
-
-			if totalPaymentsCount == 0 {
-				err = salesReturn.AddPayment()
-				if err != nil {
-					return err
-				}
-			}
-		*/
-
-		/*
-			d := salesReturn.Date.Add(time.Hour * time.Duration(-3))
-			salesReturn.Date = &d
-		*/
-		//salesReturn.Date = salesReturn.CreatedAt
 		err = salesReturn.Update()
 		if err != nil {
 			return err

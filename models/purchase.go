@@ -1428,50 +1428,6 @@ func ProcessPurchases() error {
 			return err
 		}
 
-		//for _, purchaseProduct := range model.Products {
-
-		/*
-			for _, purchaseProduct := range model.Products {
-				for _, order := range orders {
-					for _, orderProduct := range order.Products {
-						if purchaseProduct.ProductID.Hex() == orderProduct.ProductID.Hex() {
-							if purchaseProduct.PurchaseUnitPrice < orderProduct.PurchaseUnitPrice && (orderProduct.PurchaseUnitPrice-purchaseProduct.PurchaseUnitPrice) > 50 {
-								fmt.Printf("\n\nPurchase ID: %s", model.Code)
-								fmt.Printf("\n\nOrder ID: %s", order.Code)
-								fmt.Printf("\nProduct Part Number: %s", orderProduct.PartNumber)
-								fmt.Printf("\nPurchase Unit Price: %f", purchaseProduct.PurchaseUnitPrice)
-								fmt.Printf("\nOrder Product Purchase Unit Price: %f", orderProduct.PurchaseUnitPrice)
-								fmt.Printf("\nProduct sold for unit Price : %f", orderProduct.UnitPrice)
-								fmt.Printf("\nOrder Product profit: %f", orderProduct.Profit)
-							}
-						}
-					}
-				}
-			}
-		*/
-
-		/*
-			if model.PaymentStatus == "" {
-				model.PaymentStatus = "paid"
-			}
-
-			if model.PaymentMethod == "" {
-				model.PaymentMethod = "cash"
-			}
-
-			totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_id": model.ID}, "purchase_payment")
-			if err != nil {
-				return err
-			}
-
-			if totalPaymentsCount == 0 {
-				err = model.AddPayment()
-				if err != nil {
-					return err
-				}
-			}
-		*/
-
 		err = model.Update()
 		if err != nil {
 			return err

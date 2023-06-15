@@ -1605,7 +1605,16 @@ func (product *Product) Update() error {
 		bson.M{"$set": product},
 		updateOptions,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	err = product.ReflectValidPurchaseUnitPrice()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
@@ -1843,6 +1852,44 @@ func IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
+func (product *Product) ReflectValidPurchaseUnitPrice() error {
+	salesHistories, err := GetSalesHistoriesByProductID(&product.ID)
+	if err != nil {
+		return errors.New("Error fetching sales history of product:" + err.Error())
+	}
+
+	if len(salesHistories) == 0 {
+		return nil
+	}
+
+	for _, salesHistory := range salesHistories {
+		order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
+		if err != nil {
+			return errors.New("Error fetching order:" + err.Error())
+		}
+
+		for k, _ := range order.Products {
+			for _, store := range product.Stores {
+
+				if store.StoreID == *order.StoreID &&
+					order.Products[k].ProductID.Hex() == product.ID.Hex() &&
+					(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0 || order.Products[k].PurchaseUnitPrice == 0) &&
+					store.PurchaseUnitPrice > 0 {
+					//log.Printf("Updating purchase unit price of order: %s", order.Code)
+					order.Products[k].PurchaseUnitPrice = store.PurchaseUnitPrice
+				}
+
+			}
+		}
+
+		err = order.Update()
+		if err != nil {
+			return errors.New("Error updating order:" + err.Error())
+		}
+	}
+	return nil
+}
+
 func ProcessProducts() error {
 	log.Printf("Processing products")
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
@@ -1870,150 +1917,14 @@ func ProcessProducts() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		/*
-			for i, store := range product.Stores {
-				zeroValue := 0.00
-
-				if store.PurchaseUnitPrice == nil {
-					product.Stores[i].PurchaseUnitPrice = &zeroValue
-				}
-
-				if store.WholesaleUnitPrice == nil {
-					product.Stores[i].WholesaleUnitPrice = &zeroValue
-				}
-
-				if store.RetailUnitPrice == nil {
-					product.Stores[i].RetailUnitPrice = &zeroValue
-				}
-
-				product.Stores[i].RetailUnitProfit = *product.Stores[i].RetailUnitPrice - *product.Stores[i].PurchaseUnitPrice
-
-				if product.Stores[i].PurchaseUnitPrice == nil || *product.Stores[i].PurchaseUnitPrice == 0 {
-					product.Stores[i].RetailUnitProfitPerc = 100
-				} else {
-					product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / *product.Stores[i].PurchaseUnitPrice) * 100
-				}
-
-				product.Stores[i].WholesaleUnitProfit = *product.Stores[i].WholesaleUnitPrice - *product.Stores[i].PurchaseUnitPrice
-
-				if product.Stores[i].PurchaseUnitPrice == nil || *product.Stores[i].PurchaseUnitPrice == 0 {
-					product.Stores[i].WholesaleUnitProfitPerc = 100
-				} else {
-					product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / *product.Stores[i].PurchaseUnitPrice) * 100
-				}
-			}
-		*/
-
-		/*
-			length := 0
-			if len(product.UnitPrices) > len(product.Stock) {
-				length = len(product.UnitPrices)
-			} else {
-				length = len(product.Stock)
-			}
-
-			product.Stores = make([]ProductStore, length)
-
-			for k, unitPrice := range product.UnitPrices {
-				//product.Stores[unitPrice.StoreID.Hex()][unitPrice.StoreID] = unitPrice.StoreID
-				if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == unitPrice.StoreID.Hex()) {
-					product.Stores[k].StoreID = unitPrice.StoreID
-					product.Stores[k].StoreName = unitPrice.StoreName
-					product.Stores[k].StoreNameInArabic = unitPrice.StoreNameInArabic
-					product.Stores[k].PurchaseUnitPrice = unitPrice.PurchaseUnitPrice
-					product.Stores[k].RetailUnitPrice = unitPrice.RetailUnitPrice
-					product.Stores[k].WholesaleUnitPrice = unitPrice.WholesaleUnitPrice
-					product.Stores[k].PurchaseUnitPriceSecret = unitPrice.PurchaseUnitPriceSecret
-				}
-			}
-
-			for k, stock := range product.Stock {
-				if product.Stores[k].StoreID.IsZero() || (product.Stores[k].StoreID.Hex() == stock.StoreID.Hex()) {
-					product.Stores[k].StoreID = stock.StoreID
-					product.Stores[k].StoreName = stock.StoreName
-					product.Stores[k].StoreNameInArabic = stock.StoreNameInArabic
-					product.Stores[k].Stock = stock.Stock
-				}
-			}
-		*/
-
-		/*
-			purchaseHistory, err := GetPurchaseHistoriesByProductID(&product.ID)
-			if err != nil {
-				return errors.New("Error fetching purchase history:" + err.Error())
-			}
-		*/
-
-		//if len(purchaseHistory) <= 1 {
-		//log.Printf("Purchase history is: %d for product: %s", len(purchaseHistory), model.Name)
-		//update unit pruchase value to all orders
-		salesHistories, err := GetSalesHistoriesByProductID(&product.ID)
-		if err != nil {
-			return errors.New("Error fetching sales history:" + err.Error())
-		}
-
-		if product.PartNumber == "90919-T1004" {
-			//log.Printf("Part No: %s", product.PartNumber)
-			//log.Printf("Sales history is: %d for product: %s", len(salesHistories), product.Name)
-		}
-
-		if len(salesHistories) > 0 {
-			//log.Printf("Sales history is: %d for product: %s", len(salesHistories), model.Name)
-			for _, salesHistory := range salesHistories {
-				order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
-				if err != nil {
-					return errors.New("Error fetching order:" + err.Error())
-				}
-
-				for k, _ := range order.Products {
-					for _, store := range product.Stores {
-
-						if product.PartNumber == "90919-T1004" {
-							//log.Printf("Part No: %s", product.PartNumber)
-							//log.Printf("Sales history is: %d for product: %s", len(salesHistories), product.Name)
-							//log.Print("order.Products[k].PurchaseUnitPrice:")
-							//log.Print(order.Products[k].PurchaseUnitPrice)
-						}
-
-						if store.StoreID == *order.StoreID &&
-							order.Products[k].ProductID.Hex() == product.ID.Hex() &&
-							(order.Products[k].Loss > 0 || order.Products[k].Profit <= 0 || order.Products[k].PurchaseUnitPrice == 0) &&
-							store.PurchaseUnitPrice > 0 {
-							//log.Printf("Updating purchase unit price of order: %s", order.Code)
-							order.Products[k].PurchaseUnitPrice = store.PurchaseUnitPrice
-						}
-
-					}
-				}
-
-				err = order.Update()
-				if err != nil {
-					return errors.New("Error updating order:" + err.Error())
-				}
-			}
-
-		}
-
-		//}
-
-		/*
-			store, err := FindStoreByCode("GUO", bson.M{})
-			if err != nil {
-				return errors.New("Error finding store:" + err.Error())
-			}
-			model.StoreID = &store.ID
-		*/
-
-		err = product.Update()
+		err = product.ReflectValidPurchaseUnitPrice()
 		if err != nil {
 			return err
 		}
 
-		if product.PartNumber == "FLAP" && product.Ean12 == "100000004507" {
-			err = product.HardDelete()
-			if err != nil {
-				return err
-			}
+		err = product.Update()
+		if err != nil {
+			return err
 		}
 	}
 
