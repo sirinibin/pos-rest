@@ -35,6 +35,9 @@ func main() {
 	fields = bson.M{"name": 1}
 	CreateIndex("product", fields, false, true)
 
+	fields = bson.M{"created_at": -1}
+	CreateIndex("product", fields, false, false)
+
 	fields = bson.M{"code": 1}
 	CreateIndex("order", fields, true, false)
 
