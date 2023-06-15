@@ -26,10 +26,10 @@ func main() {
 	RemoveAllIndexes()
 
 	fields := bson.M{"ean_12": 1}
-	CreateIndex("product", fields, true, true)
+	CreateIndex("product", fields, true, false)
 
 	fields = bson.M{"part_number": 1}
-	CreateIndex("product", fields, true, true)
+	CreateIndex("product", fields, true, false)
 
 	fields = bson.M{"name": "text"}
 	CreateIndex("product", fields, false, true)
