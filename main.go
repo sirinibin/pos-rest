@@ -26,12 +26,12 @@ func main() {
 	RemoveAllIndexes()
 
 	fields := bson.M{"ean_12": 1}
-	CreateIndex("product", fields, true, false)
+	CreateIndex("product", fields, true, true)
 
 	fields = bson.M{"part_number": 1}
-	CreateIndex("product", fields, true, false)
+	CreateIndex("product", fields, true, true)
 
-	fields = bson.M{"name": 1}
+	fields = bson.M{"name": "text"}
 	CreateIndex("product", fields, false, true)
 
 	fields = bson.M{"created_at": -1}
@@ -124,7 +124,7 @@ func main() {
 	fields = bson.M{"amount": 1}
 	CreateIndex("expense", fields, false, false)
 
-	fields = bson.M{"vendor_invoice_no": 1}
+	fields = bson.M{"vendor_invoice_no": "text"}
 	CreateIndex("purchase", fields, false, true)
 
 	fields = bson.M{"vendor_id": 1}
