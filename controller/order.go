@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -18,7 +17,6 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
-	log.Print("Inside Orders")
 
 	_, err := models.AuthenticateByAccessToken(r)
 	if err != nil {

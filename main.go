@@ -44,12 +44,61 @@ func main() {
 	CreateIndex("order", fields, false, false)
 	fields = bson.M{"store_id": 1}
 	CreateIndex("salesreturn", fields, false, false)
+
 	fields = bson.M{"store_id": 1}
 	CreateIndex("product", fields, false, false)
+	fields = bson.M{"stores.store_id": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.purchase_unit_price": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.wholesale_unit_price": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.retail_unit_price": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.wholesale_unit_profit": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.retail_unit_profit": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.wholesale_unit_profit_perc": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.retail_unit_profit_perc": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"stores.stock": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"category_id": 1}
+	CreateIndex("product", fields, false, false)
+
+	fields = bson.M{"created_by": 1}
+	CreateIndex("product", fields, false, false)
+
 	fields = bson.M{"store_id": 1}
 	CreateIndex("purchase", fields, false, false)
 	fields = bson.M{"store_id": 1}
 	CreateIndex("purchasereturn", fields, false, false)
+
+	fields = bson.M{"created_by": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"customer_id": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"discount": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"discount_percent": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"date": -1}
+	CreateIndex("order", fields, false, false)
 
 	fields = bson.M{"code": 1}
 	CreateIndex("order", fields, true, false)
@@ -75,6 +124,27 @@ func main() {
 	fields = bson.M{"amount": 1}
 	CreateIndex("expense", fields, false, false)
 
+	fields = bson.M{"vendor_invoice_no": 1}
+	CreateIndex("purchase", fields, false, true)
+
+	fields = bson.M{"vendor_id": 1}
+	CreateIndex("purchase", fields, false, false)
+
+	fields = bson.M{"discount": 1}
+	CreateIndex("purchase", fields, false, false)
+
+	fields = bson.M{"vat_price": 1}
+	CreateIndex("purchase", fields, false, false)
+
+	fields = bson.M{"net_retail_profit": 1}
+	CreateIndex("purchase", fields, false, false)
+
+	fields = bson.M{"net_wholesale_profit": 1}
+	CreateIndex("purchase", fields, false, false)
+
+	fields = bson.M{"created_by": 1}
+	CreateIndex("purchase", fields, false, false)
+
 	fields = bson.M{"created_at": -1}
 	CreateIndex("purchase", fields, false, false)
 
@@ -84,6 +154,7 @@ func main() {
 	fields = bson.M{"net_total": 1}
 	CreateIndex("purchase", fields, false, false)
 
+	//Sales Return indexes
 	fields = bson.M{"date": -1}
 	CreateIndex("salesreturn", fields, false, false)
 

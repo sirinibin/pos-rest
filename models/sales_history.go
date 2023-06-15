@@ -371,7 +371,6 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 	}
 
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		log.Print("Cool")
 		err := cur.Err()
 		if err != nil {
 			return models, criterias, errors.New("Cursor error:" + err.Error())
