@@ -26,19 +26,80 @@ func main() {
 	db.InitRedis()
 	RemoveAllIndexes()
 
-	CreateIndex("product", "ean_12", true, false)
-	CreateIndex("product", "part_number", true, false)
-	CreateIndex("product", "name", false, true)
+	fields := bson.M{"ean_12": 1}
+	CreateIndex("product", fields, true, false)
 
-	CreateIndex("order", "code", true, false)
-	CreateIndex("salesreturn", "code", true, false)
-	CreateIndex("salesreturn", "order_code", false, false)
+	fields = bson.M{"part_number": 1}
+	CreateIndex("product", fields, true, false)
 
-	CreateIndex("purchase", "code", true, false)
-	CreateIndex("purchasereturn", "code", true, false)
-	CreateIndex("purchasereturn", "purchase_code", false, false)
-	CreateIndex("quotation", "code", true, false)
-	//ListAllIndexes("product")
+	fields = bson.M{"name": 1}
+	CreateIndex("product", fields, false, true)
+
+	fields = bson.M{"code": 1}
+	CreateIndex("order", fields, true, false)
+
+	fields = bson.M{"date": -1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"net_total": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"payment_status": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"net_profit": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"loss": 1}
+	CreateIndex("order", fields, false, false)
+
+	fields = bson.M{"date": -1}
+	CreateIndex("expense", fields, false, false)
+
+	fields = bson.M{"amount": 1}
+	CreateIndex("expense", fields, false, false)
+
+	fields = bson.M{"date": -1}
+	CreateIndex("purchase", fields, false, false)
+
+	fields = bson.M{"net_total": 1}
+	CreateIndex("purchase", fields, false, false)
+
+	fields = bson.M{"date": -1}
+	CreateIndex("salesreturn", fields, false, false)
+
+	fields = bson.M{"net_total": 1}
+	CreateIndex("salesreturn", fields, false, false)
+
+	fields = bson.M{"net_profit": 1}
+	CreateIndex("salesreturn", fields, false, false)
+
+	fields = bson.M{"loss": 1}
+	CreateIndex("salesreturn", fields, false, false)
+
+	fields = bson.M{"code": 1}
+	CreateIndex("salesreturn", fields, true, false)
+
+	fields = bson.M{"order_code": 1}
+	CreateIndex("salesreturn", fields, false, false)
+
+	fields = bson.M{"code": 1}
+	CreateIndex("purchase", fields, true, false)
+
+	fields = bson.M{"code": 1}
+	CreateIndex("purchasereturn", fields, true, false)
+
+	fields = bson.M{"date": -1}
+	CreateIndex("purchasereturn", fields, false, false)
+
+	fields = bson.M{"net_total": 1}
+	CreateIndex("purchasereturn", fields, false, false)
+
+	fields = bson.M{"purchase_code": 1}
+	CreateIndex("purchasereturn", fields, false, false)
+
+	fields = bson.M{"code": 1}
+	CreateIndex("quotation", fields, true, false)
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -324,6 +385,7 @@ func ListAllIndexes(collectionName string) {
 }
 
 func RemoveAllIndexes() {
+	log.Print("Removing all indexes")
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	collection.Indexes().DropAll(context.Background())
 
@@ -342,21 +404,20 @@ func RemoveAllIndexes() {
 }
 
 // CreateIndex - creates an index for a specific field in a collection
-func CreateIndex(collectionName string, field string, unique bool, text bool) error {
-	log.Print("Inside Create Index")
+func CreateIndex(collectionName string, fields bson.M, unique bool, text bool) error {
 	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
-	collection.Indexes().DropAll(context.Background())
+	//collection.Indexes().DropAll(context.Background())
 
 	// 1. Lets define the keys for the index we want to create
 	var mod mongo.IndexModel
 	if text {
 		mod = mongo.IndexModel{
-			Keys:    bson.M{field: "text"}, // index in ascending order or -1 for descending order
+			Keys:    fields, // index in ascending order or -1 for descending order
 			Options: options.Index().SetDefaultLanguage("english"),
 		}
 	} else {
 		mod = mongo.IndexModel{
-			Keys:    bson.M{field: 1}, // index in ascending order or -1 for descending order
+			Keys:    fields, // index in ascending order or -1 for descending order
 			Options: options.Index().SetUnique(unique),
 		}
 	}
@@ -369,12 +430,12 @@ func CreateIndex(collectionName string, field string, unique bool, text bool) er
 	indexName, err := collection.Indexes().CreateOne(ctx, mod)
 	if err != nil {
 		// 5. Something went wrong, we log it and return false
-		log.Printf("Failed to create Index for field:%s", field)
+		log.Printf("Failed to create Index for field:%v", fields)
 		fmt.Println(err.Error())
 		return err
 	}
 
-	log.Printf("Created Index:%s for collection:%s", indexName, collectionName)
+	log.Printf("Created Index:%s for collection:%s for fields %v", indexName, collectionName, fields)
 
 	// 6. All went well, we return true
 	return nil

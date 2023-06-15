@@ -19,6 +19,7 @@ require (
 	github.com/myesui/uuid v1.0.0 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.16.0 // indirect
+	github.com/rs/cors v1.9.0 // indirect
 	github.com/twinj/uuid v1.0.0
 	go.mongodb.org/mongo-driver v1.7.3
 	golang.org/x/crypto v0.0.0-20201012173705-84dcc777aaee // indirect

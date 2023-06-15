@@ -2009,6 +2009,26 @@ func ProcessProducts() error {
 			return err
 		}
 
+		if product.PartNumber == "FLAP" && product.Ean12 == "100000004507" {
+			err = product.HardDelete()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (product *Product) HardDelete() error {
+	log.Print("Deleting product")
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"_id": product.ID,
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
