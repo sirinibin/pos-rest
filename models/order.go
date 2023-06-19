@@ -637,6 +637,14 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethodList := strings.Split(keys[0], ",")
+		if len(paymentMethodList) > 0 {
+			criterias.SearchBy["payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[delivered_by]"]
 	if ok && len(keys[0]) >= 1 {
 		deliveredByID, err := primitive.ObjectIDFromHex(keys[0])
