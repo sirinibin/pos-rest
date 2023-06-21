@@ -410,6 +410,23 @@ func (salesPayment *SalesPayment) Insert() error {
 	if err != nil {
 		return err
 	}
+
+	//Updating order.payments
+	order, err := FindOrderByID(salesPayment.OrderID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	_, err = order.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -431,6 +448,23 @@ func (salesPayment *SalesPayment) Update() error {
 		bson.M{"$set": salesPayment},
 		updateOptions,
 	)
+
+	//Updating order.payments
+	order, err := FindOrderByID(salesPayment.OrderID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	_, err = order.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
 	return err
 }
 

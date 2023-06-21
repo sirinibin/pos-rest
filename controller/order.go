@@ -122,6 +122,15 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.FindTotalQuantity()
 	order.FindVatPrice()
 
+	order.UpdateForeignLabelFields()
+
+	order.ID = primitive.NewObjectID()
+	if len(order.Code) == 0 {
+		order.MakeCode()
+	}
+
+	order.CalculateOrderProfit()
+
 	err = order.Insert()
 	if err != nil {
 		response.Status = false
@@ -132,6 +141,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	order.CreateProductsSalesHistory()
+	order.AddPayment()
 
 	err = order.RemoveStock()
 	if err != nil {
@@ -226,6 +238,10 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.FindTotalQuantity()
 	order.FindVatPrice()
 
+	order.UpdateForeignLabelFields()
+	order.CalculateOrderProfit()
+	order.GetPayments()
+
 	err = order.Update()
 	if err != nil {
 		response.Status = false
@@ -235,6 +251,14 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	order.ClearProductsSalesHistory()
+	order.CreateProductsSalesHistory()
+	count, _ := order.GetPaymentsCount()
+	if count == 1 {
+		order.ClearPayments()
+		order.AddPayment()
 	}
 
 	err = orderOld.AddStock()

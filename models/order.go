@@ -15,6 +15,7 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -31,6 +32,18 @@ type OrderProduct struct {
 	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	Profit            float64            `bson:"profit" json:"profit"`
 	Loss              float64            `bson:"loss" json:"loss"`
+}
+
+type OrderPayment struct {
+	PaymentID     primitive.ObjectID  `json:"payment_id,omitempty" bson:"payment_id,omitempty"`
+	Amount        float64             `json:"amount" bson:"amount"`
+	Method        string              `json:"method" bson:"method"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 }
 
 // Order : Order structure
@@ -64,6 +77,11 @@ type Order struct {
 	NetTotal                 float64             `bson:"net_total" json:"net_total"`
 	PartiaPaymentAmount      float64             `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
+	PaymentMethods           []string            `json:"payment_methods" bson:"payment_methods"`
+	TotalPaymentReceived     float64             `bson:"total_payment_received" json:"total_payment_received"`
+	BalanceAmount            float64             `bson:"balance_amount" json:"balance_amount"`
+	Payments                 []OrderPayment      `bson:"payments" json:"payments"`
+	PaymentsCount            int64               `bson:"payments_count" json:"payments_count"`
 	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
 	Profit                   float64             `bson:"profit" json:"profit"`
 	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
@@ -545,6 +563,58 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 
 	}
 
+	keys, ok = r.URL.Query()["search[total_payment_received]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["total_payment_received"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["total_payment_received"] = value
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["balance_amount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payments_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["payments_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["payments_count"] = value
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[net_profit]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -642,6 +712,28 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		paymentMethodList := strings.Split(keys[0], ",")
 		if len(paymentMethodList) > 0 {
 			criterias.SearchBy["payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+
+		paymentMethods := strings.Split(keys[0], ",")
+
+		/*
+			objecIds := []primitive.ObjectID{}
+
+			for _, id := range categoryIds {
+				categoryID, err := primitive.ObjectIDFromHex(id)
+				if err != nil {
+					return products, criterias, err
+				}
+				objecIds = append(objecIds, categoryID)
+			}
+		*/
+
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
 		}
 	}
 
@@ -1126,22 +1218,33 @@ func (order *Order) GenerateCode(startFrom int, storeCode string) (string, error
 	return storeCode + "-" + strconv.Itoa(code+1), nil
 }
 
+func (order *Order) ClearPayments() error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"order_id": order.ID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (order *Order) GetPaymentsCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"order_id": order.ID,
+	})
+}
+
 func (order *Order) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
-
-	err := order.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	err = order.CalculateOrderProfit()
-	if err != nil {
-		return err
-	}
 
 	updateResult, err := collection.UpdateOne(
 		ctx,
@@ -1153,19 +1256,10 @@ func (order *Order) Update() error {
 		return err
 	}
 
-	err = order.ClearProductsSalesHistory()
-	if err != nil {
-		return err
-	}
-
-	err = order.CreateProductsSalesHistory()
-	if err != nil {
-		return err
-	}
-
 	if updateResult.MatchedCount > 0 {
 		return nil
 	}
+
 	return nil
 }
 
@@ -1174,40 +1268,104 @@ func (order *Order) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := order.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	order.ID = primitive.NewObjectID()
-	if len(order.Code) == 0 {
-		err = order.MakeCode()
-		if err != nil {
-			return err
-		}
-	}
-
-	err = order.CalculateOrderProfit()
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.InsertOne(ctx, &order)
-	if err != nil {
-		return err
-	}
-
-	err = order.CreateProductsSalesHistory()
-	if err != nil {
-		return err
-	}
-
-	err = order.AddPayment()
+	_, err := collection.InsertOne(ctx, &order)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (order *Order) AddPayment() error {
+	amount := float64(0.0)
+	if order.PaymentStatus == "paid" {
+		amount = order.NetTotal
+	} else if order.PaymentStatus == "paid_partially" {
+		amount = order.PartiaPaymentAmount
+	} else {
+		return nil
+	}
+
+	payment := SalesPayment{
+		OrderID:       &order.ID,
+		OrderCode:     order.Code,
+		Amount:        amount,
+		Method:        order.PaymentMethod,
+		CreatedAt:     order.CreatedAt,
+		UpdatedAt:     order.UpdatedAt,
+		CreatedBy:     order.CreatedBy,
+		CreatedByName: order.CreatedByName,
+		UpdatedBy:     order.UpdatedBy,
+		UpdatedByName: order.UpdatedByName,
+		StoreID:       order.StoreID,
+		StoreName:     order.StoreName,
+	}
+	err := payment.Insert()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (order *Order) GetPayments() (models []OrderPayment, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"order_id": order.ID}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching order payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	totalPaymentReceived := float64(0.0)
+	paymentMethods := []string{}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := SalesPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		//log.Print("Pushing")
+		models = append(models, OrderPayment{
+			PaymentID:     model.ID,
+			Amount:        model.Amount,
+			Method:        model.Method,
+			CreatedAt:     model.CreatedAt,
+			UpdatedAt:     model.UpdatedAt,
+			CreatedBy:     model.CreatedBy,
+			UpdatedBy:     model.UpdatedBy,
+			CreatedByName: model.CreatedByName,
+			UpdatedByName: model.UpdatedByName,
+		})
+
+		totalPaymentReceived += model.Amount
+
+		if !slices.Contains(paymentMethods, model.Method) {
+			paymentMethods = append(paymentMethods, model.Method)
+		}
+	} //end for loop
+
+	order.TotalPaymentReceived = totalPaymentReceived
+	order.BalanceAmount = order.NetTotal - totalPaymentReceived
+	order.PaymentMethods = paymentMethods
+	order.Payments = models
+	order.PaymentsCount = int64(len(models))
+
+	return models, err
 }
 
 func (order *Order) MakeCode() error {
@@ -1284,36 +1442,44 @@ func FindLastOrderByStoreID(
 	return order, err
 }
 
-func (order *Order) AddPayment() error {
-	amount := float64(0.0)
-	if order.PaymentStatus == "paid" {
-		amount = order.NetTotal
-	} else if order.PaymentStatus == "paid_partially" {
-		amount = order.PartiaPaymentAmount
-	} else {
-		return nil
+/*
+func GetSalesHistoriesByProductID(productID *primitive.ObjectID) (models []ProductSalesHistory, err error) {
+	//log.Print("Fetching sales histories")
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"product_id": productID}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching product sales history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
 	}
 
-	payment := SalesPayment{
-		OrderID:       &order.ID,
-		OrderCode:     order.Code,
-		Amount:        amount,
-		Method:        order.PaymentMethod,
-		CreatedAt:     order.CreatedAt,
-		UpdatedAt:     order.UpdatedAt,
-		CreatedBy:     order.CreatedBy,
-		CreatedByName: order.CreatedByName,
-		UpdatedBy:     order.UpdatedBy,
-		UpdatedByName: order.UpdatedByName,
-		StoreID:       order.StoreID,
-		StoreName:     order.StoreName,
-	}
-	err := payment.Insert()
-	if err != nil {
-		return err
-	}
-	return nil
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		salesHistory := ProductSalesHistory{}
+		err = cur.Decode(&salesHistory)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		//log.Print("Pushing")
+		models = append(models, salesHistory)
+	} //end for loop
+
+	return models, nil
 }
+*/
 
 func (order *Order) IsCodeExists() (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
@@ -1532,19 +1698,37 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = order.CalculateOrderProfit()
+		/*
+			err = order.CalculateOrderProfit()
+			if err != nil {
+				return err
+			}
+
+			err = order.ClearProductsSalesHistory()
+			if err != nil {
+				return err
+			}
+
+			err = order.CreateProductsSalesHistory()
+			if err != nil {
+				return err
+			}
+		*/
+
+		count, err := order.GetPaymentsCount()
 		if err != nil {
 			return err
 		}
 
-		err = order.ClearProductsSalesHistory()
-		if err != nil {
-			return err
-		}
-
-		err = order.CreateProductsSalesHistory()
-		if err != nil {
-			return err
+		if count == 1 {
+			err = order.ClearPayments()
+			if err != nil {
+				return err
+			}
+			err = order.AddPayment()
+			if err != nil {
+				return err
+			}
 		}
 
 		err = order.Update()
@@ -1553,5 +1737,6 @@ func ProcessOrders() error {
 		}
 	}
 
+	log.Print("DONE!")
 	return nil
 }

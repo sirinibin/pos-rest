@@ -395,7 +395,7 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 }
 
 func (order *Order) ClearProductsSalesHistory() error {
-	log.Printf("Clearing Sales history of order id:%s", order.Code)
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{"order_id": order.ID})
@@ -406,7 +406,7 @@ func (order *Order) ClearProductsSalesHistory() error {
 }
 
 func (order *Order) CreateProductsSalesHistory() error {
-	log.Printf("Creating Sales history of order id:%s", order.Code)
+	//log.Printf("Creating Sales history of order id:%s", order.Code)
 	exists, err := IsSalesHistoryExistsByOrderID(&order.ID)
 	if err != nil {
 		return err
