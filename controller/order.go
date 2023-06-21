@@ -144,6 +144,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.CreateProductsSalesHistory()
 	order.AddPayment()
+	order.GetPayments()
+	order.Update()
 
 	err = order.RemoveStock()
 	if err != nil {
@@ -259,6 +261,8 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if count == 1 {
 		order.ClearPayments()
 		order.AddPayment()
+		order.GetPayments()
+		order.Update()
 	}
 
 	err = orderOld.AddStock()

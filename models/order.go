@@ -1304,6 +1304,7 @@ func (order *Order) AddPayment() error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -1725,7 +1726,13 @@ func ProcessOrders() error {
 			if err != nil {
 				return err
 			}
+			//log.Print("Addin payment")
 			err = order.AddPayment()
+			if err != nil {
+				return err
+			}
+
+			_, err = order.GetPayments()
 			if err != nil {
 				return err
 			}
