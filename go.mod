@@ -1,6 +1,6 @@
 module github.com/sirinibin/pos-rest
 
-go 1.19
+go 1.20
 
 require (
 	github.com/abdullahdiaa/garabic v0.0.0-20210618210345-00e1a0d4b691
