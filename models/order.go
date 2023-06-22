@@ -327,6 +327,10 @@ type SalesStats struct {
 	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
 	Discount               float64             `json:"discount" bson:"discount"`
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	PaidSales              float64             `json:"paid_sales" bson:"paid_sales"`
+	UnPaidSales            float64             `json:"unpaid_sales" bson:"unpaid_sales"`
+	CashSales              float64             `json:"cash_sales" bson:"cash_sales"`
+	BankAccountSales       float64             `json:"bank_account_sales" bson:"bank_account_sales"`
 }
 
 func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
@@ -347,6 +351,55 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 				"vat_price":              bson.M{"$sum": "$vat_price"},
 				"discount":               bson.M{"$sum": "$discount"},
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
+				"paid_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"unpaid_sales": bson.M{"$sum": "$balance_amount"},
+				"cash_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "cash"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"bank_account_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "bank_account"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
 			},
 		},
 	}
