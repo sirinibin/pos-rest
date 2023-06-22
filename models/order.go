@@ -1726,27 +1726,7 @@ func ProcessOrders() error {
 			}
 		*/
 
-		count, err := order.GetPaymentsCount()
-		if err != nil {
-			return err
-		}
-
-		if count == 1 {
-			err = order.ClearPayments()
-			if err != nil {
-				return err
-			}
-			//log.Print("Addin payment")
-			err = order.AddPayment()
-			if err != nil {
-				return err
-			}
-
-			_, err = order.GetPayments()
-			if err != nil {
-				return err
-			}
-		}
+		order.GetPayments()
 
 		err = order.Update()
 		if err != nil {
