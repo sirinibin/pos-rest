@@ -408,6 +408,7 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 	if err != nil {
 		return stats, err
 	}
+
 	defer cur.Close(ctx)
 
 	if cur.Next(ctx) {
@@ -415,9 +416,9 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
-		stats.NetProfit = math.Round(stats.NetProfit*100) / 100
-		stats.Loss = math.Round(stats.Loss*100) / 100
+		//stats.NetTotal = math.Round(stats.NetTotal*100) / 100
+		//stats.NetProfit = math.Round(stats.NetProfit*100) / 100
+		//stats.Loss = math.Round(stats.Loss*100) / 100
 	}
 	return stats, nil
 }
