@@ -1360,18 +1360,18 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 		}
 	} //end for loop
 
-	order.TotalPaymentReceived = totalPaymentReceived
-	order.BalanceAmount = order.NetTotal - totalPaymentReceived
+	order.TotalPaymentReceived = ToFixed(totalPaymentReceived, 2)
+	order.BalanceAmount = ToFixed(order.NetTotal-totalPaymentReceived, 2)
 	order.PaymentMethods = paymentMethods
 	order.Payments = models
 	order.PaymentsCount = int64(len(models))
 
-	if order.NetTotal == totalPaymentReceived {
+	if ToFixed(order.NetTotal, 2) == ToFixed(totalPaymentReceived, 2) {
 		order.PaymentStatus = "paid"
-	} else if totalPaymentReceived > 0 {
+	} else if ToFixed(totalPaymentReceived, 2) > 0 {
 		order.PaymentStatus = "paid_partially"
 		order.PartiaPaymentAmount = totalPaymentReceived
-	} else {
+	} else if ToFixed(totalPaymentReceived, 2) <= 0 {
 		order.PaymentStatus = "not_paid"
 	}
 

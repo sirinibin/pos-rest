@@ -378,8 +378,21 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 
 		}
 	} else {
-		if (salespaymentStats.TotalPayment + salesPayment.Amount) > order.NetTotal {
-			if (order.NetTotal - salespaymentStats.TotalPayment) > 0 {
+		/*
+			log.Print("salespaymentStats.TotalPayment: ")
+			log.Print(salespaymentStats.TotalPayment)
+			log.Print("order.TotalPaymentReceived: ")
+			log.Print(order.TotalPaymentReceived)
+			log.Print("salesPayment.Amount:")
+			log.Print(salesPayment.Amount)
+			log.Print("order.NetTotal:")
+			log.Print(order.NetTotal)
+			log.Print("ToFixed((salespaymentStats.TotalPayment+salesPayment.Amount), 2):")
+			log.Print(ToFixed((salespaymentStats.TotalPayment + salesPayment.Amount), 2))
+		*/
+
+		if ToFixed((salespaymentStats.TotalPayment+salesPayment.Amount), 2) > order.NetTotal {
+			if ToFixed((order.NetTotal-salespaymentStats.TotalPayment), 2) > 0 {
 				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (order.NetTotal-salespaymentStats.TotalPayment))
 			} else {
 				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR"
