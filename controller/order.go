@@ -125,9 +125,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.UpdateForeignLabelFields()
 
 	order.ID = primitive.NewObjectID()
-	if len(order.Code) == 0 {
-		order.MakeCode()
-	}
+	order.MakeCode()
 
 	order.CalculateOrderProfit()
 
@@ -143,7 +141,11 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.CreateProductsSalesHistory()
-	order.AddPayment()
+
+	if order.PaymentStatus != "not_paid" {
+		order.AddPayment()
+	}
+
 	order.GetPayments()
 	order.Update()
 
@@ -242,7 +244,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.UpdateForeignLabelFields()
 	order.CalculateOrderProfit()
-	order.GetPayments()
+	//order.GetPayments()
 
 	err = order.Update()
 	if err != nil {
@@ -258,12 +260,14 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.ClearProductsSalesHistory()
 	order.CreateProductsSalesHistory()
 	count, _ := order.GetPaymentsCount()
-	if count == 1 {
+
+	if count == 1 && order.PaymentStatus == "paid" {
 		order.ClearPayments()
 		order.AddPayment()
-		order.GetPayments()
-		order.Update()
 	}
+
+	order.GetPayments()
+	order.Update()
 
 	err = orderOld.AddStock()
 	if err != nil {

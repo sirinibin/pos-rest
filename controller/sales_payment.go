@@ -120,6 +120,11 @@ func CreateSalesPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//Updating order.payments
+	order, _ := models.FindOrderByID(salespayment.OrderID, map[string]interface{}{})
+	order.GetPayments()
+	order.Update()
+
 	response.Status = true
 	response.Result = salespayment
 
@@ -198,6 +203,11 @@ func UpdateSalesPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	//Updating order.payments
+	order, _ := models.FindOrderByID(salespayment.OrderID, map[string]interface{}{})
+	order.GetPayments()
+	order.Update()
 
 	salespayment, err = models.FindSalesPaymentByID(&salespayment.ID, bson.M{})
 	if err != nil {

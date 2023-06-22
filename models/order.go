@@ -1366,6 +1366,14 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 	order.Payments = models
 	order.PaymentsCount = int64(len(models))
 
+	if order.NetTotal == totalPaymentReceived {
+		order.PaymentStatus = "paid"
+	} else if totalPaymentReceived > 0 {
+		order.PaymentStatus = "paid_partially"
+	} else {
+		order.PaymentStatus = "not_paid"
+	}
+
 	return models, err
 }
 
@@ -1391,6 +1399,7 @@ func (order *Order) MakeCode() error {
 			}
 			codeInt++
 			order.Code = storeCode + "-" + strconv.Itoa(codeInt)
+			log.Printf("New code: %s", order.Code)
 		}
 	}
 

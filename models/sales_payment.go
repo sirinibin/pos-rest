@@ -433,22 +433,6 @@ func (salesPayment *SalesPayment) Update() error {
 		updateOptions,
 	)
 
-	//Updating order.payments
-	order, err := FindOrderByID(salesPayment.OrderID, map[string]interface{}{})
-	if err != nil {
-		return err
-	}
-
-	_, err = order.GetPayments()
-	if err != nil {
-		return err
-	}
-
-	err = order.Update()
-	if err != nil {
-		return err
-	}
-
 	return err
 }
 
