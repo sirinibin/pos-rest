@@ -1370,6 +1370,7 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 		order.PaymentStatus = "paid"
 	} else if totalPaymentReceived > 0 {
 		order.PaymentStatus = "paid_partially"
+		order.PartiaPaymentAmount = totalPaymentReceived
 	} else {
 		order.PaymentStatus = "not_paid"
 	}
