@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -19,6 +22,8 @@ import (
 // SalesPayment : SalesPayment structure
 type SalesPayment struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr       string              `json:"date_str,omitempty"`
 	OrderID       *primitive.ObjectID `json:"order_id" bson:"order_id"`
 	OrderCode     string              `json:"order_code" bson:"order_code"`
 	Amount        float64             `json:"amount" bson:"amount"`
@@ -78,10 +83,13 @@ func (salesPayment *SalesPayment) UpdateForeignLabelFields() error {
 
 	if salesPayment.OrderID != nil && !salesPayment.OrderID.IsZero() {
 		order, err := FindOrderByID(salesPayment.OrderID, bson.M{"id": 1, "code": 1})
-		if err != nil {
+		if err != nil && err != mongo.ErrNoDocuments {
 			return err
 		}
-		salesPayment.OrderCode = order.Code
+
+		if order != nil {
+			salesPayment.OrderCode = order.Code
+		}
 	} else {
 		salesPayment.OrderCode = ""
 	}
@@ -205,6 +213,63 @@ func SearchSalesPayment(w http.ResponseWriter, r *http.Request) (models []SalesP
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
+	}
+
 	var createdAtStartDate time.Time
 	var createdAtEndDate time.Time
 
@@ -325,6 +390,17 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 	errs = make(map[string]string)
 
 	var oldSalesPayment *SalesPayment
+
+	if govalidator.IsNull(salesPayment.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		const shortForm = "2006-01-02T15:04:05Z07:00"
+		date, err := time.Parse(shortForm, salesPayment.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		salesPayment.Date = &date
+	}
 
 	if scenario == "update" {
 		if salesPayment.ID.IsZero() {
@@ -524,4 +600,45 @@ func GetSalesPaymentStats(filter map[string]interface{}) (stats SalesPaymentStat
 	}
 
 	return stats, nil
+}
+
+func ProcessSalesPayments() error {
+	log.Print("Processing sales payments")
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//productCount := 1
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := SalesPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		model.Date = model.CreatedAt
+		//log.Print("Date updated")
+		err = model.Update()
+		if err != nil {
+			log.Print(err)
+			return err
+		}
+	}
+
+	log.Print("DONE!")
+	return nil
 }
