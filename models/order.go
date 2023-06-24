@@ -1345,7 +1345,7 @@ func (order *Order) AddPayment() error {
 		OrderCode:     order.Code,
 		Amount:        amount,
 		Method:        order.PaymentMethod,
-		Date:          order.CreatedAt,
+		Date:          order.Date,
 		CreatedAt:     order.CreatedAt,
 		UpdatedAt:     order.UpdatedAt,
 		CreatedBy:     order.CreatedBy,
