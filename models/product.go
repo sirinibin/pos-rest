@@ -108,7 +108,7 @@ func GetProductStats(
 	storeID primitive.ObjectID,
 ) (stats ProductStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	stock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
