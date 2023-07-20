@@ -1129,7 +1129,11 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		product.SearchLabel = product.Name + " ( Part #: " + product.PartNumber + " " + product.NameInArabic + ")"
+		product.SearchLabel = product.Name + " ( Part #: " + product.PartNumber + " )"
+
+		if product.NameInArabic != "" {
+			product.SearchLabel += " / " + product.NameInArabic
+		}
 
 		if _, ok := criterias.Select["category.id"]; ok {
 			for _, categoryID := range product.CategoryID {
