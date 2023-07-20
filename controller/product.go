@@ -58,13 +58,6 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product")
-	if err != nil {
-		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
 	var storeID primitive.ObjectID
 	keys, ok := r.URL.Query()["search[store_id]"]
@@ -78,12 +71,27 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	productStats, err := models.GetProductStats(criterias.SearchBy, storeID)
-	if err != nil {
-		response.Status = false
-		response.Errors["product_stats"] = "Unable to find product stats:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	var productStats models.ProductStats
+
+	keys, ok = r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product")
+			if err != nil {
+				response.Status = false
+				response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			productStats, err = models.GetProductStats(criterias.SearchBy, storeID)
+			if err != nil {
+				response.Status = false
+				response.Errors["product_stats"] = "Unable to find product stats:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
 	}
 
 	response.Meta = map[string]interface{}{}
