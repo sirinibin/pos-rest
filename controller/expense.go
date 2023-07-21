@@ -39,20 +39,28 @@ func ListExpense(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "expense")
-	if err != nil {
-		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of expenses:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
-	expenseStats, err := models.GetExpenseStats(criterias.SearchBy)
-	if err != nil {
-		response.Status = false
-		response.Errors["total"] = "Unable to find total amount of expenses:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	var expenseStats models.ExpenseStats
+
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "expense")
+			if err != nil {
+				response.Status = false
+				response.Errors["total_count"] = "Unable to find total count of expenses:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			expenseStats, err = models.GetExpenseStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["total"] = "Unable to find total amount of expenses:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
 	}
 
 	response.Meta = map[string]interface{}{}

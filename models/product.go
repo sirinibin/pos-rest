@@ -554,6 +554,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
 		}
+		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord, "$language": "en"}
 	}
 	var storeID primitive.ObjectID
 	keys, ok = r.URL.Query()["search[store_id]"]

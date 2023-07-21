@@ -39,20 +39,28 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchasereturn")
-	if err != nil {
-		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of purchasereturns:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
-	purchaseReturnStats, err := models.GetPurchaseReturnStats(criterias.SearchBy)
-	if err != nil {
-		response.Status = false
-		response.Errors["purchase_return_stats"] = "Unable to find purchase return stats:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	var purchaseReturnStats models.PurchaseReturnStats
+
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchasereturn")
+			if err != nil {
+				response.Status = false
+				response.Errors["total_count"] = "Unable to find total count of purchasereturns:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			purchaseReturnStats, err = models.GetPurchaseReturnStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["purchase_return_stats"] = "Unable to find purchase return stats:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
 	}
 
 	response.Meta = map[string]interface{}{}

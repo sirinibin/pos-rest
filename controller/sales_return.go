@@ -39,20 +39,28 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "salesreturn")
-	if err != nil {
-		response.Status = false
-		response.Errors["total_count"] = "Unable to find total count of salesreturns:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
-	salesReturnStats, err := models.GetSalesReturnStats(criterias.SearchBy)
-	if err != nil {
-		response.Status = false
-		response.Errors["total_return_sales"] = "Unable to find total amount of sales return:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	var salesReturnStats models.SalesReturnStats
+
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "salesreturn")
+			if err != nil {
+				response.Status = false
+				response.Errors["total_count"] = "Unable to find total count of salesreturns:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			salesReturnStats, err = models.GetSalesReturnStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["total_return_sales"] = "Unable to find total amount of sales return:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
 	}
 
 	response.Meta = map[string]interface{}{}
