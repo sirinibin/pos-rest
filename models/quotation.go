@@ -78,6 +78,8 @@ type Quotation struct {
 	CreatedByName            string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName            string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ValidityDays             *int64              `bson:"validity_days,omitempty" json:"validity_days,omitempty"`
+	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
 	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
@@ -919,6 +921,18 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	if quotation.VatPercent == nil {
 		errs["vat_percent"] = "VAT Percentage is required"
+	}
+
+	if quotation.ValidityDays == nil {
+		errs["validity_days"] = "Validity days are required"
+	} else if *quotation.ValidityDays < 1 {
+		errs["validity_days"] = "Validity days should be greater than 0"
+	}
+
+	if quotation.DeliveryDays == nil {
+		errs["delivery_days"] = "Delivery days are required"
+	} else if *quotation.DeliveryDays < 1 {
+		errs["delivery_days"] = "Delivery days should be greater than 0"
 	}
 
 	if len(errs) > 0 {
