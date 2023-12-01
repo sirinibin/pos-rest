@@ -120,6 +120,11 @@ func CreateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//Updating salesReturn.payments
+	salesReturn, _ := models.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
+	salesReturn.GetPayments()
+	salesReturn.Update()
+
 	response.Status = true
 	response.Result = salesreturnpayment
 
@@ -198,6 +203,11 @@ func UpdateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	//Updating salesReturn.payments
+	salesReturn, _ := models.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
+	salesReturn.GetPayments()
+	salesReturn.Update()
 
 	salesreturnpayment, err = models.FindSalesReturnPaymentByID(&salesreturnpayment.ID, bson.M{})
 	if err != nil {

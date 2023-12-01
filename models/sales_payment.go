@@ -391,6 +391,10 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 
 	var oldSalesPayment *SalesPayment
 
+	if govalidator.IsNull(salesPayment.Method) {
+		errs["method"] = "Payment method is required"
+	}
+
 	if govalidator.IsNull(salesPayment.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {

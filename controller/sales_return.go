@@ -70,6 +70,10 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["loss"] = salesReturnStats.Loss
 	response.Meta["vat_price"] = salesReturnStats.VatPrice
 	response.Meta["discount"] = salesReturnStats.Discount
+	response.Meta["paid_sales_return"] = salesReturnStats.PaidSalesReturn
+	response.Meta["unpaid_sales_return"] = salesReturnStats.UnPaidSalesReturn
+	response.Meta["cash_sales_return"] = salesReturnStats.CashSalesReturn
+	response.Meta["bank_account_sales_return"] = salesReturnStats.BankAccountSalesReturn
 
 	if len(salesreturns) == 0 {
 		response.Result = []interface{}{}
@@ -128,6 +132,12 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.FindTotal()
 	salesreturn.FindTotalQuantity()
 	salesreturn.FindVatPrice()
+	salesreturn.UpdateForeignLabelFields()
+
+	salesreturn.ID = primitive.NewObjectID()
+	salesreturn.MakeCode()
+
+	salesreturn.CalculateSalesReturnProfit()
 
 	err = salesreturn.Insert()
 	if err != nil {
@@ -139,6 +149,15 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	salesreturn.UpdateOrderReturnDiscount()
+	salesreturn.CreateProductsSalesReturnHistory()
+	if salesreturn.PaymentStatus != "not_paid" {
+		salesreturn.AddPayment()
+	}
+
+	salesreturn.GetPayments()
+	salesreturn.Update()
 
 	err = salesreturn.AddStock()
 	if err != nil {
@@ -244,11 +263,48 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.FindTotalQuantity()
 	salesreturn.FindVatPrice()
 
+	salesreturn.UpdateForeignLabelFields()
+	salesreturn.CalculateSalesReturnProfit()
+
 	err = salesreturn.Update()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturn.ClearProductsSalesReturnHistory()
+	salesreturn.CreateProductsSalesReturnHistory()
+	count, _ := salesreturn.GetPaymentsCount()
+
+	if count == 1 && salesreturn.PaymentStatus == "paid" {
+		salesreturn.ClearPayments()
+		salesreturn.AddPayment()
+	}
+
+	salesreturn.GetPayments()
+	salesreturn.Update()
+
+	err = salesreturnOld.RemoveStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = salesreturn.AddStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)

@@ -352,7 +352,7 @@ func SearchSalesReturnHistory(w http.ResponseWriter, r *http.Request) (models []
 	return models, criterias, nil
 }
 
-func (salesReturn *SalesReturn) AddProductsSalesReturnHistory() error {
+func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 	exists, err := IsSalesReturnHistoryExistsBySalesReturnID(&salesReturn.ID)
 	if err != nil {
 		return err
@@ -411,4 +411,15 @@ func IsSalesReturnHistoryExistsBySalesReturnID(ID *primitive.ObjectID) (exists b
 	})
 
 	return (count > 0), err
+}
+
+func (salesReturn *SalesReturn) ClearProductsSalesReturnHistory() error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"sales_return_id": salesReturn.ID})
+	if err != nil {
+		return err
+	}
+	return nil
 }

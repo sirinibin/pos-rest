@@ -16,6 +16,7 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -86,16 +87,25 @@ type SalesReturn struct {
 	Profit                  float64              `bson:"profit" json:"profit"`
 	NetProfit               float64              `bson:"net_profit" json:"net_profit"`
 	Loss                    float64              `bson:"loss" json:"loss"`
+	TotalPaymentPaid        float64              `bson:"total_payment_paid" json:"total_payment_paid"`
+	BalanceAmount           float64              `bson:"balance_amount" json:"balance_amount"`
+	Payments                []SalesReturnPayment `bson:"payments" json:"payments"`
+	PaymentsCount           int64                `bson:"payments_count" json:"payments_count"`
+	PaymentMethods          []string             `json:"payment_methods" bson:"payment_methods"`
 }
 
 // DiskQuotaUsageResult payload for disk quota usage
 type SalesReturnStats struct {
-	ID        *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal  float64             `json:"net_total" bson:"net_total"`
-	VatPrice  float64             `json:"vat_price" bson:"vat_price"`
-	Discount  float64             `json:"discount" bson:"discount"`
-	NetProfit float64             `json:"net_profit" bson:"net_profit"`
-	Loss      float64             `json:"loss" bson:"loss"`
+	ID                     *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal               float64             `json:"net_total" bson:"net_total"`
+	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
+	Discount               float64             `json:"discount" bson:"discount"`
+	NetProfit              float64             `json:"net_profit" bson:"net_profit"`
+	Loss                   float64             `json:"loss" bson:"loss"`
+	PaidSalesReturn        float64             `json:"paid_sales_return" bson:"paid_sales_return"`
+	UnPaidSalesReturn      float64             `json:"unpaid_sales_return" bson:"unpaid_sales_return"`
+	CashSalesReturn        float64             `json:"cash_sales_return" bson:"cash_sales_return"`
+	BankAccountSalesReturn float64             `json:"bank_account_sales_return" bson:"bank_account_sales_return"`
 }
 
 func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
@@ -115,6 +125,55 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 				"discount":   bson.M{"$sum": "$discount"},
 				"net_profit": bson.M{"$sum": "$net_profit"},
 				"loss":       bson.M{"$sum": "$loss"},
+				"paid_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"unpaid_sales_return": bson.M{"$sum": "$balance_amount"},
+				"cash_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "cash"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"bank_account_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "bank_account"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
 			},
 		},
 	}
@@ -315,8 +374,77 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
+	keys, ok := r.URL.Query()["search[payment_status]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentStatusList := strings.Split(keys[0], ",")
+		if len(paymentStatusList) > 0 {
+			criterias.SearchBy["payment_status"] = bson.M{"$in": paymentStatusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[total_payment_paid]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["total_payment_paid"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["total_payment_paid"] = value
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["balance_amount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payments_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["payments_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["payments_count"] = value
+		}
+	}
+
 	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	keys, ok = r.URL.Query()["search[timezone_offset]"]
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
@@ -1058,40 +1186,7 @@ func (salesreturn *SalesReturn) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := salesreturn.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	salesreturn.ID = primitive.NewObjectID()
-	if len(salesreturn.Code) == 0 {
-		err = salesreturn.MakeCode()
-		if err != nil {
-			return err
-		}
-	}
-
-	err = salesreturn.CalculateSalesReturnProfit()
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.InsertOne(ctx, &salesreturn)
-	if err != nil {
-		return err
-	}
-
-	err = salesreturn.UpdateOrderReturnDiscount()
-	if err != nil {
-		return err
-	}
-
-	err = salesreturn.AddProductsSalesReturnHistory()
-	if err != nil {
-		return err
-	}
-
-	err = salesreturn.AddPayment()
+	_, err := collection.InsertOne(ctx, &salesreturn)
 	if err != nil {
 		return err
 	}
@@ -1244,6 +1339,7 @@ func (salesReturn *SalesReturn) AddPayment() error {
 
 	payment := SalesReturnPayment{
 		SalesReturnID:   &salesReturn.ID,
+		Date:            salesReturn.Date,
 		SalesReturnCode: salesReturn.Code,
 		OrderID:         salesReturn.OrderID,
 		OrderCode:       salesReturn.OrderCode,
@@ -1332,16 +1428,6 @@ func (salesreturn *SalesReturn) Update() error {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
 	defer cancel()
-
-	err := salesreturn.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	err = salesreturn.CalculateSalesReturnProfit()
-	if err != nil {
-		return err
-	}
 
 	updateResult, err := collection.UpdateOne(
 		ctx,
@@ -1502,10 +1588,17 @@ func ProcessSalesReturns() error {
 			return err
 		}
 
-		err = salesReturn.AddProductsSalesReturnHistory()
+		err = salesReturn.ClearProductsSalesReturnHistory()
 		if err != nil {
 			return err
 		}
+
+		err = salesReturn.CreateProductsSalesReturnHistory()
+		if err != nil {
+			return err
+		}
+
+		salesReturn.GetPayments()
 
 		err = salesReturn.Update()
 		if err != nil {
@@ -1520,6 +1613,132 @@ func ProcessSalesReturns() error {
 		}
 
 	}
-
+	log.Print("DONE!")
 	return nil
+}
+
+func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"sales_return_id": salesReturn.ID}, findOptions)
+	if err != nil {
+		return payments, errors.New("Error fetching sales return payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	totalPaymentPaid := float64(0.0)
+	paymentMethods := []string{}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return payments, errors.New("Cursor error:" + err.Error())
+		}
+		model := SalesReturnPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return payments, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		payments = append(payments, model)
+
+		totalPaymentPaid += model.Amount
+
+		if !slices.Contains(paymentMethods, model.Method) {
+			paymentMethods = append(paymentMethods, model.Method)
+		}
+	} //end for loop
+
+	salesReturn.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
+	salesReturn.BalanceAmount = ToFixed(salesReturn.NetTotal-totalPaymentPaid, 2)
+	salesReturn.PaymentMethods = paymentMethods
+	salesReturn.Payments = payments
+	salesReturn.PaymentsCount = int64(len(payments))
+
+	if ToFixed(salesReturn.NetTotal, 2) == ToFixed(totalPaymentPaid, 2) {
+		salesReturn.PaymentStatus = "paid"
+	} else if ToFixed(totalPaymentPaid, 2) > 0 {
+		salesReturn.PaymentStatus = "paid_partially"
+		salesReturn.PartiaPaymentAmount = totalPaymentPaid
+	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
+		salesReturn.PaymentStatus = "not_paid"
+	}
+
+	return payments, err
+}
+
+func (salesReturn *SalesReturn) RemoveStock() (err error) {
+	if len(salesReturn.Products) == 0 {
+		return nil
+	}
+
+	for _, salesReturnProduct := range salesReturn.Products {
+		product, err := FindProductByID(&salesReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		if len(product.Stores) == 0 {
+			store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+			productStore := ProductStore{
+				StoreID:           *salesReturn.StoreID,
+				StoreName:         salesReturn.StoreName,
+				StoreNameInArabic: store.NameInArabic,
+				Stock:             float64(0),
+			}
+			product.Stores = []ProductStore{productStore}
+		}
+
+		for k, productStore := range product.Stores {
+			if productStore.StoreID.Hex() == salesReturn.StoreID.Hex() {
+				product.Stores[k].Stock -= (salesReturnProduct.Quantity)
+				break
+			}
+		}
+
+		err = product.Update()
+		if err != nil {
+			return err
+		}
+
+	}
+
+	err = salesReturn.Update()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (salesReturn *SalesReturn) ClearPayments() error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"sales_return_id": salesReturn.ID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (salesReturn *SalesReturn) GetPaymentsCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"sales_return_id": salesReturn.ID,
+	})
 }

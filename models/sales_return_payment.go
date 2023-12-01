@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -19,6 +21,8 @@ import (
 // SalesReturnPayment : SalesReturnPayment structure
 type SalesReturnPayment struct {
 	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr         string              `json:"date_str,omitempty"`
 	SalesReturnID   *primitive.ObjectID `json:"sales_return_id" bson:"sales_return_id"`
 	SalesReturnCode string              `json:"sales_return_code" bson:"sales_return_code"`
 	OrderID         *primitive.ObjectID `json:"order_id" bson:"order_id"`
@@ -71,7 +75,7 @@ func (salesreturnPayment *SalesReturnPayment) UpdateForeignLabelFields() error {
 	if salesreturnPayment.StoreID != nil && !salesreturnPayment.StoreID.IsZero() {
 		store, err := FindStoreByID(salesreturnPayment.StoreID, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("Error finding store: " + err.Error())
 		}
 		salesreturnPayment.StoreName = store.Name
 	} else {
@@ -81,7 +85,8 @@ func (salesreturnPayment *SalesReturnPayment) UpdateForeignLabelFields() error {
 	if salesreturnPayment.SalesReturnID != nil && !salesreturnPayment.SalesReturnID.IsZero() {
 		salesReturn, err := FindSalesReturnByID(salesreturnPayment.SalesReturnID, bson.M{"id": 1, "code": 1})
 		if err != nil {
-			return err
+			//return err
+			return errors.New("Error finding sales return id: " + err.Error())
 		}
 		salesreturnPayment.SalesReturnCode = salesReturn.Code
 	} else {
@@ -91,7 +96,8 @@ func (salesreturnPayment *SalesReturnPayment) UpdateForeignLabelFields() error {
 	if salesreturnPayment.OrderID != nil && !salesreturnPayment.OrderID.IsZero() {
 		order, err := FindOrderByID(salesreturnPayment.OrderID, bson.M{"id": 1, "code": 1})
 		if err != nil {
-			return err
+			//return err
+			return errors.New("Error finding order id: " + err.Error())
 		}
 		salesreturnPayment.OrderCode = order.Code
 	} else {
@@ -101,7 +107,8 @@ func (salesreturnPayment *SalesReturnPayment) UpdateForeignLabelFields() error {
 	if salesreturnPayment.CreatedBy != nil {
 		createdByUser, err := FindUserByID(salesreturnPayment.CreatedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			//return err
+			return errors.New("Error finding user: " + err.Error())
 		}
 		salesreturnPayment.CreatedByName = createdByUser.Name
 	}
@@ -109,7 +116,8 @@ func (salesreturnPayment *SalesReturnPayment) UpdateForeignLabelFields() error {
 	if salesreturnPayment.UpdatedBy != nil {
 		updatedByUser, err := FindUserByID(salesreturnPayment.UpdatedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			//return err
+			return errors.New("Error finding user: " + err.Error())
 		}
 		salesreturnPayment.UpdatedByName = updatedByUser.Name
 	}
@@ -134,6 +142,63 @@ func SearchSalesReturnPayment(w http.ResponseWriter, r *http.Request) (models []
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
 	}
 
 	keys, ok = r.URL.Query()["search[created_by_name]"]
@@ -345,19 +410,34 @@ func SearchSalesReturnPayment(w http.ResponseWriter, r *http.Request) (models []
 	return models, criterias, nil
 }
 
-func (salesreturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
 
 	var oldSalesReturnPayment *SalesReturnPayment
 
+	if govalidator.IsNull(salesReturnPayment.Method) {
+		errs["method"] = "Payment method is required"
+	}
+
+	if govalidator.IsNull(salesReturnPayment.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		const shortForm = "2006-01-02T15:04:05Z07:00"
+		date, err := time.Parse(shortForm, salesReturnPayment.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		salesReturnPayment.Date = &date
+	}
+
 	if scenario == "update" {
-		if salesreturnPayment.ID.IsZero() {
+		if salesReturnPayment.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsSalesReturnPaymentExists(&salesreturnPayment.ID)
+		exists, err := IsSalesReturnPaymentExists(&salesReturnPayment.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -365,36 +445,36 @@ func (salesreturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 		}
 
 		if !exists {
-			errs["id"] = "Invalid sales return payment :" + salesreturnPayment.ID.Hex()
+			errs["id"] = "Invalid sales return payment :" + salesReturnPayment.ID.Hex()
 		}
 
-		oldSalesReturnPayment, err = FindSalesReturnPaymentByID(&salesreturnPayment.ID, bson.M{})
+		oldSalesReturnPayment, err = FindSalesReturnPaymentByID(&salesReturnPayment.ID, bson.M{})
 		if err != nil {
 			errs["sales_return_payment"] = err.Error()
 			return errs
 		}
 	}
 
-	if salesreturnPayment.Amount == 0 {
+	if salesReturnPayment.Amount == 0 {
 		errs["amount"] = "Amount is required"
 	}
 
-	if salesreturnPayment.Amount < 0 {
+	if salesReturnPayment.Amount < 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	salesReturnPaymentStats, err := GetSalesReturnPaymentStats(bson.M{"sales_return_id": salesreturnPayment.SalesReturnID})
+	salesReturnPaymentStats, err := GetSalesReturnPaymentStats(bson.M{"sales_return_id": salesReturnPayment.SalesReturnID})
 	if err != nil {
 		return errs
 	}
 
-	salesReturn, err := FindSalesReturnByID(salesreturnPayment.SalesReturnID, bson.M{})
+	salesReturn, err := FindSalesReturnByID(salesReturnPayment.SalesReturnID, bson.M{})
 	if err != nil {
 		return errs
 	}
 
 	if scenario == "update" {
-		if ((salesReturnPaymentStats.TotalPayment - oldSalesReturnPayment.Amount) + salesreturnPayment.Amount) > salesReturn.NetTotal {
+		if ((salesReturnPaymentStats.TotalPayment - oldSalesReturnPayment.Amount) + salesReturnPayment.Amount) > salesReturn.NetTotal {
 			if (salesReturn.NetTotal - (salesReturnPaymentStats.TotalPayment - oldSalesReturnPayment.Amount)) > 0 {
 				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-(salesReturnPaymentStats.TotalPayment-oldSalesReturnPayment.Amount)))
 			} else {
@@ -403,8 +483,9 @@ func (salesreturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 
 		}
 	} else {
-		if (salesReturnPaymentStats.TotalPayment + salesreturnPayment.Amount) > salesReturn.NetTotal {
-			if (salesReturn.NetTotal - salesReturnPaymentStats.TotalPayment) > 0 {
+
+		if ToFixed((salesReturnPaymentStats.TotalPayment+salesReturnPayment.Amount), 2) > salesReturn.NetTotal {
+			if ToFixed((salesReturn.NetTotal-salesReturnPaymentStats.TotalPayment), 2) > 0 {
 				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-salesReturnPaymentStats.TotalPayment))
 			} else {
 				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR"
@@ -412,6 +493,28 @@ func (salesreturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 
 		}
 	}
+
+	/*
+		if scenario == "update" {
+			if ((salesReturnPaymentStats.TotalPayment - oldSalesReturnPayment.Amount) + salesreturnPayment.Amount) > salesReturn.NetTotal {
+				if (salesReturn.NetTotal - (salesReturnPaymentStats.TotalPayment - oldSalesReturnPayment.Amount)) > 0 {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-(salesReturnPaymentStats.TotalPayment-oldSalesReturnPayment.Amount)))
+				} else {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR"
+				}
+
+			}
+		} else {
+			if (salesReturnPaymentStats.TotalPayment + salesreturnPayment.Amount) > salesReturn.NetTotal {
+				if (salesReturn.NetTotal - salesReturnPaymentStats.TotalPayment) > 0 {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-salesReturnPaymentStats.TotalPayment))
+				} else {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR"
+				}
+
+			}
+		}
+	*/
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -447,7 +550,7 @@ func (salesreturnPayment *SalesReturnPayment) Update() error {
 
 	err := salesreturnPayment.UpdateForeignLabelFields()
 	if err != nil {
-		return err
+		return errors.New("Error updating foreign label fields: " + err.Error())
 	}
 
 	_, err = collection.UpdateOne(
@@ -456,7 +559,12 @@ func (salesreturnPayment *SalesReturnPayment) Update() error {
 		bson.M{"$set": salesreturnPayment},
 		updateOptions,
 	)
-	return err
+	if err != nil {
+		return errors.New("Error updating sales return payment: " + err.Error())
+	}
+
+	return nil
+
 }
 
 func FindSalesReturnPaymentByID(
@@ -534,4 +642,46 @@ func GetSalesReturnPaymentStats(filter map[string]interface{}) (stats SalesRetur
 	}
 
 	return stats, nil
+}
+
+func ProcessSalesReturnPayments() error {
+	log.Print("Processing sales return payments")
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching sales return payments:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//productCount := 1
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := SalesReturnPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		model.Date = model.CreatedAt
+		//log.Print("Date updated")
+		err = model.Update()
+		if err != nil {
+			log.Print(err)
+
+			//return err
+		}
+	}
+
+	log.Print("DONE!")
+	return nil
 }
