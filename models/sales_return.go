@@ -827,12 +827,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["payment_status"] = "Payment status is required"
 	}
 
-	if order.PaymentStatus != "not_paid" {
-		if govalidator.IsNull(order.PaymentMethod) {
-			errs["payment_method"] = "Payment method is required"
-		}
-	}
-
 	if govalidator.IsNull(salesreturn.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
@@ -884,6 +878,12 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 				if salesreturn.Status == "pending" || salesreturn.Status == "cancelled" || salesreturn.Status == "salesreturn_placed" {
 					errs["status"] = "Can't change the status from delivered/dispatched to pending/cancelled/salesreturn_placed"
 				}
+			}
+		}
+	} else {
+		if order.PaymentStatus != "not_paid" {
+			if govalidator.IsNull(order.PaymentMethod) {
+				errs["payment_method"] = "Payment method is required"
 			}
 		}
 	}

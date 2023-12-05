@@ -922,12 +922,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["payment_status"] = "Payment status is required"
 	}
 
-	if order.PaymentStatus != "not_paid" {
-		if govalidator.IsNull(order.PaymentMethod) {
-			errs["payment_method"] = "Payment method is required"
-		}
-	}
-
 	if govalidator.IsNull(order.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
@@ -976,6 +970,12 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["id"] = "Invalid Order:" + order.ID.Hex()
 		}
 
+	} else {
+		if order.PaymentStatus != "not_paid" {
+			if govalidator.IsNull(order.PaymentMethod) {
+				errs["payment_method"] = "Payment method is required"
+			}
+		}
 	}
 
 	if order.StoreID == nil || order.StoreID.IsZero() {

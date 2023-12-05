@@ -943,13 +943,6 @@ func (purchase *Purchase) Validate(
 		errs["payment_status"] = "Payment status is required"
 	}
 
-	log.Print("purchase.PaymentStatus:" + purchase.PaymentStatus)
-	if purchase.PaymentStatus != "not_paid" {
-		if govalidator.IsNull(purchase.PaymentMethod) {
-			errs["payment_method"] = "Payment method is required"
-		}
-	}
-
 	if govalidator.IsNull(purchase.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
@@ -1006,6 +999,12 @@ func (purchase *Purchase) Validate(
 			}
 		}
 
+	} else {
+		if purchase.PaymentStatus != "not_paid" {
+			if govalidator.IsNull(purchase.PaymentMethod) {
+				errs["payment_method"] = "Payment method is required"
+			}
+		}
 	}
 
 	if purchase.StoreID == nil || purchase.StoreID.IsZero() {
