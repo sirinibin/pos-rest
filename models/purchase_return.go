@@ -1458,17 +1458,19 @@ func ProcessPurchaseReturns() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		model.PaymentStatus = "paid"
-		model.PaymentMethod = "cash"
-		err = model.Update()
-		if err != nil {
-			return err
-		}
+		/*
+			model.PaymentStatus = "paid"
+			model.PaymentMethod = "cash"
+			err = model.Update()
+			if err != nil {
+				return err
+			}
 
-		count, _ := model.GetPaymentsCount()
-		if count == 0 {
-			model.AddPayment()
-		}
+			count, _ := model.GetPaymentsCount()
+			if count == 0 {
+				model.AddPayment()
+			}
+		*/
 
 		err = model.ClearProductsPurchaseReturnHistory()
 		if err != nil {
