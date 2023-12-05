@@ -68,6 +68,10 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total_purchase_return"] = purchaseReturnStats.NetTotal
 	response.Meta["vat_price"] = purchaseReturnStats.VatPrice
 	response.Meta["discount"] = purchaseReturnStats.Discount
+	response.Meta["paid_purchase_return"] = purchaseReturnStats.PaidPurchaseReturn
+	response.Meta["unpaid_purchase_return"] = purchaseReturnStats.UnPaidPurchaseReturn
+	response.Meta["cash_purchase_return"] = purchaseReturnStats.CashPurchaseReturn
+	response.Meta["bank_account_purchase_return"] = purchaseReturnStats.BankAccountPurchaseReturn
 
 	if len(purchasereturns) == 0 {
 		response.Result = []interface{}{}
@@ -126,6 +130,9 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchasereturn.FindTotal()
 	purchasereturn.FindTotalQuantity()
 	purchasereturn.FindVatPrice()
+	purchasereturn.UpdateForeignLabelFields()
+	purchasereturn.ID = primitive.NewObjectID()
+	purchasereturn.MakeCode()
 
 	err = purchasereturn.Insert()
 	if err != nil {
@@ -137,6 +144,14 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchasereturn.UpdatePurchaseReturnDiscount(false)
+	purchasereturn.AddProductsPurchaseReturnHistory()
+	if purchasereturn.PaymentStatus != "not_paid" {
+		purchasereturn.AddPayment()
+	}
+	purchasereturn.GetPayments()
+	purchasereturn.Update()
 
 	err = purchasereturn.RemoveStock()
 	if err != nil {
@@ -242,6 +257,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchasereturn.FindTotal()
 	purchasereturn.FindTotalQuantity()
 	purchasereturn.FindVatPrice()
+	purchasereturn.UpdateForeignLabelFields()
 
 	err = purchasereturn.Update()
 	if err != nil {
@@ -253,6 +269,18 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchasereturn.ClearProductsPurchaseReturnHistory()
+	purchasereturn.AddProductsPurchaseReturnHistory()
+	count, _ := purchasereturn.GetPaymentsCount()
+
+	if count == 1 && purchasereturn.PaymentStatus == "paid" {
+		purchasereturn.ClearPayments()
+		purchasereturn.AddPayment()
+	}
+
+	purchasereturn.GetPayments()
+	purchasereturn.Update()
 
 	err = purchasereturn.UpdatePurchaseReturnDiscount(true)
 	if err != nil {

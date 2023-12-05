@@ -428,9 +428,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 
 	if purchasePayment.Amount == nil {
 		errs["amount"] = "Amount is required"
-	}
-
-	if ToFixed(*purchasePayment.Amount, 2) <= 0 {
+	} else if ToFixed(*purchasePayment.Amount, 2) <= 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
@@ -445,7 +443,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 	}
 
 	if scenario == "update" {
-		if ToFixed(((purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)+*purchasePayment.Amount), 2) > purchase.NetTotal {
+		if purchasePayment.Amount != nil && ToFixed(((purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)+*purchasePayment.Amount), 2) > purchase.NetTotal {
 			if ToFixed((purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)), 2) > 0 {
 				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)))
 			} else {
@@ -455,7 +453,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 		}
 	} else {
 
-		if ToFixed((purchasePaymentStats.TotalPayment+*purchasePayment.Amount), 2) > purchase.NetTotal {
+		if purchasePayment.Amount != nil && ToFixed((purchasePaymentStats.TotalPayment+*purchasePayment.Amount), 2) > purchase.NetTotal {
 			if ToFixed((purchase.NetTotal-purchasePaymentStats.TotalPayment), 2) > 0 {
 				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchasePaymentStats.TotalPayment))
 			} else {

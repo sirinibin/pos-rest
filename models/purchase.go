@@ -987,18 +987,6 @@ func (purchase *Purchase) Validate(
 			errs["id"] = "Invalid Purchase:" + purchase.ID.Hex()
 		}
 
-		if oldPurchase != nil {
-			if oldPurchase.Status == "delivered" {
-
-				if purchase.Status == "pending" ||
-					purchase.Status == "cancelled" ||
-					purchase.Status == "order_placed" ||
-					purchase.Status == "dispatched" {
-					errs["status"] = "Can't change the status from delivered to pending/cancelled/order_placed/dispatched"
-				}
-			}
-		}
-
 	} else {
 		if purchase.PaymentStatus != "not_paid" {
 			if govalidator.IsNull(purchase.PaymentMethod) {

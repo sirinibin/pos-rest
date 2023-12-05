@@ -410,3 +410,14 @@ func IsPurchaseReturnHistoryExistsByPurchaseReturnID(ID *primitive.ObjectID) (ex
 
 	return (count > 0), err
 }
+
+func (purchaseReturn *PurchaseReturn) ClearProductsPurchaseReturnHistory() error {
+	//log.Printf("Clearing product purchase return history of purchase id:%s", purchase.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_return_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"purchase_return_id": purchaseReturn.ID})
+	if err != nil {
+		return errors.New("error deleting product purchase return history: " + err.Error())
+	}
+	return nil
+}
