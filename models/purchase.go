@@ -1307,6 +1307,7 @@ func (purchase *Purchase) AddPayment() error {
 
 	payment := PurchasePayment{
 		PurchaseID:    &purchase.ID,
+		Date:          purchase.Date,
 		PurchaseCode:  purchase.Code,
 		Amount:        &amount,
 		Method:        purchase.PaymentMethod,
