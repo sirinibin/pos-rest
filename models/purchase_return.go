@@ -699,10 +699,6 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 	purchasereturn.PurchaseCode = purchase.Code
 
-	if govalidator.IsNull(purchasereturn.Status) {
-		errs["status"] = "Status is required"
-	}
-
 	if govalidator.IsNull(purchasereturn.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
@@ -1393,4 +1389,14 @@ func ProcessPurchaseReturns() error {
 	}
 
 	return nil
+}
+
+func (model *PurchaseReturn) GetPaymentsCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"purchase_return_id": model.ID,
+	})
 }

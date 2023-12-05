@@ -456,6 +456,17 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 	return nil
 }
 
+func (purchase *Purchase) ClearProductsPurchaseHistory() error {
+	//log.Printf("Clearing product purchase history of purchase id:%s", purchase.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"purchase_id": purchase.ID})
+	if err != nil {
+		return errors.New("error deleting product purchase history: " + err.Error())
+	}
+	return nil
+}
+
 func IsPurchaseHistoryExistsByPurchaseID(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

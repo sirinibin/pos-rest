@@ -120,6 +120,11 @@ func CreatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//Updating purchase.payments
+	purchase, _ := models.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
+	purchase.GetPayments()
+	purchase.Update()
+
 	response.Status = true
 	response.Result = purchasepayment
 
@@ -198,6 +203,11 @@ func UpdatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	//Updating purchase.payments
+	purchase, _ := models.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
+	purchase.GetPayments()
+	purchase.Update()
 
 	purchasepayment, err = models.FindPurchasePaymentByID(&purchasepayment.ID, bson.M{})
 	if err != nil {

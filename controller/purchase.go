@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -72,6 +71,10 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	response.Meta["shipping_handling_fees"] = purchaseStats.ShippingOrHandlingFees
 	response.Meta["net_retail_profit"] = purchaseStats.NetRetailProfit
 	response.Meta["net_wholesale_profit"] = purchaseStats.NetWholesaleProfit
+	response.Meta["paid_purchase"] = purchaseStats.PaidPurchase
+	response.Meta["unpaid_purchase"] = purchaseStats.UnPaidPurchase
+	response.Meta["cash_purchase"] = purchaseStats.CashPurchase
+	response.Meta["bank_account_purchase"] = purchaseStats.BankAccountPurchase
 
 	if len(purchases) == 0 {
 		response.Result = []interface{}{}
@@ -125,14 +128,15 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Validated")
 
 	purchase.FindNetTotal()
 	purchase.FindTotal()
 	purchase.FindTotalQuantity()
 	purchase.FindVatPrice()
-
-	log.Print("Before Insert")
+	purchase.UpdateForeignLabelFields()
+	purchase.ID = primitive.NewObjectID()
+	purchase.MakeCode()
+	purchase.CalculatePurchaseExpectedProfit()
 
 	err = purchase.Insert()
 	if err != nil {
@@ -145,7 +149,13 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Print("Inserted")
+	purchase.AddProductsPurchaseHistory()
+	if purchase.PaymentStatus != "not_paid" {
+		purchase.AddPayment()
+	}
+	purchase.GetPayments()
+	purchase.Update()
+
 	err = purchase.AddStock()
 	if err != nil {
 		response.Status = false
@@ -156,7 +166,6 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Added Stock")
 
 	err = purchase.UpdateProductUnitPriceInStore()
 	if err != nil {
@@ -251,6 +260,8 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.FindTotal()
 	purchase.FindTotalQuantity()
 	purchase.FindVatPrice()
+	purchase.UpdateForeignLabelFields()
+	purchase.CalculatePurchaseExpectedProfit()
 
 	err = purchase.Update()
 	if err != nil {
@@ -262,6 +273,18 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchase.ClearProductsPurchaseHistory()
+	purchase.AddProductsPurchaseHistory()
+	count, _ := purchase.GetPaymentsCount()
+
+	if count == 1 && purchase.PaymentStatus == "paid" {
+		purchase.ClearPayments()
+		purchase.AddPayment()
+	}
+
+	purchase.GetPayments()
+	purchase.Update()
 
 	err = purchaseOld.RemoveStock()
 	if err != nil {

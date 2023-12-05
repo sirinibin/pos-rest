@@ -574,5 +574,17 @@ func cronJobsEveryHour() error {
 		}
 	*/
 
+	/*
+		err := models.ProcessPurchases()
+		if err != nil {
+			log.Print(err)
+		}
+
+		err = models.ProcessPurchasePayments()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
+
 	return nil
 }

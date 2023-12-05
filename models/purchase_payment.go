@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -19,9 +21,11 @@ import (
 // PurchasePayment : PurchasePayment structure
 type PurchasePayment struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr       string              `json:"date_str,omitempty"`
 	PurchaseID    *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
 	PurchaseCode  string              `json:"purchase_code" bson:"purchase_code"`
-	Amount        float64             `json:"amount" bson:"amount"`
+	Amount        *float64            `json:"amount" bson:"amount"`
 	Method        string              `json:"method" bson:"method"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -123,6 +127,63 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 			timeZoneOffset = s
 		}
 
+	}
+
+	keys, ok = r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
 	}
 
 	keys, ok = r.URL.Query()["search[created_by_name]"]
@@ -326,6 +387,21 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 
 	var oldPurchasePayment *PurchasePayment
 
+	if govalidator.IsNull(purchasePayment.Method) {
+		errs["method"] = "Payment method is required"
+	}
+
+	if govalidator.IsNull(purchasePayment.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		const shortForm = "2006-01-02T15:04:05Z07:00"
+		date, err := time.Parse(shortForm, purchasePayment.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		purchasePayment.Date = &date
+	}
+
 	if scenario == "update" {
 		if purchasePayment.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
@@ -350,15 +426,15 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if purchasePayment.Amount == 0 {
+	if purchasePayment.Amount == nil {
 		errs["amount"] = "Amount is required"
 	}
 
-	if purchasePayment.Amount < 0 {
+	if ToFixed(*purchasePayment.Amount, 2) <= 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	purchasepaymentStats, err := GetPurchasePaymentStats(bson.M{"purchase_id": purchasePayment.PurchaseID})
+	purchasePaymentStats, err := GetPurchasePaymentStats(bson.M{"purchase_id": purchasePayment.PurchaseID})
 	if err != nil {
 		return errs
 	}
@@ -369,20 +445,21 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 	}
 
 	if scenario == "update" {
-		if ((purchasepaymentStats.TotalPayment - oldPurchasePayment.Amount) + purchasePayment.Amount) > purchase.NetTotal {
-			if (purchase.NetTotal - (purchasepaymentStats.TotalPayment - oldPurchasePayment.Amount)) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasepaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchase.NetTotal-(purchasepaymentStats.TotalPayment-oldPurchasePayment.Amount)))
+		if ToFixed(((purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)+*purchasePayment.Amount), 2) > purchase.NetTotal {
+			if ToFixed((purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)), 2) > 0 {
+				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)))
 			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasepaymentStats.TotalPayment) + " SAR"
+				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR"
 			}
 
 		}
 	} else {
-		if (purchasepaymentStats.TotalPayment + purchasePayment.Amount) > purchase.NetTotal {
-			if (purchase.NetTotal - purchasepaymentStats.TotalPayment) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasepaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchasepaymentStats.TotalPayment))
+
+		if ToFixed((purchasePaymentStats.TotalPayment+*purchasePayment.Amount), 2) > purchase.NetTotal {
+			if ToFixed((purchase.NetTotal-purchasePaymentStats.TotalPayment), 2) > 0 {
+				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchasePaymentStats.TotalPayment))
 			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasepaymentStats.TotalPayment) + " SAR"
+				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR"
 			}
 
 		}
@@ -509,4 +586,46 @@ func GetPurchasePaymentStats(filter map[string]interface{}) (stats PurchasePayme
 	}
 
 	return stats, nil
+}
+
+func ProcessPurchasePayments() error {
+	log.Print("Processing purchase payments")
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching purchase payments:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//productCount := 1
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := PurchasePayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		model.Date = model.CreatedAt
+		//log.Print("Date updated")
+		err = model.Update()
+		if err != nil {
+			log.Print(err)
+
+			//return err
+		}
+	}
+
+	log.Print("DONE!")
+	return nil
 }

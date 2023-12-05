@@ -15,6 +15,7 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -94,6 +95,11 @@ type Purchase struct {
 	UpdatedByName              string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName              string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	TotalPaymentPaid           float64             `bson:"total_payment_paid" json:"total_payment_paid"`
+	BalanceAmount              float64             `bson:"balance_amount" json:"balance_amount"`
+	Payments                   []PurchasePayment   `bson:"payments" json:"payments"`
+	PaymentsCount              int64               `bson:"payments_count" json:"payments_count"`
+	PaymentMethods             []string            `json:"payment_methods" bson:"payment_methods"`
 }
 
 func UpdatePurchaseProfit() error {
@@ -139,6 +145,10 @@ type PurchaseStats struct {
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 	NetRetailProfit        float64             `json:"net_retail_net_profit" bson:"net_retail_profit"`
 	NetWholesaleProfit     float64             `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
+	PaidPurchase           float64             `json:"paid_purchase" bson:"paid_purchase"`
+	UnPaidPurchase         float64             `json:"unpaid_purchase" bson:"unpaid_purchase"`
+	CashPurchase           float64             `json:"cash_purchase" bson:"cash_purchase"`
+	BankAccountPurchase    float64             `json:"bank_account_purchase" bson:"bank_account_purchase"`
 }
 
 func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err error) {
@@ -159,6 +169,55 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
 				"net_retail_profit":      bson.M{"$sum": "$net_retail_profit"},
 				"net_wholesale_profit":   bson.M{"$sum": "$net_wholesale_profit"},
+				"paid_purchase": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"unpaid_purchase": bson.M{"$sum": "$balance_amount"},
+				"cash_purchase": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "cash"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"bank_account_purchase": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "bank_account"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
 			},
 		},
 	}
@@ -437,6 +496,75 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_status]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentStatusList := strings.Split(keys[0], ",")
+		if len(paymentStatusList) > 0 {
+			criterias.SearchBy["payment_status"] = bson.M{"$in": paymentStatusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[total_payment_paid]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["total_payment_paid"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["total_payment_paid"] = value
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["balance_amount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payments_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["payments_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["payments_count"] = value
 		}
 	}
 
@@ -811,8 +939,15 @@ func (purchase *Purchase) Validate(
 
 	errs = make(map[string]string)
 
-	if govalidator.IsNull(purchase.Status) {
-		errs["status"] = "Status is required"
+	if govalidator.IsNull(purchase.PaymentStatus) {
+		errs["payment_status"] = "Payment status is required"
+	}
+
+	log.Print("purchase.PaymentStatus:" + purchase.PaymentStatus)
+	if purchase.PaymentStatus != "not_paid" {
+		if govalidator.IsNull(purchase.PaymentMethod) {
+			errs["payment_method"] = "Payment method is required"
+		}
 	}
 
 	if govalidator.IsNull(purchase.DateStr) {
@@ -1080,34 +1215,7 @@ func (purchase *Purchase) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := purchase.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	purchase.ID = primitive.NewObjectID()
-	if len(purchase.Code) == 0 {
-		err = purchase.MakeCode()
-		if err != nil {
-			return err
-		}
-	}
-	err = purchase.CalculatePurchaseExpectedProfit()
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.InsertOne(ctx, &purchase)
-	if err != nil {
-		return err
-	}
-
-	err = purchase.AddProductsPurchaseHistory()
-	if err != nil {
-		return err
-	}
-
-	err = purchase.AddPayment()
+	_, err := collection.InsertOne(ctx, &purchase)
 	if err != nil {
 		return err
 	}
@@ -1201,7 +1309,7 @@ func (purchase *Purchase) AddPayment() error {
 	payment := PurchasePayment{
 		PurchaseID:    &purchase.ID,
 		PurchaseCode:  purchase.Code,
-		Amount:        amount,
+		Amount:        &amount,
 		Method:        purchase.PaymentMethod,
 		CreatedAt:     purchase.CreatedAt,
 		UpdatedAt:     purchase.UpdatedAt,
@@ -1256,17 +1364,7 @@ func (purchase *Purchase) Update() error {
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
-	err := purchase.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	err = purchase.CalculatePurchaseExpectedProfit()
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.UpdateOne(
+	_, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": purchase.ID},
 		bson.M{"$set": purchase},
@@ -1423,16 +1521,104 @@ func ProcessPurchases() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		err = model.ClearProductsPurchaseHistory()
+		if err != nil {
+			return errors.New("error deleting product purchase history: " + err.Error())
+		}
+
 		err = model.AddProductsPurchaseHistory()
 		if err != nil {
-			return err
+			return errors.New("error Adding product purchase history: " + err.Error())
 		}
+
+		model.GetPayments()
 
 		err = model.Update()
 		if err != nil {
-			return err
+			return errors.New("error updating purchase: " + err.Error())
 		}
 	}
+	log.Print("DONE!")
 
+	return nil
+}
+
+func (model *Purchase) GetPayments() (payments []PurchasePayment, err error) {
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"purchase_id": model.ID}, findOptions)
+	if err != nil {
+		return payments, errors.New("Error fetching purchase payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	totalPaymentPaid := float64(0.0)
+	paymentMethods := []string{}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return payments, errors.New("Cursor error:" + err.Error())
+		}
+		payment := PurchasePayment{}
+		err = cur.Decode(&payment)
+		if err != nil {
+			return payments, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		payments = append(payments, payment)
+
+		totalPaymentPaid += *payment.Amount
+
+		if !slices.Contains(paymentMethods, payment.Method) {
+			paymentMethods = append(paymentMethods, payment.Method)
+		}
+	} //end for loop
+
+	model.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
+	model.BalanceAmount = ToFixed(model.NetTotal-totalPaymentPaid, 2)
+	model.PaymentMethods = paymentMethods
+	model.Payments = payments
+	model.PaymentsCount = int64(len(payments))
+
+	if ToFixed(model.NetTotal, 2) == ToFixed(totalPaymentPaid, 2) {
+		model.PaymentStatus = "paid"
+	} else if ToFixed(totalPaymentPaid, 2) > 0 {
+		model.PaymentStatus = "paid_partially"
+		model.PartiaPaymentAmount = totalPaymentPaid
+	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
+		model.PaymentStatus = "not_paid"
+	}
+
+	return payments, err
+}
+
+func (model *Purchase) GetPaymentsCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"purchase_id": model.ID,
+	})
+}
+
+func (model *Purchase) ClearPayments() error {
+	//log.Printf("Clearing Purchase payment history of purchase id:%s", model.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"purchase_id": model.ID})
+	if err != nil {
+		return err
+	}
 	return nil
 }

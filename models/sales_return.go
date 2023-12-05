@@ -823,16 +823,14 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	salesreturn.OrderCode = order.Code
 
-	if govalidator.IsNull(salesreturn.Status) {
-		errs["status"] = "Status is required"
-	}
-
-	if govalidator.IsNull(salesreturn.PaymentMethod) {
-		errs["payment_method"] = "Payment method is required"
-	}
-
 	if govalidator.IsNull(salesreturn.PaymentStatus) {
 		errs["payment_status"] = "Payment status is required"
+	}
+
+	if order.PaymentStatus != "not_paid" {
+		if govalidator.IsNull(order.PaymentMethod) {
+			errs["payment_method"] = "Payment method is required"
+		}
 	}
 
 	if govalidator.IsNull(salesreturn.DateStr) {
@@ -1343,7 +1341,7 @@ func (salesReturn *SalesReturn) AddPayment() error {
 		SalesReturnCode: salesReturn.Code,
 		OrderID:         salesReturn.OrderID,
 		OrderCode:       salesReturn.OrderCode,
-		Amount:          amount,
+		Amount:          &amount,
 		Method:          salesReturn.PaymentMethod,
 		CreatedAt:       salesReturn.CreatedAt,
 		UpdatedAt:       salesReturn.UpdatedAt,
@@ -1651,7 +1649,7 @@ func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, er
 
 		payments = append(payments, model)
 
-		totalPaymentPaid += model.Amount
+		totalPaymentPaid += *model.Amount
 
 		if !slices.Contains(paymentMethods, model.Method) {
 			paymentMethods = append(paymentMethods, model.Method)

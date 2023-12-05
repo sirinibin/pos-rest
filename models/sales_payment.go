@@ -26,7 +26,7 @@ type SalesPayment struct {
 	DateStr       string              `json:"date_str,omitempty"`
 	OrderID       *primitive.ObjectID `json:"order_id" bson:"order_id"`
 	OrderCode     string              `json:"order_code" bson:"order_code"`
-	Amount        float64             `json:"amount" bson:"amount"`
+	Amount        *float64            `json:"amount" bson:"amount"`
 	Method        string              `json:"method" bson:"method"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -430,11 +430,11 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if salesPayment.Amount == 0 {
+	if salesPayment.Amount == nil {
 		errs["amount"] = "Amount is required"
 	}
 
-	if salesPayment.Amount < 0 {
+	if ToFixed(*salesPayment.Amount, 2) <= 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
@@ -449,29 +449,16 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 	}
 
 	if scenario == "update" {
-		if ((salespaymentStats.TotalPayment - oldSalesPayment.Amount) + salesPayment.Amount) > order.NetTotal {
-			if (order.NetTotal - (salespaymentStats.TotalPayment - oldSalesPayment.Amount)) > 0 {
-				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (order.NetTotal-(salespaymentStats.TotalPayment-oldSalesPayment.Amount)))
+		if ToFixed((salespaymentStats.TotalPayment-*oldSalesPayment.Amount)+*salesPayment.Amount, 2) > order.NetTotal {
+			if ToFixed(order.NetTotal-(salespaymentStats.TotalPayment-*oldSalesPayment.Amount), 2) > 0 {
+				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (order.NetTotal-(salespaymentStats.TotalPayment-*oldSalesPayment.Amount)))
 			} else {
 				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR"
 			}
 
 		}
 	} else {
-		/*
-			log.Print("salespaymentStats.TotalPayment: ")
-			log.Print(salespaymentStats.TotalPayment)
-			log.Print("order.TotalPaymentReceived: ")
-			log.Print(order.TotalPaymentReceived)
-			log.Print("salesPayment.Amount:")
-			log.Print(salesPayment.Amount)
-			log.Print("order.NetTotal:")
-			log.Print(order.NetTotal)
-			log.Print("ToFixed((salespaymentStats.TotalPayment+salesPayment.Amount), 2):")
-			log.Print(ToFixed((salespaymentStats.TotalPayment + salesPayment.Amount), 2))
-		*/
-
-		if ToFixed((salespaymentStats.TotalPayment+salesPayment.Amount), 2) > order.NetTotal {
+		if ToFixed((salespaymentStats.TotalPayment+*salesPayment.Amount), 2) > order.NetTotal {
 			if ToFixed((order.NetTotal-salespaymentStats.TotalPayment), 2) > 0 {
 				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (order.NetTotal-salespaymentStats.TotalPayment))
 			} else {

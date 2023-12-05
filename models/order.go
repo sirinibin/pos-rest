@@ -918,16 +918,14 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	errs = make(map[string]string)
 
-	if govalidator.IsNull(order.Status) {
-		errs["status"] = "Status is required"
-	}
-
-	if govalidator.IsNull(order.PaymentMethod) {
-		errs["payment_method"] = "Payment method is required"
-	}
-
 	if govalidator.IsNull(order.PaymentStatus) {
 		errs["payment_status"] = "Payment status is required"
+	}
+
+	if order.PaymentStatus != "not_paid" {
+		if govalidator.IsNull(order.PaymentMethod) {
+			errs["payment_method"] = "Payment method is required"
+		}
 	}
 
 	if govalidator.IsNull(order.DateStr) {
@@ -1343,7 +1341,7 @@ func (order *Order) AddPayment() error {
 	payment := SalesPayment{
 		OrderID:       &order.ID,
 		OrderCode:     order.Code,
-		Amount:        amount,
+		Amount:        &amount,
 		Method:        order.PaymentMethod,
 		Date:          order.Date,
 		CreatedAt:     order.CreatedAt,
@@ -1398,7 +1396,7 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 		//log.Print("Pushing")
 		models = append(models, OrderPayment{
 			PaymentID:     model.ID,
-			Amount:        model.Amount,
+			Amount:        *model.Amount,
 			Method:        model.Method,
 			CreatedAt:     model.CreatedAt,
 			UpdatedAt:     model.UpdatedAt,
@@ -1408,7 +1406,7 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 			UpdatedByName: model.UpdatedByName,
 		})
 
-		totalPaymentReceived += model.Amount
+		totalPaymentReceived += *model.Amount
 
 		if !slices.Contains(paymentMethods, model.Method) {
 			paymentMethods = append(paymentMethods, model.Method)
