@@ -455,3 +455,14 @@ func IsQuotationHistoryExistsByQuotationID(ID *primitive.ObjectID) (exists bool,
 
 	return (count > 0), err
 }
+
+func (model *Quotation) ClearProductsQuotationHistory() error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"quotation_id": model.ID})
+	if err != nil {
+		return err
+	}
+	return nil
+}

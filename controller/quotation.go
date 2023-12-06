@@ -117,6 +117,10 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.FindTotal()
 	quotation.FindTotalQuantity()
 	quotation.FindVatPrice()
+	quotation.UpdateForeignLabelFields()
+	quotation.ID = primitive.NewObjectID()
+	quotation.MakeCode()
+	quotation.CalculateQuotationProfit()
 
 	err = quotation.Insert()
 	if err != nil {
@@ -128,6 +132,8 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	quotation.AddProductsQuotationHistory()
 
 	response.Status = true
 	response.Result = quotation
@@ -222,6 +228,12 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	quotation.UpdateForeignLabelFields()
+	quotation.CalculateQuotationProfit()
+
+	quotation.ClearProductsQuotationHistory()
+	quotation.AddProductsQuotationHistory()
 
 	err = quotation.AttributesValueChangeEvent(quotationOld)
 	if err != nil {

@@ -955,25 +955,7 @@ func (quotation *Quotation) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := quotation.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	quotation.ID = primitive.NewObjectID()
-	if len(quotation.Code) == 0 {
-		err = quotation.MakeCode()
-		if err != nil {
-			return err
-		}
-	}
-
-	err = quotation.CalculateQuotationProfit()
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.InsertOne(ctx, &quotation)
+	_, err := collection.InsertOne(ctx, &quotation)
 	if err != nil {
 		return err
 	}
@@ -1079,24 +1061,7 @@ func (quotation *Quotation) Update() error {
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
-	err := quotation.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	/*
-		err = quotation.GeneratePDF()
-		if err != nil {
-			return err
-		}
-	*/
-
-	err = quotation.CalculateQuotationProfit()
-	if err != nil {
-		return err
-	}
-
-	_, err = collection.UpdateOne(
+	_, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": quotation.ID},
 		bson.M{"$set": quotation},
@@ -1230,6 +1195,7 @@ func ProcessQuotations() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		quotation.ClearProductsQuotationHistory()
 		err = quotation.AddProductsQuotationHistory()
 		if err != nil {
 			return err
