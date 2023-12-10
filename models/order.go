@@ -1736,19 +1736,17 @@ func ProcessOrders() error {
 			return err
 		}
 
-		/*
-			err = order.ClearProductsSalesHistory()
-			if err != nil {
-				return err
-			}
+		err = order.ClearProductsSalesHistory()
+		if err != nil {
+			return err
+		}
 
-			err = order.CreateProductsSalesHistory()
-			if err != nil {
-				return err
-			}
-		*/
+		err = order.CreateProductsSalesHistory()
+		if err != nil {
+			return err
+		}
 
-		//order.GetPayments()
+		order.GetPayments()
 
 		err = order.SetProductsSalesStats()
 		if err != nil {
