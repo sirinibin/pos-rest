@@ -1650,6 +1650,8 @@ func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive
 		if err != nil {
 			return err
 		}
+
+		stats.PurchaseReturn = math.Round(stats.PurchaseReturn*100) / 100
 	}
 
 	for storeIndex, store := range product.Stores {

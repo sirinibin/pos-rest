@@ -1662,6 +1662,8 @@ func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.Objec
 		if err != nil {
 			return err
 		}
+
+		stats.Purchase = math.Round(stats.Purchase*100) / 100
 	}
 
 	for storeIndex, store := range product.Stores {

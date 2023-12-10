@@ -1758,6 +1758,10 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 		if err != nil {
 			return err
 		}
+
+		stats.SalesReturn = math.Round(stats.SalesReturn*100) / 100
+		stats.SalesReturnProfit = math.Round(stats.SalesReturnProfit*100) / 100
+		stats.SalesReturnLoss = math.Round(stats.SalesReturnLoss*100) / 100
 	}
 
 	for storeIndex, store := range product.Stores {

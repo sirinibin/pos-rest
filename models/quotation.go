@@ -1260,6 +1260,8 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 		if err != nil {
 			return err
 		}
+
+		stats.Quotation = math.Round(stats.Quotation*100) / 100
 	}
 
 	for storeIndex, store := range product.Stores {
