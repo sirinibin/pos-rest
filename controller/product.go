@@ -270,6 +270,8 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	product.ReflectValidPurchaseUnitPrice()
 
+	product.SetProductSalesStatsByStoreID(*product.StoreID)
+
 	/*
 		err = product.AttributesValueChangeEvent(productOld)
 		if err != nil {
