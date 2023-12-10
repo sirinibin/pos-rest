@@ -1509,17 +1509,24 @@ func ProcessPurchases() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = model.ClearProductsPurchaseHistory()
-		if err != nil {
-			return errors.New("error deleting product purchase history: " + err.Error())
-		}
+		/*
+			err = model.ClearProductsPurchaseHistory()
+			if err != nil {
+				return errors.New("error deleting product purchase history: " + err.Error())
+			}
 
-		err = model.AddProductsPurchaseHistory()
-		if err != nil {
-			return errors.New("error Adding product purchase history: " + err.Error())
-		}
+			err = model.AddProductsPurchaseHistory()
+			if err != nil {
+				return errors.New("error Adding product purchase history: " + err.Error())
+			}
 
-		model.GetPayments()
+			model.GetPayments()
+		*/
+
+		err = model.SetProductsPurchaseStats()
+		if err != nil {
+			return errors.New("error set product purchase stats: " + err.Error())
+		}
 
 		err = model.Update()
 		if err != nil {
@@ -1607,6 +1614,84 @@ func (model *Purchase) ClearPayments() error {
 	_, err := collection.DeleteMany(ctx, bson.M{"purchase_id": model.ID})
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+type ProductPurchaseStats struct {
+	PurchaseCount    int64   `json:"purchase_count" bson:"purchase_count"`
+	PurchaseQuantity float64 `json:"purchase_quantity" bson:"purchase_quantity"`
+	Purchase         float64 `json:"purchase" bson:"purchase"`
+}
+
+func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductPurchaseStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":               nil,
+				"purchase_count":    bson.M{"$sum": 1},
+				"purchase_quantity": bson.M{"$sum": "$quantity"},
+				"purchase":          bson.M{"$sum": "$net_price"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	for storeIndex, store := range product.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			product.Stores[storeIndex].PurchaseCount = stats.PurchaseCount
+			product.Stores[storeIndex].PurchaseQuantity = stats.PurchaseQuantity
+			product.Stores[storeIndex].Purchase = stats.Purchase
+			err = product.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (purchase *Purchase) SetProductsPurchaseStats() error {
+	for _, purchaseProduct := range purchase.Products {
+		product, err := FindProductByID(&purchaseProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductPurchaseStatsByStoreID(*purchase.StoreID)
+		if err != nil {
+			return err
+		}
+
 	}
 	return nil
 }

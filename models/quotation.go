@@ -1201,6 +1201,11 @@ func ProcessQuotations() error {
 			return err
 		}
 
+		err = quotation.SetProductsQuotationStats()
+		if err != nil {
+			return err
+		}
+
 		//quotation.Date = quotation.CreatedAt
 		err = quotation.Update()
 		if err != nil {
@@ -1208,5 +1213,82 @@ func ProcessQuotations() error {
 		}
 	}
 
+	return nil
+}
+
+type ProductQuotationStats struct {
+	QuotationCount    int64   `json:"quotation_count" bson:"quotation_count"`
+	QuotationQuantity float64 `json:"quotation_quantity" bson:"quotation_quantity"`
+	Quotation         float64 `json:"quotation" bson:"quotation"`
+}
+
+func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductQuotationStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                nil,
+				"quotation_count":    bson.M{"$sum": 1},
+				"quotation_quantity": bson.M{"$sum": "$quantity"},
+				"quotation":          bson.M{"$sum": "$net_price"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	for storeIndex, store := range product.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			product.Stores[storeIndex].QuotationCount = stats.QuotationCount
+			product.Stores[storeIndex].QuotationQuantity = stats.QuotationQuantity
+			product.Stores[storeIndex].Quotation = stats.Quotation
+			err = product.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (quotation *Quotation) SetProductsQuotationStats() error {
+	for _, quotationProduct := range quotation.Products {
+		product, err := FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductQuotationStatsByStoreID(*quotation.StoreID)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

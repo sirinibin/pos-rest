@@ -646,7 +646,17 @@ func ProcessDeliveryNotes() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		err = deliverynote.ClearProductsDeliveryNoteHistory()
+		if err != nil {
+			return err
+		}
+
 		err = deliverynote.AddProductsDeliveryNoteHistory()
+		if err != nil {
+			return err
+		}
+
+		err = deliverynote.SetProductsDeliveryNoteStats()
 		if err != nil {
 			return err
 		}
@@ -657,5 +667,79 @@ func ProcessDeliveryNotes() error {
 		}
 	}
 
+	return nil
+}
+
+type ProductDeliveryNoteStats struct {
+	DeliveryNoteCount    int64   `json:"delivery_note_count" bson:"delivery_note_count"`
+	DeliveryNoteQuantity float64 `json:"delivery_note_quantity" bson:"delivery_note_quantity"`
+}
+
+func (product *Product) SetProductDeliveryNoteStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductDeliveryNoteStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                    nil,
+				"delivery_note_count":    bson.M{"$sum": 1},
+				"delivery_note_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	for storeIndex, store := range product.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			product.Stores[storeIndex].DeliveryNoteCount = stats.DeliveryNoteCount
+			product.Stores[storeIndex].DeliveryNoteQuantity = stats.DeliveryNoteQuantity
+			err = product.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (deliveryNote *DeliveryNote) SetProductsDeliveryNoteStats() error {
+	for _, deliveryNoteProduct := range deliveryNote.Products {
+		product, err := FindProductByID(&deliveryNoteProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductDeliveryNoteStatsByStoreID(*deliveryNote.StoreID)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

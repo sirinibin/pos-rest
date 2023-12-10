@@ -196,40 +196,6 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 	return stats, nil
 }
 
-func (salesreturn *SalesReturn) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
-	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
-	}
-
-	salesreturn.ChangeLog = append(
-		salesreturn.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
-}
-
 func (salesreturn *SalesReturn) AttributesValueChangeEvent(salesreturnOld *SalesReturn) error {
 
 	if salesreturn.Status != salesreturnOld.Status {
@@ -1465,8 +1431,6 @@ func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err 
 	now := time.Now()
 	salesreturn.DeletedAt = &now
 
-	salesreturn.SetChangeLog("delete", nil, nil, nil)
-
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": salesreturn.ID},
@@ -1597,6 +1561,11 @@ func ProcessSalesReturns() error {
 		}
 
 		salesReturn.GetPayments()
+
+		err = salesReturn.SetProductsSalesReturnStats()
+		if err != nil {
+			return err
+		}
 
 		err = salesReturn.Update()
 		if err != nil {
@@ -1739,4 +1708,88 @@ func (salesReturn *SalesReturn) GetPaymentsCount() (count int64, err error) {
 	return collection.CountDocuments(ctx, bson.M{
 		"sales_return_id": salesReturn.ID,
 	})
+}
+
+type ProductSalesReturnStats struct {
+	SalesReturnCount    int64   `json:"sales_return_count" bson:"sales_return_count"`
+	SalesReturnQuantity float64 `json:"sales_return_quantity" bson:"sales_return_quantity"`
+	SalesReturn         float64 `json:"sales_return" bson:"sales_return"`
+	SalesReturnProfit   float64 `json:"sales_return_profit" bson:"sales_return_profit"`
+	SalesReturnLoss     float64 `json:"sales_return_loss" bson:"lsales_return_oss"`
+}
+
+func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductSalesReturnStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                   nil,
+				"sales_return_count":    bson.M{"$sum": 1},
+				"sales_return_quantity": bson.M{"$sum": "$quantity"},
+				"sales_return":          bson.M{"$sum": "$net_price"},
+				"sales_return_profit":   bson.M{"$sum": "$profit"},
+				"sales_return_loss":     bson.M{"$sum": "$loss"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	for storeIndex, store := range product.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			product.Stores[storeIndex].SalesReturnCount = stats.SalesReturnCount
+			product.Stores[storeIndex].SalesReturnQuantity = stats.SalesReturnQuantity
+			product.Stores[storeIndex].SalesReturn = stats.SalesReturn
+			product.Stores[storeIndex].SalesReturnProfit = stats.SalesReturnProfit
+			product.Stores[storeIndex].SalesReturnLoss = stats.SalesReturnLoss
+			err = product.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
+	for _, salesReturnProduct := range salesReturn.Products {
+		product, err := FindProductByID(&salesReturnProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductSalesReturnStatsByStoreID(*salesReturn.StoreID)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 }

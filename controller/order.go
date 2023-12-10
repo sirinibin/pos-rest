@@ -172,6 +172,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	order.SetProductsSalesStats()
+
 	response.Status = true
 	response.Result = order
 
@@ -303,6 +305,8 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	order.SetProductsSalesStats()
+
 	order, err = models.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {
 		response.Status = false
@@ -358,8 +362,6 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	order.SetChangeLog("view", nil, nil, nil)
 
 	response.Status = true
 	response.Result = order

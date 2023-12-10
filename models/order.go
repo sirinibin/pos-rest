@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -142,40 +141,6 @@ func UpdateOrderProfit() error {
 	}
 
 	return nil
-}
-
-func (order *Order) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64))
-	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64))
-	}
-
-	order.ChangeLog = append(
-		order.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
 }
 
 func (order *Order) AttributesValueChangeEvent(orderOld *Order) error {
@@ -1220,13 +1185,14 @@ func (order *Order) CalculateOrderProfit() error {
 		salesPrice := quantity * orderProduct.UnitPrice
 		purchaseUnitPrice := orderProduct.PurchaseUnitPrice
 
+		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
 		if purchaseUnitPrice == 0 ||
 			order.Products[i].Loss > 0 ||
 			order.Products[i].Profit <= 0 {
-			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-			if err != nil {
-				return err
-			}
 			for _, store := range product.Stores {
 				if store.StoreID == *order.StoreID {
 					purchaseUnitPrice = store.PurchaseUnitPrice
@@ -1242,15 +1208,18 @@ func (order *Order) CalculateOrderProfit() error {
 			profit = salesPrice - (quantity * purchaseUnitPrice)
 		}
 
+		loss := 0.0
+
 		profit = math.Round(profit*100) / 100
 
 		if profit >= 0 {
 			order.Products[i].Profit = profit
-			order.Products[i].Loss = 0.0
+			order.Products[i].Loss = loss
 			totalProfit += order.Products[i].Profit
 		} else {
 			order.Products[i].Profit = 0
-			order.Products[i].Loss = (profit * -1)
+			loss = (profit * -1)
+			order.Products[i].Loss = loss
 			totalLoss += order.Products[i].Loss
 		}
 
@@ -1779,7 +1748,12 @@ func ProcessOrders() error {
 			}
 		*/
 
-		order.GetPayments()
+		//order.GetPayments()
+
+		err = order.SetProductsSalesStats()
+		if err != nil {
+			return err
+		}
 
 		err = order.Update()
 		if err != nil {
@@ -1788,5 +1762,89 @@ func ProcessOrders() error {
 	}
 
 	log.Print("DONE!")
+	return nil
+}
+
+type ProductSalesStats struct {
+	SalesCount    int64   `json:"sales_count" bson:"sales_count"`
+	SalesQuantity float64 `json:"sales_quantity" bson:"sales_quantity"`
+	Sales         float64 `json:"sales" bson:"sales"`
+	SalesProfit   float64 `json:"sales_profit" bson:"sales_profit"`
+	SalesLoss     float64 `json:"sales_loss" bson:"sales_loss"`
+}
+
+func (product *Product) SetProductSalesStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductSalesStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":            nil,
+				"sales_count":    bson.M{"$sum": 1},
+				"sales_quantity": bson.M{"$sum": "$quantity"},
+				"sales":          bson.M{"$sum": "$net_price"},
+				"sales_profit":   bson.M{"$sum": "$profit"},
+				"sales_loss":     bson.M{"$sum": "$loss"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	for storeIndex, store := range product.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			product.Stores[storeIndex].SalesCount = stats.SalesCount
+			product.Stores[storeIndex].SalesQuantity = stats.SalesQuantity
+			product.Stores[storeIndex].Sales = stats.Sales
+			product.Stores[storeIndex].SalesProfit = stats.SalesProfit
+			product.Stores[storeIndex].SalesLoss = stats.SalesLoss
+			err = product.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (order *Order) SetProductsSalesStats() error {
+	for _, orderProduct := range order.Products {
+		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductSalesStatsByStoreID(*order.StoreID)
+		if err != nil {
+			return err
+		}
+
+	}
 	return nil
 }

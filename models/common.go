@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -270,4 +271,84 @@ func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
 func ToFixed(num float64, precision int) float64 {
 	output := math.Pow(10, float64(precision))
 	return float64(math.Round(num*output)) / output
+}
+
+func GetIntSearchElement(
+	field string,
+	operator string,
+	storeID primitive.ObjectID,
+	value int64,
+) bson.M {
+	element := bson.M{"$elemMatch": bson.M{}}
+
+	if operator != "" {
+		if !storeID.IsZero() {
+			element["$elemMatch"] = bson.M{
+				"sales_count": bson.M{
+					operator: value,
+				},
+				"store_id": storeID,
+			}
+		} else {
+			element["$elemMatch"] = bson.M{
+				"stock": bson.M{
+					operator: value,
+				},
+			}
+		}
+
+	} else {
+		if !storeID.IsZero() {
+			element["$elemMatch"] = bson.M{
+				"sales_count": value,
+				"store_id":    storeID,
+			}
+		} else {
+			element["$elemMatch"] = bson.M{
+				"sales_count": value,
+			}
+		}
+	}
+
+	return element
+}
+
+func GetFloatSearchElement(
+	field string,
+	operator string,
+	storeID primitive.ObjectID,
+	value float64,
+) bson.M {
+	element := bson.M{"$elemMatch": bson.M{}}
+
+	if operator != "" {
+		if !storeID.IsZero() {
+			element["$elemMatch"] = bson.M{
+				"sales_count": bson.M{
+					operator: value,
+				},
+				"store_id": storeID,
+			}
+		} else {
+			element["$elemMatch"] = bson.M{
+				"stock": bson.M{
+					operator: value,
+				},
+			}
+		}
+
+	} else {
+		if !storeID.IsZero() {
+			element["$elemMatch"] = bson.M{
+				"sales_count": value,
+				"store_id":    storeID,
+			}
+		} else {
+			element["$elemMatch"] = bson.M{
+				"sales_count": value,
+			}
+		}
+	}
+
+	return element
 }

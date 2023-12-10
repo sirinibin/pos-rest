@@ -338,3 +338,14 @@ func IsDeliveryNoteHistoryExistsByDeliveryNoteID(ID *primitive.ObjectID) (exists
 
 	return (count > 0), err
 }
+
+func (model *DeliveryNote) ClearProductsDeliveryNoteHistory() error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"delivery_note_id": model.ID})
+	if err != nil {
+		return err
+	}
+	return nil
+}

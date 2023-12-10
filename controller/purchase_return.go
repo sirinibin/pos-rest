@@ -175,6 +175,8 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	purchasereturn.SetProductsPurchaseReturnStats()
+
 	response.Status = true
 	response.Result = purchasereturn
 
@@ -325,6 +327,8 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchasereturn.SetProductsPurchaseReturnStats()
 
 	/*
 		err = purchasereturn.AttributesValueChangeEvent(purchasereturnOld)

@@ -1484,6 +1484,11 @@ func ProcessPurchaseReturns() error {
 
 		model.GetPayments()
 
+		err = model.SetProductsPurchaseReturnStats()
+		if err != nil {
+			return errors.New("error setting products purchase return stats: " + err.Error())
+		}
+
 		/*
 			if model.PaymentStatus == "" {
 				model.PaymentStatus = "paid"
@@ -1597,6 +1602,84 @@ func (model *PurchaseReturn) ClearPayments() error {
 	_, err := collection.DeleteMany(ctx, bson.M{"purchase_return_id": model.ID})
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+type ProductPurchaseReturnStats struct {
+	PurchaseReturnCount    int64   `json:"purchase_return_count" bson:"purchase_return_count"`
+	PurchaseReturnQuantity float64 `json:"purchase_return_quantity" bson:"purchase_return_quantity"`
+	PurchaseReturn         float64 `json:"purchase_return" bson:"purchase_return"`
+}
+
+func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_return_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductPurchaseReturnStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                      nil,
+				"purchase_return_count":    bson.M{"$sum": 1},
+				"purchase_return_quantity": bson.M{"$sum": "$quantity"},
+				"purchase_return":          bson.M{"$sum": "$net_price"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	for storeIndex, store := range product.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			product.Stores[storeIndex].PurchaseReturnCount = stats.PurchaseReturnCount
+			product.Stores[storeIndex].PurchaseReturnQuantity = stats.PurchaseReturnQuantity
+			product.Stores[storeIndex].PurchaseReturn = stats.PurchaseReturn
+			err = product.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (purchaseReturn *PurchaseReturn) SetProductsPurchaseReturnStats() error {
+	for _, purchaseReturnProduct := range purchaseReturn.Products {
+		product, err := FindProductByID(&purchaseReturnProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductPurchaseReturnStatsByStoreID(*purchaseReturn.StoreID)
+		if err != nil {
+			return err
+		}
+
 	}
 	return nil
 }

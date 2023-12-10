@@ -29,6 +29,8 @@ type ProductSalesReturnHistory struct {
 	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
 	NetPrice        float64             `bson:"net_price" json:"net_price"`
+	Profit          float64             `bson:"profit" json:"profit"`
+	Loss            float64             `bson:"loss" json:"loss"`
 	VatPercent      float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	VatPrice        float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
 	Unit            string              `bson:"unit,omitempty" json:"unit,omitempty"`
@@ -41,6 +43,8 @@ type ProductSalesReturnHistory struct {
 type SalesReturnHistoryStats struct {
 	ID               *primitive.ObjectID `json:"id" bson:"_id"`
 	TotalSalesReturn float64             `json:"total_sales_return" bson:"total_sales_return"`
+	TotalProfit      float64             `json:"total_profit" bson:"total_profit"`
+	TotalLoss        float64             `json:"total_loss" bson:"total_loss"`
 	TotalVatReturn   float64             `json:"total_vat_return" bson:"total_vat_return"`
 }
 
@@ -59,6 +63,8 @@ func GetSalesReturnHistoryStats(filter map[string]interface{}) (stats SalesRetur
 			"$group": bson.M{
 				"_id":                nil,
 				"total_sales_return": bson.M{"$sum": "$net_price"},
+				"total_profit":       bson.M{"$sum": "$profit"},
+				"total_loss":         bson.M{"$sum": "$loss"},
 				"total_vat_return":   bson.M{"$sum": "$vat_price"},
 			},
 		},
@@ -76,6 +82,8 @@ func GetSalesReturnHistoryStats(filter map[string]interface{}) (stats SalesRetur
 			return stats, err
 		}
 		stats.TotalSalesReturn = math.Round(stats.TotalSalesReturn*100) / 100
+		stats.TotalProfit = math.Round(stats.TotalProfit*100) / 100
+		stats.TotalLoss = math.Round(stats.TotalLoss*100) / 100
 		stats.TotalVatReturn = math.Round(stats.TotalVatReturn*100) / 100
 	}
 
@@ -388,6 +396,8 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 		history.VatPercent = math.Round(*salesReturn.VatPercent*100) / 100
 		history.VatPrice = math.Round((history.Price*(history.VatPercent/100))*100) / 100
 		history.NetPrice = math.Round((history.Price+history.VatPrice)*100) / 100
+		history.Profit = math.Round(salesReturnProduct.Profit*100) / 100
+		history.Loss = math.Round(salesReturnProduct.Loss*100) / 100
 
 		history.ID = primitive.NewObjectID()
 

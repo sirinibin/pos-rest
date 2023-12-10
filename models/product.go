@@ -52,6 +52,27 @@ type ProductStore struct {
 	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc" json:"retail_unit_profit_perc"`
 	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit" json:"wholesale_unit_profit"`
 	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc" json:"wholesale_unit_profit_perc"`
+	SalesCount              int64              `bson:"sales_count" json:"sales_count"`
+	SalesQuantity           float64            `bson:"sales_quantity" json:"sales_quantity"`
+	Sales                   float64            `bson:"sales" json:"sales"`
+	SalesReturnCount        int64              `bson:"sales_return_count" json:"sales_return_count"`
+	SalesReturnQuantity     float64            `bson:"sales_return_quantity" json:"sales_return_quantity"`
+	SalesReturn             float64            `bson:"sales_return" json:"sales_return"`
+	SalesProfit             float64            `bson:"sales_profit" json:"sales_profit"`
+	SalesLoss               float64            `bson:"sales_loss" json:"sales_loss"`
+	PurchaseCount           int64              `bson:"purchase_count" json:"purchase_count"`
+	PurchaseQuantity        float64            `bson:"purchase_quantity" json:"purchase_quantity"`
+	Purchase                float64            `bson:"purchase" json:"purchase"`
+	PurchaseReturnCount     int64              `bson:"purchase_return_count" json:"purchase_return_count"`
+	PurchaseReturnQuantity  float64            `bson:"purchase_return_quantity" json:"purchase_return_quantity"`
+	PurchaseReturn          float64            `bson:"purchase_return" json:"purchase_return"`
+	SalesReturnProfit       float64            `bson:"sales_return_profit" json:"sales_return_profit"`
+	SalesReturnLoss         float64            `bson:"sales_return_loss" json:"sales_return_loss"`
+	QuotationCount          int64              `bson:"quotation_count" json:"quotation_count"`
+	QuotationQuantity       float64            `bson:"quotation_quantity" json:"quotation_quantity"`
+	Quotation               float64            `bson:"quotation" json:"quotation"`
+	DeliveryNoteCount       int64              `bson:"delivery_note_count" json:"delivery_note_count"`
+	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity" json:"delivery_note_quantity"`
 }
 
 // Product : Product structure
@@ -785,6 +806,255 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		criterias.SearchBy["stores"] = stockElement
 	}
 
+	//sales
+	keys, ok = r.URL.Query()["search[sales_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_quantity", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, storeID, value)
+	}
+
+	// Sales return
+	keys, ok = r.URL.Query()["search[sales_reutrn_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_quantity", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, storeID, value)
+	}
+
+	//purchase
+
+	keys, ok = r.URL.Query()["search[purchase_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_quantity", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase", operator, storeID, value)
+	}
+
+	// purchase return
+
+	keys, ok = r.URL.Query()["search[purchase_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_quantity", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return", operator, storeID, value)
+	}
+
+	//Quotation
+	keys, ok = r.URL.Query()["search[quotation_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_quantity", operator, storeID, value)
+	}
+
+	//Delivery note
+	keys, ok = r.URL.Query()["search[delivery_note_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[delivery_note_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("delivery_note_quantity", operator, storeID, value)
+	}
+
+	//-end
 	keys, ok = r.URL.Query()["search[retail_unit_price]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -1351,23 +1621,7 @@ func FindLastProduct(
 	return product, err
 }
 
-func (product *Product) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
-	product.ID = primitive.NewObjectID()
-	/*
-		if len(product.ItemCode) == 0 {
-			for {
-				exists, err := product.IsItemCodeExists()
-				if err != nil {
-					return err
-				}
-				if !exists {
-					break
-				}
-				product.ItemCode = strings.ToUpper(GenerateItemCode(7))
-			}
-		}
-	*/
+func (product *Product) SetPartNumber() (err error) {
 	if len(product.PartNumber) == 0 {
 		for {
 			product.PartNumber = strings.ToUpper(GeneratePartNumber(10))
@@ -1382,7 +1636,10 @@ func (product *Product) Insert() (err error) {
 			}
 		}
 	}
+	return nil
+}
 
+func (product *Product) SetBarcode() (err error) {
 	if len(product.Ean12) == 0 {
 		lastProduct, err := FindLastProduct(bson.M{})
 		if err != nil {
@@ -1402,8 +1659,6 @@ func (product *Product) Insert() (err error) {
 
 		for {
 			product.Ean12 = barcode
-			log.Print("product.Ean12:")
-			log.Print(product.Ean12)
 			exists, err := product.IsEan12Exists()
 			if err != nil {
 				return err
@@ -1417,36 +1672,29 @@ func (product *Product) Insert() (err error) {
 			}
 			lastEan12++
 			barcode = strconv.Itoa(lastEan12)
-
-			//barcodeStartAt++
 		}
 	}
+	return nil
+}
 
-	if len(product.ImagesContent) > 0 {
-		err := product.SaveImages()
-		if err != nil {
-			return err
-		}
+func (product *Product) InitStoreUnitPrice() (err error) {
+	if len(product.Stores) > 0 {
+		return nil
 	}
 
-	err = product.UpdateForeignLabelFields()
-	if err != nil {
-		return err
+	product.Stores = make([]ProductStore, 1)
+	product.Stores[0] = ProductStore{
+		StoreID:            *product.StoreID,
+		StoreName:          product.StoreName,
+		RetailUnitPrice:    0,
+		WholesaleUnitPrice: 0,
+		PurchaseUnitPrice:  0,
 	}
+	return nil
+}
 
-	if len(product.Stores) == 0 {
-		product.Stores = make([]ProductStore, 1)
-		product.Stores[0] = ProductStore{
-			StoreID:            *product.StoreID,
-			StoreName:          product.StoreName,
-			RetailUnitPrice:    0,
-			WholesaleUnitPrice: 0,
-			PurchaseUnitPrice:  0,
-		}
-	}
-
+func (product *Product) CalculateUnitProfit() (err error) {
 	for i, _ := range product.Stores {
-
 		product.Stores[i].RetailUnitProfit = product.Stores[i].RetailUnitPrice - product.Stores[i].PurchaseUnitPrice
 		product.Stores[i].WholesaleUnitProfit = product.Stores[i].WholesaleUnitPrice - product.Stores[i].PurchaseUnitPrice
 		product.Stores[i].RetailUnitProfitPerc = 0
@@ -1464,7 +1712,11 @@ func (product *Product) Insert() (err error) {
 			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
 		}
 	}
+	return nil
+}
 
+func (product *Product) Insert() (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 	_, err = collection.InsertOne(ctx, &product)
@@ -1475,8 +1727,9 @@ func (product *Product) Insert() (err error) {
 }
 
 func (product *Product) SaveImages() error {
-
-	oldImagesCount := len(product.Images)
+	if len(product.ImagesContent) == 0 {
+		return nil
+	}
 
 	for _, imageContent := range product.ImagesContent {
 		content, err := base64.StdEncoding.DecodeString(imageContent)
@@ -1497,13 +1750,6 @@ func (product *Product) SaveImages() error {
 		product.Images = append(product.Images, "/"+filename)
 	}
 
-	product.SetChangeLog(
-		"add_image",
-		"images",
-		oldImagesCount,
-		len(product.Images),
-	)
-
 	product.ImagesContent = []string{}
 
 	return nil
@@ -1516,105 +1762,12 @@ func (product *Product) Update() error {
 	updateOptions.SetUpsert(false)
 	defer cancel()
 
-	if len(product.ImagesContent) > 0 {
-		err := product.SaveImages()
-		if err != nil {
-			return err
-		}
-	}
-
-	err := product.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	if len(product.Ean12) == 0 {
-		//barcodeStartAt := 100000000000
-		lastProduct, err := FindLastProduct(bson.M{})
-		if err != nil {
-			return err
-		}
-		lastEan12, err := strconv.Atoi(lastProduct.Ean12)
-		if err != nil {
-			return err
-		}
-		lastEan12++
-		barcode := strconv.Itoa(lastEan12)
-
-		for {
-			product.Ean12 = strings.ToUpper(barcode)
-			exists, err := product.IsEan12Exists()
-			if err != nil {
-				return err
-			}
-			if !exists {
-				break
-			}
-
-			lastEan12, err := strconv.Atoi(product.Ean12)
-			if err != nil {
-				return err
-			}
-			lastEan12++
-			barcode = strconv.Itoa(lastEan12)
-		}
-	}
-
-	if len(product.PartNumber) == 0 {
-		for {
-			product.PartNumber = strings.ToUpper(GeneratePartNumber(7))
-			exists, err := product.IsPartNumberExists()
-			if err != nil {
-				return err
-			}
-			if !exists {
-				break
-			}
-		}
-	}
-
-	if len(product.Stores) == 0 {
-		product.Stores = make([]ProductStore, 1)
-		product.Stores[0] = ProductStore{
-			StoreID:            *product.StoreID,
-			StoreName:          product.StoreName,
-			RetailUnitPrice:    0,
-			WholesaleUnitPrice: 0,
-			PurchaseUnitPrice:  0,
-		}
-	}
-
-	for i, _ := range product.Stores {
-
-		product.Stores[i].RetailUnitProfit = product.Stores[i].RetailUnitPrice - product.Stores[i].PurchaseUnitPrice
-		product.Stores[i].WholesaleUnitProfit = product.Stores[i].WholesaleUnitPrice - product.Stores[i].PurchaseUnitPrice
-		product.Stores[i].RetailUnitProfitPerc = 0
-		product.Stores[i].WholesaleUnitProfitPerc = 0
-
-		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].RetailUnitProfit > 0 {
-			product.Stores[i].RetailUnitProfitPerc = 100
-		} else if product.Stores[i].PurchaseUnitPrice != 0 {
-			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
-		}
-
-		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].WholesaleUnitProfit > 0 {
-			product.Stores[i].WholesaleUnitProfitPerc = 100
-		} else if product.Stores[i].PurchaseUnitPrice != 0 {
-			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
-		}
-	}
-
-	_, err = collection.UpdateOne(
+	_, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": product.ID},
 		bson.M{"$set": product},
 		updateOptions,
 	)
-	if err != nil {
-		return err
-	}
-
-	err = product.ReflectValidPurchaseUnitPrice()
 	if err != nil {
 		return err
 	}

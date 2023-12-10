@@ -181,6 +181,8 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	salesreturn.SetProductsSalesReturnStats()
+
 	response.Status = true
 	response.Result = salesreturn
 
@@ -322,6 +324,8 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	salesreturn.SetProductsSalesReturnStats()
+
 	salesreturn, err = models.FindSalesReturnByID(&salesreturn.ID, bson.M{})
 	if err != nil {
 		response.Status = false
@@ -377,8 +381,6 @@ func ViewSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	salesreturn.SetChangeLog("view", nil, nil, nil)
 
 	response.Status = true
 	response.Result = salesreturn

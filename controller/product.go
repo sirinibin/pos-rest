@@ -154,6 +154,14 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	product.ID = primitive.NewObjectID()
+	product.SetPartNumber()
+	product.SetBarcode()
+	product.SaveImages()
+	product.UpdateForeignLabelFields()
+	product.InitStoreUnitPrice()
+	product.CalculateUnitProfit()
+
 	err = product.Insert()
 	if err != nil {
 		response.Status = false
@@ -187,7 +195,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var product *models.Product
-	var productOld *models.Product
+	//var productOld *models.Product
 
 	params := mux.Vars(r)
 
@@ -199,14 +207,16 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productOld, err = models.FindProductByID(&productID, bson.M{})
-	if err != nil {
-		response.Status = false
-		response.Errors["product"] = "Unable to find product:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	/*
+		productOld, err = models.FindProductByID(&productID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors["product"] = "Unable to find product:" + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	*/
 
 	product, err = models.FindProductByID(&productID, bson.M{})
 	if err != nil {
@@ -240,6 +250,13 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	product.SaveImages()
+	product.UpdateForeignLabelFields()
+	product.SetBarcode()
+	product.SetPartNumber()
+	product.InitStoreUnitPrice()
+	product.CalculateUnitProfit()
+
 	err = product.Update()
 	if err != nil {
 		response.Status = false
@@ -251,16 +268,20 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = product.AttributesValueChangeEvent(productOld)
-	if err != nil {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
+	product.ReflectValidPurchaseUnitPrice()
 
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	/*
+		err = product.AttributesValueChangeEvent(productOld)
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	*/
 
 	product, err = models.FindProductByID(&product.ID, bson.M{})
 	if err != nil {
