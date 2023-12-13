@@ -80,7 +80,6 @@ type PurchaseReturn struct {
 	CreatedByName                   string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName                   string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName                   string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog                       []ChangeLog             `json:"change_log,omitempty" bson:"change_log,omitempty"`
 	TotalPaymentPaid                float64                 `bson:"total_payment_paid" json:"total_payment_paid"`
 	BalanceAmount                   float64                 `bson:"balance_amount" json:"balance_amount"`
 	Payments                        []PurchaseReturnPayment `bson:"payments" json:"payments"`
@@ -181,40 +180,6 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturn
 		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
 	}
 	return stats, nil
-}
-
-func (purchasereturn *PurchaseReturn) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	} else if event == "remove_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " reduced from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
-	} else if event == "add_stock" && name != nil {
-		description = "Stock of product: " + name.(string) + " raised from " + strconv.Itoa(oldValue.(int)) + " to " + strconv.Itoa(newValue.(int))
-	}
-
-	purchasereturn.ChangeLog = append(
-		purchasereturn.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
 }
 
 func (purchasereturn *PurchaseReturn) AttributesValueChangeEvent(purchasereturnOld *PurchaseReturn) error {
@@ -1472,22 +1437,24 @@ func ProcessPurchaseReturns() error {
 			}
 		*/
 
-		err = model.ClearProductsPurchaseReturnHistory()
-		if err != nil {
-			return errors.New("error deleting product purchase return history: " + err.Error())
-		}
+		/*
+			err = model.ClearProductsPurchaseReturnHistory()
+			if err != nil {
+				return errors.New("error deleting product purchase return history: " + err.Error())
+			}
 
-		err = model.AddProductsPurchaseReturnHistory()
-		if err != nil {
-			return errors.New("error Adding product purchase return history: " + err.Error())
-		}
+			err = model.AddProductsPurchaseReturnHistory()
+			if err != nil {
+				return errors.New("error Adding product purchase return history: " + err.Error())
+			}
 
-		model.GetPayments()
+			model.GetPayments()
 
-		err = model.SetProductsPurchaseReturnStats()
-		if err != nil {
-			return errors.New("error setting products purchase return stats: " + err.Error())
-		}
+			err = model.SetProductsPurchaseReturnStats()
+			if err != nil {
+				return errors.New("error setting products purchase return stats: " + err.Error())
+			}
+		*/
 
 		/*
 			if model.PaymentStatus == "" {
@@ -1516,6 +1483,12 @@ func ProcessPurchaseReturns() error {
 			model.Date = &d
 		*/
 		//model.Date = model.CreatedAt
+
+		err = model.SetVendorPurchaseReturnStats()
+		if err != nil {
+			return err
+		}
+
 		err = model.Update()
 		if err != nil {
 			return err
@@ -1683,5 +1656,154 @@ func (purchaseReturn *PurchaseReturn) SetProductsPurchaseReturnStats() error {
 		}
 
 	}
+	return nil
+}
+
+//Vendor
+
+type VendorPurchaseReturnStats struct {
+	PurchaseReturnCount              int64   `json:"purchase_return_count" bson:"purchase_return_count"`
+	PurchaseReturnAmount             float64 `json:"purchase_return_amount" bson:"purchase_return_amount"`
+	PurchaseReturnPaidAmount         float64 `json:"purchase_return_paid_amount" bson:"purchase_return_paid_amount"`
+	PurchaseReturnBalanceAmount      float64 `json:"purchase_return_balance_amount" bson:"purchase_return_balance_amount"`
+	PurchaseReturnPaidCount          int64   `json:"purchase_return_paid_count" bson:"purchase_return_paid_count"`
+	PurchaseReturnNotPaidCount       int64   `json:"purchase_return_not_paid_count" bson:"purchase_return_not_paid_count"`
+	PurchaseReturnPaidPartiallyCount int64   `json:"purchase_return_paid_partially_count" bson:"purchase_return_paid_partially_count"`
+}
+
+func (vendor *Vendor) SetVendorPurchaseReturnStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats VendorPurchaseReturnStats
+
+	filter := map[string]interface{}{
+		"store_id":  storeID,
+		"vendor_id": vendor.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                            nil,
+				"purchase_return_count":          bson.M{"$sum": 1},
+				"purchase_return_amount":         bson.M{"$sum": "$net_total"},
+				"purchase_return_paid_amount":    bson.M{"$sum": "$total_payment_paid"},
+				"purchase_return_balance_amount": bson.M{"$sum": "$balance_amount"},
+				"purchase_return_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"purchase_return_not_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"not_paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"purchase_return_paid_partially_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid_partially",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+		stats.PurchaseReturnAmount = math.Round(stats.PurchaseReturnAmount*100) / 100
+		stats.PurchaseReturnPaidAmount = math.Round(stats.PurchaseReturnPaidAmount*100) / 100
+		stats.PurchaseReturnBalanceAmount = math.Round(stats.PurchaseReturnBalanceAmount*100) / 100
+
+	}
+
+	if !vendor.IsStoreExistsInVendor(storeID) {
+		store, err := FindStoreByID(&storeID, bson.M{})
+		if err != nil {
+			return errors.New("error finding store: " + err.Error())
+		}
+
+		if len(vendor.Stores) == 0 {
+			vendor.Stores = []VendorStore{VendorStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			}}
+		} else {
+			vendor.Stores = append(vendor.Stores, VendorStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			})
+		}
+	}
+
+	for storeIndex, store := range vendor.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			vendor.Stores[storeIndex].PurchaseReturnCount = stats.PurchaseReturnCount
+			vendor.Stores[storeIndex].PurchaseReturnPaidCount = stats.PurchaseReturnPaidCount
+			vendor.Stores[storeIndex].PurchaseReturnNotPaidCount = stats.PurchaseReturnNotPaidCount
+			vendor.Stores[storeIndex].PurchaseReturnPaidPartiallyCount = stats.PurchaseReturnPaidPartiallyCount
+			vendor.Stores[storeIndex].PurchaseReturnAmount = stats.PurchaseReturnAmount
+			vendor.Stores[storeIndex].PurchaseReturnPaidAmount = stats.PurchaseReturnPaidAmount
+			vendor.Stores[storeIndex].PurchaseReturnBalanceAmount = stats.PurchaseReturnBalanceAmount
+			err = vendor.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (purchaseReturn *PurchaseReturn) SetVendorPurchaseReturnStats() error {
+
+	vendor, err := FindVendorByID(purchaseReturn.VendorID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	err = vendor.SetVendorPurchaseReturnStatsByStoreID(*purchaseReturn.StoreID)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

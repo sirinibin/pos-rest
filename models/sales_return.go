@@ -1545,24 +1545,31 @@ func ProcessSalesReturns() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = salesReturn.CalculateSalesReturnProfit()
-		if err != nil {
-			return err
-		}
+		/*
+			err = salesReturn.CalculateSalesReturnProfit()
+			if err != nil {
+				return err
+			}
 
-		err = salesReturn.ClearProductsSalesReturnHistory()
-		if err != nil {
-			return err
-		}
+			err = salesReturn.ClearProductsSalesReturnHistory()
+			if err != nil {
+				return err
+			}
 
-		err = salesReturn.CreateProductsSalesReturnHistory()
-		if err != nil {
-			return err
-		}
+			err = salesReturn.CreateProductsSalesReturnHistory()
+			if err != nil {
+				return err
+			}
 
-		salesReturn.GetPayments()
+			salesReturn.GetPayments()
 
-		err = salesReturn.SetProductsSalesReturnStats()
+			err = salesReturn.SetProductsSalesReturnStats()
+			if err != nil {
+				return err
+			}
+		*/
+
+		err = salesReturn.SetCustomerSalesReturnStats()
 		if err != nil {
 			return err
 		}
@@ -1795,5 +1802,160 @@ func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
 		}
 
 	}
+	return nil
+}
+
+// Customer
+type CustomerSalesReturnStats struct {
+	SalesReturnCount              int64   `json:"sales_return_count" bson:"sales_return_count"`
+	SalesReturnAmount             float64 `json:"sales_return_amount" bson:"sales_return_amount"`
+	SalesReturnPaidAmount         float64 `json:"sales_return_paid_amount" bson:"sales_return_paid_amount"`
+	SalesReturnBalanceAmount      float64 `json:"sales_return_balance_amount" bson:"sales_return_balance_amount"`
+	SalesReturnProfit             float64 `json:"sales_return_profit" bson:"sales_return_profit"`
+	SalesReturnLoss               float64 `json:"sales_return_loss" bson:"sales_return_loss"`
+	SalesReturnPaidCount          int64   `json:"sales_return_paid_count" bson:"sales_return_paid_count"`
+	SalesReturnNotPaidCount       int64   `json:"sales_return_not_paid_count" bson:"sales_return_not_paid_count"`
+	SalesReturnPaidPartiallyCount int64   `json:"sales_return_paid_partially_count" bson:"sales_return_paid_partially_count"`
+}
+
+func (customer *Customer) SetCustomerSalesReturnStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats CustomerSalesReturnStats
+
+	filter := map[string]interface{}{
+		"store_id":    storeID,
+		"customer_id": customer.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                         nil,
+				"sales_return_count":          bson.M{"$sum": 1},
+				"sales_return_amount":         bson.M{"$sum": "$net_total"},
+				"sales_return_paid_amount":    bson.M{"$sum": "$total_payment_paid"},
+				"sales_return_balance_amount": bson.M{"$sum": "$balance_amount"},
+				"sales_return_profit":         bson.M{"$sum": "$net_profit"},
+				"sales_return_loss":           bson.M{"$sum": "$loss"},
+				"sales_return_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"sales_return_not_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"not_paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"sales_return_paid_partially_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid_partially",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+		stats.SalesReturnAmount = math.Round(stats.SalesReturnAmount*100) / 100
+		stats.SalesReturnPaidAmount = math.Round(stats.SalesReturnPaidAmount*100) / 100
+		stats.SalesReturnBalanceAmount = math.Round(stats.SalesReturnBalanceAmount*100) / 100
+		stats.SalesReturnProfit = math.Round(stats.SalesReturnProfit*100) / 100
+		stats.SalesReturnLoss = math.Round(stats.SalesReturnLoss*100) / 100
+	}
+
+	if !customer.IsStoreExistsInCustomer(storeID) {
+		store, err := FindStoreByID(&storeID, bson.M{})
+		if err != nil {
+			return errors.New("error finding store: " + err.Error())
+		}
+
+		if len(customer.Stores) == 0 {
+			customer.Stores = []CustomerStore{CustomerStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			}}
+		} else {
+			customer.Stores = append(customer.Stores, CustomerStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			})
+		}
+	}
+
+	for storeIndex, store := range customer.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			customer.Stores[storeIndex].SalesReturnCount = stats.SalesReturnCount
+			customer.Stores[storeIndex].SalesReturnAmount = stats.SalesReturnAmount
+			customer.Stores[storeIndex].SalesReturnPaidAmount = stats.SalesReturnPaidAmount
+			customer.Stores[storeIndex].SalesReturnBalanceAmount = stats.SalesReturnBalanceAmount
+			customer.Stores[storeIndex].SalesReturnProfit = stats.SalesReturnProfit
+			customer.Stores[storeIndex].SalesReturnLoss = stats.SalesReturnLoss
+			customer.Stores[storeIndex].SalesReturnPaidCount = stats.SalesReturnPaidCount
+			customer.Stores[storeIndex].SalesReturnNotPaidCount = stats.SalesReturnNotPaidCount
+			customer.Stores[storeIndex].SalesReturnPaidPartiallyCount = stats.SalesReturnPaidPartiallyCount
+			err = customer.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (salesReturn *SalesReturn) SetCustomerSalesReturnStats() error {
+
+	customer, err := FindCustomerByID(salesReturn.CustomerID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	err = customer.SetCustomerSalesReturnStatsByStoreID(*salesReturn.StoreID)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

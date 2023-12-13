@@ -113,6 +113,7 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	deliverynote.AddProductsDeliveryNoteHistory()
 
 	deliverynote.SetProductsDeliveryNoteStats()
+	deliverynote.SetCustomerDeliveryNoteStats()
 
 	response.Status = true
 	response.Result = deliverynote
@@ -208,6 +209,7 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	deliverynote.AddProductsDeliveryNoteHistory()
 
 	deliverynote.SetProductsDeliveryNoteStats()
+	deliverynote.SetCustomerDeliveryNoteStats()
 
 	deliverynote, err = models.FindDeliveryNoteByID(&deliverynote.ID, bson.M{})
 	if err != nil {

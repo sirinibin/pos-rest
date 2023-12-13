@@ -16,6 +16,30 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+type VendorStore struct {
+	StoreID                          primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName                        string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic                string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	PurchaseCount                    int64              `bson:"purchase_count" json:"purchase_count"`
+	PurchaseAmount                   float64            `bson:"purchase_amount" json:"purchase_amount"`
+	PurchasePaidAmount               float64            `bson:"purchase_paid_amount" json:"purchase_paid_amount"`
+	PurchaseBalanceAmount            float64            `bson:"purchase_balance_amount" json:"purchase_balance_amount"`
+	PurchaseRetailProfit             float64            `bson:"purchase_retail_profit" json:"purchase_retail_profit"`
+	PurchaseRetailLoss               float64            `bson:"purchase_retail_loss" json:"purchase_retail_loss"`
+	PurchaseWholesaleProfit          float64            `bson:"purchase_wholesale_profit" json:"purchase_wholesale_profit"`
+	PurchaseWholesaleLoss            float64            `bson:"purchase_wholesale_loss" json:"purchase_wholesale_loss"`
+	PurchasePaidCount                int64              `bson:"purchase_paid_count" json:"purchase_paid_count"`
+	PurchaseNotPaidCount             int64              `bson:"purchase_not_paid_count" json:"purchase_not_paid_count"`
+	PurchasePaidPartiallyCount       int64              `bson:"purchase_paid_partially_count" json:"purchase_paid_partially_count"`
+	PurchaseReturnCount              int64              `bson:"purchase_return_count" json:"purchase_return_count"`
+	PurchaseReturnAmount             float64            `bson:"purchase_return_amount" json:"purchase_return_amount"`
+	PurchaseReturnPaidAmount         float64            `bson:"purchase_return_paid_amount" json:"purchase_return_paid_amount"`
+	PurchaseReturnBalanceAmount      float64            `bson:"purchase_return_balance_amount" json:"purchase_return_balance_amount"`
+	PurchaseReturnPaidCount          int64              `bson:"purchase_return_paid_count" json:"purchase_return_paid_count"`
+	PurchaseReturnNotPaidCount       int64              `bson:"purchase_return_not_paid_count" json:"purchase_return_not_paid_count"`
+	PurchaseReturnPaidPartiallyCount int64              `bson:"purchase_return_paid_partially_count" json:"purchase_return_paid_partially_count"`
+}
+
 // Vendor : Vendor structure
 type Vendor struct {
 	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
@@ -49,7 +73,7 @@ type Vendor struct {
 	CreatedByName              string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName              string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName              string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	Stores                     []VendorStore       `bson:"stores,omitempty" json:"stores,omitempty"`
 	SearchLabel                string              `json:"search_label"`
 }
 
@@ -74,36 +98,6 @@ type NationalAddresss struct {
 	AdditionalNoArabic      string `bson:"additional_no_arabic,omitempty" json:"additional_no_arabic"`
 	UnitNo                  string `bson:"unit_no,omitempty" json:"unit_no"`
 	UnitNoArabic            string `bson:"unit_no_arabic,omitempty" json:"unit_no_arabic"`
-}
-
-func (vendor *Vendor) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	}
-
-	vendor.ChangeLog = append(
-		vendor.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
 }
 
 func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
@@ -168,12 +162,237 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
+	var storeID primitive.ObjectID
+	keys, ok := r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return vendors, criterias, err
+		}
+	}
+
 	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	keys, ok = r.URL.Query()["search[timezone_offset]"]
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_paid_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_paid_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_balance_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_retail_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_retail_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_retail_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_retail_loss", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_wholesale_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_wholesale_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_wholesale_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_wholesale_loss", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_not_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_not_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_paid_partially_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_paid_partially_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_paid_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_paid_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_balance_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_not_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_not_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_paid_partially_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_paid_partially_count", operator, &storeID, value)
 	}
 
 	var createdAtStartDate time.Time
@@ -492,8 +711,6 @@ func (vendor *Vendor) Insert() error {
 		}
 	}
 
-	vendor.SetChangeLog("create", nil, nil, nil)
-
 	_, err = collection.InsertOne(ctx, &vendor)
 	if err != nil {
 		return err
@@ -542,8 +759,6 @@ func (vendor *Vendor) Update() error {
 	}
 	vendor.LogoContent = ""
 
-	vendor.SetChangeLog("update", nil, nil, nil)
-
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": vendor.ID},
@@ -578,8 +793,6 @@ func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
 	vendor.DeletedBy = &userID
 	now := time.Now()
 	vendor.DeletedAt = &now
-
-	vendor.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

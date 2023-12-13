@@ -179,6 +179,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.SetProductsPurchaseStats()
+	purchase.SetVendorPurchaseStats()
 
 	response.Status = true
 	response.Result = purchase
@@ -333,6 +334,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.SetProductsPurchaseStats()
+	purchase.SetVendorPurchaseStats()
 
 	purchase, err = models.FindPurchaseByID(&purchase.ID, bson.M{})
 	if err != nil {

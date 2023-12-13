@@ -23,6 +23,35 @@ type ChangeLog struct {
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 }
 
+type CustomerStore struct {
+	StoreID                       primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName                     string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic             string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	SalesCount                    int64              `bson:"sales_count" json:"sales_count"`
+	SalesAmount                   float64            `bson:"sales_amount" json:"sales_amount"`
+	SalesPaidAmount               float64            `bson:"sales_paid_amount" json:"sales_paid_amount"`
+	SalesBalanceAmount            float64            `bson:"sales_balance_amount" json:"sales_balance_amount"`
+	SalesProfit                   float64            `bson:"sales_profit" json:"sales_profit"`
+	SalesLoss                     float64            `bson:"sales_loss" json:"sales_loss"`
+	SalesPaidCount                int64              `bson:"sales_paid_count" json:"sales_paid_count"`
+	SalesNotPaidCount             int64              `bson:"sales_not_paid_count" json:"sales_not_paid_count"`
+	SalesPaidPartiallyCount       int64              `bson:"sales_paid_partially_count" json:"sales_paid_partially_count"`
+	SalesReturnCount              int64              `bson:"sales_return_count" json:"sales_return_count"`
+	SalesReturnAmount             float64            `bson:"sales_return_amount" json:"sales_return_amount"`
+	SalesReturnPaidAmount         float64            `bson:"sales_return_paid_amount" json:"sales_return_paid_amount"`
+	SalesReturnBalanceAmount      float64            `bson:"sales_return_balance_amount" json:"sales_return_balance_amount"`
+	SalesReturnProfit             float64            `bson:"sales_return_profit" json:"sales_return_profit"`
+	SalesReturnLoss               float64            `bson:"sales_return_loss" json:"sales_return_loss"`
+	SalesReturnPaidCount          int64              `bson:"sales_return_paid_count" json:"sales_return_paid_count"`
+	SalesReturnNotPaidCount       int64              `bson:"sales_return_not_paid_count" json:"sales_return_not_paid_count"`
+	SalesReturnPaidPartiallyCount int64              `bson:"sales_return_paid_partially_count" json:"sales_return_paid_partially_count"`
+	QuotationCount                int64              `bson:"quotation_count" json:"quotation_count"`
+	QuotationAmount               float64            `bson:"quotation_amount" json:"quotation_amount"`
+	QuotationProfit               float64            `bson:"quotation_profit" json:"quotation_profit"`
+	QuotationLoss                 float64            `bson:"quotation_loss" json:"quotation_loss"`
+	DeliveryNoteCount             int64              `bson:"delivery_note_count" json:"delivery_note_count"`
+}
+
 // Customer : Customer structure
 type Customer struct {
 	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
@@ -50,10 +79,11 @@ type Customer struct {
 	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog       []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 	SearchLabel     string              `json:"search_label"`
+	Stores          []CustomerStore     `bson:"stores,omitempty" json:"stores,omitempty"`
 }
 
+/*
 func (customer *Customer) SetChangeLog(
 	event string,
 	attribute, oldValue, newValue *string,
@@ -83,6 +113,7 @@ func (customer *Customer) SetChangeLog(
 		},
 	)
 }
+*/
 
 func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) error {
 
@@ -95,13 +126,6 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		if err != nil {
 			return nil
 		}
-		attribute := "name"
-		customer.SetChangeLog(
-			"attribute_value_change",
-			&attribute,
-			&customerOld.Name,
-			&customer.Name,
-		)
 
 		err = UpdateManyByCollectionName(
 			"quotation",
@@ -185,7 +209,292 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
 		}
+	}
 
+	var storeID primitive.ObjectID
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return customers, criterias, err
+		}
+	}
+
+	//sales
+	keys, ok = r.URL.Query()["search[sales_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_not_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_not_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_paid_partially_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_partially_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_paid_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_paid_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_balance_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_paid_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_paid_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_balance_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_not_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_not_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_paid_partially_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_partially_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_loss", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[delivery_note_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]
@@ -445,21 +754,7 @@ func (customer *Customer) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	customer.CreatedBy = &UserObject.ID
-	customer.UpdatedBy = &UserObject.ID
-	now := time.Now()
-	customer.CreatedAt = &now
-	customer.UpdatedAt = &now
-
-	err := customer.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	customer.SetChangeLog("create", nil, nil, nil)
-
-	customer.ID = primitive.NewObjectID()
-	_, err = collection.InsertOne(ctx, &customer)
+	_, err := collection.InsertOne(ctx, &customer)
 	if err != nil {
 		return err
 	}
@@ -474,18 +769,7 @@ func (customer *Customer) Update() error {
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
-	customer.UpdatedBy = &UserObject.ID
-	now := time.Now()
-	customer.UpdatedAt = &now
-
-	err := customer.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	customer.SetChangeLog("update", nil, nil, nil)
-
-	_, err = collection.UpdateOne(
+	_, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": customer.ID},
 		bson.M{"$set": customer},
@@ -518,8 +802,6 @@ func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
 	customer.DeletedBy = &userID
 	now := time.Now()
 	customer.DeletedAt = &now
-
-	customer.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -1170,6 +1171,7 @@ func IsQuotationExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func ProcessQuotations() error {
+	log.Print("Processing quotations")
 	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -1195,13 +1197,20 @@ func ProcessQuotations() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		quotation.ClearProductsQuotationHistory()
-		err = quotation.AddProductsQuotationHistory()
-		if err != nil {
-			return err
-		}
+		/*
+			quotation.ClearProductsQuotationHistory()
+			err = quotation.AddProductsQuotationHistory()
+			if err != nil {
+				return err
+			}
 
-		err = quotation.SetProductsQuotationStats()
+			err = quotation.SetProductsQuotationStats()
+			if err != nil {
+				return err
+			}
+		*/
+
+		err = quotation.SetCustomerQuotationStats()
 		if err != nil {
 			return err
 		}
@@ -1212,7 +1221,7 @@ func ProcessQuotations() error {
 			return err
 		}
 	}
-
+	log.Print("DONE!")
 	return nil
 }
 
@@ -1292,5 +1301,110 @@ func (quotation *Quotation) SetProductsQuotationStats() error {
 			return err
 		}
 	}
+	return nil
+}
+
+// Customer
+type CustomerQuotationStats struct {
+	QuotationCount  int64   `json:"quotation_count" bson:"quotation_count"`
+	QuotationAmount float64 `json:"quotation_amount" bson:"quotation_amount"`
+	QuotationProfit float64 `json:"quotation_profit" bson:"quotation_profit"`
+	QuotationLoss   float64 `json:"quotation_loss" bson:"quotation_loss"`
+}
+
+func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats CustomerQuotationStats
+
+	filter := map[string]interface{}{
+		"store_id":    storeID,
+		"customer_id": customer.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":              nil,
+				"quotation_count":  bson.M{"$sum": 1},
+				"quotation_amount": bson.M{"$sum": "$net_total"},
+				"quotation_profit": bson.M{"$sum": "$net_profit"},
+				"quotation_loss":   bson.M{"$sum": "$loss"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+		stats.QuotationAmount = math.Round(stats.QuotationAmount*100) / 100
+		stats.QuotationProfit = math.Round(stats.QuotationProfit*100) / 100
+		stats.QuotationLoss = math.Round(stats.QuotationLoss*100) / 100
+	}
+
+	if !customer.IsStoreExistsInCustomer(storeID) {
+		store, err := FindStoreByID(&storeID, bson.M{})
+		if err != nil {
+			return errors.New("error finding store: " + err.Error())
+		}
+
+		if len(customer.Stores) == 0 {
+			customer.Stores = []CustomerStore{CustomerStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			}}
+		} else {
+			customer.Stores = append(customer.Stores, CustomerStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			})
+		}
+	}
+
+	for storeIndex, store := range customer.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			customer.Stores[storeIndex].QuotationCount = stats.QuotationCount
+			customer.Stores[storeIndex].QuotationAmount = stats.QuotationAmount
+			customer.Stores[storeIndex].QuotationProfit = stats.QuotationProfit
+			customer.Stores[storeIndex].QuotationLoss = stats.QuotationLoss
+			err = customer.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (quotation *Quotation) SetCustomerQuotationStats() error {
+
+	customer, err := FindCustomerByID(quotation.CustomerID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	err = customer.SetCustomerQuotationStatsByStoreID(*quotation.StoreID)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

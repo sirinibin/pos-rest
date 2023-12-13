@@ -136,6 +136,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.AddProductsQuotationHistory()
 
 	quotation.SetProductsQuotationStats()
+	quotation.SetCustomerQuotationStats()
 
 	response.Status = true
 	response.Result = quotation
@@ -253,6 +254,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	quotation.SetProductsQuotationStats()
+	quotation.SetCustomerQuotationStats()
 
 	quotation, err = models.FindQuotationByID(&quotation.ID, bson.M{})
 	if err != nil {

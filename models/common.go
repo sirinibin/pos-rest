@@ -274,38 +274,38 @@ func ToFixed(num float64, precision int) float64 {
 }
 
 func GetIntSearchElement(
-	field string,
+	fieldName string,
 	operator string,
-	storeID primitive.ObjectID,
+	storeID *primitive.ObjectID,
 	value int64,
 ) bson.M {
 	element := bson.M{"$elemMatch": bson.M{}}
 
 	if operator != "" {
-		if !storeID.IsZero() {
+		if storeID != nil && !storeID.IsZero() {
 			element["$elemMatch"] = bson.M{
-				"sales_count": bson.M{
+				fieldName: bson.M{
 					operator: value,
 				},
 				"store_id": storeID,
 			}
 		} else {
 			element["$elemMatch"] = bson.M{
-				"stock": bson.M{
+				fieldName: bson.M{
 					operator: value,
 				},
 			}
 		}
 
 	} else {
-		if !storeID.IsZero() {
+		if storeID != nil && !storeID.IsZero() {
 			element["$elemMatch"] = bson.M{
-				"sales_count": value,
-				"store_id":    storeID,
+				fieldName:  value,
+				"store_id": storeID,
 			}
 		} else {
 			element["$elemMatch"] = bson.M{
-				"sales_count": value,
+				fieldName: value,
 			}
 		}
 	}
@@ -314,41 +314,59 @@ func GetIntSearchElement(
 }
 
 func GetFloatSearchElement(
-	field string,
+	fieldName string,
 	operator string,
-	storeID primitive.ObjectID,
+	storeID *primitive.ObjectID,
 	value float64,
 ) bson.M {
 	element := bson.M{"$elemMatch": bson.M{}}
 
 	if operator != "" {
-		if !storeID.IsZero() {
+		if storeID != nil && !storeID.IsZero() {
 			element["$elemMatch"] = bson.M{
-				"sales_count": bson.M{
+				fieldName: bson.M{
 					operator: value,
 				},
 				"store_id": storeID,
 			}
 		} else {
 			element["$elemMatch"] = bson.M{
-				"stock": bson.M{
+				fieldName: bson.M{
 					operator: value,
 				},
 			}
 		}
 
 	} else {
-		if !storeID.IsZero() {
+		if storeID != nil && !storeID.IsZero() {
 			element["$elemMatch"] = bson.M{
-				"sales_count": value,
-				"store_id":    storeID,
+				fieldName:  value,
+				"store_id": storeID,
 			}
 		} else {
 			element["$elemMatch"] = bson.M{
-				"sales_count": value,
+				fieldName: value,
 			}
 		}
 	}
 
 	return element
+}
+
+func (customer *Customer) IsStoreExistsInCustomer(storeID primitive.ObjectID) bool {
+	for _, store := range customer.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			return true
+		}
+	}
+	return false
+}
+
+func (vendor *Vendor) IsStoreExistsInVendor(storeID primitive.ObjectID) bool {
+	for _, store := range vendor.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			return true
+		}
+	}
+	return false
 }

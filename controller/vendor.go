@@ -263,8 +263,6 @@ func ViewVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor.SetChangeLog("view", nil, nil, nil)
-
 	response.Status = true
 	response.Result = vendor
 

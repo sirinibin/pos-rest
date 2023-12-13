@@ -1523,9 +1523,16 @@ func ProcessPurchases() error {
 			model.GetPayments()
 		*/
 
-		err = model.SetProductsPurchaseStats()
+		/*
+			err = model.SetProductsPurchaseStats()
+			if err != nil {
+				return errors.New("error set product purchase stats: " + err.Error())
+			}
+		*/
+
+		err = model.SetVendorPurchaseStats()
 		if err != nil {
-			return errors.New("error set product purchase stats: " + err.Error())
+			return err
 		}
 
 		err = model.Update()
@@ -1695,5 +1702,169 @@ func (purchase *Purchase) SetProductsPurchaseStats() error {
 		}
 
 	}
+	return nil
+}
+
+//Vendor
+
+type VendorPurchaseStats struct {
+	PurchaseCount              int64   `json:"purchase_count" bson:"purchase_count"`
+	PurchaseAmount             float64 `json:"purchase_amount" bson:"purchase_amount"`
+	PurchasePaidAmount         float64 `json:"purchase_paid_amount" bson:"purchase_paid_amount"`
+	PurchaseBalanceAmount      float64 `json:"purchase_balance_amount" bson:"purchase_balance_amount"`
+	PurchaseRetailProfit       float64 `json:"purchase_retail_profit" bson:"purchase_retail_profit"`
+	PurchaseWholesaleProfit    float64 `json:"purchase_wholesale_profit" bson:"purchase_wholesale_profit"`
+	PurchaseRetailLoss         float64 `json:"purchase_retail_loss" bson:"purchase_retail_loss"`
+	PurchaseWholesaleLoss      float64 `json:"purchase_wholesale_loss" bson:"purchase_wholesale_loss"`
+	PurchasePaidCount          int64   `json:"purchase_paid_count" bson:"purchase_paid_count"`
+	PurchaseNotPaidCount       int64   `json:"purchase_not_paid_count" bson:"purchase_not_paid_count"`
+	PurchasePaidPartiallyCount int64   `json:"purchase_paid_partially_count" bson:"purchase_paid_partially_count"`
+}
+
+func (vendor *Vendor) SetVendorPurchaseStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats VendorPurchaseStats
+
+	filter := map[string]interface{}{
+		"store_id":  storeID,
+		"vendor_id": vendor.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                       nil,
+				"purchase_count":            bson.M{"$sum": 1},
+				"purchase_amount":           bson.M{"$sum": "$net_total"},
+				"purchase_paid_amount":      bson.M{"$sum": "$total_payment_paid"},
+				"purchase_balance_amount":   bson.M{"$sum": "$balance_amount"},
+				"purchase_retail_profit":    bson.M{"$sum": "$net_retail_profit"},
+				"purchase_wholesale_profit": bson.M{"$sum": "$net_wholesale_profit"},
+				"purchase_retail_loss":      bson.M{"$sum": "$retail_loss"},
+				"purchase_wholesale_loss":   bson.M{"$sum": "$wholesale_loss"},
+				"purchase_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"purchase_not_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"not_paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"purchase_paid_partially_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid_partially",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+		stats.PurchaseAmount = math.Round(stats.PurchaseAmount*100) / 100
+		stats.PurchasePaidAmount = math.Round(stats.PurchasePaidAmount*100) / 100
+		stats.PurchaseBalanceAmount = math.Round(stats.PurchaseBalanceAmount*100) / 100
+		stats.PurchaseRetailProfit = math.Round(stats.PurchaseRetailProfit*100) / 100
+		stats.PurchaseWholesaleProfit = math.Round(stats.PurchaseWholesaleProfit*100) / 100
+		stats.PurchaseRetailLoss = math.Round(stats.PurchaseRetailLoss*100) / 100
+		stats.PurchaseWholesaleLoss = math.Round(stats.PurchaseWholesaleLoss*100) / 100
+	}
+
+	if !vendor.IsStoreExistsInVendor(storeID) {
+		store, err := FindStoreByID(&storeID, bson.M{})
+		if err != nil {
+			return errors.New("error finding store: " + err.Error())
+		}
+
+		if len(vendor.Stores) == 0 {
+			vendor.Stores = []VendorStore{VendorStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			}}
+		} else {
+			vendor.Stores = append(vendor.Stores, VendorStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			})
+		}
+	}
+
+	for storeIndex, store := range vendor.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			vendor.Stores[storeIndex].PurchaseCount = stats.PurchaseCount
+			vendor.Stores[storeIndex].PurchasePaidCount = stats.PurchasePaidCount
+			vendor.Stores[storeIndex].PurchaseNotPaidCount = stats.PurchaseNotPaidCount
+			vendor.Stores[storeIndex].PurchasePaidPartiallyCount = stats.PurchasePaidPartiallyCount
+			vendor.Stores[storeIndex].PurchaseAmount = stats.PurchaseAmount
+			vendor.Stores[storeIndex].PurchasePaidAmount = stats.PurchasePaidAmount
+			vendor.Stores[storeIndex].PurchaseBalanceAmount = stats.PurchaseBalanceAmount
+			vendor.Stores[storeIndex].PurchaseRetailProfit = stats.PurchaseRetailProfit
+			vendor.Stores[storeIndex].PurchaseWholesaleProfit = stats.PurchaseWholesaleProfit
+			vendor.Stores[storeIndex].PurchaseRetailLoss = stats.PurchaseRetailLoss
+			vendor.Stores[storeIndex].PurchaseWholesaleLoss = stats.PurchaseWholesaleLoss
+			err = vendor.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (purchase *Purchase) SetVendorPurchaseStats() error {
+
+	vendor, err := FindVendorByID(purchase.VendorID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	err = vendor.SetVendorPurchaseStatsByStoreID(*purchase.StoreID)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -621,6 +622,7 @@ func IsDeliveryNoteExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func ProcessDeliveryNotes() error {
+	log.Print("Processing delivery notes")
 	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -646,17 +648,24 @@ func ProcessDeliveryNotes() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = deliverynote.ClearProductsDeliveryNoteHistory()
-		if err != nil {
-			return err
-		}
+		/*
+			err = deliverynote.ClearProductsDeliveryNoteHistory()
+			if err != nil {
+				return err
+			}
 
-		err = deliverynote.AddProductsDeliveryNoteHistory()
-		if err != nil {
-			return err
-		}
+			err = deliverynote.AddProductsDeliveryNoteHistory()
+			if err != nil {
+				return err
+			}
 
-		err = deliverynote.SetProductsDeliveryNoteStats()
+			err = deliverynote.SetProductsDeliveryNoteStats()
+			if err != nil {
+				return err
+			}
+		*/
+
+		err = deliverynote.SetCustomerDeliveryNoteStats()
 		if err != nil {
 			return err
 		}
@@ -666,7 +675,7 @@ func ProcessDeliveryNotes() error {
 			return err
 		}
 	}
-
+	log.Print("DONE!")
 	return nil
 }
 
@@ -741,5 +750,98 @@ func (deliveryNote *DeliveryNote) SetProductsDeliveryNoteStats() error {
 			return err
 		}
 	}
+	return nil
+}
+
+// Customer
+type CustomerDeliveryNoteStats struct {
+	DeliveryNoteCount int64 `json:"delivery_note_count" bson:"delivery_note_count"`
+}
+
+func (customer *Customer) SetCustomerDeliveryNoteStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats CustomerDeliveryNoteStats
+
+	filter := map[string]interface{}{
+		"store_id":    storeID,
+		"customer_id": customer.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                 nil,
+				"delivery_note_count": bson.M{"$sum": 1},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !customer.IsStoreExistsInCustomer(storeID) {
+		store, err := FindStoreByID(&storeID, bson.M{})
+		if err != nil {
+			return errors.New("error finding store: " + err.Error())
+		}
+
+		if len(customer.Stores) == 0 {
+			customer.Stores = []CustomerStore{CustomerStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			}}
+		} else {
+			customer.Stores = append(customer.Stores, CustomerStore{
+				StoreID:           storeID,
+				StoreName:         store.Name,
+				StoreNameInArabic: store.NameInArabic,
+			})
+		}
+	}
+
+	for storeIndex, store := range customer.Stores {
+		if store.StoreID.Hex() == storeID.Hex() {
+			customer.Stores[storeIndex].DeliveryNoteCount = stats.DeliveryNoteCount
+			err = customer.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (deliveryNote *DeliveryNote) SetCustomerDeliveryNoteStats() error {
+
+	customer, err := FindCustomerByID(deliveryNote.CustomerID, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	err = customer.SetCustomerDeliveryNoteStatsByStoreID(*deliveryNote.StoreID)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

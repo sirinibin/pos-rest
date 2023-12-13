@@ -123,6 +123,7 @@ func CreateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	//Updating salesReturn.payments
 	salesReturn, _ := models.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
 	salesReturn.GetPayments()
+	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
 
 	response.Status = true
@@ -207,6 +208,7 @@ func UpdateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	//Updating salesReturn.payments
 	salesReturn, _ := models.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
 	salesReturn.GetPayments()
+	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
 
 	salesreturnpayment, err = models.FindSalesReturnPaymentByID(&salesreturnpayment.ID, bson.M{})

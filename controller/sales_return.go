@@ -182,6 +182,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salesreturn.SetProductsSalesReturnStats()
+	salesreturn.SetCustomerSalesReturnStats()
 
 	response.Status = true
 	response.Result = salesreturn
@@ -313,18 +314,21 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = salesreturn.AttributesValueChangeEvent(salesreturnOld)
-	if err != nil {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
+	/*
+		err = salesreturn.AttributesValueChangeEvent(salesreturnOld)
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	*/
 
 	salesreturn.SetProductsSalesReturnStats()
+	salesreturn.SetCustomerSalesReturnStats()
 
 	salesreturn, err = models.FindSalesReturnByID(&salesreturn.ID, bson.M{})
 	if err != nil {

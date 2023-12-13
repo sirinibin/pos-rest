@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
@@ -61,7 +62,7 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -83,6 +84,22 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customer.CreatedBy = &userID
+	customer.UpdatedBy = &userID
+	now := time.Now()
+	customer.CreatedAt = &now
+	customer.UpdatedAt = &now
+	customer.UpdateForeignLabelFields()
+	customer.ID = primitive.NewObjectID()
 
 	err = customer.Insert()
 	if err != nil {
@@ -108,7 +125,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -158,6 +175,19 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customer.UpdatedBy = &userID
+	now := time.Now()
+	customer.UpdatedAt = &now
+	customer.UpdateForeignLabelFields()
 
 	err = customer.Update()
 	if err != nil {
@@ -235,8 +265,6 @@ func ViewCustomer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	customer.SetChangeLog("view", nil, nil, nil)
 
 	response.Status = true
 	response.Result = customer

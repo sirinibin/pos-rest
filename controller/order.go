@@ -173,6 +173,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.SetProductsSalesStats()
+	order.SetCustomerSalesStats()
 
 	response.Status = true
 	response.Result = order
@@ -306,6 +307,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.SetProductsSalesStats()
+	order.SetCustomerSalesStats()
 
 	order, err = models.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {

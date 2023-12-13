@@ -816,7 +816,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_quantity]"]
@@ -828,7 +828,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_quantity", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales]"]
@@ -840,7 +840,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_profit]"]
@@ -852,7 +852,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_loss]"]
@@ -864,7 +864,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
 	}
 
 	// Sales return
@@ -877,7 +877,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_quantity]"]
@@ -889,7 +889,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_quantity", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return]"]
@@ -901,7 +901,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_profit]"]
@@ -913,7 +913,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_loss]"]
@@ -925,7 +925,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
 	}
 
 	//purchase
@@ -939,7 +939,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_quantity]"]
@@ -951,7 +951,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_quantity", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase]"]
@@ -963,7 +963,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase", operator, &storeID, value)
 	}
 
 	// purchase return
@@ -977,7 +977,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_quantity]"]
@@ -989,7 +989,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_quantity", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return]"]
@@ -1001,7 +1001,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return", operator, &storeID, value)
 	}
 
 	//Quotation
@@ -1014,7 +1014,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[quotation_quantity]"]
@@ -1026,7 +1026,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_quantity", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_quantity", operator, &storeID, value)
 	}
 
 	//Delivery note
@@ -1039,7 +1039,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[delivery_note_quantity]"]
@@ -1051,7 +1051,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("delivery_note_quantity", operator, storeID, value)
+		criterias.SearchBy["stores"] = GetFloatSearchElement("delivery_note_quantity", operator, &storeID, value)
 	}
 
 	//-end
