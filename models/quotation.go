@@ -1356,39 +1356,28 @@ func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.O
 		stats.QuotationLoss = math.Round(stats.QuotationLoss*100) / 100
 	}
 
-	if !customer.IsStoreExistsInCustomer(storeID) {
-		store, err := FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return errors.New("error finding store: " + err.Error())
-		}
-
-		if len(customer.Stores) == 0 {
-			customer.Stores = []CustomerStore{CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			}}
-		} else {
-			customer.Stores = append(customer.Stores, CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			})
-		}
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
 	}
 
-	for storeIndex, store := range customer.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			customer.Stores[storeIndex].QuotationCount = stats.QuotationCount
-			customer.Stores[storeIndex].QuotationAmount = stats.QuotationAmount
-			customer.Stores[storeIndex].QuotationProfit = stats.QuotationProfit
-			customer.Stores[storeIndex].QuotationLoss = stats.QuotationLoss
-			err = customer.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if len(customer.Stores) == 0 {
+		customer.Stores = map[string]CustomerStore{}
+	}
+
+	customer.Stores[storeID.Hex()] = CustomerStore{
+		StoreID:           storeID,
+		StoreName:         store.Name,
+		StoreNameInArabic: store.NameInArabic,
+		QuotationCount:    stats.QuotationCount,
+		QuotationAmount:   stats.QuotationAmount,
+		QuotationProfit:   stats.QuotationProfit,
+		QuotationLoss:     stats.QuotationLoss,
+	}
+
+	err = customer.Update()
+	if err != nil {
+		return errors.New("Error updating customer: " + err.Error())
 	}
 
 	return nil

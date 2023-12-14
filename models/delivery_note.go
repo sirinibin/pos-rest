@@ -796,36 +796,25 @@ func (customer *Customer) SetCustomerDeliveryNoteStatsByStoreID(storeID primitiv
 		}
 	}
 
-	if !customer.IsStoreExistsInCustomer(storeID) {
-		store, err := FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return errors.New("error finding store: " + err.Error())
-		}
-
-		if len(customer.Stores) == 0 {
-			customer.Stores = []CustomerStore{CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			}}
-		} else {
-			customer.Stores = append(customer.Stores, CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			})
-		}
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
 	}
 
-	for storeIndex, store := range customer.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			customer.Stores[storeIndex].DeliveryNoteCount = stats.DeliveryNoteCount
-			err = customer.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if len(customer.Stores) == 0 {
+		customer.Stores = map[string]CustomerStore{}
+	}
+
+	customer.Stores[storeID.Hex()] = CustomerStore{
+		StoreID:           storeID,
+		StoreName:         store.Name,
+		StoreNameInArabic: store.NameInArabic,
+		DeliveryNoteCount: stats.DeliveryNoteCount,
+	}
+
+	err = customer.Update()
+	if err != nil {
+		return errors.New("Error updating customer: " + err.Error())
 	}
 
 	return nil

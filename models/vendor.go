@@ -168,15 +168,6 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-
-		//element := bson.M{"$elemMatch": bson.M{}}
-		//element:= [string]bson.M{[string]interface{}}{}
-		/*element["$elemMatch"] = bson.M{
-			"store_id": storeID,
-			//"store_id":        storeID,
-		}*/
-		//criterias.SearchBy["stores"] = element
-		//criterias.SearchBy["stores.store_id"] = storeID
 	}
 
 	keys, ok = r.URL.Query()["sort"]
@@ -205,7 +196,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_amount]"]
@@ -217,7 +214,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_paid_amount]"]
@@ -229,7 +232,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_paid_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_paid_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_paid_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_paid_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_balance_amount]"]
@@ -241,7 +250,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_balance_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_balance_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_balance_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_retail_profit]"]
@@ -253,7 +268,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_retail_profit", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_retail_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_retail_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_retail_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_retail_loss]"]
@@ -265,7 +286,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_retail_loss", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_retail_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_retail_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_retail_loss", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_wholesale_profit]"]
@@ -277,7 +304,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_wholesale_profit", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_wholesale_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_wholesale_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_wholesale_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_wholesale_loss]"]
@@ -289,7 +322,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_wholesale_loss", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_wholesale_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_wholesale_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_wholesale_loss", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_paid_count]"]
@@ -301,7 +340,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_not_paid_count]"]
@@ -313,7 +358,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_not_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_not_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_not_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_not_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_paid_partially_count]"]
@@ -325,7 +376,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_paid_partially_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_paid_partially_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_paid_partially_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_paid_partially_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_count]"]
@@ -337,7 +394,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_amount]"]
@@ -349,7 +412,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_paid_amount]"]
@@ -361,7 +430,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_paid_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_paid_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_paid_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_paid_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_balance_amount]"]
@@ -373,7 +448,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_balance_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_balance_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_balance_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_paid_count]"]
@@ -385,7 +466,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_not_paid_count]"]
@@ -397,7 +484,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_not_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_not_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_not_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_not_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_paid_partially_count]"]
@@ -409,7 +502,13 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_paid_partially_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_paid_partially_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".purchase_return_paid_partially_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_paid_partially_count", operator, &storeID, value)
 	}
 
 	var createdAtStartDate time.Time

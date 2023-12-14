@@ -1957,44 +1957,33 @@ func (customer *Customer) SetCustomerSalesStatsByStoreID(storeID primitive.Objec
 		stats.SalesLoss = math.Round(stats.SalesLoss*100) / 100
 	}
 
-	if !customer.IsStoreExistsInCustomer(storeID) {
-		store, err := FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return errors.New("error finding store: " + err.Error())
-		}
-
-		if len(customer.Stores) == 0 {
-			customer.Stores = []CustomerStore{CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			}}
-		} else {
-			customer.Stores = append(customer.Stores, CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			})
-		}
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
 	}
 
-	for storeIndex, store := range customer.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			customer.Stores[storeIndex].SalesCount = stats.SalesCount
-			customer.Stores[storeIndex].SalesPaidCount = stats.SalesPaidCount
-			customer.Stores[storeIndex].SalesNotPaidCount = stats.SalesNotPaidCount
-			customer.Stores[storeIndex].SalesPaidPartiallyCount = stats.SalesPaidPartiallyCount
-			customer.Stores[storeIndex].SalesAmount = stats.SalesAmount
-			customer.Stores[storeIndex].SalesPaidAmount = stats.SalesPaidAmount
-			customer.Stores[storeIndex].SalesBalanceAmount = stats.SalesBalanceAmount
-			customer.Stores[storeIndex].SalesProfit = stats.SalesProfit
-			customer.Stores[storeIndex].SalesLoss = stats.SalesLoss
-			err = customer.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if len(customer.Stores) == 0 {
+		customer.Stores = map[string]CustomerStore{}
+	}
+
+	customer.Stores[storeID.Hex()] = CustomerStore{
+		StoreID:                 storeID,
+		StoreName:               store.Name,
+		StoreNameInArabic:       store.NameInArabic,
+		SalesCount:              stats.SalesCount,
+		SalesPaidCount:          stats.SalesPaidCount,
+		SalesNotPaidCount:       stats.SalesNotPaidCount,
+		SalesPaidPartiallyCount: stats.SalesPaidPartiallyCount,
+		SalesAmount:             stats.SalesAmount,
+		SalesPaidAmount:         stats.SalesPaidAmount,
+		SalesBalanceAmount:      stats.SalesBalanceAmount,
+		SalesProfit:             stats.SalesProfit,
+		SalesLoss:               stats.SalesLoss,
+	}
+
+	err = customer.Update()
+	if err != nil {
+		return errors.New("Error updating customer: " + err.Error())
 	}
 
 	return nil

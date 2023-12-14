@@ -102,29 +102,6 @@ func ParseSelectString(selectStr string) (fields map[string]interface{}) {
 		} else {
 			fields[field] = 1
 		}
-
-		if field == "stores" {
-
-			/*
-				fields[field] = bson.M{
-					"$filter": bson.M{
-						"input": "$stores",
-						"as":    "store",
-						"cond": bson.M{
-							"$and": []bson.M{
-								{"$eq": []string{"$$store.store_name", "GULF UNION OZONE CONTRACTING CO."}},
-								{"$eq": []string{"$$store.store_name", "GULF UNION OZONE CONTRACTING CO."}},
-							},
-						},
-					},
-				}
-
-			*/
-
-			//log.Print(fields)
-
-		}
-
 	}
 
 	return fields
@@ -148,14 +125,6 @@ func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
 			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
 		}
 
-	}
-
-	if sortString == "stores.purchase_count" {
-		/*log.Print("OK")
-		sortBy[sortString] = 1
-		sortBy[]
-		*/
-		//sortBy["stores.store_name"] = bson.M{"$meta": "GULF UNION OZONE CONTRACTING CO."}
 	}
 
 	return sortBy

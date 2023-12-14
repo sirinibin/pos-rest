@@ -54,33 +54,33 @@ type CustomerStore struct {
 
 // Customer : Customer structure
 type Customer struct {
-	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name            string              `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic    string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	VATNo           string              `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
-	VATNoInArabic   string              `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	Phone           string              `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic   string              `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
-	Title           string              `bson:"title,omitempty" json:"title,omitempty"`
-	TitleInArabic   string              `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
-	Email           string              `bson:"email,omitempty" json:"email,omitempty"`
-	Address         string              `bson:"address,omitempty" json:"address,omitempty"`
-	AddressInArabic string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	Deleted         bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy       *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser   *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
-	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	SearchLabel     string              `json:"search_label"`
-	Stores          []CustomerStore     `bson:"stores,omitempty" json:"stores,omitempty"`
+	ID              primitive.ObjectID       `json:"id,omitempty" bson:"_id,omitempty"`
+	Name            string                   `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic    string                   `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	VATNo           string                   `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
+	VATNoInArabic   string                   `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
+	Phone           string                   `bson:"phone,omitempty" json:"phone,omitempty"`
+	PhoneInArabic   string                   `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	Title           string                   `bson:"title,omitempty" json:"title,omitempty"`
+	TitleInArabic   string                   `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
+	Email           string                   `bson:"email,omitempty" json:"email,omitempty"`
+	Address         string                   `bson:"address,omitempty" json:"address,omitempty"`
+	AddressInArabic string                   `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
+	Deleted         bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy       *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser   *User                    `json:"deleted_by_user,omitempty"`
+	DeletedAt       *time.Time               `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt       *time.Time               `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt       *time.Time               `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy       *primitive.ObjectID      `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy       *primitive.ObjectID      `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser   *User                    `json:"created_by_user,omitempty"`
+	UpdatedByUser   *User                    `json:"updated_by_user,omitempty"`
+	CreatedByName   string                   `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName   string                   `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName   string                   `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	SearchLabel     string                   `json:"search_label"`
+	Stores          map[string]CustomerStore `bson:"stores" json:"stores"`
 }
 
 /*
@@ -203,20 +203,26 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
-
 	var storeID primitive.ObjectID
-	keys, ok = r.URL.Query()["search[store_id]"]
+	keys, ok := r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
 		storeID, err = primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
 			return customers, criterias, err
+		}
+	}
+
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		keys[0] = strings.Replace(keys[0], "stores.", "stores."+storeID.Hex()+".", -1)
+		criterias.SortBy = GetSortByFields(keys[0])
+	}
+
+	timeZoneOffset := 0.0
+	keys, ok = r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
 		}
 	}
 
@@ -230,7 +236,12 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_count"] = value
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[sales_paid_count]"]
@@ -242,7 +253,14 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_paid_count"] = value
+		}
+
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_not_paid_count]"]
@@ -254,7 +272,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_not_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_not_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_not_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_not_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_paid_partially_count]"]
@@ -266,7 +290,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_partially_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_paid_partially_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_paid_partially_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_partially_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_count]"]
@@ -278,7 +308,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_amount]"]
@@ -290,7 +326,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_paid_amount]"]
@@ -302,7 +344,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_paid_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_paid_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_paid_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_paid_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_balance_amount]"]
@@ -314,7 +362,12 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_balance_amount", operator, &storeID, value)
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_balance_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_balance_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_profit]"]
@@ -326,7 +379,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_loss]"]
@@ -338,7 +397,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_amount]"]
@@ -350,7 +415,14 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_amount"] = value
+		}
+
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_paid_amount]"]
@@ -362,7 +434,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_paid_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_paid_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_balance_amount]"]
@@ -374,7 +452,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_balance_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_balance_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_balance_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_profit]"]
@@ -386,7 +470,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_loss]"]
@@ -398,7 +488,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_paid_count]"]
@@ -410,7 +506,14 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_count"] = value
+		}
+
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_not_paid_count]"]
@@ -422,7 +525,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_not_paid_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_not_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_not_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_not_paid_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_paid_partially_count]"]
@@ -434,7 +543,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_partially_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_partially_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_partially_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_partially_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[quotation_count]"]
@@ -446,7 +561,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[quotation_amount]"]
@@ -458,7 +579,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_amount", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_amount", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[quotation_profit]"]
@@ -470,7 +597,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_profit", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[quotation_loss]"]
@@ -482,7 +615,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_loss", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_loss", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[delivery_note_count]"]
@@ -494,7 +633,13 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".delivery_note_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".delivery_note_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]
@@ -601,10 +746,6 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 	keys, ok = r.URL.Query()["page"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.Page, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["sort"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SortBy = GetSortByFields(keys[0])
 	}
 
 	offset := (criterias.Page - 1) * criterias.Size

@@ -1902,44 +1902,33 @@ func (customer *Customer) SetCustomerSalesReturnStatsByStoreID(storeID primitive
 		stats.SalesReturnLoss = math.Round(stats.SalesReturnLoss*100) / 100
 	}
 
-	if !customer.IsStoreExistsInCustomer(storeID) {
-		store, err := FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return errors.New("error finding store: " + err.Error())
-		}
-
-		if len(customer.Stores) == 0 {
-			customer.Stores = []CustomerStore{CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			}}
-		} else {
-			customer.Stores = append(customer.Stores, CustomerStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			})
-		}
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
 	}
 
-	for storeIndex, store := range customer.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			customer.Stores[storeIndex].SalesReturnCount = stats.SalesReturnCount
-			customer.Stores[storeIndex].SalesReturnAmount = stats.SalesReturnAmount
-			customer.Stores[storeIndex].SalesReturnPaidAmount = stats.SalesReturnPaidAmount
-			customer.Stores[storeIndex].SalesReturnBalanceAmount = stats.SalesReturnBalanceAmount
-			customer.Stores[storeIndex].SalesReturnProfit = stats.SalesReturnProfit
-			customer.Stores[storeIndex].SalesReturnLoss = stats.SalesReturnLoss
-			customer.Stores[storeIndex].SalesReturnPaidCount = stats.SalesReturnPaidCount
-			customer.Stores[storeIndex].SalesReturnNotPaidCount = stats.SalesReturnNotPaidCount
-			customer.Stores[storeIndex].SalesReturnPaidPartiallyCount = stats.SalesReturnPaidPartiallyCount
-			err = customer.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if len(customer.Stores) == 0 {
+		customer.Stores = map[string]CustomerStore{}
+	}
+
+	customer.Stores[storeID.Hex()] = CustomerStore{
+		StoreID:                       storeID,
+		StoreName:                     store.Name,
+		StoreNameInArabic:             store.NameInArabic,
+		SalesReturnCount:              stats.SalesReturnCount,
+		SalesReturnAmount:             stats.SalesReturnAmount,
+		SalesReturnPaidAmount:         stats.SalesReturnPaidAmount,
+		SalesReturnBalanceAmount:      stats.SalesReturnBalanceAmount,
+		SalesReturnProfit:             stats.SalesReturnProfit,
+		SalesReturnLoss:               stats.SalesReturnLoss,
+		SalesReturnPaidCount:          stats.SalesReturnPaidCount,
+		SalesReturnNotPaidCount:       stats.SalesReturnNotPaidCount,
+		SalesReturnPaidPartiallyCount: stats.SalesReturnPaidPartiallyCount,
+	}
+
+	err = customer.Update()
+	if err != nil {
+		return errors.New("Error updating customer: " + err.Error())
 	}
 
 	return nil
