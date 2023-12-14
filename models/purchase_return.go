@@ -1761,17 +1761,31 @@ func (vendor *Vendor) SetVendorPurchaseReturnStatsByStoreID(storeID primitive.Ob
 		vendor.Stores = map[string]VendorStore{}
 	}
 
-	vendor.Stores[storeID.Hex()] = VendorStore{
-		StoreID:                          storeID,
-		StoreName:                        store.Name,
-		StoreNameInArabic:                store.NameInArabic,
-		PurchaseReturnCount:              stats.PurchaseReturnCount,
-		PurchaseReturnPaidCount:          stats.PurchaseReturnPaidCount,
-		PurchaseReturnNotPaidCount:       stats.PurchaseReturnNotPaidCount,
-		PurchaseReturnPaidPartiallyCount: stats.PurchaseReturnPaidPartiallyCount,
-		PurchaseReturnAmount:             stats.PurchaseReturnAmount,
-		PurchaseReturnPaidAmount:         stats.PurchaseReturnPaidAmount,
-		PurchaseReturnBalanceAmount:      stats.PurchaseReturnBalanceAmount,
+	if vendorStore, ok := vendor.Stores[storeID.Hex()]; ok {
+		vendorStore.StoreID = storeID
+		vendorStore.StoreName = store.Name
+		vendorStore.StoreNameInArabic = store.NameInArabic
+		vendorStore.PurchaseReturnCount = stats.PurchaseReturnCount
+		vendorStore.PurchaseReturnPaidCount = stats.PurchaseReturnPaidCount
+		vendorStore.PurchaseReturnNotPaidCount = stats.PurchaseReturnNotPaidCount
+		vendorStore.PurchaseReturnPaidPartiallyCount = stats.PurchaseReturnPaidPartiallyCount
+		vendorStore.PurchaseReturnAmount = stats.PurchaseReturnAmount
+		vendorStore.PurchaseReturnPaidAmount = stats.PurchaseReturnPaidAmount
+		vendorStore.PurchaseReturnBalanceAmount = stats.PurchaseReturnBalanceAmount
+		vendor.Stores[storeID.Hex()] = vendorStore
+	} else {
+		vendor.Stores[storeID.Hex()] = VendorStore{
+			StoreID:                          storeID,
+			StoreName:                        store.Name,
+			StoreNameInArabic:                store.NameInArabic,
+			PurchaseReturnCount:              stats.PurchaseReturnCount,
+			PurchaseReturnPaidCount:          stats.PurchaseReturnPaidCount,
+			PurchaseReturnNotPaidCount:       stats.PurchaseReturnNotPaidCount,
+			PurchaseReturnPaidPartiallyCount: stats.PurchaseReturnPaidPartiallyCount,
+			PurchaseReturnAmount:             stats.PurchaseReturnAmount,
+			PurchaseReturnPaidAmount:         stats.PurchaseReturnPaidAmount,
+			PurchaseReturnBalanceAmount:      stats.PurchaseReturnBalanceAmount,
+		}
 	}
 
 	err = vendor.Update()

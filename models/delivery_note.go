@@ -805,11 +805,19 @@ func (customer *Customer) SetCustomerDeliveryNoteStatsByStoreID(storeID primitiv
 		customer.Stores = map[string]CustomerStore{}
 	}
 
-	customer.Stores[storeID.Hex()] = CustomerStore{
-		StoreID:           storeID,
-		StoreName:         store.Name,
-		StoreNameInArabic: store.NameInArabic,
-		DeliveryNoteCount: stats.DeliveryNoteCount,
+	if customerStore, ok := customer.Stores[storeID.Hex()]; ok {
+		customerStore.StoreID = storeID
+		customerStore.StoreName = store.Name
+		customerStore.StoreNameInArabic = store.NameInArabic
+		customerStore.DeliveryNoteCount = stats.DeliveryNoteCount
+		customer.Stores[storeID.Hex()] = customerStore
+	} else {
+		customer.Stores[storeID.Hex()] = CustomerStore{
+			StoreID:           storeID,
+			StoreName:         store.Name,
+			StoreNameInArabic: store.NameInArabic,
+			DeliveryNoteCount: stats.DeliveryNoteCount,
+		}
 	}
 
 	err = customer.Update()

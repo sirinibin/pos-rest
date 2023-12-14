@@ -1966,19 +1966,35 @@ func (customer *Customer) SetCustomerSalesStatsByStoreID(storeID primitive.Objec
 		customer.Stores = map[string]CustomerStore{}
 	}
 
-	customer.Stores[storeID.Hex()] = CustomerStore{
-		StoreID:                 storeID,
-		StoreName:               store.Name,
-		StoreNameInArabic:       store.NameInArabic,
-		SalesCount:              stats.SalesCount,
-		SalesPaidCount:          stats.SalesPaidCount,
-		SalesNotPaidCount:       stats.SalesNotPaidCount,
-		SalesPaidPartiallyCount: stats.SalesPaidPartiallyCount,
-		SalesAmount:             stats.SalesAmount,
-		SalesPaidAmount:         stats.SalesPaidAmount,
-		SalesBalanceAmount:      stats.SalesBalanceAmount,
-		SalesProfit:             stats.SalesProfit,
-		SalesLoss:               stats.SalesLoss,
+	if customerStore, ok := customer.Stores[storeID.Hex()]; ok {
+		customerStore.StoreID = storeID
+		customerStore.StoreName = store.Name
+		customerStore.StoreNameInArabic = store.NameInArabic
+		customerStore.SalesCount = stats.SalesCount
+		customerStore.SalesPaidCount = stats.SalesPaidCount
+		customerStore.SalesNotPaidCount = stats.SalesNotPaidCount
+		customerStore.SalesPaidPartiallyCount = stats.SalesPaidPartiallyCount
+		customerStore.SalesAmount = stats.SalesAmount
+		customerStore.SalesPaidAmount = stats.SalesPaidAmount
+		customerStore.SalesBalanceAmount = stats.SalesBalanceAmount
+		customerStore.SalesProfit = stats.SalesProfit
+		customerStore.SalesLoss = stats.SalesLoss
+		customer.Stores[storeID.Hex()] = customerStore
+	} else {
+		customer.Stores[storeID.Hex()] = CustomerStore{
+			StoreID:                 storeID,
+			StoreName:               store.Name,
+			StoreNameInArabic:       store.NameInArabic,
+			SalesCount:              stats.SalesCount,
+			SalesPaidCount:          stats.SalesPaidCount,
+			SalesNotPaidCount:       stats.SalesNotPaidCount,
+			SalesPaidPartiallyCount: stats.SalesPaidPartiallyCount,
+			SalesAmount:             stats.SalesAmount,
+			SalesPaidAmount:         stats.SalesPaidAmount,
+			SalesBalanceAmount:      stats.SalesBalanceAmount,
+			SalesProfit:             stats.SalesProfit,
+			SalesLoss:               stats.SalesLoss,
+		}
 	}
 
 	err = customer.Update()

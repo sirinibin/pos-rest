@@ -1818,21 +1818,39 @@ func (vendor *Vendor) SetVendorPurchaseStatsByStoreID(storeID primitive.ObjectID
 		vendor.Stores = map[string]VendorStore{}
 	}
 
-	vendor.Stores[storeID.Hex()] = VendorStore{
-		StoreID:                    storeID,
-		StoreName:                  store.Name,
-		StoreNameInArabic:          store.NameInArabic,
-		PurchaseCount:              stats.PurchaseCount,
-		PurchasePaidCount:          stats.PurchasePaidCount,
-		PurchaseNotPaidCount:       stats.PurchaseNotPaidCount,
-		PurchasePaidPartiallyCount: stats.PurchasePaidPartiallyCount,
-		PurchaseAmount:             stats.PurchaseAmount,
-		PurchasePaidAmount:         stats.PurchasePaidAmount,
-		PurchaseBalanceAmount:      stats.PurchaseBalanceAmount,
-		PurchaseRetailProfit:       stats.PurchaseRetailProfit,
-		PurchaseWholesaleProfit:    stats.PurchaseWholesaleProfit,
-		PurchaseRetailLoss:         stats.PurchaseRetailLoss,
-		PurchaseWholesaleLoss:      stats.PurchaseWholesaleLoss,
+	if vendorStore, ok := vendor.Stores[storeID.Hex()]; ok {
+		vendorStore.StoreID = storeID
+		vendorStore.StoreName = store.Name
+		vendorStore.StoreNameInArabic = store.NameInArabic
+		vendorStore.PurchaseCount = stats.PurchaseCount
+		vendorStore.PurchasePaidCount = stats.PurchasePaidCount
+		vendorStore.PurchaseNotPaidCount = stats.PurchaseNotPaidCount
+		vendorStore.PurchasePaidPartiallyCount = stats.PurchasePaidPartiallyCount
+		vendorStore.PurchaseAmount = stats.PurchaseAmount
+		vendorStore.PurchasePaidAmount = stats.PurchasePaidAmount
+		vendorStore.PurchaseBalanceAmount = stats.PurchaseBalanceAmount
+		vendorStore.PurchaseRetailProfit = stats.PurchaseRetailProfit
+		vendorStore.PurchaseWholesaleProfit = stats.PurchaseWholesaleProfit
+		vendorStore.PurchaseRetailLoss = stats.PurchaseRetailLoss
+		vendorStore.PurchaseWholesaleLoss = stats.PurchaseWholesaleLoss
+		vendor.Stores[storeID.Hex()] = vendorStore
+	} else {
+		vendor.Stores[storeID.Hex()] = VendorStore{
+			StoreID:                    storeID,
+			StoreName:                  store.Name,
+			StoreNameInArabic:          store.NameInArabic,
+			PurchaseCount:              stats.PurchaseCount,
+			PurchasePaidCount:          stats.PurchasePaidCount,
+			PurchaseNotPaidCount:       stats.PurchaseNotPaidCount,
+			PurchasePaidPartiallyCount: stats.PurchasePaidPartiallyCount,
+			PurchaseAmount:             stats.PurchaseAmount,
+			PurchasePaidAmount:         stats.PurchasePaidAmount,
+			PurchaseBalanceAmount:      stats.PurchaseBalanceAmount,
+			PurchaseRetailProfit:       stats.PurchaseRetailProfit,
+			PurchaseWholesaleProfit:    stats.PurchaseWholesaleProfit,
+			PurchaseRetailLoss:         stats.PurchaseRetailLoss,
+			PurchaseWholesaleLoss:      stats.PurchaseWholesaleLoss,
+		}
 	}
 
 	err = vendor.Update()

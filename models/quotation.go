@@ -1365,14 +1365,25 @@ func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.O
 		customer.Stores = map[string]CustomerStore{}
 	}
 
-	customer.Stores[storeID.Hex()] = CustomerStore{
-		StoreID:           storeID,
-		StoreName:         store.Name,
-		StoreNameInArabic: store.NameInArabic,
-		QuotationCount:    stats.QuotationCount,
-		QuotationAmount:   stats.QuotationAmount,
-		QuotationProfit:   stats.QuotationProfit,
-		QuotationLoss:     stats.QuotationLoss,
+	if customerStore, ok := customer.Stores[storeID.Hex()]; ok {
+		customerStore.StoreID = storeID
+		customerStore.StoreName = store.Name
+		customerStore.StoreNameInArabic = store.NameInArabic
+		customerStore.QuotationCount = stats.QuotationCount
+		customerStore.QuotationAmount = stats.QuotationAmount
+		customerStore.QuotationProfit = stats.QuotationProfit
+		customerStore.QuotationLoss = stats.QuotationLoss
+		customer.Stores[storeID.Hex()] = customerStore
+	} else {
+		customer.Stores[storeID.Hex()] = CustomerStore{
+			StoreID:           storeID,
+			StoreName:         store.Name,
+			StoreNameInArabic: store.NameInArabic,
+			QuotationCount:    stats.QuotationCount,
+			QuotationAmount:   stats.QuotationAmount,
+			QuotationProfit:   stats.QuotationProfit,
+			QuotationLoss:     stats.QuotationLoss,
+		}
 	}
 
 	err = customer.Update()

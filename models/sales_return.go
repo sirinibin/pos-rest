@@ -1911,19 +1911,35 @@ func (customer *Customer) SetCustomerSalesReturnStatsByStoreID(storeID primitive
 		customer.Stores = map[string]CustomerStore{}
 	}
 
-	customer.Stores[storeID.Hex()] = CustomerStore{
-		StoreID:                       storeID,
-		StoreName:                     store.Name,
-		StoreNameInArabic:             store.NameInArabic,
-		SalesReturnCount:              stats.SalesReturnCount,
-		SalesReturnAmount:             stats.SalesReturnAmount,
-		SalesReturnPaidAmount:         stats.SalesReturnPaidAmount,
-		SalesReturnBalanceAmount:      stats.SalesReturnBalanceAmount,
-		SalesReturnProfit:             stats.SalesReturnProfit,
-		SalesReturnLoss:               stats.SalesReturnLoss,
-		SalesReturnPaidCount:          stats.SalesReturnPaidCount,
-		SalesReturnNotPaidCount:       stats.SalesReturnNotPaidCount,
-		SalesReturnPaidPartiallyCount: stats.SalesReturnPaidPartiallyCount,
+	if customerStore, ok := customer.Stores[storeID.Hex()]; ok {
+		customerStore.StoreID = storeID
+		customerStore.StoreName = store.Name
+		customerStore.StoreNameInArabic = store.NameInArabic
+		customerStore.SalesReturnCount = stats.SalesReturnCount
+		customerStore.SalesReturnAmount = stats.SalesReturnAmount
+		customerStore.SalesReturnPaidAmount = stats.SalesReturnPaidAmount
+		customerStore.SalesReturnBalanceAmount = stats.SalesReturnBalanceAmount
+		customerStore.SalesReturnProfit = stats.SalesReturnProfit
+		customerStore.SalesReturnLoss = stats.SalesReturnLoss
+		customerStore.SalesReturnPaidCount = stats.SalesReturnPaidCount
+		customerStore.SalesReturnNotPaidCount = stats.SalesReturnNotPaidCount
+		customerStore.SalesReturnPaidPartiallyCount = stats.SalesReturnPaidPartiallyCount
+		customer.Stores[storeID.Hex()] = customerStore
+	} else {
+		customer.Stores[storeID.Hex()] = CustomerStore{
+			StoreID:                       storeID,
+			StoreName:                     store.Name,
+			StoreNameInArabic:             store.NameInArabic,
+			SalesReturnCount:              stats.SalesReturnCount,
+			SalesReturnAmount:             stats.SalesReturnAmount,
+			SalesReturnPaidAmount:         stats.SalesReturnPaidAmount,
+			SalesReturnBalanceAmount:      stats.SalesReturnBalanceAmount,
+			SalesReturnProfit:             stats.SalesReturnProfit,
+			SalesReturnLoss:               stats.SalesReturnLoss,
+			SalesReturnPaidCount:          stats.SalesReturnPaidCount,
+			SalesReturnNotPaidCount:       stats.SalesReturnNotPaidCount,
+			SalesReturnPaidPartiallyCount: stats.SalesReturnPaidPartiallyCount,
+		}
 	}
 
 	err = customer.Update()
