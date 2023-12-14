@@ -14,7 +14,6 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
-	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -637,25 +636,27 @@ func cronJobsEveryHour() error {
 		}
 	*/
 
-	err := models.ProcessOrders()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessOrders()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessSalesReturns()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessSalesReturns()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessQuotations()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessQuotations()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessDeliveryNotes()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessDeliveryNotes()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	/*
 		err := models.ProcessPurchases()
