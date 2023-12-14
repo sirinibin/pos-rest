@@ -1485,7 +1485,7 @@ func ProcessPurchases() error {
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
-		return errors.New("Error fetching quotations:" + err.Error())
+		return errors.New("Error fetching purchases:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -1506,7 +1506,7 @@ func ProcessPurchases() error {
 		model := Purchase{}
 		err = cur.Decode(&model)
 		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
+			return errors.New("Cursor decoding purchase error:" + err.Error())
 		}
 
 		/*
@@ -1532,7 +1532,7 @@ func ProcessPurchases() error {
 
 		err = model.SetVendorPurchaseStats()
 		if err != nil {
-			return err
+			return errors.New("Error setting vendor purchase stats: " + err.Error())
 		}
 
 		err = model.Update()
@@ -1790,7 +1790,7 @@ func (vendor *Vendor) SetVendorPurchaseStatsByStoreID(storeID primitive.ObjectID
 
 	cur, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return err
+		return errors.New("error finding purchase stats aggregate: " + err.Error())
 	}
 
 	defer cur.Close(ctx)
@@ -1798,7 +1798,7 @@ func (vendor *Vendor) SetVendorPurchaseStatsByStoreID(storeID primitive.ObjectID
 	if cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
-			return err
+			return errors.New("Error decoding purchase stats: " + err.Error())
 		}
 		stats.PurchaseAmount = math.Round(stats.PurchaseAmount*100) / 100
 		stats.PurchasePaidAmount = math.Round(stats.PurchasePaidAmount*100) / 100
@@ -1809,46 +1809,35 @@ func (vendor *Vendor) SetVendorPurchaseStatsByStoreID(storeID primitive.ObjectID
 		stats.PurchaseWholesaleLoss = math.Round(stats.PurchaseWholesaleLoss*100) / 100
 	}
 
-	if !vendor.IsStoreExistsInVendor(storeID) {
-		store, err := FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return errors.New("error finding store: " + err.Error())
-		}
-
-		if len(vendor.Stores) == 0 {
-			vendor.Stores = []VendorStore{VendorStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			}}
-		} else {
-			vendor.Stores = append(vendor.Stores, VendorStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			})
-		}
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
 	}
 
-	for storeIndex, store := range vendor.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			vendor.Stores[storeIndex].PurchaseCount = stats.PurchaseCount
-			vendor.Stores[storeIndex].PurchasePaidCount = stats.PurchasePaidCount
-			vendor.Stores[storeIndex].PurchaseNotPaidCount = stats.PurchaseNotPaidCount
-			vendor.Stores[storeIndex].PurchasePaidPartiallyCount = stats.PurchasePaidPartiallyCount
-			vendor.Stores[storeIndex].PurchaseAmount = stats.PurchaseAmount
-			vendor.Stores[storeIndex].PurchasePaidAmount = stats.PurchasePaidAmount
-			vendor.Stores[storeIndex].PurchaseBalanceAmount = stats.PurchaseBalanceAmount
-			vendor.Stores[storeIndex].PurchaseRetailProfit = stats.PurchaseRetailProfit
-			vendor.Stores[storeIndex].PurchaseWholesaleProfit = stats.PurchaseWholesaleProfit
-			vendor.Stores[storeIndex].PurchaseRetailLoss = stats.PurchaseRetailLoss
-			vendor.Stores[storeIndex].PurchaseWholesaleLoss = stats.PurchaseWholesaleLoss
-			err = vendor.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if len(vendor.Stores) == 0 {
+		vendor.Stores = map[string]VendorStore{}
+	}
+
+	vendor.Stores[storeID.Hex()] = VendorStore{
+		StoreID:                    storeID,
+		StoreName:                  store.Name,
+		StoreNameInArabic:          store.NameInArabic,
+		PurchaseCount:              stats.PurchaseCount,
+		PurchasePaidCount:          stats.PurchasePaidCount,
+		PurchaseNotPaidCount:       stats.PurchaseNotPaidCount,
+		PurchasePaidPartiallyCount: stats.PurchasePaidPartiallyCount,
+		PurchaseAmount:             stats.PurchaseAmount,
+		PurchasePaidAmount:         stats.PurchasePaidAmount,
+		PurchaseBalanceAmount:      stats.PurchaseBalanceAmount,
+		PurchaseRetailProfit:       stats.PurchaseRetailProfit,
+		PurchaseWholesaleProfit:    stats.PurchaseWholesaleProfit,
+		PurchaseRetailLoss:         stats.PurchaseRetailLoss,
+		PurchaseWholesaleLoss:      stats.PurchaseWholesaleLoss,
+	}
+
+	err = vendor.Update()
+	if err != nil {
+		return errors.New("Error updating vendor: " + err.Error())
 	}
 
 	return nil
@@ -1858,7 +1847,7 @@ func (purchase *Purchase) SetVendorPurchaseStats() error {
 
 	vendor, err := FindVendorByID(purchase.VendorID, map[string]interface{}{})
 	if err != nil {
-		return err
+		return errors.New("Error finding vendor: " + err.Error())
 	}
 
 	err = vendor.SetVendorPurchaseStatsByStoreID(*purchase.StoreID)

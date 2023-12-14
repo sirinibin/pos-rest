@@ -42,40 +42,42 @@ type VendorStore struct {
 
 // Vendor : Vendor structure
 type Vendor struct {
-	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name                       string              `bson:"name" json:"name"`
-	NameInArabic               string              `bson:"name_in_arabic" json:"name_in_arabic"`
-	Title                      string              `bson:"title" json:"title"`
-	TitleInArabic              string              `bson:"title_in_arabic" json:"title_in_arabic"`
-	Email                      string              `bson:"email,omitempty" json:"email"`
-	Phone                      string              `bson:"phone,omitempty" json:"phone"`
-	PhoneInArabic              string              `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic"`
-	Address                    string              `bson:"address,omitempty" json:"address"`
-	AddressInArabic            string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic"`
-	VATNo                      string              `bson:"vat_no,omitempty" json:"vat_no"`
-	VATNoInArabic              string              `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic"`
-	VatPercent                 *float32            `bson:"vat_percent" json:"vat_percent"`
-	RegistrationNumber         string              `bson:"registration_number,omitempty" json:"registration_number"`
-	RegistrationNumberInArabic string              `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic"`
-	NationalAddresss           NationalAddresss    `bson:"national_address,omitempty" json:"national_address"`
-	Logo                       string              `bson:"logo,omitempty" json:"logo"`
-	LogoContent                string              `json:"logo_content,omitempty"`
-	Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser              *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt                  *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt                  *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt                  *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy                  *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy                  *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser              *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser              *User               `json:"updated_by_user,omitempty"`
-	CreatedByName              string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName              string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName              string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Stores                     []VendorStore       `bson:"stores,omitempty" json:"stores,omitempty"`
-	SearchLabel                string              `json:"search_label"`
+	ID                         primitive.ObjectID     `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                       string                 `bson:"name" json:"name"`
+	NameInArabic               string                 `bson:"name_in_arabic" json:"name_in_arabic"`
+	Title                      string                 `bson:"title" json:"title"`
+	TitleInArabic              string                 `bson:"title_in_arabic" json:"title_in_arabic"`
+	Email                      string                 `bson:"email,omitempty" json:"email"`
+	Phone                      string                 `bson:"phone,omitempty" json:"phone"`
+	PhoneInArabic              string                 `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic"`
+	Address                    string                 `bson:"address,omitempty" json:"address"`
+	AddressInArabic            string                 `bson:"address_in_arabic,omitempty" json:"address_in_arabic"`
+	VATNo                      string                 `bson:"vat_no,omitempty" json:"vat_no"`
+	VATNoInArabic              string                 `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic"`
+	VatPercent                 *float32               `bson:"vat_percent" json:"vat_percent"`
+	RegistrationNumber         string                 `bson:"registration_number,omitempty" json:"registration_number"`
+	RegistrationNumberInArabic string                 `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic"`
+	NationalAddresss           NationalAddresss       `bson:"national_address,omitempty" json:"national_address"`
+	Logo                       string                 `bson:"logo,omitempty" json:"logo"`
+	LogoContent                string                 `json:"logo_content,omitempty"`
+	Deleted                    bool                   `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                  *primitive.ObjectID    `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser              *User                  `json:"deleted_by_user,omitempty"`
+	DeletedAt                  *time.Time             `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                  *time.Time             `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                  *time.Time             `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                  *primitive.ObjectID    `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                  *primitive.ObjectID    `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser              *User                  `json:"created_by_user,omitempty"`
+	UpdatedByUser              *User                  `json:"updated_by_user,omitempty"`
+	CreatedByName              string                 `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName              string                 `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName              string                 `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Stores                     map[string]VendorStore `bson:"stores" json:"stores"`
+	SearchLabel                string                 `json:"search_label"`
 }
+
+//Stores2                    []VendorStore          `bson:"stores,omitempty" json:"stores,omitempty"`
 
 type NationalAddresss struct {
 	ApplicationNo           string `bson:"application_no,omitempty" json:"application_no"`
@@ -159,9 +161,6 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		SortBy: map[string]interface{}{},
 	}
 
-	criterias.SearchBy = make(map[string]interface{})
-	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
-
 	var storeID primitive.ObjectID
 	keys, ok := r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
@@ -169,7 +168,25 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 		if err != nil {
 			return vendors, criterias, err
 		}
+
+		//element := bson.M{"$elemMatch": bson.M{}}
+		//element:= [string]bson.M{[string]interface{}}{}
+		/*element["$elemMatch"] = bson.M{
+			"store_id": storeID,
+			//"store_id":        storeID,
+		}*/
+		//criterias.SearchBy["stores"] = element
+		//criterias.SearchBy["stores.store_id"] = storeID
 	}
+
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		keys[0] = strings.Replace(keys[0], "stores.", "stores."+storeID.Hex()+".", -1)
+		criterias.SortBy = GetSortByFields(keys[0])
+	}
+
+	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	timeZoneOffset := 0.0
 	keys, ok = r.URL.Query()["search[timezone_offset]"]
@@ -472,10 +489,6 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 	if ok && len(keys[0]) >= 1 {
 		criterias.Page, _ = strconv.Atoi(keys[0])
 	}
-	keys, ok = r.URL.Query()["sort"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SortBy = GetSortByFields(keys[0])
-	}
 
 	offset := (criterias.Page - 1) * criterias.Size
 
@@ -484,9 +497,10 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
 	findOptions.SetLimit(int64(criterias.Size))
-	findOptions.SetSort(criterias.SortBy)
+	//findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
+	//findOptions.SetOplogReplay()
 
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}
@@ -514,6 +528,8 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 	if criterias.Select != nil {
 		findOptions.SetProjection(criterias.Select)
 	}
+
+	findOptions.SetSort(criterias.SortBy)
 
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here

@@ -102,9 +102,63 @@ func ParseSelectString(selectStr string) (fields map[string]interface{}) {
 		} else {
 			fields[field] = 1
 		}
+
+		if field == "stores" {
+
+			/*
+				fields[field] = bson.M{
+					"$filter": bson.M{
+						"input": "$stores",
+						"as":    "store",
+						"cond": bson.M{
+							"$and": []bson.M{
+								{"$eq": []string{"$$store.store_name", "GULF UNION OZONE CONTRACTING CO."}},
+								{"$eq": []string{"$$store.store_name", "GULF UNION OZONE CONTRACTING CO."}},
+							},
+						},
+					},
+				}
+
+			*/
+
+			//log.Print(fields)
+
+		}
+
 	}
 
 	return fields
+}
+
+func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
+	sortFieldWithOrder := strings.Fields(sortString)
+	sortBy = map[string]interface{}{}
+
+	if len(sortFieldWithOrder) == 2 {
+		if sortFieldWithOrder[1] == "1" {
+			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
+		} else if sortFieldWithOrder[1] == "-1" {
+			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Descending order
+		}
+	} else if len(sortFieldWithOrder) == 1 {
+		if strings.HasPrefix(sortFieldWithOrder[0], "-") {
+			sortFieldWithOrder[0] = strings.TrimPrefix(sortFieldWithOrder[0], "-")
+			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Ascending order
+		} else {
+			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
+		}
+
+	}
+
+	if sortString == "stores.purchase_count" {
+		/*log.Print("OK")
+		sortBy[sortString] = 1
+		sortBy[]
+		*/
+		//sortBy["stores.store_name"] = bson.M{"$meta": "GULF UNION OZONE CONTRACTING CO."}
+	}
+
+	return sortBy
 }
 
 func ParseRelationalSelectString(selectFields interface{}, prefix string) (fields map[string]interface{}) {
@@ -243,29 +297,6 @@ func ClearPurchaseReturnPayments() error {
 	}
 
 	return nil
-}
-
-func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
-	sortFieldWithOrder := strings.Fields(sortString)
-	sortBy = map[string]interface{}{}
-
-	if len(sortFieldWithOrder) == 2 {
-		if sortFieldWithOrder[1] == "1" {
-			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
-		} else if sortFieldWithOrder[1] == "-1" {
-			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Descending order
-		}
-	} else if len(sortFieldWithOrder) == 1 {
-		if strings.HasPrefix(sortFieldWithOrder[0], "-") {
-			sortFieldWithOrder[0] = strings.TrimPrefix(sortFieldWithOrder[0], "-")
-			sortBy[sortFieldWithOrder[0]] = -1 // Sort by Ascending order
-		} else {
-			sortBy[sortFieldWithOrder[0]] = 1 // Sort by Ascending order
-		}
-
-	}
-
-	return sortBy
 }
 
 func ToFixed(num float64, precision int) float64 {

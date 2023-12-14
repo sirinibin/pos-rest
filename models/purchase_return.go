@@ -1752,42 +1752,31 @@ func (vendor *Vendor) SetVendorPurchaseReturnStatsByStoreID(storeID primitive.Ob
 
 	}
 
-	if !vendor.IsStoreExistsInVendor(storeID) {
-		store, err := FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return errors.New("error finding store: " + err.Error())
-		}
-
-		if len(vendor.Stores) == 0 {
-			vendor.Stores = []VendorStore{VendorStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			}}
-		} else {
-			vendor.Stores = append(vendor.Stores, VendorStore{
-				StoreID:           storeID,
-				StoreName:         store.Name,
-				StoreNameInArabic: store.NameInArabic,
-			})
-		}
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
 	}
 
-	for storeIndex, store := range vendor.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			vendor.Stores[storeIndex].PurchaseReturnCount = stats.PurchaseReturnCount
-			vendor.Stores[storeIndex].PurchaseReturnPaidCount = stats.PurchaseReturnPaidCount
-			vendor.Stores[storeIndex].PurchaseReturnNotPaidCount = stats.PurchaseReturnNotPaidCount
-			vendor.Stores[storeIndex].PurchaseReturnPaidPartiallyCount = stats.PurchaseReturnPaidPartiallyCount
-			vendor.Stores[storeIndex].PurchaseReturnAmount = stats.PurchaseReturnAmount
-			vendor.Stores[storeIndex].PurchaseReturnPaidAmount = stats.PurchaseReturnPaidAmount
-			vendor.Stores[storeIndex].PurchaseReturnBalanceAmount = stats.PurchaseReturnBalanceAmount
-			err = vendor.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if len(vendor.Stores) == 0 {
+		vendor.Stores = map[string]VendorStore{}
+	}
+
+	vendor.Stores[storeID.Hex()] = VendorStore{
+		StoreID:                          storeID,
+		StoreName:                        store.Name,
+		StoreNameInArabic:                store.NameInArabic,
+		PurchaseReturnCount:              stats.PurchaseReturnCount,
+		PurchaseReturnPaidCount:          stats.PurchaseReturnPaidCount,
+		PurchaseReturnNotPaidCount:       stats.PurchaseReturnNotPaidCount,
+		PurchaseReturnPaidPartiallyCount: stats.PurchaseReturnPaidPartiallyCount,
+		PurchaseReturnAmount:             stats.PurchaseReturnAmount,
+		PurchaseReturnPaidAmount:         stats.PurchaseReturnPaidAmount,
+		PurchaseReturnBalanceAmount:      stats.PurchaseReturnBalanceAmount,
+	}
+
+	err = vendor.Update()
+	if err != nil {
+		return err
 	}
 
 	return nil
