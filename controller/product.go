@@ -268,10 +268,6 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product.ReflectValidPurchaseUnitPrice()
-
-	product.SetProductSalesStatsByStoreID(*product.StoreID)
-
 	/*
 		err = product.AttributesValueChangeEvent(productOld)
 		if err != nil {
@@ -292,6 +288,14 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	product.ReflectValidPurchaseUnitPrice()
+	product.SetProductSalesStatsByStoreID(*product.StoreID)
+	product.SetProductSalesReturnStatsByStoreID(*product.StoreID)
+	product.SetProductPurchaseStatsByStoreID(*product.StoreID)
+	product.SetProductPurchaseReturnStatsByStoreID(*product.StoreID)
+	product.SetProductQuotationStatsByStoreID(*product.StoreID)
+	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
 
 	response.Status = true
 	response.Result = product

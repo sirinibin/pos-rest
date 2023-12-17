@@ -133,18 +133,19 @@ func GetProductStats(
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	stock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
-	retailStockvalue_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
+	//stock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
+	//retailStockvalue_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
 	//retailStockValueStock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
 
 	if !storeID.IsZero() {
-		stock_StoreCond = []interface{}{
+		/*stock_StoreCond = []interface{}{
 			"$$store.store_id", storeID,
 		}
 
 		retailStockvalue_StoreCond = []interface{}{
 			"$$store.store_id", storeID,
 		}
+		*/
 
 		/*
 			retailStockValueStock_StoreCond = []interface{}{
@@ -170,6 +171,13 @@ func GetProductStats(
 												},
 											},
 										}}},
+
+										 bson.M{"$cond":bson.M{
+					[]interface{}{
+						bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+						"$product_stores." + storeID.Hex() + ".stock",
+						0,
+					}},
 	*/
 
 	pipeline := []bson.M{
@@ -179,79 +187,130 @@ func GetProductStats(
 		bson.M{
 			"$group": bson.M{
 				"_id": nil,
-				"stock": bson.M{"$sum": bson.M{"$sum": bson.M{
-					"$map": bson.M{
-						"input": "$stores",
-						"as":    "store",
-						"in": bson.M{
-							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": stock_StoreCond},
-									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-								}},
-								"$$store.stock",
-								0,
-							},
-						},
+				"stock": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+					"$product_stores." + storeID.Hex() + ".stock",
+					0,
+				}}},
+				"retail_stock_value": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+					bson.M{"$multiply": []interface{}{
+						"$product_stores." + storeID.Hex() + ".stock",
+						"$product_stores." + storeID.Hex() + ".retail_unit_price",
+					}},
+					0,
+				}}},
+				"wholesale_stock_value": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+					bson.M{"$multiply": []interface{}{
+						"$product_stores." + storeID.Hex() + ".stock",
+						"$product_stores." + storeID.Hex() + ".wholesale_unit_price",
+					}},
+					0,
+				}}},
+				"purchase_stock_value": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+					bson.M{"$multiply": []interface{}{
+						"$product_stores." + storeID.Hex() + ".stock",
+						"$product_stores." + storeID.Hex() + ".purchase_unit_price",
+					}},
+					0,
+				}}},
+				/*"stock": bson.M{"$sum": bson.M{
+				"input": "$product_stores." + storeID.Hex(),
+				"as":    "store",
+				"in": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+						"$$store.stock",
+						0,
 					},
 				}}},
-				"retail_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
-					"$map": bson.M{
-						"input": "$stores",
-						"as":    "store",
-						"in": bson.M{
-							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": retailStockvalue_StoreCond},
-									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-								}},
-								bson.M{"$multiply": []interface{}{
-									"$$store.retail_unit_price",
+				*/
+				//"stock": bson.M{"$sum": "$product_stores." + storeID.Hex() + ".stock"},
+				/*"retail_stock_value": bson.M{"$sum": bson.M{"$multiply": []interface{}{
+					"$product_stores." + storeID.Hex() + ".stock",
+					"$product_stores." + storeID.Hex() + ".retail_unit_price",
+				}}},*/
+
+				//"retail_stock_value": bson.M{"$sum": "$product_stores." + storeID.Hex() + ".stock*$product_stores." + storeID.Hex() + ".retail_unit_price"},
+				/*
+					"stock": bson.M{"$sum": bson.M{"$sum": bson.M{
+						"$map": bson.M{
+							"input": "$product_stores",
+							"as":    "store",
+							"in": bson.M{
+								"$cond": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": stock_StoreCond},
+										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+									}},
 									"$$store.stock",
-								}},
-								0,
+									0,
+								},
 							},
 						},
-					},
-				}}},
-				"wholesale_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
-					"$map": bson.M{
-						"input": "$stores",
-						"as":    "store",
-						"in": bson.M{
-							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": retailStockvalue_StoreCond},
-									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-								}},
-								bson.M{"$multiply": []interface{}{
-									"$$store.wholesale_unit_price",
-									"$$store.stock",
-								}},
-								0,
+					}}},
+				*/
+				/*
+					"retail_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
+						"$map": bson.M{
+							"input": "$product_stores",
+							"as":    "store",
+							"in": bson.M{
+								"$cond": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": retailStockvalue_StoreCond},
+										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+									}},
+									bson.M{"$multiply": []interface{}{
+										"$$store.retail_unit_price",
+										"$$store.stock",
+									}},
+									0,
+								},
 							},
 						},
-					},
-				}}},
-				"purchase_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
-					"$map": bson.M{
-						"input": "$stores",
-						"as":    "store",
-						"in": bson.M{
-							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": retailStockvalue_StoreCond},
-									bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-								}},
-								bson.M{"$multiply": []interface{}{
-									"$$store.purchase_unit_price",
-									"$$store.stock",
-								}},
-								0,
+					}}},
+					"wholesale_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
+						"$map": bson.M{
+							"input": "$product_stores",
+							"as":    "store",
+							"in": bson.M{
+								"$cond": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": retailStockvalue_StoreCond},
+										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+									}},
+									bson.M{"$multiply": []interface{}{
+										"$$store.wholesale_unit_price",
+										"$$store.stock",
+									}},
+									0,
+								},
 							},
 						},
-					},
-				}}},
+					}}},
+					"purchase_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
+						"$map": bson.M{
+							"input": "$product_stores",
+							"as":    "store",
+							"in": bson.M{
+								"$cond": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": retailStockvalue_StoreCond},
+										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
+									}},
+									bson.M{"$multiply": []interface{}{
+										"$$store.purchase_unit_price",
+										"$$store.stock",
+									}},
+									0,
+								},
+							},
+						},
+					}}},
+				*/
 			},
 		},
 	}
