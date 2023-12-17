@@ -93,7 +93,7 @@ type Product struct {
 	Category     []*ProductCategory    `json:"category,omitempty"`
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
-	Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
+	//Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
 	ProductStores map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
 	Unit          string                  `bson:"unit" json:"unit"`
 	Images        []string                `bson:"images,omitempty" json:"images,omitempty"`
@@ -2321,15 +2321,17 @@ func ProcessProducts() error {
 				return err
 			}
 		*/
-		if len(product.ProductStores) == 0 {
-			product.ProductStores = map[string]ProductStore{}
-		}
-
-		for _, store := range product.Stores {
-			if !store.StoreID.IsZero() && store.StoreID.Hex() != "" {
-				product.ProductStores[store.StoreID.Hex()] = store
+		/*
+			if len(product.ProductStores) == 0 {
+				product.ProductStores = map[string]ProductStore{}
 			}
-		}
+
+			for _, store := range product.Stores {
+				if !store.StoreID.IsZero() && store.StoreID.Hex() != "" {
+					product.ProductStores[store.StoreID.Hex()] = store
+				}
+			}
+		*/
 
 		err = product.Update()
 		if err != nil {
