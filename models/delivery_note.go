@@ -723,10 +723,13 @@ func (product *Product) SetProductDeliveryNoteStatsByStoreID(storeID primitive.O
 		}
 	}
 
-	for storeIndex, store := range product.Stores {
+	for storeIndex, store := range product.ProductStores {
 		if store.StoreID.Hex() == storeID.Hex() {
-			product.Stores[storeIndex].DeliveryNoteCount = stats.DeliveryNoteCount
-			product.Stores[storeIndex].DeliveryNoteQuantity = stats.DeliveryNoteQuantity
+			if productStore, ok := product.ProductStores[storeIndex]; ok {
+				productStore.DeliveryNoteCount = stats.DeliveryNoteCount
+				productStore.DeliveryNoteQuantity = stats.DeliveryNoteQuantity
+				product.ProductStores[storeIndex] = productStore
+			}
 			err = product.Update()
 			if err != nil {
 				return err

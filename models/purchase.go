@@ -957,8 +957,6 @@ func (purchase *Purchase) Validate(
 			errs["date_str"] = "Invalid date format"
 		}
 		purchase.Date = &date
-		log.Print("purchase.Date:")
-		log.Print(purchase.Date)
 	}
 
 	if !govalidator.IsNull(purchase.SignatureDateStr) {
@@ -1104,22 +1102,35 @@ func (purchase *Purchase) AddStock() (err error) {
 			return err
 		}
 
-		storeExistInProductStore := false
-		for k, productStore := range product.Stores {
-			if productStore.StoreID.Hex() == purchase.StoreID.Hex() {
-				product.Stores[k].Stock += (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
-				storeExistInProductStore = true
-				break
-			}
-		}
-
-		if !storeExistInProductStore {
-			productStore := ProductStore{
+		if productStoreTemp, ok := product.ProductStores[purchase.StoreID.Hex()]; ok {
+			productStoreTemp.Stock += (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
+			product.ProductStores[purchase.StoreID.Hex()] = productStoreTemp
+		} else {
+			product.ProductStores = map[string]ProductStore{}
+			product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
 				StoreID: *purchase.StoreID,
 				Stock:   (purchaseProduct.Quantity - purchaseProduct.QuantityReturned),
 			}
-			product.Stores = append(product.Stores, productStore)
 		}
+
+		/*
+			storeExistInProductStore := false
+			for k, productStore := range product.Stores {
+				if productStore.StoreID.Hex() == purchase.StoreID.Hex() {
+					product.Stores[k].Stock += (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
+					storeExistInProductStore = true
+					break
+				}
+			}
+
+			if !storeExistInProductStore {
+				productStore := ProductStore{
+					StoreID: *purchase.StoreID,
+					Stock:   (purchaseProduct.Quantity - purchaseProduct.QuantityReturned),
+				}
+				product.Stores = append(product.Stores, productStore)
+			}
+		*/
 
 		err = product.Update()
 		if err != nil {
@@ -1136,12 +1147,18 @@ func (purchase *Purchase) RemoveStock() (err error) {
 			return err
 		}
 
-		for k, productStore := range product.Stores {
-			if productStore.StoreID.Hex() == purchase.StoreID.Hex() {
-				product.Stores[k].Stock -= (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
-				break
-			}
+		if productStoreTemp, ok := product.ProductStores[purchase.StoreID.Hex()]; ok {
+			productStoreTemp.Stock -= (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
+			product.ProductStores[purchase.StoreID.Hex()] = productStoreTemp
 		}
+
+		/*
+			for k, productStore := range product.Stores {
+				if productStore.StoreID.Hex() == purchase.StoreID.Hex() {
+					product.Stores[k].Stock -= (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
+					break
+				}
+			}*/
 
 		err = product.Update()
 		if err != nil {
@@ -1159,26 +1176,41 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 			return err
 		}
 
-		storeExistInProductUnitPrice := false
-		for k, productStore := range product.Stores {
-			if productStore.StoreID.Hex() == purchase.StoreID.Hex() {
-				product.Stores[k].PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
-				product.Stores[k].WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
-				product.Stores[k].RetailUnitPrice = purchaseProduct.RetailUnitPrice
-				storeExistInProductUnitPrice = true
-				break
-			}
-		}
-
-		if !storeExistInProductUnitPrice {
-			productStore := ProductStore{
+		if productStoreTemp, ok := product.ProductStores[purchase.StoreID.Hex()]; ok {
+			productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
+			product.ProductStores[purchase.StoreID.Hex()] = productStoreTemp
+		} else {
+			product.ProductStores = map[string]ProductStore{}
+			product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
 				StoreID:            *purchase.StoreID,
 				PurchaseUnitPrice:  purchaseProduct.PurchaseUnitPrice,
 				WholesaleUnitPrice: purchaseProduct.WholesaleUnitPrice,
 				RetailUnitPrice:    purchaseProduct.RetailUnitPrice,
 			}
-			product.Stores = append(product.Stores, productStore)
 		}
+
+		/*
+			storeExistInProductUnitPrice := false
+			for k, productStore := range product.Stores {
+				if productStore.StoreID.Hex() == purchase.StoreID.Hex() {
+					product.Stores[k].PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
+					product.Stores[k].WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+					product.Stores[k].RetailUnitPrice = purchaseProduct.RetailUnitPrice
+					storeExistInProductUnitPrice = true
+					break
+				}
+			}
+
+			if !storeExistInProductUnitPrice {
+				productStore := ProductStore{
+					StoreID:            *purchase.StoreID,
+					PurchaseUnitPrice:  purchaseProduct.PurchaseUnitPrice,
+					WholesaleUnitPrice: purchaseProduct.WholesaleUnitPrice,
+					RetailUnitPrice:    purchaseProduct.RetailUnitPrice,
+				}
+				product.Stores = append(product.Stores, productStore)
+			}
+		*/
 		err = product.Update()
 		if err != nil {
 			return err
@@ -1673,18 +1705,32 @@ func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.Objec
 		stats.Purchase = math.Round(stats.Purchase*100) / 100
 	}
 
-	for storeIndex, store := range product.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			product.Stores[storeIndex].PurchaseCount = stats.PurchaseCount
-			product.Stores[storeIndex].PurchaseQuantity = stats.PurchaseQuantity
-			product.Stores[storeIndex].Purchase = stats.Purchase
-			err = product.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		productStoreTemp.PurchaseCount = stats.PurchaseCount
+		productStoreTemp.PurchaseQuantity = stats.PurchaseQuantity
+		productStoreTemp.Purchase = stats.Purchase
+		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
+
+	err = product.Update()
+	if err != nil {
+		return err
+	}
+
+	/*
+		for storeIndex, store := range product.Stores {
+			if store.StoreID.Hex() == storeID.Hex() {
+				product.Stores[storeIndex].PurchaseCount = stats.PurchaseCount
+				product.Stores[storeIndex].PurchaseQuantity = stats.PurchaseQuantity
+				product.Stores[storeIndex].Purchase = stats.Purchase
+				err = product.Update()
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	*/
 
 	return nil
 }

@@ -1089,37 +1089,36 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 			return err
 		}
 
-		storeExistInProductStore := false
-		for k, productStore := range product.Stores {
-			if productStore.StoreID.Hex() == salesreturn.StoreID.Hex() {
-				/*
-					salesreturn.SetChangeLog(
-						"add_stock",
-						product.Name,
-						product.Stores[k].Stock,
-						(product.Stores[k].Stock + salesreturnProduct.Quantity),
-					)
-
-					product.SetChangeLog(
-						"add_stock",
-						product.Name,
-						product.Stores[k].Stock,
-						(product.Stores[k].Stock + salesreturnProduct.Quantity),
-					)*/
-
-				product.Stores[k].Stock += salesreturnProduct.Quantity
-				storeExistInProductStore = true
-				break
-			}
-		}
-
-		if !storeExistInProductStore {
-			productStore := ProductStore{
+		if productStoreTemp, ok := product.ProductStores[salesreturn.StoreID.Hex()]; ok {
+			productStoreTemp.Stock += salesreturnProduct.Quantity
+			product.ProductStores[salesreturn.StoreID.Hex()] = productStoreTemp
+		} else {
+			product.ProductStores = map[string]ProductStore{}
+			product.ProductStores[salesreturn.StoreID.Hex()] = ProductStore{
 				StoreID: *salesreturn.StoreID,
 				Stock:   salesreturnProduct.Quantity,
 			}
-			product.Stores = append(product.Stores, productStore)
 		}
+
+		/*
+			storeExistInProductStore := false
+			for k, productStore := range product.ProductStores {
+				if productStore.StoreID.Hex() == salesreturn.StoreID.Hex() {
+
+					product.Stores[k].Stock += salesreturnProduct.Quantity
+					storeExistInProductStore = true
+					break
+				}
+			}
+
+			if !storeExistInProductStore {
+				productStore := ProductStore{
+					StoreID: *salesreturn.StoreID,
+					Stock:   salesreturnProduct.Quantity,
+				}
+				product.Stores = append(product.Stores, productStore)
+			}
+		*/
 
 		err = product.Update()
 		if err != nil {
@@ -1185,7 +1184,7 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 			if err != nil {
 				return err
 			}
-			for _, productStore := range product.Stores {
+			for _, productStore := range product.ProductStores {
 				if productStore.StoreID == *salesReturn.StoreID {
 					purchaseUnitPrice = productStore.PurchaseUnitPrice
 					salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
@@ -1661,26 +1660,34 @@ func (salesReturn *SalesReturn) RemoveStock() (err error) {
 			return err
 		}
 
-		if len(product.Stores) == 0 {
+		if len(product.ProductStores) == 0 {
 			store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 			if err != nil {
 				return err
 			}
-			productStore := ProductStore{
+
+			product.ProductStores = map[string]ProductStore{}
+
+			product.ProductStores[salesReturn.StoreID.Hex()] = ProductStore{
 				StoreID:           *salesReturn.StoreID,
 				StoreName:         salesReturn.StoreName,
 				StoreNameInArabic: store.NameInArabic,
 				Stock:             float64(0),
 			}
-			product.Stores = []ProductStore{productStore}
 		}
 
-		for k, productStore := range product.Stores {
-			if productStore.StoreID.Hex() == salesReturn.StoreID.Hex() {
-				product.Stores[k].Stock -= (salesReturnProduct.Quantity)
-				break
-			}
+		if productStoreTemp, ok := product.ProductStores[salesReturn.StoreID.Hex()]; ok {
+			productStoreTemp.Stock -= (salesReturnProduct.Quantity)
+			product.ProductStores[salesReturn.StoreID.Hex()] = productStoreTemp
 		}
+		/*
+			for k, productStore := range product.ProductStores {
+				if productStore.StoreID.Hex() == salesReturn.StoreID.Hex() {
+					product.Stores[k].Stock -= (salesReturnProduct.Quantity)
+					break
+				}
+			}
+		*/
 
 		err = product.Update()
 		if err != nil {
@@ -1771,20 +1778,36 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 		stats.SalesReturnLoss = math.Round(stats.SalesReturnLoss*100) / 100
 	}
 
-	for storeIndex, store := range product.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			product.Stores[storeIndex].SalesReturnCount = stats.SalesReturnCount
-			product.Stores[storeIndex].SalesReturnQuantity = stats.SalesReturnQuantity
-			product.Stores[storeIndex].SalesReturn = stats.SalesReturn
-			product.Stores[storeIndex].SalesReturnProfit = stats.SalesReturnProfit
-			product.Stores[storeIndex].SalesReturnLoss = stats.SalesReturnLoss
-			err = product.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		productStoreTemp.SalesReturnCount = stats.SalesReturnCount
+		productStoreTemp.SalesReturnQuantity = stats.SalesReturnQuantity
+		productStoreTemp.SalesReturn = stats.SalesReturn
+		productStoreTemp.SalesReturnProfit = stats.SalesReturnProfit
+		productStoreTemp.SalesReturnLoss = stats.SalesReturnLoss
+		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
+
+	err = product.Update()
+	if err != nil {
+		return err
+	}
+
+	/*
+		for storeIndex, store := range product.ProductStores {
+			if store.StoreID.Hex() == storeID.Hex() {
+				product.Stores[storeIndex].SalesReturnCount = stats.SalesReturnCount
+				product.Stores[storeIndex].SalesReturnQuantity = stats.SalesReturnQuantity
+				product.Stores[storeIndex].SalesReturn = stats.SalesReturn
+				product.Stores[storeIndex].SalesReturnProfit = stats.SalesReturnProfit
+				product.Stores[storeIndex].SalesReturnLoss = stats.SalesReturnLoss
+				err = product.Update()
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	*/
 
 	return nil
 }

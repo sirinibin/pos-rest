@@ -141,7 +141,7 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 		purchaseUnitPrice := quotation.Products[i].PurchaseUnitPrice
 
 		if purchaseUnitPrice == 0 {
-			for _, store := range product.Stores {
+			for _, store := range product.ProductStores {
 				if store.StoreID == *quotation.StoreID {
 					purchaseUnitPrice = store.PurchaseUnitPrice
 					quotation.Products[i].PurchaseUnitPrice = purchaseUnitPrice
@@ -1273,18 +1273,32 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 		stats.Quotation = math.Round(stats.Quotation*100) / 100
 	}
 
-	for storeIndex, store := range product.Stores {
-		if store.StoreID.Hex() == storeID.Hex() {
-			product.Stores[storeIndex].QuotationCount = stats.QuotationCount
-			product.Stores[storeIndex].QuotationQuantity = stats.QuotationQuantity
-			product.Stores[storeIndex].Quotation = stats.Quotation
-			err = product.Update()
-			if err != nil {
-				return err
-			}
-			break
-		}
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		productStoreTemp.QuotationCount = stats.QuotationCount
+		productStoreTemp.QuotationQuantity = stats.QuotationQuantity
+		productStoreTemp.Quotation = stats.Quotation
+		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
+
+	err = product.Update()
+	if err != nil {
+		return err
+	}
+
+	/*
+		for storeIndex, store := range product.Stores {
+			if store.StoreID.Hex() == storeID.Hex() {
+				product.Stores[storeIndex].QuotationCount = stats.QuotationCount
+				product.Stores[storeIndex].QuotationQuantity = stats.QuotationQuantity
+				product.Stores[storeIndex].Quotation = stats.Quotation
+				err = product.Update()
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+	*/
 
 	return nil
 }

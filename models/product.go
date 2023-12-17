@@ -93,27 +93,28 @@ type Product struct {
 	Category     []*ProductCategory    `json:"category,omitempty"`
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
-	Stores        []ProductStore      `bson:"stores,omitempty" json:"stores,omitempty"`
-	Unit          string              `bson:"unit" json:"unit"`
-	Images        []string            `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent []string            `json:"images_content,omitempty"`
-	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
-	BrandName     string              `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
-	CategoryName  []string            `json:"category_name" bson:"category_name"`
-	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog     []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
-	BarcodeBase64 string              `json:"barcode_base64"`
+	//Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
+	ProductStores map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
+	Unit          string                  `bson:"unit" json:"unit"`
+	Images        []string                `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent []string                `json:"images_content,omitempty"`
+	Deleted       bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User                   `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time              `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     *time.Time              `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time              `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID     `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID     `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser *User                   `json:"created_by_user,omitempty"`
+	UpdatedByUser *User                   `json:"updated_by_user,omitempty"`
+	BrandName     string                  `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
+	CategoryName  []string                `json:"category_name" bson:"category_name"`
+	CreatedByName string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ChangeLog     []ChangeLog             `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	BarcodeBase64 string                  `json:"barcode_base64"`
 }
 
 type ProductStats struct {
@@ -275,21 +276,36 @@ func GetProductStats(
 }
 
 func (product *Product) getRetailUnitPriceByStoreID(storeID primitive.ObjectID) (retailUnitPrice float64, err error) {
-	for _, store := range product.Stores {
+	if productStore, ok := product.ProductStores[storeID.Hex()]; ok {
+		return productStore.RetailUnitPrice, nil
+	}
+
+	return retailUnitPrice, nil
+	/*for _, store := range product.Stores {
 		if store.StoreID == storeID {
 			return store.RetailUnitPrice, nil
 		}
 	}
 	return retailUnitPrice, err
+	*/
 }
 
 func (product *Product) getPurchaseUnitPriceSecretByStoreID(storeID primitive.ObjectID) (secret string, err error) {
-	for _, productStore := range product.Stores {
-		if productStore.StoreID == storeID {
-			return productStore.PurchaseUnitPriceSecret, nil
-		}
+
+	if productStore, ok := product.ProductStores[storeID.Hex()]; ok {
+		return productStore.PurchaseUnitPriceSecret, nil
 	}
-	return secret, err
+
+	return "", nil
+
+	/*
+		for _, productStore := range product.ProductStores {
+			if productStore.StoreID == storeID {
+				return productStore.PurchaseUnitPriceSecret, nil
+			}
+		}
+		return secret, err
+	*/
 }
 
 func (product *Product) AttributesValueChangeEvent(productOld *Product) error {
@@ -357,24 +373,17 @@ func (product *Product) UpdateForeignLabelFields() error {
 
 	product.CategoryName = []string{}
 
-	for i, productStore := range product.Stores {
+	for i, productStore := range product.ProductStores {
 		store, err := FindStoreByID(&productStore.StoreID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error Finding store:" + productStore.StoreID.Hex() + ",error:" + err.Error())
 		}
 
-		product.Stores[i].StoreName = store.Name
-		product.Stores[i].StoreNameInArabic = store.NameInArabic
-	}
-
-	for i, productStore := range product.Stores {
-		store, err := FindStoreByID(&productStore.StoreID, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return errors.New("Error Finding store:" + productStore.StoreID.Hex() + ",error:" + err.Error())
+		if productStore, ok := product.ProductStores[i]; ok {
+			productStore.StoreName = store.Name
+			productStore.StoreNameInArabic = store.NameInArabic
+			product.ProductStores[i] = productStore
 		}
-
-		product.Stores[i].StoreName = store.Name
-		product.Stores[i].StoreNameInArabic = store.NameInArabic
 	}
 
 	for _, categoryID := range product.CategoryID {
@@ -498,17 +507,21 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 
 		productPrice := "0.00"
 		purchaseUnitPriceSecret := ""
-		if len(product.Stores) > 0 {
-			for i, productStore := range product.Stores {
+		if len(product.ProductStores) > 0 {
+			for i, productStore := range product.ProductStores {
 				if productStore.StoreID == store.ID {
 					if len(productStore.PurchaseUnitPriceSecret) == 0 {
-						product.Stores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
+						if productStoreTemp, ok := product.ProductStores[i]; ok {
+							productStoreTemp.PurchaseUnitPriceSecret = GenerateSecretCode(int(product.ProductStores[i].PurchaseUnitPrice))
+							product.ProductStores[i] = productStoreTemp
+						}
+						//product.ProductStores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
 						err = product.Update()
 						if err != nil {
 							return products, err
 						}
 					}
-					purchaseUnitPriceSecret = product.Stores[i].PurchaseUnitPriceSecret
+					purchaseUnitPriceSecret = product.ProductStores[i].PurchaseUnitPriceSecret
 
 					price := float64(productStore.RetailUnitPrice)
 					vatPrice := (float64(float64(productStore.RetailUnitPrice) * float64(store.VatPercent/float64(100))))
@@ -586,6 +599,12 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		}
 	}
 
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
+		criterias.SortBy = GetSortByFields(keys[0])
+	}
+
 	keys, ok = r.URL.Query()["search[retail_unit_profit]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -596,38 +615,45 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		element := bson.M{"$elemMatch": bson.M{}}
+		/*
+			element := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit": bson.M{
+							operator: value,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit": bson.M{
+							operator: value,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit": value,
+						"store_id":           storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit": value,
+					}
+				}
+			}
+		*/
 
 		if operator != "" {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit": bson.M{
-						operator: value,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit": bson.M{
-						operator: value,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit"] = bson.M{operator: value}
 		} else {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit": value,
-					"store_id":           storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit": value,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit"] = value
 		}
-
-		criterias.SearchBy["stores"] = element
+		//criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[retail_unit_profit_perc]"]
@@ -640,38 +666,45 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		element := bson.M{"$elemMatch": bson.M{}}
+		/*
+			element := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit_perc": bson.M{
+							operator: value,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit_perc": bson.M{
+							operator: value,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit_perc": value,
+						"store_id":                storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_profit_perc": value,
+					}
+				}
+			}
+		*/
 
 		if operator != "" {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit_perc": bson.M{
-						operator: value,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit_perc": bson.M{
-						operator: value,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit_perc"] = bson.M{operator: value}
 		} else {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit_perc": value,
-					"store_id":                storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_profit_perc": value,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit_perc"] = value
 		}
-
-		criterias.SearchBy["stores"] = element
+		//criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[wholesale_unit_profit]"]
@@ -684,38 +717,45 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		element := bson.M{"$elemMatch": bson.M{}}
+		/*
+			element := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit": bson.M{
+							operator: value,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit": bson.M{
+							operator: value,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit": value,
+						"store_id":              storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit": value,
+					}
+				}
+			}
+		*/
 
 		if operator != "" {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit": bson.M{
-						operator: value,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit": bson.M{
-						operator: value,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit"] = bson.M{operator: value}
 		} else {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit": value,
-					"store_id":              storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit": value,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit"] = value
 		}
-
-		criterias.SearchBy["stores"] = element
+		//criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[wholesale_unit_profit_perc]"]
@@ -728,38 +768,45 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		element := bson.M{"$elemMatch": bson.M{}}
+		/*
+			element := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit_perc": bson.M{
+							operator: value,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit_perc": bson.M{
+							operator: value,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit_perc": value,
+						"store_id":                   storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_profit_perc": value,
+					}
+				}
+			}
+		*/
 
 		if operator != "" {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit_perc": bson.M{
-						operator: value,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit_perc": bson.M{
-						operator: value,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit_perc"] = bson.M{operator: value}
 		} else {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit_perc": value,
-					"store_id":                   storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_profit_perc": value,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit_perc"] = value
 		}
-
-		criterias.SearchBy["stores"] = element
+		//criterias.SearchBy["stores"] = element
 	}
 
 	keys, ok = r.URL.Query()["search[stock]"]
@@ -772,38 +819,46 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		stockElement := bson.M{"$elemMatch": bson.M{}}
+		/*
+			stockElement := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					stockElement["$elemMatch"] = bson.M{
+						"stock": bson.M{
+							operator: stockValue,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					stockElement["$elemMatch"] = bson.M{
+						"stock": bson.M{
+							operator: stockValue,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					stockElement["$elemMatch"] = bson.M{
+						"stock":    stockValue,
+						"store_id": storeID,
+					}
+				} else {
+					stockElement["$elemMatch"] = bson.M{
+						"stock": stockValue,
+					}
+				}
+			}
+		*/
 
 		if operator != "" {
-			if !storeID.IsZero() {
-				stockElement["$elemMatch"] = bson.M{
-					"stock": bson.M{
-						operator: stockValue,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				stockElement["$elemMatch"] = bson.M{
-					"stock": bson.M{
-						operator: stockValue,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = bson.M{operator: stockValue}
 		} else {
-			if !storeID.IsZero() {
-				stockElement["$elemMatch"] = bson.M{
-					"stock":    stockValue,
-					"store_id": storeID,
-				}
-			} else {
-				stockElement["$elemMatch"] = bson.M{
-					"stock": stockValue,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = stockValue
 		}
 
-		criterias.SearchBy["stores"] = stockElement
+		//criterias.SearchBy["stores"] = stockElement
 	}
 
 	//sales
@@ -816,7 +871,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_quantity]"]
@@ -828,7 +889,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_quantity", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales]"]
@@ -840,7 +907,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_profit]"]
@@ -852,7 +925,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_loss]"]
@@ -864,7 +943,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
 	}
 
 	// Sales return
@@ -877,7 +962,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_quantity]"]
@@ -889,7 +980,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_quantity", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return]"]
@@ -901,7 +998,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_profit]"]
@@ -913,7 +1016,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[sales_return_loss]"]
@@ -925,7 +1034,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
 	}
 
 	//purchase
@@ -939,7 +1054,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_quantity]"]
@@ -951,7 +1072,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_quantity", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase]"]
@@ -963,7 +1090,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase", operator, &storeID, value)
 	}
 
 	// purchase return
@@ -977,7 +1110,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_quantity]"]
@@ -989,7 +1128,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_quantity", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_quantity", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return]"]
@@ -1001,7 +1146,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return", operator, &storeID, value)
 	}
 
 	//Quotation
@@ -1014,7 +1165,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[quotation_quantity]"]
@@ -1026,7 +1183,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_quantity", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_quantity", operator, &storeID, value)
 	}
 
 	//Delivery note
@@ -1039,7 +1202,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[delivery_note_quantity]"]
@@ -1051,7 +1220,13 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
-		criterias.SearchBy["stores"] = GetFloatSearchElement("delivery_note_quantity", operator, &storeID, value)
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_quantity"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("delivery_note_quantity", operator, &storeID, value)
 	}
 
 	//-end
@@ -1065,38 +1240,46 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		element := bson.M{"$elemMatch": bson.M{}}
-
 		if operator != "" {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_price": bson.M{
-						operator: value,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_price": bson.M{
-						operator: value,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_price"] = bson.M{operator: value}
 		} else {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_price": value,
-					"store_id":          storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"retail_unit_price": value,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_price"] = value
 		}
 
-		criterias.SearchBy["stores"] = element
+		/*
+			element := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_price": bson.M{
+							operator: value,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_price": bson.M{
+							operator: value,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_price": value,
+						"store_id":          storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"retail_unit_price": value,
+					}
+				}
+			}
+
+			criterias.SearchBy["stores"] = element
+		*/
 	}
 
 	keys, ok = r.URL.Query()["search[wholesale_unit_price]"]
@@ -1109,38 +1292,46 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		element := bson.M{"$elemMatch": bson.M{}}
-
 		if operator != "" {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_price": bson.M{
-						operator: value,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_price": bson.M{
-						operator: value,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_price"] = bson.M{operator: value}
 		} else {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_price": value,
-					"store_id":             storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"wholesale_unit_price": value,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_price"] = value
 		}
 
-		criterias.SearchBy["stores"] = element
+		/*
+			element := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_price": bson.M{
+							operator: value,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_price": bson.M{
+							operator: value,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_price": value,
+						"store_id":             storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"wholesale_unit_price": value,
+					}
+				}
+			}
+
+			criterias.SearchBy["stores"] = element
+		*/
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_unit_price]"]
@@ -1153,38 +1344,45 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 			return products, criterias, err
 		}
 
-		element := bson.M{"$elemMatch": bson.M{}}
-
 		if operator != "" {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"purchase_unit_price": bson.M{
-						operator: value,
-					},
-					"store_id": storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"purchase_unit_price": bson.M{
-						operator: value,
-					},
-				}
-			}
-
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_unit_price"] = bson.M{operator: value}
 		} else {
-			if !storeID.IsZero() {
-				element["$elemMatch"] = bson.M{
-					"purchase_unit_price": value,
-					"store_id":            storeID,
-				}
-			} else {
-				element["$elemMatch"] = bson.M{
-					"purchase_unit_price": value,
-				}
-			}
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_unit_price"] = value
 		}
 
-		criterias.SearchBy["stores"] = element
+		/*
+			element := bson.M{"$elemMatch": bson.M{}}
+
+			if operator != "" {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"purchase_unit_price": bson.M{
+							operator: value,
+						},
+						"store_id": storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"purchase_unit_price": bson.M{
+							operator: value,
+						},
+					}
+				}
+
+			} else {
+				if !storeID.IsZero() {
+					element["$elemMatch"] = bson.M{
+						"purchase_unit_price": value,
+						"store_id":            storeID,
+					}
+				} else {
+					element["$elemMatch"] = bson.M{
+						"purchase_unit_price": value,
+					}
+				}
+			}
+			criterias.SearchBy["stores"] = element
+		*/
 	}
 
 	keys, ok = r.URL.Query()["search[rack]"]
@@ -1327,10 +1525,6 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 	keys, ok = r.URL.Query()["page"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.Page, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["sort"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SortBy = GetSortByFields(keys[0])
 	}
 
 	offset := (criterias.Page - 1) * criterias.Size
@@ -1523,20 +1717,27 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
-	for i, productStore := range product.Stores {
+	storeNo := 0
+	for i, productStore := range product.ProductStores {
 		if productStore.StoreID.IsZero() {
-			errs["store_id_"+strconv.Itoa(i)] = "store_id is required for unit price"
+			errs["store_id_"+strconv.Itoa(storeNo)] = "store_id is required for unit price"
 			return errs
 		}
 		exists, err := IsStoreExists(&productStore.StoreID)
 		if err != nil {
-			errs["store_id_"+strconv.Itoa(i)] = err.Error()
+			errs["store_id_"+strconv.Itoa(storeNo)] = err.Error()
 		}
 
 		if !exists {
-			errs["store_id"+strconv.Itoa(i)] = "Invalid store_id:" + productStore.StoreID.Hex() + " in stores"
+			errs["store_id"+strconv.Itoa(storeNo)] = "Invalid store_id:" + productStore.StoreID.Hex() + " in stores"
 		}
-		product.Stores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
+
+		if productStoreTemp, ok := product.ProductStores[i]; ok {
+			productStoreTemp.PurchaseUnitPriceSecret = GenerateSecretCode(int(product.ProductStores[i].PurchaseUnitPrice))
+			product.ProductStores[i] = productStoreTemp
+		}
+		//product.Stores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
+		storeNo++
 	}
 
 	if len(product.CategoryID) == 0 {
@@ -1678,38 +1879,77 @@ func (product *Product) SetBarcode() (err error) {
 }
 
 func (product *Product) InitStoreUnitPrice() (err error) {
-	if len(product.Stores) > 0 {
+	if len(product.ProductStores) > 0 {
 		return nil
 	}
 
-	product.Stores = make([]ProductStore, 1)
-	product.Stores[0] = ProductStore{
-		StoreID:            *product.StoreID,
-		StoreName:          product.StoreName,
-		RetailUnitPrice:    0,
-		WholesaleUnitPrice: 0,
-		PurchaseUnitPrice:  0,
+	product.ProductStores = map[string]ProductStore{}
+
+	if !product.StoreID.IsZero() && product.StoreID.Hex() != "" {
+		product.ProductStores[product.StoreID.Hex()] = ProductStore{
+			StoreID:            *product.StoreID,
+			StoreName:          product.StoreName,
+			RetailUnitPrice:    0,
+			WholesaleUnitPrice: 0,
+			PurchaseUnitPrice:  0,
+		}
 	}
+
+	/*
+		product.ProductStores = make([]ProductStore, 1)
+		product.ProductStores[0] = ProductStore{
+			StoreID:            *product.StoreID,
+			StoreName:          product.StoreName,
+			RetailUnitPrice:    0,
+			WholesaleUnitPrice: 0,
+			PurchaseUnitPrice:  0,
+		}
+	*/
 	return nil
 }
 
 func (product *Product) CalculateUnitProfit() (err error) {
-	for i, _ := range product.Stores {
-		product.Stores[i].RetailUnitProfit = product.Stores[i].RetailUnitPrice - product.Stores[i].PurchaseUnitPrice
-		product.Stores[i].WholesaleUnitProfit = product.Stores[i].WholesaleUnitPrice - product.Stores[i].PurchaseUnitPrice
-		product.Stores[i].RetailUnitProfitPerc = 0
-		product.Stores[i].WholesaleUnitProfitPerc = 0
+	for i, _ := range product.ProductStores {
+		if productStoreTemp, ok := product.ProductStores[i]; ok {
+			productStoreTemp.RetailUnitProfit = product.ProductStores[i].RetailUnitPrice - product.ProductStores[i].PurchaseUnitPrice
+			productStoreTemp.WholesaleUnitProfit = product.ProductStores[i].WholesaleUnitPrice - product.ProductStores[i].PurchaseUnitPrice
+			productStoreTemp.RetailUnitProfitPerc = 0
+			productStoreTemp.WholesaleUnitProfitPerc = 0
+			product.ProductStores[i] = productStoreTemp
+		}
+		/*
+			product.ProductStores[i].RetailUnitProfit = product.ProductStores[i].RetailUnitPrice - product.ProductStores[i].PurchaseUnitPrice
+			product.ProductStores[i].WholesaleUnitProfit = product.ProductStores[i].WholesaleUnitPrice - product.ProductStores[i].PurchaseUnitPrice
+			product.ProductStores[i].RetailUnitProfitPerc = 0
+			product.ProductStores[i].WholesaleUnitProfitPerc = 0
+		*/
 
-		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].RetailUnitProfit > 0 {
-			product.Stores[i].RetailUnitProfitPerc = 100
-		} else if product.Stores[i].PurchaseUnitPrice != 0 {
-			product.Stores[i].RetailUnitProfitPerc = (product.Stores[i].RetailUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
+		if product.ProductStores[i].PurchaseUnitPrice == 0 && product.ProductStores[i].RetailUnitProfit > 0 {
+			if productStoreTemp, ok := product.ProductStores[i]; ok {
+				productStoreTemp.RetailUnitProfitPerc = 100
+				product.ProductStores[i] = productStoreTemp
+			}
+			//product.ProductStores[i].RetailUnitProfitPerc = 100
+		} else if product.ProductStores[i].PurchaseUnitPrice != 0 {
+			if productStoreTemp, ok := product.ProductStores[i]; ok {
+				productStoreTemp.RetailUnitProfitPerc = (product.ProductStores[i].RetailUnitProfit / product.ProductStores[i].PurchaseUnitPrice) * 100
+				product.ProductStores[i] = productStoreTemp
+			}
+			//product.ProductStores[i].RetailUnitProfitPerc = (product.ProductStores[i].RetailUnitProfit / product.ProductStores[i].PurchaseUnitPrice) * 100
 		}
 
-		if product.Stores[i].PurchaseUnitPrice == 0 && product.Stores[i].WholesaleUnitProfit > 0 {
-			product.Stores[i].WholesaleUnitProfitPerc = 100
-		} else if product.Stores[i].PurchaseUnitPrice != 0 {
-			product.Stores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
+		if product.ProductStores[i].PurchaseUnitPrice == 0 && product.ProductStores[i].WholesaleUnitProfit > 0 {
+			//product.ProductStores[i].WholesaleUnitProfitPerc = 100
+			if productStoreTemp, ok := product.ProductStores[i]; ok {
+				productStoreTemp.WholesaleUnitProfitPerc = 100
+				product.ProductStores[i] = productStoreTemp
+			}
+		} else if product.ProductStores[i].PurchaseUnitPrice != 0 {
+			if productStoreTemp, ok := product.ProductStores[i]; ok {
+				productStoreTemp.WholesaleUnitProfitPerc = (product.ProductStores[i].WholesaleUnitProfit / product.ProductStores[i].PurchaseUnitPrice) * 100
+				product.ProductStores[i] = productStoreTemp
+			}
+			//product.ProductStores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
 		}
 	}
 	return nil
@@ -2027,7 +2267,7 @@ func (product *Product) ReflectValidPurchaseUnitPrice() error {
 		}
 
 		for k, _ := range order.Products {
-			for _, store := range product.Stores {
+			for _, store := range product.ProductStores {
 
 				if store.StoreID == *order.StoreID &&
 					order.Products[k].ProductID.Hex() == product.ID.Hex() &&
@@ -2075,9 +2315,20 @@ func ProcessProducts() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = product.ReflectValidPurchaseUnitPrice()
-		if err != nil {
-			return err
+		/*
+			err = product.ReflectValidPurchaseUnitPrice()
+			if err != nil {
+				return err
+			}
+		*/
+		if len(product.ProductStores) == 0 {
+			product.ProductStores = map[string]ProductStore{}
+		}
+
+		for _, store := range product.ProductStores {
+			if !store.StoreID.IsZero() && store.StoreID.Hex() != "" {
+				product.ProductStores[store.StoreID.Hex()] = store
+			}
 		}
 
 		err = product.Update()
@@ -2086,6 +2337,7 @@ func ProcessProducts() error {
 		}
 	}
 
+	log.Print("DONE!")
 	return nil
 }
 
