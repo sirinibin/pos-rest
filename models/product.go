@@ -656,6 +656,20 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		if err != nil {
 			return products, criterias, err
 		}
+
+		store, err := FindStoreByID(&storeID, bson.M{})
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if len(store.UseProductsFromStoreID) > 0 {
+			criterias.SearchBy["$or"] = []bson.M{
+				{"store_id": storeID},
+				{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
+			}
+		} else {
+			criterias.SearchBy["store_id"] = storeID
+		}
 	}
 
 	keys, ok = r.URL.Query()["sort"]
@@ -1566,15 +1580,6 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
 	} else if !createdAtEndDate.IsZero() {
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
-	}
-
-	keys, ok = r.URL.Query()["search[store_id]"]
-	if ok && len(keys[0]) >= 1 {
-		storeID, err := primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			return products, criterias, err
-		}
-		criterias.SearchBy["store_id"] = storeID
 	}
 
 	keys, ok = r.URL.Query()["limit"]
