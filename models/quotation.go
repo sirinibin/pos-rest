@@ -14,6 +14,7 @@ import (
 	"github.com/jung-kurt/gofpdf"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -965,7 +966,7 @@ func (quotation *Quotation) Insert() error {
 
 func (quotation *Quotation) MakeCode() error {
 	lastQuotation, err := FindLastQuotationByStoreID(quotation.StoreID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
 	if lastQuotation == nil {

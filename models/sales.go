@@ -13,6 +13,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
@@ -1421,7 +1422,7 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 
 func (order *Order) MakeCode() error {
 	lastOrder, err := FindLastOrderByStoreID(order.StoreID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
 	if lastOrder == nil {

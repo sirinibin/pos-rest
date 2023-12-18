@@ -15,6 +15,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
@@ -1159,7 +1160,7 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 
 func (purchaseReturn *PurchaseReturn) MakeCode() error {
 	lastQuotation, err := FindLastPurchaseReturnByStoreID(purchaseReturn.StoreID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
 	if lastQuotation == nil {

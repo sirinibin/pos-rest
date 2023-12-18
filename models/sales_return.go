@@ -15,6 +15,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
@@ -1219,18 +1220,19 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 }
 
 func (salesReturn *SalesReturn) MakeCode() error {
-	lastQuotation, err := FindLastSalesReturnByStoreID(salesReturn.StoreID, bson.M{})
-	if err != nil {
+	lastSalesReturn, err := FindLastSalesReturnByStoreID(salesReturn.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
-	if lastQuotation == nil {
+
+	if lastSalesReturn == nil {
 		store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 		if err != nil {
 			return err
 		}
 		salesReturn.Code = store.Code + "-200000"
 	} else {
-		splits := strings.Split(lastQuotation.Code, "-")
+		splits := strings.Split(lastSalesReturn.Code, "-")
 		if len(splits) == 2 {
 			storeCode := splits[0]
 			codeStr := splits[1]
@@ -1252,7 +1254,7 @@ func (salesReturn *SalesReturn) MakeCode() error {
 			break
 		}
 
-		splits := strings.Split(lastQuotation.Code, "-")
+		splits := strings.Split(lastSalesReturn.Code, "-")
 		storeCode := splits[0]
 		codeStr := splits[1]
 		codeInt, err := strconv.Atoi(codeStr)

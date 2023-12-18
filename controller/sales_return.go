@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -133,11 +134,20 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.FindTotalQuantity()
 	salesreturn.FindVatPrice()
 	salesreturn.UpdateForeignLabelFields()
+	salesreturn.CalculateSalesReturnProfit()
 
 	salesreturn.ID = primitive.NewObjectID()
-	salesreturn.MakeCode()
+	log.Print("Calling Make code")
+	err = salesreturn.MakeCode()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["code"] = "Error making code: " + err.Error()
 
-	salesreturn.CalculateSalesReturnProfit()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = salesreturn.Insert()
 	if err != nil {
