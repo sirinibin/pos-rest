@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,41 +19,43 @@ import (
 
 // Store : Store structure
 type Store struct {
-	ID                         primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name                       string              `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic               string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	Code                       string              `bson:"code" json:"code"`
-	Title                      string              `bson:"title,omitempty" json:"title,omitempty"`
-	TitleInArabic              string              `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
-	RegistrationNumber         string              `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
-	RegistrationNumberInArabic string              `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
-	Email                      string              `bson:"email,omitempty" json:"email,omitempty"`
-	Phone                      string              `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic              string              `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
-	Address                    string              `bson:"address,omitempty" json:"address,omitempty"`
-	AddressInArabic            string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	ZipCode                    string              `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
-	ZipCodeInArabic            string              `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
-	VATNo                      string              `bson:"vat_no" json:"vat_no"`
-	VATNoInArabic              string              `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	VatPercent                 float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Logo                       string              `bson:"logo,omitempty" json:"logo,omitempty"`
-	LogoContent                string              `json:"logo_content,omitempty"`
-	NationalAddresss           NationalAddresss    `bson:"national_address,omitempty" json:"national_address,omitempty"`
-	Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser              *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt                  *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt                  *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt                  *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy                  *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy                  *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser              *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser              *User               `json:"updated_by_user,omitempty"`
-	CreatedByName              string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName              string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName              string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog                  []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	ID                         primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                       string                `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic               string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	Code                       string                `bson:"code" json:"code"`
+	Title                      string                `bson:"title,omitempty" json:"title,omitempty"`
+	TitleInArabic              string                `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
+	RegistrationNumber         string                `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
+	RegistrationNumberInArabic string                `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
+	Email                      string                `bson:"email,omitempty" json:"email,omitempty"`
+	Phone                      string                `bson:"phone,omitempty" json:"phone,omitempty"`
+	PhoneInArabic              string                `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	Address                    string                `bson:"address,omitempty" json:"address,omitempty"`
+	AddressInArabic            string                `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
+	ZipCode                    string                `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
+	ZipCodeInArabic            string                `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
+	VATNo                      string                `bson:"vat_no" json:"vat_no"`
+	VATNoInArabic              string                `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
+	VatPercent                 float64               `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Logo                       string                `bson:"logo,omitempty" json:"logo,omitempty"`
+	LogoContent                string                `json:"logo_content,omitempty"`
+	NationalAddresss           NationalAddresss      `bson:"national_address,omitempty" json:"national_address,omitempty"`
+	Deleted                    bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                  *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser              *User                 `json:"deleted_by_user,omitempty"`
+	DeletedAt                  *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                  *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                  *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                  *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                  *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser              *User                 `json:"created_by_user,omitempty"`
+	UpdatedByUser              *User                 `json:"updated_by_user,omitempty"`
+	CreatedByName              string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName              string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName              string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	UseProductsFromStoreID     []*primitive.ObjectID `json:"use_products_from_store_id" bson:"use_products_from_store_id"`
+	UseProductsFromStoreNames  []string              `json:"use_products_from_store_names" bson:"use_products_from_store_names"`
+	ChangeLog                  []ChangeLog           `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
 func (store *Store) SetChangeLog(
@@ -110,6 +113,16 @@ func (store *Store) AttributesValueChangeEvent(storeOld *Store) error {
 }
 
 func (store *Store) UpdateForeignLabelFields() error {
+
+	store.UseProductsFromStoreNames = []string{}
+
+	for _, storeID := range store.UseProductsFromStoreID {
+		storeTemp, err := FindStoreByID(storeID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error Finding store id:" + storeID.Hex() + ",error:" + err.Error())
+		}
+		store.UseProductsFromStoreNames = append(store.UseProductsFromStoreNames, storeTemp.Name)
+	}
 
 	if store.CreatedBy != nil {
 		createdByUser, err := FindUserByID(store.CreatedBy, bson.M{"id": 1, "name": 1})
@@ -345,6 +358,20 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	}
 
+	if len(store.UseProductsFromStoreID) == 0 {
+		for i, storeID := range store.UseProductsFromStoreID {
+			exists, err := IsStoreExists(storeID)
+			if err != nil {
+				errs["use_products_from_store_id_"+strconv.Itoa(i)] = err.Error()
+			}
+
+			if !exists {
+				errs["use_products_from_store_id_"+strconv.Itoa(i)] = "Invalid store:" + storeID.Hex()
+			}
+		}
+
+	}
+
 	if govalidator.IsNull(store.Name) {
 		errs["name"] = "Name is required"
 	}
@@ -466,8 +493,6 @@ func (store *Store) Insert() error {
 		}
 	}
 
-	store.SetChangeLog("create", nil, nil, nil)
-
 	_, err = collection.InsertOne(ctx, &store)
 	if err != nil {
 		return err
@@ -515,8 +540,6 @@ func (store *Store) Update() error {
 		}
 	}
 	store.LogoContent = ""
-
-	store.SetChangeLog("update", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -674,4 +697,41 @@ func IsStoreExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func ProcessStores() error {
+	log.Printf("Processing stores")
+	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching products" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		store := Store{}
+		err = cur.Decode(&store)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		err = store.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Print("DONE!")
+	return nil
 }
