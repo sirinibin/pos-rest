@@ -1600,7 +1600,7 @@ func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, er
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{"sales_return_id": salesReturn.ID}, findOptions)
+	cur, err := collection.Find(ctx, bson.M{"sales_return_id": salesReturn.ID, "deleted": bson.M{"$ne": true}}, findOptions)
 	if err != nil {
 		return payments, errors.New("Error fetching sales return payment history" + err.Error())
 	}
@@ -1723,6 +1723,7 @@ func (salesReturn *SalesReturn) GetPaymentsCount() (count int64, err error) {
 
 	return collection.CountDocuments(ctx, bson.M{
 		"sales_return_id": salesReturn.ID,
+		"deleted":         bson.M{"$ne": true},
 	})
 }
 

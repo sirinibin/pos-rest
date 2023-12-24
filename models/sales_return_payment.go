@@ -37,6 +37,10 @@ type SalesReturnPayment struct {
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	StoreID         *primitive.ObjectID `json:"store_id" bson:"store_id"`
 	StoreName       string              `json:"store_name" bson:"store_name"`
+	Deleted         bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 }
 
 /*
@@ -136,8 +140,20 @@ func SearchSalesReturnPayment(w http.ResponseWriter, r *http.Request) (models []
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
+	keys, ok := r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		}
+	}
+
 	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	keys, ok = r.URL.Query()["search[timezone_offset]"]
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
@@ -620,8 +636,13 @@ func GetSalesReturnPaymentStats(filter map[string]interface{}) (stats SalesRetur
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":           nil,
-				"total_payment": bson.M{"$sum": "$amount"},
+				"_id": nil,
+				//"total_payment": bson.M{"$sum": "$amount"},
+				"total_payment": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$ne": []interface{}{"$deleted", true}},
+					"$amount",
+					0,
+				}}},
 			},
 		},
 	}
@@ -652,7 +673,9 @@ func ProcessSalesReturnPayments() error {
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	searchBy := make(map[string]interface{})
+	searchBy["deleted"] = bson.M{"$ne": true}
+	cur, err := collection.Find(ctx, searchBy, findOptions)
 	if err != nil {
 		return errors.New("Error fetching sales return payments:" + err.Error())
 	}
@@ -683,5 +706,25 @@ func ProcessSalesReturnPayments() error {
 	}
 
 	log.Print("DONE!")
+	return nil
+}
+
+func (salesReturnPayment *SalesReturnPayment) DeleteSalesReturnPayment() (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": salesReturnPayment.ID},
+		bson.M{"$set": salesReturnPayment},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

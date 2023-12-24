@@ -1277,6 +1277,7 @@ func (order *Order) GetPaymentsCount() (count int64, err error) {
 
 	return collection.CountDocuments(ctx, bson.M{
 		"order_id": order.ID,
+		"deleted":  bson.M{"$ne": true},
 	})
 }
 
@@ -1358,7 +1359,7 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{"order_id": order.ID}, findOptions)
+	cur, err := collection.Find(ctx, bson.M{"order_id": order.ID, "deleted": bson.M{"$ne": true}}, findOptions)
 	if err != nil {
 		return models, errors.New("Error fetching order payment history" + err.Error())
 	}

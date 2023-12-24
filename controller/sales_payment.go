@@ -272,3 +272,70 @@ func ViewSalesPayment(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// DeleteSalesPayment : handler function for DELETE /v1/sales-payment/<id> call
+func DeleteSalesPayment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	salesPaymentID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["sales_payment_id"] = "Invalid sales payment ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesPayment, err := models.FindSalesPaymentByID(&salesPaymentID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Error finding sales payement: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesPayment.Deleted = true
+	salesPayment.DeletedBy = &userID
+	now := time.Now()
+	salesPayment.DeletedAt = &now
+
+	err = salesPayment.DeleteSalesPayment()
+	if err != nil {
+		response.Status = false
+		response.Errors["delete"] = "Unable to delete:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	//Updating order.payments
+	order, _ := models.FindOrderByID(salesPayment.OrderID, map[string]interface{}{})
+	order.GetPayments()
+	order.SetCustomerSalesStats()
+	order.Update()
+
+	response.Status = true
+	response.Result = "Deleted successfully"
+
+	json.NewEncoder(w).Encode(response)
+
+}

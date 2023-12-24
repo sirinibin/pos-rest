@@ -123,6 +123,7 @@ func CreatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 	//Updating purchase.payments
 	purchase, _ := models.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
 	purchase.GetPayments()
+	purchase.SetVendorPurchaseStats()
 	purchase.Update()
 
 	response.Status = true
@@ -207,6 +208,7 @@ func UpdatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 	//Updating purchase.payments
 	purchase, _ := models.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
 	purchase.GetPayments()
+	purchase.SetVendorPurchaseStats()
 	purchase.Update()
 
 	purchasepayment, err = models.FindPurchasePaymentByID(&purchasepayment.ID, bson.M{})
@@ -269,4 +271,71 @@ func ViewPurchasePayment(w http.ResponseWriter, r *http.Request) {
 	response.Result = purchasepayment
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// DeletePurchasePayment : handler function for DELETE /v1/purchase-payment/<id> call
+func DeletePurchasePayment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	purchasePaymentID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["purchase_payment_id"] = "Invalid purchase payment ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasePayment, err := models.FindPurchasePaymentByID(&purchasePaymentID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Error finding purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasePayment.Deleted = true
+	purchasePayment.DeletedBy = &userID
+	now := time.Now()
+	purchasePayment.DeletedAt = &now
+
+	err = purchasePayment.DeletePurchasePayment()
+	if err != nil {
+		response.Status = false
+		response.Errors["delete"] = "Unable to delete:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	//Updating purchase.payments
+	purchase, _ := models.FindPurchaseByID(purchasePayment.PurchaseID, map[string]interface{}{})
+	purchase.GetPayments()
+	purchase.SetVendorPurchaseStats()
+	purchase.Update()
+
+	response.Status = true
+	response.Result = "Deleted successfully"
+
+	json.NewEncoder(w).Encode(response)
+
 }

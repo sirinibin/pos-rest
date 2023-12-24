@@ -272,3 +272,72 @@ func ViewSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// DeleteSalesReturnPayment : handler function for DELETE /v1/sales-return-payment/<id> call
+func DeleteSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	salesReturnPaymentID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["sales_return_payment_id"] = "Invalid sales return payment ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesReturnPayment, err := models.FindSalesReturnPaymentByID(&salesReturnPaymentID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Error finding sales return payement: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesReturnPayment.Deleted = true
+	salesReturnPayment.DeletedBy = &userID
+	now := time.Now()
+	salesReturnPayment.DeletedAt = &now
+
+	err = salesReturnPayment.DeleteSalesReturnPayment()
+	if err != nil {
+		response.Status = false
+		response.Errors["delete"] = "Unable to delete:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	//Updating salesReturn.payments
+	if salesReturnPayment.SalesReturnID != nil {
+		salesReturn, _ := models.FindSalesReturnByID(salesReturnPayment.SalesReturnID, map[string]interface{}{})
+		salesReturn.GetPayments()
+		salesReturn.SetCustomerSalesReturnStats()
+		salesReturn.Update()
+	}
+
+	response.Status = true
+	response.Result = "Deleted successfully"
+
+	json.NewEncoder(w).Encode(response)
+
+}

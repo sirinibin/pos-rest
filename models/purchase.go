@@ -1586,7 +1586,7 @@ func (model *Purchase) GetPayments() (payments []PurchasePayment, err error) {
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{"purchase_id": model.ID}, findOptions)
+	cur, err := collection.Find(ctx, bson.M{"purchase_id": model.ID, "deleted": bson.M{"$ne": true}}, findOptions)
 	if err != nil {
 		return payments, errors.New("Error fetching purchase payment history" + err.Error())
 	}
@@ -1644,6 +1644,7 @@ func (model *Purchase) GetPaymentsCount() (count int64, err error) {
 
 	return collection.CountDocuments(ctx, bson.M{
 		"purchase_id": model.ID,
+		"deleted":     bson.M{"$ne": true},
 	})
 }
 
@@ -1916,6 +1917,26 @@ func (purchase *Purchase) SetVendorPurchaseStats() error {
 	}
 
 	err = vendor.SetVendorPurchaseStatsByStoreID(*purchase.StoreID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (purchasePayment *PurchasePayment) DeletePurchasePayment() (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": purchasePayment.ID},
+		bson.M{"$set": purchasePayment},
+		updateOptions,
+	)
 	if err != nil {
 		return err
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -405,24 +406,28 @@ func main() {
 	router.HandleFunc("/v1/sales-payment", controller.ListSalesPayment).Methods("GET")
 	router.HandleFunc("/v1/sales-payment/{id}", controller.ViewSalesPayment).Methods("GET")
 	router.HandleFunc("/v1/sales-payment/{id}", controller.UpdateSalesPayment).Methods("PUT")
+	router.HandleFunc("/v1/sales-payment/{id}", controller.DeleteSalesPayment).Methods("DELETE")
 
 	//SalesReturnPayment
 	router.HandleFunc("/v1/sales-return-payment", controller.CreateSalesReturnPayment).Methods("POST")
 	router.HandleFunc("/v1/sales-return-payment", controller.ListSalesReturnPayment).Methods("GET")
 	router.HandleFunc("/v1/sales-return-payment/{id}", controller.ViewSalesReturnPayment).Methods("GET")
 	router.HandleFunc("/v1/sales-return-payment/{id}", controller.UpdateSalesReturnPayment).Methods("PUT")
+	router.HandleFunc("/v1/sales-return-payment/{id}", controller.DeleteSalesReturnPayment).Methods("DELETE")
 
 	//PurchasePayment
 	router.HandleFunc("/v1/purchase-payment", controller.CreatePurchasePayment).Methods("POST")
 	router.HandleFunc("/v1/purchase-payment", controller.ListPurchasePayment).Methods("GET")
 	router.HandleFunc("/v1/purchase-payment/{id}", controller.ViewPurchasePayment).Methods("GET")
 	router.HandleFunc("/v1/purchase-payment/{id}", controller.UpdatePurchasePayment).Methods("PUT")
+	router.HandleFunc("/v1/purchase-payment/{id}", controller.DeletePurchasePayment).Methods("DELETE")
 
-	//PurchasePayment
+	//PurchaseReturnPayment
 	router.HandleFunc("/v1/purchase-return-payment", controller.CreatePurchaseReturnPayment).Methods("POST")
 	router.HandleFunc("/v1/purchase-return-payment", controller.ListPurchaseReturnPayment).Methods("GET")
 	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.ViewPurchaseReturnPayment).Methods("GET")
 	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.UpdatePurchaseReturnPayment).Methods("PUT")
+	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.DeletePurchaseReturnPayment).Methods("DELETE")
 
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
@@ -657,15 +662,7 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 
-		err = models.ProcessPurchases()
-		if err != nil {
-			log.Print(err)
-		}
 
-		err = models.ProcessPurchaseReturns()
-		if err != nil {
-			log.Print(err)
-		}
 	*/
 
 	/*
@@ -681,6 +678,16 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 	*/
+
+	err := models.ProcessPurchases()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessPurchaseReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
 	return nil
 }

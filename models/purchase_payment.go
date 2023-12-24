@@ -35,6 +35,10 @@ type PurchasePayment struct {
 	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	StoreID       *primitive.ObjectID `json:"store_id" bson:"store_id"`
 	StoreName     string              `json:"store_name" bson:"store_name"`
+	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 }
 
 /*
@@ -119,9 +123,20 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+	keys, ok := r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		}
+	}
 
 	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	keys, ok = r.URL.Query()["search[timezone_offset]"]
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
@@ -562,8 +577,13 @@ func GetPurchasePaymentStats(filter map[string]interface{}) (stats PurchasePayme
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":           nil,
-				"total_payment": bson.M{"$sum": "$amount"},
+				"_id": nil,
+				//"total_payment": bson.M{"$sum": "$amount"},
+				"total_payment": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$ne": []interface{}{"$deleted", true}},
+					"$amount",
+					0,
+				}}},
 			},
 		},
 	}
@@ -594,7 +614,9 @@ func ProcessPurchasePayments() error {
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	searchBy := make(map[string]interface{})
+	searchBy["deleted"] = bson.M{"$ne": true}
+	cur, err := collection.Find(ctx, searchBy, findOptions)
 	if err != nil {
 		return errors.New("Error fetching purchase payments:" + err.Error())
 	}

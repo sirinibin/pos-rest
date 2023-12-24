@@ -1547,6 +1547,7 @@ func (model *PurchaseReturn) GetPaymentsCount() (count int64, err error) {
 
 	return collection.CountDocuments(ctx, bson.M{
 		"purchase_return_id": model.ID,
+		"deleted":            bson.M{"$ne": true},
 	})
 }
 
@@ -1558,7 +1559,7 @@ func (model *PurchaseReturn) GetPayments() (payments []PurchaseReturnPayment, er
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{"purchase_return_id": model.ID}, findOptions)
+	cur, err := collection.Find(ctx, bson.M{"purchase_return_id": model.ID, "deleted": bson.M{"$ne": true}}, findOptions)
 	if err != nil {
 		return payments, errors.New("Error fetching purchase return payment history" + err.Error())
 	}
@@ -1851,6 +1852,26 @@ func (purchaseReturn *PurchaseReturn) SetVendorPurchaseReturnStats() error {
 	}
 
 	err = vendor.SetVendorPurchaseReturnStatsByStoreID(*purchaseReturn.StoreID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (purchaseReturnPayment *PurchaseReturnPayment) DeletePurchaseReturnPayment() (err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": purchaseReturnPayment.ID},
+		bson.M{"$set": purchaseReturnPayment},
+		updateOptions,
+	)
 	if err != nil {
 		return err
 	}
