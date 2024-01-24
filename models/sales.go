@@ -2155,7 +2155,6 @@ func (order *Order) CreateJournalEntries() (ledger *Ledger, err error) {
 
 			if firstPayment.Date.Equal(*order.Date) && len(order.Payments) == 1 && order.PaymentStatus == "paid" {
 				//Case: paid with 1 single payment at the time of sale
-				log.Printf("cashReceivingAccount: %v", cashReceivingAccount)
 				journals = append(journals, Journal{
 					Date:          payment.Date,
 					AccountID:     cashReceivingAccount.ID,
@@ -2230,14 +2229,15 @@ func (order *Order) CreateJournalEntries() (ledger *Ledger, err error) {
 					})
 
 					journals = append(journals, Journal{
-						Date:          order.Date,
+						Date:          payment.Date,
 						AccountID:     customerAccount.ID,
 						AccountNumber: customerAccount.Number,
 						AccountName:   customerAccount.Name,
 						DebitOrCredit: "credit",
-						Credit:        balanceAmount,
-						CreatedAt:     &now,
-						UpdatedAt:     &now,
+						//Credit:        balanceAmount,
+						Credit:    *payment.Amount,
+						CreatedAt: &now,
+						UpdatedAt: &now,
 					})
 				}
 
@@ -2490,9 +2490,6 @@ func CreateAccountIfNotExists(
 	if err != nil {
 		return nil, errors.New("error creating new account: " + err.Error())
 	}
-
-	log.Print("New account created")
-	log.Print(account)
 
 	return account, nil
 }

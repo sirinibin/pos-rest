@@ -10,6 +10,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -415,21 +416,26 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oldLedger, err := models.FindLedgerByReferenceID(order.ID, *order.StoreID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		response.Status = false
 		response.Errors["ledger"] = "Failed to find ledger: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	oldLedgerAccounts, err := oldLedger.GetRelatedAccounts()
-	if err != nil {
-		response.Status = false
-		response.Errors["old_ledger_accounts"] = "Failed to find old ledger accounts: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	oldLedgerAccounts := map[string]models.Account{}
+
+	if oldLedger != nil {
+		oldLedgerAccounts, err = oldLedger.GetRelatedAccounts()
+		if err != nil {
+			response.Status = false
+			response.Errors["old_ledger_accounts"] = "Failed to find old ledger accounts: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
+	log.Print("Removing journal entries")
 	err = order.RemoveJournalEntries()
 	if err != nil {
 		response.Status = false
