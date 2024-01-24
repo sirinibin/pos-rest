@@ -2155,6 +2155,7 @@ func (order *Order) CreateJournalEntries() (ledger *Ledger, err error) {
 
 			if firstPayment.Date.Equal(*order.Date) && len(order.Payments) == 1 && order.PaymentStatus == "paid" {
 				//Case: paid with 1 single payment at the time of sale
+				log.Printf("cashReceivingAccount: %v", cashReceivingAccount)
 				journals = append(journals, Journal{
 					Date:          payment.Date,
 					AccountID:     cashReceivingAccount.ID,

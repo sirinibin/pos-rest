@@ -370,12 +370,13 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.ClearProductsSalesHistory()
 	order.CreateProductsSalesHistory()
-	count, _ := order.GetPaymentsCount()
 
+	/*count, _ := order.GetPaymentsCount()
 	if count == 1 && order.PaymentStatus == "paid" {
 		order.ClearPayments()
 		order.AddPayment()
 	}
+	*/
 
 	order.GetPayments()
 	order.Update()
@@ -420,6 +421,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
 	ledger, err := order.CreateJournalEntries()
 	if err != nil {
 		response.Status = false

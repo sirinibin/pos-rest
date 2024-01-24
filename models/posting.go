@@ -97,7 +97,7 @@ func (account *Account) CalculateBalance() error {
 		account.Balance = math.Round((stats.DebitTotal-stats.CreditTotal)*100) / 100
 	}
 
-	if account.Type == "asset" && *account.ReferenceModel == "customer" {
+	if account.Type == "asset" && account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
 		if stats.CreditTotal > stats.DebitTotal {
 			account.Type = "liability"
 		} else {
@@ -163,8 +163,7 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 				}
 
 				posts = append(posts, Post{
-					Date: journal2.Date,
-					//Account:       journal2.Account,
+					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
 					AccountName:   journal2.AccountName,
 					AccountNumber: journal2.AccountNumber,
@@ -247,6 +246,33 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 	err = bankAccount.CalculateBalance()
 	if err != nil {
 		return nil, err
+	}
+
+	if ledger.ReferenceModel == "sales" {
+
+		order, err := FindOrderByID(&ledger.ReferenceID, bson.M{})
+		if err != nil {
+			return nil, err
+		}
+
+		referenceModel := "customer"
+		customerAccount, err := CreateAccountIfNotExists(
+			order.StoreID,
+			order.CustomerID,
+			&referenceModel,
+			order.CustomerName,
+			"asset",
+			nil,
+			false,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		err = customerAccount.CalculateBalance()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return postings, nil
