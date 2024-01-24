@@ -895,6 +895,8 @@ func (customer *Customer) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	customer.ID = primitive.NewObjectID()
+
 	_, err := collection.InsertOne(ctx, &customer)
 	if err != nil {
 		return err

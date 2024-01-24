@@ -99,7 +99,6 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	customer.CreatedAt = &now
 	customer.UpdatedAt = &now
 	customer.UpdateForeignLabelFields()
-	customer.ID = primitive.NewObjectID()
 
 	err = customer.Insert()
 	if err != nil {

@@ -957,6 +957,8 @@ func (quotation *Quotation) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	quotation.ID = primitive.NewObjectID()
+
 	_, err := collection.InsertOne(ctx, &quotation)
 	if err != nil {
 		return err

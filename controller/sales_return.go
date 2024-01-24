@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -136,8 +135,6 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()
 
-	salesreturn.ID = primitive.NewObjectID()
-	log.Print("Calling Make code")
 	err = salesreturn.MakeCode()
 	if err != nil {
 		response.Status = false

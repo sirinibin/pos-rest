@@ -134,7 +134,6 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.FindTotalQuantity()
 	purchase.FindVatPrice()
 	purchase.UpdateForeignLabelFields()
-	purchase.ID = primitive.NewObjectID()
 	purchase.MakeCode()
 	purchase.CalculatePurchaseExpectedProfit()
 

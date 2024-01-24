@@ -126,6 +126,37 @@ func CreateSalesPayment(w http.ResponseWriter, r *http.Request) {
 	order.SetCustomerSalesStats()
 	order.Update()
 
+	err = order.RemoveJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to remove journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	ledger, err := order.CreateJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to create journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = ledger.RemovePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to remove postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to create postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = salespayment
 
@@ -210,6 +241,37 @@ func UpdateSalesPayment(w http.ResponseWriter, r *http.Request) {
 	order.GetPayments()
 	order.SetCustomerSalesStats()
 	order.Update()
+
+	err = order.RemoveJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to remove journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	ledger, err := order.CreateJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to create journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = ledger.RemovePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to remove postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to create postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	salespayment, err = models.FindSalesPaymentByID(&salespayment.ID, bson.M{})
 	if err != nil {
@@ -332,6 +394,37 @@ func DeleteSalesPayment(w http.ResponseWriter, r *http.Request) {
 	order.GetPayments()
 	order.SetCustomerSalesStats()
 	order.Update()
+
+	err = order.RemoveJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to remove journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	ledger, err := order.CreateJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to create journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = ledger.RemovePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to remove postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to create postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	response.Status = true
 	response.Result = "Deleted successfully"

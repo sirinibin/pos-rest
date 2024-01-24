@@ -118,7 +118,6 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.FindTotalQuantity()
 	quotation.FindVatPrice()
 	quotation.UpdateForeignLabelFields()
-	quotation.ID = primitive.NewObjectID()
 	quotation.MakeCode()
 	quotation.CalculateQuotationProfit()
 

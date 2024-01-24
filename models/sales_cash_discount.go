@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -19,9 +21,12 @@ import (
 // SalesCashDiscount : SalesCashDiscount structure
 type SalesCashDiscount struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr       string              `json:"date_str,omitempty"`
 	OrderID       *primitive.ObjectID `json:"order_id" bson:"order_id"`
 	OrderCode     string              `json:"order_code" bson:"order_code"`
 	Amount        float64             `json:"amount" bson:"amount"`
+	Method        string              `json:"method" bson:"method"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
@@ -121,6 +126,68 @@ func SearchSalesCashDiscount(w http.ResponseWriter, r *http.Request) (models []S
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[method]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["method"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[created_by_name]"]
@@ -319,6 +386,21 @@ func (salesCashDiscount *SalesCashDiscount) Validate(w http.ResponseWriter, r *h
 
 	var oldSalesCashDiscount *SalesCashDiscount
 
+	if govalidator.IsNull(salesCashDiscount.Method) {
+		errs["method"] = "Payment method is required"
+	}
+
+	if govalidator.IsNull(salesCashDiscount.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		const shortForm = "2006-01-02T15:04:05Z07:00"
+		date, err := time.Parse(shortForm, salesCashDiscount.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		salesCashDiscount.Date = &date
+	}
+
 	if scenario == "update" {
 		if salesCashDiscount.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
@@ -362,12 +444,12 @@ func (salesCashDiscount *SalesCashDiscount) Validate(w http.ResponseWriter, r *h
 	}
 
 	if scenario == "update" {
-		if ((salescashdiscountStats.TotalCashDiscount - oldSalesCashDiscount.Amount) + salesCashDiscount.Amount) >= order.Total {
-			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (order.Total-(salescashdiscountStats.TotalCashDiscount-oldSalesCashDiscount.Amount)))
+		if ((salescashdiscountStats.TotalCashDiscount - oldSalesCashDiscount.Amount) + salesCashDiscount.Amount) >= order.TotalPaymentReceived {
+			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (order.TotalPaymentReceived-(salescashdiscountStats.TotalCashDiscount-oldSalesCashDiscount.Amount)))
 		}
 	} else {
-		if (salescashdiscountStats.TotalCashDiscount + salesCashDiscount.Amount) >= order.Total {
-			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (order.Total-salescashdiscountStats.TotalCashDiscount))
+		if (salescashdiscountStats.TotalCashDiscount + salesCashDiscount.Amount) >= order.TotalPaymentReceived {
+			errs["amount"] = "Amount should be less than " + fmt.Sprintf("%.02f", (order.TotalPaymentReceived-salescashdiscountStats.TotalCashDiscount))
 		}
 	}
 
@@ -492,4 +574,45 @@ func GetSalesCashDiscountStats(filter map[string]interface{}) (stats SalesCashDi
 	}
 
 	return stats, nil
+}
+
+func ProcessSalesCashDiscounts() error {
+	log.Print("Processing sales cash discount")
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_cash_discount")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//productCount := 1
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := SalesCashDiscount{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		model.Date = model.CreatedAt
+		model.Method = "cash"
+
+		err = model.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Print("DONE!")
+	return nil
 }

@@ -1150,6 +1150,8 @@ func (salesreturn *SalesReturn) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	salesreturn.ID = primitive.NewObjectID()
+
 	_, err := collection.InsertOne(ctx, &salesreturn)
 	if err != nil {
 		return err
@@ -1597,6 +1599,9 @@ func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, er
 	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 

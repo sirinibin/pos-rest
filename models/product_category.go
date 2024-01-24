@@ -413,8 +413,6 @@ func (productCategory *ProductCategory) Insert() error {
 		return err
 	}
 
-	productCategory.SetChangeLog("create", nil, nil, nil)
-
 	productCategory.ID = primitive.NewObjectID()
 	_, err = collection.InsertOne(ctx, &productCategory)
 	if err != nil {

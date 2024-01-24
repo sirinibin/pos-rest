@@ -131,7 +131,6 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchasereturn.FindTotalQuantity()
 	purchasereturn.FindVatPrice()
 	purchasereturn.UpdateForeignLabelFields()
-	purchasereturn.ID = primitive.NewObjectID()
 	purchasereturn.MakeCode()
 
 	err = purchasereturn.Insert()

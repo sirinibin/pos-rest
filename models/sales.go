@@ -80,7 +80,7 @@ type Order struct {
 	PaymentMethods           []string            `json:"payment_methods" bson:"payment_methods"`
 	TotalPaymentReceived     float64             `bson:"total_payment_received" json:"total_payment_received"`
 	BalanceAmount            float64             `bson:"balance_amount" json:"balance_amount"`
-	Payments                 []OrderPayment      `bson:"payments" json:"payments"`
+	Payments                 []SalesPayment      `bson:"payments" json:"payments"`
 	PaymentsCount            int64               `bson:"payments_count" json:"payments_count"`
 	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
 	Profit                   float64             `bson:"profit" json:"profit"`
@@ -1310,6 +1310,8 @@ func (order *Order) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	order.ID = primitive.NewObjectID()
+
 	_, err := collection.InsertOne(ctx, &order)
 	if err != nil {
 		return err
@@ -1351,11 +1353,15 @@ func (order *Order) AddPayment() error {
 	return nil
 }
 
-func (order *Order) GetPayments() (models []OrderPayment, err error) {
+func (order *Order) GetPayments() (models []SalesPayment, err error) {
 
 	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
@@ -1384,17 +1390,8 @@ func (order *Order) GetPayments() (models []OrderPayment, err error) {
 		}
 
 		//log.Print("Pushing")
-		models = append(models, OrderPayment{
-			PaymentID:     model.ID,
-			Amount:        *model.Amount,
-			Method:        model.Method,
-			CreatedAt:     model.CreatedAt,
-			UpdatedAt:     model.UpdatedAt,
-			CreatedBy:     model.CreatedBy,
-			UpdatedBy:     model.UpdatedBy,
-			CreatedByName: model.CreatedByName,
-			UpdatedByName: model.UpdatedByName,
-		})
+
+		models = append(models, model)
 
 		totalPaymentReceived += *model.Amount
 
@@ -1772,13 +1769,19 @@ func ProcessOrders() error {
 		*/
 
 		/*
-			err = order.SetProductsSalesStats()
+				err = order.SetProductsSalesStats()
+				if err != nil {
+					return err
+				}
+
+
+			err = order.SetCustomerSalesStats()
 			if err != nil {
 				return err
 			}
 		*/
 
-		err = order.SetCustomerSalesStats()
+		_, err = order.GetPayments()
 		if err != nil {
 			return err
 		}
@@ -2055,4 +2058,478 @@ func (order *Order) SetCustomerSalesStats() error {
 	}
 
 	return nil
+}
+
+func (order *Order) RemoveJournalEntries() error {
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"reference_id":    order.ID,
+		"reference_model": "sales",
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (order *Order) CreateJournalEntries() (ledger *Ledger, err error) {
+	now := time.Now()
+
+	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "customer"
+	customerAccount, err := CreateAccountIfNotExists(
+		order.StoreID,
+		&customer.ID,
+		&referenceModel,
+		customer.Name,
+		"asset",
+		&customer.Phone,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", "asset", nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Bank", "asset", nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	salesAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Sales", "revenue", nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+	balanceAmount := float64(0.00)
+
+	if len(order.Payments) == 0 {
+		//Case: Not paid
+		journals = append(journals, Journal{
+			Date:          order.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         order.NetTotal,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		journals = append(journals, Journal{
+			Date:          order.Date,
+			AccountID:     salesAccount.ID,
+			AccountNumber: salesAccount.Number,
+			AccountName:   salesAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        order.NetTotal,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	} else {
+		//Case: paid or paid_partially
+		paymentNumber := 1
+		firstPayment := SalesPayment{}
+		for _, payment := range order.Payments {
+			if paymentNumber == 1 {
+				firstPayment = payment
+			}
+
+			cashReceivingAccount := Account{}
+			if payment.Method == "cash" {
+				cashReceivingAccount = *cashAccount
+			} else if payment.Method == "bank_account" {
+				cashReceivingAccount = *bankAccount
+			}
+
+			if firstPayment.Date.Equal(*order.Date) && len(order.Payments) == 1 && order.PaymentStatus == "paid" {
+				//Case: paid with 1 single payment at the time of sale
+				journals = append(journals, Journal{
+					Date:          payment.Date,
+					AccountID:     cashReceivingAccount.ID,
+					AccountNumber: cashReceivingAccount.Number,
+					AccountName:   cashReceivingAccount.Name,
+					DebitOrCredit: "debit",
+					Debit:         *payment.Amount,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+				journals = append(journals, Journal{
+					Date:          payment.Date,
+					AccountID:     salesAccount.ID,
+					AccountNumber: salesAccount.Number,
+					AccountName:   salesAccount.Name,
+					DebitOrCredit: "credit",
+					Credit:        *payment.Amount,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+				break
+			} else if firstPayment.Date.Equal(*order.Date) && len(order.Payments) > 0 {
+				//Case: paid with 1 single partial payment at the time of sale and completed or not completed with many other payments
+				//payment1
+				if paymentNumber == 1 {
+					balanceAmount = order.NetTotal - *payment.Amount
+					journals = append(journals, Journal{
+						Date:          payment.Date,
+						AccountID:     cashReceivingAccount.ID,
+						AccountNumber: cashReceivingAccount.Number,
+						AccountName:   cashReceivingAccount.Name,
+						DebitOrCredit: "debit",
+						Debit:         *payment.Amount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+					//Debtor acc up sales acc up
+					journals = append(journals, Journal{
+						Date:          order.Date,
+						AccountID:     customerAccount.ID,
+						AccountNumber: customerAccount.Number,
+						AccountName:   customerAccount.Name,
+						DebitOrCredit: "debit",
+						Debit:         balanceAmount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+					journals = append(journals, Journal{
+						Date:          order.Date,
+						AccountID:     salesAccount.ID,
+						AccountNumber: salesAccount.Number,
+						AccountName:   salesAccount.Name,
+						DebitOrCredit: "credit",
+						Credit:        order.NetTotal,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+				} else if paymentNumber > 1 {
+					balanceAmount = balanceAmount - *payment.Amount
+					//payment2,3 etc
+					journals = append(journals, Journal{
+						Date:          payment.Date,
+						AccountID:     cashReceivingAccount.ID,
+						AccountNumber: cashReceivingAccount.Number,
+						AccountName:   cashReceivingAccount.Name,
+						DebitOrCredit: "debit",
+						Debit:         *payment.Amount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+					journals = append(journals, Journal{
+						Date:          order.Date,
+						AccountID:     customerAccount.ID,
+						AccountNumber: customerAccount.Number,
+						AccountName:   customerAccount.Name,
+						DebitOrCredit: "credit",
+						Credit:        balanceAmount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+				}
+
+			} else if !firstPayment.Date.Equal(*order.Date) && len(order.Payments) == 1 {
+				//Case: paid with 1 single payment after the time of sale
+				//Debtor acc up sales acc up
+				journals = append(journals, Journal{
+					Date:          order.Date,
+					AccountID:     customerAccount.ID,
+					AccountNumber: customerAccount.Number,
+					AccountName:   customerAccount.Name,
+					DebitOrCredit: "debit",
+					Debit:         order.NetTotal,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+				journals = append(journals, Journal{
+					Date:          order.Date,
+					AccountID:     salesAccount.ID,
+					AccountNumber: salesAccount.Number,
+					AccountName:   salesAccount.Name,
+					DebitOrCredit: "credit",
+					Credit:        order.NetTotal,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+
+				//Cash acc up and debtor acc down
+				journals = append(journals, Journal{
+					Date:          payment.Date,
+					AccountID:     cashReceivingAccount.ID,
+					AccountNumber: cashReceivingAccount.Number,
+					AccountName:   cashReceivingAccount.Name,
+					DebitOrCredit: "debit",
+					Debit:         *payment.Amount,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+
+				journals = append(journals, Journal{
+					Date:          payment.Date,
+					AccountID:     customerAccount.ID,
+					AccountNumber: customerAccount.Number,
+					AccountName:   customerAccount.Name,
+					DebitOrCredit: "credit",
+					Credit:        *payment.Amount,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+
+				break
+
+			} else if !firstPayment.Date.Equal(*order.Date) && len(order.Payments) > 1 {
+				//Case: paid with many payment after the time of sale
+				if paymentNumber == 1 {
+					//Debtor & Sales acc up
+					journals = append(journals, Journal{
+						Date:          order.Date,
+						AccountID:     customerAccount.ID,
+						AccountNumber: customerAccount.Number,
+						AccountName:   customerAccount.Name,
+						DebitOrCredit: "debit",
+						Debit:         order.NetTotal,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+					journals = append(journals, Journal{
+						Date:          order.Date,
+						AccountID:     salesAccount.ID,
+						AccountNumber: salesAccount.Number,
+						AccountName:   salesAccount.Name,
+						DebitOrCredit: "credit",
+						Credit:        order.NetTotal,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+					// Cash acc up & Debtor acc down
+					journals = append(journals, Journal{
+						Date:          payment.Date,
+						AccountID:     cashReceivingAccount.ID,
+						AccountNumber: cashReceivingAccount.Number,
+						AccountName:   cashReceivingAccount.Name,
+						DebitOrCredit: "debit",
+						Debit:         *payment.Amount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+					journals = append(journals, Journal{
+						Date:          payment.Date,
+						AccountID:     customerAccount.ID,
+						AccountNumber: customerAccount.Number,
+						AccountName:   customerAccount.Name,
+						DebitOrCredit: "credit",
+						Credit:        *payment.Amount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+				} else if paymentNumber > 1 {
+					// Cash acc up & Debtor acc down
+					journals = append(journals, Journal{
+						Date:          payment.Date,
+						AccountID:     cashReceivingAccount.ID,
+						AccountNumber: cashReceivingAccount.Number,
+						AccountName:   cashReceivingAccount.Name,
+						DebitOrCredit: "debit",
+						Debit:         *payment.Amount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+					journals = append(journals, Journal{
+						Date:          payment.Date,
+						AccountID:     customerAccount.ID,
+						AccountNumber: customerAccount.Number,
+						AccountName:   customerAccount.Name,
+						DebitOrCredit: "credit",
+						Credit:        *payment.Amount,
+						CreatedAt:     &now,
+						UpdatedAt:     &now,
+					})
+
+				}
+			}
+
+			paymentNumber++
+		} //end for
+
+	}
+
+	//Check if there is any cash discounts
+	cashDiscounts, err := order.GetCashDiscounts()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(cashDiscounts) > 0 {
+		cashDiscountAllowedAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash discount allowed", "expense", nil, true)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, cashDiscunt := range cashDiscounts {
+			cashSpendingAccount := Account{}
+			if cashDiscunt.Method == "cash" {
+				cashSpendingAccount = *cashAccount
+			} else if cashDiscunt.Method == "bank_account" {
+				cashSpendingAccount = *bankAccount
+			}
+
+			journals = append(journals, Journal{
+				Date:          cashDiscunt.Date,
+				AccountID:     cashDiscountAllowedAccount.ID,
+				AccountNumber: cashDiscountAllowedAccount.Number,
+				AccountName:   cashDiscountAllowedAccount.Name,
+				DebitOrCredit: "debit",
+				Debit:         cashDiscunt.Amount,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+			journals = append(journals, Journal{
+				Date:          cashDiscunt.Date,
+				AccountID:     cashSpendingAccount.ID,
+				AccountNumber: cashSpendingAccount.Number,
+				AccountName:   cashSpendingAccount.Name,
+				DebitOrCredit: "credit",
+				Credit:        cashDiscunt.Amount,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+		}
+	}
+
+	ledger = &Ledger{
+		StoreID:        order.StoreID,
+		ReferenceID:    order.ID,
+		ReferenceModel: "sales",
+		ReferenceCode:  order.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
+}
+
+func CreateAccountIfNotExists(
+	storeID *primitive.ObjectID,
+	referenceID *primitive.ObjectID,
+	referenceModel *string,
+	name string,
+	accountType string,
+	phone *string,
+	open bool,
+) (account *Account, err error) {
+	if referenceID != nil {
+		account, err = FindAccountByReferenceID(*referenceID, *storeID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+
+	} else if phone != nil {
+		account, err = FindAccountByPhone(*phone, storeID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	} else if referenceID == nil {
+		//Only for accounts like Cash,Bank,Sales
+		account, err = FindAccountByName(name, storeID, nil, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
+
+	if account != nil {
+		return account, nil
+	}
+
+	startFrom := 1000
+	count, err := GetTotalCount(bson.M{"store_id": storeID}, "account")
+	if err != nil {
+		return nil, err
+	}
+	accountNumber := startFrom + int(count)
+
+	now := time.Now()
+	account = &Account{
+		StoreID:        storeID,
+		ReferenceID:    referenceID,
+		ReferenceModel: referenceModel,
+		Type:           accountType,
+		Name:           name,
+		Number:         int64(accountNumber),
+		Phone:          phone,
+		Balance:        0,
+		Open:           open,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+	//account = &accountModel
+	err = account.Insert()
+	if err != nil {
+		return nil, errors.New("error creating new account: " + err.Error())
+	}
+
+	log.Print("New account created")
+	log.Print(account)
+
+	return account, nil
+}
+
+func (order *Order) GetCashDiscounts() (models []SalesCashDiscount, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("sales_cash_discount")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"order_id": order.ID, "deleted": bson.M{"$ne": true}}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching sales cash discounts" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := SalesCashDiscount{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		//log.Print("Pushing")
+
+		models = append(models, model)
+	} //end for loop
+
+	return models, err
 }

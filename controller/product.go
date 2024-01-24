@@ -154,7 +154,6 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product.ID = primitive.NewObjectID()
 	product.SetPartNumber()
 	product.SetBarcode()
 	product.SaveImages()

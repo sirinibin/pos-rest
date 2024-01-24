@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -134,12 +135,31 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.FindTotalQuantity()
 	order.FindVatPrice()
 
-	order.UpdateForeignLabelFields()
+	err = order.UpdateForeignLabelFields()
+	if err != nil {
+		response.Status = false
+		response.Errors["foreign_fields"] = "Error updating foreign fields: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	order.ID = primitive.NewObjectID()
-	order.MakeCode()
+	err = order.MakeCode()
+	if err != nil {
+		response.Status = false
+		response.Errors["code"] = "Error making code: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	order.CalculateOrderProfit()
+	log.Print("Order code Created")
+
+	err = order.CalculateOrderProfit()
+	if err != nil {
+		response.Status = false
+		response.Errors["profit"] = "Error calculating order profit: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = order.Insert()
 	if err != nil {
@@ -151,15 +171,45 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	log.Print("Order Created")
 
-	order.CreateProductsSalesHistory()
+	err = order.CreateProductsSalesHistory()
+	if err != nil {
+		response.Status = false
+		response.Errors["product"] = "Error creating products sales history: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	log.Print("Products sales history created")
 
 	if order.PaymentStatus != "not_paid" {
-		order.AddPayment()
+		err = order.AddPayment()
+		if err != nil {
+			response.Status = false
+			response.Errors["payment"] = "Error creating payment: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		log.Print("Payment created")
 	}
 
-	order.GetPayments()
-	order.Update()
+	_, err = order.GetPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["order"] = "Error getting payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = order.Update()
+	if err != nil {
+		response.Status = false
+		response.Errors["order"] = "Error updating order: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	log.Print("Order updated")
 
 	err = order.RemoveStock()
 	if err != nil {
@@ -171,12 +221,58 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	log.Print("Stock removed")
 
-	order.SetProductsSalesStats()
-	order.SetCustomerSalesStats()
+	err = order.SetProductsSalesStats()
+	if err != nil {
+		response.Status = false
+		response.Errors["product"] = "Error setting product sales stats: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = order.SetCustomerSalesStats()
+	if err != nil {
+		response.Status = false
+		response.Errors["customer"] = "Error setting customer sales stats: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	response.Status = true
 	response.Result = order
+
+	err = order.RemoveJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to remove journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	ledger, err := order.CreateJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to create journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = ledger.RemovePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to remove postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to create postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	json.NewEncoder(w).Encode(response)
 }
@@ -313,6 +409,37 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find order:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = order.RemoveJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to remove journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	ledger, err := order.CreateJournalEntries()
+	if err != nil {
+		response.Status = false
+		response.Errors["journal"] = "Failed to create journal entries: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = ledger.RemovePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to remove postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		response.Status = false
+		response.Errors["postings"] = "Failed to create postings: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
