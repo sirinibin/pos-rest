@@ -74,3 +74,30 @@ func (ledger *Ledger) Update() error {
 
 	return nil
 }
+
+func FindLedgerByReferenceID(
+	referenceID primitive.ObjectID,
+	storeID primitive.ObjectID,
+	selectFields map[string]interface{},
+) (ledger *Ledger, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"reference_id": referenceID,
+			"store_id":     storeID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&ledger)
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, err
+}

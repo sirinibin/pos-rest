@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"log"
 	"math"
 	"time"
 
@@ -120,7 +119,6 @@ func (account *Account) CalculateBalance() error {
 }
 
 func (ledger *Ledger) RemovePostings() error {
-	log.Print("Removing postings")
 	ctx := context.Background()
 	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
 	_, err := collection.DeleteMany(ctx, bson.M{
@@ -133,8 +131,32 @@ func (ledger *Ledger) RemovePostings() error {
 	return nil
 }
 
+func (ledger *Ledger) GetRelatedAccounts() (map[string]Account, error) {
+	accounts := map[string]Account{}
+	for _, journal := range ledger.Journals {
+		account, err := FindAccountByID(journal.AccountID, bson.M{})
+		if err != nil {
+			return nil, err
+		}
+
+		if !account.ID.IsZero() {
+			accounts[account.ID.Hex()] = *account
+		}
+	}
+	return accounts, nil
+}
+
+func SetAccountBalances(accounts map[string]Account) error {
+	for _, account := range accounts {
+		err := account.CalculateBalance()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
-	log.Print("Creating postings")
 	now := time.Now()
 
 	for _, journal := range ledger.Journals {
@@ -143,8 +165,6 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 		if err != nil {
 			return nil, err
 		}
-
-		//account := journal.Account
 
 		posts := []Post{} // Reset posts
 		debitTotal := float64(0.00)
@@ -182,8 +202,7 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 				}
 
 				posts = append(posts, Post{
-					Date: journal2.Date,
-					//Account:       journal2.Account,
+					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
 					AccountName:   journal2.AccountName,
 					AccountNumber: journal2.AccountNumber,
@@ -225,55 +244,6 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 		}
 
 	} // end for
-
-	//Calculate Balance of cash account
-	cashAccount, err := CreateAccountIfNotExists(ledger.StoreID, nil, nil, "Cash", "asset", nil, true)
-	if err != nil {
-		return nil, err
-	}
-
-	err = cashAccount.CalculateBalance()
-	if err != nil {
-		return nil, err
-	}
-
-	//Calculate Balance of bank account
-	bankAccount, err := CreateAccountIfNotExists(ledger.StoreID, nil, nil, "Bank", "asset", nil, true)
-	if err != nil {
-		return nil, err
-	}
-
-	err = bankAccount.CalculateBalance()
-	if err != nil {
-		return nil, err
-	}
-
-	if ledger.ReferenceModel == "sales" {
-
-		order, err := FindOrderByID(&ledger.ReferenceID, bson.M{})
-		if err != nil {
-			return nil, err
-		}
-
-		referenceModel := "customer"
-		customerAccount, err := CreateAccountIfNotExists(
-			order.StoreID,
-			order.CustomerID,
-			&referenceModel,
-			order.CustomerName,
-			"asset",
-			nil,
-			false,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		err = customerAccount.CalculateBalance()
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	return postings, nil
 }

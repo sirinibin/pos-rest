@@ -414,6 +414,22 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldLedger, err := models.FindLedgerByReferenceID(order.ID, *order.StoreID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["ledger"] = "Failed to find ledger: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	oldLedgerAccounts, err := oldLedger.GetRelatedAccounts()
+	if err != nil {
+		response.Status = false
+		response.Errors["old_ledger_accounts"] = "Failed to find old ledger accounts: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = order.RemoveJournalEntries()
 	if err != nil {
 		response.Status = false
@@ -442,6 +458,14 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["postings"] = "Failed to create postings: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = models.SetAccountBalances(oldLedgerAccounts)
+	if err != nil {
+		response.Status = false
+		response.Errors["setting_balances"] = "Failed to balances for old ledger accounts: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
