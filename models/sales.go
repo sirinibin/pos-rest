@@ -2629,6 +2629,8 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 				cashSpendingAccount = *cashAccount
 			} else if cashDiscunt.Method == "bank_account" {
 				cashSpendingAccount = *bankAccount
+			} else if cashDiscunt.Method == "customer_account" {
+				cashSpendingAccount = *customerAccount
 			}
 
 			groupAccounts := []int64{cashDiscountAllowedAccount.Number, cashSpendingAccount.Number}
@@ -2731,7 +2733,11 @@ func (order *Order) DoAccounting() error {
 func (order *Order) UndoAccounting() error {
 	ledger, err := FindLedgerByReferenceID(order.ID, *order.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
-		return err
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
 	}
 
 	ledgerAccounts := map[string]Account{}
@@ -2739,23 +2745,23 @@ func (order *Order) UndoAccounting() error {
 	if ledger != nil {
 		ledgerAccounts, err = ledger.GetRelatedAccounts()
 		if err != nil {
-			return err
+			return errors.New("Error getting related accounts: " + err.Error())
 		}
 	}
 
 	err = RemoveLedgerByReferenceID(order.ID)
 	if err != nil {
-		return err
+		return errors.New("Error removing ledger by reference id: " + err.Error())
 	}
 
 	err = RemovePostingsByReferenceID(order.ID)
 	if err != nil {
-		return err
+		return errors.New("Error removing postings by reference id: " + err.Error())
 	}
 
 	err = SetAccountBalances(ledgerAccounts)
 	if err != nil {
-		return err
+		return errors.New("Error setting account balances: " + err.Error())
 	}
 
 	return nil

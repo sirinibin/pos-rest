@@ -2,11 +2,13 @@ package models
 
 import (
 	"context"
+	"log"
 	"math"
 	"time"
 
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -138,8 +140,15 @@ func RemovePostingsByReferenceID(referenceID primitive.ObjectID) error {
 func (ledger *Ledger) GetRelatedAccounts() (map[string]Account, error) {
 	accounts := map[string]Account{}
 	for _, journal := range ledger.Journals {
+		if journal.AccountID.IsZero() {
+			continue
+		}
+
 		account, err := FindAccountByID(journal.AccountID, bson.M{})
 		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				log.Print("No account  Documents:" + journal.AccountName)
+			}
 			return nil, err
 		}
 
