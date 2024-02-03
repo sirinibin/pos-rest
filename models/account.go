@@ -2,10 +2,12 @@ package models
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -26,6 +28,73 @@ type Account struct {
 	Open           bool                `bson:"open" json:"open"`
 	CreatedAt      *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt      *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+func CreateAccountIfNotExists(
+	storeID *primitive.ObjectID,
+	referenceID *primitive.ObjectID,
+	referenceModel *string,
+	name string,
+	phone *string,
+) (account *Account, err error) {
+	if referenceID != nil {
+		account, err = FindAccountByReferenceID(*referenceID, *storeID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+
+	} else if phone != nil {
+		account, err = FindAccountByPhone(*phone, storeID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	} else if referenceID == nil {
+		//Only for accounts like Cash,Bank,Sales
+		account, err = FindAccountByName(name, storeID, nil, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
+
+	if account != nil {
+		return account, nil
+	}
+
+	startFrom := 1000
+	count, err := GetTotalCount(bson.M{"store_id": storeID}, "account")
+	if err != nil {
+		return nil, err
+	}
+	accountNumber := startFrom + int(count)
+
+	now := time.Now()
+	account = &Account{
+		StoreID:        storeID,
+		ReferenceID:    referenceID,
+		ReferenceModel: referenceModel,
+		Name:           name,
+		Number:         int64(accountNumber),
+		Phone:          phone,
+		Balance:        0,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	if referenceModel == nil && (name == "Cash" || name == "Bank") {
+		account.Type = "asset"
+	} else if referenceModel == nil && (name == "Sales") {
+		account.Type = "revenue"
+	} else if referenceModel == nil && (name == "Cash discount allowed") {
+		account.Type = "expense"
+	}
+
+	//account = &accountModel
+	err = account.Insert()
+	if err != nil {
+		return nil, errors.New("error creating new account: " + err.Error())
+	}
+
+	return account, nil
 }
 
 func (account *Account) Insert() error {

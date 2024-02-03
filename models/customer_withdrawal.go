@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -178,6 +179,11 @@ func SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Request) (customerw
 			criterias.SearchBy["amount"] = float64(value)
 		}
 
+	}
+
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["payment_method"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[description]"]
@@ -537,6 +543,92 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		customerwithdrawal.Date = &date
 	}
 
+	customer, err := FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+	if err != nil {
+		errs["customer_id"] = "Invalid Customer:" + customerwithdrawal.CustomerID.Hex()
+	}
+
+	if scenario == "update" {
+		/*
+			err = customerwithdrawal.UndoAccounting()
+			if err != nil {
+				errs["removing_accounting"] = "Error removing accounting: " + err.Error()
+			}
+		*/
+	}
+
+	referenceModel := "customer"
+	customerAccount, err := CreateAccountIfNotExists(
+		customerwithdrawal.StoreID,
+		&customer.ID,
+		&referenceModel,
+		customer.Name,
+		&customer.Phone,
+	)
+	if err != nil {
+		errs["account"] = "Error creating account: " + err.Error()
+	}
+
+	customerBalance := customerAccount.Balance
+	accountType := customerAccount.Type
+
+	oldCustomerWithdrawl := &CustomerWithdrawal{}
+
+	if customerAccount != nil {
+		if scenario == "update" {
+			oldCustomerWithdrawl, _ = FindCustomerWithdrawalByID(&customerwithdrawal.ID, bson.M{})
+			if customerAccount.CreditTotal > (customerAccount.DebitTotal - oldCustomerWithdrawl.Amount) {
+				accountType = "liability"
+				customerBalance += oldCustomerWithdrawl.Amount
+			} else {
+				accountType = "asset"
+			}
+		}
+
+		if customerBalance == 0 {
+			errs["customer_account"] = "customer account balance is zero"
+		} else if accountType == "asset" {
+			errs["customer_account"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
+		} else if accountType == "liability" && customerBalance < customerwithdrawal.Amount {
+			errs["customer_account"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
+		}
+
+		spendingAccount := &Account{}
+		spendingAccountName := ""
+		if customerwithdrawal.PaymentMethod == "cash" {
+			cashAccount, err := CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Cash", nil)
+			if err != nil {
+				errs["payment_method"] = "error fetching cash account"
+			}
+
+			if scenario == "update" && oldCustomerWithdrawl.PaymentMethod == "cash" {
+				cashAccount.Balance += oldCustomerWithdrawl.Amount
+			}
+
+			spendingAccount = cashAccount
+			spendingAccountName = "cash"
+
+		} else if customerwithdrawal.PaymentMethod == "bank_account" {
+			bankAccount, err := CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Bank", nil)
+			if err != nil {
+				errs["payment_method"] = "error fetching bank account"
+			}
+
+			if scenario == "update" && oldCustomerWithdrawl.PaymentMethod == "bank_account" {
+				bankAccount.Balance += oldCustomerWithdrawl.Amount
+			}
+
+			spendingAccount = bankAccount
+			spendingAccountName = "bank"
+		}
+
+		if spendingAccount.Balance == 0 {
+			errs["payment_method"] = spendingAccountName + " account balance is zero"
+		} else if spendingAccount.Balance < customerwithdrawal.Amount {
+			errs["payment_method"] = spendingAccountName + " account balance is only: " + fmt.Sprintf("%.02f", spendingAccount.Balance)
+		}
+	}
+
 	for k, imageContent := range customerwithdrawal.ImagesContent {
 		splits := strings.Split(imageContent, ",")
 
@@ -557,6 +649,13 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 	}
 
 	if len(errs) > 0 {
+		/*
+			err = customerwithdrawal.DoAccounting()
+			if err != nil {
+				errs["create_accounting"] = "Error creating accounting: " + err.Error()
+			}
+		*/
+
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
@@ -924,4 +1023,134 @@ func ProcessCustomerWithdrawals() error {
 	}
 
 	return nil
+}
+
+func (customerWithdrawal *CustomerWithdrawal) DoAccounting() error {
+	ledger, err := customerWithdrawal.CreateLedger()
+	if err != nil {
+		return err
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (customerWithdrawal *CustomerWithdrawal) UndoAccounting() error {
+	ledger, err := FindLedgerByReferenceID(customerWithdrawal.ID, *customerWithdrawal.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = RemoveLedgerByReferenceID(customerWithdrawal.ID)
+	if err != nil {
+		return err
+	}
+
+	err = RemovePostingsByReferenceID(customerWithdrawal.ID)
+	if err != nil {
+		return err
+	}
+
+	err = SetAccountBalances(ledgerAccounts)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, err error) {
+	now := time.Now()
+
+	customer, err := FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "customer"
+	customerAccount, err := CreateAccountIfNotExists(
+		customerWithdrawal.StoreID,
+		&customer.ID,
+		&referenceModel,
+		customer.Name,
+		&customer.Phone,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Bank", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+
+	spendingAccount := Account{}
+	if customerWithdrawal.PaymentMethod == "cash" {
+		spendingAccount = *cashAccount
+	} else if customerWithdrawal.PaymentMethod == "bank_account" {
+		spendingAccount = *bankAccount
+	}
+
+	groupAccounts := []int64{customerAccount.Number, spendingAccount.Number}
+
+	journals = append(journals, Journal{
+		Date:          customerWithdrawal.Date,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         customerWithdrawal.Amount,
+		GroupAccounts: groupAccounts,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	journals = append(journals, Journal{
+		Date:          customerWithdrawal.Date,
+		AccountID:     spendingAccount.ID,
+		AccountNumber: spendingAccount.Number,
+		AccountName:   spendingAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        customerWithdrawal.Amount,
+		GroupAccounts: groupAccounts,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	ledger = &Ledger{
+		StoreID:        customerWithdrawal.StoreID,
+		ReferenceID:    customerWithdrawal.ID,
+		ReferenceModel: "customer_withdrawal",
+		ReferenceCode:  customerWithdrawal.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
 }

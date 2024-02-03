@@ -180,6 +180,11 @@ func SearchCustomerDeposit(w http.ResponseWriter, r *http.Request) (customerdepo
 
 	}
 
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["payment_method"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[description]"]
 	if ok && len(keys[0]) >= 1 {
 		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
@@ -924,4 +929,133 @@ func ProcessCustomerDeposits() error {
 	}
 
 	return nil
+}
+
+func (customerDeposit *CustomerDeposit) DoAccounting() error {
+	ledger, err := customerDeposit.CreateLedger()
+	if err != nil {
+		return err
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (customerDeposit *CustomerDeposit) UndoAccounting() error {
+	ledger, err := FindLedgerByReferenceID(customerDeposit.ID, *customerDeposit.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = RemoveLedgerByReferenceID(customerDeposit.ID)
+	if err != nil {
+		return err
+	}
+
+	err = RemovePostingsByReferenceID(customerDeposit.ID)
+	if err != nil {
+		return err
+	}
+
+	err = SetAccountBalances(ledgerAccounts)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err error) {
+	now := time.Now()
+
+	customer, err := FindCustomerByID(customerDeposit.CustomerID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "customer"
+	customerAccount, err := CreateAccountIfNotExists(
+		customerDeposit.StoreID,
+		&customer.ID,
+		&referenceModel,
+		customer.Name,
+		&customer.Phone,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Bank", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+
+	receivingAccount := Account{}
+	if customerDeposit.PaymentMethod == "cash" {
+		receivingAccount = *cashAccount
+	} else if customerDeposit.PaymentMethod == "bank_account" {
+		receivingAccount = *bankAccount
+	}
+
+	groupAccounts := []int64{receivingAccount.Number, customerAccount.Number}
+
+	journals = append(journals, Journal{
+		Date:          customerDeposit.Date,
+		AccountID:     receivingAccount.ID,
+		AccountNumber: receivingAccount.Number,
+		AccountName:   receivingAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         customerDeposit.Amount,
+		GroupAccounts: groupAccounts,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	journals = append(journals, Journal{
+		Date:          customerDeposit.Date,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        customerDeposit.Amount,
+		GroupAccounts: groupAccounts,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	ledger = &Ledger{
+		StoreID:        customerDeposit.StoreID,
+		ReferenceID:    customerDeposit.ID,
+		ReferenceModel: "customer_deposit",
+		ReferenceCode:  customerDeposit.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
 }

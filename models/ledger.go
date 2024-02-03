@@ -32,8 +32,22 @@ type Journal struct {
 	DebitOrCredit string             `json:"debit_or_credit,omitempty" bson:"debit_or_credit,omitempty"`
 	Debit         float64            `bson:"debit" json:"debit"`
 	Credit        float64            `bson:"credit" json:"credit"`
+	GroupAccounts []int64            `bson:"group_accounts" json:"group_accounts"`
 	CreatedAt     *time.Time         `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time         `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+func RemoveLedgerByReferenceID(referenceID primitive.ObjectID) error {
+	ctx := context.Background()
+	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"reference_id": referenceID,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (ledger *Ledger) Insert() error {

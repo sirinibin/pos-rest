@@ -96,11 +96,15 @@ func (account *Account) CalculateBalance() error {
 		account.Balance = math.Round((stats.DebitTotal-stats.CreditTotal)*100) / 100
 	}
 
-	if account.Type == "asset" && account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
+	if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
 		if stats.CreditTotal > stats.DebitTotal {
-			account.Type = "liability"
+			account.Type = "liability" //creditor
 		} else {
 			account.Type = "asset" //debtor
+		}
+
+		if account.Balance == 0 {
+			account.Type = "closed"
 		}
 	}
 
@@ -118,11 +122,11 @@ func (account *Account) CalculateBalance() error {
 	return nil
 }
 
-func (ledger *Ledger) RemovePostings() error {
+func RemovePostingsByReferenceID(referenceID primitive.ObjectID) error {
 	ctx := context.Background()
 	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
 	_, err := collection.DeleteMany(ctx, bson.M{
-		"reference_id": ledger.ReferenceID,
+		"reference_id": referenceID,
 	})
 	if err != nil {
 		return err
@@ -155,26 +159,76 @@ func SetAccountBalances(accounts map[string]Account) error {
 	}
 	return nil
 }
+func IsAccountExistsInPosts(accountID primitive.ObjectID, posts []Post) bool {
+	for _, post := range posts {
+		if post.AccountID.Hex() == accountID.Hex() {
+			return true
+		}
+	}
+	return false
+}
 
-func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
+func IsAccountExistsInPostings(accountID primitive.ObjectID, postings []Posting) bool {
+	for _, posting := range postings {
+		if posting.AccountID.Hex() == accountID.Hex() {
+			return true
+		}
+	}
+	return false
+}
+
+func IsAccountExistsInGroup(accountNumber int64, groupAccountNumbers []int64) bool {
+	for _, groupAccountNumber := range groupAccountNumbers {
+		if groupAccountNumber == accountNumber {
+			return true
+		}
+	}
+	return false
+}
+
+func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 	now := time.Now()
 
-	for _, journal := range ledger.Journals {
+	for k1, journal := range ledger.Journals {
 
 		account, err := FindAccountByID(journal.AccountID, bson.M{})
 		if err != nil {
 			return nil, err
 		}
 
+		if IsAccountExistsInPostings(journal.AccountID, postings) {
+			continue
+		}
+
 		posts := []Post{} // Reset posts
 		debitTotal := float64(0.00)
 		creditTotal := float64(0.00)
-		for _, journal2 := range ledger.Journals {
-			if journal2.AccountID.Hex() == account.ID.Hex() || !journal.Date.Equal(*journal2.Date) {
+		for k2, journal2 := range ledger.Journals {
+			if k2 == k1 {
 				continue
 			}
 
+			if !IsAccountExistsInGroup(account.Number, journal2.GroupAccounts) {
+				continue
+			}
+
+			if account.Number == journal2.AccountNumber && journal.DebitOrCredit != journal2.DebitOrCredit {
+				//continue
+			}
+			//if journal2.AccountID.Hex() == account.ID.Hex() || !journal.Date.Equal(*journal2.Date) {
+			/*if !journal.Date.Equal(*journal2.Date) || IsAccountExistsInPosts(journal.AccountID, posts) {
+				continue
+			}*/
+
+			/*
+				if !journal.Date.Equal(*journal2.Date) {
+					continue
+				}
+			*/
+
 			if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "credit" {
+				//amount := journal.Debit
+
 				amount := float64(0.00)
 				if journal.Debit < journal2.Credit {
 					amount = journal.Debit
@@ -194,6 +248,8 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 				})
 				debitTotal += amount
 			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "debit" {
+				//amount := journal.Credit
+
 				amount := float64(0.00)
 				if journal.Credit < journal2.Debit {
 					amount = journal.Credit
@@ -212,7 +268,46 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 					UpdatedAt:     &now,
 				})
 				creditTotal += amount
+			} /*else if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "debit" {
+				amount := float64(0.00)
+				if journal.Debit < journal2.Debit {
+					amount = journal.Debit
+				} else {
+					amount = journal2.Debit
+				}
+
+				posts = append(posts, Post{
+					Date:          journal2.Date,
+					AccountID:     journal2.AccountID,
+					AccountName:   journal2.AccountName,
+					AccountNumber: journal2.AccountNumber,
+					DebitOrCredit: "credit",
+					Credit:        amount,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+				creditTotal += amount
 			}
+			 else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "credit" {
+				amount := float64(0.00)
+				if journal.Credit < journal2.Credit {
+					amount = journal.Credit
+				} else {
+					amount = journal2.Credit
+				}
+
+				posts = append(posts, Post{
+					Date:          journal2.Date,
+					AccountID:     journal2.AccountID,
+					AccountName:   journal2.AccountName,
+					AccountNumber: journal2.AccountNumber,
+					DebitOrCredit: "debit",
+					Debit:         amount,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+				debitTotal += amount
+			} */
 		}
 
 		posting := &Posting{
@@ -236,7 +331,7 @@ func (ledger *Ledger) CreatePostings() (postings []*Posting, err error) {
 			return nil, err
 		}
 
-		postings = append(postings, posting)
+		postings = append(postings, *posting)
 
 		err = account.CalculateBalance()
 		if err != nil {

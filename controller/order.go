@@ -10,7 +10,6 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -243,34 +242,10 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	response.Status = true
 	response.Result = order
 
-	err = order.RemoveJournalEntries()
+	err = order.DoAccounting()
 	if err != nil {
 		response.Status = false
-		response.Errors["journal"] = "Failed to remove journal entries: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	ledger, err := order.CreateJournalEntries()
-	if err != nil {
-		response.Status = false
-		response.Errors["journal"] = "Failed to create journal entries: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = ledger.RemovePostings()
-	if err != nil {
-		response.Status = false
-		response.Errors["postings"] = "Failed to remove postings: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	_, err = ledger.CreatePostings()
-	if err != nil {
-		response.Status = false
-		response.Errors["postings"] = "Failed to create postings: " + err.Error()
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -415,63 +390,18 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldLedger, err := models.FindLedgerByReferenceID(order.ID, *order.StoreID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
+	err = order.UndoAccounting()
+	if err != nil {
 		response.Status = false
-		response.Errors["ledger"] = "Failed to find ledger: " + err.Error()
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	oldLedgerAccounts := map[string]models.Account{}
-
-	if oldLedger != nil {
-		oldLedgerAccounts, err = oldLedger.GetRelatedAccounts()
-		if err != nil {
-			response.Status = false
-			response.Errors["old_ledger_accounts"] = "Failed to find old ledger accounts: " + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	}
-
-	log.Print("Removing journal entries")
-	err = order.RemoveJournalEntries()
+	err = order.DoAccounting()
 	if err != nil {
 		response.Status = false
-		response.Errors["journal"] = "Failed to remove journal entries: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	ledger, err := order.CreateJournalEntries()
-	if err != nil {
-		response.Status = false
-		response.Errors["journal"] = "Failed to create journal entries: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = ledger.RemovePostings()
-	if err != nil {
-		response.Status = false
-		response.Errors["postings"] = "Failed to remove postings: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	_, err = ledger.CreatePostings()
-	if err != nil {
-		response.Status = false
-		response.Errors["postings"] = "Failed to create postings: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = models.SetAccountBalances(oldLedgerAccounts)
-	if err != nil {
-		response.Status = false
-		response.Errors["setting_balances"] = "Failed to balances for old ledger accounts: " + err.Error()
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

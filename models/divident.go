@@ -180,6 +180,11 @@ func SearchDivident(w http.ResponseWriter, r *http.Request) (dividents []Dividen
 
 	}
 
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["payment_method"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[description]"]
 	if ok && len(keys[0]) >= 1 {
 		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)

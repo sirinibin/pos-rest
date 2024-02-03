@@ -123,6 +123,14 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = customerwithdrawal.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error doing accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = customerwithdrawal
 
@@ -224,6 +232,22 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find customerwithdrawal:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerwithdrawal.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerwithdrawal.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error doing accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
