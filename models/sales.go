@@ -2207,7 +2207,7 @@ func MakeJournalsForPartialSalePayment(
 ) []Journal {
 	now := time.Now()
 	groupAccounts := []int64{customerAccount.Number, cashReceivingAccount.Number, salesAccount.Number}
-	balanceAmount := order.NetTotal - *payment.Amount
+	balanceAmount := math.Round((order.NetTotal-*payment.Amount)*100) / 100
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2221,7 +2221,22 @@ func MakeJournalsForPartialSalePayment(
 		UpdatedAt:     &now,
 	})
 
-	//Debtor acc up sales acc up
+	/*
+		//Asset or debt increased
+		journals = append(journals, Journal{
+			Date:          order.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         balanceAmount,
+			GroupAccounts: groupAccounts,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	*/
+
+	//Asset or debt increased
 	journals = append(journals, Journal{
 		Date:          order.Date,
 		AccountID:     customerAccount.ID,
@@ -2233,6 +2248,8 @@ func MakeJournalsForPartialSalePayment(
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
+
+	//Sales account increased
 	journals = append(journals, Journal{
 		Date:          order.Date,
 		AccountID:     salesAccount.ID,
@@ -2240,6 +2257,57 @@ func MakeJournalsForPartialSalePayment(
 		AccountName:   salesAccount.Name,
 		DebitOrCredit: "credit",
 		Credit:        order.NetTotal,
+		GroupAccounts: groupAccounts,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	return journals
+}
+
+func MakeJournalsForNewSalePayment(
+	order *Order,
+	customerAccount *Account,
+	cashReceivingAccount *Account,
+	payment *SalesPayment,
+) []Journal {
+	now := time.Now()
+	groupAccounts := []int64{cashReceivingAccount.Number, customerAccount.Number}
+
+	journals := []Journal{}
+	journals = append(journals, Journal{
+		Date:          payment.Date,
+		AccountID:     cashReceivingAccount.ID,
+		AccountNumber: cashReceivingAccount.Number,
+		AccountName:   cashReceivingAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         *payment.Amount,
+		GroupAccounts: groupAccounts,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	//Liability descreased or customer acc. balance decrease
+	journals = append(journals, Journal{
+		Date:          payment.Date,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         *payment.Amount,
+		GroupAccounts: groupAccounts,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	//Asset or debt descreased
+	journals = append(journals, Journal{
+		Date:          payment.Date,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        *payment.Amount,
 		GroupAccounts: groupAccounts,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
@@ -2257,10 +2325,11 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 ) []Journal {
 	now := time.Now()
 	groupAccounts := []int64{customerAccount.Number, salesAccount.Number}
-	balanceAmount := order.NetTotal - *payment.Amount
+	balanceAmount := math.Round((order.NetTotal-*payment.Amount)*100) / 100
 	journals := []Journal{}
 	//Debtor acc up
 
+	//Liability or account balance decrease
 	journals = append(journals, Journal{
 		Date:          order.Date,
 		AccountID:     customerAccount.ID,
@@ -2272,7 +2341,22 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
+	/*
+		//Asset or customer debt decrease
+		journals = append(journals, Journal{
+			Date:          order.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        *payment.Amount,
+			GroupAccounts: groupAccounts,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	*/
 
+	//Debt or asset increase
 	journals = append(journals, Journal{
 		Date:          order.Date,
 		AccountID:     customerAccount.ID,
@@ -2285,6 +2369,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 		UpdatedAt:     &now,
 	})
 
+	//Sales increase
 	journals = append(journals, Journal{
 		Date:          order.Date,
 		AccountID:     salesAccount.ID,
@@ -2345,6 +2430,7 @@ func MakeJournalsForNewSalePaymentFromCustomerAccount(
 	groupAccounts := []int64{customerAccount.Number}
 	journals := []Journal{}
 
+	//Account balance or liability decrease
 	journals = append(journals, Journal{
 		Date:          payment.Date,
 		AccountID:     customerAccount.ID,
@@ -2357,6 +2443,7 @@ func MakeJournalsForNewSalePaymentFromCustomerAccount(
 		UpdatedAt:     &now,
 	})
 
+	//Asset or debt decrease
 	journals = append(journals, Journal{
 		Date:          payment.Date,
 		AccountID:     customerAccount.ID,
@@ -2373,43 +2460,6 @@ func MakeJournalsForNewSalePaymentFromCustomerAccount(
 }
 
 //End customer account journals
-
-func MakeJournalsForNewSalePayment(
-	order *Order,
-	customerAccount *Account,
-	cashReceivingAccount *Account,
-	payment *SalesPayment,
-) []Journal {
-	now := time.Now()
-	groupAccounts := []int64{cashReceivingAccount.Number, customerAccount.Number}
-
-	journals := []Journal{}
-	journals = append(journals, Journal{
-		Date:          payment.Date,
-		AccountID:     cashReceivingAccount.ID,
-		AccountNumber: cashReceivingAccount.Number,
-		AccountName:   cashReceivingAccount.Name,
-		DebitOrCredit: "debit",
-		Debit:         *payment.Amount,
-		GroupAccounts: groupAccounts,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
-
-	journals = append(journals, Journal{
-		Date:          payment.Date,
-		AccountID:     customerAccount.ID,
-		AccountNumber: customerAccount.Number,
-		AccountName:   customerAccount.Name,
-		DebitOrCredit: "credit",
-		Credit:        *payment.Amount,
-		GroupAccounts: groupAccounts,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
-
-	return journals
-}
 
 func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 	now := time.Now()

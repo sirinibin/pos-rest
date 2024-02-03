@@ -586,11 +586,11 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		}
 
 		if customerBalance == 0 {
-			errs["customer_account"] = "customer account balance is zero"
+			errs["amount"] = "customer account balance is zero"
 		} else if accountType == "asset" {
-			errs["customer_account"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
+			errs["amount"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
 		} else if accountType == "liability" && customerBalance < customerwithdrawal.Amount {
-			errs["customer_account"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
+			errs["amount"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
 		}
 
 		spendingAccount := &Account{}

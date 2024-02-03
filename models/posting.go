@@ -204,7 +204,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 		debitTotal := float64(0.00)
 		creditTotal := float64(0.00)
 		for k2, journal2 := range ledger.Journals {
-			if k2 == k1 {
+			if k2 == k1 || account.Number == journal2.AccountNumber {
 				continue
 			}
 
@@ -227,14 +227,16 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			*/
 
 			if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "credit" {
-				//amount := journal.Debit
+				amount := journal2.Credit
 
-				amount := float64(0.00)
-				if journal.Debit < journal2.Credit {
-					amount = journal.Debit
-				} else {
-					amount = journal2.Credit
-				}
+				/*
+					amount := float64(0.00)
+					if journal.Debit < journal2.Credit {
+						amount = journal.Debit
+					} else {
+						amount = journal2.Credit
+					}
+				*/
 
 				posts = append(posts, Post{
 					Date:          journal2.Date,
@@ -248,33 +250,16 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				})
 				debitTotal += amount
 			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "debit" {
-				//amount := journal.Credit
+				amount := journal2.Debit
 
-				amount := float64(0.00)
-				if journal.Credit < journal2.Debit {
-					amount = journal.Credit
-				} else {
-					amount = journal2.Debit
-				}
-
-				posts = append(posts, Post{
-					Date:          journal2.Date,
-					AccountID:     journal2.AccountID,
-					AccountName:   journal2.AccountName,
-					AccountNumber: journal2.AccountNumber,
-					DebitOrCredit: "credit",
-					Credit:        amount,
-					CreatedAt:     &now,
-					UpdatedAt:     &now,
-				})
-				creditTotal += amount
-			} /*else if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "debit" {
-				amount := float64(0.00)
-				if journal.Debit < journal2.Debit {
-					amount = journal.Debit
-				} else {
-					amount = journal2.Debit
-				}
+				/*
+					amount := float64(0.00)
+					if journal.Credit < journal2.Debit {
+						amount = journal.Credit
+					} else {
+						amount = journal2.Debit
+					}
+				*/
 
 				posts = append(posts, Post{
 					Date:          journal2.Date,
@@ -287,14 +272,39 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					UpdatedAt:     &now,
 				})
 				creditTotal += amount
-			}
-			 else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "credit" {
-				amount := float64(0.00)
-				if journal.Credit < journal2.Credit {
-					amount = journal.Credit
-				} else {
-					amount = journal2.Credit
-				}
+			} else if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "debit" {
+				amount := journal2.Debit
+
+				/*
+					amount := float64(0.00)
+					if journal.Debit < journal2.Debit {
+						amount = journal.Debit
+					} else {
+						amount = journal2.Debit
+					}
+				*/
+
+				posts = append(posts, Post{
+					Date:          journal2.Date,
+					AccountID:     journal2.AccountID,
+					AccountName:   journal2.AccountName,
+					AccountNumber: journal2.AccountNumber,
+					DebitOrCredit: "credit",
+					Credit:        amount,
+					CreatedAt:     &now,
+					UpdatedAt:     &now,
+				})
+				creditTotal += amount
+			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "credit" {
+				amount := journal2.Credit
+				/*
+					amount := float64(0.00)
+					if journal.Credit < journal2.Credit {
+						amount = journal.Credit
+					} else {
+						amount = journal2.Credit
+					}
+				*/
 
 				posts = append(posts, Post{
 					Date:          journal2.Date,
@@ -307,7 +317,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					UpdatedAt:     &now,
 				})
 				debitTotal += amount
-			} */
+			}
 		}
 
 		posting := &Posting{
