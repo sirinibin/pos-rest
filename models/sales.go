@@ -1848,9 +1848,24 @@ func ProcessOrders() error {
 			}
 		*/
 
-		_, err = order.GetPayments()
+		/*
+			_, err = order.GetPayments()
+			if err != nil {
+				return err
+			}
+		*/
+
+		order.GetPayments()
+		order.Update()
+
+		err = order.UndoAccounting()
 		if err != nil {
-			return err
+			return errors.New("error undo accounting: " + err.Error())
+		}
+
+		err = order.DoAccounting()
+		if err != nil {
+			return errors.New("error doing accounting: " + err.Error())
 		}
 
 		err = order.Update()
@@ -2133,7 +2148,7 @@ func MakeJournalsForUnpaidSale(
 	salesAccount *Account,
 ) []Journal {
 	now := time.Now()
-	groupAccounts := []int64{customerAccount.Number, salesAccount.Number}
+	groupAccounts := []string{customerAccount.Number, salesAccount.Number}
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          order.Date,
@@ -2169,7 +2184,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 	payment *SalesPayment,
 ) []Journal {
 	now := time.Now()
-	groupAccounts := []int64{cashReceivingAccount.Number, salesAccount.Number}
+	groupAccounts := []string{cashReceivingAccount.Number, salesAccount.Number}
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2206,7 +2221,7 @@ func MakeJournalsForPartialSalePayment(
 	payment *SalesPayment,
 ) []Journal {
 	now := time.Now()
-	groupAccounts := []int64{customerAccount.Number, cashReceivingAccount.Number, salesAccount.Number}
+	groupAccounts := []string{customerAccount.Number, cashReceivingAccount.Number, salesAccount.Number}
 	balanceAmount := math.Round((order.NetTotal-*payment.Amount)*100) / 100
 	journals := []Journal{}
 	journals = append(journals, Journal{
@@ -2272,7 +2287,7 @@ func MakeJournalsForNewSalePayment(
 	payment *SalesPayment,
 ) []Journal {
 	now := time.Now()
-	groupAccounts := []int64{cashReceivingAccount.Number, customerAccount.Number}
+	groupAccounts := []string{cashReceivingAccount.Number, customerAccount.Number}
 
 	journals := []Journal{}
 	journals = append(journals, Journal{
@@ -2288,17 +2303,19 @@ func MakeJournalsForNewSalePayment(
 	})
 
 	//Liability descreased or customer acc. balance decrease
-	journals = append(journals, Journal{
-		Date:          payment.Date,
-		AccountID:     customerAccount.ID,
-		AccountNumber: customerAccount.Number,
-		AccountName:   customerAccount.Name,
-		DebitOrCredit: "debit",
-		Debit:         *payment.Amount,
-		GroupAccounts: groupAccounts,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
+	/*
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         *payment.Amount,
+			GroupAccounts: groupAccounts,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	*/
 
 	//Asset or debt descreased
 	journals = append(journals, Journal{
@@ -2324,7 +2341,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	payment *SalesPayment,
 ) []Journal {
 	now := time.Now()
-	groupAccounts := []int64{customerAccount.Number, salesAccount.Number}
+	groupAccounts := []string{customerAccount.Number, salesAccount.Number}
 	balanceAmount := math.Round((order.NetTotal-*payment.Amount)*100) / 100
 	journals := []Journal{}
 	//Debtor acc up
@@ -2392,7 +2409,7 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 	payment *SalesPayment,
 ) []Journal {
 	now := time.Now()
-	groupAccounts := []int64{customerAccount.Number, salesAccount.Number}
+	groupAccounts := []string{customerAccount.Number, salesAccount.Number}
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2427,7 +2444,7 @@ func MakeJournalsForNewSalePaymentFromCustomerAccount(
 	payment *SalesPayment,
 ) []Journal {
 	now := time.Now()
-	groupAccounts := []int64{customerAccount.Number}
+	groupAccounts := []string{customerAccount.Number}
 	journals := []Journal{}
 
 	//Account balance or liability decrease
@@ -2508,10 +2525,10 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 	} else {
 		//Case: paid or paid_partially
 		paymentNumber := 1
-		firstPayment := SalesPayment{}
+		firstPayment := &SalesPayment{}
 		for _, payment := range order.Payments {
 			if paymentNumber == 1 {
-				firstPayment = payment
+				firstPayment = &payment
 			}
 
 			cashReceivingAccount := Account{}
@@ -2520,6 +2537,10 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 			} else if payment.Method == "bank_account" {
 				cashReceivingAccount = *bankAccount
 			} else if payment.Method == "customer_account" {
+			}
+
+			if firstPayment == nil || firstPayment.Date == nil {
+				continue
 			}
 
 			if firstPayment.Date.Equal(*order.Date) && len(order.Payments) == 1 && order.PaymentStatus == "paid" {
@@ -2633,7 +2654,7 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 				cashSpendingAccount = *customerAccount
 			}
 
-			groupAccounts := []int64{cashDiscountAllowedAccount.Number, cashSpendingAccount.Number}
+			groupAccounts := []string{cashDiscountAllowedAccount.Number, cashSpendingAccount.Number}
 
 			journals = append(journals, Journal{
 				Date:          cashDiscunt.Date,
@@ -2719,12 +2740,12 @@ func (order *Order) GetCashDiscounts() (models []SalesCashDiscount, err error) {
 func (order *Order) DoAccounting() error {
 	ledger, err := order.CreateLedger()
 	if err != nil {
-		return err
+		return errors.New("error creating ledger: " + err.Error())
 	}
 
 	_, err = ledger.CreatePostings()
 	if err != nil {
-		return err
+		return errors.New("error creating postings: " + err.Error())
 	}
 
 	return nil
@@ -2744,7 +2765,7 @@ func (order *Order) UndoAccounting() error {
 
 	if ledger != nil {
 		ledgerAccounts, err = ledger.GetRelatedAccounts()
-		if err != nil {
+		if err != nil && err != mongo.ErrNoDocuments {
 			return errors.New("Error getting related accounts: " + err.Error())
 		}
 	}

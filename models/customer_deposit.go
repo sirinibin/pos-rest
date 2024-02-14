@@ -1016,7 +1016,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err erro
 		receivingAccount = *bankAccount
 	}
 
-	groupAccounts := []int64{receivingAccount.Number, customerAccount.Number}
+	groupAccounts := []string{receivingAccount.Number, customerAccount.Number}
 
 	journals = append(journals, Journal{
 		Date:          customerDeposit.Date,

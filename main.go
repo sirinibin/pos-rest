@@ -429,6 +429,14 @@ func main() {
 	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.UpdatePurchaseReturnPayment).Methods("PUT")
 	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.DeletePurchaseReturnPayment).Methods("DELETE")
 
+	//Ledger
+	router.HandleFunc("/v1/ledger", controller.ListLedger).Methods("GET")
+	//Accounts
+	router.HandleFunc("/v1/account", controller.ListAccounts).Methods("GET")
+	router.HandleFunc("/v1/account/{id}", controller.ViewAccount).Methods("GET")
+	//Postings
+	router.HandleFunc("/v1/posting", controller.ListPostings).Methods("GET")
+
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
@@ -691,17 +699,22 @@ func cronJobsEveryHour() error {
 		}
 	*/
 
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
 	err := models.ProcessSalesCashDiscounts()
 	if err != nil {
 		log.Print(err)
 	}
+
+	err = models.ProcessOrders()
+	if err != nil {
+		log.Print(err)
+	}
+
+	/*
+		err := models.ProcessSalesCashDiscounts()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	return nil
 }

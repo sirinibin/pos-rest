@@ -3,6 +3,10 @@ package models
 import (
 	"context"
 	"errors"
+	"math"
+	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirinibin/pos-rest/db"
@@ -14,20 +18,515 @@ import (
 
 // Account : Account structure
 type Account struct {
-	ID             primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	StoreID        *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	ReferenceID    *primitive.ObjectID `json:"reference_id,omitempty" bson:"reference_id,omitempty"`
-	ReferenceModel *string             `bson:"reference_model,omitempty" json:"reference_model,omitempty"`
-	Type           string              `bson:"type,omitempty" json:"type,omitempty"` //drawing,expense,asset,liability,equity,revenue
-	Number         int64               `bson:"number,omitempty" json:"number,omitempty"`
-	Name           string              `bson:"name,omitempty" json:"name,omitempty"`
-	Phone          *string             `bson:"phone,omitempty" json:"phone,omitempty"`
-	Balance        float64             `bson:"balance" json:"balance"`
-	DebitTotal     float64             `bson:"debit_total" json:"debit_total"`
-	CreditTotal    float64             `bson:"credit_total" json:"credit_total"`
-	Open           bool                `bson:"open" json:"open"`
-	CreatedAt      *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt      *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ID                   primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	StoreID              *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	ReferenceID          *primitive.ObjectID `json:"reference_id,omitempty" bson:"reference_id,omitempty"`
+	ReferenceModel       *string             `bson:"reference_model,omitempty" json:"reference_model,omitempty"`
+	Type                 string              `bson:"type,omitempty" json:"type,omitempty"` //drawing,expense,asset,liability,equity,revenue
+	Number               string              `bson:"number,omitempty" json:"number,omitempty"`
+	Name                 string              `bson:"name,omitempty" json:"name,omitempty"`
+	Phone                *string             `bson:"phone,omitempty" json:"phone,omitempty"`
+	Balance              float64             `bson:"balance" json:"balance"`
+	DebitOrCreditBalance string              `bson:"debit_or_credit_balance" json:"debit_or_credit_balance"`
+	DebitTotal           float64             `bson:"debit_total" json:"debit_total"`
+	CreditTotal          float64             `bson:"credit_total" json:"credit_total"`
+	Open                 bool                `bson:"open" json:"open"`
+	SearchLabel          string              `json:"search_label"`
+	CreatedAt            *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt            *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+type AccountStats struct {
+	ID          *primitive.ObjectID `json:"id" bson:"_id"`
+	DebitTotal  float64             `json:"debit_total" bson:"debit_total"`
+	CreditTotal float64             `json:"credit_total" bson:"credit_total"`
+}
+
+type AccountListStats struct {
+	ID                 *primitive.ObjectID `json:"id" bson:"_id"`
+	DebitBalanceTotal  float64             `json:"debit_balance_total" bson:"debit_balance_total"`
+	CreditBalanceTotal float64             `json:"credit_balance_total" bson:"credit_balance_total"`
+}
+
+func GetAccountListStats(filter map[string]interface{}) (stats AccountListStats, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id": nil,
+				"debit_balance_total": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$eq": []interface{}{"$debit_or_credit_balance", "debit_balance"}},
+					"$balance",
+					0,
+				}}},
+				"credit_balance_total": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$eq": []interface{}{"$debit_or_credit_balance", "credit_balance"}},
+					"$balance",
+					0,
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+		stats.DebitBalanceTotal = math.Round(stats.DebitBalanceTotal*100) / 100
+		stats.CreditBalanceTotal = math.Round(stats.CreditBalanceTotal*100) / 100
+		//stats.Loss = math.Round(stats.Loss*100) / 100
+	}
+	return stats, nil
+}
+
+func (account *Account) CalculateBalance() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := map[string]interface{}{
+		"account_id": account.ID,
+	}
+
+	stats := AccountStats{}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":          nil,
+				"debit_total":  bson.M{"$sum": "$debit_total"},
+				"credit_total": bson.M{"$sum": "$credit_total"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+		stats.DebitTotal = math.Round(stats.DebitTotal*100) / 100
+		stats.CreditTotal = math.Round(stats.CreditTotal*100) / 100
+	}
+
+	account.DebitTotal = stats.DebitTotal
+	account.CreditTotal = stats.CreditTotal
+
+	if stats.CreditTotal > stats.DebitTotal {
+		account.Balance = math.Round((stats.CreditTotal-stats.DebitTotal)*100) / 100
+	} else {
+		account.Balance = math.Round((stats.DebitTotal-stats.CreditTotal)*100) / 100
+	}
+
+	if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
+		if stats.CreditTotal > stats.DebitTotal {
+			account.Type = "liability" //creditor
+		} else {
+			account.Type = "asset" //debtor
+		}
+
+		if account.Balance == 0 {
+			account.Type = "closed"
+		}
+	}
+
+	if account.Type == "drawing" || account.Type == "expense" || account.Type == "asset" {
+		account.DebitOrCreditBalance = "debit_balance"
+	} else if account.Type == "liability" || account.Type == "equity" || account.Type == "revenue" {
+		account.DebitOrCreditBalance = "credit_balance"
+	}
+
+	if account.Balance == 0 {
+		account.Open = false
+		account.DebitOrCreditBalance = "na"
+	} else {
+		account.Open = true
+	}
+
+	now := time.Now()
+	account.UpdatedAt = &now
+	err = account.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, criterias SearchCriterias, err error) {
+	criterias = SearchCriterias{
+		Page:   1,
+		Size:   10,
+		SortBy: map[string]interface{}{},
+	}
+
+	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+
+	timeZoneOffset := 0.0
+	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+	}
+
+	var storeID primitive.ObjectID
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+		criterias.SearchBy["store_id"] = storeID
+	}
+
+	keys, ok = r.URL.Query()["search[reference_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+		criterias.SearchBy["reference_id"] = storeID
+	}
+
+	/*
+		keys, ok = r.URL.Query()["search[reference_model]"]
+		if ok && len(keys[0]) >= 1 {
+			criterias.SearchBy["reference_model"] = keys[0]
+		}*/
+
+	keys, ok = r.URL.Query()["search[reference_model]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["reference_model"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[reference_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["reference_code"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[name]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[search]"]
+	if ok && len(keys[0]) >= 1 {
+		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		/*isInteger := true
+		intValue, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			isInteger = false
+		}
+		*/
+
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"number": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+
+		/*
+			if isInteger {
+				criterias.SearchBy["$or"] = []bson.M{
+					{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+					{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+					{"number": bson.M{"$regex": intValue, "$options": "i"}},
+				}
+
+			}
+		*/
+	}
+
+	keys, ok = r.URL.Query()["search[phone]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[type]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["type"] = keys[0]
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[number]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[balance]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["balance"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["balance"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[debit_total]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["debit_total"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["debit_total"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[credit_total]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["credit_total"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["credit_total"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[open]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["open"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["open"] = bson.M{"$eq": false}
+		}
+	}
+
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		keys[0] = strings.Replace(keys[0], "stores.", "stores."+storeID.Hex()+".", -1)
+		criterias.SortBy = GetSortByFields(keys[0])
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	var updatedAtStartDate time.Time
+	var updatedAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[updated_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["updated_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[updated_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		updatedAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			updatedAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, updatedAtStartDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[updated_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		updatedAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			updatedAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, updatedAtEndDate)
+		}
+
+		updatedAtEndDate = updatedAtEndDate.Add(time.Hour * time.Duration(24))
+		updatedAtEndDate = updatedAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !updatedAtStartDate.IsZero() && !updatedAtEndDate.IsZero() {
+		criterias.SearchBy["updated_at"] = bson.M{"$gte": updatedAtStartDate, "$lte": updatedAtEndDate}
+	} else if !updatedAtStartDate.IsZero() {
+		criterias.SearchBy["updated_at"] = bson.M{"$gte": updatedAtStartDate}
+	} else if !updatedAtEndDate.IsZero() {
+		criterias.SearchBy["updated_at"] = bson.M{"$lte": updatedAtEndDate}
+	}
+
+	keys, ok = r.URL.Query()["limit"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Size, _ = strconv.Atoi(keys[0])
+	}
+	keys, ok = r.URL.Query()["page"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Page, _ = strconv.Atoi(keys[0])
+	}
+
+	offset := (criterias.Page - 1) * criterias.Size
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetSkip(int64(offset))
+	findOptions.SetLimit(int64(criterias.Size))
+	findOptions.SetSort(criterias.SortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+	}
+
+	if criterias.Select != nil {
+		findOptions.SetProjection(criterias.Select)
+	}
+
+	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
+	/* Note: Actual Record fetching will not happen here
+	as it is using mongodb cursor and record fetching will
+	start with we call cur.Next()
+	*/
+	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
+	if err != nil {
+		return models, criterias, errors.New("Error fetching Customers:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return models, criterias, errors.New("Cursor error:" + err.Error())
+		}
+		model := Account{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, criterias, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		model.SearchLabel = model.Name + " A/c #" + model.Number
+
+		if model.Phone != nil {
+			model.SearchLabel += " ph: " + *model.Phone
+		}
+
+		models = append(models, model)
+	} //end for loop
+
+	return models, criterias, nil
+
 }
 
 func CreateAccountIfNotExists(
@@ -65,7 +564,7 @@ func CreateAccountIfNotExists(
 	if err != nil {
 		return nil, err
 	}
-	accountNumber := startFrom + int(count)
+	accountNumber := strconv.Itoa(startFrom + int(count))
 
 	now := time.Now()
 	account = &Account{
@@ -73,7 +572,7 @@ func CreateAccountIfNotExists(
 		ReferenceID:    referenceID,
 		ReferenceModel: referenceModel,
 		Name:           name,
-		Number:         int64(accountNumber),
+		Number:         accountNumber,
 		Phone:          phone,
 		Balance:        0,
 		CreatedAt:      &now,
@@ -279,4 +778,14 @@ func IsAccountExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func SetAccountBalances(accounts map[string]Account) error {
+	for _, account := range accounts {
+		err := account.CalculateBalance()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

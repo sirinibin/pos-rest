@@ -1111,7 +1111,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 		spendingAccount = *bankAccount
 	}
 
-	groupAccounts := []int64{customerAccount.Number, spendingAccount.Number}
+	groupAccounts := []string{customerAccount.Number, spendingAccount.Number}
 
 	journals = append(journals, Journal{
 		Date:          customerWithdrawal.Date,
