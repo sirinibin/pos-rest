@@ -103,6 +103,14 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 			balanceBoughtDown = math.Round((creditTotalBoughtDown-debitTotalBoughtDown)*100) / 100
 		}
 
+		if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
+			if creditTotalBoughtDown > debitTotalBoughtDown {
+				account.Type = "liability" //creditor
+			} else if creditTotalBoughtDown < debitTotalBoughtDown {
+				account.Type = "asset" //debtor
+			}
+		}
+
 		balanceBoughtDownType := ""
 		if account.Type == "divident" || account.Type == "expense" || account.Type == "asset" {
 			balanceBoughtDownType = "debit"

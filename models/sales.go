@@ -1790,6 +1790,10 @@ func (order *Order) HardDeleteSalesReturn() error {
 
 func ProcessOrders() error {
 	log.Print("Processing orders")
+	//ledgersCount := 0
+	//cashOrdersCount := 0
+	//postingsCount := 0
+
 	collection := db.Client().Database(db.GetPosDB()).Collection("order")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -1855,24 +1859,81 @@ func ProcessOrders() error {
 			}
 		*/
 
-		order.GetPayments()
-		order.Update()
+		/*
+			order.GetPayments()
+			order.Update()
 
-		err = order.UndoAccounting()
-		if err != nil {
-			return errors.New("error undo accounting: " + err.Error())
-		}
+			err = order.UndoAccounting()
+			if err != nil {
+				return errors.New("error undo accounting: " + err.Error())
+			}
 
-		err = order.DoAccounting()
-		if err != nil {
-			return errors.New("error doing accounting: " + err.Error())
-		}
+			err = order.DoAccounting()
+			if err != nil {
+				return errors.New("error doing accounting: " + err.Error())
+			}
 
-		err = order.Update()
-		if err != nil {
-			return err
-		}
+			err = order.Update()
+			if err != nil {
+				return err
+			}
+		*/
+		/*
+			if order.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
+				continue
+			}
+
+			for _, method := range order.PaymentMethods {
+				if method == "cash" {
+					cashOrdersCount++
+					ledgerCount, _ := GetTotalCount(bson.M{"reference_id": order.ID}, "ledger")
+					if ledgerCount > 1 {
+						log.Print("More than 1")
+						log.Print(ledgerCount)
+						log.Print(order.Code)
+					}
+
+					if ledgerCount == 0 {
+						log.Print("No ledger found")
+						log.Print(ledgerCount)
+						log.Print(order.Code)
+					}
+
+					if ledgerCount > 0 {
+						ledgersCount++
+					}
+
+					postingCount, _ := GetTotalCount(bson.M{"reference_id": order.ID, "account_number": "1001"}, "posting")
+					if postingCount > 0 {
+						postingsCount++
+					}
+
+					if postingCount == 0 {
+						log.Print("No posting found")
+						log.Print(postingCount)
+						log.Print(order.Code)
+					}
+
+					if postingCount > 1 {
+						log.Print("More than 1")
+						log.Print(postingCount)
+						log.Print(order.Code)
+					}
+				}
+			}
+		*/
+
 	}
+
+	/*
+		log.Print("Ledger count: ")
+		log.Print(ledgersCount)
+		log.Print("Cash orders: ")
+		log.Print(cashOrdersCount)
+
+		log.Print("postings count: ")
+		log.Print(postingsCount)
+	*/
 
 	log.Print("DONE!")
 	return nil

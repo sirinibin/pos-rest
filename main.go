@@ -704,9 +704,15 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 	*/
-
 	/*
 		err := models.ProcessOrders()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
+
+	/*
+		err := models.ProcessPostings()
 		if err != nil {
 			log.Print(err)
 		}
