@@ -206,6 +206,84 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		criterias.SearchBy["account_id"] = accountID
 	}
 
+	debitObjectIds := []primitive.ObjectID{}
+	creditObjectIds := []primitive.ObjectID{}
+
+	keys, ok = r.URL.Query()["search[debit_account_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		accountIds := strings.Split(keys[0], ",")
+
+		//objecIds := []primitive.ObjectID{}
+
+		for _, id := range accountIds {
+			accountID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return models, criterias, err, startDate
+			}
+			debitObjectIds = append(debitObjectIds, accountID)
+		}
+
+		/*
+			if len(objecIds) > 0 {
+				criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
+					"account_id":      bson.M{"$in": objecIds},
+					"debit_or_credit": bson.M{"$eq": "debit"},
+				}}
+			}
+		*/
+	}
+
+	keys, ok = r.URL.Query()["search[credit_account_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		accountIds := strings.Split(keys[0], ",")
+
+		//objecIds := []primitive.ObjectID{}
+
+		for _, id := range accountIds {
+			accountID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return models, criterias, err, startDate
+			}
+			creditObjectIds = append(creditObjectIds, accountID)
+		}
+
+		/*
+			if len(objecIds) > 0 {
+				//criterias.SearchBy["posts.account_id"] = bson.M{"$in": objecIds}
+				criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
+					"account_id":      bson.M{"$in": objecIds},
+					"debit_or_credit": bson.M{"$eq": "credit"},
+				}}
+
+			}
+		*/
+	}
+
+	if len(debitObjectIds) > 0 && len(creditObjectIds) > 0 {
+		criterias.SearchBy["$and"] = []bson.M{
+			{"posts": bson.M{"$elemMatch": bson.M{
+				"account_id":      bson.M{"$in": debitObjectIds},
+				"debit_or_credit": bson.M{"$eq": "debit"},
+			}}},
+			{"posts": bson.M{"$elemMatch": bson.M{
+				"account_id":      bson.M{"$in": creditObjectIds},
+				"debit_or_credit": bson.M{"$eq": "credit"},
+			}}},
+		}
+	} else if len(debitObjectIds) > 0 {
+		criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
+			"account_id":      bson.M{"$in": debitObjectIds},
+			"debit_or_credit": bson.M{"$eq": "debit"},
+		}}
+	} else if len(creditObjectIds) > 0 {
+		criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
+			"account_id":      bson.M{"$in": creditObjectIds},
+			"debit_or_credit": bson.M{"$eq": "credit"},
+		}}
+	}
+
 	keys, ok = r.URL.Query()["search[account_name]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["account_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
