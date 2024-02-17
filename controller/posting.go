@@ -128,7 +128,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 
 	if debitTotal < creditTotal {
 		response.Meta["debit_balance"] = math.Round((creditTotal-debitTotal)*100) / 100
-	} else if postingListStats.CreditTotal < postingListStats.DebitTotal {
+	} else if debitTotal > creditTotal {
 		response.Meta["credit_balance"] = math.Round((debitTotal-creditTotal)*100) / 100
 	}
 
