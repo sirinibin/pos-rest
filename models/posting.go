@@ -56,10 +56,126 @@ type PostingListStats struct {
 	CreditTotalBoughtDown float64             `json:"credit_total_bought_down" bson:"credit_total_bought_down"`
 }
 
-func GetPostingListStats(filter map[string]interface{}, startDate time.Time) (stats PostingListStats, err error) {
+func GetPostingListStats(filter map[string]interface{}, startDate time.Time, endDate time.Time) (stats PostingListStats, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	debitTotalCondition := bson.M{}
+	creditTotalCondition := bson.M{}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		debitTotalCondition = bson.M{"$sum": bson.M{"$sum": bson.M{
+			"$map": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"in": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$and": []interface{}{
+							bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+							bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+							bson.M{"$gt": []interface{}{"$$post.debit", 0}},
+						}},
+						"$$post.debit",
+						0,
+					},
+				},
+			},
+		}}}
+
+		creditTotalCondition = bson.M{"$sum": bson.M{"$sum": bson.M{
+			"$map": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"in": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$and": []interface{}{
+							bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+							bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+							bson.M{"$gt": []interface{}{"$$post.credit", 0}},
+						}},
+						"$$post.credit",
+						0,
+					},
+				},
+			},
+		}}}
+	} else if !startDate.IsZero() {
+		debitTotalCondition = bson.M{"$sum": bson.M{"$sum": bson.M{
+			"$map": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"in": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$and": []interface{}{
+							bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+							bson.M{"$gt": []interface{}{"$$post.debit", 0}},
+						}},
+						"$$post.debit",
+						0,
+					},
+				},
+			},
+		}}}
+
+		creditTotalCondition = bson.M{"$sum": bson.M{"$sum": bson.M{
+			"$map": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"in": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$and": []interface{}{
+							bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+							bson.M{"$gt": []interface{}{"$$post.credit", 0}},
+						}},
+						"$$post.credit",
+						0,
+					},
+				},
+			},
+		}}}
+
+	} else if !endDate.IsZero() {
+		debitTotalCondition = bson.M{"$sum": bson.M{"$sum": bson.M{
+			"$map": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"in": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$and": []interface{}{
+							bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+							bson.M{"$gt": []interface{}{"$$post.debit", 0}},
+						}},
+						"$$post.debit",
+						0,
+					},
+				},
+			},
+		}}}
+
+		creditTotalCondition = bson.M{"$sum": bson.M{"$sum": bson.M{
+			"$map": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"in": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$and": []interface{}{
+							bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+							bson.M{"$gt": []interface{}{"$$post.credit", 0}},
+						}},
+						"$$post.credit",
+						0,
+					},
+				},
+			},
+		}}}
+
+	}
+
+	if startDate.IsZero() && endDate.IsZero() {
+		debitTotalCondition = bson.M{"$sum": "$debit_total"}
+		creditTotalCondition = bson.M{"$sum": "$credit_total"}
+	}
 
 	pipeline := []bson.M{
 		bson.M{
@@ -68,8 +184,8 @@ func GetPostingListStats(filter map[string]interface{}, startDate time.Time) (st
 		bson.M{
 			"$group": bson.M{
 				"_id":          nil,
-				"debit_total":  bson.M{"$sum": "$debit_total"},
-				"credit_total": bson.M{"$sum": "$credit_total"},
+				"debit_total":  debitTotalCondition,
+				"credit_total": creditTotalCondition,
 			},
 		},
 	}
@@ -176,6 +292,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	criterias SearchCriterias,
 	err error,
 	startDate time.Time,
+	endDate time.Time,
 ) {
 	criterias = SearchCriterias{
 		Page:   1,
@@ -191,7 +308,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	if ok && len(keys[0]) >= 1 {
 		storeID, err = primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 		criterias.SearchBy["store_id"] = storeID
 	}
@@ -201,7 +318,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	if ok && len(keys[0]) >= 1 {
 		accountID, err = primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 		criterias.SearchBy["account_id"] = accountID
 	}
@@ -219,7 +336,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		for _, id := range accountIds {
 			accountID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return models, criterias, err, startDate
+				return models, criterias, err, startDate, endDate
 			}
 			debitObjectIds = append(debitObjectIds, accountID)
 		}
@@ -244,7 +361,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		for _, id := range accountIds {
 			accountID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return models, criterias, err, startDate
+				return models, criterias, err, startDate, endDate
 			}
 			creditObjectIds = append(creditObjectIds, accountID)
 		}
@@ -293,7 +410,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	if ok && len(keys[0]) >= 1 {
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 		criterias.SearchBy["account_number"] = value
 	}
@@ -302,7 +419,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	if ok && len(keys[0]) >= 1 {
 		storeID, err = primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 		criterias.SearchBy["reference_id"] = storeID
 	}
@@ -332,14 +449,14 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	}
 
 	//var startDate time.Time
-	var endDate time.Time
+	//var endDate time.Time
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
 		const shortForm = "Jan 02 2006"
 		startDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 
 		if timeZoneOffset != 0 {
@@ -348,7 +465,11 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 
 		endDate = startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
-		criterias.SearchBy["posts.date"] = bson.M{"$gte": startDate, "$lte": endDate}
+		//criterias.SearchBy["posts.date"] = bson.M{"$gte": startDate, "$lte": endDate}
+		/*criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
+			"date": bson.M{"$gte": startDate, "$lte": endDate},
+		}}*/
+		log.Print("Okk1")
 	}
 
 	keys, ok = r.URL.Query()["search[from_date]"]
@@ -356,7 +477,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		const shortForm = "Jan 02 2006"
 		startDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 
 		if timeZoneOffset != 0 {
@@ -369,7 +490,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		const shortForm = "Jan 02 2006"
 		endDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 
 		if timeZoneOffset != 0 {
@@ -380,12 +501,94 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		endDate = endDate.Add(-time.Second * time.Duration(1))
 	}
 
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+		//Relational Select Fields
+	}
+
 	if !startDate.IsZero() && !endDate.IsZero() {
 		criterias.SearchBy["posts.date"] = bson.M{"$gte": startDate, "$lte": endDate}
+		/*
+			criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
+				"date": bson.M{"$gte": startDate, "$lte": endDate},
+			}}
+		*/
+
+		criterias.Select["posts"] = bson.M{"$filter": bson.M{
+			"input": "$posts",
+			"as":    "post",
+			"cond": bson.M{
+				"$and": []interface{}{
+					bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+					bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+				},
+			},
+		}}
+
+		/*
+			criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
+				"date": bson.M{"$gte": startDate, "$lte": endDate},
+			}}
+			8/
+
+			criterias.SearchBy["posts"] = bson.M{"$filter": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"cond": bson.M{
+					"$and": []interface{}{
+						bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+						bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+					},
+				},
+			}}
+
+			criterias.Select["posts"] = bson.M{"$filter": bson.M{
+				"input": "$posts",
+				"as":    "post",
+				"cond": bson.M{
+					"$and": []interface{}{
+						bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+						bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+					},
+				},
+			}}
+			/*
+				criterias.Select["posts"] = bson.M{"$filter": bson.M{
+					"input": "$posts",
+					"as":    "post",
+					"cond": bson.M{
+						"$and": []interface{}{
+							bson.M{ "$gt": []interface{}{ "$$item.a", 0  },
+							bson.M{ "$gt": []interface{}{ "$$item.a", 0  },
+					},
+				},},
+		*/
+		/*
+			"cond": bson.M{
+				"$gte": []interface{}{"$$post.date", startDate},
+				"$lte": []interface{}{"$$post.date", endDate},
+			},*/
+		/*
+			"cond": bson.M{"$elemMatch": bson.M{
+				"$$post.date": bson.M{"$gte": startDate, "$lte": endDate},
+			}},*/
+
+		//log.Print("Okk2")
 	} else if !startDate.IsZero() {
 		criterias.SearchBy["posts.date"] = bson.M{"$gte": startDate}
+		criterias.Select["posts"] = bson.M{"$filter": bson.M{
+			"input": "$posts",
+			"as":    "post",
+			"cond":  bson.M{"$gte": []interface{}{"$$post.date", startDate}},
+		}}
 	} else if !endDate.IsZero() {
 		criterias.SearchBy["posts.date"] = bson.M{"$lte": endDate}
+		criterias.Select["posts"] = bson.M{"$filter": bson.M{
+			"input": "$posts",
+			"as":    "post",
+			"cond":  bson.M{"$lte": []interface{}{"$$post.date", endDate}},
+		}}
 	}
 
 	var createdAtStartDate time.Time
@@ -396,7 +599,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
@@ -412,7 +615,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		const shortForm = "Jan 02 2006"
 		createdAtStartDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 
 		if timeZoneOffset != 0 {
@@ -425,7 +628,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		const shortForm = "Jan 02 2006"
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 
 		if timeZoneOffset != 0 {
@@ -451,7 +654,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 
 		if operator != "" {
@@ -468,7 +671,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return models, criterias, err, startDate
+			return models, criterias, err, startDate, endDate
 		}
 
 		if operator != "" {
@@ -498,12 +701,6 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	keys, ok = r.URL.Query()["select"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.Select = ParseSelectString(keys[0])
-		//Relational Select Fields
-	}
-
 	if criterias.Select != nil {
 		findOptions.SetProjection(criterias.Select)
 	}
@@ -515,7 +712,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return models, criterias, errors.New("Error fetching Customers:" + err.Error()), startDate
+		return models, criterias, errors.New("Error fetching Customers:" + err.Error()), startDate, endDate
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -524,18 +721,18 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return models, criterias, errors.New("Cursor error:" + err.Error()), startDate
+			return models, criterias, errors.New("Cursor error:" + err.Error()), startDate, endDate
 		}
 		model := Posting{}
 		err = cur.Decode(&model)
 		if err != nil {
-			return models, criterias, errors.New("Cursor decode error:" + err.Error()), startDate
+			return models, criterias, errors.New("Cursor decode error:" + err.Error()), startDate, endDate
 		}
 
 		models = append(models, model)
 	} //end for loop
 
-	return models, criterias, nil, startDate
+	return models, criterias, nil, startDate, endDate
 
 }
 

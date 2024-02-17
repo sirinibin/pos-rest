@@ -27,7 +27,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 
 	postings := []models.Posting{}
 
-	postings, criterias, err, startDate := models.SearchPosting(w, r)
+	postings, criterias, err, startDate, endDate := models.SearchPosting(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find postings:" + err.Error()
@@ -47,7 +47,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			postingListStats, err = models.GetPostingListStats(criterias.SearchBy, startDate)
+			postingListStats, err = models.GetPostingListStats(criterias.SearchBy, startDate, endDate)
 			if err != nil {
 				response.Status = false
 				response.Errors["posting_list_stats"] = "Unable to find posting list stats:" + err.Error()
