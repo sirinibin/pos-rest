@@ -3,10 +3,12 @@ package models
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +23,19 @@ type SearchCriterias struct {
 	Select   map[string]interface{} `bson:"select,omitempty" json:"select,omitempty"`
 	SearchBy map[string]interface{} `bson:"search_by,omitempty" json:"search_by,omitempty"`
 	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
+}
+
+func RoundToTwoDecimal(number float64) float64 {
+	numStr := fmt.Sprintf("%.2f", number)
+	log.Print("numStr:")
+	log.Print(numStr)
+	numFloat, _ := strconv.ParseFloat(numStr, 32)
+	return numFloat
+}
+
+func roundFloat(val float64, precision uint) float64 {
+	ratio := math.Pow(10, float64(precision))
+	return math.Round(val*ratio) / ratio
 }
 
 func GenerateFileName(prefix, suffix string) string {
@@ -270,7 +285,7 @@ func ClearPurchaseReturnPayments() error {
 
 func ToFixed(num float64, precision int) float64 {
 	output := math.Pow(10, float64(precision))
-	return float64(math.Ceil(num*output)) / output
+	return float64(math.Round(num*output)) / output
 }
 
 func GetIntSearchElement(

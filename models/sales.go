@@ -265,7 +265,9 @@ func (order *Order) FindNetTotal() {
 	log.Print("netTotal:")
 	log.Print(netTotal)
 	//order.NetTotal = math.Round(netTotal*100) / 100
-	order.NetTotal = math.Ceil(netTotal*100) / 100
+	//order.NetTotal = RoundToTwoDecimal(netTotal)
+	//order.NetTotal = roundFloat(netTotal*100, 2) / 100
+	order.NetTotal = roundFloat(netTotal, 2)
 	log.Print("order.NetTotal:")
 	log.Print(order.NetTotal)
 }
