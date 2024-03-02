@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -485,7 +484,7 @@ func GetPurchaseCashDiscountStats(filter map[string]interface{}) (stats Purchase
 			return stats, err
 		}
 
-		stats.TotalCashDiscount = math.Ceil(stats.TotalCashDiscount*100) / 100
+		stats.TotalCashDiscount = RoundFloat(stats.TotalCashDiscount, 2)
 	}
 
 	return stats, nil

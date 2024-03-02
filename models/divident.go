@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -137,7 +136,7 @@ func GetDividentStats(filter map[string]interface{}) (stats DividentStats, err e
 		if err != nil {
 			return stats, err
 		}
-		stats.Total = math.Ceil(stats.Total*100) / 100
+		stats.Total = RoundFloat(stats.Total, 2)
 	}
 	return stats, nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -202,8 +201,8 @@ func GetPostingListStats(filter map[string]interface{}, startDate time.Time, end
 		if err != nil {
 			return stats, err
 		}
-		stats.DebitTotal = math.Ceil(stats.DebitTotal*100) / 100
-		stats.CreditTotal = math.Ceil(stats.CreditTotal*100) / 100
+		stats.DebitTotal = RoundFloat(stats.DebitTotal, 2)
+		stats.CreditTotal = RoundFloat(stats.CreditTotal, 2)
 	}
 
 	if startDate.IsZero() {
@@ -280,8 +279,8 @@ func GetPostingListStats(filter map[string]interface{}, startDate time.Time, end
 		if err != nil {
 			return stats, err
 		}
-		stats.DebitTotalBoughtDown = math.Ceil(stats.DebitTotalBoughtDown*100) / 100
-		stats.CreditTotalBoughtDown = math.Ceil(stats.CreditTotalBoughtDown*100) / 100
+		stats.DebitTotalBoughtDown = RoundFloat(stats.DebitTotalBoughtDown, 2)
+		stats.CreditTotalBoughtDown = RoundFloat(stats.CreditTotalBoughtDown, 2)
 	}
 
 	return stats, nil

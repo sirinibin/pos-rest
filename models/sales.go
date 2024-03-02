@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -262,14 +261,7 @@ func (order *Order) FindNetTotal() {
 		netTotal += ((netTotal * *order.VatPercent) / float64(100))
 	}
 
-	log.Print("netTotal:")
-	log.Print(netTotal)
-	//order.NetTotal = math.Round(netTotal*100) / 100
-	//order.NetTotal = RoundToTwoDecimal(netTotal)
-	//order.NetTotal = roundFloat(netTotal*100, 2) / 100
-	order.NetTotal = roundFloat(netTotal, 2)
-	log.Print("order.NetTotal:")
-	log.Print(order.NetTotal)
+	order.NetTotal = RoundFloat(netTotal, 2)
 }
 
 func (order *Order) FindTotal() {
@@ -278,7 +270,7 @@ func (order *Order) FindTotal() {
 		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	order.Total = math.Round(total*100) / 100
+	order.Total = RoundFloat(total, 2)
 }
 
 func (order *Order) FindTotalQuantity() {
@@ -291,7 +283,7 @@ func (order *Order) FindTotalQuantity() {
 
 func (order *Order) FindVatPrice() {
 	vatPrice := ((*order.VatPercent / 100) * float64(order.Total-order.Discount+order.ShippingOrHandlingFees))
-	vatPrice = math.Round(vatPrice*100) / 100
+	vatPrice = RoundFloat(vatPrice, 2)
 	order.VatPrice = vatPrice
 }
 
@@ -394,9 +386,6 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 		if err != nil {
 			return stats, err
 		}
-		//stats.NetTotal = math.Round(stats.NetTotal*100) / 100
-		//stats.NetProfit = math.Round(stats.NetProfit*100) / 100
-		//stats.Loss = math.Round(stats.Loss*100) / 100
 	}
 	return stats, nil
 }
@@ -1379,7 +1368,7 @@ func (order *Order) CalculateOrderProfit() error {
 
 		loss := 0.0
 
-		profit = math.Round(profit*100) / 100
+		profit = RoundFloat(profit, 2)
 
 		if profit >= 0 {
 			order.Products[i].Profit = profit
@@ -1393,8 +1382,8 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	order.Profit = math.Round(totalProfit*100) / 100
-	order.NetProfit = math.Round(((totalProfit-order.CashDiscount)-order.Discount)*100) / 100
+	order.Profit = RoundFloat(totalProfit, 2)
+	order.NetProfit = RoundFloat(((totalProfit - order.CashDiscount) - order.Discount), 2)
 	order.Loss = totalLoss
 	return nil
 }
@@ -2144,9 +2133,9 @@ func (product *Product) SetProductSalesStatsByStoreID(storeID primitive.ObjectID
 		if err != nil {
 			return err
 		}
-		stats.Sales = math.Round(stats.Sales*100) / 100
-		stats.SalesProfit = math.Round(stats.SalesProfit*100) / 100
-		stats.SalesLoss = math.Round(stats.SalesLoss*100) / 100
+		stats.Sales = RoundFloat(stats.Sales, 2)
+		stats.SalesProfit = RoundFloat(stats.SalesProfit, 2)
+		stats.SalesLoss = RoundFloat(stats.SalesLoss, 2)
 	}
 
 	/*
@@ -2290,11 +2279,11 @@ func (customer *Customer) SetCustomerSalesStatsByStoreID(storeID primitive.Objec
 		if err != nil {
 			return err
 		}
-		stats.SalesAmount = math.Round(stats.SalesAmount*100) / 100
-		stats.SalesPaidAmount = math.Round(stats.SalesPaidAmount*100) / 100
-		stats.SalesBalanceAmount = math.Round(stats.SalesBalanceAmount*100) / 100
-		stats.SalesProfit = math.Round(stats.SalesProfit*100) / 100
-		stats.SalesLoss = math.Round(stats.SalesLoss*100) / 100
+		stats.SalesAmount = RoundFloat(stats.SalesAmount, 2)
+		stats.SalesPaidAmount = RoundFloat(stats.SalesPaidAmount, 2)
+		stats.SalesBalanceAmount = RoundFloat(stats.SalesBalanceAmount, 2)
+		stats.SalesProfit = RoundFloat(stats.SalesProfit, 2)
+		stats.SalesLoss = RoundFloat(stats.SalesLoss, 2)
 	}
 
 	store, err := FindStoreByID(&storeID, bson.M{})
@@ -2484,7 +2473,7 @@ func MakeJournalsForPartialSalePayment(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
-	balanceAmount := math.Round(((order.NetTotal-order.CashDiscount)-*payment.Amount)*100) / 100
+	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2593,7 +2582,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
-	balanceAmount := math.Round(((order.NetTotal-order.CashDiscount)-*payment.Amount)*100) / 100
+	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
 	journals := []Journal{}
 	//Debtor acc up
 

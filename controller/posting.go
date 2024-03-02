@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"math"
 	"net/http"
 
 	"github.com/sirinibin/pos-rest/models"
@@ -98,9 +97,9 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 		*/
 
 		if debitTotalBoughtDown > creditTotalBoughtDown {
-			balanceBoughtDown = math.Ceil((debitTotalBoughtDown-creditTotalBoughtDown)*100) / 100
+			balanceBoughtDown = models.RoundFloat((debitTotalBoughtDown - creditTotalBoughtDown), 2)
 		} else if creditTotalBoughtDown > debitTotalBoughtDown {
-			balanceBoughtDown = math.Ceil((creditTotalBoughtDown-debitTotalBoughtDown)*100) / 100
+			balanceBoughtDown = models.RoundFloat((creditTotalBoughtDown - debitTotalBoughtDown), 2)
 		}
 
 		if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
@@ -123,13 +122,13 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 		response.Meta[balanceBoughtDownType+"_balance_bought_down"] = balanceBoughtDown
 	}
 
-	response.Meta["debit_total"] = math.Ceil(debitTotal*100) / 100
-	response.Meta["credit_total"] = math.Ceil(creditTotal*100) / 100
+	response.Meta["debit_total"] = models.RoundFloat(debitTotal, 2)
+	response.Meta["credit_total"] = models.RoundFloat(creditTotal, 2)
 
 	if debitTotal < creditTotal {
-		response.Meta["debit_balance"] = math.Ceil((creditTotal-debitTotal)*100) / 100
+		response.Meta["debit_balance"] = models.RoundFloat((creditTotal - debitTotal), 2)
 	} else if debitTotal > creditTotal {
-		response.Meta["credit_balance"] = math.Ceil((debitTotal-creditTotal)*100) / 100
+		response.Meta["credit_balance"] = models.RoundFloat((debitTotal - creditTotal), 2)
 	}
 
 	response.Status = true

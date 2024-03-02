@@ -11,7 +11,6 @@ import (
 	"image/png"
 	"io/ioutil"
 	"log"
-	"math"
 	"net/http"
 	"os"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/boombuler/barcode/code128"
 	"github.com/hennedo/escpos"
 	"github.com/jung-kurt/gofpdf"
+	"github.com/sirinibin/pos-rest/models"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
@@ -152,7 +152,7 @@ func GetStringFontSize(str string) float64 {
 		}
 		i += 10
 	}
-	return math.Round(size*100) / 100
+	return models.RoundFloat(size, 2)
 }
 
 func drawAnImage() {

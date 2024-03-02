@@ -10,7 +10,6 @@ import (
 	"image/png"
 	"io/ioutil"
 	"log"
-	"math"
 
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/code128"
@@ -77,7 +76,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 			return err
 		}
 
-		retailUnitPriceWithTax = math.Ceil((retailUnitPrice+(retailUnitPrice*(store.VatPercent/100)))*100) / 100
+		retailUnitPriceWithTax = RoundFloat((retailUnitPrice + (retailUnitPrice * (store.VatPercent / 100))), 2)
 
 		purchaseUnitPriceSecret, err = product.getPurchaseUnitPriceSecretByStoreID(storeID)
 		if err != nil {

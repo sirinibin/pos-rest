@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -628,7 +627,7 @@ func GetPurchaseReturnPaymentStats(filter map[string]interface{}) (stats Purchas
 			return stats, err
 		}
 
-		stats.TotalPayment = math.Ceil(stats.TotalPayment*100) / 100
+		stats.TotalPayment = RoundFloat(stats.TotalPayment, 2)
 	}
 
 	return stats, nil

@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -72,8 +71,8 @@ func GetPurchaseReturnHistoryStats(filter map[string]interface{}) (stats Purchas
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalPurchaseReturn = math.Ceil(stats.TotalPurchaseReturn*100) / 100
-		stats.TotalVatReturn = math.Ceil(stats.TotalVatReturn*100) / 100
+		stats.TotalPurchaseReturn = RoundFloat(stats.TotalPurchaseReturn, 2)
+		stats.TotalVatReturn = RoundFloat(stats.TotalVatReturn, 2)
 	}
 
 	return stats, nil
@@ -382,11 +381,11 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 			UpdatedAt:          purchaseReturn.UpdatedAt,
 		}
 
-		history.UnitPrice = math.Ceil(purchaseReturnProduct.PurchaseReturnUnitPrice*100) / 100
-		history.Price = math.Ceil((purchaseReturnProduct.PurchaseReturnUnitPrice*purchaseReturnProduct.Quantity)*100) / 100
-		history.VatPercent = math.Ceil(*purchaseReturn.VatPercent*100) / 100
-		history.VatPrice = math.Ceil((history.Price*(history.VatPercent/100))*100) / 100
-		history.NetPrice = math.Ceil((history.Price+history.VatPrice)*100) / 100
+		history.UnitPrice = RoundFloat(purchaseReturnProduct.PurchaseReturnUnitPrice, 2)
+		history.Price = RoundFloat((purchaseReturnProduct.PurchaseReturnUnitPrice * purchaseReturnProduct.Quantity), 2)
+		history.VatPercent = RoundFloat(*purchaseReturn.VatPercent, 2)
+		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
+		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)
 
 		history.ID = primitive.NewObjectID()
 

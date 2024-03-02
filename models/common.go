@@ -33,9 +33,14 @@ func RoundToTwoDecimal(number float64) float64 {
 	return numFloat
 }
 
-func roundFloat(val float64, precision uint) float64 {
+func RoundFloat(val float64, precision uint) float64 {
 	ratio := math.Pow(10, float64(precision))
 	return math.Round(val*ratio) / ratio
+}
+
+func ToFixed(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(math.Round(num*output)) / output
 }
 
 func GenerateFileName(prefix, suffix string) string {
@@ -281,11 +286,6 @@ func ClearPurchaseReturnPayments() error {
 	}
 
 	return nil
-}
-
-func ToFixed(num float64, precision int) float64 {
-	output := math.Pow(10, float64(precision))
-	return float64(math.Round(num*output)) / output
 }
 
 func GetIntSearchElement(

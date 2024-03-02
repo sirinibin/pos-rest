@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -178,7 +177,7 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturn
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = math.Ceil(stats.NetTotal*100) / 100
+		stats.NetTotal = RoundFloat(stats.NetTotal, 2)
 	}
 	return stats, nil
 }
@@ -303,7 +302,7 @@ func (purchasereturn *PurchaseReturn) FindNetTotal() {
 		netTotal += netTotal * (*purchasereturn.VatPercent / float64(100))
 	}
 
-	purchasereturn.NetTotal = math.Ceil(netTotal*100) / 100
+	purchasereturn.NetTotal = RoundFloat(netTotal, 2)
 }
 
 func (purchasereturn *PurchaseReturn) FindTotal() {
@@ -312,7 +311,7 @@ func (purchasereturn *PurchaseReturn) FindTotal() {
 		total += product.Quantity * product.PurchaseReturnUnitPrice
 	}
 
-	purchasereturn.Total = math.Ceil(total*100) / 100
+	purchasereturn.Total = RoundFloat(total, 2)
 }
 
 func (purchasereturn *PurchaseReturn) FindTotalQuantity() {
@@ -325,7 +324,7 @@ func (purchasereturn *PurchaseReturn) FindTotalQuantity() {
 
 func (purchasereturn *PurchaseReturn) FindVatPrice() {
 	vatPrice := ((*purchasereturn.VatPercent / 100) * (purchasereturn.Total - purchasereturn.Discount))
-	vatPrice = math.Ceil(vatPrice*100) / 100
+	vatPrice = RoundFloat(vatPrice, 2)
 	purchasereturn.VatPrice = vatPrice
 }
 
@@ -946,9 +945,9 @@ func (purchasereturn *PurchaseReturn) Validate(
 			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
 				purchasedQty := 0.0
 				if scenario == "update" {
-					purchasedQty = math.Ceil((purchaseProduct.Quantity)*100) / float64(100)
+					purchasedQty = RoundFloat(purchaseProduct.Quantity, 2)
 				} else {
-					purchasedQty = math.Ceil((purchaseProduct.Quantity-purchaseProduct.QuantityReturned)*100) / float64(100)
+					purchasedQty = RoundFloat((purchaseProduct.Quantity - purchaseProduct.QuantityReturned), 2)
 				}
 
 				if purchasedQty == 0 {
@@ -1671,7 +1670,7 @@ func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive
 			return err
 		}
 
-		stats.PurchaseReturn = math.Ceil(stats.PurchaseReturn*100) / 100
+		stats.PurchaseReturn = RoundFloat(stats.PurchaseReturn, 2)
 	}
 
 	for storeIndex, store := range product.ProductStores {
@@ -1799,9 +1798,9 @@ func (vendor *Vendor) SetVendorPurchaseReturnStatsByStoreID(storeID primitive.Ob
 		if err != nil {
 			return err
 		}
-		stats.PurchaseReturnAmount = math.Ceil(stats.PurchaseReturnAmount*100) / 100
-		stats.PurchaseReturnPaidAmount = math.Ceil(stats.PurchaseReturnPaidAmount*100) / 100
-		stats.PurchaseReturnBalanceAmount = math.Ceil(stats.PurchaseReturnBalanceAmount*100) / 100
+		stats.PurchaseReturnAmount = RoundFloat(stats.PurchaseReturnAmount, 2)
+		stats.PurchaseReturnPaidAmount = RoundFloat(stats.PurchaseReturnPaidAmount, 2)
+		stats.PurchaseReturnBalanceAmount = RoundFloat(stats.PurchaseReturnBalanceAmount, 2)
 
 	}
 

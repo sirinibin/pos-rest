@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -84,12 +83,12 @@ func GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHisto
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalPurchase = math.Ceil(stats.TotalPurchase*100) / 100
-		stats.TotalRetailProfit = math.Ceil(stats.TotalRetailProfit*100) / 100
-		stats.TotalWholesaleProfit = math.Ceil(stats.TotalWholesaleProfit*100) / 100
-		stats.TotalRetailLoss = math.Ceil(stats.TotalRetailLoss*100) / 100
-		stats.TotalWholesaleLoss = math.Ceil(stats.TotalWholesaleLoss*100) / 100
-		stats.TotalVat = math.Ceil(stats.TotalVat*100) / 100
+		stats.TotalPurchase = RoundFloat(stats.TotalPurchase, 2)
+		stats.TotalRetailProfit = RoundFloat(stats.TotalRetailProfit, 2)
+		stats.TotalWholesaleProfit = RoundFloat(stats.TotalWholesaleProfit, 2)
+		stats.TotalRetailLoss = RoundFloat(stats.TotalRetailLoss, 2)
+		stats.TotalWholesaleLoss = RoundFloat(stats.TotalWholesaleLoss, 2)
+		stats.TotalVat = RoundFloat(stats.TotalVat, 2)
 	}
 
 	return stats, nil
@@ -434,17 +433,17 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 			UpdatedAt:    purchase.UpdatedAt,
 		}
 
-		history.UnitPrice = math.Ceil(purchaseProduct.PurchaseUnitPrice*100) / 100
-		history.Price = math.Ceil((purchaseProduct.PurchaseUnitPrice*purchaseProduct.Quantity)*100) / 100
+		history.UnitPrice = RoundFloat(purchaseProduct.PurchaseUnitPrice, 2)
+		history.Price = RoundFloat((purchaseProduct.PurchaseUnitPrice * purchaseProduct.Quantity), 2)
 
-		history.RetailProfit = math.Ceil(purchase.ExpectedRetailProfit*100) / 100
-		history.WholesaleProfit = math.Ceil(purchase.ExpectedWholesaleProfit*100) / 100
-		history.RetailLoss = math.Ceil(purchase.ExpectedRetailLoss*100) / 100
-		history.WholesaleLoss = math.Ceil(purchase.ExpectedWholesaleLoss*100) / 100
+		history.RetailProfit = RoundFloat(purchase.ExpectedRetailProfit, 2)
+		history.WholesaleProfit = RoundFloat(purchase.ExpectedWholesaleProfit, 2)
+		history.RetailLoss = RoundFloat(purchase.ExpectedRetailLoss, 2)
+		history.WholesaleLoss = RoundFloat(purchase.ExpectedWholesaleLoss, 2)
 
-		history.VatPercent = math.Ceil(*purchase.VatPercent*100) / 100
-		history.VatPrice = math.Ceil((history.Price*(history.VatPercent/100))*100) / 100
-		history.NetPrice = math.Ceil((history.Price+history.VatPrice)*100) / 100
+		history.VatPercent = RoundFloat(*purchase.VatPercent, 2)
+		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
+		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)
 
 		history.ID = primitive.NewObjectID()
 

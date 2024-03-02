@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -63,7 +62,7 @@ func GetDeliveryNoteHistoryStats(filter map[string]interface{}) (stats DeliveryN
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalQuantity = math.Ceil(stats.TotalQuantity*100) / 100
+		stats.TotalQuantity = RoundFloat(stats.TotalQuantity, 2)
 	}
 
 	return stats, nil

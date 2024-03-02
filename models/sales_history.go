@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -80,10 +79,10 @@ func GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStat
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalSales = math.Ceil(stats.TotalSales*100) / 100
-		stats.TotalProfit = math.Ceil(stats.TotalProfit*100) / 100
-		stats.TotalLoss = math.Ceil(stats.TotalLoss*100) / 100
-		stats.TotalVat = math.Ceil(stats.TotalVat*100) / 100
+		stats.TotalSales = RoundFloat(stats.TotalSales, 2)
+		stats.TotalProfit = RoundFloat(stats.TotalProfit, 2)
+		stats.TotalLoss = RoundFloat(stats.TotalLoss, 2)
+		stats.TotalVat = RoundFloat(stats.TotalVat, 2)
 	}
 
 	return stats, nil
@@ -437,14 +436,14 @@ func (order *Order) CreateProductsSalesHistory() error {
 			UpdatedAt:         order.UpdatedAt,
 		}
 
-		history.UnitPrice = math.Ceil(orderProduct.UnitPrice*100) / 100
-		history.Price = math.Ceil((orderProduct.UnitPrice*orderProduct.Quantity)*100) / 100
-		history.Profit = math.Ceil(orderProduct.Profit*100) / 100
-		history.Loss = math.Ceil(orderProduct.Loss*100) / 100
+		history.UnitPrice = RoundFloat(orderProduct.UnitPrice, 2)
+		history.Price = RoundFloat((orderProduct.UnitPrice * orderProduct.Quantity), 2)
+		history.Profit = RoundFloat(orderProduct.Profit, 2)
+		history.Loss = RoundFloat(orderProduct.Loss, 2)
 
-		history.VatPercent = math.Ceil(*order.VatPercent*100) / 100
-		history.VatPrice = math.Ceil((history.Price*(history.VatPercent/100))*100) / 100
-		history.NetPrice = math.Ceil((history.Price+history.VatPrice)*100) / 100
+		history.VatPercent = RoundFloat(*order.VatPercent, 2)
+		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
+		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)
 
 		history.ID = primitive.NewObjectID()
 
