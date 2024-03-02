@@ -25,10 +25,29 @@ type SearchCriterias struct {
 	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
 }
 
+func FormatFloat(num float64, prc int) string {
+	var (
+		zero, dot = "0", "."
+
+		str = fmt.Sprintf("%."+strconv.Itoa(prc)+"f", num)
+	)
+
+	return strings.TrimRight(strings.TrimRight(str, zero), dot)
+}
+
+func TruncateToTwoDecimals(some float64) float64 {
+	return float64(int(some*100)) / 100
+}
+
 func RoundToTwoDecimal(number float64) float64 {
+
+	//numStr := fmt.Sprintf("%.2f", TruncateToTwoDecimals(number))
 	numStr := fmt.Sprintf("%.2f", number)
-	//log.Print("numStr:")
-	//log.Print(numStr)
+
+	//numStr := strconv.FormatFloat(number, 'f', -1, 64)
+	//numStr := FormatFloat(number, 2)
+	log.Print("numStr:")
+	log.Print(numStr)
 	numFloat, _ := strconv.ParseFloat(numStr, 32)
 	return RoundFloat(numFloat, 2)
 }
@@ -36,6 +55,7 @@ func RoundToTwoDecimal(number float64) float64 {
 func RoundFloat(val float64, precision uint) float64 {
 	ratio := math.Pow(10, float64(precision))
 	return math.Round(val*ratio) / ratio
+	//return math.Floor(val*ratio) / ratio
 }
 
 func ToFixed(num float64, precision int) float64 {
