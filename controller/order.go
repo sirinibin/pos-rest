@@ -71,6 +71,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	response.Meta["loss"] = salesStats.Loss
 	response.Meta["vat_price"] = salesStats.VatPrice
 	response.Meta["discount"] = salesStats.Discount
+	response.Meta["cash_discount"] = salesStats.CashDiscount
 	response.Meta["shipping_handling_fees"] = salesStats.ShippingOrHandlingFees
 	response.Meta["paid_sales"] = salesStats.PaidSales
 	response.Meta["unpaid_sales"] = salesStats.UnPaidSales
@@ -182,16 +183,14 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Print("Products sales history created")
 
-	if order.PaymentStatus != "not_paid" {
-		err = order.AddPayment()
-		if err != nil {
-			response.Status = false
-			response.Errors["payment"] = "Error creating payment: " + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-		log.Print("Payment created")
+	err = order.AddPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["creating_payments"] = "Error creating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
+	log.Print("Payments created")
 
 	_, err = order.GetPayments()
 	if err != nil {
@@ -353,6 +352,15 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		order.AddPayment()
 	}
 	*/
+
+	err = order.UpdatePayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["updated_payments"] = "Error updating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	log.Print("Payments updated")
 
 	order.GetPayments()
 	order.Update()

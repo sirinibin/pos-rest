@@ -604,8 +604,11 @@ func ProcessSalesCashDiscounts() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		model.Date = model.CreatedAt
-		model.Method = "cash"
+		order, _ := FindOrderByID(model.OrderID, bson.M{})
+		order.CashDiscount = model.Amount
+		order.Update()
+		//model.Date = model.CreatedAt
+		//model.Method = "cash"
 
 		err = model.Update()
 		if err != nil {
