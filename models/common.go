@@ -27,10 +27,10 @@ type SearchCriterias struct {
 
 func RoundToTwoDecimal(number float64) float64 {
 	numStr := fmt.Sprintf("%.2f", number)
-	log.Print("numStr:")
-	log.Print(numStr)
+	//log.Print("numStr:")
+	//log.Print(numStr)
 	numFloat, _ := strconv.ParseFloat(numStr, 32)
-	return numFloat
+	return RoundFloat(numFloat, 2)
 }
 
 func RoundFloat(val float64, precision uint) float64 {

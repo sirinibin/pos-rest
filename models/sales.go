@@ -261,7 +261,13 @@ func (order *Order) FindNetTotal() {
 		netTotal += ((netTotal * *order.VatPercent) / float64(100))
 	}
 
-	order.NetTotal = RoundFloat(netTotal, 2)
+	//log.Print("netTotal:")
+	//log.Print(netTotal)
+	//	order.NetTotal = RoundFloat(netTotal, 2)
+	order.NetTotal = RoundToTwoDecimal(netTotal)
+	// log.Print("order.NetTotal")
+	//
+	//	log.Print(order.NetTotal)
 }
 
 func (order *Order) FindTotal() {
