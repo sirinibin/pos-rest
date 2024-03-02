@@ -258,10 +258,12 @@ func (order *Order) FindNetTotal() {
 	netTotal += order.ShippingOrHandlingFees
 
 	if order.VatPercent != nil {
-		netTotal += netTotal * (*order.VatPercent / float64(100))
+		//netTotal += netTotal * (*order.VatPercent / float64(100))
+		netTotal += ((netTotal * *order.VatPercent) / float64(100))
 	}
 
-	order.NetTotal = math.Round(netTotal*100) / 100
+	//order.NetTotal = math.Ceil(netTotal*100) / 100
+	order.NetTotal = math.Ceil(order.NetTotal*100) / 100
 }
 
 func (order *Order) FindTotal() {
@@ -270,7 +272,7 @@ func (order *Order) FindTotal() {
 		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	order.Total = math.Round(total*100) / 100
+	order.Total = math.Ceil(total*100) / 100
 }
 
 func (order *Order) FindTotalQuantity() {
@@ -283,7 +285,7 @@ func (order *Order) FindTotalQuantity() {
 
 func (order *Order) FindVatPrice() {
 	vatPrice := ((*order.VatPercent / 100) * float64(order.Total-order.Discount+order.ShippingOrHandlingFees))
-	vatPrice = math.Round(vatPrice*100) / 100
+	vatPrice = math.Ceil(vatPrice*100) / 100
 	order.VatPrice = vatPrice
 }
 
@@ -386,9 +388,9 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 		if err != nil {
 			return stats, err
 		}
-		//stats.NetTotal = math.Round(stats.NetTotal*100) / 100
-		//stats.NetProfit = math.Round(stats.NetProfit*100) / 100
-		//stats.Loss = math.Round(stats.Loss*100) / 100
+		//stats.NetTotal = math.Ceil(stats.NetTotal*100) / 100
+		//stats.NetProfit = math.Ceil(stats.NetProfit*100) / 100
+		//stats.Loss = math.Ceil(stats.Loss*100) / 100
 	}
 	return stats, nil
 }
@@ -1371,7 +1373,7 @@ func (order *Order) CalculateOrderProfit() error {
 
 		loss := 0.0
 
-		profit = math.Round(profit*100) / 100
+		profit = math.Ceil(profit*100) / 100
 
 		if profit >= 0 {
 			order.Products[i].Profit = profit
@@ -1385,8 +1387,8 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	order.Profit = math.Round(totalProfit*100) / 100
-	order.NetProfit = math.Round(((totalProfit-order.CashDiscount)-order.Discount)*100) / 100
+	order.Profit = math.Ceil(totalProfit*100) / 100
+	order.NetProfit = math.Ceil(((totalProfit-order.CashDiscount)-order.Discount)*100) / 100
 	order.Loss = totalLoss
 	return nil
 }
@@ -2136,9 +2138,9 @@ func (product *Product) SetProductSalesStatsByStoreID(storeID primitive.ObjectID
 		if err != nil {
 			return err
 		}
-		stats.Sales = math.Round(stats.Sales*100) / 100
-		stats.SalesProfit = math.Round(stats.SalesProfit*100) / 100
-		stats.SalesLoss = math.Round(stats.SalesLoss*100) / 100
+		stats.Sales = math.Ceil(stats.Sales*100) / 100
+		stats.SalesProfit = math.Ceil(stats.SalesProfit*100) / 100
+		stats.SalesLoss = math.Ceil(stats.SalesLoss*100) / 100
 	}
 
 	/*
@@ -2282,11 +2284,11 @@ func (customer *Customer) SetCustomerSalesStatsByStoreID(storeID primitive.Objec
 		if err != nil {
 			return err
 		}
-		stats.SalesAmount = math.Round(stats.SalesAmount*100) / 100
-		stats.SalesPaidAmount = math.Round(stats.SalesPaidAmount*100) / 100
-		stats.SalesBalanceAmount = math.Round(stats.SalesBalanceAmount*100) / 100
-		stats.SalesProfit = math.Round(stats.SalesProfit*100) / 100
-		stats.SalesLoss = math.Round(stats.SalesLoss*100) / 100
+		stats.SalesAmount = math.Ceil(stats.SalesAmount*100) / 100
+		stats.SalesPaidAmount = math.Ceil(stats.SalesPaidAmount*100) / 100
+		stats.SalesBalanceAmount = math.Ceil(stats.SalesBalanceAmount*100) / 100
+		stats.SalesProfit = math.Ceil(stats.SalesProfit*100) / 100
+		stats.SalesLoss = math.Ceil(stats.SalesLoss*100) / 100
 	}
 
 	store, err := FindStoreByID(&storeID, bson.M{})
@@ -2476,7 +2478,7 @@ func MakeJournalsForPartialSalePayment(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
-	balanceAmount := math.Round(((order.NetTotal-order.CashDiscount)-*payment.Amount)*100) / 100
+	balanceAmount := math.Ceil(((order.NetTotal-order.CashDiscount)-*payment.Amount)*100) / 100
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2585,7 +2587,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
-	balanceAmount := math.Round(((order.NetTotal-order.CashDiscount)-*payment.Amount)*100) / 100
+	balanceAmount := math.Ceil(((order.NetTotal-order.CashDiscount)-*payment.Amount)*100) / 100
 	journals := []Journal{}
 	//Debtor acc up
 

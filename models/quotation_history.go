@@ -78,10 +78,10 @@ func GetQuotationHistoryStats(filter map[string]interface{}) (stats QuotationHis
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalQuotation = math.Round(stats.TotalQuotation*100) / 100
-		stats.TotalProfit = math.Round(stats.TotalProfit*100) / 100
-		stats.TotalLoss = math.Round(stats.TotalLoss*100) / 100
-		stats.TotalVat = math.Round(stats.TotalVat*100) / 100
+		stats.TotalQuotation = math.Ceil(stats.TotalQuotation*100) / 100
+		stats.TotalProfit = math.Ceil(stats.TotalProfit*100) / 100
+		stats.TotalLoss = math.Ceil(stats.TotalLoss*100) / 100
+		stats.TotalVat = math.Ceil(stats.TotalVat*100) / 100
 	}
 
 	return stats, nil
@@ -424,14 +424,14 @@ func (quotation *Quotation) AddProductsQuotationHistory() error {
 			UpdatedAt:     quotation.UpdatedAt,
 		}
 
-		history.UnitPrice = math.Round(quotationProduct.UnitPrice*100) / 100
-		history.Price = math.Round((quotationProduct.UnitPrice*quotationProduct.Quantity)*100) / 100
-		history.Profit = math.Round(quotationProduct.Profit*100) / 100
-		history.Loss = math.Round(quotationProduct.Loss*100) / 100
+		history.UnitPrice = math.Ceil(quotationProduct.UnitPrice*100) / 100
+		history.Price = math.Ceil((quotationProduct.UnitPrice*quotationProduct.Quantity)*100) / 100
+		history.Profit = math.Ceil(quotationProduct.Profit*100) / 100
+		history.Loss = math.Ceil(quotationProduct.Loss*100) / 100
 
-		history.VatPercent = math.Round(*quotation.VatPercent*100) / 100
-		history.VatPrice = math.Round((history.Price*(history.VatPercent/100))*100) / 100
-		history.NetPrice = math.Round((history.Price+history.VatPrice)*100) / 100
+		history.VatPercent = math.Ceil(*quotation.VatPercent*100) / 100
+		history.VatPrice = math.Ceil((history.Price*(history.VatPercent/100))*100) / 100
+		history.NetPrice = math.Ceil((history.Price+history.VatPrice)*100) / 100
 
 		history.ID = primitive.NewObjectID()
 		_, err := collection.InsertOne(ctx, &history)

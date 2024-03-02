@@ -72,8 +72,8 @@ func GetPurchaseReturnHistoryStats(filter map[string]interface{}) (stats Purchas
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalPurchaseReturn = math.Round(stats.TotalPurchaseReturn*100) / 100
-		stats.TotalVatReturn = math.Round(stats.TotalVatReturn*100) / 100
+		stats.TotalPurchaseReturn = math.Ceil(stats.TotalPurchaseReturn*100) / 100
+		stats.TotalVatReturn = math.Ceil(stats.TotalVatReturn*100) / 100
 	}
 
 	return stats, nil
@@ -382,11 +382,11 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 			UpdatedAt:          purchaseReturn.UpdatedAt,
 		}
 
-		history.UnitPrice = math.Round(purchaseReturnProduct.PurchaseReturnUnitPrice*100) / 100
-		history.Price = math.Round((purchaseReturnProduct.PurchaseReturnUnitPrice*purchaseReturnProduct.Quantity)*100) / 100
-		history.VatPercent = math.Round(*purchaseReturn.VatPercent*100) / 100
-		history.VatPrice = math.Round((history.Price*(history.VatPercent/100))*100) / 100
-		history.NetPrice = math.Round((history.Price+history.VatPrice)*100) / 100
+		history.UnitPrice = math.Ceil(purchaseReturnProduct.PurchaseReturnUnitPrice*100) / 100
+		history.Price = math.Ceil((purchaseReturnProduct.PurchaseReturnUnitPrice*purchaseReturnProduct.Quantity)*100) / 100
+		history.VatPercent = math.Ceil(*purchaseReturn.VatPercent*100) / 100
+		history.VatPrice = math.Ceil((history.Price*(history.VatPercent/100))*100) / 100
+		history.NetPrice = math.Ceil((history.Price+history.VatPrice)*100) / 100
 
 		history.ID = primitive.NewObjectID()
 

@@ -152,7 +152,7 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 		}
 
 		profit := salesPrice - (quantity * purchaseUnitPrice)
-		profit = math.Round(profit*100) / 100
+		profit = math.Ceil(profit*100) / 100
 
 		if profit >= 0 {
 			quotation.Products[i].Profit = profit
@@ -166,8 +166,8 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 
 	}
 
-	quotation.Profit = math.Round(totalProfit*100) / 100
-	quotation.NetProfit = math.Round((totalProfit-quotation.Discount)*100) / 100
+	quotation.Profit = math.Ceil(totalProfit*100) / 100
+	quotation.NetProfit = math.Ceil((totalProfit-quotation.Discount)*100) / 100
 	quotation.Loss = totalLoss
 	return nil
 }
@@ -202,9 +202,9 @@ func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
-		stats.NetProfit = math.Round(stats.NetProfit*100) / 100
-		stats.Loss = math.Round(stats.Loss*100) / 100
+		stats.NetTotal = math.Ceil(stats.NetTotal*100) / 100
+		stats.NetProfit = math.Ceil(stats.NetProfit*100) / 100
+		stats.Loss = math.Ceil(stats.Loss*100) / 100
 
 		return stats, nil
 	}
@@ -411,7 +411,7 @@ func (quotation *Quotation) FindNetTotal() {
 		netTotal += netTotal * (*quotation.VatPercent / float64(100))
 	}
 
-	quotation.NetTotal = math.Round(netTotal*100) / 100
+	quotation.NetTotal = math.Ceil(netTotal*100) / 100
 }
 
 func (quotation *Quotation) FindTotal() {
@@ -420,7 +420,7 @@ func (quotation *Quotation) FindTotal() {
 		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	quotation.Total = math.Round(total*100) / 100
+	quotation.Total = math.Ceil(total*100) / 100
 }
 
 func (quotation *Quotation) FindTotalQuantity() {
@@ -433,7 +433,7 @@ func (quotation *Quotation) FindTotalQuantity() {
 
 func (quotation *Quotation) FindVatPrice() {
 	vatPrice := ((*quotation.VatPercent / 100) * (quotation.Total - quotation.Discount + quotation.ShippingOrHandlingFees))
-	vatPrice = math.Round(vatPrice*100) / 100
+	vatPrice = math.Ceil(vatPrice*100) / 100
 	quotation.VatPrice = vatPrice
 }
 
@@ -1273,7 +1273,7 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 			return err
 		}
 
-		stats.Quotation = math.Round(stats.Quotation*100) / 100
+		stats.Quotation = math.Ceil(stats.Quotation*100) / 100
 	}
 
 	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
@@ -1368,9 +1368,9 @@ func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.O
 		if err != nil {
 			return err
 		}
-		stats.QuotationAmount = math.Round(stats.QuotationAmount*100) / 100
-		stats.QuotationProfit = math.Round(stats.QuotationProfit*100) / 100
-		stats.QuotationLoss = math.Round(stats.QuotationLoss*100) / 100
+		stats.QuotationAmount = math.Ceil(stats.QuotationAmount*100) / 100
+		stats.QuotationProfit = math.Ceil(stats.QuotationProfit*100) / 100
+		stats.QuotationLoss = math.Ceil(stats.QuotationLoss*100) / 100
 	}
 
 	store, err := FindStoreByID(&storeID, bson.M{})

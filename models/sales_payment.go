@@ -712,7 +712,7 @@ func GetSalesPaymentStats(filter map[string]interface{}) (stats SalesPaymentStat
 			return stats, err
 		}
 
-		stats.TotalPayment = math.Round(stats.TotalPayment*100) / 100
+		stats.TotalPayment = math.Ceil(stats.TotalPayment*100) / 100
 	}
 
 	return stats, nil

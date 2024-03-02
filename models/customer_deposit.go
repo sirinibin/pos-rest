@@ -137,7 +137,7 @@ func GetCustomerDepositStats(filter map[string]interface{}) (stats CustomerDepos
 		if err != nil {
 			return stats, err
 		}
-		stats.Total = math.Round(stats.Total*100) / 100
+		stats.Total = math.Ceil(stats.Total*100) / 100
 	}
 	return stats, nil
 }

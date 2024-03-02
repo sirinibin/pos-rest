@@ -326,10 +326,10 @@ func GetProductStats(
 		if err != nil {
 			return stats, err
 		}
-		stats.Stock = math.Round(stats.Stock*100) / 100
-		stats.RetailStockValue = math.Round(stats.RetailStockValue*100) / 100
-		stats.WholesaleStockValue = math.Round(stats.WholesaleStockValue*100) / 100
-		stats.PurchaseStockValue = math.Round(stats.PurchaseStockValue*100) / 100
+		stats.Stock = math.Ceil(stats.Stock*100) / 100
+		stats.RetailStockValue = math.Ceil(stats.RetailStockValue*100) / 100
+		stats.WholesaleStockValue = math.Ceil(stats.WholesaleStockValue*100) / 100
+		stats.PurchaseStockValue = math.Ceil(stats.PurchaseStockValue*100) / 100
 	}
 	return stats, nil
 }
@@ -585,7 +585,7 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 					price := float64(productStore.RetailUnitPrice)
 					vatPrice := (float64(float64(productStore.RetailUnitPrice) * float64(store.VatPercent/float64(100))))
 					price += vatPrice
-					price = math.Round(price*100) / 100
+					price = math.Ceil(price*100) / 100
 					productPrice = fmt.Sprintf("%.2f", price)
 					break
 				}

@@ -138,7 +138,7 @@ func GetCustomerWithdrawalStats(filter map[string]interface{}) (stats CustomerWi
 		if err != nil {
 			return stats, err
 		}
-		stats.Total = math.Round(stats.Total*100) / 100
+		stats.Total = math.Ceil(stats.Total*100) / 100
 	}
 	return stats, nil
 }

@@ -86,9 +86,9 @@ func GetAccountListStats(filter map[string]interface{}) (stats AccountListStats,
 		if err != nil {
 			return stats, err
 		}
-		stats.DebitBalanceTotal = math.Round(stats.DebitBalanceTotal*100) / 100
-		stats.CreditBalanceTotal = math.Round(stats.CreditBalanceTotal*100) / 100
-		//stats.Loss = math.Round(stats.Loss*100) / 100
+		stats.DebitBalanceTotal = math.Ceil(stats.DebitBalanceTotal*100) / 100
+		stats.CreditBalanceTotal = math.Ceil(stats.CreditBalanceTotal*100) / 100
+		//stats.Loss = math.Ceil(stats.Loss*100) / 100
 	}
 	return stats, nil
 }
@@ -128,17 +128,17 @@ func (account *Account) CalculateBalance() error {
 		if err != nil {
 			return err
 		}
-		stats.DebitTotal = math.Round(stats.DebitTotal*100) / 100
-		stats.CreditTotal = math.Round(stats.CreditTotal*100) / 100
+		stats.DebitTotal = math.Ceil(stats.DebitTotal*100) / 100
+		stats.CreditTotal = math.Ceil(stats.CreditTotal*100) / 100
 	}
 
 	account.DebitTotal = stats.DebitTotal
 	account.CreditTotal = stats.CreditTotal
 
 	if stats.CreditTotal > stats.DebitTotal {
-		account.Balance = math.Round((stats.CreditTotal-stats.DebitTotal)*100) / 100
+		account.Balance = math.Ceil((stats.CreditTotal-stats.DebitTotal)*100) / 100
 	} else {
-		account.Balance = math.Round((stats.DebitTotal-stats.CreditTotal)*100) / 100
+		account.Balance = math.Ceil((stats.DebitTotal-stats.CreditTotal)*100) / 100
 	}
 
 	if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {

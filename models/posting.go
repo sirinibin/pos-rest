@@ -202,8 +202,8 @@ func GetPostingListStats(filter map[string]interface{}, startDate time.Time, end
 		if err != nil {
 			return stats, err
 		}
-		stats.DebitTotal = math.Round(stats.DebitTotal*100) / 100
-		stats.CreditTotal = math.Round(stats.CreditTotal*100) / 100
+		stats.DebitTotal = math.Ceil(stats.DebitTotal*100) / 100
+		stats.CreditTotal = math.Ceil(stats.CreditTotal*100) / 100
 	}
 
 	if startDate.IsZero() {
@@ -280,8 +280,8 @@ func GetPostingListStats(filter map[string]interface{}, startDate time.Time, end
 		if err != nil {
 			return stats, err
 		}
-		stats.DebitTotalBoughtDown = math.Round(stats.DebitTotalBoughtDown*100) / 100
-		stats.CreditTotalBoughtDown = math.Round(stats.CreditTotalBoughtDown*100) / 100
+		stats.DebitTotalBoughtDown = math.Ceil(stats.DebitTotalBoughtDown*100) / 100
+		stats.CreditTotalBoughtDown = math.Ceil(stats.CreditTotalBoughtDown*100) / 100
 	}
 
 	return stats, nil

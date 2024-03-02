@@ -84,12 +84,12 @@ func GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHisto
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalPurchase = math.Round(stats.TotalPurchase*100) / 100
-		stats.TotalRetailProfit = math.Round(stats.TotalRetailProfit*100) / 100
-		stats.TotalWholesaleProfit = math.Round(stats.TotalWholesaleProfit*100) / 100
-		stats.TotalRetailLoss = math.Round(stats.TotalRetailLoss*100) / 100
-		stats.TotalWholesaleLoss = math.Round(stats.TotalWholesaleLoss*100) / 100
-		stats.TotalVat = math.Round(stats.TotalVat*100) / 100
+		stats.TotalPurchase = math.Ceil(stats.TotalPurchase*100) / 100
+		stats.TotalRetailProfit = math.Ceil(stats.TotalRetailProfit*100) / 100
+		stats.TotalWholesaleProfit = math.Ceil(stats.TotalWholesaleProfit*100) / 100
+		stats.TotalRetailLoss = math.Ceil(stats.TotalRetailLoss*100) / 100
+		stats.TotalWholesaleLoss = math.Ceil(stats.TotalWholesaleLoss*100) / 100
+		stats.TotalVat = math.Ceil(stats.TotalVat*100) / 100
 	}
 
 	return stats, nil
@@ -434,17 +434,17 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 			UpdatedAt:    purchase.UpdatedAt,
 		}
 
-		history.UnitPrice = math.Round(purchaseProduct.PurchaseUnitPrice*100) / 100
-		history.Price = math.Round((purchaseProduct.PurchaseUnitPrice*purchaseProduct.Quantity)*100) / 100
+		history.UnitPrice = math.Ceil(purchaseProduct.PurchaseUnitPrice*100) / 100
+		history.Price = math.Ceil((purchaseProduct.PurchaseUnitPrice*purchaseProduct.Quantity)*100) / 100
 
-		history.RetailProfit = math.Round(purchase.ExpectedRetailProfit*100) / 100
-		history.WholesaleProfit = math.Round(purchase.ExpectedWholesaleProfit*100) / 100
-		history.RetailLoss = math.Round(purchase.ExpectedRetailLoss*100) / 100
-		history.WholesaleLoss = math.Round(purchase.ExpectedWholesaleLoss*100) / 100
+		history.RetailProfit = math.Ceil(purchase.ExpectedRetailProfit*100) / 100
+		history.WholesaleProfit = math.Ceil(purchase.ExpectedWholesaleProfit*100) / 100
+		history.RetailLoss = math.Ceil(purchase.ExpectedRetailLoss*100) / 100
+		history.WholesaleLoss = math.Ceil(purchase.ExpectedWholesaleLoss*100) / 100
 
-		history.VatPercent = math.Round(*purchase.VatPercent*100) / 100
-		history.VatPrice = math.Round((history.Price*(history.VatPercent/100))*100) / 100
-		history.NetPrice = math.Round((history.Price+history.VatPrice)*100) / 100
+		history.VatPercent = math.Ceil(*purchase.VatPercent*100) / 100
+		history.VatPrice = math.Ceil((history.Price*(history.VatPercent/100))*100) / 100
+		history.NetPrice = math.Ceil((history.Price+history.VatPrice)*100) / 100
 
 		history.ID = primitive.NewObjectID()
 

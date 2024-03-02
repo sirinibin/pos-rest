@@ -98,9 +98,9 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 		*/
 
 		if debitTotalBoughtDown > creditTotalBoughtDown {
-			balanceBoughtDown = math.Round((debitTotalBoughtDown-creditTotalBoughtDown)*100) / 100
+			balanceBoughtDown = math.Ceil((debitTotalBoughtDown-creditTotalBoughtDown)*100) / 100
 		} else if creditTotalBoughtDown > debitTotalBoughtDown {
-			balanceBoughtDown = math.Round((creditTotalBoughtDown-debitTotalBoughtDown)*100) / 100
+			balanceBoughtDown = math.Ceil((creditTotalBoughtDown-debitTotalBoughtDown)*100) / 100
 		}
 
 		if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
@@ -123,13 +123,13 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 		response.Meta[balanceBoughtDownType+"_balance_bought_down"] = balanceBoughtDown
 	}
 
-	response.Meta["debit_total"] = math.Round(debitTotal*100) / 100
-	response.Meta["credit_total"] = math.Round(creditTotal*100) / 100
+	response.Meta["debit_total"] = math.Ceil(debitTotal*100) / 100
+	response.Meta["credit_total"] = math.Ceil(creditTotal*100) / 100
 
 	if debitTotal < creditTotal {
-		response.Meta["debit_balance"] = math.Round((creditTotal-debitTotal)*100) / 100
+		response.Meta["debit_balance"] = math.Ceil((creditTotal-debitTotal)*100) / 100
 	} else if debitTotal > creditTotal {
-		response.Meta["credit_balance"] = math.Round((debitTotal-creditTotal)*100) / 100
+		response.Meta["credit_balance"] = math.Ceil((debitTotal-creditTotal)*100) / 100
 	}
 
 	response.Status = true

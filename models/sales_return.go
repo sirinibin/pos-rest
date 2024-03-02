@@ -190,9 +190,9 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
-		stats.NetProfit = math.Round(stats.NetProfit*100) / 100
-		stats.Loss = math.Round(stats.Loss*100) / 100
+		stats.NetTotal = math.Ceil(stats.NetTotal*100) / 100
+		stats.NetProfit = math.Ceil(stats.NetProfit*100) / 100
+		stats.Loss = math.Ceil(stats.Loss*100) / 100
 	}
 	return stats, nil
 }
@@ -304,7 +304,7 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 		netTotal += netTotal * (*salesreturn.VatPercent / float64(100))
 	}
 
-	salesreturn.NetTotal = math.Round(netTotal*100) / 100
+	salesreturn.NetTotal = math.Ceil(netTotal*100) / 100
 }
 
 func (salesreturn *SalesReturn) FindTotal() {
@@ -313,7 +313,7 @@ func (salesreturn *SalesReturn) FindTotal() {
 		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	salesreturn.Total = math.Round(total*100) / 100
+	salesreturn.Total = math.Ceil(total*100) / 100
 }
 
 func (salesreturn *SalesReturn) FindTotalQuantity() {
@@ -326,7 +326,7 @@ func (salesreturn *SalesReturn) FindTotalQuantity() {
 
 func (salesreturn *SalesReturn) FindVatPrice() {
 	vatPrice := ((*salesreturn.VatPercent / 100) * (salesreturn.Total - salesreturn.Discount))
-	vatPrice = math.Round(vatPrice*100) / 100
+	vatPrice = math.Ceil(vatPrice*100) / 100
 	salesreturn.VatPrice = vatPrice
 }
 
@@ -935,7 +935,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 		for _, orderProduct := range order.Products {
 			if orderProduct.ProductID == salesReturnProduct.ProductID {
-				soldQty := math.Round((orderProduct.Quantity-orderProduct.QuantityReturned)*100) / 100
+				soldQty := math.Ceil((orderProduct.Quantity-orderProduct.QuantityReturned)*100) / 100
 				if soldQty == 0 {
 					errs["quantity_"+strconv.Itoa(index)] = "Already returned all sold quantities"
 				} else if salesReturnProduct.Quantity > float64(soldQty) {
@@ -1202,7 +1202,7 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 			profit = salesPrice - (quantity * purchaseUnitPrice)
 		}
 
-		profit = math.Round(profit*100) / 100
+		profit = math.Ceil(profit*100) / 100
 
 		if profit >= 0 {
 			salesReturn.Products[i].Profit = profit
@@ -1215,8 +1215,8 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 		}
 
 	}
-	salesReturn.Profit = math.Round(totalProfit*100) / 100
-	salesReturn.NetProfit = math.Round((totalProfit-salesReturn.Discount)*100) / 100
+	salesReturn.Profit = math.Ceil(totalProfit*100) / 100
+	salesReturn.NetProfit = math.Ceil((totalProfit-salesReturn.Discount)*100) / 100
 	salesReturn.Loss = totalLoss
 	return nil
 }
@@ -1781,9 +1781,9 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 			return err
 		}
 
-		stats.SalesReturn = math.Round(stats.SalesReturn*100) / 100
-		stats.SalesReturnProfit = math.Round(stats.SalesReturnProfit*100) / 100
-		stats.SalesReturnLoss = math.Round(stats.SalesReturnLoss*100) / 100
+		stats.SalesReturn = math.Ceil(stats.SalesReturn*100) / 100
+		stats.SalesReturnProfit = math.Ceil(stats.SalesReturnProfit*100) / 100
+		stats.SalesReturnLoss = math.Ceil(stats.SalesReturnLoss*100) / 100
 	}
 
 	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
@@ -1926,11 +1926,11 @@ func (customer *Customer) SetCustomerSalesReturnStatsByStoreID(storeID primitive
 		if err != nil {
 			return err
 		}
-		stats.SalesReturnAmount = math.Round(stats.SalesReturnAmount*100) / 100
-		stats.SalesReturnPaidAmount = math.Round(stats.SalesReturnPaidAmount*100) / 100
-		stats.SalesReturnBalanceAmount = math.Round(stats.SalesReturnBalanceAmount*100) / 100
-		stats.SalesReturnProfit = math.Round(stats.SalesReturnProfit*100) / 100
-		stats.SalesReturnLoss = math.Round(stats.SalesReturnLoss*100) / 100
+		stats.SalesReturnAmount = math.Ceil(stats.SalesReturnAmount*100) / 100
+		stats.SalesReturnPaidAmount = math.Ceil(stats.SalesReturnPaidAmount*100) / 100
+		stats.SalesReturnBalanceAmount = math.Ceil(stats.SalesReturnBalanceAmount*100) / 100
+		stats.SalesReturnProfit = math.Ceil(stats.SalesReturnProfit*100) / 100
+		stats.SalesReturnLoss = math.Ceil(stats.SalesReturnLoss*100) / 100
 	}
 
 	store, err := FindStoreByID(&storeID, bson.M{})

@@ -63,7 +63,7 @@ func GetDeliveryNoteHistoryStats(filter map[string]interface{}) (stats DeliveryN
 		if err != nil {
 			return stats, err
 		}
-		stats.TotalQuantity = math.Round(stats.TotalQuantity*100) / 100
+		stats.TotalQuantity = math.Ceil(stats.TotalQuantity*100) / 100
 	}
 
 	return stats, nil

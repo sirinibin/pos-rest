@@ -152,7 +152,7 @@ func GetStringFontSize(str string) float64 {
 		}
 		i += 10
 	}
-	return math.Round(size*100) / 100
+	return math.Ceil(size*100) / 100
 }
 
 func drawAnImage() {

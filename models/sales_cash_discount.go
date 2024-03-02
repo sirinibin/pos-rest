@@ -570,7 +570,7 @@ func GetSalesCashDiscountStats(filter map[string]interface{}) (stats SalesCashDi
 			return stats, err
 		}
 
-		stats.TotalCashDiscount = math.Round(stats.TotalCashDiscount*100) / 100
+		stats.TotalCashDiscount = math.Ceil(stats.TotalCashDiscount*100) / 100
 	}
 
 	return stats, nil

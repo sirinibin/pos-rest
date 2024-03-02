@@ -234,9 +234,9 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 		if err != nil {
 			return stats, err
 		}
-		stats.NetTotal = math.Round(stats.NetTotal*100) / 100
-		stats.NetRetailProfit = math.Round(stats.NetRetailProfit*100) / 100
-		stats.NetWholesaleProfit = math.Round(stats.NetWholesaleProfit*100) / 100
+		stats.NetTotal = math.Ceil(stats.NetTotal*100) / 100
+		stats.NetRetailProfit = math.Ceil(stats.NetRetailProfit*100) / 100
+		stats.NetWholesaleProfit = math.Ceil(stats.NetWholesaleProfit*100) / 100
 	}
 	return stats, nil
 }
@@ -283,21 +283,21 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	}
 
 	if purchase.ReturnedAll {
-		purchase.ExpectedRetailProfit = math.Round(0.00*100) / 100
-		purchase.ExpectedWholesaleProfit = math.Round(0.00*100) / 100
-		purchase.ExpectedNetRetailProfit = math.Round(0.00*100) / 100
-		purchase.ExpectedNetWholesaleProfit = math.Round(0.00*100) / 100
-		purchase.ExpectedRetailLoss = math.Round(0.00*100) / 100
-		purchase.ExpectedWholesaleLoss = math.Round(0.00*100) / 100
+		purchase.ExpectedRetailProfit = math.Ceil(0.00*100) / 100
+		purchase.ExpectedWholesaleProfit = math.Ceil(0.00*100) / 100
+		purchase.ExpectedNetRetailProfit = math.Ceil(0.00*100) / 100
+		purchase.ExpectedNetWholesaleProfit = math.Ceil(0.00*100) / 100
+		purchase.ExpectedRetailLoss = math.Ceil(0.00*100) / 100
+		purchase.ExpectedWholesaleLoss = math.Ceil(0.00*100) / 100
 	} else {
-		purchase.ExpectedRetailProfit = math.Round((totalRetailProfit)*100) / 100
-		purchase.ExpectedWholesaleProfit = math.Round((totalWholesaleProfit)*100) / 100
+		purchase.ExpectedRetailProfit = math.Ceil((totalRetailProfit)*100) / 100
+		purchase.ExpectedWholesaleProfit = math.Ceil((totalWholesaleProfit)*100) / 100
 
-		purchase.ExpectedNetRetailProfit = math.Round((totalRetailProfit+purchase.Discount-purchase.ReturnDiscount)*100) / 100
-		purchase.ExpectedNetWholesaleProfit = math.Round((totalWholesaleProfit+purchase.Discount-purchase.ReturnDiscount)*100) / 100
+		purchase.ExpectedNetRetailProfit = math.Ceil((totalRetailProfit+purchase.Discount-purchase.ReturnDiscount)*100) / 100
+		purchase.ExpectedNetWholesaleProfit = math.Ceil((totalWholesaleProfit+purchase.Discount-purchase.ReturnDiscount)*100) / 100
 
-		purchase.ExpectedRetailLoss = math.Round(totalRetailLoss*100) / 100
-		purchase.ExpectedWholesaleLoss = math.Round(totalWholesaleLoss*100) / 100
+		purchase.ExpectedRetailLoss = math.Ceil(totalRetailLoss*100) / 100
+		purchase.ExpectedWholesaleLoss = math.Ceil(totalWholesaleLoss*100) / 100
 	}
 
 	return nil
@@ -455,7 +455,7 @@ func (purchase *Purchase) FindNetTotal() {
 		netTotal += netTotal * (*purchase.VatPercent / float64(100))
 	}
 
-	purchase.NetTotal = math.Round(netTotal*100) / 100
+	purchase.NetTotal = math.Ceil(netTotal*100) / 100
 }
 
 func (purchase *Purchase) FindTotal() {
@@ -464,7 +464,7 @@ func (purchase *Purchase) FindTotal() {
 		total += (float64(product.Quantity) * product.PurchaseUnitPrice)
 	}
 
-	purchase.Total = math.Round(total*100) / 100
+	purchase.Total = math.Ceil(total*100) / 100
 }
 
 func (purchase *Purchase) FindTotalQuantity() {
@@ -477,7 +477,7 @@ func (purchase *Purchase) FindTotalQuantity() {
 
 func (purchase *Purchase) FindVatPrice() {
 	vatPrice := ((*purchase.VatPercent / 100) * (purchase.Total - purchase.Discount + purchase.ShippingOrHandlingFees))
-	vatPrice = math.Round(vatPrice*100) / 100
+	vatPrice = math.Ceil(vatPrice*100) / 100
 	purchase.VatPrice = vatPrice
 }
 
@@ -1711,7 +1711,7 @@ func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.Objec
 			return err
 		}
 
-		stats.Purchase = math.Round(stats.Purchase*100) / 100
+		stats.Purchase = math.Ceil(stats.Purchase*100) / 100
 	}
 
 	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
@@ -1855,13 +1855,13 @@ func (vendor *Vendor) SetVendorPurchaseStatsByStoreID(storeID primitive.ObjectID
 		if err != nil {
 			return errors.New("Error decoding purchase stats: " + err.Error())
 		}
-		stats.PurchaseAmount = math.Round(stats.PurchaseAmount*100) / 100
-		stats.PurchasePaidAmount = math.Round(stats.PurchasePaidAmount*100) / 100
-		stats.PurchaseBalanceAmount = math.Round(stats.PurchaseBalanceAmount*100) / 100
-		stats.PurchaseRetailProfit = math.Round(stats.PurchaseRetailProfit*100) / 100
-		stats.PurchaseWholesaleProfit = math.Round(stats.PurchaseWholesaleProfit*100) / 100
-		stats.PurchaseRetailLoss = math.Round(stats.PurchaseRetailLoss*100) / 100
-		stats.PurchaseWholesaleLoss = math.Round(stats.PurchaseWholesaleLoss*100) / 100
+		stats.PurchaseAmount = math.Ceil(stats.PurchaseAmount*100) / 100
+		stats.PurchasePaidAmount = math.Ceil(stats.PurchasePaidAmount*100) / 100
+		stats.PurchaseBalanceAmount = math.Ceil(stats.PurchaseBalanceAmount*100) / 100
+		stats.PurchaseRetailProfit = math.Ceil(stats.PurchaseRetailProfit*100) / 100
+		stats.PurchaseWholesaleProfit = math.Ceil(stats.PurchaseWholesaleProfit*100) / 100
+		stats.PurchaseRetailLoss = math.Ceil(stats.PurchaseRetailLoss*100) / 100
+		stats.PurchaseWholesaleLoss = math.Ceil(stats.PurchaseWholesaleLoss*100) / 100
 	}
 
 	store, err := FindStoreByID(&storeID, bson.M{})
