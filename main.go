@@ -706,12 +706,10 @@ func cronJobsEveryHour() error {
 		}
 	*/
 
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
+	err := models.ProcessOrders()
+	if err != nil {
+		log.Print(err)
+	}
 
 	/*
 		err := models.ProcessPostings()
@@ -727,10 +725,12 @@ func cronJobsEveryHour() error {
 		}
 	*/
 
-	err := models.ProcessSalesCashDiscounts()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessSalesCashDiscounts()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	return nil
 }
