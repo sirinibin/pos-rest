@@ -704,7 +704,6 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 	*/
-
 	/*
 		err := models.ProcessOrders()
 		if err != nil {

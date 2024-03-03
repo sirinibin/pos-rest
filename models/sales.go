@@ -931,6 +931,17 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
+	totalAmountFromCustomerAccount := 0.00
+	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil {
+		errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
+	}
+
+	customerAccount, err := FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_account"] = "Error finding customer account: " + err.Error()
+	}
+
 	for index, payment := range order.PaymentsInput {
 		if govalidator.IsNull(payment.DateStr) {
 			errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
@@ -977,6 +988,37 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			}
 		}
 
+		if payment.Method == "customer_account" {
+			totalAmountFromCustomerAccount += *payment.Amount
+			log.Print("Checking customer account Balance")
+
+			if customerAccount != nil {
+				if customerAccount.Balance == 0 {
+					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
+				} else if customerAccount.Type == "asset" {
+					errs["payment_method_"+strconv.Itoa(index)] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+				} else if customerAccount.Type == "liability" && customerAccount.Balance < (*payment.Amount) {
+					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+				}
+			} else {
+				errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
+			}
+		}
+
+	} //end for
+
+	if totalAmountFromCustomerAccount > 0 {
+		if customerAccount != nil {
+			if customerAccount.Balance == 0 {
+				errs["customer_id"] = "customer account balance is zero"
+			} else if customerAccount.Type == "asset" {
+				errs["customer_id"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+			} else if customerAccount.Type == "liability" && customerAccount.Balance < totalAmountFromCustomerAccount {
+				errs["customer_id"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+			}
+		} else {
+			errs["customer_id"] = "customer account balance is zero"
+		}
 	}
 
 	/*
