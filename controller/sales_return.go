@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -159,7 +158,8 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.UpdateOrderReturnDiscount()
+	salesreturn.UpdateOrderReturnDiscount(nil)
+	salesreturn.UpdateOrderReturnCashDiscount(nil)
 	salesreturn.CreateProductsSalesReturnHistory()
 	/*
 		if salesreturn.PaymentStatus != "not_paid" {
@@ -174,7 +174,6 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Payments created")
 
 	salesreturn.GetPayments()
 	salesreturn.Update()
@@ -300,6 +299,9 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	salesreturn.UpdateOrderReturnDiscount(salesreturnOld)
+	salesreturn.UpdateOrderReturnCashDiscount(salesreturnOld)
+
 	salesreturn.ClearProductsSalesReturnHistory()
 	salesreturn.CreateProductsSalesReturnHistory()
 	//count, _ := salesreturn.GetPaymentsCount()
@@ -318,7 +320,6 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Payments updated")
 
 	salesreturn.GetPayments()
 	salesreturn.Update()

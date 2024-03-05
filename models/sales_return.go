@@ -420,10 +420,9 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 func (salesreturn *SalesReturn) FindTotal() {
 	total := float64(0.0)
 	for _, product := range salesreturn.Products {
-		total += (float64(product.Quantity) * product.UnitPrice)
+		total += (product.Quantity * product.UnitPrice)
 	}
-
-	salesreturn.Total = RoundFloat(salesreturn.Total, 2)
+	salesreturn.Total = RoundFloat(total, 2)
 }
 
 func (salesreturn *SalesReturn) FindTotalQuantity() {
@@ -435,7 +434,7 @@ func (salesreturn *SalesReturn) FindTotalQuantity() {
 }
 
 func (salesreturn *SalesReturn) FindVatPrice() {
-	vatPrice := ((*salesreturn.VatPercent / 100) * (salesreturn.Total - salesreturn.Discount))
+	vatPrice := ((*salesreturn.VatPercent / 100) * float64(salesreturn.Total-salesreturn.Discount))
 	vatPrice = RoundFloat(vatPrice, 2)
 	salesreturn.VatPrice = vatPrice
 }
@@ -1006,6 +1005,17 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
 	}
 
+	maxCashDiscountAllowed := 0.00
+	if scenario == "update" {
+		maxCashDiscountAllowed = order.CashDiscount - (order.ReturnCashDiscount - oldSalesReturn.CashDiscount)
+	} else {
+		maxCashDiscountAllowed = order.CashDiscount - order.ReturnCashDiscount
+	}
+
+	if salesreturn.CashDiscount > maxCashDiscountAllowed {
+		errs["cash_discount"] = "Cash discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxCashDiscountAllowed))
+	}
+
 	salesreturn.OrderCode = order.Code
 
 	/*
@@ -1559,12 +1569,31 @@ func (salesReturn *SalesReturn) AddPayment() error {
 	return nil
 }
 
-func (salesreturn *SalesReturn) UpdateOrderReturnDiscount() error {
-	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
+func (salesReturn *SalesReturn) UpdateOrderReturnDiscount(salesReturnOld *SalesReturn) error {
+	order, err := FindOrderByID(salesReturn.OrderID, bson.M{})
 	if err != nil {
 		return err
 	}
-	order.ReturnDiscount += salesreturn.Discount
+
+	if salesReturnOld != nil {
+		order.ReturnDiscount -= salesReturnOld.Discount
+	}
+
+	order.ReturnDiscount += salesReturn.Discount
+	return order.Update()
+}
+
+func (salesReturn *SalesReturn) UpdateOrderReturnCashDiscount(salesReturnOld *SalesReturn) error {
+	order, err := FindOrderByID(salesReturn.OrderID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if salesReturnOld != nil {
+		order.ReturnCashDiscount -= salesReturnOld.CashDiscount
+	}
+
+	order.ReturnCashDiscount += salesReturn.CashDiscount
 	return order.Update()
 }
 

@@ -190,7 +190,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Payments created")
 
 	_, err = order.GetPayments()
 	if err != nil {
@@ -360,7 +359,6 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Payments updated")
 
 	order.GetPayments()
 	order.Update()

@@ -67,6 +67,7 @@ type Order struct {
 	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float64             `bson:"discount" json:"discount"`
 	ReturnDiscount           float64             `bson:"return_discount" json:"return_discount"`
+	ReturnCashDiscount       float64             `bson:"return_cash_discount" json:"return_cash_discount"`
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
@@ -1388,9 +1389,6 @@ func (order *Order) CalculateOrderProfit() error {
 		order.NetLoss += (order.NetProfit * -1)
 		order.NetProfit = 0.00
 	}
-
-	log.Print("order.NetLoss:")
-	log.Print(order.NetLoss)
 
 	return nil
 }
