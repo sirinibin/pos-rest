@@ -163,7 +163,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct(false)
+	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct(nil)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -317,7 +317,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct(true)
+	err = purchasereturn.UpdateReturnedQuantityInPurchaseProduct(purchasereturnOld)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

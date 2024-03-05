@@ -64,6 +64,7 @@ type SalesReturn struct {
 	VatPrice                float64              `bson:"vat_price" json:"vat_price"`
 	Total                   float64              `bson:"total" json:"total"`
 	NetTotal                float64              `bson:"net_total" json:"net_total"`
+	CashDiscount            float64              `bson:"cash_discount" json:"cash_discount"`
 	PartiaPaymentAmount     float64              `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod           string               `bson:"payment_method" json:"payment_method"`
 	PaymentStatus           string               `bson:"payment_status" json:"payment_status"`
@@ -83,15 +84,122 @@ type SalesReturn struct {
 	CreatedByName           string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName           string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName           string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog               []ChangeLog          `json:"change_log,omitempty" bson:"change_log,omitempty"`
 	Profit                  float64              `bson:"profit" json:"profit"`
 	NetProfit               float64              `bson:"net_profit" json:"net_profit"`
 	Loss                    float64              `bson:"loss" json:"loss"`
+	NetLoss                 float64              `bson:"net_loss" json:"net_loss"`
 	TotalPaymentPaid        float64              `bson:"total_payment_paid" json:"total_payment_paid"`
 	BalanceAmount           float64              `bson:"balance_amount" json:"balance_amount"`
 	Payments                []SalesReturnPayment `bson:"payments" json:"payments"`
+	PaymentsInput           []SalesReturnPayment `json:"payments_input"`
 	PaymentsCount           int64                `bson:"payments_count" json:"payments_count"`
 	PaymentMethods          []string             `json:"payment_methods" bson:"payment_methods"`
+}
+
+func (salesReturn *SalesReturn) AddPayments() error {
+	for _, payment := range salesReturn.PaymentsInput {
+		salesReturnPayment := SalesReturnPayment{
+			SalesReturnID:   &salesReturn.ID,
+			SalesReturnCode: salesReturn.Code,
+			OrderID:         salesReturn.OrderID,
+			OrderCode:       salesReturn.OrderCode,
+			Amount:          payment.Amount,
+			Method:          payment.Method,
+			Date:            payment.Date,
+			CreatedAt:       salesReturn.CreatedAt,
+			UpdatedAt:       salesReturn.UpdatedAt,
+			CreatedBy:       salesReturn.CreatedBy,
+			CreatedByName:   salesReturn.CreatedByName,
+			UpdatedBy:       salesReturn.UpdatedBy,
+			UpdatedByName:   salesReturn.UpdatedByName,
+			StoreID:         salesReturn.StoreID,
+			StoreName:       salesReturn.StoreName,
+		}
+		err := salesReturnPayment.Insert()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (salesReturn *SalesReturn) UpdatePayments() error {
+	salesReturn.GetPayments()
+	now := time.Now()
+	for _, payment := range salesReturn.PaymentsInput {
+		if payment.ID.IsZero() {
+			//Create new
+			salesReturnPayment := SalesReturnPayment{
+				SalesReturnID:   &salesReturn.ID,
+				SalesReturnCode: salesReturn.Code,
+				OrderID:         salesReturn.OrderID,
+				OrderCode:       salesReturn.OrderCode,
+				Amount:          payment.Amount,
+				Method:          payment.Method,
+				Date:            payment.Date,
+				CreatedAt:       &now,
+				UpdatedAt:       &now,
+				CreatedBy:       salesReturn.CreatedBy,
+				CreatedByName:   salesReturn.CreatedByName,
+				UpdatedBy:       salesReturn.UpdatedBy,
+				UpdatedByName:   salesReturn.UpdatedByName,
+				StoreID:         salesReturn.StoreID,
+				StoreName:       salesReturn.StoreName,
+			}
+			err := salesReturnPayment.Insert()
+			if err != nil {
+				return err
+			}
+
+		} else {
+			//Update
+			salesReturnPayment, err := FindSalesReturnPaymentByID(&payment.ID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			salesReturnPayment.Date = payment.Date
+			salesReturnPayment.Amount = payment.Amount
+			salesReturnPayment.Method = payment.Method
+			salesReturnPayment.UpdatedAt = &now
+			salesReturnPayment.UpdatedBy = salesReturn.UpdatedBy
+			salesReturnPayment.UpdatedByName = salesReturn.UpdatedByName
+			err = salesReturnPayment.Update()
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	//Deleting payments
+
+	paymentsToDelete := []SalesReturnPayment{}
+
+	for _, payment := range salesReturn.Payments {
+		found := false
+		for _, paymentInput := range salesReturn.PaymentsInput {
+			if paymentInput.ID.Hex() == payment.ID.Hex() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			paymentsToDelete = append(paymentsToDelete, payment)
+		}
+	}
+
+	for _, payment := range paymentsToDelete {
+		payment.Deleted = true
+		payment.DeletedAt = &now
+		payment.DeletedBy = salesReturn.UpdatedBy
+		err := payment.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // DiskQuotaUsageResult payload for disk quota usage
@@ -100,8 +208,9 @@ type SalesReturnStats struct {
 	NetTotal               float64             `json:"net_total" bson:"net_total"`
 	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
 	Discount               float64             `json:"discount" bson:"discount"`
+	CashDiscount           float64             `json:"cash_discount" bson:"cash_discount"`
 	NetProfit              float64             `json:"net_profit" bson:"net_profit"`
-	Loss                   float64             `json:"loss" bson:"loss"`
+	NetLoss                float64             `json:"net_loss" bson:"net_loss"`
 	PaidSalesReturn        float64             `json:"paid_sales_return" bson:"paid_sales_return"`
 	UnPaidSalesReturn      float64             `json:"unpaid_sales_return" bson:"unpaid_sales_return"`
 	CashSalesReturn        float64             `json:"cash_sales_return" bson:"cash_sales_return"`
@@ -119,12 +228,13 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":        nil,
-				"net_total":  bson.M{"$sum": "$net_total"},
-				"vat_price":  bson.M{"$sum": "$vat_price"},
-				"discount":   bson.M{"$sum": "$discount"},
-				"net_profit": bson.M{"$sum": "$net_profit"},
-				"loss":       bson.M{"$sum": "$loss"},
+				"_id":           nil,
+				"net_total":     bson.M{"$sum": "$net_total"},
+				"vat_price":     bson.M{"$sum": "$vat_price"},
+				"discount":      bson.M{"$sum": "$discount"},
+				"cash_discount": bson.M{"$sum": "$cash_discount"},
+				"net_profit":    bson.M{"$sum": "$net_profit"},
+				"net_loss":      bson.M{"$sum": "$net_loss"},
 				"paid_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",
@@ -191,7 +301,8 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 		}
 		stats.NetTotal = RoundFloat(stats.NetTotal, 2)
 		stats.NetProfit = RoundFloat(stats.NetProfit, 2)
-		stats.Loss = RoundFloat(stats.Loss, 2)
+		stats.NetLoss = RoundFloat(stats.NetLoss, 2)
+		stats.CashDiscount = RoundFloat(stats.CashDiscount, 2)
 	}
 	return stats, nil
 }
@@ -556,7 +667,23 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 		} else {
 			criterias.SearchBy["net_total"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[cash_discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["cash_discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["cash_discount"] = value
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[net_profit]"]
@@ -592,7 +719,23 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 		} else {
 			criterias.SearchBy["loss"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[net_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_loss"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_loss"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
@@ -770,6 +913,75 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	errs = make(map[string]string)
 
+	if govalidator.IsNull(salesreturn.DateStr) {
+		errs["date_str"] = "Date is required"
+	} else {
+		const shortForm = "2006-01-02T15:04:05Z07:00"
+		date, err := time.Parse(shortForm, salesreturn.DateStr)
+		if err != nil {
+			errs["date_str"] = "Invalid date format"
+		}
+		salesreturn.Date = &date
+	}
+
+	if salesreturn.CashDiscount >= salesreturn.NetTotal {
+		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", salesreturn.NetTotal)
+	}
+
+	totalPayment := float64(0.00)
+	for _, payment := range salesreturn.PaymentsInput {
+		if payment.Amount != nil {
+			totalPayment += *payment.Amount
+		}
+	}
+
+	for index, payment := range salesreturn.PaymentsInput {
+		if govalidator.IsNull(payment.DateStr) {
+			errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
+		} else {
+			const shortForm = "2006-01-02T15:04:05Z07:00"
+			date, err := time.Parse(shortForm, payment.DateStr)
+			if err != nil {
+				errs["payment_date_"+strconv.Itoa(index)] = "Invalid date format"
+			}
+
+			salesreturn.PaymentsInput[index].Date = &date
+			payment.Date = &date
+
+			if salesreturn.Date != nil && salesreturn.PaymentsInput[index].Date.Before(*salesreturn.Date) {
+				errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to sales return date time"
+			}
+		}
+
+		if payment.Amount == nil {
+			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
+		} else if *payment.Amount == 0 {
+			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+		}
+
+		if payment.Method == "" {
+			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
+		}
+
+		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
+			if *payment.Amount <= 0 {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+			}
+
+			maxAllowedAmount := (salesreturn.NetTotal - salesreturn.CashDiscount) - (totalPayment - *payment.Amount)
+
+			if maxAllowedAmount < 0 {
+				maxAllowedAmount = 0
+			}
+
+			if maxAllowedAmount == 0 {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (salesreturn.NetTotal-salesreturn.CashDiscount)) + ", Please delete this payment"
+			} else if *payment.Amount > maxAllowedAmount {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
+			}
+		}
+	} //end for
+
 	if salesreturn.OrderID == nil || salesreturn.OrderID.IsZero() {
 		w.WriteHeader(http.StatusBadRequest)
 		errs["order_id"] = "Order ID is required"
@@ -783,35 +995,24 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		return errs
 	}
 
-	if salesreturn.Discount > (order.Discount - order.ReturnDiscount) {
-		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (order.Discount-order.ReturnDiscount))
+	maxDiscountAllowed := 0.00
+	if scenario == "update" {
+		maxDiscountAllowed = order.Discount - (order.ReturnDiscount - oldSalesReturn.Discount)
+	} else {
+		maxDiscountAllowed = order.Discount - order.ReturnDiscount
+	}
+
+	if salesreturn.Discount > maxDiscountAllowed {
+		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
 	}
 
 	salesreturn.OrderCode = order.Code
 
-	if govalidator.IsNull(salesreturn.PaymentStatus) {
-		errs["payment_status"] = "Payment status is required"
-	}
-
-	if govalidator.IsNull(salesreturn.DateStr) {
-		errs["date_str"] = "Date is required"
-	} else {
-		/*
-			const shortForm = "Jan 02 2006"
-			date, err := time.Parse(shortForm, salesreturn.DateStr)
-			if err != nil {
-				errs["date_str"] = "Invalid date format"
-			}
-			salesreturn.Date = &date
-		*/
-
-		const shortForm = "2006-01-02T15:04:05Z07:00"
-		date, err := time.Parse(shortForm, salesreturn.DateStr)
-		if err != nil {
-			errs["date_str"] = "Invalid date format"
+	/*
+		if govalidator.IsNull(salesreturn.PaymentStatus) {
+			errs["payment_status"] = "Payment status is required"
 		}
-		salesreturn.Date = &date
-	}
+	*/
 
 	if !govalidator.IsNull(salesreturn.SignatureDateStr) {
 		const shortForm = "Jan 02 2006"
@@ -839,18 +1040,13 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["id"] = "Invalid SalesReturn:" + salesreturn.ID.Hex()
 		}
 
-		if oldSalesReturn != nil {
-			if oldSalesReturn.Status == "delivered" || oldSalesReturn.Status == "dispatched" {
-				if salesreturn.Status == "pending" || salesreturn.Status == "cancelled" || salesreturn.Status == "salesreturn_placed" {
-					errs["status"] = "Can't change the status from delivered/dispatched to pending/cancelled/salesreturn_placed"
-				}
-			}
-		}
 	} else {
 		if order.PaymentStatus != "not_paid" {
-			if govalidator.IsNull(order.PaymentMethod) {
-				errs["payment_method"] = "Payment method is required"
-			}
+			/*
+				if govalidator.IsNull(salesreturn.PaymentMethod) {
+					errs["payment_method"] = "Payment method is required"
+				}
+			*/
 		}
 	}
 
@@ -883,19 +1079,21 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	if salesreturn.ReceivedBy == nil || salesreturn.ReceivedBy.IsZero() {
-		errs["received_by"] = "Received By is required"
-	} else {
-		exists, err := IsUserExists(salesreturn.ReceivedBy)
-		if err != nil {
-			errs["received_by"] = err.Error()
-			return errs
-		}
+	/*
+		if salesreturn.ReceivedBy == nil || salesreturn.ReceivedBy.IsZero() {
+			errs["received_by"] = "Received By is required"
+		} else {
+			exists, err := IsUserExists(salesreturn.ReceivedBy)
+			if err != nil {
+				errs["received_by"] = err.Error()
+				return errs
+			}
 
-		if !exists {
-			errs["received_by"] = "Invalid Received By:" + salesreturn.ReceivedBy.Hex()
+			if !exists {
+				errs["received_by"] = "Invalid Received By:" + salesreturn.ReceivedBy.Hex()
+			}
 		}
-	}
+	*/
 
 	if len(salesreturn.Products) == 0 {
 		errs["product_id"] = "Atleast 1 product is required for salesreturn"
@@ -934,12 +1132,26 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 		for _, orderProduct := range order.Products {
 			if orderProduct.ProductID == salesReturnProduct.ProductID {
-				soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
-				if soldQty == 0 {
-					errs["quantity_"+strconv.Itoa(index)] = "Already returned all sold quantities"
-				} else if salesReturnProduct.Quantity > float64(soldQty) {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + orderProduct.Unit
+				//soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
+				maxAllowedQuantity := 0.00
+				if scenario == "update" {
+					maxAllowedQuantity = orderProduct.Quantity - (orderProduct.QuantityReturned - oldSalesReturn.Products[index].Quantity)
+				} else {
+					log.Print("Creating")
+					maxAllowedQuantity = orderProduct.Quantity - orderProduct.QuantityReturned
 				}
+
+				if salesReturnProduct.Quantity > maxAllowedQuantity {
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + orderProduct.Unit
+				}
+				/*
+					soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
+					if soldQty == 0 {
+						errs["quantity_"+strconv.Itoa(index)] = "Already returned all sold quantities"
+					} else if salesReturnProduct.Quantity > float64(soldQty) {
+						errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + orderProduct.Unit
+					}
+				*/
 			}
 		}
 
@@ -978,11 +1190,24 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	return errs
 }
 
-func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct() error {
+func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct(salesReturnOld *SalesReturn) error {
 	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
 	if err != nil {
 		return err
 	}
+
+	if salesReturnOld != nil {
+		for _, salesReturnProduct := range salesReturnOld.Products {
+			for index2, orderProduct := range order.Products {
+				if orderProduct.ProductID == salesReturnProduct.ProductID {
+					if order.Products[index2].QuantityReturned > 0 {
+						order.Products[index2].QuantityReturned -= salesReturnProduct.Quantity
+					}
+				}
+			}
+		}
+	}
+
 	for _, salesReturnProduct := range salesreturn.Products {
 		for index2, orderProduct := range order.Products {
 			if orderProduct.ProductID == salesReturnProduct.ProductID {
@@ -990,6 +1215,7 @@ func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct() error {
 			}
 		}
 	}
+
 	err = order.CalculateOrderProfit()
 	if err != nil {
 		return err
@@ -1215,8 +1441,14 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 
 	}
 	salesReturn.Profit = RoundFloat(totalProfit, 2)
-	salesReturn.NetProfit = RoundFloat((totalProfit - salesReturn.Discount), 2)
+	salesReturn.NetProfit = RoundFloat(((totalProfit - salesReturn.CashDiscount) - salesReturn.Discount), 2)
 	salesReturn.Loss = totalLoss
+	salesReturn.NetLoss = totalLoss
+	if salesReturn.NetProfit < 0 {
+		salesReturn.NetLoss += (salesReturn.NetProfit * -1)
+		salesReturn.NetProfit = 0.00
+	}
+
 	return nil
 }
 
@@ -1571,7 +1803,14 @@ func ProcessSalesReturns() error {
 			}
 		*/
 
-		err = salesReturn.SetCustomerSalesReturnStats()
+		/*
+			err = salesReturn.SetCustomerSalesReturnStats()
+			if err != nil {
+				return err
+			}
+		*/
+
+		err = salesReturn.CalculateSalesReturnProfit()
 		if err != nil {
 			return err
 		}
@@ -1581,12 +1820,14 @@ func ProcessSalesReturns() error {
 			return err
 		}
 
-		if salesReturn.Code == "GUOJ-200042" {
-			err = salesReturn.HardDelete()
-			if err != nil {
-				return err
+		/*
+			if salesReturn.Code == "GUOJ-200042" {
+				err = salesReturn.HardDelete()
+				if err != nil {
+					return err
+				}
 			}
-		}
+		*/
 
 	}
 	log.Print("DONE!")
@@ -1638,12 +1879,13 @@ func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, er
 	} //end for loop
 
 	salesReturn.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
-	salesReturn.BalanceAmount = ToFixed(salesReturn.NetTotal-totalPaymentPaid, 2)
+	//salesReturn.BalanceAmount = ToFixed(salesReturn.NetTotal-totalPaymentPaid, 2)
+	salesReturn.BalanceAmount = ToFixed((salesReturn.NetTotal-salesReturn.CashDiscount)-totalPaymentPaid, 2)
 	salesReturn.PaymentMethods = paymentMethods
 	salesReturn.Payments = payments
 	salesReturn.PaymentsCount = int64(len(payments))
 
-	if ToFixed(salesReturn.NetTotal, 2) == ToFixed(totalPaymentPaid, 2) {
+	if ToFixed((salesReturn.NetTotal-salesReturn.CashDiscount), 2) == ToFixed(totalPaymentPaid, 2) {
 		salesReturn.PaymentStatus = "paid"
 	} else if ToFixed(totalPaymentPaid, 2) > 0 {
 		salesReturn.PaymentStatus = "paid_partially"
@@ -1736,7 +1978,7 @@ type ProductSalesReturnStats struct {
 	SalesReturnQuantity float64 `json:"sales_return_quantity" bson:"sales_return_quantity"`
 	SalesReturn         float64 `json:"sales_return" bson:"sales_return"`
 	SalesReturnProfit   float64 `json:"sales_return_profit" bson:"sales_return_profit"`
-	SalesReturnLoss     float64 `json:"sales_return_loss" bson:"lsales_return_oss"`
+	SalesReturnLoss     float64 `json:"sales_return_loss" bson:"sales_return_loss"`
 }
 
 func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.ObjectID) error {

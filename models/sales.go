@@ -88,6 +88,7 @@ type Order struct {
 	Profit                   float64             `bson:"profit" json:"profit"`
 	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
 	Loss                     float64             `bson:"loss" json:"loss"`
+	NetLoss                  float64             `bson:"net_loss" json:"net_loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -297,7 +298,7 @@ type SalesStats struct {
 	ID                     *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal               float64             `json:"net_total" bson:"net_total"`
 	NetProfit              float64             `json:"net_profit" bson:"net_profit"`
-	Loss                   float64             `json:"loss" bson:"loss"`
+	NetLoss                float64             `json:"net_loss" bson:"net_loss"`
 	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
 	Discount               float64             `json:"discount" bson:"discount"`
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
@@ -322,7 +323,7 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 				"_id":                    nil,
 				"net_total":              bson.M{"$sum": "$net_total"},
 				"net_profit":             bson.M{"$sum": "$net_profit"},
-				"loss":                   bson.M{"$sum": "$loss"},
+				"net_loss":               bson.M{"$sum": "$net_loss"},
 				"vat_price":              bson.M{"$sum": "$vat_price"},
 				"discount":               bson.M{"$sum": "$discount"},
 				"cash_discount":          bson.M{"$sum": "$cash_discount"},
@@ -605,7 +606,6 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		} else {
 			criterias.SearchBy["cash_discount"] = value
 		}
-
 	}
 
 	keys, ok = r.URL.Query()["search[total_payment_received]"]
@@ -693,7 +693,23 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		} else {
 			criterias.SearchBy["loss"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[net_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_loss"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_loss"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
@@ -1175,72 +1191,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if order.PaymentMethod == "customer_account" &&
-		order.PaymentStatus != "not_paid" &&
-		scenario != "update" {
-
-		log.Print("Checking customer account Balance")
-		customer, err := FindCustomerByID(order.CustomerID, bson.M{})
-		if err != nil {
-			errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
-		}
-
-		referenceModel := "customer"
-		customerAccount, err := CreateAccountIfNotExists(
-			order.StoreID,
-			&customer.ID,
-			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-		)
-		if err != nil {
-			errs["customer_account"] = "Error creating customer account: " + err.Error()
-		}
-
-		customerBalance := customerAccount.Balance
-		log.Print(customerBalance)
-		accountType := customerAccount.Type
-
-		if customerBalance == 0 {
-			errs["payment_method"] = "customer account balance is zero"
-		} else if accountType == "asset" {
-			errs["payment_method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
-		} else if accountType == "liability" && order.PaymentStatus == "paid" && customerBalance < order.NetTotal {
-			errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance) + ", total: " + fmt.Sprintf("%.02f", order.NetTotal)
-		} else if accountType == "liability" && order.PaymentStatus == "paid_partially" && customerBalance < order.PartiaPaymentAmount {
-			errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
-		}
-
-		/*
-			spendingAccount := &Account{}
-			spendingAccountName := ""
-			if *order.PayFromAccount == "cash_account" {
-				cashAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", nil)
-				if err != nil {
-					errs["pay_from_account"] = "error fetching cash account"
-				}
-				spendingAccount = cashAccount
-				spendingAccountName = "cash"
-
-			} else if *order.PayFromAccount == "bank_account" {
-				bankAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Bank", nil)
-				if err != nil {
-					errs["pay_from_account"] = "error fetching bank account"
-				}
-				spendingAccount = bankAccount
-				spendingAccountName = "bank"
-			}
-
-			if spendingAccount.Balance == 0 {
-				errs["pay_from_account"] = spendingAccountName + " account balance is zero"
-			} else if order.PaymentStatus == "paid" && spendingAccount.Balance < order.NetTotal {
-				errs["pay_from_account"] = spendingAccountName + " account balance is only: " + fmt.Sprintf("%.02f", spendingAccount.Balance)
-			} else if order.PaymentStatus == "paid_partially" && spendingAccount.Balance < order.PartiaPaymentAmount {
-				errs["pay_from_account"] = spendingAccountName + " account balance is only: " + fmt.Sprintf("%.02f", spendingAccount.Balance)
-			}
-		*/
-	}
-
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -1433,6 +1383,15 @@ func (order *Order) CalculateOrderProfit() error {
 	order.Profit = RoundFloat(totalProfit, 2)
 	order.NetProfit = RoundFloat(((totalProfit - order.CashDiscount) - order.Discount), 2)
 	order.Loss = totalLoss
+	order.NetLoss = totalLoss
+	if order.NetProfit < 0 {
+		order.NetLoss += (order.NetProfit * -1)
+		order.NetProfit = 0.00
+	}
+
+	log.Print("order.NetLoss:")
+	log.Print(order.NetLoss)
+
 	return nil
 }
 

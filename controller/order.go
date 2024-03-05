@@ -68,7 +68,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 
 	response.Meta["total_sales"] = salesStats.NetTotal
 	response.Meta["net_profit"] = salesStats.NetProfit
-	response.Meta["loss"] = salesStats.Loss
+	response.Meta["net_loss"] = salesStats.NetLoss
 	response.Meta["vat_price"] = salesStats.VatPrice
 	response.Meta["discount"] = salesStats.Discount
 	response.Meta["cash_discount"] = salesStats.CashDiscount

@@ -943,22 +943,38 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 		for _, purchaseProduct := range purchase.Products {
 			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
-				purchasedQty := 0.0
+
+				maxAllowedQuantity := 0.00
 				if scenario == "update" {
-					purchasedQty = RoundFloat(purchaseProduct.Quantity, 2)
+					maxAllowedQuantity = purchaseProduct.Quantity - (purchaseProduct.QuantityReturned - oldPurchaseReturn.Products[index].Quantity)
 				} else {
-					purchasedQty = RoundFloat((purchaseProduct.Quantity - purchaseProduct.QuantityReturned), 2)
+					log.Print("Creating")
+					maxAllowedQuantity = purchaseProduct.Quantity - purchaseProduct.QuantityReturned
 				}
 
-				if purchasedQty == 0 {
-					errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
-				} else if purchaseReturnProduct.Quantity > float64(purchasedQty) {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", purchasedQty) + " " + purchaseProduct.Unit
+				if purchaseReturnProduct.Quantity > maxAllowedQuantity {
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchaseProduct.Unit
 				}
+				/*
+					purchasedQty := 0.0
 
-				if purchaseReturnProduct.PurchaseReturnUnitPrice > purchaseProduct.PurchaseUnitPrice {
-					errs["purchasereturned_unit_price_"+strconv.Itoa(index)] = "Purchase Return Unit Price should not be greater than purchase Unit Price: " + fmt.Sprintf("%.02f", purchaseProduct.PurchaseUnitPrice)
-				}
+					if scenario == "update" {
+						//purchasedQty = RoundFloat(purchaseProduct.Quantity, 2)
+						purchasedQty = RoundFloat((purchaseProduct.Quantity - (purchaseProduct.QuantityReturned - purchaseReturnProduct.Quantity)), 2)
+					} else {
+						purchasedQty = RoundFloat((purchaseProduct.Quantity - purchaseProduct.QuantityReturned), 2)
+					}
+
+					if purchasedQty == 0 {
+						errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
+					} else if purchaseReturnProduct.Quantity > float64(purchasedQty) {
+						errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", purchasedQty) + " " + purchaseProduct.Unit
+					}
+
+					if purchaseReturnProduct.PurchaseReturnUnitPrice > purchaseProduct.PurchaseUnitPrice {
+						errs["purchasereturned_unit_price_"+strconv.Itoa(index)] = "Purchase Return Unit Price should not be greater than purchase Unit Price: " + fmt.Sprintf("%.02f", purchaseProduct.PurchaseUnitPrice)
+					}
+				*/
 			}
 		}
 
@@ -977,20 +993,26 @@ func (purchasereturn *PurchaseReturn) Validate(
 	return errs
 }
 
-func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(replace bool) error {
+func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(purchaseReturnOld *PurchaseReturn) error {
 	purchase, err := FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
 	if err != nil {
 		return err
 	}
+
+	if purchaseReturnOld != nil {
+		for _, purchaseReturnProduct := range purchaseReturnOld.Products {
+			for index2, purchaseProduct := range purchase.Products {
+				if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
+					purchase.Products[index2].QuantityReturned -= purchaseReturnProduct.Quantity
+				}
+			}
+		}
+	}
+
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
 		for index2, purchaseProduct := range purchase.Products {
 			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
-				if replace {
-					purchase.Products[index2].QuantityReturned = purchaseReturnProduct.Quantity
-				} else {
-					purchase.Products[index2].QuantityReturned += purchaseReturnProduct.Quantity
-				}
-
+				purchase.Products[index2].QuantityReturned += purchaseReturnProduct.Quantity
 			}
 		}
 	}

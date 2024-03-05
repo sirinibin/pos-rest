@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -67,9 +68,10 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	response.Meta["total_sales_return"] = salesReturnStats.NetTotal
 	response.Meta["net_profit"] = salesReturnStats.NetProfit
-	response.Meta["loss"] = salesReturnStats.Loss
+	response.Meta["net_loss"] = salesReturnStats.NetLoss
 	response.Meta["vat_price"] = salesReturnStats.VatPrice
 	response.Meta["discount"] = salesReturnStats.Discount
+	response.Meta["cash_discount"] = salesReturnStats.CashDiscount
 	response.Meta["paid_sales_return"] = salesReturnStats.PaidSalesReturn
 	response.Meta["unpaid_sales_return"] = salesReturnStats.UnPaidSalesReturn
 	response.Meta["cash_sales_return"] = salesReturnStats.CashSalesReturn
@@ -159,9 +161,20 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	salesreturn.UpdateOrderReturnDiscount()
 	salesreturn.CreateProductsSalesReturnHistory()
-	if salesreturn.PaymentStatus != "not_paid" {
-		salesreturn.AddPayment()
+	/*
+		if salesreturn.PaymentStatus != "not_paid" {
+			salesreturn.AddPayment()
+		}
+	*/
+
+	err = salesreturn.AddPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["creating_payments"] = "Error creating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
+	log.Print("Payments created")
 
 	salesreturn.GetPayments()
 	salesreturn.Update()
@@ -177,7 +190,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = salesreturn.UpdateReturnedQuantityInOrderProduct()
+	err = salesreturn.UpdateReturnedQuantityInOrderProduct(nil)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -289,12 +302,23 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	salesreturn.ClearProductsSalesReturnHistory()
 	salesreturn.CreateProductsSalesReturnHistory()
-	count, _ := salesreturn.GetPaymentsCount()
+	//count, _ := salesreturn.GetPaymentsCount()
 
-	if count == 1 && salesreturn.PaymentStatus == "paid" {
-		salesreturn.ClearPayments()
-		salesreturn.AddPayment()
+	/*
+		if count == 1 && salesreturn.PaymentStatus == "paid" {
+			salesreturn.ClearPayments()
+			salesreturn.AddPayment()
+		}
+	*/
+
+	err = salesreturn.UpdatePayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["updated_payments"] = "Error updating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
+	log.Print("Payments updated")
 
 	salesreturn.GetPayments()
 	salesreturn.Update()
@@ -315,6 +339,17 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = salesreturn.UpdateReturnedQuantityInOrderProduct(salesreturnOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["update_returned_quantity"] = "Unable to update returned quantity:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)

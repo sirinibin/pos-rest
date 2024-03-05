@@ -14,6 +14,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -360,6 +361,7 @@ func main() {
 
 	//SalesReturn
 	router.HandleFunc("/v1/sales-return", controller.CreateSalesReturn).Methods("POST")
+	router.HandleFunc("/v1/sales-return/{id}", controller.UpdateSalesReturn).Methods("PUT")
 	router.HandleFunc("/v1/sales-return", controller.ListSalesReturn).Methods("GET")
 	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
 	/*
@@ -654,10 +656,7 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 
-		err = models.ProcessSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}
+
 
 		err = models.ProcessQuotations()
 		if err != nil {
@@ -732,6 +731,11 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 	*/
+
+	err := models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
 	return nil
 }
