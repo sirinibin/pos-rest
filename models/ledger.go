@@ -37,6 +37,7 @@ type Journal struct {
 	Debit         float64            `bson:"debit,omitempty" json:"debit,omitempty"`
 	Credit        float64            `bson:"credit,omitempty" json:"credit,omitempty"`
 	GroupAccounts []string           `bson:"group_accounts" json:"group_accounts"`
+	GroupID       primitive.ObjectID `json:"group_id,omitempty" bson:"group_id,omitempty"`
 	CreatedAt     *time.Time         `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time         `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }

@@ -468,112 +468,130 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		return errs
 	}
 
+	maxAllowedAmount := 0.00
+
 	if scenario == "update" {
-		if salesPayment.Amount != nil && ToFixed((salespaymentStats.TotalPayment-*oldSalesPayment.Amount)+*salesPayment.Amount, 2) > order.NetTotal {
-			if ToFixed(order.NetTotal-(salespaymentStats.TotalPayment-*oldSalesPayment.Amount), 2) > 0 {
-				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (order.NetTotal-(salespaymentStats.TotalPayment-*oldSalesPayment.Amount)))
-			} else {
-				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR"
-			}
-
-		}
+		maxAllowedAmount = (order.NetTotal - order.CashDiscount) - (salespaymentStats.TotalPayment - *oldSalesPayment.Amount)
 	} else {
-		if salesPayment.Amount != nil && ToFixed((salespaymentStats.TotalPayment+*salesPayment.Amount), 2) > order.NetTotal {
-			if ToFixed((order.NetTotal-salespaymentStats.TotalPayment), 2) > 0 {
-				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (order.NetTotal-salespaymentStats.TotalPayment))
-			} else {
-				errs["amount"] = "Customer already paid " + fmt.Sprintf("%.02f", salespaymentStats.TotalPayment) + " SAR"
-			}
+		maxAllowedAmount = (order.NetTotal - order.CashDiscount) - salespaymentStats.TotalPayment
+	}
 
-		}
+	if *salesPayment.Amount > maxAllowedAmount {
+		errs["amount"] = "The amount should not be greater than " + fmt.Sprintf("%.02f", maxAllowedAmount)
+	}
+
+	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil {
+		errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
+	}
+
+	customerAccount, err := FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_account"] = "Error finding customer account: " + err.Error()
 	}
 
 	if salesPayment.Method == "customer_account" {
-		customer, err := FindCustomerByID(order.CustomerID, bson.M{})
-		if err != nil {
-			errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
-		}
-
-		referenceModel := "customer"
-		customerAccount, err := CreateAccountIfNotExists(
-			order.StoreID,
-			&customer.ID,
-			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-		)
-		if err != nil {
-			errs["customer_account"] = "Error creating customer account: " + err.Error()
-		}
-
-		customerBalance := customerAccount.Balance
-		accountType := customerAccount.Type
-		oldSalesPayment := &SalesPayment{}
-
-		if scenario == "update" {
-			oldSalesPayment, _ = FindSalesPaymentByID(&salesPayment.ID, bson.M{})
-			if customerAccount.CreditTotal > (customerAccount.DebitTotal - *oldSalesPayment.Amount) {
-				accountType = "liability"
-				customerBalance += *oldSalesPayment.Amount
-			} else {
-				accountType = "asset"
+		log.Print("Checking customer account Balance")
+		if customerAccount != nil {
+			if customerAccount.Balance == 0 {
+				errs["payment_method"] = "customer account balance is zero"
+			} else if customerAccount.Type == "asset" {
+				errs["payment_method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+			} else if customerAccount.Type == "liability" && customerAccount.Balance < (*salesPayment.Amount) {
+				errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
 			}
+		} else {
+			errs["payment_method"] = "customer account balance is zero"
 		}
-
-		if customerBalance == 0 {
-			errs["method"] = "customer account balance is zero"
-		} else if accountType == "asset" {
-			errs["method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
-		} else if accountType == "liability" && customerBalance < *salesPayment.Amount {
-			errs["method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
-		}
-
-		//Check balances of cash or bank accounts (Spending accounts)
-		/*
-			spendingAccount := &Account{}
-			spendingAccountName := ""
-			if salesPayment.Method == "customer_account" {
-				if *salesPayment.PayFromAccount == "cash_account" {
-					cashAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", nil)
-					if err != nil {
-						errs["pay_from_account"] = "error fetching cash account"
-					}
-
-					if scenario == "update" && oldSalesPayment.Method == "cash" {
-						cashAccount.Balance += *oldSalesPayment.Amount
-					}
-
-					spendingAccount = cashAccount
-					spendingAccountName = "cash"
-
-				} else if *salesPayment.PayFromAccount == "bank_account" {
-					bankAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Bank", nil)
-					if err != nil {
-						errs["pay_from_account"] = "error fetching bank account"
-					}
-
-					if scenario == "update" && oldSalesPayment.Method == "bank_account" {
-						bankAccount.Balance += *oldSalesPayment.Amount
-					}
-
-					spendingAccount = bankAccount
-					spendingAccountName = "bank"
-				}
-
-				spendingAccountBalance := spendingAccount.Balance
-
-				if oldSalesPayment != nil && oldSalesPayment.Amount != nil {
-					spendingAccountBalance += *oldSalesPayment.Amount
-				}
-
-				if spendingAccountBalance == 0 {
-					errs["pay_from_account"] = spendingAccountName + " account balance is zero"
-				} else if spendingAccountBalance < *salesPayment.Amount {
-					errs["pay_from_account"] = spendingAccountName + " account balance is only: " + fmt.Sprintf("%.02f", spendingAccountBalance)
-				}
-			}
-		*/
 	}
+
+	/*
+		if salesPayment.Method == "customer_account" {
+			customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+			if err != nil {
+				errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
+			}
+
+			referenceModel := "customer"
+			customerAccount, err := CreateAccountIfNotExists(
+				order.StoreID,
+				&customer.ID,
+				&referenceModel,
+				customer.Name,
+				&customer.Phone,
+			)
+			if err != nil {
+				errs["customer_account"] = "Error creating customer account: " + err.Error()
+			}
+
+			customerBalance := customerAccount.Balance
+			accountType := customerAccount.Type
+			oldSalesPayment := &SalesPayment{}
+
+			if scenario == "update" {
+				oldSalesPayment, _ = FindSalesPaymentByID(&salesPayment.ID, bson.M{})
+				if customerAccount.CreditTotal > (customerAccount.DebitTotal - *oldSalesPayment.Amount) {
+					accountType = "liability"
+					customerBalance += *oldSalesPayment.Amount
+				} else {
+					accountType = "asset"
+				}
+			}
+
+			if customerBalance == 0 {
+				errs["method"] = "customer account balance is zero"
+			} else if accountType == "asset" {
+				errs["method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
+			} else if accountType == "liability" && customerBalance < *salesPayment.Amount {
+				errs["method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
+			}
+
+			//Check balances of cash or bank accounts (Spending accounts)
+			/*
+				spendingAccount := &Account{}
+				spendingAccountName := ""
+				if salesPayment.Method == "customer_account" {
+					if *salesPayment.PayFromAccount == "cash_account" {
+						cashAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", nil)
+						if err != nil {
+							errs["pay_from_account"] = "error fetching cash account"
+						}
+
+						if scenario == "update" && oldSalesPayment.Method == "cash" {
+							cashAccount.Balance += *oldSalesPayment.Amount
+						}
+
+						spendingAccount = cashAccount
+						spendingAccountName = "cash"
+
+					} else if *salesPayment.PayFromAccount == "bank_account" {
+						bankAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Bank", nil)
+						if err != nil {
+							errs["pay_from_account"] = "error fetching bank account"
+						}
+
+						if scenario == "update" && oldSalesPayment.Method == "bank_account" {
+							bankAccount.Balance += *oldSalesPayment.Amount
+						}
+
+						spendingAccount = bankAccount
+						spendingAccountName = "bank"
+					}
+
+					spendingAccountBalance := spendingAccount.Balance
+
+					if oldSalesPayment != nil && oldSalesPayment.Amount != nil {
+						spendingAccountBalance += *oldSalesPayment.Amount
+					}
+
+					if spendingAccountBalance == 0 {
+						errs["pay_from_account"] = spendingAccountName + " account balance is zero"
+					} else if spendingAccountBalance < *salesPayment.Amount {
+						errs["pay_from_account"] = spendingAccountName + " account balance is only: " + fmt.Sprintf("%.02f", spendingAccountBalance)
+					}
+				}
+	*/
+	//}
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)

@@ -794,6 +794,14 @@ func IsAccountExistsInGroup(accountNumber string, groupAccountNumbers []string) 
 	return false
 }
 
+func GetGroupString(groups []string) string {
+	groupStr := ""
+	for _, group := range groups {
+		groupStr += group
+	}
+	return groupStr
+}
+
 func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 	now := time.Now()
 
@@ -808,19 +816,26 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			return nil, errors.New("error finding account: " + journal.AccountName)
 		}
 
-		if IsAccountExistsInPostings(journal.AccountID, postings) {
-			continue
-		}
+		/*
+			if IsAccountExistsInPostings(journal.AccountID, postings) {
+				continue
+			}
+		*/
 
 		posts := []Post{} // Reset posts
 		debitTotal := float64(0.00)
 		creditTotal := float64(0.00)
 		for k2, journal2 := range ledger.Journals {
-			if k2 == k1 || account.Number == journal2.AccountNumber {
+			//if k2 == k1 || account.Number == journal2.AccountNumber {
+			if k2 == k1 {
 				continue
 			}
+			/*
+				if !IsAccountExistsInGroup(account.Number, journal2.GroupAccounts) {
+					continue
+				}*/
 
-			if !IsAccountExistsInGroup(account.Number, journal2.GroupAccounts) {
+			if journal.GroupID.Hex() != journal2.GroupID.Hex() {
 				continue
 			}
 
@@ -839,7 +854,9 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			*/
 
 			if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "credit" {
-				amount := journal2.Credit
+
+				//amount := journal2.Credit
+				amount := journal.Debit
 
 				/*
 					amount := float64(0.00)
@@ -862,7 +879,9 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				})
 				debitTotal += amount
 			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "debit" {
+
 				amount := journal2.Debit
+				//amount := journal.Credit
 
 				/*
 					amount := float64(0.00)
@@ -885,6 +904,13 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				})
 				creditTotal += amount
 			} else if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "debit" {
+				continue
+				/*
+					if account.Number == journal2.AccountNumber {
+						continue
+					}
+				*/
+
 				amount := journal2.Debit
 
 				/*
@@ -908,6 +934,13 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				})
 				creditTotal += amount
 			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "credit" {
+				continue
+				/*
+					if account.Number == journal2.AccountNumber {
+						continue
+					}
+				*/
+
 				amount := journal2.Credit
 				/*
 					amount := float64(0.00)

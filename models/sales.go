@@ -67,7 +67,6 @@ type Order struct {
 	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float64             `bson:"discount" json:"discount"`
 	ReturnDiscount           float64             `bson:"return_discount" json:"return_discount"`
-	ReturnCashDiscount       float64             `bson:"return_cash_discount" json:"return_cash_discount"`
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
@@ -77,6 +76,7 @@ type Order struct {
 	Total                    float64             `bson:"total" json:"total"`
 	NetTotal                 float64             `bson:"net_total" json:"net_total"`
 	CashDiscount             float64             `bson:"cash_discount" json:"cash_discount"`
+	ReturnCashDiscount       float64             `bson:"return_cash_discount" json:"return_cash_discount"`
 	PartiaPaymentAmount      float64             `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
 	PaymentMethods           []string            `json:"payment_methods" bson:"payment_methods"`
@@ -263,13 +263,13 @@ func (order *Order) FindNetTotal() {
 		netTotal += ((netTotal * *order.VatPercent) / float64(100))
 	}
 
-	log.Print("netTotal:")
-	log.Print(netTotal)
+	//log.Print("netTotal:")
+	//log.Print(netTotal)
 	order.NetTotal = RoundFloat(netTotal, 2)
 	//order.NetTotal = RoundToTwoDecimal(netTotal)
-	log.Print("order.NetTotal")
+	//log.Print("order.NetTotal")
 	//
-	log.Print(order.NetTotal)
+	//log.Print(order.NetTotal)
 }
 
 func (order *Order) FindTotal() {
@@ -1010,12 +1010,32 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			log.Print("Checking customer account Balance")
 
 			if customerAccount != nil {
-				if customerAccount.Balance == 0 {
+				customerBalance := .00
+				if scenario == "update" {
+					var oldSalesPayment *SalesPayment
+					oldOrder.GetPayments()
+					for _, oldPayment := range oldOrder.Payments {
+						if oldPayment.ID.Hex() == payment.ID.Hex() {
+							oldSalesPayment = &oldPayment
+							break
+						}
+					}
+					if oldSalesPayment != nil {
+						customerBalance = customerAccount.Balance + *oldSalesPayment.Amount
+					} else {
+						customerBalance = customerAccount.Balance
+					}
+
+				} else {
+					customerBalance = customerAccount.Balance
+				}
+
+				if customerBalance == 0 {
 					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
 				} else if customerAccount.Type == "asset" {
-					errs["payment_method_"+strconv.Itoa(index)] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-				} else if customerAccount.Type == "liability" && customerAccount.Balance < (*payment.Amount) {
-					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+					errs["payment_method_"+strconv.Itoa(index)] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
+				} else if customerBalance < *payment.Amount {
+					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
 				}
 			} else {
 				errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
@@ -1026,12 +1046,27 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if totalAmountFromCustomerAccount > 0 {
 		if customerAccount != nil {
-			if customerAccount.Balance == 0 {
+			customerBalance := .00
+			if scenario == "update" {
+				oldTotalAmountFromCustomerAccount := 0.0
+				oldOrder.GetPayments()
+				for _, oldPayment := range oldOrder.Payments {
+					if oldPayment.Method == "customer_account" {
+						oldTotalAmountFromCustomerAccount += *oldPayment.Amount
+					}
+				}
+				customerBalance = customerAccount.Balance + oldTotalAmountFromCustomerAccount
+
+			} else {
+				customerBalance = customerAccount.Balance
+			}
+
+			if customerBalance == 0 {
 				errs["customer_id"] = "customer account balance is zero"
 			} else if customerAccount.Type == "asset" {
-				errs["customer_id"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-			} else if customerAccount.Type == "liability" && customerAccount.Balance < totalAmountFromCustomerAccount {
-				errs["customer_id"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+				errs["customer_id"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
+			} else if customerBalance < totalAmountFromCustomerAccount {
+				errs["customer_id"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
 			}
 		} else {
 			errs["customer_id"] = "customer account balance is zero"
@@ -2366,6 +2401,8 @@ func MakeJournalsForUnpaidSale(
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
 
+	groupID := primitive.NewObjectID()
+
 	journals := []Journal{}
 
 	journals = append(journals, Journal{
@@ -2376,6 +2413,7 @@ func MakeJournalsForUnpaidSale(
 		DebitOrCredit: "debit",
 		Debit:         (order.NetTotal - order.CashDiscount),
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2389,6 +2427,7 @@ func MakeJournalsForUnpaidSale(
 			DebitOrCredit: "debit",
 			Debit:         order.CashDiscount,
 			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
@@ -2403,6 +2442,7 @@ func MakeJournalsForUnpaidSale(
 		DebitOrCredit: "credit",
 		Credit:        order.NetTotal,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2422,6 +2462,9 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
+
+	groupID := primitive.NewObjectID()
+
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2431,6 +2474,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 		DebitOrCredit: "debit",
 		Debit:         *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2444,6 +2488,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 			DebitOrCredit: "debit",
 			Debit:         order.CashDiscount,
 			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
@@ -2458,6 +2503,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 		DebitOrCredit: "credit",
 		Credit:        order.NetTotal,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2478,6 +2524,8 @@ func MakeJournalsForPartialSalePayment(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
+	groupID := primitive.NewObjectID()
+
 	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
 	journals := []Journal{}
 	journals = append(journals, Journal{
@@ -2488,6 +2536,7 @@ func MakeJournalsForPartialSalePayment(
 		DebitOrCredit: "debit",
 		Debit:         *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2501,6 +2550,7 @@ func MakeJournalsForPartialSalePayment(
 			DebitOrCredit: "debit",
 			Debit:         order.CashDiscount,
 			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
@@ -2516,6 +2566,7 @@ func MakeJournalsForPartialSalePayment(
 		DebitOrCredit: "debit",
 		Debit:         balanceAmount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2529,6 +2580,7 @@ func MakeJournalsForPartialSalePayment(
 		DebitOrCredit: "credit",
 		Credit:        order.NetTotal,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2544,6 +2596,7 @@ func MakeJournalsForNewSalePayment(
 ) []Journal {
 	now := time.Now()
 	groupAccounts := []string{cashReceivingAccount.Number, customerAccount.Number}
+	groupID := primitive.NewObjectID()
 
 	journals := []Journal{}
 	journals = append(journals, Journal{
@@ -2554,6 +2607,7 @@ func MakeJournalsForNewSalePayment(
 		DebitOrCredit: "debit",
 		Debit:         *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2567,6 +2621,7 @@ func MakeJournalsForNewSalePayment(
 		DebitOrCredit: "credit",
 		Credit:        *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2587,6 +2642,8 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
+	groupID := primitive.NewObjectID()
+
 	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
 	journals := []Journal{}
 	//Debtor acc up
@@ -2600,6 +2657,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 		DebitOrCredit: "debit",
 		Debit:         *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2613,6 +2671,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 			DebitOrCredit: "debit",
 			Debit:         order.CashDiscount,
 			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
@@ -2628,6 +2687,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 		DebitOrCredit: "debit",
 		Debit:         balanceAmount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2641,6 +2701,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 		DebitOrCredit: "credit",
 		Credit:        order.NetTotal,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2660,6 +2721,8 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 	if order.CashDiscount > 0 {
 		groupAccounts = append(groupAccounts, cashDiscountAllowedAccount.Number)
 	}
+	groupID := primitive.NewObjectID()
+
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2669,6 +2732,7 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 		DebitOrCredit: "debit",
 		Debit:         *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2682,6 +2746,7 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 			DebitOrCredit: "debit",
 			Debit:         order.CashDiscount,
 			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
@@ -2696,6 +2761,7 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 		DebitOrCredit: "credit",
 		Credit:        order.NetTotal,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2710,6 +2776,7 @@ func MakeJournalsForNewSalePaymentFromCustomerAccount(
 ) []Journal {
 	now := time.Now()
 	groupAccounts := []string{customerAccount.Number}
+	groupID := primitive.NewObjectID()
 	journals := []Journal{}
 
 	//Account balance or liability decrease
@@ -2721,6 +2788,7 @@ func MakeJournalsForNewSalePaymentFromCustomerAccount(
 		DebitOrCredit: "debit",
 		Debit:         *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -2734,6 +2802,7 @@ func MakeJournalsForNewSalePaymentFromCustomerAccount(
 		DebitOrCredit: "credit",
 		Credit:        *payment.Amount,
 		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
