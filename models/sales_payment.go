@@ -493,13 +493,34 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 	if salesPayment.Method == "customer_account" {
 		log.Print("Checking customer account Balance")
 		if customerAccount != nil {
-			if customerAccount.Balance == 0 {
-				errs["payment_method"] = "customer account balance is zero"
-			} else if customerAccount.Type == "asset" {
-				errs["payment_method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-			} else if customerAccount.Type == "liability" && customerAccount.Balance < *salesPayment.Amount {
-				errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+			if scenario == "update" {
+				extraAmount := 0.00
+				if oldSalesPayment != nil && *oldSalesPayment.Amount > *salesPayment.Amount {
+					extraAmount = *oldSalesPayment.Amount - *salesPayment.Amount
+				}
+
+				if extraAmount > 0 {
+					if customerAccount.Balance == 0 {
+						errs["payment_method"] = "customer account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmount)) + " to customer account to continue"
+					} else if customerAccount.Type == "asset" {
+						errs["payment_method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (customerAccount.Balance+extraAmount)) + " to customer account to continue"
+					} else if customerAccount.Type == "liability" && customerAccount.Balance < extraAmount {
+						errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", extraAmount) + " to customer account to continue"
+					}
+				}
+
+			} else {
+
+				if customerAccount.Balance == 0 {
+					errs["payment_method"] = "customer account balance is zero"
+				} else if customerAccount.Type == "asset" {
+					errs["payment_method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+				} else if customerAccount.Type == "liability" && customerAccount.Balance < *salesPayment.Amount {
+					errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+				}
+
 			}
+
 		} else {
 			errs["payment_method"] = "customer account balance is zero"
 		}
