@@ -1000,7 +1000,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 			if maxAllowedAmount == 0 {
 				errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
-			} else if *payment.Amount > maxAllowedAmount {
+			} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
 				errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
 			}
 		}
@@ -1010,32 +1010,36 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			log.Print("Checking customer account Balance")
 
 			if customerAccount != nil {
-				customerBalance := .00
-				if scenario == "update" {
-					var oldSalesPayment *SalesPayment
-					oldOrder.GetPayments()
-					for _, oldPayment := range oldOrder.Payments {
-						if oldPayment.ID.Hex() == payment.ID.Hex() {
-							oldSalesPayment = &oldPayment
-							break
+				//customerBalance := .00
+				/*
+					if scenario == "update" {
+						var oldSalesPayment *SalesPayment
+						oldOrder.GetPayments()
+						for _, oldPayment := range oldOrder.Payments {
+							if oldPayment.ID.Hex() == payment.ID.Hex() {
+								oldSalesPayment = &oldPayment
+								break
+							}
 						}
-					}
-					if oldSalesPayment != nil {
-						customerBalance = customerAccount.Balance + *oldSalesPayment.Amount
+						if oldSalesPayment != nil {
+							customerBalance = customerAccount.Balance + *oldSalesPayment.Amount
+						} else {
+							customerBalance = customerAccount.Balance
+						}
+
 					} else {
 						customerBalance = customerAccount.Balance
 					}
+				*/
 
-				} else {
-					customerBalance = customerAccount.Balance
-				}
+				//customerBalance = customerAccount.Balance
 
-				if customerBalance == 0 {
+				if customerAccount.Balance == 0 {
 					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
 				} else if customerAccount.Type == "asset" {
-					errs["payment_method_"+strconv.Itoa(index)] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
-				} else if customerBalance < *payment.Amount {
-					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
+					errs["payment_method_"+strconv.Itoa(index)] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
+				} else if customerAccount.Balance < *payment.Amount {
+					errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
 				}
 			} else {
 				errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"

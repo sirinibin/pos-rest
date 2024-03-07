@@ -879,6 +879,10 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				})
 				debitTotal += amount
 			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "debit" {
+				/*
+					if account.Number == journal2.AccountNumber {
+						continue
+					} */
 
 				amount := journal2.Debit
 				//amount := journal.Credit

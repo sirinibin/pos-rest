@@ -476,7 +476,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		maxAllowedAmount = (order.NetTotal - order.CashDiscount) - salespaymentStats.TotalPayment
 	}
 
-	if *salesPayment.Amount > maxAllowedAmount {
+	if *salesPayment.Amount > RoundFloat(maxAllowedAmount, 2) {
 		errs["amount"] = "The amount should not be greater than " + fmt.Sprintf("%.02f", maxAllowedAmount)
 	}
 
@@ -497,7 +497,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 				errs["payment_method"] = "customer account balance is zero"
 			} else if customerAccount.Type == "asset" {
 				errs["payment_method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-			} else if customerAccount.Type == "liability" && customerAccount.Balance < (*salesPayment.Amount) {
+			} else if customerAccount.Type == "liability" && customerAccount.Balance < *salesPayment.Amount {
 				errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
 			}
 		} else {
@@ -507,25 +507,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 
 	/*
 		if salesPayment.Method == "customer_account" {
-			customer, err := FindCustomerByID(order.CustomerID, bson.M{})
-			if err != nil {
-				errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
-			}
-
-			referenceModel := "customer"
-			customerAccount, err := CreateAccountIfNotExists(
-				order.StoreID,
-				&customer.ID,
-				&referenceModel,
-				customer.Name,
-				&customer.Phone,
-			)
-			if err != nil {
-				errs["customer_account"] = "Error creating customer account: " + err.Error()
-			}
-
-			customerBalance := customerAccount.Balance
-			accountType := customerAccount.Type
+			e
 			oldSalesPayment := &SalesPayment{}
 
 			if scenario == "update" {
