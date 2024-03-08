@@ -299,7 +299,7 @@ func (purchasereturn *PurchaseReturn) FindNetTotal() {
 	netTotal -= purchasereturn.Discount
 
 	if purchasereturn.VatPercent != nil {
-		netTotal += netTotal * (*purchasereturn.VatPercent / float64(100))
+		netTotal += (netTotal * (*purchasereturn.VatPercent / float64(100)))
 	}
 
 	purchasereturn.NetTotal = RoundFloat(netTotal, 2)

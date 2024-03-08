@@ -251,25 +251,22 @@ func (order *Order) UpdateForeignLabelFields() error {
 
 func (order *Order) FindNetTotal() {
 	netTotal := float64(0.0)
+	total := float64(0.0)
 	for _, product := range order.Products {
-		netTotal += (float64(product.Quantity) * product.UnitPrice)
+		total += (product.Quantity * product.UnitPrice)
 	}
 
-	netTotal -= order.Discount
+	netTotal = total
 	netTotal += order.ShippingOrHandlingFees
+	netTotal -= order.Discount
 
+	vatPrice := float64(0.00)
 	if order.VatPercent != nil {
-		//netTotal += netTotal * (*order.VatPercent / float64(100))
-		netTotal += ((netTotal * *order.VatPercent) / float64(100))
+		vatPrice += (netTotal * (*order.VatPercent / float64(100.00)))
+		netTotal += vatPrice
 	}
 
-	//log.Print("netTotal:")
-	//log.Print(netTotal)
-	order.NetTotal = RoundFloat(netTotal, 2)
-	//order.NetTotal = RoundToTwoDecimal(netTotal)
-	//log.Print("order.NetTotal")
-	//
-	//log.Print(order.NetTotal)
+	order.NetTotal = netTotal
 }
 
 func (order *Order) FindTotal() {
@@ -278,7 +275,8 @@ func (order *Order) FindTotal() {
 		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	order.Total = RoundFloat(total, 2)
+	order.Total = total
+	//order.Total = RoundFloat(total, 2)
 }
 
 func (order *Order) FindTotalQuantity() {
@@ -290,8 +288,10 @@ func (order *Order) FindTotalQuantity() {
 }
 
 func (order *Order) FindVatPrice() {
-	vatPrice := ((*order.VatPercent / 100) * float64(order.Total-order.Discount+order.ShippingOrHandlingFees))
-	vatPrice = RoundFloat(vatPrice, 2)
+	vatPrice := ((*order.VatPercent / float64(100.00)) * ((order.Total + order.ShippingOrHandlingFees) - order.Discount))
+	log.Print("vatPrice calculated:")
+	log.Print(vatPrice)
+	//vatPrice = RoundFloat(vatPrice, 2)
 	order.VatPrice = vatPrice
 }
 
@@ -1427,7 +1427,7 @@ func (order *Order) CalculateOrderProfit() error {
 
 		loss := 0.0
 
-		profit = RoundFloat(profit, 2)
+		//profit = RoundFloat(profit, 2)
 
 		if profit >= 0 {
 			order.Products[i].Profit = profit
@@ -1441,8 +1441,9 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	order.Profit = RoundFloat(totalProfit, 2)
-	order.NetProfit = RoundFloat(((totalProfit - order.CashDiscount) - order.Discount), 2)
+	//order.Profit = RoundFloat(totalProfit, 2)
+	//order.NetProfit = RoundFloat(((totalProfit - order.CashDiscount) - order.Discount), 2)
+	order.NetProfit = (totalProfit - order.CashDiscount) - order.Discount
 	order.Loss = totalLoss
 	order.NetLoss = totalLoss
 	if order.NetProfit < 0 {
@@ -2551,7 +2552,7 @@ func MakeJournalsForPartialSalePayment(
 	}
 	groupID := primitive.NewObjectID()
 
-	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
+	balanceAmount := ((order.NetTotal - order.CashDiscount) - *payment.Amount)
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2669,7 +2670,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	}
 	groupID := primitive.NewObjectID()
 
-	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
+	balanceAmount := ((order.NetTotal - order.CashDiscount) - *payment.Amount)
 	journals := []Journal{}
 	//Debtor acc up
 
