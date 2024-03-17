@@ -289,8 +289,8 @@ func (order *Order) FindTotalQuantity() {
 
 func (order *Order) FindVatPrice() {
 	vatPrice := ((*order.VatPercent / float64(100.00)) * ((order.Total + order.ShippingOrHandlingFees) - order.Discount))
-	log.Print("vatPrice calculated:")
-	log.Print(vatPrice)
+	//log.Print("vatPrice calculated:")
+	//log.Print(vatPrice)
 	//vatPrice = RoundFloat(vatPrice, 2)
 	order.VatPrice = vatPrice
 }
@@ -1021,11 +1021,10 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 						}
 					}
 
-					if oldSalesPayment != nil && *oldSalesPayment.Amount > *payment.Amount {
-						log.Print("old payment  found")
-						extraAmount = *oldSalesPayment.Amount - *payment.Amount
+					if oldSalesPayment != nil && *oldSalesPayment.Amount < *payment.Amount {
+						extraAmount = *payment.Amount - *oldSalesPayment.Amount
 					} else {
-						log.Print("old payment not found")
+						log.Print("payment amount not increased")
 					}
 
 					if extraAmount > 0 {
@@ -1046,7 +1045,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 					} else if customerAccount.Type == "liability" && customerAccount.Balance < *payment.Amount {
 						errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
 					}
-
 				}
 
 			} else {
