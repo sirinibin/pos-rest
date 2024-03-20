@@ -266,7 +266,8 @@ func (order *Order) FindNetTotal() {
 		netTotal += vatPrice
 	}
 
-	order.NetTotal = netTotal
+	//order.NetTotal = netTotal
+	order.NetTotal = RoundFloat(netTotal, 2)
 }
 
 func (order *Order) FindTotal() {
@@ -275,8 +276,8 @@ func (order *Order) FindTotal() {
 		total += (float64(product.Quantity) * product.UnitPrice)
 	}
 
-	order.Total = total
-	//order.Total = RoundFloat(total, 2)
+	//order.Total = total
+	order.Total = RoundFloat(total, 2)
 }
 
 func (order *Order) FindTotalQuantity() {
@@ -291,8 +292,8 @@ func (order *Order) FindVatPrice() {
 	vatPrice := ((*order.VatPercent / float64(100.00)) * ((order.Total + order.ShippingOrHandlingFees) - order.Discount))
 	//log.Print("vatPrice calculated:")
 	//log.Print(vatPrice)
-	//vatPrice = RoundFloat(vatPrice, 2)
-	order.VatPrice = vatPrice
+	vatPrice = RoundFloat(vatPrice, 2)
+	//order.VatPrice = vatPrice
 }
 
 type SalesStats struct {
@@ -2064,6 +2065,11 @@ func ProcessOrders() error {
 				return err
 			}
 		*/
+
+		order.FindNetTotal()
+		order.FindTotal()
+		order.FindTotalQuantity()
+		order.FindVatPrice()
 
 		err = order.CalculateOrderProfit()
 		if err != nil {
