@@ -2556,7 +2556,7 @@ func MakeJournalsForPartialSalePayment(
 	}
 	groupID := primitive.NewObjectID()
 
-	balanceAmount := ((order.NetTotal - order.CashDiscount) - *payment.Amount)
+	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
 	journals := []Journal{}
 	journals = append(journals, Journal{
 		Date:          payment.Date,
@@ -2674,7 +2674,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	}
 	groupID := primitive.NewObjectID()
 
-	balanceAmount := ((order.NetTotal - order.CashDiscount) - *payment.Amount)
+	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - *payment.Amount), 2)
 	journals := []Journal{}
 	//Debtor acc up
 
