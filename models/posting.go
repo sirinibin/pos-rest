@@ -856,7 +856,12 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "credit" {
 
 				//amount := journal2.Credit
-				amount := journal.Debit
+				amount := float64(0.00)
+				if journal.Debit > journal2.Credit {
+					amount = journal2.Credit
+				} else {
+					amount = journal.Debit
+				}
 
 				/*
 					amount := float64(0.00)
@@ -885,7 +890,14 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					} */
 
 				//amount := journal2.Debit
-				amount := journal.Credit
+				//amount := journal.Credit
+
+				amount := float64(0.00)
+				if journal.Credit > journal2.Debit {
+					amount = journal2.Debit
+				} else {
+					amount = journal.Credit
+				}
 
 				/*
 					amount := float64(0.00)
