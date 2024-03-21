@@ -967,17 +967,19 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 			}
 
-			maxAllowedAmount := (salesreturn.NetTotal - salesreturn.CashDiscount) - (totalPayment - *payment.Amount)
+			/*
+				maxAllowedAmount := (salesreturn.NetTotal - salesreturn.CashDiscount) - (totalPayment - *payment.Amount)
 
-			if maxAllowedAmount < 0 {
-				maxAllowedAmount = 0
-			}
+				if maxAllowedAmount < 0 {
+					maxAllowedAmount = 0
+				}
 
-			if maxAllowedAmount == 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (salesreturn.NetTotal-salesreturn.CashDiscount)) + ", Please delete this payment"
-			} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-			}
+				if maxAllowedAmount == 0 {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (salesreturn.NetTotal-salesreturn.CashDiscount)) + ", Please delete this payment"
+				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
+				}
+			*/
 		}
 	} //end for
 
@@ -1914,7 +1916,7 @@ func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, er
 	salesReturn.Payments = payments
 	salesReturn.PaymentsCount = int64(len(payments))
 
-	if ToFixed((salesReturn.NetTotal-salesReturn.CashDiscount), 2) == ToFixed(totalPaymentPaid, 2) {
+	if ToFixed((salesReturn.NetTotal-salesReturn.CashDiscount), 2) <= ToFixed(totalPaymentPaid, 2) {
 		salesReturn.PaymentStatus = "paid"
 	} else if ToFixed(totalPaymentPaid, 2) > 0 {
 		salesReturn.PaymentStatus = "paid_partially"

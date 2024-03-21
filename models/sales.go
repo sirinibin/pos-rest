@@ -993,17 +993,20 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 			}
 
-			maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
+			/*
+				maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
 
-			if maxAllowedAmount < 0 {
-				maxAllowedAmount = 0
-			}
+				if maxAllowedAmount < 0 {
+					maxAllowedAmount = 0
+				}
 
-			if maxAllowedAmount == 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
-			} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-			}
+
+					if maxAllowedAmount == 0 {
+						errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
+					} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
+						errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
+					}
+			*/
 		}
 
 		if payment.Method == "customer_account" {
@@ -1680,7 +1683,7 @@ func (order *Order) GetPayments() (models []SalesPayment, err error) {
 	order.Payments = models
 	order.PaymentsCount = int64(len(models))
 
-	if ToFixed((order.NetTotal-order.CashDiscount), 2) == ToFixed(totalPaymentReceived, 2) {
+	if ToFixed((order.NetTotal-order.CashDiscount), 2) <= ToFixed(totalPaymentReceived, 2) {
 		order.PaymentStatus = "paid"
 	} else if ToFixed(totalPaymentReceived, 2) > 0 {
 		order.PaymentStatus = "paid_partially"
@@ -2419,6 +2422,7 @@ func (order *Order) SetCustomerSalesStats() error {
 	return nil
 }
 
+// Journal entries
 func MakeJournalsForUnpaidSale(
 	order *Order,
 	customerAccount *Account,
@@ -2486,7 +2490,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 	salesAccount *Account,
 	payment *SalesPayment,
 	cashDiscountAllowedAccount *Account,
-) []Journal {
+) ([]Journal, error) {
 	now := time.Now()
 	groupAccounts := []string{cashReceivingAccount.Number, salesAccount.Number}
 	if order.CashDiscount > 0 {
@@ -2526,7 +2530,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 	}
 
 	journals = append(journals, Journal{
-		Date:          payment.Date,
+		Date:          order.Date,
 		AccountID:     salesAccount.ID,
 		AccountNumber: salesAccount.Number,
 		AccountName:   salesAccount.Name,
@@ -2538,7 +2542,58 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 		UpdatedAt:     &now,
 	})
 
-	return journals
+	if order.BalanceAmount < 0 {
+		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
+			order,
+			&groupID,
+		)
+
+		if err != nil {
+			return journals, err
+		}
+
+		journals = append(journals, *balanceAmountJournal)
+	}
+
+	return journals, nil
+}
+
+// Journal for negative balance amount
+func MakeJournalEntryForNegativeBalanceAmount(
+	order *Order,
+	groupID *primitive.ObjectID,
+) (*Journal, error) {
+	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	referenceModel := "customer"
+	customerAccount, err := CreateAccountIfNotExists(
+		order.StoreID,
+		&customer.ID,
+		&referenceModel,
+		customer.Name,
+		&customer.Phone,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+
+	journal := Journal{
+		Date:          order.Date,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        (order.BalanceAmount * -1),
+		GroupID:       *groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	}
+
+	return &journal, nil
 }
 
 func MakeJournalsForPartialSalePayment(
@@ -2548,7 +2603,7 @@ func MakeJournalsForPartialSalePayment(
 	salesAccount *Account,
 	payment *SalesPayment,
 	cashDiscountAllowedAccount *Account,
-) []Journal {
+) ([]Journal, error) {
 	now := time.Now()
 	groupAccounts := []string{customerAccount.Number, cashReceivingAccount.Number, salesAccount.Number}
 	if order.CashDiscount > 0 {
@@ -2615,7 +2670,20 @@ func MakeJournalsForPartialSalePayment(
 		UpdatedAt:     &now,
 	})
 
-	return journals
+	if order.BalanceAmount < 0 {
+		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
+			order,
+			&groupID,
+		)
+
+		if err != nil {
+			return journals, err
+		}
+
+		journals = append(journals, *balanceAmountJournal)
+	}
+
+	return journals, nil
 }
 
 func MakeJournalsForNewSalePayment(
@@ -2666,7 +2734,7 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	salesAccount *Account,
 	payment *SalesPayment,
 	cashDiscountAllowedAccount *Account,
-) []Journal {
+) ([]Journal, error) {
 	now := time.Now()
 	groupAccounts := []string{customerAccount.Number, salesAccount.Number}
 	if order.CashDiscount > 0 {
@@ -2736,7 +2804,20 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 		UpdatedAt:     &now,
 	})
 
-	return journals
+	if order.BalanceAmount < 0 {
+		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
+			order,
+			&groupID,
+		)
+
+		if err != nil {
+			return journals, err
+		}
+
+		journals = append(journals, *balanceAmountJournal)
+	}
+
+	return journals, nil
 }
 
 func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
@@ -2745,7 +2826,7 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 	salesAccount *Account,
 	payment *SalesPayment,
 	cashDiscountAllowedAccount *Account,
-) []Journal {
+) ([]Journal, error) {
 	now := time.Now()
 	groupAccounts := []string{customerAccount.Number, salesAccount.Number}
 	if order.CashDiscount > 0 {
@@ -2796,7 +2877,20 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 		UpdatedAt:     &now,
 	})
 
-	return journals
+	if order.BalanceAmount < 0 {
+		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
+			order,
+			&groupID,
+		)
+
+		if err != nil {
+			return journals, err
+		}
+
+		journals = append(journals, *balanceAmountJournal)
+	}
+
+	return journals, nil
 }
 
 func MakeJournalsForNewSalePaymentFromCustomerAccount(
@@ -2926,21 +3020,31 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 					if err != nil {
 						return nil, err
 					}
-					journals = append(journals, MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
+					newJournals, err := MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 						order,
 						customerAccount,
 						salesAccount,
 						&payment,
 						cashDiscountAllowedAccount,
-					)...)
+					)
+					if err != nil {
+						return nil, err
+					}
+
+					journals = append(journals, newJournals...)
 				} else {
-					journals = append(journals, MakeJournalsForPaidSaleWithSinglePayment(
+					newJournals, err := MakeJournalsForPaidSaleWithSinglePayment(
 						order,
 						&cashReceivingAccount,
 						salesAccount,
 						&payment,
 						cashDiscountAllowedAccount,
-					)...)
+					)
+					if err != nil {
+						return nil, err
+					}
+
+					journals = append(journals, newJournals...)
 				}
 
 				break
@@ -2961,22 +3065,31 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 
 				if paymentNumber == 1 {
 					if payment.Method == "customer_account" {
-						journals = append(journals, MakeJournalsForPartialSalePaymentFromCustomerAccount(
+						newJournals, err := MakeJournalsForPartialSalePaymentFromCustomerAccount(
 							order,
 							customerAccount,
 							salesAccount,
 							&payment,
 							cashDiscountAllowedAccount,
-						)...)
+						)
+						if err != nil {
+							return nil, err
+						}
+						journals = append(journals, newJournals...)
 					} else {
-						journals = append(journals, MakeJournalsForPartialSalePayment(
+						newJournals, err := MakeJournalsForPartialSalePayment(
 							order,
 							customerAccount,
 							&cashReceivingAccount,
 							salesAccount,
 							&payment,
 							cashDiscountAllowedAccount,
-						)...)
+						)
+						if err != nil {
+							return nil, err
+						}
+
+						journals = append(journals, newJournals...)
 					}
 				} else if paymentNumber > 1 {
 					//payment2,3 etc
