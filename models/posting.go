@@ -884,8 +884,8 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 						continue
 					} */
 
+				//amount := journal2.Debit
 				amount := journal.Credit
-				//amount := journal.Credit
 
 				/*
 					amount := float64(0.00)

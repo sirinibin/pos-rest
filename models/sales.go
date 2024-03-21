@@ -993,20 +993,18 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 			}
 
-			/*
-				maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
+			maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
 
-				if maxAllowedAmount < 0 {
-					maxAllowedAmount = 0
-				}
+			if maxAllowedAmount < 0 {
+				maxAllowedAmount = 0
+			}
 
+			if maxAllowedAmount == 0 {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
+			} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
+			}
 
-					if maxAllowedAmount == 0 {
-						errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
-					} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-						errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-					}
-			*/
 		}
 
 		if payment.Method == "customer_account" {
@@ -2546,6 +2544,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
 			order,
 			&groupID,
+			(order.BalanceAmount * -1),
 		)
 
 		if err != nil {
@@ -2562,6 +2561,7 @@ func MakeJournalsForPaidSaleWithSinglePayment(
 func MakeJournalEntryForNegativeBalanceAmount(
 	order *Order,
 	groupID *primitive.ObjectID,
+	balanceAmount float64,
 ) (*Journal, error) {
 	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
@@ -2587,7 +2587,7 @@ func MakeJournalEntryForNegativeBalanceAmount(
 		AccountNumber: customerAccount.Number,
 		AccountName:   customerAccount.Name,
 		DebitOrCredit: "credit",
-		Credit:        (order.BalanceAmount * -1),
+		Credit:        balanceAmount,
 		GroupID:       *groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
@@ -2643,18 +2643,20 @@ func MakeJournalsForPartialSalePayment(
 	}
 
 	//Asset or debt increased
-	journals = append(journals, Journal{
-		Date:          order.Date,
-		AccountID:     customerAccount.ID,
-		AccountNumber: customerAccount.Number,
-		AccountName:   customerAccount.Name,
-		DebitOrCredit: "debit",
-		Debit:         balanceAmount,
-		GroupAccounts: groupAccounts,
-		GroupID:       groupID,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
+	if balanceAmount > 0 {
+		journals = append(journals, Journal{
+			Date:          order.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         balanceAmount,
+			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	}
 
 	//Sales account increased
 	journals = append(journals, Journal{
@@ -2670,17 +2672,32 @@ func MakeJournalsForPartialSalePayment(
 		UpdatedAt:     &now,
 	})
 
-	if order.BalanceAmount < 0 {
-		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
-			order,
-			&groupID,
-		)
+	if balanceAmount < 0 {
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        (balanceAmount * -1),
+			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+		/*
+			balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
+				order,
+				&groupID,
+				balanceAmount,
+			)
 
-		if err != nil {
-			return journals, err
-		}
+			if err != nil {
+				return journals, err
+			}
 
-		journals = append(journals, *balanceAmountJournal)
+			journals = append(journals, *balanceAmountJournal)
+		*/
 	}
 
 	return journals, nil
@@ -2777,18 +2794,20 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 	}
 
 	//Debt or asset increase
-	journals = append(journals, Journal{
-		Date:          order.Date,
-		AccountID:     customerAccount.ID,
-		AccountNumber: customerAccount.Number,
-		AccountName:   customerAccount.Name,
-		DebitOrCredit: "debit",
-		Debit:         balanceAmount,
-		GroupAccounts: groupAccounts,
-		GroupID:       groupID,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
+	if balanceAmount > 0 {
+		journals = append(journals, Journal{
+			Date:          order.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         balanceAmount,
+			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	}
 
 	//Sales increase
 	journals = append(journals, Journal{
@@ -2804,17 +2823,32 @@ func MakeJournalsForPartialSalePaymentFromCustomerAccount(
 		UpdatedAt:     &now,
 	})
 
-	if order.BalanceAmount < 0 {
-		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
-			order,
-			&groupID,
-		)
+	if balanceAmount < 0 {
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        (balanceAmount * -1),
+			GroupAccounts: groupAccounts,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+		/*
+			balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
+				order,
+				&groupID,
+				balanceAmount,
+			)
 
-		if err != nil {
-			return journals, err
-		}
+			if err != nil {
+				return journals, err
+			}
 
-		journals = append(journals, *balanceAmountJournal)
+			journals = append(journals, *balanceAmountJournal)
+		*/
 	}
 
 	return journals, nil
@@ -2881,6 +2915,7 @@ func MakeJournalsForPaidSaleWithSinglePaymentFromCustomerAccount(
 		balanceAmountJournal, err := MakeJournalEntryForNegativeBalanceAmount(
 			order,
 			&groupID,
+			(order.BalanceAmount * -1),
 		)
 
 		if err != nil {
