@@ -2613,6 +2613,8 @@ func MakeJournalsForPaymentsByDatetime(
 			return nil, err
 		}
 
+		totalPayment = RoundFloat(totalPayment, 2)
+
 		journals = append(journals, Journal{
 			Date:          firstPaymentDate,
 			AccountID:     customerAccount.ID,
