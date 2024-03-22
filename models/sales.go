@@ -2440,13 +2440,15 @@ func MakeJournalsForUnpaidSale(
 
 	journals := []Journal{}
 
+	balanceAmount := RoundFloat((order.NetTotal - order.CashDiscount), 2)
+
 	journals = append(journals, Journal{
 		Date:          order.Date,
 		AccountID:     customerAccount.ID,
 		AccountNumber: customerAccount.Number,
 		AccountName:   customerAccount.Name,
 		DebitOrCredit: "debit",
-		Debit:         (order.NetTotal - order.CashDiscount),
+		Debit:         balanceAmount,
 		GroupAccounts: groupAccounts,
 		GroupID:       groupID,
 		CreatedAt:     &now,
@@ -2502,10 +2504,12 @@ func MakeJournalsForPaymentsByDatetime(
 	journals := []Journal{}
 	totalPayment := float64(0.00)
 
-	var paymentDate *time.Time
+	var firstPaymentDate *time.Time
+	if len(payments) >= 0 {
+		firstPaymentDate = payments[0].Date
+	}
 
 	for _, payment := range payments {
-		paymentDate = payment.Date
 		cashReceivingAccount := Account{}
 		if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
@@ -2540,7 +2544,7 @@ func MakeJournalsForPaymentsByDatetime(
 		totalPayment += *payment.Amount
 	}
 
-	if order.CashDiscount > 0 && paymentsByDatetimeNumber == 1 {
+	if order.CashDiscount > 0 && paymentsByDatetimeNumber == 1 && order.Date.Equal(*firstPaymentDate) {
 		journals = append(journals, Journal{
 			Date:          order.Date,
 			AccountID:     cashDiscountAllowedAccount.ID,
@@ -2558,7 +2562,7 @@ func MakeJournalsForPaymentsByDatetime(
 	balanceAmount := RoundFloat(((order.NetTotal - order.CashDiscount) - totalPayment), 2)
 
 	//Asset or debt increased
-	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 {
+	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && order.Date.Equal(*firstPaymentDate) {
 		referenceModel := "customer"
 		customerAccount, err := CreateAccountIfNotExists(
 			order.StoreID,
@@ -2584,7 +2588,7 @@ func MakeJournalsForPaymentsByDatetime(
 		})
 	}
 
-	if paymentsByDatetimeNumber == 1 {
+	if paymentsByDatetimeNumber == 1 && order.Date.Equal(*firstPaymentDate) {
 		journals = append(journals, Journal{
 			Date:          order.Date,
 			AccountID:     salesAccount.ID,
@@ -2596,7 +2600,7 @@ func MakeJournalsForPaymentsByDatetime(
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
-	} else {
+	} else if paymentsByDatetimeNumber > 1 || !order.Date.Equal(*firstPaymentDate) {
 		referenceModel := "customer"
 		customerAccount, err := CreateAccountIfNotExists(
 			order.StoreID,
@@ -2610,7 +2614,7 @@ func MakeJournalsForPaymentsByDatetime(
 		}
 
 		journals = append(journals, Journal{
-			Date:          paymentDate,
+			Date:          firstPaymentDate,
 			AccountID:     customerAccount.ID,
 			AccountNumber: customerAccount.Number,
 			AccountName:   customerAccount.Name,
@@ -2667,7 +2671,12 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 
 	journals := []Journal{}
 
-	if len(order.Payments) == 0 {
+	var firstPaymentDate *time.Time
+	if len(order.Payments) > 0 {
+		firstPaymentDate = order.Payments[0].Date
+	}
+
+	if len(order.Payments) == 0 || (firstPaymentDate != nil && !firstPaymentDate.Equal(*order.Date)) {
 		//Case: UnPaid
 		referenceModel := "customer"
 		customerAccount, err := CreateAccountIfNotExists(
@@ -2686,7 +2695,9 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 			salesAccount,
 			cashDiscountAllowedAccount,
 		)...)
-	} else {
+	}
+
+	if len(order.Payments) > 0 {
 		paymentsByDatetimeNumber := 1
 		paymentsByDatetime := RegroupSalesPaymentsByDatetime(order.Payments)
 
@@ -2706,9 +2717,9 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 			}
 
 			journals = append(journals, newJournals...)
-
 			paymentsByDatetimeNumber++
 		}
+
 	}
 
 	ledger = &Ledger{
