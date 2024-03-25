@@ -1222,6 +1222,12 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
 		}
 
+		if scenario == "update" {
+			if product.Quantity < product.QuantityReturned {
+				errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be less than the returned quantity: " + fmt.Sprintf("%.02f", product.QuantityReturned)
+			}
+		}
+
 		if product.UnitPrice == 0 {
 			errs["unit_price_"+strconv.Itoa(index)] = "Unit Price is required"
 		}
