@@ -2074,33 +2074,37 @@ func ProcessOrders() error {
 			}
 		*/
 
-		order.FindNetTotal()
-		order.FindTotal()
-		order.FindTotalQuantity()
-		order.FindVatPrice()
+		//order.FindNetTotal()
+		//order.FindTotal()
+		//order.FindTotalQuantity()
 
-		err = order.CalculateOrderProfit()
-		if err != nil {
-			return err
+		if order.VatPrice == 0 {
+			order.FindVatPrice()
+			err = order.Update()
+			if err != nil {
+				return err
+			}
 		}
 
-		order.GetPayments()
-		order.Update()
+		/*
+			err = order.CalculateOrderProfit()
+			if err != nil {
+				return err
+			}
 
-		err = order.UndoAccounting()
-		if err != nil {
-			return errors.New("error undo accounting: " + err.Error())
-		}
+			order.GetPayments()
+			order.Update()
 
-		err = order.DoAccounting()
-		if err != nil {
-			return errors.New("error doing accounting: " + err.Error())
-		}
+			err = order.UndoAccounting()
+			if err != nil {
+				return errors.New("error undo accounting: " + err.Error())
+			}
 
-		err = order.Update()
-		if err != nil {
-			return err
-		}
+			err = order.DoAccounting()
+			if err != nil {
+				return errors.New("error doing accounting: " + err.Error())
+			}
+		*/
 
 		/*
 			if order.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
