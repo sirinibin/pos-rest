@@ -290,10 +290,8 @@ func (order *Order) FindTotalQuantity() {
 
 func (order *Order) FindVatPrice() {
 	vatPrice := ((*order.VatPercent / float64(100.00)) * ((order.Total + order.ShippingOrHandlingFees) - order.Discount))
-	//log.Print("vatPrice calculated:")
-	//log.Print(vatPrice)
 	vatPrice = RoundFloat(vatPrice, 2)
-	//order.VatPrice = vatPrice
+	order.VatPrice = vatPrice
 }
 
 type SalesStats struct {
@@ -2509,9 +2507,16 @@ func MakeJournalsForPaymentsByDatetime(
 
 	journals := []Journal{}
 	totalPayment := float64(0.00)
+	/*
+		extraAmountPaid := float64(0.00)
+		if order.BalanceAmount < 0 {
+			extraAmountPaid = order.BalanceAmount * (-1)
+		}
+		extraPayments := []SalesPayment{}
+	*/
 
 	var firstPaymentDate *time.Time
-	if len(payments) >= 0 {
+	if len(payments) > 0 {
 		firstPaymentDate = payments[0].Date
 	}
 
