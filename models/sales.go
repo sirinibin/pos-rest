@@ -2,10 +2,12 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -991,17 +993,19 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 			}
 
-			maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
+			/*
+				maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
 
-			if maxAllowedAmount < 0 {
-				maxAllowedAmount = 0
-			}
+				if maxAllowedAmount < 0 {
+					maxAllowedAmount = 0
+				}
 
-			if maxAllowedAmount == 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
-			} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-			}
+				if maxAllowedAmount == 0 {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
+				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
+				}
+			*/
 
 		}
 
@@ -2067,44 +2071,30 @@ func ProcessOrders() error {
 			}
 		*/
 
-		/*
-			_, err = order.GetPayments()
-			if err != nil {
-				return err
-			}
-		*/
-
 		//order.FindNetTotal()
 		//order.FindTotal()
 		//order.FindTotalQuantity()
-
-		if order.VatPrice == 0 {
-			order.FindVatPrice()
-			err = order.Update()
-			if err != nil {
-				return err
-			}
-		}
 
 		/*
 			err = order.CalculateOrderProfit()
 			if err != nil {
 				return err
 			}
-
-			order.GetPayments()
-			order.Update()
-
-			err = order.UndoAccounting()
-			if err != nil {
-				return errors.New("error undo accounting: " + err.Error())
-			}
-
-			err = order.DoAccounting()
-			if err != nil {
-				return errors.New("error doing accounting: " + err.Error())
-			}
 		*/
+
+		//order.Update()
+
+		order.GetPayments()
+
+		err = order.UndoAccounting()
+		if err != nil {
+			return errors.New("error undo accounting: " + err.Error())
+		}
+
+		err = order.DoAccounting()
+		if err != nil {
+			return errors.New("error doing accounting: " + err.Error())
+		}
 
 		/*
 			if order.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
@@ -2495,6 +2485,10 @@ func MakeJournalsForUnpaidSale(
 	return journals
 }
 
+var totalPaidAmount float64
+var extraAmountPaid float64
+var extraPayments []SalesPayment
+
 func MakeJournalsForPaymentsByDatetime(
 	order *Order,
 	customer *Customer,
@@ -2506,18 +2500,10 @@ func MakeJournalsForPaymentsByDatetime(
 	paymentsByDatetimeNumber int,
 ) ([]Journal, error) {
 	now := time.Now()
-
 	groupID := primitive.NewObjectID()
 
 	journals := []Journal{}
 	totalPayment := float64(0.00)
-	/*
-		extraAmountPaid := float64(0.00)
-		if order.BalanceAmount < 0 {
-			extraAmountPaid = order.BalanceAmount * (-1)
-		}
-		extraPayments := []SalesPayment{}
-	*/
 
 	var firstPaymentDate *time.Time
 	if len(payments) > 0 {
@@ -2525,6 +2511,42 @@ func MakeJournalsForPaymentsByDatetime(
 	}
 
 	for _, payment := range payments {
+		totalPaidAmount += *payment.Amount
+		if totalPaidAmount > (order.NetTotal - order.CashDiscount) {
+			extraAmountPaid = RoundFloat((totalPaidAmount - (order.NetTotal - order.CashDiscount)), 2)
+		}
+		amount := *payment.Amount
+
+		if extraAmountPaid > 0 {
+			skip := false
+			if extraAmountPaid < *payment.Amount {
+				extraAmount := extraAmountPaid
+				extraPayments = append(extraPayments, SalesPayment{
+					Date:   payment.Date,
+					Amount: &extraAmount,
+					Method: payment.Method,
+				})
+				amount = RoundFloat((*payment.Amount - extraAmountPaid), 2)
+				//totalPaidAmount -= *payment.Amount
+				//totalPaidAmount += amount
+				extraAmountPaid = 0
+			} else if extraAmountPaid >= *payment.Amount {
+				extraPayments = append(extraPayments, SalesPayment{
+					Date:   payment.Date,
+					Amount: payment.Amount,
+					Method: payment.Method,
+				})
+
+				skip = true
+				extraAmountPaid = RoundFloat((extraAmountPaid - *payment.Amount), 2)
+			}
+
+			if skip {
+				continue
+			}
+
+		}
+
 		cashReceivingAccount := Account{}
 		if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
@@ -2551,12 +2573,12 @@ func MakeJournalsForPaymentsByDatetime(
 			AccountNumber: cashReceivingAccount.Number,
 			AccountName:   cashReceivingAccount.Name,
 			DebitOrCredit: "debit",
-			Debit:         *payment.Amount,
+			Debit:         amount,
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
-		totalPayment += *payment.Amount
+		totalPayment += amount
 	}
 
 	if order.CashDiscount > 0 && paymentsByDatetimeNumber == 1 && order.Date.Equal(*firstPaymentDate) {
@@ -2630,30 +2652,124 @@ func MakeJournalsForPaymentsByDatetime(
 
 		totalPayment = RoundFloat(totalPayment, 2)
 
-		journals = append(journals, Journal{
-			Date:          firstPaymentDate,
-			AccountID:     customerAccount.ID,
-			AccountNumber: customerAccount.Number,
-			AccountName:   customerAccount.Name,
-			DebitOrCredit: "credit",
-			Credit:        totalPayment,
-			GroupID:       groupID,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
-		})
-
+		if totalPayment > 0 {
+			journals = append(journals, Journal{
+				Date:          firstPaymentDate,
+				AccountID:     customerAccount.ID,
+				AccountNumber: customerAccount.Number,
+				AccountName:   customerAccount.Name,
+				DebitOrCredit: "credit",
+				Credit:        totalPayment,
+				GroupID:       groupID,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+		}
 	}
 
 	return journals, nil
 }
 
+func MakeJournalsForExtraPayments(
+	order *Order,
+	customer *Customer,
+	cashAccount *Account,
+	bankAccount *Account,
+	extraPayments []SalesPayment,
+) ([]Journal, error) {
+	now := time.Now()
+	journals := []Journal{}
+	groupID := primitive.NewObjectID()
+
+	var lastPaymentDate *time.Time
+	if len(extraPayments) > 0 {
+		lastPaymentDate = extraPayments[len(extraPayments)-1].Date
+	}
+
+	for _, payment := range extraPayments {
+		cashReceivingAccount := Account{}
+		if payment.Method == "cash" {
+			cashReceivingAccount = *cashAccount
+		} else if payment.Method == "bank_account" {
+			cashReceivingAccount = *bankAccount
+		} else if payment.Method == "customer_account" {
+			referenceModel := "customer"
+			customerAccount, err := CreateAccountIfNotExists(
+				order.StoreID,
+				&customer.ID,
+				&referenceModel,
+				customer.Name,
+				&customer.Phone,
+			)
+			if err != nil {
+				return nil, err
+			}
+			cashReceivingAccount = *customerAccount
+		}
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     cashReceivingAccount.ID,
+			AccountNumber: cashReceivingAccount.Number,
+			AccountName:   cashReceivingAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+	} //end for
+
+	referenceModel := "customer"
+	customerAccount, err := CreateAccountIfNotExists(
+		order.StoreID,
+		&customer.ID,
+		&referenceModel,
+		customer.Name,
+		&customer.Phone,
+	)
+	if err != nil {
+		return nil, err
+	}
+	journals = append(journals, Journal{
+		Date:          lastPaymentDate,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        order.BalanceAmount * (-1),
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	return journals, nil
+}
+
+func PrettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	fmt.Println(string(s))
+	return string(s)
+}
+
 // Regroup sales payments by datetime
-func RegroupSalesPaymentsByDatetime(payments []SalesPayment) map[string][]SalesPayment {
+func RegroupSalesPaymentsByDatetime(payments []SalesPayment) [][]SalesPayment {
 	paymentsByDatetime := map[string][]SalesPayment{}
 	for _, payment := range payments {
 		paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
 	}
-	return paymentsByDatetime
+
+	paymentsByDatetime2 := [][]SalesPayment{}
+	for _, v := range paymentsByDatetime {
+		paymentsByDatetime2 = append(paymentsByDatetime2, v)
+	}
+
+	sort.Slice(paymentsByDatetime2, func(i, j int) bool {
+		return paymentsByDatetime2[i][0].Date.Before(*paymentsByDatetime2[j][0].Date)
+	})
+
+	return paymentsByDatetime2
 }
 
 //End customer account journals
@@ -2715,8 +2831,13 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 	}
 
 	if len(order.Payments) > 0 {
+		totalPaidAmount = float64(0.00)
+		extraAmountPaid = float64(0.00)
+		extraPayments = []SalesPayment{}
+
 		paymentsByDatetimeNumber := 1
 		paymentsByDatetime := RegroupSalesPaymentsByDatetime(order.Payments)
+		//fmt.Printf("%+v", paymentsByDatetime)
 
 		for _, paymentByDatetime := range paymentsByDatetime {
 			newJournals, err := MakeJournalsForPaymentsByDatetime(
@@ -2736,6 +2857,24 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 			journals = append(journals, newJournals...)
 			paymentsByDatetimeNumber++
 		}
+
+		if order.BalanceAmount < 0 && len(extraPayments) > 0 {
+			newJournals, err := MakeJournalsForExtraPayments(
+				order,
+				customer,
+				cashAccount,
+				bankAccount,
+				extraPayments,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			journals = append(journals, newJournals...)
+		}
+
+		totalPaidAmount = float64(0.00)
+		extraAmountPaid = float64(0.00)
 
 	}
 
