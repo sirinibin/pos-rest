@@ -91,7 +91,7 @@ type SalesReturn struct {
 	TotalPaymentPaid        float64              `bson:"total_payment_paid" json:"total_payment_paid"`
 	BalanceAmount           float64              `bson:"balance_amount" json:"balance_amount"`
 	Payments                []SalesReturnPayment `bson:"payments" json:"payments"`
-	PaymentsInput           []SalesReturnPayment `json:"payments_input"`
+	PaymentsInput           []SalesReturnPayment `bson:"-" json:"payments_input"`
 	PaymentsCount           int64                `bson:"payments_count" json:"payments_count"`
 	PaymentMethods          []string             `json:"payment_methods" bson:"payment_methods"`
 }

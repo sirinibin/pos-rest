@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -323,8 +322,6 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salesreturn.GetPayments()
-	log.Print("payments:")
-	models.PrettyPrint(salesreturn.Payments)
 	salesreturn.Update()
 
 	err = salesreturnOld.RemoveStock()

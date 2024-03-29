@@ -85,7 +85,7 @@ type Order struct {
 	TotalPaymentReceived     float64             `bson:"total_payment_received" json:"total_payment_received"`
 	BalanceAmount            float64             `bson:"balance_amount" json:"balance_amount"`
 	Payments                 []SalesPayment      `bson:"payments" json:"payments"`
-	PaymentsInput            []SalesPayment      `json:"payments_input"`
+	PaymentsInput            []SalesPayment      `bson:"-" json:"payments_input"`
 	PaymentsCount            int64               `bson:"payments_count" json:"payments_count"`
 	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
 	Profit                   float64             `bson:"profit" json:"profit"`
