@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -429,7 +428,7 @@ func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 
 	errs = make(map[string]string)
 
-	var oldSalesReturnPayment *SalesReturnPayment
+	//var oldSalesReturnPayment *SalesReturnPayment
 
 	if govalidator.IsNull(salesReturnPayment.Method) {
 		errs["method"] = "Payment method is required"
@@ -463,11 +462,13 @@ func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 			errs["id"] = "Invalid sales return payment :" + salesReturnPayment.ID.Hex()
 		}
 
-		oldSalesReturnPayment, err = FindSalesReturnPaymentByID(&salesReturnPayment.ID, bson.M{})
-		if err != nil {
-			errs["sales_return_payment"] = err.Error()
-			return errs
-		}
+		/*
+			oldSalesReturnPayment, err = FindSalesReturnPaymentByID(&salesReturnPayment.ID, bson.M{})
+			if err != nil {
+				errs["sales_return_payment"] = err.Error()
+				return errs
+			}
+		*/
 	}
 
 	if salesReturnPayment.Amount == nil {
@@ -478,36 +479,40 @@ func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	salesReturnPaymentStats, err := GetSalesReturnPaymentStats(bson.M{"sales_return_id": salesReturnPayment.SalesReturnID})
-	if err != nil {
-		return errs
-	}
-
-	salesReturn, err := FindSalesReturnByID(salesReturnPayment.SalesReturnID, bson.M{})
-	if err != nil {
-		return errs
-	}
-
-	if scenario == "update" {
-		if ((salesReturnPaymentStats.TotalPayment - *oldSalesReturnPayment.Amount) + *salesReturnPayment.Amount) > salesReturn.NetTotal {
-			if (salesReturn.NetTotal - (salesReturnPaymentStats.TotalPayment - *oldSalesReturnPayment.Amount)) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-(salesReturnPaymentStats.TotalPayment-*oldSalesReturnPayment.Amount)))
-			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR"
-			}
-
+	/*
+		salesReturnPaymentStats, err := GetSalesReturnPaymentStats(bson.M{"sales_return_id": salesReturnPayment.SalesReturnID})
+		if err != nil {
+			return errs
 		}
-	} else {
 
-		if ToFixed((salesReturnPaymentStats.TotalPayment+*salesReturnPayment.Amount), 2) > salesReturn.NetTotal {
-			if ToFixed((salesReturn.NetTotal-salesReturnPaymentStats.TotalPayment), 2) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-salesReturnPaymentStats.TotalPayment))
-			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR"
-			}
-
+		salesReturn, err := FindSalesReturnByID(salesReturnPayment.SalesReturnID, bson.M{})
+		if err != nil {
+			return errs
 		}
-	}
+	*/
+
+	/*
+		if scenario == "update" {
+			if ((salesReturnPaymentStats.TotalPayment - *oldSalesReturnPayment.Amount) + *salesReturnPayment.Amount) > salesReturn.NetTotal {
+				if (salesReturn.NetTotal - (salesReturnPaymentStats.TotalPayment - *oldSalesReturnPayment.Amount)) > 0 {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-(salesReturnPaymentStats.TotalPayment-*oldSalesReturnPayment.Amount)))
+				} else {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR"
+				}
+
+			}
+		} else {
+
+			if ToFixed((salesReturnPaymentStats.TotalPayment+*salesReturnPayment.Amount), 2) > salesReturn.NetTotal {
+				if ToFixed((salesReturn.NetTotal-salesReturnPaymentStats.TotalPayment), 2) > 0 {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-salesReturnPaymentStats.TotalPayment))
+				} else {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", salesReturnPaymentStats.TotalPayment) + " SAR"
+				}
+
+			}
+		}
+	*/
 
 	/*
 		if scenario == "update" {

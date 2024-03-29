@@ -458,27 +458,31 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	salespaymentStats, err := GetSalesPaymentStats(bson.M{"order_id": salesPayment.OrderID})
-	if err != nil {
-		return errs
-	}
+	/*
+		salespaymentStats, err := GetSalesPaymentStats(bson.M{"order_id": salesPayment.OrderID})
+		if err != nil {
+			return errs
+		}
+	*/
 
 	order, err := FindOrderByID(salesPayment.OrderID, bson.M{})
 	if err != nil {
 		return errs
 	}
 
-	maxAllowedAmount := 0.00
+	/*
+		maxAllowedAmount := 0.00
 
-	if scenario == "update" {
-		maxAllowedAmount = (order.NetTotal - order.CashDiscount) - (salespaymentStats.TotalPayment - *oldSalesPayment.Amount)
-	} else {
-		maxAllowedAmount = (order.NetTotal - order.CashDiscount) - salespaymentStats.TotalPayment
-	}
+		if scenario == "update" {
+			maxAllowedAmount = (order.NetTotal - order.CashDiscount) - (salespaymentStats.TotalPayment - *oldSalesPayment.Amount)
+		} else {
+			maxAllowedAmount = (order.NetTotal - order.CashDiscount) - salespaymentStats.TotalPayment
+		}
 
-	if *salesPayment.Amount > RoundFloat(maxAllowedAmount, 2) {
-		errs["amount"] = "The amount should not be greater than " + fmt.Sprintf("%.02f", maxAllowedAmount)
-	}
+		if *salesPayment.Amount > RoundFloat(maxAllowedAmount, 2) {
+			errs["amount"] = "The amount should not be greater than " + fmt.Sprintf("%.02f", maxAllowedAmount)
+		}
+	*/
 
 	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
