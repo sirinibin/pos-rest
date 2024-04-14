@@ -934,10 +934,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		salesreturn.Date = &date
 	}
 
-	if salesreturn.CashDiscount >= salesreturn.NetTotal {
-		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", salesreturn.NetTotal)
-	}
-
 	totalPayment := float64(0.00)
 	for _, payment := range salesreturn.PaymentsInput {
 		if payment.Amount != nil {
@@ -1017,6 +1013,10 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	if salesreturn.Discount > maxDiscountAllowed {
 		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
+	}
+
+	if salesreturn.NetTotal > 0 && salesreturn.CashDiscount >= salesreturn.NetTotal {
+		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", salesreturn.NetTotal)
 	}
 
 	maxCashDiscountAllowed := 0.00
