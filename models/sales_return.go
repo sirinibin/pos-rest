@@ -1019,16 +1019,18 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", salesreturn.NetTotal)
 	}
 
-	maxCashDiscountAllowed := 0.00
-	if scenario == "update" {
-		maxCashDiscountAllowed = order.CashDiscount - (order.ReturnCashDiscount - oldSalesReturn.CashDiscount)
-	} else {
-		maxCashDiscountAllowed = order.CashDiscount - order.ReturnCashDiscount
-	}
+	/*
+		maxCashDiscountAllowed := 0.00
+		if scenario == "update" {
+			maxCashDiscountAllowed = order.CashDiscount - (order.ReturnCashDiscount - oldSalesReturn.CashDiscount)
+		} else {
+			maxCashDiscountAllowed = order.CashDiscount - order.ReturnCashDiscount
+		}
 
-	if salesreturn.NetTotal > 0 && salesreturn.CashDiscount > maxCashDiscountAllowed {
-		errs["cash_discount"] = "Cash discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxCashDiscountAllowed))
-	}
+		if salesreturn.NetTotal > 0 && salesreturn.CashDiscount > maxCashDiscountAllowed {
+			errs["cash_discount"] = "Cash discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxCashDiscountAllowed))
+		}
+	*/
 
 	salesreturn.OrderCode = order.Code
 
