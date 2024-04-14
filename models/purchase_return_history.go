@@ -365,6 +365,9 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 	defer cancel()
 
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
+		if !purchaseReturnProduct.Selected {
+			continue
+		}
 
 		history := ProductPurchaseReturnHistory{
 			StoreID:            purchaseReturn.StoreID,

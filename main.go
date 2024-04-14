@@ -14,6 +14,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -557,164 +558,6 @@ func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, o
 
 func cronJobsEveryHour() error {
 	log.Print("Running cron job every 8 Hours")
-	/*
-		err := models.ProcessSalesPayments()
-		if err != nil {
-			return err
-		}
-
-			err := models.ProcessOrders()
-			if err != nil {
-				return err
-			}
-	*/
-	/*
-		err := models.ProcessSalesReturnPayments()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessPurchases()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessPurchaseReturns()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessQuotations()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessDeliveryNotes()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessQuotations()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessDeliveryNotes()
-		if err != nil {
-			log.Print(err)
-		}
-
-	*/
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-	/*
-		err := models.ProcessPurchases()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
-
-
-
-		err = models.ProcessQuotations()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessDeliveryNotes()
-		if err != nil {
-			log.Print(err)
-		}
-
-
-	*/
-
-	/*
-		err := models.ProcessProducts()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessStores()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessPurchases()
-		if err != nil {
-			log.Print(err)
-		}
-
-		err = models.ProcessPurchaseReturns()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessSalesCashDiscounts()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
-
-	/*
-		err := models.ProcessPostings()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
 
 	/*
 		err := models.ProcessSalesCashDiscounts()
@@ -736,6 +579,16 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 	*/
+
+	err := models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessPurchaseReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
 	return nil
 }

@@ -29,6 +29,7 @@ type PurchaseReturnProduct struct {
 	Quantity                float64            `json:"quantity" bson:"quantity"`
 	Unit                    string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	PurchaseReturnUnitPrice float64            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
+	Selected                bool               `bson:"selected" json:"selected"`
 }
 
 // PurchaseReturn : PurchaseReturn structure
@@ -61,7 +62,7 @@ type PurchaseReturn struct {
 	VatPrice                        float64                 `bson:"vat_price" json:"vat_price"`
 	Total                           float64                 `bson:"total" json:"total"`
 	NetTotal                        float64                 `bson:"net_total" json:"net_total"`
-	PartiaPaymentAmount             float64                 `bson:"partial_payment_amount" json:"partial_payment_amount"`
+	CashDiscount                    float64                 `bson:"cash_discount" json:"cash_discount"`
 	PaymentMethod                   string                  `bson:"payment_method" json:"payment_method"`
 	PaymentStatus                   string                  `bson:"payment_status" json:"payment_status"`
 	Deleted                         bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -83,8 +84,114 @@ type PurchaseReturn struct {
 	TotalPaymentPaid                float64                 `bson:"total_payment_paid" json:"total_payment_paid"`
 	BalanceAmount                   float64                 `bson:"balance_amount" json:"balance_amount"`
 	Payments                        []PurchaseReturnPayment `bson:"payments" json:"payments"`
+	PaymentsInput                   []PurchasePayment       `bson:"-" json:"payments_input"`
 	PaymentsCount                   int64                   `bson:"payments_count" json:"payments_count"`
 	PaymentMethods                  []string                `json:"payment_methods" bson:"payment_methods"`
+}
+
+func (model *PurchaseReturn) AddPayments() error {
+	for _, payment := range model.PaymentsInput {
+		purchaseReturnPayment := PurchaseReturnPayment{
+			PurchaseReturnID:   &model.ID,
+			PurchaseReturnCode: model.Code,
+			PurchaseID:         model.PurchaseID,
+			PurchaseCode:       model.PurchaseCode,
+			Amount:             payment.Amount,
+			Method:             payment.Method,
+			Date:               payment.Date,
+			CreatedAt:          model.CreatedAt,
+			UpdatedAt:          model.UpdatedAt,
+			CreatedBy:          model.CreatedBy,
+			CreatedByName:      model.CreatedByName,
+			UpdatedBy:          model.UpdatedBy,
+			UpdatedByName:      model.UpdatedByName,
+			StoreID:            model.StoreID,
+			StoreName:          model.StoreName,
+		}
+		err := purchaseReturnPayment.Insert()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (model *PurchaseReturn) UpdatePayments() error {
+	model.GetPayments()
+	now := time.Now()
+	for _, payment := range model.PaymentsInput {
+		if payment.ID.IsZero() {
+			//Create new
+			purchaseReturnPayment := PurchaseReturnPayment{
+				PurchaseReturnID:   &model.ID,
+				PurchaseReturnCode: model.Code,
+				PurchaseID:         model.PurchaseID,
+				PurchaseCode:       model.PurchaseCode,
+				Amount:             payment.Amount,
+				Method:             payment.Method,
+				Date:               payment.Date,
+				CreatedAt:          &now,
+				UpdatedAt:          &now,
+				CreatedBy:          model.CreatedBy,
+				CreatedByName:      model.CreatedByName,
+				UpdatedBy:          model.UpdatedBy,
+				UpdatedByName:      model.UpdatedByName,
+				StoreID:            model.StoreID,
+				StoreName:          model.StoreName,
+			}
+			err := purchaseReturnPayment.Insert()
+			if err != nil {
+				return err
+			}
+		} else {
+			//Update
+			purchaseReturnPayment, err := FindPurchaseReturnPaymentByID(&payment.ID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			purchaseReturnPayment.Date = payment.Date
+			purchaseReturnPayment.Amount = payment.Amount
+			purchaseReturnPayment.Method = payment.Method
+			purchaseReturnPayment.UpdatedAt = &now
+			purchaseReturnPayment.UpdatedBy = model.UpdatedBy
+			purchaseReturnPayment.UpdatedByName = model.UpdatedByName
+			err = purchaseReturnPayment.Update()
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	//Deleting payments
+
+	paymentsToDelete := []PurchaseReturnPayment{}
+
+	for _, payment := range model.Payments {
+		found := false
+		for _, paymentInput := range model.PaymentsInput {
+			if paymentInput.ID.Hex() == payment.ID.Hex() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			paymentsToDelete = append(paymentsToDelete, payment)
+		}
+	}
+
+	for _, payment := range paymentsToDelete {
+		payment.Deleted = true
+		payment.DeletedAt = &now
+		payment.DeletedBy = model.UpdatedBy
+		err := payment.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type PurchaseReturnStats struct {
@@ -92,6 +199,7 @@ type PurchaseReturnStats struct {
 	NetTotal                  float64             `json:"net_total" bson:"net_total"`
 	VatPrice                  float64             `json:"vat_price" bson:"vat_price"`
 	Discount                  float64             `json:"discount" bson:"discount"`
+	CashDiscount              float64             `json:"cash_discount" bson:"cash_discount"`
 	PaidPurchaseReturn        float64             `json:"paid_purchase_return" bson:"paid_purchase_return"`
 	UnPaidPurchaseReturn      float64             `json:"unpaid_purchase_return" bson:"unpaid_purchase_return"`
 	CashPurchaseReturn        float64             `json:"cash_purchase_return" bson:"cash_purchase_return"`
@@ -109,10 +217,11 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturn
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":       nil,
-				"net_total": bson.M{"$sum": "$net_total"},
-				"vat_price": bson.M{"$sum": "$vat_price"},
-				"discount":  bson.M{"$sum": "$discount"},
+				"_id":           nil,
+				"net_total":     bson.M{"$sum": "$net_total"},
+				"vat_price":     bson.M{"$sum": "$vat_price"},
+				"discount":      bson.M{"$sum": "$discount"},
+				"cash_discount": bson.M{"$sum": "$cash_discount"},
 				"paid_purchase_return": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",
@@ -277,6 +386,10 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range purchasereturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
@@ -293,6 +406,10 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 func (purchasereturn *PurchaseReturn) FindNetTotal() {
 	netTotal := float64(0.0)
 	for _, product := range purchasereturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		netTotal += (float64(product.Quantity) * product.PurchaseReturnUnitPrice)
 	}
 
@@ -308,6 +425,10 @@ func (purchasereturn *PurchaseReturn) FindNetTotal() {
 func (purchasereturn *PurchaseReturn) FindTotal() {
 	total := float64(0.0)
 	for _, product := range purchasereturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		total += product.Quantity * product.PurchaseReturnUnitPrice
 	}
 
@@ -317,6 +438,10 @@ func (purchasereturn *PurchaseReturn) FindTotal() {
 func (purchasereturn *PurchaseReturn) FindTotalQuantity() {
 	totalQuantity := float64(0.00)
 	for _, product := range purchasereturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		totalQuantity += product.Quantity
 	}
 	purchasereturn.TotalQuantity = totalQuantity
@@ -344,6 +469,23 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[cash_discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return purchasereturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["cash_discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["cash_discount"] = value
 		}
 	}
 
@@ -767,8 +909,11 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 	errs = make(map[string]string)
 
-	if govalidator.IsNull(purchasereturn.PaymentStatus) {
-		errs["payment_status"] = "Payment status is required"
+	purchase, err := FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["purchase_id"] = err.Error()
+		return errs
 	}
 
 	if purchasereturn.PurchaseID == nil || purchasereturn.PurchaseID.IsZero() {
@@ -777,38 +922,98 @@ func (purchasereturn *PurchaseReturn) Validate(
 		return errs
 	}
 
-	purchase, err := FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		errs["purchase_id"] = err.Error()
-		return errs
+	if purchasereturn.NetTotal <= 0 {
+		errs["net_total"] = "Net total should be greater than 0.00 "
 	}
 
+	if purchasereturn.CashDiscount >= purchasereturn.NetTotal {
+		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", purchasereturn.NetTotal)
+	}
+
+	maxDiscountAllowed := 0.00
 	if scenario == "update" {
-		if purchasereturn.Discount > (purchase.Discount) {
-			errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (purchase.Discount))
-		}
+		maxDiscountAllowed = purchasereturn.Discount - (purchase.ReturnDiscount - oldPurchaseReturn.Discount)
 	} else {
-		if purchasereturn.Discount > (purchase.Discount - purchase.ReturnDiscount) {
-			errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (purchase.Discount-purchase.ReturnDiscount))
+		maxDiscountAllowed = purchasereturn.Discount - purchase.ReturnDiscount
+	}
+
+	if purchasereturn.Discount > maxDiscountAllowed {
+		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
+	}
+
+	maxCashDiscountAllowed := 0.00
+	if scenario == "update" {
+		maxCashDiscountAllowed = purchasereturn.CashDiscount - (purchase.ReturnCashDiscount - oldPurchaseReturn.CashDiscount)
+	} else {
+		maxCashDiscountAllowed = purchasereturn.CashDiscount - purchase.ReturnCashDiscount
+	}
+
+	if purchasereturn.CashDiscount > maxCashDiscountAllowed {
+		errs["cash_discount"] = "Cash discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxCashDiscountAllowed))
+	}
+
+	totalPayment := float64(0.00)
+	for _, payment := range purchasereturn.PaymentsInput {
+		if payment.Amount != nil {
+			totalPayment += *payment.Amount
+		}
+	}
+
+	for index, payment := range purchasereturn.PaymentsInput {
+		if govalidator.IsNull(payment.DateStr) {
+			errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
+		} else {
+			const shortForm = "2006-01-02T15:04:05Z07:00"
+			date, err := time.Parse(shortForm, payment.DateStr)
+			if err != nil {
+				errs["payment_date_"+strconv.Itoa(index)] = "Invalid date format"
+			}
+
+			purchasereturn.PaymentsInput[index].Date = &date
+			payment.Date = &date
+
+			if purchasereturn.Date != nil && purchasereturn.PaymentsInput[index].Date.Before(*purchasereturn.Date) {
+				errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to sales return date time"
+			}
 		}
 
-	}
+		if payment.Amount == nil {
+			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
+		} else if *payment.Amount == 0 {
+			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+		}
+
+		if payment.Method == "" {
+			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
+		}
+
+		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
+			if *payment.Amount <= 0 {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+			}
+
+			/*
+				maxAllowedAmount := (salesreturn.NetTotal - salesreturn.CashDiscount) - (totalPayment - *payment.Amount)
+
+				if maxAllowedAmount < 0 {
+					maxAllowedAmount = 0
+				}
+
+				if maxAllowedAmount == 0 {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (salesreturn.NetTotal-salesreturn.CashDiscount)) + ", Please delete this payment"
+				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
+				}
+			*/
+
+		}
+	} //end for
 
 	purchasereturn.PurchaseCode = purchase.Code
 
 	if govalidator.IsNull(purchasereturn.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
-		/*
-			const shortForm = "Jan 02 2006"
-			date, err := time.Parse(shortForm, purchasereturn.DateStr)
-			if err != nil {
-				errs["date_str"] = "Invalid date format"
-			}
-			purchasereturn.Date = &date
-		*/
-
 		const shortForm = "2006-01-02T15:04:05Z07:00"
 		date, err := time.Parse(shortForm, purchasereturn.DateStr)
 		if err != nil {
@@ -843,24 +1048,6 @@ func (purchasereturn *PurchaseReturn) Validate(
 			errs["id"] = "Invalid PurchaseReturn:" + purchasereturn.ID.Hex()
 		}
 
-		if oldPurchaseReturn != nil {
-			if oldPurchaseReturn.Status == "delivered" {
-
-				if purchasereturn.Status == "pending" ||
-					purchasereturn.Status == "cancelled" ||
-					purchasereturn.Status == "purchase_returned" ||
-					purchasereturn.Status == "dispatched" {
-					errs["status"] = "Can't change the status from delivered to pending/cancelled/order_placed/dispatched"
-				}
-			}
-		}
-
-	} else {
-		if purchasereturn.PaymentStatus != "not_paid" {
-			if govalidator.IsNull(purchasereturn.PaymentMethod) {
-				errs["payment_method"] = "Payment method is required"
-			}
-		}
 	}
 
 	if purchasereturn.StoreID == nil || purchasereturn.StoreID.IsZero() {
@@ -923,6 +1110,10 @@ func (purchasereturn *PurchaseReturn) Validate(
 	}
 
 	for index, purchaseReturnProduct := range purchasereturn.Products {
+		if !purchaseReturnProduct.Selected {
+			continue
+		}
+
 		if purchaseReturnProduct.ProductID.IsZero() {
 			errs["product_id_"+strconv.Itoa(index)] = "Product is required for purchase return"
 		} else {
@@ -1001,6 +1192,10 @@ func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(pu
 
 	if purchaseReturnOld != nil {
 		for _, purchaseReturnProduct := range purchaseReturnOld.Products {
+			if !purchaseReturnProduct.Selected {
+				continue
+			}
+
 			for index2, purchaseProduct := range purchase.Products {
 				if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
 					purchase.Products[index2].QuantityReturned -= purchaseReturnProduct.Quantity
@@ -1010,6 +1205,10 @@ func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(pu
 	}
 
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
+		if !purchaseReturnProduct.Selected {
+			continue
+		}
+
 		for index2, purchaseProduct := range purchase.Products {
 			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
 				purchase.Products[index2].QuantityReturned += purchaseReturnProduct.Quantity
@@ -1032,6 +1231,10 @@ func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(pu
 
 func (purchasereturn *PurchaseReturn) AddStock() (err error) {
 	for _, purchasereturnProduct := range purchasereturn.Products {
+		if !purchasereturnProduct.Selected {
+			continue
+		}
+
 		product, err := FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
@@ -1077,6 +1280,10 @@ func (purchasereturn *PurchaseReturn) AddStock() (err error) {
 
 func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
 	for _, purchasereturnProduct := range purchasereturn.Products {
+		if !purchasereturnProduct.Selected {
+			continue
+		}
+
 		product, err := FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
@@ -1104,6 +1311,10 @@ func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
 func (purchasereturn *PurchaseReturn) UpdateProductUnitPriceInStore() (err error) {
 
 	for _, purchasereturnProduct := range purchasereturn.Products {
+		if !purchasereturnProduct.Selected {
+			continue
+		}
+
 		product, err := FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
@@ -1251,40 +1462,6 @@ func FindLastPurchaseReturnByStoreID(
 	}
 
 	return purchaseReturn, err
-}
-
-func (purchaseReturn *PurchaseReturn) AddPayment() error {
-	amount := float64(0.0)
-	if purchaseReturn.PaymentStatus == "paid" {
-		amount = purchaseReturn.NetTotal
-	} else if purchaseReturn.PaymentStatus == "paid_partially" {
-		amount = purchaseReturn.PartiaPaymentAmount
-	} else {
-		return nil
-	}
-
-	payment := PurchaseReturnPayment{
-		PurchaseReturnID:   &purchaseReturn.ID,
-		Date:               purchaseReturn.Date,
-		PurchaseReturnCode: purchaseReturn.Code,
-		PurchaseID:         purchaseReturn.PurchaseID,
-		PurchaseCode:       purchaseReturn.PurchaseCode,
-		Amount:             &amount,
-		Method:             purchaseReturn.PaymentMethod,
-		CreatedAt:          purchaseReturn.CreatedAt,
-		UpdatedAt:          purchaseReturn.UpdatedAt,
-		CreatedBy:          purchaseReturn.CreatedBy,
-		CreatedByName:      purchaseReturn.CreatedByName,
-		UpdatedBy:          purchaseReturn.UpdatedBy,
-		UpdatedByName:      purchaseReturn.UpdatedByName,
-		StoreID:            purchaseReturn.StoreID,
-		StoreName:          purchaseReturn.StoreName,
-	}
-	err := payment.Insert()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (purchasereturn *PurchaseReturn) Update() error {
@@ -1548,9 +1725,19 @@ func ProcessPurchaseReturns() error {
 		*/
 		//model.Date = model.CreatedAt
 
-		err = model.SetVendorPurchaseReturnStats()
-		if err != nil {
-			return err
+		/*
+			err = model.SetVendorPurchaseReturnStats()
+			if err != nil {
+				return err
+			}
+		*/
+
+		for i, _ := range model.Products {
+			if model.Products[i].Quantity > 0 {
+				model.Products[i].Selected = true
+			} else {
+				model.Products[i].Selected = false
+			}
 		}
 
 		err = model.Update()
@@ -1619,16 +1806,15 @@ func (model *PurchaseReturn) GetPayments() (payments []PurchaseReturnPayment, er
 	} //end for loop
 
 	model.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
-	model.BalanceAmount = ToFixed(model.NetTotal-totalPaymentPaid, 2)
+	model.BalanceAmount = ToFixed((model.NetTotal-model.CashDiscount)-totalPaymentPaid, 2)
 	model.PaymentMethods = paymentMethods
 	model.Payments = payments
 	model.PaymentsCount = int64(len(payments))
 
-	if ToFixed(model.NetTotal, 2) == ToFixed(totalPaymentPaid, 2) {
+	if ToFixed((model.NetTotal-model.CashDiscount), 2) <= ToFixed(totalPaymentPaid, 2) {
 		model.PaymentStatus = "paid"
 	} else if ToFixed(totalPaymentPaid, 2) > 0 {
 		model.PaymentStatus = "paid_partially"
-		model.PartiaPaymentAmount = totalPaymentPaid
 	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
 		model.PaymentStatus = "not_paid"
 	}

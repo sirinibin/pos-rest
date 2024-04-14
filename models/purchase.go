@@ -67,7 +67,8 @@ type Purchase struct {
 	VatPrice                   float64             `bson:"vat_price" json:"vat_price"`
 	Total                      float64             `bson:"total" json:"total"`
 	NetTotal                   float64             `bson:"net_total" json:"net_total"`
-	PartiaPaymentAmount        float64             `bson:"partial_payment_amount" json:"partial_payment_amount"`
+	CashDiscount               float64             `bson:"cash_discount" json:"cash_discount"`
+	ReturnCashDiscount         float64             `bson:"return_cash_discount" json:"return_cash_discount"`
 	PaymentMethod              string              `bson:"payment_method" json:"payment_method"`
 	PaymentStatus              string              `bson:"payment_status" json:"payment_status"`
 	ShippingOrHandlingFees     float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
@@ -98,8 +99,111 @@ type Purchase struct {
 	TotalPaymentPaid           float64             `bson:"total_payment_paid" json:"total_payment_paid"`
 	BalanceAmount              float64             `bson:"balance_amount" json:"balance_amount"`
 	Payments                   []PurchasePayment   `bson:"payments" json:"payments"`
+	PaymentsInput              []PurchasePayment   `bson:"-" json:"payments_input"`
 	PaymentsCount              int64               `bson:"payments_count" json:"payments_count"`
 	PaymentMethods             []string            `json:"payment_methods" bson:"payment_methods"`
+}
+
+func (model *Purchase) AddPayments() error {
+	for _, payment := range model.PaymentsInput {
+		purchasePayment := PurchasePayment{
+			PurchaseID:    &model.ID,
+			PurchaseCode:  model.Code,
+			Amount:        payment.Amount,
+			Method:        payment.Method,
+			Date:          payment.Date,
+			CreatedAt:     model.CreatedAt,
+			UpdatedAt:     model.UpdatedAt,
+			CreatedBy:     model.CreatedBy,
+			CreatedByName: model.CreatedByName,
+			UpdatedBy:     model.UpdatedBy,
+			UpdatedByName: model.UpdatedByName,
+			StoreID:       model.StoreID,
+			StoreName:     model.StoreName,
+		}
+		err := purchasePayment.Insert()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (model *Purchase) UpdatePayments() error {
+	model.GetPayments()
+	now := time.Now()
+	for _, payment := range model.PaymentsInput {
+		if payment.ID.IsZero() {
+			//Create new
+			salesPayment := PurchasePayment{
+				PurchaseID:    &model.ID,
+				PurchaseCode:  model.Code,
+				Amount:        payment.Amount,
+				Method:        payment.Method,
+				Date:          payment.Date,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+				CreatedBy:     model.CreatedBy,
+				CreatedByName: model.CreatedByName,
+				UpdatedBy:     model.UpdatedBy,
+				UpdatedByName: model.UpdatedByName,
+				StoreID:       model.StoreID,
+				StoreName:     model.StoreName,
+			}
+			err := salesPayment.Insert()
+			if err != nil {
+				return err
+			}
+
+		} else {
+			//Update
+			purchasePayment, err := FindPurchasePaymentByID(&payment.ID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			purchasePayment.Date = payment.Date
+			purchasePayment.Amount = payment.Amount
+			purchasePayment.Method = payment.Method
+			purchasePayment.UpdatedAt = &now
+			purchasePayment.UpdatedBy = model.UpdatedBy
+			purchasePayment.UpdatedByName = model.UpdatedByName
+			err = purchasePayment.Update()
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	//Deleting payments
+	paymentsToDelete := []PurchasePayment{}
+
+	for _, payment := range model.Payments {
+		found := false
+		for _, paymentInput := range model.PaymentsInput {
+			if paymentInput.ID.Hex() == payment.ID.Hex() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			paymentsToDelete = append(paymentsToDelete, payment)
+		}
+	}
+
+	for _, payment := range paymentsToDelete {
+		payment.Deleted = true
+		payment.DeletedAt = &now
+		payment.DeletedBy = model.UpdatedBy
+		err := payment.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func UpdatePurchaseProfit() error {
@@ -142,6 +246,7 @@ type PurchaseStats struct {
 	NetTotal               float64             `json:"net_total" bson:"net_total"`
 	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
 	Discount               float64             `json:"discount" bson:"discount"`
+	CashDiscount           float64             `json:"cash_discount" bson:"cash_discount"`
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 	NetRetailProfit        float64             `json:"net_retail_net_profit" bson:"net_retail_profit"`
 	NetWholesaleProfit     float64             `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
@@ -166,6 +271,7 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 				"net_total":              bson.M{"$sum": "$net_total"},
 				"vat_price":              bson.M{"$sum": "$vat_price"},
 				"discount":               bson.M{"$sum": "$discount"},
+				"cash_discount":          bson.M{"$sum": "$cash_discount"},
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
 				"net_retail_profit":      bson.M{"$sum": "$net_retail_profit"},
 				"net_wholesale_profit":   bson.M{"$sum": "$net_wholesale_profit"},
@@ -247,14 +353,8 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	totalRetailLoss := 0.0
 	totalWholesaleLoss := 0.0
 
-	purchase.ReturnedAll = true
-
 	for index, purchaseProduct := range purchase.Products {
-		quantity := (purchaseProduct.Quantity - purchaseProduct.QuantityReturned)
-
-		if quantity > 0 {
-			purchase.ReturnedAll = false
-		}
+		quantity := purchaseProduct.Quantity
 
 		purchasePrice := quantity * purchaseProduct.PurchaseUnitPrice
 		retailPrice := quantity * purchaseProduct.RetailUnitPrice
@@ -281,23 +381,14 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 
 	}
 
-	if purchase.ReturnedAll {
-		purchase.ExpectedRetailProfit = 0.00
-		purchase.ExpectedWholesaleProfit = 0.00
-		purchase.ExpectedNetRetailProfit = 0.00
-		purchase.ExpectedNetWholesaleProfit = 0.00
-		purchase.ExpectedRetailLoss = 0.00
-		purchase.ExpectedWholesaleLoss = 0.00
-	} else {
-		purchase.ExpectedRetailProfit = RoundFloat(totalRetailProfit, 2)
-		purchase.ExpectedWholesaleProfit = RoundFloat(totalWholesaleProfit, 2)
+	purchase.ExpectedRetailProfit = RoundFloat(totalRetailProfit, 2)
+	purchase.ExpectedWholesaleProfit = RoundFloat(totalWholesaleProfit, 2)
 
-		purchase.ExpectedNetRetailProfit = RoundFloat((totalRetailProfit + purchase.Discount - purchase.ReturnDiscount), 2)
-		purchase.ExpectedNetWholesaleProfit = RoundFloat((totalWholesaleProfit + purchase.Discount - purchase.ReturnDiscount), 2)
+	purchase.ExpectedNetRetailProfit = RoundFloat((totalRetailProfit + purchase.Discount + purchase.CashDiscount), 2)
+	purchase.ExpectedNetWholesaleProfit = RoundFloat((totalWholesaleProfit + purchase.Discount + purchase.CashDiscount), 2)
 
-		purchase.ExpectedRetailLoss = RoundFloat(totalRetailLoss, 2)
-		purchase.ExpectedWholesaleLoss = RoundFloat(totalWholesaleLoss, 2)
-	}
+	purchase.ExpectedRetailLoss = RoundFloat(totalRetailLoss, 2)
+	purchase.ExpectedWholesaleLoss = RoundFloat(totalWholesaleLoss, 2)
 
 	return nil
 }
@@ -496,6 +587,23 @@ func SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchas
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[cash_discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["cash_discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["cash_discount"] = value
 		}
 	}
 
@@ -939,24 +1047,177 @@ func (purchase *Purchase) Validate(
 
 	errs = make(map[string]string)
 
-	if govalidator.IsNull(purchase.PaymentStatus) {
-		errs["payment_status"] = "Payment status is required"
-	}
-
 	if govalidator.IsNull(purchase.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
-		//const shortForm = "Jan 02 2006"
-		//const shortForm = "	January 02, 2006T3:04PM"
-		//from js:Thu Apr 14 2022 03:53:15 GMT+0300 (Arabian Standard Time)
-		//	const shortForm = "Monday Jan 02 2006 15:04:05 GMT-0700 (MST)"
-		//const shortForm = "Mon Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		const shortForm = "2006-01-02T15:04:05Z07:00"
 		date, err := time.Parse(shortForm, purchase.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
 		}
 		purchase.Date = &date
+	}
+
+	if purchase.CashDiscount >= purchase.NetTotal {
+		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", purchase.NetTotal)
+	}
+
+	totalPayment := float64(0.00)
+	for _, payment := range purchase.PaymentsInput {
+		if payment.Amount != nil {
+			totalPayment += *payment.Amount
+		}
+	}
+
+	totalAmountFromVendorAccount := 0.00
+	vendor, err := FindVendorByID(purchase.VendorID, bson.M{})
+	if err != nil {
+		errs["vendor_id"] = "Invalid Vendor:" + purchase.VendorID.Hex()
+	}
+
+	vendorAccount, err := FindAccountByReferenceID(vendor.ID, *purchase.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["vendor_account"] = "Error finding vendor account: " + err.Error()
+	}
+
+	for index, payment := range purchase.PaymentsInput {
+		if govalidator.IsNull(payment.DateStr) {
+			errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
+		} else {
+			const shortForm = "2006-01-02T15:04:05Z07:00"
+			date, err := time.Parse(shortForm, payment.DateStr)
+			if err != nil {
+				errs["payment_date_"+strconv.Itoa(index)] = "Invalid date format"
+			}
+
+			purchase.PaymentsInput[index].Date = &date
+			payment.Date = &date
+
+			if purchase.Date != nil && purchase.PaymentsInput[index].Date.Before(*purchase.Date) {
+				errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to purchase date time"
+			}
+		}
+
+		if payment.Amount == nil {
+			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
+		} else if *payment.Amount == 0 {
+			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+		}
+
+		if payment.Method == "" {
+			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
+		}
+
+		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
+			if *payment.Amount <= 0 {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+			}
+
+			/*
+				maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
+
+				if maxAllowedAmount < 0 {
+					maxAllowedAmount = 0
+				}
+
+				if maxAllowedAmount == 0 {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
+				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
+				}
+			*/
+
+		}
+
+		if payment.Method == "vendor_account" {
+			totalAmountFromVendorAccount += *payment.Amount
+			log.Print("Checking vendor account Balance")
+
+			if vendorAccount != nil {
+				if scenario == "update" {
+					extraAmount := 0.00
+					var oldPurchasePayment *PurchasePayment
+					oldPurchase.GetPayments()
+					for _, oldPayment := range oldPurchase.Payments {
+						if oldPayment.ID.Hex() == payment.ID.Hex() {
+							oldPurchasePayment = &oldPayment
+							break
+						}
+					}
+
+					if oldPurchasePayment != nil && *oldPurchasePayment.Amount < *payment.Amount {
+						extraAmount = *payment.Amount - *oldPurchasePayment.Amount
+					} else if oldPurchasePayment == nil {
+						//New payment added
+						extraAmount = *payment.Amount
+					} else {
+						log.Print("payment amount not increased")
+					}
+
+					if extraAmount > 0 {
+						if vendorAccount.Balance == 0 {
+							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmount)) + " to vendor account to continue"
+						} else if vendorAccount.Type == "liability" {
+							errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
+						} else if vendorAccount.Type == "asset" && vendorAccount.Balance < extraAmount {
+							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
+						}
+					}
+
+				} else {
+					if vendorAccount.Balance == 0 {
+						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (*payment.Amount)) + " to vendor account to continue"
+					} else if vendorAccount.Type == "liability" {
+						errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+*payment.Amount)) + " to vendor account to continue"
+					} else if vendorAccount.Type == "asset" && vendorAccount.Balance < *payment.Amount {
+						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+*payment.Amount)) + " to vendor account to continue"
+					}
+				}
+
+			} else {
+				errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero"
+			}
+		}
+	} //end for
+
+	if totalAmountFromVendorAccount > 0 {
+		if vendorAccount != nil {
+			if scenario == "update" {
+				oldTotalAmountFromVendorAccount := 0.0
+				extraAmountRequired := 0.00
+				oldPurchase.GetPayments()
+				for _, oldPayment := range oldPurchase.Payments {
+					if oldPayment.Method == "vendor_account" {
+						oldTotalAmountFromVendorAccount += *oldPayment.Amount
+					}
+				}
+
+				if totalAmountFromVendorAccount > oldTotalAmountFromVendorAccount {
+					extraAmountRequired = totalAmountFromVendorAccount - oldTotalAmountFromVendorAccount
+				}
+
+				if extraAmountRequired > 0 {
+					if vendorAccount.Balance == 0 {
+						errs["vendor_id"] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmountRequired)) + " to vendor account to continue"
+					} else if vendorAccount.Type == "asset" && vendorAccount.Balance < extraAmountRequired {
+						errs["vendor_id"] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", extraAmountRequired) + " to vendor account to continue"
+					} else if vendorAccount.Type == "liability" {
+						errs["vendor_id"] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmountRequired)) + " to vendor account to continue"
+					}
+				}
+
+			} else {
+				if vendorAccount.Balance == 0 {
+					errs["vendor_id"] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (totalAmountFromVendorAccount)) + " to vendor account to continue"
+				} else if vendorAccount.Type == "asset" && vendorAccount.Balance < totalAmountFromVendorAccount {
+					errs["vendor_id"] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", totalAmountFromVendorAccount) + " to vendor account to continue"
+				} else if vendorAccount.Type == "liability" {
+					errs["vendor_id"] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+totalAmountFromVendorAccount)) + " to vendor account to continue"
+				}
+			}
+		} else {
+			errs["vendor_id"] = "vendor account balance is zero"
+		}
 	}
 
 	if !govalidator.IsNull(purchase.SignatureDateStr) {
@@ -983,13 +1244,6 @@ func (purchase *Purchase) Validate(
 
 		if !exists {
 			errs["id"] = "Invalid Purchase:" + purchase.ID.Hex()
-		}
-
-	} else {
-		if purchase.PaymentStatus != "not_paid" {
-			if govalidator.IsNull(purchase.PaymentMethod) {
-				errs["payment_method"] = "Payment method is required"
-			}
 		}
 	}
 
@@ -1019,20 +1273,6 @@ func (purchase *Purchase) Validate(
 
 		if !exists {
 			errs["vendor_id"] = "Invalid Vendor:" + purchase.VendorID.Hex()
-		}
-	}
-
-	if purchase.OrderPlacedBy == nil || purchase.OrderPlacedBy.IsZero() {
-		errs["order_placed_by"] = "Order Placed By is required"
-	} else {
-		exists, err := IsUserExists(purchase.OrderPlacedBy)
-		if err != nil {
-			errs["order_placed_by"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["order_placed_by"] = "Invalid Order Placed By:" + purchase.OrderPlacedBy.Hex()
 		}
 	}
 
@@ -1071,6 +1311,12 @@ func (purchase *Purchase) Validate(
 			errs["quantity_"+strconv.Itoa(i)] = "Quantity is required"
 		}
 
+		if scenario == "update" {
+			if product.Quantity < product.QuantityReturned {
+				errs["quantity_"+strconv.Itoa(i)] = "Quantity should not be less than the returned quantity: " + fmt.Sprintf("%.02f", product.QuantityReturned)
+			}
+		}
+
 		if product.PurchaseUnitPrice == 0 {
 			errs["purchase_unit_price_"+strconv.Itoa(i)] = "Purchase Unit Price is required"
 		}
@@ -1083,7 +1329,7 @@ func (purchase *Purchase) Validate(
 			errs["wholesale_unit_price_"+strconv.Itoa(i)] = "Wholesale Unit Price is required"
 		}
 
-	}
+	} //end for
 
 	if purchase.VatPercent == nil {
 		errs["vat_percent"] = "VAT Percentage is required"
@@ -1317,38 +1563,6 @@ func FindLastPurchaseByStoreID(
 	}
 
 	return purchase, err
-}
-
-func (purchase *Purchase) AddPayment() error {
-	amount := float64(0.0)
-	if purchase.PaymentStatus == "paid" {
-		amount = purchase.NetTotal
-	} else if purchase.PaymentStatus == "paid_partially" {
-		amount = purchase.PartiaPaymentAmount
-	} else {
-		return nil
-	}
-
-	payment := PurchasePayment{
-		PurchaseID:    &purchase.ID,
-		Date:          purchase.Date,
-		PurchaseCode:  purchase.Code,
-		Amount:        &amount,
-		Method:        purchase.PaymentMethod,
-		CreatedAt:     purchase.CreatedAt,
-		UpdatedAt:     purchase.UpdatedAt,
-		CreatedBy:     purchase.CreatedBy,
-		CreatedByName: purchase.CreatedByName,
-		UpdatedBy:     purchase.UpdatedBy,
-		UpdatedByName: purchase.UpdatedByName,
-		StoreID:       purchase.StoreID,
-		StoreName:     purchase.StoreName,
-	}
-	err := payment.Insert()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (purchase *Purchase) IsCodeExists() (exists bool, err error) {
@@ -1626,16 +1840,15 @@ func (model *Purchase) GetPayments() (payments []PurchasePayment, err error) {
 	} //end for loop
 
 	model.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
-	model.BalanceAmount = ToFixed(model.NetTotal-totalPaymentPaid, 2)
+	model.BalanceAmount = ToFixed((model.NetTotal-model.CashDiscount)-totalPaymentPaid, 2)
 	model.PaymentMethods = paymentMethods
 	model.Payments = payments
 	model.PaymentsCount = int64(len(payments))
 
-	if ToFixed(model.NetTotal, 2) == ToFixed(totalPaymentPaid, 2) {
+	if ToFixed((model.NetTotal-model.CashDiscount), 2) <= ToFixed(totalPaymentPaid, 2) {
 		model.PaymentStatus = "paid"
 	} else if ToFixed(totalPaymentPaid, 2) > 0 {
 		model.PaymentStatus = "paid_partially"
-		model.PartiaPaymentAmount = totalPaymentPaid
 	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
 		model.PaymentStatus = "not_paid"
 	}

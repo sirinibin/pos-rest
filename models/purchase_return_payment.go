@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -429,7 +428,7 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 
 	errs = make(map[string]string)
 
-	var oldPurchaseReturnPayment *PurchaseReturnPayment
+	//var oldPurchaseReturnPayment *PurchaseReturnPayment
 
 	if govalidator.IsNull(purchasereturnPayment.Method) {
 		errs["method"] = "Payment method is required"
@@ -463,11 +462,13 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 			errs["id"] = "Invalid purchase return payment :" + purchasereturnPayment.ID.Hex()
 		}
 
-		oldPurchaseReturnPayment, err = FindPurchaseReturnPaymentByID(&purchasereturnPayment.ID, bson.M{})
-		if err != nil {
-			errs["purchase_return_payment"] = err.Error()
-			return errs
-		}
+		/*
+			oldPurchaseReturnPayment, err = FindPurchaseReturnPaymentByID(&purchasereturnPayment.ID, bson.M{})
+			if err != nil {
+				errs["purchase_return_payment"] = err.Error()
+				return errs
+			}
+		*/
 	}
 
 	if purchasereturnPayment.Amount == nil {
@@ -476,34 +477,38 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	purchaseReturnPaymentStats, err := GetPurchaseReturnPaymentStats(bson.M{"purchase_return_id": purchasereturnPayment.PurchaseReturnID})
-	if err != nil {
-		return errs
-	}
+	/*
+		purchaseReturnPaymentStats, err := GetPurchaseReturnPaymentStats(bson.M{"purchase_return_id": purchasereturnPayment.PurchaseReturnID})
+		if err != nil {
+			return errs
+		}
 
-	purchaseReturn, err := FindPurchaseReturnByID(purchasereturnPayment.PurchaseReturnID, bson.M{})
-	if err != nil {
-		return errs
-	}
+		purchaseReturn, err := FindPurchaseReturnByID(purchasereturnPayment.PurchaseReturnID, bson.M{})
+		if err != nil {
+			return errs
+		}
 
-	if scenario == "update" {
-		if purchasereturnPayment.Amount != nil && ToFixed(((purchaseReturnPaymentStats.TotalPayment-*oldPurchaseReturnPayment.Amount)+*purchasereturnPayment.Amount), 2) > purchaseReturn.NetTotal {
-			if ToFixed((purchaseReturn.NetTotal-(purchaseReturnPaymentStats.TotalPayment-*oldPurchaseReturnPayment.Amount)), 2) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-(purchaseReturnPaymentStats.TotalPayment-*oldPurchaseReturnPayment.Amount)))
-			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR"
+
+
+		if scenario == "update" {
+			if purchasereturnPayment.Amount != nil && ToFixed(((purchaseReturnPaymentStats.TotalPayment-*oldPurchaseReturnPayment.Amount)+*purchasereturnPayment.Amount), 2) > purchaseReturn.NetTotal {
+				if ToFixed((purchaseReturn.NetTotal-(purchaseReturnPaymentStats.TotalPayment-*oldPurchaseReturnPayment.Amount)), 2) > 0 {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-(purchaseReturnPaymentStats.TotalPayment-*oldPurchaseReturnPayment.Amount)))
+				} else {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR"
+				}
+			}
+		} else {
+
+			if purchasereturnPayment.Amount != nil && ToFixed((purchaseReturnPaymentStats.TotalPayment+*purchasereturnPayment.Amount), 2) > purchaseReturn.NetTotal {
+				if ToFixed((purchaseReturn.NetTotal-purchaseReturnPaymentStats.TotalPayment), 2) > 0 {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturnPaymentStats.TotalPayment))
+				} else {
+					errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR"
+				}
 			}
 		}
-	} else {
-
-		if purchasereturnPayment.Amount != nil && ToFixed((purchaseReturnPaymentStats.TotalPayment+*purchasereturnPayment.Amount), 2) > purchaseReturn.NetTotal {
-			if ToFixed((purchaseReturn.NetTotal-purchaseReturnPaymentStats.TotalPayment), 2) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturnPaymentStats.TotalPayment))
-			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchaseReturnPaymentStats.TotalPayment) + " SAR"
-			}
-		}
-	}
+	*/
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)

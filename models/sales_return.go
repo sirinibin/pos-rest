@@ -32,6 +32,7 @@ type SalesReturnProduct struct {
 	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	Profit            float64            `bson:"profit" json:"profit"`
 	Loss              float64            `bson:"loss" json:"loss"`
+	Selected          bool               `bson:"selected" json:"selected"`
 }
 
 // SalesReturn : SalesReturn structure
@@ -65,7 +66,6 @@ type SalesReturn struct {
 	Total                   float64              `bson:"total" json:"total"`
 	NetTotal                float64              `bson:"net_total" json:"net_total"`
 	CashDiscount            float64              `bson:"cash_discount" json:"cash_discount"`
-	PartiaPaymentAmount     float64              `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod           string               `bson:"payment_method" json:"payment_method"`
 	PaymentStatus           string               `bson:"payment_status" json:"payment_status"`
 	Deleted                 bool                 `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -389,6 +389,10 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range salesreturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
@@ -405,6 +409,9 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 func (salesreturn *SalesReturn) FindNetTotal() {
 	netTotal := float64(0.0)
 	for _, product := range salesreturn.Products {
+		if !product.Selected {
+			continue
+		}
 		netTotal += (float64(product.Quantity) * product.UnitPrice)
 	}
 
@@ -420,6 +427,10 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 func (salesreturn *SalesReturn) FindTotal() {
 	total := float64(0.0)
 	for _, product := range salesreturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		total += (product.Quantity * product.UnitPrice)
 	}
 	salesreturn.Total = RoundFloat(total, 2)
@@ -428,6 +439,10 @@ func (salesreturn *SalesReturn) FindTotal() {
 func (salesreturn *SalesReturn) FindTotalQuantity() {
 	totalQuantity := float64(0)
 	for _, product := range salesreturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		totalQuantity += product.Quantity
 	}
 	salesreturn.TotalQuantity = totalQuantity
@@ -1053,14 +1068,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["id"] = "Invalid SalesReturn:" + salesreturn.ID.Hex()
 		}
 
-	} else {
-		if order.PaymentStatus != "not_paid" {
-			/*
-				if govalidator.IsNull(salesreturn.PaymentMethod) {
-					errs["payment_method"] = "Payment method is required"
-				}
-			*/
-		}
 	}
 
 	if salesreturn.StoreID == nil || salesreturn.StoreID.IsZero() {
@@ -1125,6 +1132,10 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	}
 
 	for index, salesReturnProduct := range salesreturn.Products {
+		if !salesReturnProduct.Selected {
+			continue
+		}
+
 		if salesReturnProduct.ProductID.IsZero() {
 			errs["product_id"] = "Product is required for Sales Return"
 		} else {
@@ -1211,6 +1222,10 @@ func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct(salesReturn
 
 	if salesReturnOld != nil {
 		for _, salesReturnProduct := range salesReturnOld.Products {
+			if !salesReturnProduct.Selected {
+				continue
+			}
+
 			for index2, orderProduct := range order.Products {
 				if orderProduct.ProductID == salesReturnProduct.ProductID {
 					if order.Products[index2].QuantityReturned > 0 {
@@ -1222,6 +1237,10 @@ func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct(salesReturn
 	}
 
 	for _, salesReturnProduct := range salesreturn.Products {
+		if !salesReturnProduct.Selected {
+			continue
+		}
+
 		for index2, orderProduct := range order.Products {
 			if orderProduct.ProductID == salesReturnProduct.ProductID {
 				order.Products[index2].QuantityReturned += salesReturnProduct.Quantity
@@ -1323,6 +1342,10 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 	}
 
 	for _, salesreturnProduct := range salesreturn.Products {
+		if !salesreturnProduct.Selected {
+			continue
+		}
+
 		product, err := FindProductByID(&salesreturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
@@ -1407,6 +1430,10 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 	}
 
 	for i, product := range salesReturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		quantity := product.Quantity
 		salesPrice := quantity * product.UnitPrice
 		purchaseUnitPrice := product.PurchaseUnitPrice
@@ -1536,40 +1563,6 @@ func FindLastSalesReturnByStoreID(
 	}
 
 	return salesReturn, err
-}
-
-func (salesReturn *SalesReturn) AddPayment() error {
-	amount := float64(0.0)
-	if salesReturn.PaymentStatus == "paid" {
-		amount = salesReturn.NetTotal
-	} else if salesReturn.PaymentStatus == "paid_partially" {
-		amount = salesReturn.PartiaPaymentAmount
-	} else {
-		return nil
-	}
-
-	payment := SalesReturnPayment{
-		SalesReturnID:   &salesReturn.ID,
-		Date:            salesReturn.Date,
-		SalesReturnCode: salesReturn.Code,
-		OrderID:         salesReturn.OrderID,
-		OrderCode:       salesReturn.OrderCode,
-		Amount:          &amount,
-		Method:          salesReturn.PaymentMethod,
-		CreatedAt:       salesReturn.CreatedAt,
-		UpdatedAt:       salesReturn.UpdatedAt,
-		CreatedBy:       salesReturn.CreatedBy,
-		CreatedByName:   salesReturn.CreatedByName,
-		UpdatedBy:       salesReturn.UpdatedBy,
-		UpdatedByName:   salesReturn.UpdatedByName,
-		StoreID:         salesReturn.StoreID,
-		StoreName:       salesReturn.StoreName,
-	}
-	err := payment.Insert()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (salesReturn *SalesReturn) UpdateOrderReturnDiscount(salesReturnOld *SalesReturn) error {
@@ -1842,9 +1835,19 @@ func ProcessSalesReturns() error {
 			}
 		*/
 
-		err = salesReturn.CalculateSalesReturnProfit()
-		if err != nil {
-			return err
+		/*
+			err = salesReturn.CalculateSalesReturnProfit()
+			if err != nil {
+				return err
+			}
+		*/
+
+		for i, _ := range salesReturn.Products {
+			if salesReturn.Products[i].Quantity > 0 {
+				salesReturn.Products[i].Selected = true
+			} else {
+				salesReturn.Products[i].Selected = false
+			}
 		}
 
 		err = salesReturn.Update()
@@ -1921,7 +1924,6 @@ func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, er
 		salesReturn.PaymentStatus = "paid"
 	} else if ToFixed(totalPaymentPaid, 2) > 0 {
 		salesReturn.PaymentStatus = "paid_partially"
-		salesReturn.PartiaPaymentAmount = totalPaymentPaid
 	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
 		salesReturn.PaymentStatus = "not_paid"
 	}
@@ -1935,6 +1937,10 @@ func (salesReturn *SalesReturn) RemoveStock() (err error) {
 	}
 
 	for _, salesReturnProduct := range salesReturn.Products {
+		if !salesReturnProduct.Selected {
+			continue
+		}
+
 		product, err := FindProductByID(&salesReturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
@@ -2095,6 +2101,10 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 
 func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
 	for _, salesReturnProduct := range salesReturn.Products {
+		if !salesReturnProduct.Selected {
+			continue
+		}
+
 		product, err := FindProductByID(&salesReturnProduct.ProductID, map[string]interface{}{})
 		if err != nil {
 			return err

@@ -68,6 +68,7 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total_purchase"] = purchaseStats.NetTotal
 	response.Meta["vat_price"] = purchaseStats.VatPrice
 	response.Meta["discount"] = purchaseStats.Discount
+	response.Meta["cash_discount"] = purchaseStats.CashDiscount
 	response.Meta["shipping_handling_fees"] = purchaseStats.ShippingOrHandlingFees
 	response.Meta["net_retail_profit"] = purchaseStats.NetRetailProfit
 	response.Meta["net_wholesale_profit"] = purchaseStats.NetWholesaleProfit
@@ -149,9 +150,15 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.AddProductsPurchaseHistory()
-	if purchase.PaymentStatus != "not_paid" {
-		purchase.AddPayment()
+
+	err = purchase.AddPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["creating_payments"] = "Error creating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
+
 	purchase.GetPayments()
 	purchase.Update()
 
@@ -278,11 +285,13 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	purchase.ClearProductsPurchaseHistory()
 	purchase.AddProductsPurchaseHistory()
-	count, _ := purchase.GetPaymentsCount()
 
-	if count == 1 && purchase.PaymentStatus == "paid" {
-		purchase.ClearPayments()
-		purchase.AddPayment()
+	err = purchase.UpdatePayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["updated_payments"] = "Error updating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	purchase.GetPayments()

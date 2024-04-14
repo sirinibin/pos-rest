@@ -68,6 +68,7 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total_purchase_return"] = purchaseReturnStats.NetTotal
 	response.Meta["vat_price"] = purchaseReturnStats.VatPrice
 	response.Meta["discount"] = purchaseReturnStats.Discount
+	response.Meta["cash_discount"] = purchaseReturnStats.CashDiscount
 	response.Meta["paid_purchase_return"] = purchaseReturnStats.PaidPurchaseReturn
 	response.Meta["unpaid_purchase_return"] = purchaseReturnStats.UnPaidPurchaseReturn
 	response.Meta["cash_purchase_return"] = purchaseReturnStats.CashPurchaseReturn
@@ -146,8 +147,13 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 
 	purchasereturn.UpdatePurchaseReturnDiscount(false)
 	purchasereturn.AddProductsPurchaseReturnHistory()
-	if purchasereturn.PaymentStatus != "not_paid" {
-		purchasereturn.AddPayment()
+
+	err = purchasereturn.AddPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["creating_payments"] = "Error creating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 	purchasereturn.GetPayments()
 	purchasereturn.Update()
@@ -274,11 +280,13 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 
 	purchasereturn.ClearProductsPurchaseReturnHistory()
 	purchasereturn.AddProductsPurchaseReturnHistory()
-	count, _ := purchasereturn.GetPaymentsCount()
 
-	if count == 1 && purchasereturn.PaymentStatus == "paid" {
-		purchasereturn.ClearPayments()
-		purchasereturn.AddPayment()
+	err = purchasereturn.UpdatePayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["updated_payments"] = "Error updating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	purchasereturn.GetPayments()

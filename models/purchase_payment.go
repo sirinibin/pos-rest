@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -399,7 +398,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 
 	errs = make(map[string]string)
 
-	var oldPurchasePayment *PurchasePayment
+	//var oldPurchasePayment *PurchasePayment
 
 	if govalidator.IsNull(purchasePayment.Method) {
 		errs["method"] = "Payment method is required"
@@ -433,11 +432,13 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 			errs["id"] = "Invalid purchase payment :" + purchasePayment.ID.Hex()
 		}
 
-		oldPurchasePayment, err = FindPurchasePaymentByID(&purchasePayment.ID, bson.M{})
-		if err != nil {
-			errs["purchase_payment"] = err.Error()
-			return errs
-		}
+		/*
+			oldPurchasePayment, err = FindPurchasePaymentByID(&purchasePayment.ID, bson.M{})
+			if err != nil {
+				errs["purchase_payment"] = err.Error()
+				return errs
+			}
+		*/
 	}
 
 	if purchasePayment.Amount == nil {
@@ -446,36 +447,39 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	purchasePaymentStats, err := GetPurchasePaymentStats(bson.M{"purchase_id": purchasePayment.PurchaseID})
-	if err != nil {
-		return errs
-	}
-
-	purchase, err := FindPurchaseByID(purchasePayment.PurchaseID, bson.M{})
-	if err != nil {
-		return errs
-	}
-
-	if scenario == "update" {
-		if purchasePayment.Amount != nil && ToFixed(((purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)+*purchasePayment.Amount), 2) > purchase.NetTotal {
-			if ToFixed((purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)), 2) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)))
-			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR"
-			}
-
+	/*
+		purchasePaymentStats, err := GetPurchasePaymentStats(bson.M{"purchase_id": purchasePayment.PurchaseID})
+		if err != nil {
+			return errs
 		}
-	} else {
 
-		if purchasePayment.Amount != nil && ToFixed((purchasePaymentStats.TotalPayment+*purchasePayment.Amount), 2) > purchase.NetTotal {
-			if ToFixed((purchase.NetTotal-purchasePaymentStats.TotalPayment), 2) > 0 {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchasePaymentStats.TotalPayment))
-			} else {
-				errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR"
-			}
-
+		purchase, err := FindPurchaseByID(purchasePayment.PurchaseID, bson.M{})
+		if err != nil {
+			return errs
 		}
-	}
+
+
+			if scenario == "update" {
+				if purchasePayment.Amount != nil && ToFixed(((purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)+*purchasePayment.Amount), 2) > purchase.NetTotal {
+					if ToFixed((purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)), 2) > 0 {
+						errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to " + fmt.Sprintf("%.02f", (purchase.NetTotal-(purchasePaymentStats.TotalPayment-*oldPurchasePayment.Amount)))
+					} else {
+						errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR"
+					}
+
+				}
+			} else {
+
+				if purchasePayment.Amount != nil && ToFixed((purchasePaymentStats.TotalPayment+*purchasePayment.Amount), 2) > purchase.NetTotal {
+					if ToFixed((purchase.NetTotal-purchasePaymentStats.TotalPayment), 2) > 0 {
+						errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR, So the amount should be less than or equal to  " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchasePaymentStats.TotalPayment))
+					} else {
+						errs["amount"] = "You've already paid " + fmt.Sprintf("%.02f", purchasePaymentStats.TotalPayment) + " SAR"
+					}
+
+				}
+			}
+	*/
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)

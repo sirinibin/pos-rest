@@ -374,6 +374,9 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 	defer cancel()
 
 	for _, salesReturnProduct := range salesReturn.Products {
+		if !salesReturnProduct.Selected {
+			continue
+		}
 
 		history := ProductSalesReturnHistory{
 			StoreID:         salesReturn.StoreID,

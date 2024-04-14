@@ -79,7 +79,6 @@ type Order struct {
 	NetTotal                 float64             `bson:"net_total" json:"net_total"`
 	CashDiscount             float64             `bson:"cash_discount" json:"cash_discount"`
 	ReturnCashDiscount       float64             `bson:"return_cash_discount" json:"return_cash_discount"`
-	PartiaPaymentAmount      float64             `bson:"partial_payment_amount" json:"partial_payment_amount"`
 	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
 	PaymentMethods           []string            `json:"payment_methods" bson:"payment_methods"`
 	TotalPaymentReceived     float64             `bson:"total_payment_received" json:"total_payment_received"`
@@ -1696,7 +1695,6 @@ func (order *Order) GetPayments() (models []SalesPayment, err error) {
 		order.PaymentStatus = "paid"
 	} else if ToFixed(totalPaymentReceived, 2) > 0 {
 		order.PaymentStatus = "paid_partially"
-		order.PartiaPaymentAmount = totalPaymentReceived
 	} else if ToFixed(totalPaymentReceived, 2) <= 0 {
 		order.PaymentStatus = "not_paid"
 	}
