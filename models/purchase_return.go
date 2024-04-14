@@ -386,10 +386,6 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range purchasereturn.Products {
-		if !product.Selected {
-			continue
-		}
-
 		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
