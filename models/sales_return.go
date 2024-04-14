@@ -1026,7 +1026,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		maxCashDiscountAllowed = order.CashDiscount - order.ReturnCashDiscount
 	}
 
-	if salesreturn.CashDiscount > maxCashDiscountAllowed {
+	if salesreturn.NetTotal > 0 && salesreturn.CashDiscount > maxCashDiscountAllowed {
 		errs["cash_discount"] = "Cash discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxCashDiscountAllowed))
 	}
 

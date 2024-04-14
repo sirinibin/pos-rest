@@ -918,11 +918,13 @@ func (purchasereturn *PurchaseReturn) Validate(
 		return errs
 	}
 
-	if purchasereturn.NetTotal <= 0 {
-		errs["net_total"] = "Net total should be greater than 0.00 "
-	}
+	/*
+		if purchasereturn.NetTotal <= 0 {
+			errs["net_total"] = "Net total should be greater than 0.00 "
+		}
+	*/
 
-	if purchasereturn.CashDiscount >= purchasereturn.NetTotal {
+	if purchasereturn.NetTotal > 0 && purchasereturn.CashDiscount >= purchasereturn.NetTotal {
 		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", purchasereturn.NetTotal)
 	}
 
