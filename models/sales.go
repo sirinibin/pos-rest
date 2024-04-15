@@ -36,77 +36,66 @@ type OrderProduct struct {
 	Loss              float64            `bson:"loss" json:"loss"`
 }
 
-type OrderPayment struct {
-	PaymentID     primitive.ObjectID  `json:"payment_id,omitempty" bson:"payment_id,omitempty"`
-	Amount        float64             `json:"amount" bson:"amount"`
-	Method        string              `json:"method" bson:"method"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-}
-
 // Order : Order structure
 type Order struct {
-	ID                       primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date                     *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr                  string              `json:"date_str,omitempty"`
-	Code                     string              `bson:"code,omitempty" json:"code,omitempty"`
-	StoreID                  *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID               *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Store                    *Store              `json:"store,omitempty"`
-	Customer                 *Customer           `json:"customer,omitempty"`
-	Products                 []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
-	DeliveredBy              *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	DeliveredByUser          *User               `json:"delivered_by_user,omitempty"`
-	DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
-	DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
-	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
-	SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
-	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
-	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
-	Discount                 float64             `bson:"discount" json:"discount"`
-	ReturnDiscount           float64             `bson:"return_discount" json:"return_discount"`
-	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
-	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
-	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
-	ShippingOrHandlingFees   float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
-	TotalQuantity            float64             `bson:"total_quantity" json:"total_quantity"`
-	VatPrice                 float64             `bson:"vat_price" json:"vat_price"`
-	Total                    float64             `bson:"total" json:"total"`
-	NetTotal                 float64             `bson:"net_total" json:"net_total"`
-	CashDiscount             float64             `bson:"cash_discount" json:"cash_discount"`
-	ReturnCashDiscount       float64             `bson:"return_cash_discount" json:"return_cash_discount"`
-	PaymentMethod            string              `bson:"payment_method" json:"payment_method"`
-	PaymentMethods           []string            `json:"payment_methods" bson:"payment_methods"`
-	TotalPaymentReceived     float64             `bson:"total_payment_received" json:"total_payment_received"`
-	BalanceAmount            float64             `bson:"balance_amount" json:"balance_amount"`
-	Payments                 []SalesPayment      `bson:"payments" json:"payments"`
-	PaymentsInput            []SalesPayment      `bson:"-" json:"payments_input"`
-	PaymentsCount            int64               `bson:"payments_count" json:"payments_count"`
-	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
-	Profit                   float64             `bson:"profit" json:"profit"`
-	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
-	Loss                     float64             `bson:"loss" json:"loss"`
-	NetLoss                  float64             `bson:"net_loss" json:"net_loss"`
-	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt                *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt                *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt                *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy                *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy                *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser            *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
-	DeliveredByName          string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CustomerName             string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	StoreName                string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName            string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName            string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr         string              `json:"date_str,omitempty"`
+	Code            string              `bson:"code,omitempty" json:"code,omitempty"`
+	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID      *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Store           *Store              `json:"store,omitempty"`
+	Customer        *Customer           `json:"customer,omitempty"`
+	Products        []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
+	DeliveredBy     *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	DeliveredByUser *User               `json:"delivered_by_user,omitempty"`
+	//DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
+	//DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
+	//DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
+	//SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
+	//SignatureDateStr         string              `json:"signature_date_str,omitempty"`
+	VatPercent             *float64       `bson:"vat_percent" json:"vat_percent"`
+	Discount               float64        `bson:"discount" json:"discount"`
+	DiscountPercent        float64        `bson:"discount_percent" json:"discount_percent"`
+	IsDiscountPercent      bool           `bson:"is_discount_percent" json:"is_discount_percent"`
+	ReturnDiscount         float64        `bson:"return_discount" json:"return_discount"`
+	Status                 string         `bson:"status,omitempty" json:"status,omitempty"`
+	ShippingOrHandlingFees float64        `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
+	TotalQuantity          float64        `bson:"total_quantity" json:"total_quantity"`
+	VatPrice               float64        `bson:"vat_price" json:"vat_price"`
+	Total                  float64        `bson:"total" json:"total"`
+	NetTotal               float64        `bson:"net_total" json:"net_total"`
+	CashDiscount           float64        `bson:"cash_discount" json:"cash_discount"`
+	ReturnCashDiscount     float64        `bson:"return_cash_discount" json:"return_cash_discount"`
+	PaymentMethods         []string       `json:"payment_methods" bson:"payment_methods"`
+	TotalPaymentReceived   float64        `bson:"total_payment_received" json:"total_payment_received"`
+	BalanceAmount          float64        `bson:"balance_amount" json:"balance_amount"`
+	Payments               []SalesPayment `bson:"payments" json:"payments"`
+	PaymentsInput          []SalesPayment `bson:"-" json:"payments_input"`
+	PaymentsCount          int64          `bson:"payments_count" json:"payments_count"`
+	PaymentStatus          string         `bson:"payment_status" json:"payment_status"`
+	Profit                 float64        `bson:"profit" json:"profit"`
+	NetProfit              float64        `bson:"net_profit" json:"net_profit"`
+	Loss                   float64        `bson:"loss" json:"loss"`
+	NetLoss                float64        `bson:"net_loss" json:"net_loss"`
+	ReturnCount            int64          `bson:"return_count" json:"return_count"`
+	//Deleted                bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	//DeletedBy              *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	//DeletedByUser          *User               `json:"deleted_by_user,omitempty"`
+	//DeletedAt              *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy       *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser   *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
+	DeliveredByName string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CustomerName    string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	StoreName       string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	//DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+
 }
 
 func UpdateOrderProfit() error {
@@ -204,13 +193,15 @@ func (order *Order) UpdateForeignLabelFields() error {
 		order.DeliveredByName = deliveredByUser.Name
 	}
 
-	if order.DeliveredBySignatureID != nil {
-		deliveredBySignature, err := FindSignatureByID(order.DeliveredBySignatureID, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return err
+	/*
+		if order.DeliveredBySignatureID != nil {
+			deliveredBySignature, err := FindSignatureByID(order.DeliveredBySignatureID, bson.M{"id": 1, "name": 1})
+			if err != nil {
+				return err
+			}
+			order.DeliveredBySignatureName = deliveredBySignature.Name
 		}
-		order.DeliveredBySignatureName = deliveredBySignature.Name
-	}
+	*/
 
 	if order.CreatedBy != nil {
 		createdByUser, err := FindUserByID(order.CreatedBy, bson.M{"id": 1, "name": 1})
@@ -228,13 +219,15 @@ func (order *Order) UpdateForeignLabelFields() error {
 		order.UpdatedByName = updatedByUser.Name
 	}
 
-	if order.DeletedBy != nil && !order.DeletedBy.IsZero() {
-		deletedByUser, err := FindUserByID(order.DeletedBy, bson.M{"id": 1, "name": 1})
-		if err != nil {
-			return err
+	/*
+		if order.DeletedBy != nil && !order.DeletedBy.IsZero() {
+			deletedByUser, err := FindUserByID(order.DeletedBy, bson.M{"id": 1, "name": 1})
+			if err != nil {
+				return err
+			}
+			order.DeletedByName = deletedByUser.Name
 		}
-		order.DeletedByName = deletedByUser.Name
-	}
+	*/
 
 	for i, product := range order.Products {
 		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
@@ -661,6 +654,23 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_count"] = value
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[net_profit]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -845,7 +855,7 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 	customerSelectFields := map[string]interface{}{}
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}
-	deletedByUserSelectFields := map[string]interface{}{}
+	//deletedByUserSelectFields := map[string]interface{}{}
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {
@@ -867,9 +877,11 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
 		}
 
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
-		}
+		/*
+			if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+				deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+			}
+		*/
 
 	}
 
@@ -913,9 +925,11 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if _, ok := criterias.Select["updated_by_user.id"]; ok {
 			order.UpdatedByUser, _ = FindUserByID(order.UpdatedBy, updatedByUserSelectFields)
 		}
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			order.DeletedByUser, _ = FindUserByID(order.DeletedBy, deletedByUserSelectFields)
-		}
+		/*
+			if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+				order.DeletedByUser, _ = FindUserByID(order.DeletedBy, deletedByUserSelectFields)
+			}
+		*/
 		orders = append(orders, order)
 	} //end for loop
 
@@ -1108,14 +1122,16 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	*/
 
-	if !govalidator.IsNull(order.SignatureDateStr) {
-		const shortForm = "Jan 02 2006"
-		date, err := time.Parse(shortForm, order.SignatureDateStr)
-		if err != nil {
-			errs["signature_date_str"] = "Invalid date format"
+	/*
+		if !govalidator.IsNull(order.SignatureDateStr) {
+			const shortForm = "Jan 02 2006"
+			date, err := time.Parse(shortForm, order.SignatureDateStr)
+			if err != nil {
+				errs["signature_date_str"] = "Invalid date format"
+			}
+			order.SignatureDate = &date
 		}
-		order.SignatureDate = &date
-	}
+	*/
 
 	if scenario == "update" {
 
@@ -1192,17 +1208,19 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["product_id"] = "Atleast 1 product is required for order"
 	}
 
-	if order.DeliveredBySignatureID != nil && !order.DeliveredBySignatureID.IsZero() {
-		exists, err := IsSignatureExists(order.DeliveredBySignatureID)
-		if err != nil {
-			errs["delivered_by_signature_id"] = err.Error()
-			return errs
-		}
+	/*
+		if order.DeliveredBySignatureID != nil && !order.DeliveredBySignatureID.IsZero() {
+			exists, err := IsSignatureExists(order.DeliveredBySignatureID)
+			if err != nil {
+				errs["delivered_by_signature_id"] = err.Error()
+				return errs
+			}
 
-		if !exists {
-			errs["delivered_by_signature_id"] = "Invalid Delivered By Signature:" + order.DeliveredBySignatureID.Hex()
+			if !exists {
+				errs["delivered_by_signature_id"] = "Invalid Delivered By Signature:" + order.DeliveredBySignatureID.Hex()
+			}
 		}
-	}
+	*/
 
 	for index, product := range order.Products {
 		if product.ProductID.IsZero() {
@@ -1889,15 +1907,18 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
-	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
-	if err != nil {
-		return err
-	}
+	/*
+		userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+		if err != nil {
+			return err
+		}
 
-	order.Deleted = true
-	order.DeletedBy = &userID
-	now := time.Now()
-	order.DeletedAt = &now
+
+			order.Deleted = true
+			order.DeletedBy = &userID
+			now := time.Now()
+			order.DeletedAt = &now
+	*/
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -1953,10 +1974,11 @@ func FindOrderByID(
 		order.UpdatedByUser, _ = FindUserByID(order.UpdatedBy, fields)
 	}
 
-	if _, ok := selectFields["deleted_by_user.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
-		order.DeletedByUser, _ = FindUserByID(order.DeletedBy, fields)
-	}
+	/*
+		if _, ok := selectFields["deleted_by_user.id"]; ok {
+			fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+			order.DeletedByUser, _ = FindUserByID(order.DeletedBy, fields)
+		}*/
 
 	return order, err
 }

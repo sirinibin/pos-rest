@@ -450,7 +450,7 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if purchase.Status == "delivered" && !purchase.Deleted {
+	if purchase.Status == "delivered" {
 		err = purchase.RemoveStock()
 		if err != nil {
 			response.Status = false

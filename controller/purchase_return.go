@@ -180,6 +180,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	purchasereturn.UpdatePurchaseReturnCount()
 	purchasereturn.SetProductsPurchaseReturnStats()
 	purchasereturn.SetVendorPurchaseReturnStats()
 
@@ -336,6 +337,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	purchasereturn.UpdatePurchaseReturnCount()
 	purchasereturn.SetProductsPurchaseReturnStats()
 	purchasereturn.SetVendorPurchaseReturnStats()
 
@@ -458,7 +460,7 @@ func DeletePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if purchasereturn.Status == "delivered" && !purchasereturn.Deleted {
+	if purchasereturn.Status == "delivered" {
 		err = purchasereturn.RemoveStock()
 		if err != nil {
 			response.Status = false

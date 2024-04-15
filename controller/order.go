@@ -510,7 +510,7 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.Status == "delivered" && !order.Deleted {
+	if order.Status == "delivered" {
 		err = order.AddStock()
 		if err != nil {
 			response.Status = false

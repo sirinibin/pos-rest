@@ -158,6 +158,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	salesreturn.UpdateOrderReturnCount()
 	salesreturn.UpdateOrderReturnDiscount(nil)
 	salesreturn.UpdateOrderReturnCashDiscount(nil)
 	salesreturn.CreateProductsSalesReturnHistory()
@@ -299,6 +300,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	salesreturn.UpdateOrderReturnCount()
 	salesreturn.UpdateOrderReturnDiscount(salesreturnOld)
 	salesreturn.UpdateOrderReturnCashDiscount(salesreturnOld)
 
@@ -479,7 +481,7 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if salesreturn.Status == "delivered" && !salesreturn.Deleted {
+	if salesreturn.Status == "delivered" {
 		err = salesreturn.AddStock()
 		if err != nil {
 			response.Status = false
