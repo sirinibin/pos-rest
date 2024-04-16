@@ -139,10 +139,18 @@ func (account *Account) CalculateBalance() error {
 		account.Balance = RoundFloat((stats.DebitTotal - stats.CreditTotal), 2)
 	}
 
+	if account.ReferenceModel != nil && (*account.ReferenceModel == "customer" || *account.ReferenceModel == "vendor") {
+		if stats.CreditTotal > stats.DebitTotal {
+			account.Type = "liability" //creditor
+		} else if stats.CreditTotal < stats.DebitTotal {
+			account.Type = "asset" //debtor
+		}
+	}
+
 	if account.Type == "asset" || account.Type == "liability" {
 		if stats.CreditTotal > stats.DebitTotal {
 			account.Type = "liability" //creditor
-		} else {
+		} else if stats.CreditTotal < stats.DebitTotal {
 			account.Type = "asset" //debtor
 		}
 	}

@@ -114,7 +114,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 		if account.Type == "divident" || account.Type == "expense" || account.Type == "asset" {
 			balanceBoughtDownType = "debit"
 			debitTotal += balanceBoughtDown
-		} else if account.Type == "liability" || account.Type == "equity" || account.Type == "revenue" {
+		} else if account.Type == "liability" || account.Type == "capital" || account.Type == "revenue" {
 			balanceBoughtDownType = "credit"
 			creditTotal += balanceBoughtDown
 		}
