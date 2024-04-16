@@ -1110,7 +1110,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 		spendingAccount = *bankAccount
 	}
 
-	groupAccounts := []string{customerAccount.Number, spendingAccount.Number}
+	groupID := primitive.NewObjectID()
 
 	journals = append(journals, Journal{
 		Date:          customerWithdrawal.Date,
@@ -1119,7 +1119,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 		AccountName:   customerAccount.Name,
 		DebitOrCredit: "debit",
 		Debit:         customerWithdrawal.Amount,
-		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -1131,7 +1131,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 		AccountName:   spendingAccount.Name,
 		DebitOrCredit: "credit",
 		Credit:        customerWithdrawal.Amount,
-		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})

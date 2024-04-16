@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -404,4 +405,30 @@ func (vendor *Vendor) IsStoreExistsInVendor(storeID primitive.ObjectID) bool {
 		}
 	}
 	return false
+}
+
+func PrettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	fmt.Println(string(s))
+	return string(s)
+}
+
+func IsDateTimesEqual(time1 *time.Time, time2 *time.Time) bool {
+	var timeValue1 time.Time
+	timeValue1, _ = time.Parse("2006-01-02T15:04", time1.Format("2006-01-02T15:04"))
+
+	var timeValue2 time.Time
+	timeValue2, _ = time.Parse("2006-01-02T15:04", time2.Format("2006-01-02T15:04"))
+
+	return timeValue1.Equal(timeValue2)
+}
+
+func IsAfter(time1 *time.Time, time2 *time.Time) bool {
+	var timeValue1 time.Time
+	timeValue1, _ = time.Parse("2006-01-02T15:04", time1.Format("2006-01-02T15:04"))
+
+	var timeValue2 time.Time
+	timeValue2, _ = time.Parse("2006-01-02T15:04", time2.Format("2006-01-02T15:04"))
+
+	return timeValue1.After(timeValue2)
 }

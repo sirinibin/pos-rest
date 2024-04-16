@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -887,6 +888,11 @@ func IsCapitalExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func ProcessCapitals() error {
+	totalCount, err := GetTotalCount(bson.M{}, "capital")
+	if err != nil {
+		return err
+	}
+
 	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -901,6 +907,7 @@ func ProcessCapitals() error {
 		defer cur.Close(ctx)
 	}
 
+	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
@@ -920,12 +927,158 @@ func ProcessCapitals() error {
 			model.StoreID = &store.ID
 		*/
 
+		err = model.UndoAccounting()
+		if err != nil {
+			return errors.New("error undo accounting: " + err.Error())
+		}
+
+		err = model.DoAccounting()
+		if err != nil {
+			return errors.New("error doing accounting: " + err.Error())
+		}
+
 		err = model.Update()
 		if err != nil {
 			return err
 		}
-
+		bar.Add(1)
 	}
 
 	return nil
+}
+
+func (capital *Capital) DoAccounting() error {
+	ledger, err := capital.CreateLedger()
+	if err != nil {
+		return err
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (capital *Capital) UndoAccounting() error {
+	ledger, err := FindLedgerByReferenceID(capital.ID, *capital.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = RemoveLedgerByReferenceID(capital.ID)
+	if err != nil {
+		return err
+	}
+
+	err = RemovePostingsByReferenceID(capital.ID)
+	if err != nil {
+		return err
+	}
+
+	err = SetAccountBalances(ledgerAccounts)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (capital *Capital) CreateLedger() (ledger *Ledger, err error) {
+	now := time.Now()
+
+	investor, err := FindUserByID(capital.InvestedByUserID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "investor"
+	investorAccount, err := CreateAccountIfNotExists(
+		capital.StoreID,
+		&investor.ID,
+		&referenceModel,
+		investor.Name+" Capital",
+		&investor.Mob,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := CreateAccountIfNotExists(capital.StoreID, nil, nil, "Cash", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := CreateAccountIfNotExists(capital.StoreID, nil, nil, "Bank", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+
+	receivingAccount := Account{}
+	if capital.PaymentMethod == "cash" {
+		receivingAccount = *cashAccount
+	} else if capital.PaymentMethod == "bank_account" {
+		receivingAccount = *bankAccount
+	}
+
+	groupID := primitive.NewObjectID()
+
+	journals = append(journals, Journal{
+		Date:          capital.Date,
+		AccountID:     receivingAccount.ID,
+		AccountNumber: receivingAccount.Number,
+		AccountName:   receivingAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         capital.Amount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	journals = append(journals, Journal{
+		Date:          capital.Date,
+		AccountID:     investorAccount.ID,
+		AccountNumber: investorAccount.Number,
+		AccountName:   investorAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        capital.Amount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	ledger = &Ledger{
+		StoreID:        capital.StoreID,
+		ReferenceID:    capital.ID,
+		ReferenceModel: "capital",
+		ReferenceCode:  capital.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	/*
+		err = investorAccount.CalculateBalance()
+		if err != nil {
+			return nil, errors.New("error calculating account balance: " + err.Error())
+		}
+	*/
+
+	return ledger, nil
 }

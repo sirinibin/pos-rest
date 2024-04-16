@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -1088,7 +1090,7 @@ func (purchase *Purchase) Validate(
 			purchase.PaymentsInput[index].Date = &date
 			payment.Date = &date
 
-			if purchase.Date != nil && purchase.PaymentsInput[index].Date.Before(*purchase.Date) {
+			if purchase.Date != nil && IsAfter(purchase.Date, purchase.PaymentsInput[index].Date) {
 				errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to purchase date time"
 			}
 		}
@@ -1729,6 +1731,10 @@ func IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 func ProcessPurchases() error {
 	log.Print("Processing purchases")
+	totalCount, err := GetTotalCount(bson.M{}, "purchase")
+	if err != nil {
+		return err
+	}
 	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -1749,7 +1755,7 @@ func ProcessPurchases() error {
 			return errors.New("Error fetching orders:" + err.Error())
 		}
 	*/
-
+	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
@@ -1782,17 +1788,35 @@ func ProcessPurchases() error {
 			}
 		*/
 
-		err = model.SetVendorPurchaseStats()
+		model.GetPayments()
+
+		err = model.UndoAccounting()
 		if err != nil {
-			return errors.New("Error setting vendor purchase stats: " + err.Error())
+			return errors.New("error undo accounting: " + err.Error())
+		}
+
+		err = model.DoAccounting()
+		if err != nil {
+			return errors.New("error doing accounting: " + err.Error())
 		}
 
 		err = model.Update()
 		if err != nil {
 			return errors.New("error updating purchase: " + err.Error())
 		}
+
+		/*
+			err = model.SetVendorPurchaseStats()
+			if err != nil {
+				return errors.New("Error setting vendor purchase stats: " + err.Error())
+			}
+
+
+		*/
+
+		bar.Add(1)
 	}
-	log.Print("DONE!")
+	log.Print("Purchases DONE!")
 
 	return nil
 }
@@ -2160,6 +2184,557 @@ func (purchasePayment *PurchasePayment) DeletePurchasePayment() (err error) {
 	)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// Accounting
+// Journal entries
+func MakeJournalsForUnpaidPurchase(
+	purchase *Purchase,
+	vendorAccount *Account,
+	purchaseAccount *Account,
+	cashDiscountReceivedAccount *Account,
+) []Journal {
+	now := time.Now()
+
+	groupID := primitive.NewObjectID()
+
+	journals := []Journal{}
+
+	balanceAmount := RoundFloat((purchase.NetTotal - purchase.CashDiscount), 2)
+
+	journals = append(journals, Journal{
+		Date:          purchase.Date,
+		AccountID:     purchaseAccount.ID,
+		AccountNumber: purchaseAccount.Number,
+		AccountName:   purchaseAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         purchase.NetTotal,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	if purchase.CashDiscount > 0 {
+		journals = append(journals, Journal{
+			Date:          purchase.Date,
+			AccountID:     cashDiscountReceivedAccount.ID,
+			AccountNumber: cashDiscountReceivedAccount.Number,
+			AccountName:   cashDiscountReceivedAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        purchase.CashDiscount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+	}
+
+	journals = append(journals, Journal{
+		Date:          purchase.Date,
+		AccountID:     vendorAccount.ID,
+		AccountNumber: vendorAccount.Number,
+		AccountName:   vendorAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        balanceAmount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	return journals
+}
+
+var totalPurchasePaidAmount float64
+var extraPurchaseAmountPaid float64
+var extraPurchasePayments []PurchasePayment
+
+func MakeJournalsForPurchasePaymentsByDatetime(
+	purchase *Purchase,
+	vendor *Vendor,
+	cashAccount *Account,
+	bankAccount *Account,
+	purchaseAccount *Account,
+	payments []PurchasePayment,
+	cashDiscountReceivedAccount *Account,
+	paymentsByDatetimeNumber int,
+) ([]Journal, error) {
+	now := time.Now()
+	groupID := primitive.NewObjectID()
+
+	journals := []Journal{}
+	totalPayment := float64(0.00)
+
+	var firstPaymentDate *time.Time
+	if len(payments) > 0 {
+		firstPaymentDate = payments[0].Date
+	}
+
+	//Don't touch
+	totalPurchasePaidAmountTemp := totalPurchasePaidAmount
+	extraPurchaseAmountPaidTemp := extraPurchaseAmountPaid
+
+	for _, payment := range payments {
+		totalPurchasePaidAmount += *payment.Amount
+		if totalPurchasePaidAmount > (purchase.NetTotal - purchase.CashDiscount) {
+			extraPurchaseAmountPaid = RoundFloat((totalPurchasePaidAmount - (purchase.NetTotal - purchase.CashDiscount)), 2)
+		}
+		amount := *payment.Amount
+
+		if extraPurchaseAmountPaid > 0 {
+			skip := false
+			if extraPurchaseAmountPaid < *payment.Amount {
+				amount = RoundFloat((*payment.Amount - extraPurchaseAmountPaid), 2)
+				//totalPaidAmount -= *payment.Amount
+				//totalPaidAmount += amount
+				extraPurchaseAmountPaid = 0
+			} else if extraPurchaseAmountPaid >= *payment.Amount {
+				skip = true
+				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - *payment.Amount), 2)
+			}
+
+			if skip {
+				continue
+			}
+
+		}
+		totalPayment += amount
+	} //end for
+
+	totalPurchasePaidAmount = totalPurchasePaidAmountTemp
+	extraPurchaseAmountPaid = extraPurchaseAmountPaidTemp
+	//Don't touch end
+
+	//Debits
+	if paymentsByDatetimeNumber == 1 && IsDateTimesEqual(purchase.Date, firstPaymentDate) {
+		journals = append(journals, Journal{
+			Date:          purchase.Date,
+			AccountID:     purchaseAccount.ID,
+			AccountNumber: purchaseAccount.Number,
+			AccountName:   purchaseAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         purchase.NetTotal,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(purchase.Date, firstPaymentDate) {
+		referenceModel := "vendor"
+		vendorAccount, err := CreateAccountIfNotExists(
+			purchase.StoreID,
+			&vendor.ID,
+			&referenceModel,
+			vendor.Name,
+			&vendor.Phone,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		totalPayment = RoundFloat(totalPayment, 2)
+
+		if totalPayment > 0 {
+			journals = append(journals, Journal{
+				Date:          firstPaymentDate,
+				AccountID:     vendorAccount.ID,
+				AccountNumber: vendorAccount.Number,
+				AccountName:   vendorAccount.Name,
+				DebitOrCredit: "debit",
+				Debit:         totalPayment,
+				GroupID:       groupID,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+		}
+	}
+
+	//Credits
+	totalPayment = float64(0.00)
+	for _, payment := range payments {
+		totalPurchasePaidAmount += *payment.Amount
+		if totalPurchasePaidAmount > (purchase.NetTotal - purchase.CashDiscount) {
+			extraPurchaseAmountPaid = RoundFloat((totalPurchasePaidAmount - (purchase.NetTotal - purchase.CashDiscount)), 2)
+		}
+		amount := *payment.Amount
+
+		if extraPurchaseAmountPaid > 0 {
+			skip := false
+			if extraPurchaseAmountPaid < *payment.Amount {
+				extraAmount := extraPurchaseAmountPaid
+				extraPurchasePayments = append(extraPurchasePayments, PurchasePayment{
+					Date:   payment.Date,
+					Amount: &extraAmount,
+					Method: payment.Method,
+				})
+				amount = RoundFloat((*payment.Amount - extraPurchaseAmountPaid), 2)
+				//totalPaidAmount -= *payment.Amount
+				//totalPaidAmount += amount
+				extraPurchaseAmountPaid = 0
+			} else if extraPurchaseAmountPaid >= *payment.Amount {
+				extraPurchasePayments = append(extraPurchasePayments, PurchasePayment{
+					Date:   payment.Date,
+					Amount: payment.Amount,
+					Method: payment.Method,
+				})
+
+				skip = true
+				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - *payment.Amount), 2)
+			}
+
+			if skip {
+				continue
+			}
+
+		}
+
+		cashPayingAccount := Account{}
+		if payment.Method == "cash" {
+			cashPayingAccount = *cashAccount
+		} else if payment.Method == "bank_account" {
+			cashPayingAccount = *bankAccount
+		} else if payment.Method == "vendor_account" {
+			referenceModel := "vendor"
+			vendorAccount, err := CreateAccountIfNotExists(
+				purchase.StoreID,
+				&vendor.ID,
+				&referenceModel,
+				vendor.Name,
+				&vendor.Phone,
+			)
+			if err != nil {
+				return nil, err
+			}
+			cashPayingAccount = *vendorAccount
+		}
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     cashPayingAccount.ID,
+			AccountNumber: cashPayingAccount.Number,
+			AccountName:   cashPayingAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+		totalPayment += amount
+	} //end for
+
+	if purchase.CashDiscount > 0 && paymentsByDatetimeNumber == 1 && IsDateTimesEqual(purchase.Date, firstPaymentDate) {
+		journals = append(journals, Journal{
+			Date:          purchase.Date,
+			AccountID:     cashDiscountReceivedAccount.ID,
+			AccountNumber: cashDiscountReceivedAccount.Number,
+			AccountName:   cashDiscountReceivedAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        purchase.CashDiscount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+	}
+
+	balanceAmount := RoundFloat(((purchase.NetTotal - purchase.CashDiscount) - totalPayment), 2)
+
+	//Asset or debt increased
+	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(purchase.Date, firstPaymentDate) {
+		referenceModel := "vendor"
+		vendorAccount, err := CreateAccountIfNotExists(
+			purchase.StoreID,
+			&vendor.ID,
+			&referenceModel,
+			vendor.Name,
+			&vendor.Phone,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		journals = append(journals, Journal{
+			Date:          purchase.Date,
+			AccountID:     vendorAccount.ID,
+			AccountNumber: vendorAccount.Number,
+			AccountName:   vendorAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        balanceAmount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	}
+
+	return journals, nil
+}
+
+func MakeJournalsForPurchaseExtraPayments(
+	purchase *Purchase,
+	vendor *Vendor,
+	cashAccount *Account,
+	bankAccount *Account,
+	extraPayments []PurchasePayment,
+) ([]Journal, error) {
+	now := time.Now()
+	journals := []Journal{}
+	groupID := primitive.NewObjectID()
+
+	var lastPaymentDate *time.Time
+	if len(extraPayments) > 0 {
+		lastPaymentDate = extraPayments[len(extraPayments)-1].Date
+	}
+
+	referenceModel := "vendor"
+	vendorAccount, err := CreateAccountIfNotExists(
+		purchase.StoreID,
+		&vendor.ID,
+		&referenceModel,
+		vendor.Name,
+		&vendor.Phone,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	journals = append(journals, Journal{
+		Date:          lastPaymentDate,
+		AccountID:     vendorAccount.ID,
+		AccountNumber: vendorAccount.Number,
+		AccountName:   vendorAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         purchase.BalanceAmount * (-1),
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	for _, payment := range extraPayments {
+		cashPayingAccount := Account{}
+		if payment.Method == "cash" {
+			cashPayingAccount = *cashAccount
+		} else if payment.Method == "bank_account" {
+			cashPayingAccount = *bankAccount
+		} else if payment.Method == "vendor_account" {
+			referenceModel := "vendor"
+			vendorAccount, err := CreateAccountIfNotExists(
+				purchase.StoreID,
+				&vendor.ID,
+				&referenceModel,
+				vendor.Name,
+				&vendor.Phone,
+			)
+			if err != nil {
+				return nil, err
+			}
+			cashPayingAccount = *vendorAccount
+		}
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     cashPayingAccount.ID,
+			AccountNumber: cashPayingAccount.Number,
+			AccountName:   cashPayingAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+	} //end for
+
+	return journals, nil
+}
+
+// Regroup sales payments by datetime
+func RegroupPurchasePaymentsByDatetime(payments []PurchasePayment) [][]PurchasePayment {
+	paymentsByDatetime := map[string][]PurchasePayment{}
+	for _, payment := range payments {
+		paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
+	}
+
+	paymentsByDatetime2 := [][]PurchasePayment{}
+	for _, v := range paymentsByDatetime {
+		paymentsByDatetime2 = append(paymentsByDatetime2, v)
+	}
+
+	sort.Slice(paymentsByDatetime2, func(i, j int) bool {
+		return paymentsByDatetime2[i][0].Date.Before(*paymentsByDatetime2[j][0].Date)
+	})
+
+	return paymentsByDatetime2
+}
+
+func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
+	now := time.Now()
+
+	vendor, err := FindVendorByID(purchase.VendorID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Cash", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Bank", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	purchaseAccount, err := CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Purchase", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	cashDiscountReceivedAccount, err := CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Cash discount received", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+
+	var firstPaymentDate *time.Time
+	if len(purchase.Payments) > 0 {
+		firstPaymentDate = purchase.Payments[0].Date
+	}
+
+	if len(purchase.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(purchase.Date, firstPaymentDate)) {
+		//Case: UnPaid
+		referenceModel := "vendor"
+		vendorAccount, err := CreateAccountIfNotExists(
+			purchase.StoreID,
+			&vendor.ID,
+			&referenceModel,
+			vendor.Name,
+			&vendor.Phone,
+		)
+		if err != nil {
+			return nil, err
+		}
+		journals = append(journals, MakeJournalsForUnpaidPurchase(
+			purchase,
+			vendorAccount,
+			purchaseAccount,
+			cashDiscountReceivedAccount,
+		)...)
+	}
+
+	if len(purchase.Payments) > 0 {
+		totalPurchasePaidAmount = float64(0.00)
+		extraPurchaseAmountPaid = float64(0.00)
+		extraPurchasePayments = []PurchasePayment{}
+
+		paymentsByDatetimeNumber := 1
+		paymentsByDatetime := RegroupPurchasePaymentsByDatetime(purchase.Payments)
+		//fmt.Printf("%+v", paymentsByDatetime)
+
+		for _, paymentByDatetime := range paymentsByDatetime {
+			newJournals, err := MakeJournalsForPurchasePaymentsByDatetime(
+				purchase,
+				vendor,
+				cashAccount,
+				bankAccount,
+				purchaseAccount,
+				paymentByDatetime,
+				cashDiscountReceivedAccount,
+				paymentsByDatetimeNumber,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			journals = append(journals, newJournals...)
+			paymentsByDatetimeNumber++
+		} //end for
+
+		if purchase.BalanceAmount < 0 && len(extraPurchasePayments) > 0 {
+			newJournals, err := MakeJournalsForPurchaseExtraPayments(
+				purchase,
+				vendor,
+				cashAccount,
+				bankAccount,
+				extraPurchasePayments,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			journals = append(journals, newJournals...)
+		}
+
+		totalPurchasePaidAmount = float64(0.00)
+		extraPurchaseAmountPaid = float64(0.00)
+
+	}
+
+	ledger = &Ledger{
+		StoreID:        purchase.StoreID,
+		ReferenceID:    purchase.ID,
+		ReferenceModel: "purchase",
+		ReferenceCode:  purchase.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
+}
+
+func (purchase *Purchase) DoAccounting() error {
+	ledger, err := purchase.CreateLedger()
+	if err != nil {
+		return errors.New("error creating ledger: " + err.Error())
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return errors.New("error creating postings: " + err.Error())
+	}
+
+	return nil
+}
+
+func (purchase *Purchase) UndoAccounting() error {
+	ledger, err := FindLedgerByReferenceID(purchase.ID, *purchase.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("Error getting related accounts: " + err.Error())
+		}
+	}
+
+	err = RemoveLedgerByReferenceID(purchase.ID)
+	if err != nil {
+		return errors.New("Error removing ledger by reference id: " + err.Error())
+	}
+
+	err = RemovePostingsByReferenceID(purchase.ID)
+	if err != nil {
+		return errors.New("Error removing postings by reference id: " + err.Error())
+	}
+
+	err = SetAccountBalances(ledgerAccounts)
+	if err != nil {
+		return errors.New("Error setting account balances: " + err.Error())
 	}
 
 	return nil

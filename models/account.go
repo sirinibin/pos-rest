@@ -139,27 +139,23 @@ func (account *Account) CalculateBalance() error {
 		account.Balance = RoundFloat((stats.DebitTotal - stats.CreditTotal), 2)
 	}
 
-	if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
+	if account.Type == "asset" || account.Type == "liability" {
 		if stats.CreditTotal > stats.DebitTotal {
 			account.Type = "liability" //creditor
 		} else {
 			account.Type = "asset" //debtor
 		}
-
-		if account.Balance == 0 {
-			account.Type = "closed"
-		}
 	}
 
 	if account.Type == "drawing" || account.Type == "expense" || account.Type == "asset" {
 		account.DebitOrCreditBalance = "debit_balance"
-	} else if account.Type == "liability" || account.Type == "equity" || account.Type == "revenue" {
+	} else if account.Type == "liability" || account.Type == "capital" || account.Type == "revenue" {
 		account.DebitOrCreditBalance = "credit_balance"
 	}
 
 	if account.Balance == 0 {
 		account.Open = false
-		account.DebitOrCreditBalance = "na"
+		//account.DebitOrCreditBalance = "na"
 	} else {
 		account.Open = true
 	}
@@ -211,16 +207,16 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 		criterias.SearchBy["reference_id"] = storeID
 	}
 
+	keys, ok = r.URL.Query()["search[reference_model]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["reference_model"] = keys[0]
+	}
+
 	/*
 		keys, ok = r.URL.Query()["search[reference_model]"]
 		if ok && len(keys[0]) >= 1 {
-			criterias.SearchBy["reference_model"] = keys[0]
+			criterias.SearchBy["reference_model"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 		}*/
-
-	keys, ok = r.URL.Query()["search[reference_model]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["reference_model"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
 
 	keys, ok = r.URL.Query()["search[reference_code]"]
 	if ok && len(keys[0]) >= 1 {
@@ -581,8 +577,18 @@ func CreateAccountIfNotExists(
 		account.Type = "asset"
 	} else if referenceModel == nil && (name == "Sales") {
 		account.Type = "revenue"
+	} else if referenceModel == nil && (name == "Sales Return") {
+		account.Type = "expense"
+	} else if referenceModel == nil && (name == "Purchase") {
+		account.Type = "expense"
+	} else if referenceModel == nil && (name == "Purchase Return") {
+		account.Type = "revenue"
 	} else if referenceModel == nil && (name == "Cash discount allowed") {
 		account.Type = "expense"
+	} else if referenceModel == nil && (name == "Cash discount received") {
+		account.Type = "revenue"
+	} else if *referenceModel == "investor" {
+		account.Type = "capital"
 	}
 
 	//account = &accountModel

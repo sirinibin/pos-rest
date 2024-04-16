@@ -1015,7 +1015,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err erro
 		receivingAccount = *bankAccount
 	}
 
-	groupAccounts := []string{receivingAccount.Number, customerAccount.Number}
+	groupID := primitive.NewObjectID()
 
 	journals = append(journals, Journal{
 		Date:          customerDeposit.Date,
@@ -1024,7 +1024,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err erro
 		AccountName:   receivingAccount.Name,
 		DebitOrCredit: "debit",
 		Debit:         customerDeposit.Amount,
-		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})
@@ -1036,7 +1036,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err erro
 		AccountName:   customerAccount.Name,
 		DebitOrCredit: "credit",
 		Credit:        customerDeposit.Amount,
-		GroupAccounts: groupAccounts,
+		GroupID:       groupID,
 		CreatedAt:     &now,
 		UpdatedAt:     &now,
 	})

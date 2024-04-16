@@ -184,6 +184,14 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchasereturn.SetProductsPurchaseReturnStats()
 	purchasereturn.SetVendorPurchaseReturnStats()
 
+	err = purchasereturn.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = purchasereturn
 
@@ -340,6 +348,22 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchasereturn.UpdatePurchaseReturnCount()
 	purchasereturn.SetProductsPurchaseReturnStats()
 	purchasereturn.SetVendorPurchaseReturnStats()
+
+	err = purchasereturn.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchasereturn.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	/*
 		err = purchasereturn.AttributesValueChangeEvent(purchasereturnOld)

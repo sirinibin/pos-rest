@@ -204,6 +204,14 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.SetProductsSalesReturnStats()
 	salesreturn.SetCustomerSalesReturnStats()
 
+	err = salesreturn.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = salesreturn
 
@@ -374,6 +382,22 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	salesreturn.SetProductsSalesReturnStats()
 	salesreturn.SetCustomerSalesReturnStats()
+
+	err = salesreturn.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = salesreturn.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	salesreturn, err = models.FindSalesReturnByID(&salesreturn.ID, bson.M{})
 	if err != nil {

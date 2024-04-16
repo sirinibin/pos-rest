@@ -187,6 +187,14 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.SetProductsPurchaseStats()
 	purchase.SetVendorPurchaseStats()
 
+	err = purchase.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = purchase
 
@@ -343,6 +351,22 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	purchase.SetProductsPurchaseStats()
 	purchase.SetVendorPurchaseStats()
+
+	err = purchase.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchase.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	purchase, err = models.FindPurchaseByID(&purchase.ID, bson.M{})
 	if err != nil {

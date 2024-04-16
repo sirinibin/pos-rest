@@ -102,7 +102,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 			balanceBoughtDown = models.RoundFloat((creditTotalBoughtDown - debitTotalBoughtDown), 2)
 		}
 
-		if account.ReferenceModel != nil && *account.ReferenceModel == "customer" {
+		if account.ReferenceModel != nil && (*account.ReferenceModel == "customer" || *account.ReferenceModel == "vendor") {
 			if creditTotalBoughtDown > debitTotalBoughtDown {
 				account.Type = "liability" //creditor
 			} else if creditTotalBoughtDown < debitTotalBoughtDown {

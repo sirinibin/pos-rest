@@ -423,9 +423,15 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 		criterias.SearchBy["reference_id"] = storeID
 	}
 
+	/*
+		keys, ok = r.URL.Query()["search[reference_model]"]
+		if ok && len(keys[0]) >= 1 {
+			criterias.SearchBy["reference_model"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		}*/
+
 	keys, ok = r.URL.Query()["search[reference_model]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["reference_model"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["reference_model"] = keys[0]
 	}
 
 	keys, ok = r.URL.Query()["search[reference_code]"]
