@@ -110,8 +110,16 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if account.Type == "asset" || account.Type == "liability" {
+			if creditTotalBoughtDown > debitTotalBoughtDown {
+				account.Type = "liability" //creditor
+			} else if creditTotalBoughtDown < debitTotalBoughtDown {
+				account.Type = "asset" //debtor
+			}
+		}
+
 		balanceBoughtDownType := ""
-		if account.Type == "divident" || account.Type == "expense" || account.Type == "asset" {
+		if account.Type == "drawing" || account.Type == "expense" || account.Type == "asset" {
 			balanceBoughtDownType = "debit"
 			debitTotal += balanceBoughtDown
 		} else if account.Type == "liability" || account.Type == "capital" || account.Type == "revenue" {
