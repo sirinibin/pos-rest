@@ -3,11 +3,13 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -539,13 +541,13 @@ func CreateAccountIfNotExists(
 	phone *string,
 ) (account *Account, err error) {
 	if referenceID != nil {
-		account, err = FindAccountByReferenceID(*referenceID, *storeID, bson.M{})
+		account, err = FindAccountByReferenceIDByName(*referenceID, name, *storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
 
 	} else if phone != nil {
-		account, err = FindAccountByPhone(*phone, storeID, bson.M{})
+		account, err = FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
@@ -597,6 +599,10 @@ func CreateAccountIfNotExists(
 		account.Type = "revenue"
 	} else if *referenceModel == "investor" {
 		account.Type = "capital"
+	} else if *referenceModel == "withdrawer" {
+		account.Type = "drawing"
+	} else if *referenceModel == "expense_category" {
+		account.Type = "expense"
 	}
 
 	//account = &accountModel
@@ -688,6 +694,64 @@ func FindAccountByReferenceID(
 		bson.M{
 			"reference_id": referenceID,
 			"store_id":     storeID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&account)
+	if err != nil {
+		return nil, err
+	}
+
+	return account, err
+}
+
+func FindAccountByReferenceIDByName(
+	referenceID primitive.ObjectID,
+	name string,
+	storeID primitive.ObjectID,
+	selectFields map[string]interface{},
+) (account *Account, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"reference_id": referenceID,
+			"name":         name,
+			"store_id":     storeID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&account)
+	if err != nil {
+		return nil, err
+	}
+
+	return account, err
+}
+
+func FindAccountByPhoneByName(
+	phone string,
+	name string,
+	storeID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (account *Account, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"phone":    phone,
+			"name":     name,
+			"store_id": storeID,
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
 	if err != nil {
@@ -799,5 +863,53 @@ func SetAccountBalances(accounts map[string]Account) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func ProcessAccounts() error {
+	log.Print("Processing accounts")
+	totalCount, err := GetTotalCount(bson.M{}, "account")
+	if err != nil {
+		return err
+	}
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching accounts" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	bar := progressbar.Default(totalCount)
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := Account{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		if model.ReferenceModel != nil && *model.ReferenceModel == "expense_category" {
+			model.Type = "expense"
+		}
+
+		err = model.Update()
+		if err != nil {
+			return err
+		}
+
+		bar.Add(1)
+	}
+	log.Print("Accounts DONE!")
 	return nil
 }

@@ -928,3 +928,134 @@ func ProcessDividents() error {
 
 	return nil
 }
+
+//Accounting
+
+func (divident *Divident) DoAccounting() error {
+	ledger, err := divident.CreateLedger()
+	if err != nil {
+		return err
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (divident *Divident) UndoAccounting() error {
+	ledger, err := FindLedgerByReferenceID(divident.ID, *divident.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = RemoveLedgerByReferenceID(divident.ID)
+	if err != nil {
+		return err
+	}
+
+	err = RemovePostingsByReferenceID(divident.ID)
+	if err != nil {
+		return err
+	}
+
+	err = SetAccountBalances(ledgerAccounts)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (divident *Divident) CreateLedger() (ledger *Ledger, err error) {
+	now := time.Now()
+
+	drawingUser, err := FindUserByID(divident.WithdrawnByUserID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "withdrawer"
+	drawingAccount, err := CreateAccountIfNotExists(
+		divident.StoreID,
+		&drawingUser.ID,
+		&referenceModel,
+		drawingUser.Name+" Drawings",
+		&drawingUser.Mob,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := CreateAccountIfNotExists(divident.StoreID, nil, nil, "Cash", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := CreateAccountIfNotExists(divident.StoreID, nil, nil, "Bank", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+
+	payingAccount := Account{}
+	if divident.PaymentMethod == "cash" {
+		payingAccount = *cashAccount
+	} else if divident.PaymentMethod == "bank_account" {
+		payingAccount = *bankAccount
+	}
+
+	groupID := primitive.NewObjectID()
+
+	journals = append(journals, Journal{
+		Date:          divident.Date,
+		AccountID:     drawingAccount.ID,
+		AccountNumber: drawingAccount.Number,
+		AccountName:   drawingAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         divident.Amount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	journals = append(journals, Journal{
+		Date:          divident.Date,
+		AccountID:     payingAccount.ID,
+		AccountNumber: payingAccount.Number,
+		AccountName:   payingAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        divident.Amount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	ledger = &Ledger{
+		StoreID:        divident.StoreID,
+		ReferenceID:    divident.ID,
+		ReferenceModel: "drawing",
+		ReferenceCode:  divident.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
+}

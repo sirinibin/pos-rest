@@ -123,6 +123,14 @@ func CreateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = divident.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = divident
 
@@ -224,6 +232,22 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find divident:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = divident.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = divident.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

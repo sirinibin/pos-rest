@@ -131,6 +131,14 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = expense.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = expense
 
@@ -224,6 +232,22 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = expense.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = expense.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

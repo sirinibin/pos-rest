@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -912,6 +913,12 @@ func IsExpenseExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func ProcessExpenses() error {
+	log.Print("Processing expenses")
+	totalCount, err := GetTotalCount(bson.M{}, "expense")
+	if err != nil {
+		return err
+	}
+
 	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -926,6 +933,7 @@ func ProcessExpenses() error {
 		defer cur.Close(ctx)
 	}
 
+	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
@@ -945,12 +953,155 @@ func ProcessExpenses() error {
 			model.StoreID = &store.ID
 		*/
 
-		err = model.Update()
+		err = model.UndoAccounting()
+		if err != nil {
+			return errors.New("error undo accounting: " + err.Error())
+		}
+
+		err = model.DoAccounting()
+		if err != nil {
+			return errors.New("error doing accounting: " + err.Error())
+		}
+
+		/*
+			err = model.Update()
+			if err != nil {
+				return err
+			}
+		*/
+
+		bar.Add(1)
+	}
+	log.Print("Expenses DONE!")
+	return nil
+}
+
+//Accounting
+
+func (expense *Expense) DoAccounting() error {
+	ledger, err := expense.CreateLedger()
+	if err != nil {
+		return err
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (expense *Expense) UndoAccounting() error {
+	ledger, err := FindLedgerByReferenceID(expense.ID, *expense.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
 		if err != nil {
 			return err
 		}
+	}
 
+	err = RemoveLedgerByReferenceID(expense.ID)
+	if err != nil {
+		return err
+	}
+
+	err = RemovePostingsByReferenceID(expense.ID)
+	if err != nil {
+		return err
+	}
+
+	err = SetAccountBalances(ledgerAccounts)
+	if err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func (expense *Expense) CreateLedger() (ledger *Ledger, err error) {
+	now := time.Now()
+	expenseCategory, err := FindExpenseCategoryByID(expense.CategoryID[0], bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "expense_category"
+	expenseAccount, err := CreateAccountIfNotExists(
+		expense.StoreID,
+		&expenseCategory.ID,
+		&referenceModel,
+		expenseCategory.Name+" Expense",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := CreateAccountIfNotExists(expense.StoreID, nil, nil, "Cash", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := CreateAccountIfNotExists(expense.StoreID, nil, nil, "Bank", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+
+	payingAccount := Account{}
+	if expense.PaymentMethod == "cash" {
+		payingAccount = *cashAccount
+	} else if expense.PaymentMethod == "bank_account" {
+		payingAccount = *bankAccount
+	}
+
+	groupID := primitive.NewObjectID()
+
+	journals = append(journals, Journal{
+		Date:          expense.Date,
+		AccountID:     expenseAccount.ID,
+		AccountNumber: expenseAccount.Number,
+		AccountName:   expenseAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         expense.Amount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	journals = append(journals, Journal{
+		Date:          expense.Date,
+		AccountID:     payingAccount.ID,
+		AccountNumber: payingAccount.Number,
+		AccountName:   payingAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        expense.Amount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	ledger = &Ledger{
+		StoreID:        expense.StoreID,
+		ReferenceID:    expense.ID,
+		ReferenceModel: "expense",
+		ReferenceCode:  expense.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
 }
