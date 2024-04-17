@@ -592,27 +592,31 @@ func cronJobsEveryHour() error {
 		}
 	*/
 
-	err := models.ProcessCapitals()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessCapitals()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessPurchases()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessPurchases()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessPurchaseReturns()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessPurchaseReturns()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessOrders()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessOrders()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessSalesReturns()
+
+
+	*/
+	err := models.ProcessSalesReturns()
 	if err != nil {
 		log.Print(err)
 	}

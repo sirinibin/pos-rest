@@ -2429,26 +2429,26 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	}
 
 	//Don't touch
-	totalPurchasePaidAmountTemp := totalPurchasePaidAmount
-	extraPurchaseAmountPaidTemp := extraPurchaseAmountPaid
+	totalSalesReturnPaidAmountTemp := totalSalesReturnPaidAmount
+	extraSalesReturnAmountPaidTemp := extraSalesReturnAmountPaid
 
 	for _, payment := range payments {
-		totalPurchasePaidAmount += *payment.Amount
-		if totalPurchasePaidAmount > (salesReturn.NetTotal - salesReturn.CashDiscount) {
-			extraPurchaseAmountPaid = RoundFloat((totalPurchasePaidAmount - (salesReturn.NetTotal - salesReturn.CashDiscount)), 2)
+		totalSalesReturnPaidAmount += *payment.Amount
+		if totalSalesReturnPaidAmount > (salesReturn.NetTotal - salesReturn.CashDiscount) {
+			extraSalesReturnAmountPaid = RoundFloat((totalSalesReturnPaidAmount - (salesReturn.NetTotal - salesReturn.CashDiscount)), 2)
 		}
 		amount := *payment.Amount
 
-		if extraPurchaseAmountPaid > 0 {
+		if extraSalesReturnAmountPaid > 0 {
 			skip := false
-			if extraPurchaseAmountPaid < *payment.Amount {
-				amount = RoundFloat((*payment.Amount - extraPurchaseAmountPaid), 2)
+			if extraSalesReturnAmountPaid < *payment.Amount {
+				amount = RoundFloat((*payment.Amount - extraSalesReturnAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
-				extraPurchaseAmountPaid = 0
-			} else if extraPurchaseAmountPaid >= *payment.Amount {
+				extraSalesReturnAmountPaid = 0
+			} else if extraSalesReturnAmountPaid >= *payment.Amount {
 				skip = true
-				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - *payment.Amount), 2)
+				extraSalesReturnAmountPaid = RoundFloat((extraSalesReturnAmountPaid - *payment.Amount), 2)
 			}
 
 			if skip {
@@ -2459,8 +2459,8 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 		totalPayment += amount
 	} //end for
 
-	totalPurchasePaidAmount = totalPurchasePaidAmountTemp
-	extraPurchaseAmountPaid = extraPurchaseAmountPaidTemp
+	totalSalesReturnPaidAmount = totalSalesReturnPaidAmountTemp
+	extraSalesReturnAmountPaid = extraSalesReturnAmountPaidTemp
 	//Don't touch
 
 	//Debits
@@ -2509,34 +2509,34 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	//Credits
 	totalPayment = float64(0.00)
 	for _, payment := range payments {
-		totalPurchasePaidAmount += *payment.Amount
-		if totalPurchasePaidAmount > (salesReturn.NetTotal - salesReturn.CashDiscount) {
-			extraPurchaseAmountPaid = RoundFloat((totalPurchasePaidAmount - (salesReturn.NetTotal - salesReturn.CashDiscount)), 2)
+		totalSalesReturnPaidAmount += *payment.Amount
+		if totalSalesReturnPaidAmount > (salesReturn.NetTotal - salesReturn.CashDiscount) {
+			extraSalesReturnAmountPaid = RoundFloat((totalSalesReturnPaidAmount - (salesReturn.NetTotal - salesReturn.CashDiscount)), 2)
 		}
 		amount := *payment.Amount
 
-		if extraPurchaseAmountPaid > 0 {
+		if extraSalesReturnAmountPaid > 0 {
 			skip := false
-			if extraPurchaseAmountPaid < *payment.Amount {
-				extraAmount := extraPurchaseAmountPaid
-				extraPurchasePayments = append(extraPurchasePayments, PurchasePayment{
+			if extraSalesReturnAmountPaid < *payment.Amount {
+				extraAmount := extraSalesReturnAmountPaid
+				extraSalesReturnPayments = append(extraSalesReturnPayments, SalesReturnPayment{
 					Date:   payment.Date,
 					Amount: &extraAmount,
 					Method: payment.Method,
 				})
-				amount = RoundFloat((*payment.Amount - extraPurchaseAmountPaid), 2)
+				amount = RoundFloat((*payment.Amount - extraSalesReturnAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
-				extraPurchaseAmountPaid = 0
-			} else if extraPurchaseAmountPaid >= *payment.Amount {
-				extraPurchasePayments = append(extraPurchasePayments, PurchasePayment{
+				extraSalesReturnAmountPaid = 0
+			} else if extraSalesReturnAmountPaid >= *payment.Amount {
+				extraSalesReturnPayments = append(extraSalesReturnPayments, SalesReturnPayment{
 					Date:   payment.Date,
 					Amount: payment.Amount,
 					Method: payment.Method,
 				})
 
 				skip = true
-				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - *payment.Amount), 2)
+				extraSalesReturnAmountPaid = RoundFloat((extraSalesReturnAmountPaid - *payment.Amount), 2)
 			}
 
 			if skip {
