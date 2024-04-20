@@ -41,7 +41,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	whiteColor := color.RGBA{255, 255, 255, 255}                  //  R, G, B, Alpha
 	draw.Draw(img1, img1.Bounds(), &image.Uniform{whiteColor}, image.Point{}, draw.Src)
 
-	productNameSize := 8.0
+	productNameSize := 7.8
 	width := 0
 	for {
 		width, err = addLabel(img1, 10*scale, 23*scale, product.Name, color.Black, productNameSize*float64(scale), true)
@@ -49,10 +49,10 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 			return err
 		}
 
-		if width <= 127*scale {
+		if width <= 762 {
 			break
 		}
-		productNameSize -= 0.20
+		productNameSize -= 0.10
 		img1 = image.NewRGBA(image.Rect(0, 0, 144*scale, 106*scale)) // x1,y1,  x2,y2 of background rectangle
 		draw.Draw(img1, img1.Bounds(), &image.Uniform{whiteColor}, image.Point{}, draw.Src)
 	}
