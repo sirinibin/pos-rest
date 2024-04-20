@@ -62,7 +62,37 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		storeName = store.Name
 	}
 
-	addLabel(img1, 10*scale, 15*scale, storeName, color.Black, 10*float64(scale), true)
+	/*
+		width, err = addLabel(img1, 10*scale, 15*scale, storeName, color.Black, 6.8*float64(scale), true)
+		if err != nil {
+			return err
+		}
+		log.Print(width)
+	*/
+
+	storeNameSize := 10.00
+	width = 0
+	for {
+		width, err = addLabel(img1, 10*scale, 15*scale, storeName, color.Black, storeNameSize*float64(scale), true)
+		if err != nil {
+			return err
+		}
+
+		if width <= 781 {
+			break
+		}
+
+		storeNameSize -= 0.10
+
+		//Reset image
+		img1 = image.NewRGBA(image.Rect(0, 0, 144*scale, 106*scale)) // x1,y1,  x2,y2 of background rectangle
+		draw.Draw(img1, img1.Bounds(), &image.Uniform{whiteColor}, image.Point{}, draw.Src)
+
+		_, err = addLabel(img1, 10*scale, 23*scale, product.Name, color.Black, productNameSize*float64(scale), true)
+		if err != nil {
+			return err
+		}
+	}
 
 	retailUnitPriceWithTax := 0.00
 	purchaseUnitPriceSecret := ""
