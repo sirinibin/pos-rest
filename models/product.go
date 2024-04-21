@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -2353,6 +2354,10 @@ func (product *Product) ReflectValidPurchaseUnitPrice() error {
 
 func ProcessProducts() error {
 	log.Printf("Processing products")
+	totalCount, err := GetTotalCount(bson.M{}, "product")
+	if err != nil {
+		return err
+	}
 	collection := db.Client().Database(db.GetPosDB()).Collection("product")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -2367,6 +2372,7 @@ func ProcessProducts() error {
 		defer cur.Close(ctx)
 	}
 
+	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
@@ -2396,10 +2402,14 @@ func ProcessProducts() error {
 			}
 		*/
 
+		product.CalculateUnitProfit()
+
 		err = product.Update()
 		if err != nil {
 			return err
 		}
+
+		bar.Add(1)
 	}
 
 	log.Print("DONE!")
