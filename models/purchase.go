@@ -1481,6 +1481,11 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 				product.Stores = append(product.Stores, productStore)
 			}
 		*/
+
+		err = product.CalculateUnitProfit()
+		if err != nil {
+			return err
+		}
 		err = product.Update()
 		if err != nil {
 			return err
