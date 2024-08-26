@@ -11,12 +11,12 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-//AccesstokenRequest : Access token request structure
+// AccesstokenRequest : Access token request structure
 type AccesstokenRequest struct {
 	Code string `bson:"auth_code" json:"auth_code"`
 }
 
-//RefreshAccesstokenRequest : Refresh Access token request structure
+// RefreshAccesstokenRequest : Refresh Access token request structure
 type RefreshAccesstokenRequest struct {
 	RefreshToken string `bson:"refresh_token" json:"refresh_token"`
 }
@@ -91,7 +91,7 @@ func AuthenticateByAccessToken(r *http.Request) (tokenClaims TokenClaims, err er
 		return tokenClaims, err
 	}
 	if tokenClaims.Type != "access_token" {
-		return tokenClaims, errors.New("Invalid access token.")
+		return tokenClaims, errors.New("invalid access token.")
 	}
 	TokenClaimsObject = tokenClaims
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
@@ -102,6 +102,10 @@ func AuthenticateByAccessToken(r *http.Request) (tokenClaims TokenClaims, err er
 	UserObject, err = FindUserByID(&userID, bson.M{"id": 1, "name": 1})
 	if err != nil {
 		return tokenClaims, err
+	}
+
+	if UserObject.Deleted {
+		return tokenClaims, errors.New("Account deleted")
 	}
 
 	return tokenClaims, nil
@@ -128,7 +132,7 @@ func AuthenticateByRefreshToken(r *http.Request) (tokenClaims TokenClaims, err e
 
 }
 
-//GenerateAuthCode : generate and return authcode
+// GenerateAuthCode : generate and return authcode
 func GenerateAccesstoken(email string) (accessToken AccessTokenResponse, err error) {
 
 	// Generate Access token
