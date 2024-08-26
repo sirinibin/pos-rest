@@ -100,7 +100,7 @@ func (auth *AuthorizeRequest) Authenticate() (errs map[string]string) {
 		}
 
 		if user.Deleted {
-			errs["password"] = "Account deleted"
+			errs["password"] = "E-mail or Password is wrong"
 		}
 	}
 
