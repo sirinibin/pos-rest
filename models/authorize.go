@@ -10,7 +10,7 @@ import (
 	"github.com/jameskeane/bcrypt"
 )
 
-//Authorize : Authorize structure
+// Authorize : Authorize structure
 type AuthorizeRequest struct {
 	Email    string `bson:"email" json:"email"`
 	Password string `bson:"password" json:"password"`
@@ -65,7 +65,7 @@ func ParseAuthCodeFromRequest(r *http.Request) (string, error) {
 	return tokenStr, nil
 }
 
-//GenerateAuthCode : generate and return authcode
+// GenerateAuthCode : generate and return authcode
 func (auth *AuthorizeRequest) GenerateAuthCode() (authCode AuthCodeResponse, err error) {
 
 	// Generate Auth code
@@ -77,7 +77,7 @@ func (auth *AuthorizeRequest) GenerateAuthCode() (authCode AuthCodeResponse, err
 	return authCode, err
 }
 
-//Validate : Validate authorization data
+// Validate : Validate authorization data
 func (auth *AuthorizeRequest) Authenticate() (errs map[string]string) {
 
 	errs = make(map[string]string)
@@ -97,6 +97,10 @@ func (auth *AuthorizeRequest) Authenticate() (errs map[string]string) {
 
 		if user == nil || !bcrypt.Match(auth.Password, user.Password) {
 			errs["password"] = "E-mail or Password is wrong"
+		}
+
+		if user.Deleted {
+			errs["account"] = "Account deleted"
 		}
 	}
 
