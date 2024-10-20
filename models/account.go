@@ -540,17 +540,17 @@ func CreateAccountIfNotExists(
 	name string,
 	phone *string,
 ) (account *Account, err error) {
-	if referenceID != nil {
+	if phone != nil {
+		account, err = FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	} else if referenceID != nil {
 		account, err = FindAccountByReferenceIDByName(*referenceID, name, *storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
 
-	} else if phone != nil {
-		account, err = FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			return nil, err
-		}
 	} else if referenceID == nil {
 		//Only for accounts like Cash,Bank,Sales
 		account, err = FindAccountByName(name, storeID, nil, bson.M{})
