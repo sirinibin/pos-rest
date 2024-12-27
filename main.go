@@ -208,7 +208,7 @@ func main() {
 	router := mux.NewRouter()
 
 	//API Info
-	router.HandleFunc("/v1", controller.APIInfo).Methods("GET")
+	router.HandleFunc("/v1/info", controller.APIInfo).Methods("GET")
 
 	// Register a new user account
 	router.HandleFunc("/v1/register", controller.Register).Methods("POST")
