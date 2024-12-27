@@ -21,7 +21,7 @@ import (
 type SalesCashDiscount struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr       string              `json:"date_str,omitempty"`
+	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	OrderID       *primitive.ObjectID `json:"order_id" bson:"order_id"`
 	OrderCode     string              `json:"order_code" bson:"order_code"`
 	Amount        float64             `json:"amount" bson:"amount"`

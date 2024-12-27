@@ -20,7 +20,7 @@ import (
 type PurchasePayment struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr       string              `json:"date_str,omitempty"`
+	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	PurchaseID    *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
 	PurchaseCode  string              `json:"purchase_code" bson:"purchase_code"`
 	Amount        *float64            `json:"amount" bson:"amount"`

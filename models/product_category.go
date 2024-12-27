@@ -91,12 +91,13 @@ func (productCategory *ProductCategory) AttributesValueChangeEvent(productCatego
 		if err != nil {
 			return nil
 		}
-		productCategory.SetChangeLog(
-			"attribute_value_change",
-			"name",
-			productCategoryOld.Name,
-			productCategory.Name,
-		)
+		/*
+			productCategory.SetChangeLog(
+				"attribute_value_change",
+				"name",
+				productCategoryOld.Name,
+				productCategory.Name,
+			)*/
 	}
 
 	return nil
@@ -433,8 +434,6 @@ func (productCategory *ProductCategory) Update() error {
 		return err
 	}
 
-	productCategory.SetChangeLog("update", nil, nil, nil)
-
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": productCategory.ID},
@@ -466,7 +465,7 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 	now := time.Now()
 	productCategory.DeletedAt = &now
 
-	productCategory.SetChangeLog("delete", nil, nil, nil)
+	//productCategory.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

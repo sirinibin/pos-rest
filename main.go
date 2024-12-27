@@ -19,8 +19,9 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+// testing
 func main() {
-	fmt.Println("A GoLang / Myql Microservice [OAuth2,Redis & JWT used for token management]!")
+	fmt.Println("A GoLang / MongoDB Microservice [OAuth2,Redis & JWT used for token management]!")
 	db.Client()
 	db.InitRedis()
 	RemoveAllIndexes()
@@ -207,7 +208,7 @@ func main() {
 	router := mux.NewRouter()
 
 	//API Info
-	router.HandleFunc("/", controller.APIInfo).Methods("GET")
+	router.HandleFunc("/v1", controller.APIInfo).Methods("GET")
 
 	// Register a new user account
 	router.HandleFunc("/v1/register", controller.Register).Methods("POST")

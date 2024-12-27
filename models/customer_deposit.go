@@ -25,7 +25,7 @@ type CustomerDeposit struct {
 	Amount        float64             `bson:"amount" json:"amount"`
 	Description   string              `bson:"description,omitempty" json:"description,omitempty"`
 	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr       string              `json:"date_str,omitempty"`
+	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	CustomerID    *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	CustomerName  string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	PaymentMethod string              `json:"payment_method" bson:"payment_method"`

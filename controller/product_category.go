@@ -267,8 +267,6 @@ func ViewProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory.SetChangeLog("view", nil, nil, nil)
-
 	response.Status = true
 	response.Result = productCategory
 

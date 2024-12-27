@@ -37,7 +37,7 @@ type Quotation struct {
 	ID                       primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Code                     string              `bson:"code,omitempty" json:"code,omitempty"`
 	Date                     *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr                  string              `json:"date_str,omitempty"`
+	DateStr                  string              `json:"date_str,omitempty" bson:"-"`
 	StoreID                  *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID               *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Store                    *Store              `json:"store,omitempty"`

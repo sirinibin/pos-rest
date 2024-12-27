@@ -20,7 +20,7 @@ import (
 type SalesReturnPayment struct {
 	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr         string              `json:"date_str,omitempty"`
+	DateStr         string              `json:"date_str,omitempty" bson:"-"`
 	SalesReturnID   *primitive.ObjectID `json:"sales_return_id" bson:"sales_return_id"`
 	SalesReturnCode string              `json:"sales_return_code" bson:"sales_return_code"`
 	OrderID         *primitive.ObjectID `json:"order_id" bson:"order_id"`

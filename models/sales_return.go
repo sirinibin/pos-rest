@@ -43,7 +43,7 @@ type SalesReturn struct {
 	OrderID        *primitive.ObjectID  `json:"order_id,omitempty" bson:"order_id,omitempty"`
 	OrderCode      string               `bson:"order_code,omitempty" json:"order_code,omitempty"`
 	Date           *time.Time           `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr        string               `json:"date_str,omitempty"`
+	DateStr        string               `json:"date_str,omitempty" bson:"-"`
 	Code           string               `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID        *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID     *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`

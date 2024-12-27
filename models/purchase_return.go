@@ -40,7 +40,7 @@ type PurchaseReturn struct {
 	PurchaseID             *primitive.ObjectID     `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
 	PurchaseCode           string                  `bson:"purchase_code,omitempty" json:"purchase_code,omitempty"`
 	Date                   *time.Time              `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr                string                  `json:"date_str,omitempty"`
+	DateStr                string                  `json:"date_str,omitempty" bson:"-"`
 	Code                   string                  `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID                *primitive.ObjectID     `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	VendorID               *primitive.ObjectID     `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`

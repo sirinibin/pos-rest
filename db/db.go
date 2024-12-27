@@ -57,7 +57,7 @@ func GetMongoClient() (*mongo.Client, error) {
 	pass := os.Getenv("MONGO_PASS")
 	host := Getenv("MONGO_HOST", "localhost")
 	port := Getenv("MONGO_PORT", "27017")
-	mongoRs := os.Getenv("MONGO_RS")
+	mongoRs := Getenv("MONGO_RS", "")
 
 	//Setting Client Options
 	clientOptions := options.Client()

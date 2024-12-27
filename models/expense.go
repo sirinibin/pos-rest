@@ -26,7 +26,7 @@ type Expense struct {
 	Amount        float64               `bson:"amount" json:"amount"`
 	Description   string                `bson:"description,omitempty" json:"description,omitempty"`
 	Date          *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr       string                `json:"date_str,omitempty"`
+	DateStr       string                `json:"date_str,omitempty" bson:"-"`
 	PaymentMethod string                `json:"payment_method" bson:"payment_method"`
 	StoreID       *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName     string                `json:"store_name,omitempty" bson:"store_name,omitempty"`

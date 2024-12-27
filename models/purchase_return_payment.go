@@ -21,7 +21,7 @@ import (
 type PurchaseReturnPayment struct {
 	ID                 primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Date               *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr            string              `json:"date_str,omitempty"`
+	DateStr            string              `json:"date_str,omitempty" bson:"-"`
 	PurchaseReturnID   *primitive.ObjectID `json:"purchase_return_id" bson:"purchase_return_id"`
 	PurchaseReturnCode string              `json:"purchase_return_code" bson:"purchase_return_code"`
 	PurchaseID         *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`

@@ -25,7 +25,7 @@ type Divident struct {
 	Amount              float64             `bson:"amount" json:"amount"`
 	Description         string              `bson:"description,omitempty" json:"description,omitempty"`
 	Date                *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr             string              `json:"date_str,omitempty"`
+	DateStr             string              `json:"date_str,omitempty" bson:"-"`
 	WithdrawnByUserID   *primitive.ObjectID `json:"withdrawn_by_user_id,omitempty" bson:"withdrawn_by_user_id,omitempty"`
 	WithdrawnByUserName string              `json:"withdrawn_by_user_name,omitempty" bson:"withdrawn_by_user_name,omitempty"`
 	PaymentMethod       string              `json:"payment_method" bson:"payment_method"`
