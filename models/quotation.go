@@ -1199,23 +1199,22 @@ func ProcessQuotations() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		/*
-			quotation.ClearProductsQuotationHistory()
-			err = quotation.AddProductsQuotationHistory()
-			if err != nil {
-				return err
-			}
-
-			err = quotation.SetProductsQuotationStats()
-			if err != nil {
-				return err
-			}
-		*/
-
-		err = quotation.SetCustomerQuotationStats()
+		quotation.ClearProductsQuotationHistory()
+		err = quotation.AddProductsQuotationHistory()
 		if err != nil {
 			return err
 		}
+
+		err = quotation.SetProductsQuotationStats()
+		if err != nil {
+			return err
+		}
+
+		/*
+			err = quotation.SetCustomerQuotationStats()
+			if err != nil {
+				return err
+			}*/
 
 		//quotation.Date = quotation.CreatedAt
 		err = quotation.Update()

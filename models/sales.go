@@ -2063,6 +2063,16 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		err = order.ClearProductsSalesHistory()
+		if err != nil {
+			return err
+		}
+
+		err = order.CreateProductsSalesHistory()
+		if err != nil {
+			return err
+		}
+
 		/*
 			err = order.CalculateOrderProfit()
 			if err != nil {
@@ -2108,17 +2118,19 @@ func ProcessOrders() error {
 
 		//order.Update()
 
-		order.GetPayments()
+		/*
+			order.GetPayments()
 
-		err = order.UndoAccounting()
-		if err != nil {
-			return errors.New("error undo accounting: " + err.Error())
-		}
+			err = order.UndoAccounting()
+			if err != nil {
+				return errors.New("error undo accounting: " + err.Error())
+			}
 
-		err = order.DoAccounting()
-		if err != nil {
-			return errors.New("error doing accounting: " + err.Error())
-		}
+			err = order.DoAccounting()
+			if err != nil {
+				return errors.New("error doing accounting: " + err.Error())
+			}
+		*/
 
 		order.Update()
 

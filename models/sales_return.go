@@ -1857,21 +1857,23 @@ func ProcessSalesReturns() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		err = salesReturn.ClearProductsSalesReturnHistory()
+		if err != nil {
+			return err
+		}
+
+		err = salesReturn.CreateProductsSalesReturnHistory()
+		if err != nil {
+			return err
+		}
+
 		/*
 			err = salesReturn.CalculateSalesReturnProfit()
 			if err != nil {
 				return err
 			}
 
-			err = salesReturn.ClearProductsSalesReturnHistory()
-			if err != nil {
-				return err
-			}
 
-			err = salesReturn.CreateProductsSalesReturnHistory()
-			if err != nil {
-				return err
-			}
 
 			salesReturn.GetPayments()
 
@@ -1897,29 +1899,24 @@ func ProcessSalesReturns() error {
 
 		//salesReturn.UpdateOrderReturnCount()
 
-		salesReturn.GetPayments()
+		/*
+			salesReturn.GetPayments()
 
-		err = salesReturn.UndoAccounting()
-		if err != nil {
-			return errors.New("error undo accounting: " + err.Error())
-		}
+			err = salesReturn.UndoAccounting()
+			if err != nil {
+				return errors.New("error undo accounting: " + err.Error())
+			}
 
-		err = salesReturn.DoAccounting()
-		if err != nil {
-			return errors.New("error doing accounting: " + err.Error())
-		}
+			err = salesReturn.DoAccounting()
+			if err != nil {
+				return errors.New("error doing accounting: " + err.Error())
+			}
+		*/
 
 		err = salesReturn.Update()
 		if err != nil {
 			return err
 		}
-
-		/*
-			err = salesReturn.Update()
-			if err != nil {
-				return err
-			}
-		*/
 
 		/*
 			if salesReturn.Code == "GUOJ-200042" {

@@ -1694,6 +1694,16 @@ func ProcessPurchaseReturns() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		err = model.ClearProductsPurchaseReturnHistory()
+		if err != nil {
+			return errors.New("error deleting product purchase return history: " + err.Error())
+		}
+
+		err = model.AddProductsPurchaseReturnHistory()
+		if err != nil {
+			return errors.New("error Adding product purchase return history: " + err.Error())
+		}
+
 		/*
 			model.PaymentStatus = "paid"
 			model.PaymentMethod = "cash"
@@ -1709,15 +1719,7 @@ func ProcessPurchaseReturns() error {
 		*/
 
 		/*
-			err = model.ClearProductsPurchaseReturnHistory()
-			if err != nil {
-				return errors.New("error deleting product purchase return history: " + err.Error())
-			}
 
-			err = model.AddProductsPurchaseReturnHistory()
-			if err != nil {
-				return errors.New("error Adding product purchase return history: " + err.Error())
-			}
 
 			model.GetPayments()
 
@@ -1770,17 +1772,19 @@ func ProcessPurchaseReturns() error {
 				return err
 			}
 		*/
-		model.GetPayments()
+		/*
+			model.GetPayments()
 
-		err = model.UndoAccounting()
-		if err != nil {
-			return errors.New("error undo accounting: " + err.Error())
-		}
+			err = model.UndoAccounting()
+			if err != nil {
+				return errors.New("error undo accounting: " + err.Error())
+			}
 
-		err = model.DoAccounting()
-		if err != nil {
-			return errors.New("error doing accounting: " + err.Error())
-		}
+			err = model.DoAccounting()
+			if err != nil {
+				return errors.New("error doing accounting: " + err.Error())
+			}
+		*/
 
 		err = model.Update()
 		if err != nil {
