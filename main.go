@@ -559,36 +559,42 @@ func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, o
 
 func cronJobsEveryHour() error {
 	log.Print("Running cron job every 8 Hours")
-
-	err := models.ProcessOrders()
+	err := models.ProcessSalesHistory()
 	if err != nil {
 		log.Print(err)
 	}
 
-	err = models.ProcessSalesReturns()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessOrders()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessPurchases()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessSalesReturns()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessPurchaseReturns()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessPurchases()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessQuotations()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessPurchaseReturns()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessDeliveryNotes()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessQuotations()
+		if err != nil {
+			log.Print(err)
+		}
+
+		err = models.ProcessDeliveryNotes()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	/*
 		err := models.ProcessSalesCashDiscounts()
