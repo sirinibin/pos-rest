@@ -1832,10 +1832,11 @@ func ProcessPurchases() error {
 			}
 		*/
 
-		err = model.Update()
-		if err != nil {
-			return errors.New("error updating purchase: " + err.Error())
-		}
+		/*
+			err = model.Update()
+			if err != nil {
+				return errors.New("error updating purchase: " + err.Error())
+			}*/
 
 		/*
 			err = model.SetVendorPurchaseStats()

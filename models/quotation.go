@@ -1205,10 +1205,11 @@ func ProcessQuotations() error {
 			return err
 		}
 
-		err = quotation.SetProductsQuotationStats()
-		if err != nil {
-			return err
-		}
+		/*
+			err = quotation.SetProductsQuotationStats()
+			if err != nil {
+				return err
+			}*/
 
 		/*
 			err = quotation.SetCustomerQuotationStats()
@@ -1217,10 +1218,12 @@ func ProcessQuotations() error {
 			}*/
 
 		//quotation.Date = quotation.CreatedAt
-		err = quotation.Update()
-		if err != nil {
-			return err
-		}
+		/*
+			err = quotation.Update()
+			if err != nil {
+				return err
+			}
+		*/
 	}
 	log.Print("DONE!")
 	return nil

@@ -1786,10 +1786,11 @@ func ProcessPurchaseReturns() error {
 			}
 		*/
 
-		err = model.Update()
-		if err != nil {
-			return err
-		}
+		/*
+			err = model.Update()
+			if err != nil {
+				return err
+			}*/
 
 		bar.Add(1)
 	}

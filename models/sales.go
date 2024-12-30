@@ -2132,7 +2132,7 @@ func ProcessOrders() error {
 			}
 		*/
 
-		order.Update()
+		//order.Update()
 
 		/*
 			if order.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {

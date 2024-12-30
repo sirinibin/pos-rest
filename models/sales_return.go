@@ -1900,31 +1900,31 @@ func ProcessSalesReturns() error {
 		//salesReturn.UpdateOrderReturnCount()
 
 		/*
-			salesReturn.GetPayments()
+				salesReturn.GetPayments()
 
-			err = salesReturn.UndoAccounting()
-			if err != nil {
-				return errors.New("error undo accounting: " + err.Error())
-			}
-
-			err = salesReturn.DoAccounting()
-			if err != nil {
-				return errors.New("error doing accounting: " + err.Error())
-			}
-		*/
-
-		err = salesReturn.Update()
-		if err != nil {
-			return err
-		}
-
-		/*
-			if salesReturn.Code == "GUOJ-200042" {
-				err = salesReturn.HardDelete()
+				err = salesReturn.UndoAccounting()
 				if err != nil {
-					return err
+					return errors.New("error undo accounting: " + err.Error())
 				}
+
+				err = salesReturn.DoAccounting()
+				if err != nil {
+					return errors.New("error doing accounting: " + err.Error())
+				}
+
+
+			err = salesReturn.Update()
+			if err != nil {
+				return err
 			}
+
+			/*
+				if salesReturn.Code == "GUOJ-200042" {
+					err = salesReturn.HardDelete()
+					if err != nil {
+						return err
+					}
+				}
 		*/
 		bar.Add(1)
 	}

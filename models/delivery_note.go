@@ -648,16 +648,16 @@ func ProcessDeliveryNotes() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		/*
-			err = deliverynote.ClearProductsDeliveryNoteHistory()
-			if err != nil {
-				return err
-			}
+		err = deliverynote.ClearProductsDeliveryNoteHistory()
+		if err != nil {
+			return err
+		}
 
-			err = deliverynote.AddProductsDeliveryNoteHistory()
-			if err != nil {
-				return err
-			}
+		err = deliverynote.AddProductsDeliveryNoteHistory()
+		if err != nil {
+			return err
+		}
+		/*
 
 			err = deliverynote.SetProductsDeliveryNoteStats()
 			if err != nil {
@@ -665,15 +665,17 @@ func ProcessDeliveryNotes() error {
 			}
 		*/
 
-		err = deliverynote.SetCustomerDeliveryNoteStats()
-		if err != nil {
-			return err
-		}
+		/*
+			err = deliverynote.SetCustomerDeliveryNoteStats()
+			if err != nil {
+				return err
+			}
 
-		err = deliverynote.Update()
-		if err != nil {
-			return err
-		}
+
+			err = deliverynote.Update()
+			if err != nil {
+				return err
+			}*/
 	}
 	log.Print("DONE!")
 	return nil
