@@ -3,11 +3,13 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -609,3 +611,76 @@ func FindPurchaseHistoryByPurchaseID(
 	return purchaseHistory, err
 }
 */
+
+func ProcessPurchaseHistory() error {
+	log.Print("Processing purchase history")
+	totalCount, err := GetTotalCount(bson.M{}, "product_purchase_history")
+	if err != nil {
+		return err
+	}
+
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching product purchase history:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	bar := progressbar.Default(totalCount)
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		model := ProductPurchaseHistory{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		purchase, err := FindPurchaseByID(model.PurchaseID, map[string]interface{}{})
+		if err != nil {
+			return errors.New("Error finding purchase:" + err.Error())
+		}
+		model.Date = purchase.Date
+		err = model.Update()
+		if err != nil {
+			return errors.New("Error updating purchase history:" + err.Error())
+		}
+		bar.Add(1)
+	}
+
+	log.Print("Purchase history DONE!")
+	return nil
+}
+
+func (model *ProductPurchaseHistory) Update() error {
+	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	updateResult, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": model.ID},
+		bson.M{"$set": model},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
+	if updateResult.MatchedCount > 0 {
+		return nil
+	}
+
+	return nil
+}
