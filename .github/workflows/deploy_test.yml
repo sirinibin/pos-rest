@@ -29,18 +29,29 @@ jobs:
         run: |
           go build -o pos-rest
 
-      # Step 4: Deploy to AWS
-      - name: Deploy to AWS
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          AWS_HOST: ${{ secrets.AWS_HOST }}
-          AWS_USER: ${{ secrets.AWS_USER }}
-          AWS_PORT: ${{ secrets.AWS_PORT }}
-          AWS_DEST_PATH: ${{ secrets.AWS_GO_API_TEST_DEST_PATH }}
-        run: |
-          echo "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-          sudo systemctl stop start-api-test || true
-          scp -o StrictHostKeyChecking=no -i private_key.pem -P $AWS_PORT -r pos-rest $AWS_USER@$AWS_HOST:$AWS_GO_API_TEST_DEST_PATH
-          sudo systemctl start start-api-test || true
-          rm private_key.pem
+      # Deploy to the EC2 server
+      - name: Deploy and restart service
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Stop the service if it's running
+            sudo systemctl stop start-api-test || true
+        
+            # Deploy the new binary
+            scp -o StrictHostKeyChecking=no ./pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+            sudo systemctl start start-api-test || true
+
+
+      # Verify the service status
+      - name: Verify service status
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+           sudo systemctl status start-api-test
+     
