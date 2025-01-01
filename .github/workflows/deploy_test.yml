@@ -61,7 +61,8 @@ jobs:
             # Ensure proper permissions
             chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
             sudo systemctl start start-api-test || true
-
+      - name: Log Deployed Binary Checksum
+        run: ssh -i ${{ secrets.SSH_PRIVATE_KEY }} ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest"
 
       # Verify the service status
       - name: Verify service status
