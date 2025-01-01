@@ -1,0 +1,46 @@
+name: Build and Deploy Go Application to test
+
+on:
+  push:
+    branches:
+      - test # Change to your production branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Set up Go
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+
+      # Step 3: Install dependencies and build
+      - name: Install dependencies 
+        run: |
+          go mod tidy
+     # Step 3: Install dependencies and build
+      - name: Building
+        run: |
+          go build -o pos-rest
+
+      # Step 4: Deploy to AWS
+      - name: Deploy to AWS
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+          AWS_PORT: ${{ secrets.AWS_PORT }}
+          AWS_DEST_PATH: ${{ secrets.AWS_GO_API_TEST_DEST_PATH }}
+        run: |
+          echo "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          sudo service start-api-test stop
+          scp -o StrictHostKeyChecking=no -i private_key.pem -P $AWS_PORT -r pos-rest $AWS_USER@$AWS_HOST:$AWS_GO_API_TEST_DEST_PATH
+          sudo service start-api-test start
+          rm private_key.pem
