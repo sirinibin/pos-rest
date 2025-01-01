@@ -30,6 +30,8 @@ jobs:
           go mod tidy
       - name: Clean Go cache
         run: go clean -cache -modcache -i -r
+      - name: Clean Build Directory
+        run: rm -rf ./bin ./build ./pos-rest
      # Step 3: Install dependencies and build
       - name: Building
         run: |
