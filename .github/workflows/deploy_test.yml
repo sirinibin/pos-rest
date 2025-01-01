@@ -24,6 +24,8 @@ jobs:
       - name: Install dependencies 
         run: |
           go mod tidy
+      - name: Clean Go cache
+        run: go clean -cache -modcache -i -r
      # Step 3: Install dependencies and build
       - name: Building
         run: |
