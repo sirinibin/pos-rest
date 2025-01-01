@@ -32,6 +32,13 @@ jobs:
         run: go clean -cache -modcache -i -r
       - name: Clean Build Directory
         run: rm -rf ./bin ./build ./pos-rest
+      - name: Clear GitHub Actions Cache
+        uses: actions/cache@v3
+        with:
+          path: ./build
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-build-
      # Step 3: Install dependencies and build
       - name: Building
         run: |
