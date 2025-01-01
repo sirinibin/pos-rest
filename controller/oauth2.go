@@ -117,7 +117,7 @@ func APIInfo(w http.ResponseWriter, r *http.Request) {
 
 	var response models.Response
 	response.Status = true
-	response.Result = "GoLang / MongoDb Microservice-new-4 [ OAuth2, JWT and Redis used for security ] "
+	response.Result = "GoLang / MongoDb Microservice-new-4-u [ OAuth2, JWT and Redis used for security ] "
 
 	json.NewEncoder(w).Encode(response)
 }
