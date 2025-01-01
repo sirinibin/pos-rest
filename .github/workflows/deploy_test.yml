@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - test # Change to your test branch
+    paths:
+      - '**.go'
+      - '**.mod'
+      - '**.sum'
 
 jobs:
   build-and-deploy:
