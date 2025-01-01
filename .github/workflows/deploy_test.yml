@@ -63,11 +63,15 @@ jobs:
             sudo systemctl start start-api-test || true
             sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
 
-      - name: Add SSH Key
-        run: echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key && chmod 600 private_key      
-      - name: Upload New Binary
-        run: scp -v -i private_key pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
-      # Verify the service status
+      - name: Copy Artifact to Server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+
+        # Verify the service status
       - name: Verify service status
         uses: appleboy/ssh-action@v0.1.5
         with:
