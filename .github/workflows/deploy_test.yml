@@ -45,6 +45,16 @@ jobs:
       - name: Log Build Checksum
         run: sha256sum ./pos-rest
 
+    
+
+      - name: Copy Artifact to Server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+
       # Deploy to the EC2 server
       - name: Deploy and restart service
         uses: appleboy/ssh-action@v0.1.5
@@ -57,20 +67,11 @@ jobs:
             sudo systemctl stop start-api-test || true
         
             # Deploy the new binary
-            scp -o StrictHostKeyChecking=no ./pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+            #scp -o StrictHostKeyChecking=no ./pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
             # Ensure proper permissions
             chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
             sudo systemctl start start-api-test || true
             sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
-
-      - name: Copy Artifact to Server
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
-          chmod 600 private_key
-          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
-          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
-
         # Verify the service status
       - name: Verify service status
         uses: appleboy/ssh-action@v0.1.5
