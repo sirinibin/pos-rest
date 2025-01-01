@@ -3,7 +3,7 @@ name: Build and Deploy Go Application to test
 on:
   push:
     branches:
-      - test # Change to your production branch
+      - test # Change to your test branch
 
 jobs:
   build-and-deploy:
