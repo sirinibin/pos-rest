@@ -41,7 +41,9 @@ jobs:
      # Step 3: Install dependencies and build
       - name: Building
         run: |
-          go build -o pos-rest
+          go build -ldflags="-X 'main.version=${{ github.sha }}'"  -o pos-rest
+      - name: Log Build Checksum
+        run: sha256sum ./pos-rest
 
       # Deploy to the EC2 server
       - name: Deploy and restart service
