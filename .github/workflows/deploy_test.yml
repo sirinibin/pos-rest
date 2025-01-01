@@ -63,6 +63,8 @@ jobs:
             sudo systemctl start start-api-test || true
             sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
 
+      - name: Upload New Binary
+        run: scp -v -i ${{ secrets.SSH_PRIVATE_KEY }} pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
       # Verify the service status
       - name: Verify service status
         uses: appleboy/ssh-action@v0.1.5
