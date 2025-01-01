@@ -67,7 +67,7 @@ jobs:
             sudo systemctl stop start-api-test || true
         
             # Deploy the new binary
-            #scp -o StrictHostKeyChecking=no ./pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+            scp -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
             # Ensure proper permissions
             chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
             sudo systemctl start start-api-test || true
