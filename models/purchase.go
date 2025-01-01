@@ -33,6 +33,8 @@ type PurchaseProduct struct {
 	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	Discount                float64            `bson:"discount" json:"discount"`
+	DiscountPercent         float64            `bson:"discount_percent" json:"discount_percent"`
 	ExpectedRetailProfit    float64            `bson:"retail_profit" json:"retail_profit"`
 	ExpectedWholesaleProfit float64            `bson:"wholesale_profit" json:"wholesale_profit"`
 	ExpectedWholesaleLoss   float64            `bson:"wholesale_loss" json:"wholesale_loss"`
@@ -360,7 +362,7 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	for index, purchaseProduct := range purchase.Products {
 		quantity := purchaseProduct.Quantity
 
-		purchasePrice := quantity * purchaseProduct.PurchaseUnitPrice
+		purchasePrice := (quantity * purchaseProduct.PurchaseUnitPrice) - purchaseProduct.Discount
 		retailPrice := quantity * purchaseProduct.RetailUnitPrice
 		wholesalePrice := quantity * purchaseProduct.WholesaleUnitPrice
 
@@ -526,7 +528,7 @@ func (purchase *Purchase) FindNetTotal() {
 	netTotal := float64(0.0)
 	total := float64(0.0)
 	for _, product := range purchase.Products {
-		total += (product.Quantity * product.PurchaseUnitPrice)
+		total += (product.Quantity * product.PurchaseUnitPrice) - product.Discount
 	}
 
 	netTotal = total
@@ -546,7 +548,7 @@ func (purchase *Purchase) FindNetTotal() {
 func (purchase *Purchase) FindTotal() {
 	total := float64(0.0)
 	for _, product := range purchase.Products {
-		total += (float64(product.Quantity) * product.PurchaseUnitPrice)
+		total += (product.Quantity * product.PurchaseUnitPrice) - product.Discount
 	}
 
 	purchase.Total = RoundFloat(total, 2)
@@ -1333,6 +1335,10 @@ func (purchase *Purchase) Validate(
 			errs["quantity_"+strconv.Itoa(i)] = "Quantity is required"
 		}
 
+		if product.Discount > (product.PurchaseUnitPrice*product.Quantity) && product.PurchaseUnitPrice > 0 {
+			errs["discount_"+strconv.Itoa(i)] = "Discount shouldn't be greater than product price"
+		}
+
 		if scenario == "update" {
 			if product.Quantity < product.QuantityReturned {
 				errs["quantity_"+strconv.Itoa(i)] = "Quantity should not be less than the returned quantity: " + fmt.Sprintf("%.02f", product.QuantityReturned)
@@ -1795,20 +1801,21 @@ func ProcessPurchases() error {
 			return errors.New("Cursor decoding purchase error:" + err.Error())
 		}
 
-		err = model.ClearProductsPurchaseHistory()
-		if err != nil {
-			return errors.New("error deleting product purchase history: " + err.Error())
-		}
-
-		err = model.AddProductsPurchaseHistory()
-		if err != nil {
-			return errors.New("error Adding product purchase history: " + err.Error())
-		}
-
 		/*
+			err = model.ClearProductsPurchaseHistory()
+			if err != nil {
+				return errors.New("error deleting product purchase history: " + err.Error())
+			}
+
+			err = model.AddProductsPurchaseHistory()
+			if err != nil {
+				return errors.New("error Adding product purchase history: " + err.Error())
+			}
 
 
-			model.GetPayments()
+
+
+				model.GetPayments()
 		*/
 
 		/*

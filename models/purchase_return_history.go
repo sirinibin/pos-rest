@@ -28,6 +28,8 @@ type ProductPurchaseReturnHistory struct {
 	PurchaseReturnCode string              `json:"purchase_return_code,omitempty" bson:"purchase_return_code,omitempty"`
 	Quantity           float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice          float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Discount           float64             `bson:"discount" json:"discount"`
+	DiscountPercent    float64             `bson:"discount_percent" json:"discount_percent"`
 	Price              float64             `bson:"price,omitempty" json:"price,omitempty"`
 	NetPrice           float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
 	VatPercent         float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
@@ -441,12 +443,14 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 			Quantity:           purchaseReturnProduct.Quantity,
 			UnitPrice:          purchaseReturnProduct.PurchaseReturnUnitPrice,
 			Unit:               purchaseReturnProduct.Unit,
+			Discount:           purchaseReturnProduct.Discount,
+			DiscountPercent:    purchaseReturnProduct.DiscountPercent,
 			CreatedAt:          purchaseReturn.CreatedAt,
 			UpdatedAt:          purchaseReturn.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(purchaseReturnProduct.PurchaseReturnUnitPrice, 2)
-		history.Price = RoundFloat((purchaseReturnProduct.PurchaseReturnUnitPrice * purchaseReturnProduct.Quantity), 2)
+		history.Price = RoundFloat(((purchaseReturnProduct.PurchaseReturnUnitPrice * purchaseReturnProduct.Quantity) - purchaseReturnProduct.Discount), 2)
 		history.VatPercent = RoundFloat(*purchaseReturn.VatPercent, 2)
 		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
 		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)

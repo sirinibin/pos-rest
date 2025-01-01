@@ -28,6 +28,8 @@ type ProductSalesReturnHistory struct {
 	SalesReturnCode string              `json:"sales_return_code,omitempty" bson:"sales_return_code,omitempty"`
 	Quantity        float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Discount        float64             `bson:"discount" json:"discount"`
+	DiscountPercent float64             `bson:"discount_percent" json:"discount_percent"`
 	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
 	NetPrice        float64             `bson:"net_price" json:"net_price"`
 	Profit          float64             `bson:"profit" json:"profit"`
@@ -449,12 +451,14 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 			Quantity:        salesReturnProduct.Quantity,
 			UnitPrice:       salesReturnProduct.UnitPrice,
 			Unit:            salesReturnProduct.Unit,
+			Discount:        salesReturnProduct.Discount,
+			DiscountPercent: salesReturnProduct.DiscountPercent,
 			CreatedAt:       salesReturn.CreatedAt,
 			UpdatedAt:       salesReturn.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(salesReturnProduct.UnitPrice, 2)
-		history.Price = RoundFloat((salesReturnProduct.UnitPrice * salesReturnProduct.Quantity), 2)
+		history.Price = RoundFloat(((salesReturnProduct.UnitPrice * salesReturnProduct.Quantity) - salesReturnProduct.Discount), 2)
 		history.VatPercent = RoundFloat(*salesReturn.VatPercent, 2)
 		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
 		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)

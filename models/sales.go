@@ -32,6 +32,8 @@ type OrderProduct struct {
 	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	Discount          float64            `bson:"discount" json:"discount"`
+	DiscountPercent   float64            `bson:"discount_percent" json:"discount_percent"`
 	Profit            float64            `bson:"profit" json:"profit"`
 	Loss              float64            `bson:"loss" json:"loss"`
 }
@@ -247,7 +249,7 @@ func (order *Order) FindNetTotal() {
 	netTotal := float64(0.0)
 	total := float64(0.0)
 	for _, product := range order.Products {
-		total += (product.Quantity * product.UnitPrice)
+		total += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 
 	netTotal = total
@@ -267,7 +269,7 @@ func (order *Order) FindNetTotal() {
 func (order *Order) FindTotal() {
 	total := float64(0.0)
 	for _, product := range order.Products {
-		total += (float64(product.Quantity) * product.UnitPrice)
+		total += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 
 	//order.Total = total
@@ -1241,6 +1243,10 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
 		}
 
+		if product.Discount > (product.UnitPrice*product.Quantity) && product.UnitPrice > 0 {
+			errs["discount_"+strconv.Itoa(index)] = "Discount shouldn't be greater than product price"
+		}
+
 		if scenario == "update" {
 			if product.Quantity < product.QuantityReturned {
 				errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be less than the returned quantity: " + fmt.Sprintf("%.02f", product.QuantityReturned)
@@ -1427,7 +1433,7 @@ func (order *Order) CalculateOrderProfit() error {
 		*/
 		quantity := orderProduct.Quantity
 
-		salesPrice := quantity * orderProduct.UnitPrice
+		salesPrice := (quantity * orderProduct.UnitPrice) - orderProduct.Discount
 		purchaseUnitPrice := orderProduct.PurchaseUnitPrice
 
 		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
@@ -1445,7 +1451,6 @@ func (order *Order) CalculateOrderProfit() error {
 					break
 				}
 			}
-
 		}
 
 		profit := 0.0
@@ -2063,22 +2068,7 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = order.ClearProductsSalesHistory()
-		if err != nil {
-			return err
-		}
-
-		err = order.CreateProductsSalesHistory()
-		if err != nil {
-			return err
-		}
-
 		/*
-			err = order.CalculateOrderProfit()
-			if err != nil {
-				return err
-			}
-
 			err = order.ClearProductsSalesHistory()
 			if err != nil {
 				return err
@@ -2089,7 +2079,23 @@ func ProcessOrders() error {
 				return err
 			}
 
-			order.GetPayments()
+
+				err = order.CalculateOrderProfit()
+				if err != nil {
+					return err
+				}
+
+				err = order.ClearProductsSalesHistory()
+				if err != nil {
+					return err
+				}
+
+				err = order.CreateProductsSalesHistory()
+				if err != nil {
+					return err
+				}
+
+				order.GetPayments()
 		*/
 
 		/*

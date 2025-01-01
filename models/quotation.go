@@ -28,6 +28,8 @@ type QuotationProduct struct {
 	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Discount          float64            `bson:"discount" json:"discount"`
+	DiscountPercent   float64            `bson:"discount_percent" json:"discount_percent"`
 	Profit            float64            `bson:"profit" json:"profit"`
 	Loss              float64            `bson:"loss" json:"loss"`
 }
@@ -136,7 +138,7 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 		}
 		quantity := quotationProduct.Quantity
 
-		salesPrice := quantity * quotationProduct.UnitPrice
+		salesPrice := (quantity * quotationProduct.UnitPrice) - quotationProduct.Discount
 
 		purchaseUnitPrice := quotation.Products[i].PurchaseUnitPrice
 
@@ -400,7 +402,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 func (quotation *Quotation) FindNetTotal() {
 	netTotal := float64(0.0)
 	for _, product := range quotation.Products {
-		netTotal += (float64(product.Quantity) * product.UnitPrice)
+		netTotal += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 
 	netTotal -= quotation.Discount
@@ -416,7 +418,7 @@ func (quotation *Quotation) FindNetTotal() {
 func (quotation *Quotation) FindTotal() {
 	total := float64(0.0)
 	for _, product := range quotation.Products {
-		total += (float64(product.Quantity) * product.UnitPrice)
+		total += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 
 	quotation.Total = RoundFloat(total, 2)
@@ -912,6 +914,10 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 		if product.UnitPrice == 0 {
 			errs["unit_price_"+strconv.Itoa(index)] = "Unit Price is required"
+		}
+
+		if product.Discount > (product.UnitPrice*product.Quantity) && product.UnitPrice > 0 {
+			errs["discount_"+strconv.Itoa(index)] = "Discount shouldn't be greater than product price"
 		}
 
 		if product.PurchaseUnitPrice == 0 {

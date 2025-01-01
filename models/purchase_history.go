@@ -28,6 +28,8 @@ type ProductPurchaseHistory struct {
 	PurchaseCode    string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
 	Quantity        float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Discount        float64             `bson:"discount" json:"discount"`
+	DiscountPercent float64             `bson:"discount_percent" json:"discount_percent"`
 	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
 	NetPrice        float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
 	RetailProfit    float64             `bson:"retail_profit" json:"retail_profit"`
@@ -479,23 +481,25 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 	for _, purchaseProduct := range purchase.Products {
 
 		history := ProductPurchaseHistory{
-			Date:         purchase.Date,
-			StoreID:      purchase.StoreID,
-			StoreName:    purchase.StoreName,
-			ProductID:    purchaseProduct.ProductID,
-			VendorID:     purchase.VendorID,
-			VendorName:   purchase.VendorName,
-			PurchaseID:   &purchase.ID,
-			PurchaseCode: purchase.Code,
-			Quantity:     purchaseProduct.Quantity,
-			UnitPrice:    purchaseProduct.PurchaseUnitPrice,
-			Unit:         purchaseProduct.Unit,
-			CreatedAt:    purchase.CreatedAt,
-			UpdatedAt:    purchase.UpdatedAt,
+			Date:            purchase.Date,
+			StoreID:         purchase.StoreID,
+			StoreName:       purchase.StoreName,
+			ProductID:       purchaseProduct.ProductID,
+			VendorID:        purchase.VendorID,
+			VendorName:      purchase.VendorName,
+			PurchaseID:      &purchase.ID,
+			PurchaseCode:    purchase.Code,
+			Quantity:        purchaseProduct.Quantity,
+			UnitPrice:       purchaseProduct.PurchaseUnitPrice,
+			Unit:            purchaseProduct.Unit,
+			Discount:        purchaseProduct.Discount,
+			DiscountPercent: purchaseProduct.DiscountPercent,
+			CreatedAt:       purchase.CreatedAt,
+			UpdatedAt:       purchase.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(purchaseProduct.PurchaseUnitPrice, 2)
-		history.Price = RoundFloat((purchaseProduct.PurchaseUnitPrice * purchaseProduct.Quantity), 2)
+		history.Price = RoundFloat(((purchaseProduct.PurchaseUnitPrice * purchaseProduct.Quantity) - purchaseProduct.Discount), 2)
 
 		history.RetailProfit = RoundFloat(purchase.ExpectedRetailProfit, 2)
 		history.WholesaleProfit = RoundFloat(purchase.ExpectedWholesaleProfit, 2)

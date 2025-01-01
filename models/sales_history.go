@@ -30,6 +30,8 @@ type ProductSalesHistory struct {
 	PurchaseUnitPrice float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	UnitPrice         float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	Discount          float64             `bson:"discount" json:"discount"`
+	DiscountPercent   float64             `bson:"discount_percent" json:"discount_percent"`
 	Price             float64             `bson:"price,omitempty" json:"price,omitempty"`
 	NetPrice          float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
 	Profit            float64             `bson:"profit" json:"profit"`
@@ -492,12 +494,14 @@ func (order *Order) CreateProductsSalesHistory() error {
 			Quantity:          orderProduct.Quantity,
 			PurchaseUnitPrice: orderProduct.PurchaseUnitPrice,
 			Unit:              orderProduct.Unit,
+			Discount:          orderProduct.Discount,
+			DiscountPercent:   orderProduct.DiscountPercent,
 			CreatedAt:         order.CreatedAt,
 			UpdatedAt:         order.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(orderProduct.UnitPrice, 2)
-		history.Price = RoundFloat((orderProduct.UnitPrice * orderProduct.Quantity), 2)
+		history.Price = RoundFloat(((orderProduct.UnitPrice * orderProduct.Quantity) - orderProduct.Discount), 2)
 		history.Profit = RoundFloat(orderProduct.Profit, 2)
 		history.Loss = RoundFloat(orderProduct.Loss, 2)
 

@@ -32,6 +32,8 @@ type SalesReturnProduct struct {
 	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Discount          float64            `bson:"discount" json:"discount"`
+	DiscountPercent   float64            `bson:"discount_percent" json:"discount_percent"`
 	Profit            float64            `bson:"profit" json:"profit"`
 	Loss              float64            `bson:"loss" json:"loss"`
 	Selected          bool               `bson:"selected" json:"selected"`
@@ -414,7 +416,7 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 		if !product.Selected {
 			continue
 		}
-		netTotal += (float64(product.Quantity) * product.UnitPrice)
+		netTotal += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 
 	netTotal -= salesreturn.Discount
@@ -433,7 +435,7 @@ func (salesreturn *SalesReturn) FindTotal() {
 			continue
 		}
 
-		total += (product.Quantity * product.UnitPrice)
+		total += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 	salesreturn.Total = RoundFloat(total, 2)
 }
@@ -1173,6 +1175,10 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
 		}
 
+		if salesReturnProduct.Discount > (salesReturnProduct.UnitPrice*salesReturnProduct.Quantity) && salesReturnProduct.UnitPrice > 0 {
+			errs["discount_"+strconv.Itoa(index)] = "Discount shouldn't be greater than product price"
+		}
+
 		for _, orderProduct := range order.Products {
 			if orderProduct.ProductID == salesReturnProduct.ProductID {
 				//soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
@@ -1454,7 +1460,7 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 		}
 
 		quantity := product.Quantity
-		salesPrice := quantity * product.UnitPrice
+		salesPrice := (quantity * product.UnitPrice) - product.Discount
 		purchaseUnitPrice := product.PurchaseUnitPrice
 		for _, orderProduct := range order.Products {
 			if orderProduct.ProductID.Hex() == product.ProductID.Hex() {
@@ -1857,30 +1863,31 @@ func ProcessSalesReturns() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = salesReturn.ClearProductsSalesReturnHistory()
-		if err != nil {
-			return err
-		}
-
-		err = salesReturn.CreateProductsSalesReturnHistory()
-		if err != nil {
-			return err
-		}
-
 		/*
-			err = salesReturn.CalculateSalesReturnProfit()
+			err = salesReturn.ClearProductsSalesReturnHistory()
+			if err != nil {
+				return err
+			}
+
+			err = salesReturn.CreateProductsSalesReturnHistory()
 			if err != nil {
 				return err
 			}
 
 
+				err = salesReturn.CalculateSalesReturnProfit()
+				if err != nil {
+					return err
+				}
 
-			salesReturn.GetPayments()
 
-			err = salesReturn.SetProductsSalesReturnStats()
-			if err != nil {
-				return err
-			}
+
+				salesReturn.GetPayments()
+
+				err = salesReturn.SetProductsSalesReturnStats()
+				if err != nil {
+					return err
+				}
 		*/
 
 		/*
