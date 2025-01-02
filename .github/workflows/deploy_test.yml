@@ -58,7 +58,10 @@ jobs:
              
       
       - name: Upload File
-        run: scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+        run: |
+          sudo systemctl stop start-api-test
+          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+          sudo systemctl start start-api-test
 
       # Deploy to the EC2 server
       - name: Deploy and restart service
@@ -69,13 +72,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             # Stop the service if it's running
-            sudo systemctl stop start-api-test || true
+            #sudo systemctl stop start-api-test || true
         
             # Deploy the new binary
             # scp -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
             # Ensure proper permissions
-            chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
-            sudo systemctl start start-api-test || true
+            #chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
+            #sudo systemctl start start-api-test || true
             sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
         # Verify the service status
       - name: Verify service status
