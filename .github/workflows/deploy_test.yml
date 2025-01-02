@@ -51,9 +51,14 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
           chmod 600 private_key
           ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Debug SSH Connection
+        run: |
+          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "ls -l ${{secrets.AWS_GO_API_TEST_DEST_PATH}}"
+             
       
       - name: Upload File
-        run: scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}/
+        run: scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
 
       # Deploy to the EC2 server
       - name: Deploy and restart service
