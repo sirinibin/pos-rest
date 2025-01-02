@@ -53,7 +53,7 @@ jobs:
           ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
       
       - name: Upload File
-        run: scp -v -i private_key pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+        run: scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
 
       # Deploy to the EC2 server
       - name: Deploy and restart service
