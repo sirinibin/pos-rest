@@ -45,20 +45,6 @@ jobs:
       - name: Log Build Checksum
         run: sha256sum ./pos-rest
 
-      - name: Set up SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
-          chmod 600 private_key
-          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Upload File
-        run: |
-          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sudo systemctl stop start-api-test"
-          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
-          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sudo systemctl start start-api-test"
-          
-
       # Deploy to the EC2 server
       - name: Deploy and restart service
         uses: appleboy/ssh-action@v0.1.5
@@ -68,13 +54,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             # Stop the service if it's running
-            #sudo systemctl stop start-api-test || true
+              sudo systemctl stop start-api-test 
         
             # Deploy the new binary
-            # scp -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+              scp -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
             # Ensure proper permissions
             #chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
-            #sudo systemctl start start-api-test || true
+            sudo systemctl start start-api-test 
             sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
         # Verify the service status
       - name: Verify service status
