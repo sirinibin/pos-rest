@@ -59,19 +59,20 @@ type SalesReturn struct {
 	//ReceivedBySignature     *Signature           `json:"received_by_signature,omitempty"`
 	//SignatureDate     *time.Time           `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	//SignatureDateStr  string               `json:"signature_date_str,omitempty"`
-	VatPercent        *float64 `bson:"vat_percent" json:"vat_percent"`
-	Discount          float64  `bson:"discount" json:"discount"`
-	DiscountPercent   float64  `bson:"discount_percent" json:"discount_percent"`
-	IsDiscountPercent bool     `bson:"is_discount_percent" json:"is_discount_percent"`
-	Status            string   `bson:"status,omitempty" json:"status,omitempty"`
-	StockAdded        bool     `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
-	TotalQuantity     float64  `bson:"total_quantity" json:"total_quantity"`
-	VatPrice          float64  `bson:"vat_price" json:"vat_price"`
-	Total             float64  `bson:"total" json:"total"`
-	NetTotal          float64  `bson:"net_total" json:"net_total"`
-	CashDiscount      float64  `bson:"cash_discount" json:"cash_discount"`
-	PaymentMethods    []string `json:"payment_methods" bson:"payment_methods"`
-	PaymentStatus     string   `bson:"payment_status" json:"payment_status"`
+	ShippingOrHandlingFees float64  `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
+	VatPercent             *float64 `bson:"vat_percent" json:"vat_percent"`
+	Discount               float64  `bson:"discount" json:"discount"`
+	DiscountPercent        float64  `bson:"discount_percent" json:"discount_percent"`
+	IsDiscountPercent      bool     `bson:"is_discount_percent" json:"is_discount_percent"`
+	Status                 string   `bson:"status,omitempty" json:"status,omitempty"`
+	StockAdded             bool     `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
+	TotalQuantity          float64  `bson:"total_quantity" json:"total_quantity"`
+	VatPrice               float64  `bson:"vat_price" json:"vat_price"`
+	Total                  float64  `bson:"total" json:"total"`
+	NetTotal               float64  `bson:"net_total" json:"net_total"`
+	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
+	PaymentMethods         []string `json:"payment_methods" bson:"payment_methods"`
+	PaymentStatus          string   `bson:"payment_status" json:"payment_status"`
 	//Deleted           bool                 `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	//DeletedBy         *primitive.ObjectID  `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	//DeletedByUser     *User                `json:"deleted_by_user,omitempty"`
@@ -218,6 +219,7 @@ type SalesReturnStats struct {
 	UnPaidSalesReturn      float64             `json:"unpaid_sales_return" bson:"unpaid_sales_return"`
 	CashSalesReturn        float64             `json:"cash_sales_return" bson:"cash_sales_return"`
 	BankAccountSalesReturn float64             `json:"bank_account_sales_return" bson:"bank_account_sales_return"`
+	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 }
 
 func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
@@ -231,13 +233,14 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":           nil,
-				"net_total":     bson.M{"$sum": "$net_total"},
-				"vat_price":     bson.M{"$sum": "$vat_price"},
-				"discount":      bson.M{"$sum": "$discount"},
-				"cash_discount": bson.M{"$sum": "$cash_discount"},
-				"net_profit":    bson.M{"$sum": "$net_profit"},
-				"net_loss":      bson.M{"$sum": "$net_loss"},
+				"_id":                    nil,
+				"net_total":              bson.M{"$sum": "$net_total"},
+				"vat_price":              bson.M{"$sum": "$vat_price"},
+				"discount":               bson.M{"$sum": "$discount"},
+				"cash_discount":          bson.M{"$sum": "$cash_discount"},
+				"net_profit":             bson.M{"$sum": "$net_profit"},
+				"net_loss":               bson.M{"$sum": "$net_loss"},
+				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
 				"paid_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",
@@ -419,6 +422,7 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 		netTotal += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 
+	netTotal += salesreturn.ShippingOrHandlingFees
 	netTotal -= salesreturn.Discount
 
 	if salesreturn.VatPercent != nil {
@@ -452,10 +456,10 @@ func (salesreturn *SalesReturn) FindTotalQuantity() {
 	salesreturn.TotalQuantity = totalQuantity
 }
 
-func (salesreturn *SalesReturn) FindVatPrice() {
-	vatPrice := ((*salesreturn.VatPercent / 100) * float64(salesreturn.Total-salesreturn.Discount))
+func (model *SalesReturn) FindVatPrice() {
+	vatPrice := ((*model.VatPercent / float64(100.00)) * ((model.Total + model.ShippingOrHandlingFees) - model.Discount))
 	vatPrice = RoundFloat(vatPrice, 2)
-	salesreturn.VatPrice = vatPrice
+	model.VatPrice = vatPrice
 }
 
 func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []SalesReturn, criterias SearchCriterias, err error) {

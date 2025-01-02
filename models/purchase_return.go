@@ -59,17 +59,18 @@ type PurchaseReturn struct {
 		SignatureDate               *time.Time              `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 		SignatureDateStr            string                  `json:"signature_date_str,omitempty"`
 	*/
-	VatPercent        *float64 `bson:"vat_percent" json:"vat_percent"`
-	Discount          float64  `bson:"discount" json:"discount"`
-	DiscountPercent   float64  `bson:"discount_percent" json:"discount_percent"`
-	IsDiscountPercent bool     `bson:"is_discount_percent" json:"is_discount_percent"`
-	Status            string   `bson:"status,omitempty" json:"status,omitempty"`
-	TotalQuantity     float64  `bson:"total_quantity" json:"total_quantity"`
-	VatPrice          float64  `bson:"vat_price" json:"vat_price"`
-	Total             float64  `bson:"total" json:"total"`
-	NetTotal          float64  `bson:"net_total" json:"net_total"`
-	CashDiscount      float64  `bson:"cash_discount" json:"cash_discount"`
-	PaymentStatus     string   `bson:"payment_status" json:"payment_status"`
+	VatPercent             *float64 `bson:"vat_percent" json:"vat_percent"`
+	ShippingOrHandlingFees float64  `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
+	Discount               float64  `bson:"discount" json:"discount"`
+	DiscountPercent        float64  `bson:"discount_percent" json:"discount_percent"`
+	IsDiscountPercent      bool     `bson:"is_discount_percent" json:"is_discount_percent"`
+	Status                 string   `bson:"status,omitempty" json:"status,omitempty"`
+	TotalQuantity          float64  `bson:"total_quantity" json:"total_quantity"`
+	VatPrice               float64  `bson:"vat_price" json:"vat_price"`
+	Total                  float64  `bson:"total" json:"total"`
+	NetTotal               float64  `bson:"net_total" json:"net_total"`
+	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
+	PaymentStatus          string   `bson:"payment_status" json:"payment_status"`
 	/*
 		Deleted                bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
 		DeletedBy              *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -211,6 +212,7 @@ type PurchaseReturnStats struct {
 	UnPaidPurchaseReturn      float64             `json:"unpaid_purchase_return" bson:"unpaid_purchase_return"`
 	CashPurchaseReturn        float64             `json:"cash_purchase_return" bson:"cash_purchase_return"`
 	BankAccountPurchaseReturn float64             `json:"bank_account_purchase_return" bson:"bank_account_purchase_return"`
+	ShippingOrHandlingFees    float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 }
 
 func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturnStats, err error) {
@@ -418,6 +420,7 @@ func (purchasereturn *PurchaseReturn) FindNetTotal() {
 		netTotal += (product.Quantity * product.PurchaseReturnUnitPrice) - product.Discount
 	}
 
+	netTotal += purchasereturn.ShippingOrHandlingFees
 	netTotal -= purchasereturn.Discount
 
 	if purchasereturn.VatPercent != nil {
@@ -452,10 +455,10 @@ func (purchasereturn *PurchaseReturn) FindTotalQuantity() {
 	purchasereturn.TotalQuantity = totalQuantity
 }
 
-func (purchasereturn *PurchaseReturn) FindVatPrice() {
-	vatPrice := ((*purchasereturn.VatPercent / 100) * (purchasereturn.Total - purchasereturn.Discount))
+func (model *PurchaseReturn) FindVatPrice() {
+	vatPrice := ((*model.VatPercent / float64(100.00)) * ((model.Total + model.ShippingOrHandlingFees) - model.Discount))
 	vatPrice = RoundFloat(vatPrice, 2)
-	purchasereturn.VatPrice = vatPrice
+	model.VatPrice = vatPrice
 }
 
 func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchasereturns []PurchaseReturn, criterias SearchCriterias, err error) {

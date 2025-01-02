@@ -506,24 +506,6 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 	return nil
 }
 
-/*
-func (purchase *Purchase) FindNetTotal() {
-	netTotal := float64(0.0)
-	for _, product := range purchase.Products {
-		netTotal += (float64(product.Quantity) * product.PurchaseUnitPrice)
-	}
-
-	netTotal -= purchase.Discount
-	netTotal += purchase.ShippingOrHandlingFees
-
-	if purchase.VatPercent != nil {
-		netTotal += netTotal * (*purchase.VatPercent / float64(100))
-	}
-
-	purchase.NetTotal = RoundFloat(netTotal, 2)
-}
-*/
-
 func (purchase *Purchase) FindNetTotal() {
 	netTotal := float64(0.0)
 	total := float64(0.0)
