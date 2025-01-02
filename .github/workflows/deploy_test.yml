@@ -45,6 +45,13 @@ jobs:
       - name: Log Build Checksum
         run: sha256sum ./pos-rest
 
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts   
+
       # Deploy to the EC2 server
       - name: Deploy and restart service
         uses: appleboy/ssh-action@v0.1.5
@@ -57,11 +64,9 @@ jobs:
               sudo systemctl stop start-api-test 
         
             # Deploy the new binary
-              scp -v -i key -o StrictHostKeyChecking=no pos-rest username@host:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
-            # Ensure proper permissions
-            #chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
-            sudo systemctl start start-api-test 
-            sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
+              scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+              sudo systemctl start start-api-test 
+              sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
         # Verify the service status
       - name: Verify service status
         uses: appleboy/ssh-action@v0.1.5
