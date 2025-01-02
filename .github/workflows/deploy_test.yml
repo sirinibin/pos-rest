@@ -44,6 +44,12 @@ jobs:
           go build -ldflags="-X 'main.version=${{ github.sha }}'"  -o pos-rest
       - name: Log Build Checksum
         run: sha256sum ./pos-rest
+        
+      - name: Add SSH Key
+        run: echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key && chmod 600 private_key
+      
+      - name: Upload File
+        run: scp -v -i private_key pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
 
       # Deploy to the EC2 server
       - name: Deploy and restart service
@@ -57,7 +63,7 @@ jobs:
             sudo systemctl stop start-api-test || true
         
             # Deploy the new binary
-            scp -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+            # scp -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
             # Ensure proper permissions
             chmod +x ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
             sudo systemctl start start-api-test || true
