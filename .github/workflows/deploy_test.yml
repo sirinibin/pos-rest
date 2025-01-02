@@ -44,9 +44,13 @@ jobs:
           go build -ldflags="-X 'main.version=${{ github.sha }}'"  -o pos-rest
       - name: Log Build Checksum
         run: sha256sum ./pos-rest
-        
-      - name: Add SSH Key
-        run: echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key && chmod 600 private_key
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
       
       - name: Upload File
         run: scp -v -i private_key pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
