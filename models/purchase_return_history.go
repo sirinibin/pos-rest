@@ -26,6 +26,8 @@ type ProductPurchaseReturnHistory struct {
 	VendorName         string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
 	PurchaseReturnID   *primitive.ObjectID `json:"purchase_return_id,omitempty" bson:"purchase_return_id,omitempty"`
 	PurchaseReturnCode string              `json:"purchase_return_code,omitempty" bson:"purchase_return_code,omitempty"`
+	PurchaseID         *primitive.ObjectID `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
+	PurchaseCode       string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
 	Quantity           float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice          float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Discount           float64             `bson:"discount" json:"discount"`
@@ -263,7 +265,40 @@ func SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) (models
 		} else {
 			criterias.SearchBy["unit_price"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["discount"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[discount_percent]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount_percent"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["discount_percent"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[quantity]"]
@@ -319,6 +354,20 @@ func SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) (models
 			return models, criterias, err
 		}
 		criterias.SearchBy["product_id"] = productID
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_id]"]
+	if ok && len(keys[0]) >= 1 {
+		orderID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return models, criterias, err
+		}
+		criterias.SearchBy["purchase_id"] = orderID
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["purchase_code"] = keys[0]
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_return_id]"]
@@ -440,6 +489,8 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 			VendorName:         purchaseReturn.VendorName,
 			PurchaseReturnID:   &purchaseReturn.ID,
 			PurchaseReturnCode: purchaseReturn.Code,
+			PurchaseID:         purchaseReturn.PurchaseID,
+			PurchaseCode:       purchaseReturn.PurchaseCode,
 			Quantity:           purchaseReturnProduct.Quantity,
 			UnitPrice:          purchaseReturnProduct.PurchaseReturnUnitPrice,
 			Unit:               purchaseReturnProduct.Unit,

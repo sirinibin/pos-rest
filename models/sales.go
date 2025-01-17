@@ -1436,22 +1436,24 @@ func (order *Order) CalculateOrderProfit() error {
 		salesPrice := (quantity * orderProduct.UnitPrice) - orderProduct.Discount
 		purchaseUnitPrice := orderProduct.PurchaseUnitPrice
 
-		product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-		if err != nil {
-			return err
-		}
-
-		if purchaseUnitPrice == 0 ||
-			order.Products[i].Loss > 0 ||
-			order.Products[i].Profit <= 0 {
-			for _, store := range product.ProductStores {
-				if store.StoreID == *order.StoreID {
-					purchaseUnitPrice = store.PurchaseUnitPrice
-					order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
-					break
-				}
+		/*
+			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+			if err != nil {
+				return err
 			}
-		}
+
+
+				if purchaseUnitPrice == 0 ||
+					order.Products[i].Loss > 0 ||
+					order.Products[i].Profit <= 0 {
+					for _, store := range product.ProductStores {
+						if store.StoreID == *order.StoreID {
+							purchaseUnitPrice = store.PurchaseUnitPrice
+							order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+							break
+						}
+					}
+				}*/
 
 		profit := 0.0
 		if purchaseUnitPrice > 0 {

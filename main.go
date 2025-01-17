@@ -21,7 +21,7 @@ import (
 
 // testing
 func main() {
-	fmt.Println("A GoLang / MongoDB Microservice [OAuth2,Redis & JWT used for token management]!")
+	fmt.Println("A GoLang / MongoDB Microservice-testing [OAuth2,Redis & JWT used for token management]!")
 	db.Client()
 	db.InitRedis()
 	RemoveAllIndexes()

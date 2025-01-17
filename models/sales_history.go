@@ -270,7 +270,40 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 		} else {
 			criterias.SearchBy["unit_price"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["discount"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[discount_percent]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount_percent"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["discount_percent"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[quantity]"]

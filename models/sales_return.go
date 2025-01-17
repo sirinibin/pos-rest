@@ -1453,10 +1453,12 @@ func (salesreturn *SalesReturn) Insert() error {
 func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 	totalProfit := float64(0.0)
 	totalLoss := float64(0.0)
-	order, err := FindOrderByID(salesReturn.OrderID, map[string]interface{}{})
-	if err != nil {
-		return err
-	}
+	/*
+		order, err := FindOrderByID(salesReturn.OrderID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+	*/
 
 	for i, product := range salesReturn.Products {
 		if !product.Selected {
@@ -1465,31 +1467,33 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 
 		quantity := product.Quantity
 		salesPrice := (quantity * product.UnitPrice) - product.Discount
-		purchaseUnitPrice := product.PurchaseUnitPrice
-		for _, orderProduct := range order.Products {
-			if orderProduct.ProductID.Hex() == product.ProductID.Hex() {
-				purchaseUnitPrice = orderProduct.PurchaseUnitPrice
-				break
-			}
-		}
-		salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
-
-		if purchaseUnitPrice == 0 ||
-			salesReturn.Products[i].Loss > 0 ||
-			salesReturn.Products[i].Profit <= 0 {
-			product, err := FindProductByID(&product.ProductID, map[string]interface{}{})
-			if err != nil {
-				return err
-			}
-			for _, productStore := range product.ProductStores {
-				if productStore.StoreID == *salesReturn.StoreID {
-					purchaseUnitPrice = productStore.PurchaseUnitPrice
-					salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+		//purchaseUnitPrice := product.PurchaseUnitPrice
+		/*
+			for _, orderProduct := range order.Products {
+				if orderProduct.ProductID.Hex() == product.ProductID.Hex() {
+					purchaseUnitPrice = orderProduct.PurchaseUnitPrice
 					break
 				}
-			}
+			}*/
+		//salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+		purchaseUnitPrice := salesReturn.Products[i].PurchaseUnitPrice
 
-		}
+		/*
+			if purchaseUnitPrice == 0 ||
+				salesReturn.Products[i].Loss > 0 ||
+				salesReturn.Products[i].Profit <= 0 {
+				product, err := FindProductByID(&product.ProductID, map[string]interface{}{})
+				if err != nil {
+					return err
+				}
+				for _, productStore := range product.ProductStores {
+					if productStore.StoreID == *salesReturn.StoreID {
+						purchaseUnitPrice = productStore.PurchaseUnitPrice
+						salesReturn.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+						break
+					}
+				}
+			}*/
 
 		profit := 0.0
 		if purchaseUnitPrice > 0 {
