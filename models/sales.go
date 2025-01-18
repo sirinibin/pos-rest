@@ -1476,7 +1476,7 @@ func (order *Order) CalculateOrderProfit() error {
 		}
 
 	}
-	//order.Profit = RoundFloat(totalProfit, 2)
+	order.Profit = totalProfit
 	//order.NetProfit = RoundFloat(((totalProfit - order.CashDiscount) - order.Discount), 2)
 	order.NetProfit = (totalProfit - order.CashDiscount) - order.Discount
 	order.Loss = totalLoss
@@ -2113,7 +2113,6 @@ func ProcessOrders() error {
 			}
 		*/
 
-		//order.FindNetTotal()
 		//order.FindTotal()
 		//order.FindTotalQuantity()
 

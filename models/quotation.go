@@ -65,6 +65,7 @@ type Quotation struct {
 	Profit                   float64             `bson:"profit" json:"profit"`
 	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
 	Loss                     float64             `bson:"loss" json:"loss"`
+	NetLoss                  float64             `bson:"net_loss" json:"net_loss"`
 	Deleted                  bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser            *User               `json:"deleted_by_user,omitempty"`
@@ -128,6 +129,7 @@ type QuotationStats struct {
 	Loss      float64             `json:"loss" bson:"loss"`
 }
 
+/*
 func (quotation *Quotation) CalculateQuotationProfit() error {
 	totalProfit := float64(0.0)
 	totalLoss := float64(0.0)
@@ -170,6 +172,76 @@ func (quotation *Quotation) CalculateQuotationProfit() error {
 	quotation.Profit = RoundFloat(totalProfit, 2)
 	quotation.NetProfit = RoundFloat((totalProfit - quotation.Discount), 2)
 	quotation.Loss = totalLoss
+	return nil
+}
+*/
+
+func (model *Quotation) CalculateQuotationProfit() error {
+	totalProfit := float64(0.0)
+	totalLoss := float64(0.0)
+	for i, quotationProduct := range model.Products {
+		/*
+			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+			if err != nil {
+				return err
+			}
+		*/
+		quantity := quotationProduct.Quantity
+
+		salesPrice := (quantity * quotationProduct.UnitPrice) - quotationProduct.Discount
+		purchaseUnitPrice := quotationProduct.PurchaseUnitPrice
+
+		/*
+			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
+			if err != nil {
+				return err
+			}
+
+
+				if purchaseUnitPrice == 0 ||
+					order.Products[i].Loss > 0 ||
+					order.Products[i].Profit <= 0 {
+					for _, store := range product.ProductStores {
+						if store.StoreID == *order.StoreID {
+							purchaseUnitPrice = store.PurchaseUnitPrice
+							order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
+							break
+						}
+					}
+				}*/
+
+		profit := 0.0
+		if purchaseUnitPrice > 0 {
+			profit = salesPrice - (quantity * purchaseUnitPrice)
+		}
+
+		loss := 0.0
+
+		//profit = RoundFloat(profit, 2)
+
+		if profit >= 0 {
+			model.Products[i].Profit = profit
+			model.Products[i].Loss = loss
+			totalProfit += model.Products[i].Profit
+		} else {
+			model.Products[i].Profit = 0
+			loss = (profit * -1)
+			model.Products[i].Loss = loss
+			totalLoss += model.Products[i].Loss
+		}
+
+	}
+
+	model.Profit = totalProfit
+	model.NetProfit = (totalProfit - model.Discount)
+	model.Loss = totalLoss
+	model.NetLoss = totalLoss
+
+	if model.NetProfit < 0 {
+		model.NetLoss += (model.NetProfit * -1)
+		model.NetProfit = 0.00
+	}
+
 	return nil
 }
 
@@ -399,20 +471,25 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func (quotation *Quotation) FindNetTotal() {
+func (model *Quotation) FindNetTotal() {
 	netTotal := float64(0.0)
-	for _, product := range quotation.Products {
-		netTotal += (product.Quantity * product.UnitPrice) - product.Discount
+	total := float64(0.0)
+	for _, product := range model.Products {
+		total += (product.Quantity * product.UnitPrice) - product.Discount
 	}
 
-	netTotal -= quotation.Discount
-	netTotal -= quotation.ShippingOrHandlingFees
+	netTotal = total
+	netTotal += model.ShippingOrHandlingFees
+	netTotal -= model.Discount
 
-	if quotation.VatPercent != nil {
-		netTotal += netTotal * (*quotation.VatPercent / float64(100))
+	vatPrice := float64(0.00)
+	if model.VatPercent != nil {
+		vatPrice += (netTotal * (*model.VatPercent / float64(100.00)))
+		netTotal += vatPrice
 	}
 
-	quotation.NetTotal = RoundFloat(netTotal, 2)
+	//order.NetTotal = netTotal
+	model.NetTotal = RoundFloat(netTotal, 2)
 }
 
 func (quotation *Quotation) FindTotal() {
