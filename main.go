@@ -40,8 +40,10 @@ func main() {
 		CreateIndex("product", fields, false, true, "arabic")
 	*/
 
-	fields = bson.M{"created_at": -1}
-	CreateIndex("product", fields, false, false, "")
+	/*
+		fields = bson.M{"created_at": -1}
+		CreateIndex("product", fields, false, false, "")
+	*/
 
 	fields = bson.M{"created_at": -1}
 	CreateIndex("order", fields, false, false, "")
@@ -53,32 +55,35 @@ func main() {
 
 	fields = bson.M{"store_id": 1}
 	CreateIndex("product", fields, false, false, "")
-	fields = bson.M{"stores.store_id": 1}
-	CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.purchase_unit_price": 1}
-	CreateIndex("product", fields, false, false, "")
+	/*
+		fields = bson.M{"stores.store_id": 1}
+		CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.wholesale_unit_price": 1}
-	CreateIndex("product", fields, false, false, "")
+		fields = bson.M{"stores.purchase_unit_price": 1}
+		CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.retail_unit_price": 1}
-	CreateIndex("product", fields, false, false, "")
+		fields = bson.M{"stores.wholesale_unit_price": 1}
+		CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.wholesale_unit_profit": 1}
-	CreateIndex("product", fields, false, false, "")
+		fields = bson.M{"stores.retail_unit_price": 1}
+		CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.retail_unit_profit": 1}
-	CreateIndex("product", fields, false, false, "")
+		fields = bson.M{"stores.wholesale_unit_profit": 1}
+		CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.wholesale_unit_profit_perc": 1}
-	CreateIndex("product", fields, false, false, "")
+		fields = bson.M{"stores.retail_unit_profit": 1}
+		CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.retail_unit_profit_perc": 1}
-	CreateIndex("product", fields, false, false, "")
+		fields = bson.M{"stores.wholesale_unit_profit_perc": 1}
+		CreateIndex("product", fields, false, false, "")
 
-	fields = bson.M{"stores.stock": 1}
-	CreateIndex("product", fields, false, false, "")
+		fields = bson.M{"stores.retail_unit_profit_perc": 1}
+		CreateIndex("product", fields, false, false, "")
+
+		fields = bson.M{"stores.stock": 1}
+		CreateIndex("product", fields, false, false, "")
+	*/
 
 	fields = bson.M{"category_id": 1}
 	CreateIndex("product", fields, false, false, "")
