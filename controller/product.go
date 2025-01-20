@@ -47,8 +47,17 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	products := []models.Product{}
+	criterias := models.SearchCriterias{}
 
-	products, criterias, err := models.SearchProduct(w, r)
+	loadData := true
+	keys, ok := r.URL.Query()["search[no_data]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			loadData = false
+		}
+	}
+
+	products, criterias, err = models.SearchProduct(w, r, loadData)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find products:" + err.Error()
@@ -56,11 +65,21 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if loadData {
+		response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product")
+		if err != nil {
+			response.Status = false
+			response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	response.Status = true
 	response.Criterias = criterias
 
 	var storeID primitive.ObjectID
-	keys, ok := r.URL.Query()["search[store_id]"]
+	keys, ok = r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
 		storeID, err = primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
@@ -76,14 +95,6 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 	keys, ok = r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product")
-			if err != nil {
-				response.Status = false
-				response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
 			productStats, err = models.GetProductStats(criterias.SearchBy, storeID)
 			if err != nil {
 				response.Status = false

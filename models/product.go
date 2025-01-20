@@ -606,7 +606,7 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 	return products, nil
 }
 
-func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, criterias SearchCriterias, err error) {
+func SearchProduct(w http.ResponseWriter, r *http.Request, loadData bool) (products []Product, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -1632,6 +1632,10 @@ func SearchProduct(w http.ResponseWriter, r *http.Request) (products []Product, 
 
 	if criterias.Select != nil {
 		findOptions.SetProjection(criterias.Select)
+	}
+
+	if !loadData {
+		return products, criterias, nil
 	}
 
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
