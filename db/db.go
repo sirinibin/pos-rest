@@ -95,8 +95,11 @@ func GetMongoClient() (*mongo.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	log.Println("Will connect to mongo PROD db with: " + mongoConnect)
+	//log.Println("Trying to connect to mongo db with: " + mongoConnect)
 	client, err := mongo.Connect(ctx, clientOptions)
+	if err == nil {
+		log.Printf("Connected to mongodb with " + mongoConnect)
+	}
 
 	return client, err
 }
