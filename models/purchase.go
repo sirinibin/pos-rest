@@ -1076,12 +1076,16 @@ func (purchase *Purchase) Validate(
 	totalAmountFromVendorAccount := 0.00
 	vendor, err := FindVendorByID(purchase.VendorID, bson.M{})
 	if err != nil {
-		errs["vendor_id"] = "Invalid Vendor:" + purchase.VendorID.Hex()
+		errs["vendor_id"] = "Vendor is required"
 	}
 
-	vendorAccount, err := FindAccountByReferenceID(vendor.ID, *purchase.StoreID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		errs["vendor_account"] = "Error finding vendor account: " + err.Error()
+	var vendorAccount *Account
+
+	if vendor != nil {
+		vendorAccount, err = FindAccountByReferenceID(vendor.ID, *purchase.StoreID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			errs["vendor_account"] = "Error finding vendor account: " + err.Error()
+		}
 	}
 
 	for index, payment := range purchase.PaymentsInput {

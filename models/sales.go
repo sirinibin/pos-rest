@@ -967,12 +967,16 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	totalAmountFromCustomerAccount := 0.00
 	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
-		errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
+		errs["customer_id"] = "Customer is required"
 	}
 
-	customerAccount, err := FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		errs["customer_account"] = "Error finding customer account: " + err.Error()
+	var customerAccount *Account
+
+	if customer != nil {
+		customerAccount, err = FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			errs["customer_account"] = "Error finding customer account: " + err.Error()
+		}
 	}
 
 	for index, payment := range order.PaymentsInput {
