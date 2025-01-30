@@ -23,6 +23,7 @@ type Store struct {
 	Name                       string                `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic               string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	Code                       string                `bson:"code" json:"code"`
+	BranchName                 string                `bson:"branch_name" json:"branch_name"`
 	Title                      string                `bson:"title,omitempty" json:"title,omitempty"`
 	TitleInArabic              string                `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
 	RegistrationNumber         string                `bson:"registration_number,omitempty" json:"registration_number,omitempty"`

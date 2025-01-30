@@ -1510,8 +1510,32 @@ func (purchase *Purchase) Insert() error {
 
 	return nil
 }
+func (model *Purchase) MakeRedisCode() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return err
+	}
+
+	incr, err := db.RedisClient.Incr(model.StoreID.Hex() + "_purchase_invoice_counter").Result()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	invoiceID := fmt.Sprintf("P-INV-"+store.Code+"-%06d", incr) // INV-000001, INV-000002...
+	model.Code = invoiceID
+	return nil
+}
 
 func (purchase *Purchase) MakeCode() error {
+	store, err := FindStoreByID(purchase.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return err
+	}
+
+	if store.Code != "GUOCJ" && store.Code != "GUOJ" {
+		return purchase.MakeRedisCode()
+	}
+
 	lastPurchase, err := FindLastPurchaseByStoreID(purchase.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err

@@ -1190,7 +1190,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 				if scenario == "update" {
 					maxAllowedQuantity = orderProduct.Quantity - (orderProduct.QuantityReturned - oldSalesReturn.Products[index].Quantity)
 				} else {
-					log.Print("Creating")
 					maxAllowedQuantity = orderProduct.Quantity - orderProduct.QuantityReturned
 				}
 
@@ -1525,7 +1524,32 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 	return nil
 }
 
+func (model *SalesReturn) MakeRedisCode() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return err
+	}
+
+	incr, err := db.RedisClient.Incr(model.StoreID.Hex() + "_return_invoice_counter").Result()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	returnInvoiceID := fmt.Sprintf("SR-INV-"+store.Code+"-%06d", incr) // INV-000001, INV-000002...
+	model.Code = returnInvoiceID
+	return nil
+}
+
 func (salesReturn *SalesReturn) MakeCode() error {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return err
+	}
+
+	if store.Code != "GUOCJ" && store.Code != "GUOJ" {
+		return salesReturn.MakeRedisCode()
+	}
+
 	lastSalesReturn, err := FindLastSalesReturnByStoreID(salesReturn.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err

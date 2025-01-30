@@ -1731,11 +1731,37 @@ func (order *Order) GetPayments() (models []SalesPayment, err error) {
 	return models, err
 }
 
+func (order *Order) MakeRedisCode() error {
+	store, err := FindStoreByID(order.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return err
+	}
+
+	incr, err := db.RedisClient.Incr(order.StoreID.Hex() + "_invoice_counter").Result()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	invoiceID := fmt.Sprintf("S-INV-"+store.Code+"-%06d", incr) // INV-000001, INV-000002...
+	order.Code = invoiceID
+	return nil
+}
+
 func (order *Order) MakeCode() error {
+	store, err := FindStoreByID(order.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return err
+	}
+
+	if store.Code != "GUOCJ" && store.Code != "GUOJ" {
+		return order.MakeRedisCode()
+	}
+
 	lastOrder, err := FindLastOrderByStoreID(order.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
+
 	if lastOrder == nil {
 		store, err := FindStoreByID(order.StoreID, bson.M{})
 		if err != nil {
@@ -1753,7 +1779,6 @@ func (order *Order) MakeCode() error {
 			}
 			codeInt++
 			order.Code = storeCode + "-" + strconv.Itoa(codeInt)
-			log.Printf("New code: %s", order.Code)
 		}
 	}
 
