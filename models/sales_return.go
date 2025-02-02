@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -47,6 +48,10 @@ type SalesReturn struct {
 	Date           *time.Time           `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr        string               `json:"date_str,omitempty" bson:"-"`
 	Code           string               `bson:"code,omitempty" json:"code,omitempty"`
+	UUID           string               `bson:"uuid,omitempty" json:"uuid,omitempty"`
+	Hash           string               `bson:"hash,omitempty" json:"hash,omitempty"`
+	PrevHash       string               `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
+	CSID           string               `bson:"csid,omitempty" json:"csid,omitempty"`
 	StoreID        *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID     *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Store          *Store               `json:"store,omitempty"`
@@ -1893,6 +1898,12 @@ func ProcessSalesReturns() error {
 		err = cur.Decode(&salesReturn)
 		if err != nil {
 			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		salesReturn.UUID = uuid.New().String()
+		err = salesReturn.Update()
+		if err != nil {
+			return errors.New("Error updating sales return: " + err.Error())
 		}
 
 		/*

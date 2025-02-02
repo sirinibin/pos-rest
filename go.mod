@@ -9,6 +9,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-co-op/gocron v1.11.0
 	github.com/go-redis/redis v6.15.9+incompatible
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
 	github.com/hennedo/escpos v0.0.1
 	github.com/jameskeane/bcrypt v0.0.0-20120420032655-c3cd44c1e20f

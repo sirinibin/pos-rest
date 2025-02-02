@@ -13,6 +13,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -456,7 +457,6 @@ func main() {
 
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", router))
-
 	}()
 
 	/*
@@ -475,7 +475,7 @@ func main() {
 				log.Printf("Serving @ http://" + ip.String() + ":" + httpPort + " /\n")
 			}
 		}*/
-	log.Printf("API serving @ http://localhost:" + httpPort + " /\n")
+	log.Printf("API serving @ http://localhost:%s\n", httpPort)
 	log.Fatal(http.ListenAndServe(":"+httpPort, router))
 
 }
@@ -568,6 +568,17 @@ func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, o
 
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
+
+	err := models.ProcessOrders()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
+
 	/*
 			err := models.ProcessSalesHistory()
 			if err != nil {
