@@ -42,23 +42,24 @@ type SalesReturnProduct struct {
 
 // SalesReturn : SalesReturn structure
 type SalesReturn struct {
-	ID             primitive.ObjectID   `json:"id,omitempty" bson:"_id,omitempty"`
-	OrderID        *primitive.ObjectID  `json:"order_id,omitempty" bson:"order_id,omitempty"`
-	OrderCode      string               `bson:"order_code,omitempty" json:"order_code,omitempty"`
-	Date           *time.Time           `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr        string               `json:"date_str,omitempty" bson:"-"`
-	Code           string               `bson:"code,omitempty" json:"code,omitempty"`
-	UUID           string               `bson:"uuid,omitempty" json:"uuid,omitempty"`
-	Hash           string               `bson:"hash,omitempty" json:"hash,omitempty"`
-	PrevHash       string               `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
-	CSID           string               `bson:"csid,omitempty" json:"csid,omitempty"`
-	StoreID        *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID     *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Store          *Store               `json:"store,omitempty"`
-	Customer       *Customer            `json:"customer,omitempty"`
-	Products       []SalesReturnProduct `bson:"products,omitempty" json:"products,omitempty"`
-	ReceivedBy     *primitive.ObjectID  `json:"received_by,omitempty" bson:"received_by,omitempty"`
-	ReceivedByUser *User                `json:"received_by_user,omitempty"`
+	ID                primitive.ObjectID   `json:"id,omitempty" bson:"_id,omitempty"`
+	OrderID           *primitive.ObjectID  `json:"order_id,omitempty" bson:"order_id,omitempty"`
+	OrderCode         string               `bson:"order_code,omitempty" json:"order_code,omitempty"`
+	Date              *time.Time           `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr           string               `json:"date_str,omitempty" bson:"-"`
+	InvoiceCountValue int64                `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
+	Code              string               `bson:"code,omitempty" json:"code,omitempty"`
+	UUID              string               `bson:"uuid,omitempty" json:"uuid,omitempty"`
+	Hash              string               `bson:"hash,omitempty" json:"hash,omitempty"`
+	PrevHash          string               `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
+	CSID              string               `bson:"csid,omitempty" json:"csid,omitempty"`
+	StoreID           *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID        *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Store             *Store               `json:"store,omitempty"`
+	Customer          *Customer            `json:"customer,omitempty"`
+	Products          []SalesReturnProduct `bson:"products,omitempty" json:"products,omitempty"`
+	ReceivedBy        *primitive.ObjectID  `json:"received_by,omitempty" bson:"received_by,omitempty"`
+	ReceivedByUser    *User                `json:"received_by_user,omitempty"`
 	//ReceivedBySignatureID   *primitive.ObjectID  `json:"received_by_signature_id,omitempty" bson:"received_by_signature_id,omitempty"`
 	//ReceivedBySignatureName string               `json:"received_by_signature_name,omitempty" bson:"received_by_signature_name,omitempty"`
 	//ReceivedBySignature     *Signature           `json:"received_by_signature,omitempty"`
@@ -1880,6 +1881,7 @@ func ProcessSalesReturns() error {
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
+	findOptions.SetSort(GetSortByFields("created_at"))
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
@@ -1888,6 +1890,9 @@ func ProcessSalesReturns() error {
 	if cur != nil {
 		defer cur.Close(ctx)
 	}
+
+	icvByStores := map[string]int64{}
+
 	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
@@ -1900,11 +1905,27 @@ func ProcessSalesReturns() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		//salesReturn.InvoiceCountValue = int64(i + 1)
+
+		_, ok := icvByStores[salesReturn.StoreID.Hex()]
+		if ok {
+			icvByStores[salesReturn.StoreID.Hex()]++
+		} else {
+			icvByStores[salesReturn.StoreID.Hex()] = int64(1)
+		}
+
+		salesReturn.InvoiceCountValue = icvByStores[salesReturn.StoreID.Hex()]
 		salesReturn.UUID = uuid.New().String()
 		err = salesReturn.Update()
 		if err != nil {
-			return errors.New("Error updating sales return: " + err.Error())
+			return errors.New("Error updating: " + err.Error())
 		}
+
+		/*salesReturn.UUID = uuid.New().String()
+		err = salesReturn.Update()
+		if err != nil {
+			return errors.New("Error updating sales return: " + err.Error())
+		}*/
 
 		/*
 			err = salesReturn.ClearProductsSalesReturnHistory()

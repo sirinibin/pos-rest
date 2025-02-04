@@ -41,21 +41,22 @@ type OrderProduct struct {
 
 // Order : Order structure
 type Order struct {
-	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr         string              `json:"date_str,omitempty" bson:"-"`
-	Code            string              `bson:"code,omitempty" json:"code,omitempty"`
-	UUID            string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
-	Hash            string              `bson:"hash,omitempty" json:"hash,omitempty"`
-	PrevHash        string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
-	CSID            string              `bson:"csid,omitempty" json:"csid,omitempty"`
-	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID      *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Store           *Store              `json:"store,omitempty"`
-	Customer        *Customer           `json:"customer,omitempty"`
-	Products        []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
-	DeliveredBy     *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	DeliveredByUser *User               `json:"delivered_by_user,omitempty"`
+	ID                primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date              *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr           string              `json:"date_str,omitempty" bson:"-"`
+	InvoiceCountValue int64               `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
+	Code              string              `bson:"code,omitempty" json:"code,omitempty"`
+	UUID              string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
+	Hash              string              `bson:"hash,omitempty" json:"hash,omitempty"`
+	PrevHash          string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
+	CSID              string              `bson:"csid,omitempty" json:"csid,omitempty"`
+	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Store             *Store              `json:"store,omitempty"`
+	Customer          *Customer           `json:"customer,omitempty"`
+	Products          []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
+	DeliveredBy       *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	DeliveredByUser   *User               `json:"delivered_by_user,omitempty"`
 	//DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
 	//DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
 	//DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
@@ -2083,6 +2084,7 @@ func ProcessOrders() error {
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
+	findOptions.SetSort(GetSortByFields("created_at"))
 
 	cur, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
@@ -2091,6 +2093,8 @@ func ProcessOrders() error {
 	if cur != nil {
 		defer cur.Close(ctx)
 	}
+
+	icvByStores := map[string]int64{}
 
 	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
@@ -2104,11 +2108,29 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		order.UUID = uuid.New().String()
-		order.Update()
-		if err != nil {
-			return errors.New("Error updating order: " + err.Error())
+		_, ok := icvByStores[order.StoreID.Hex()]
+		if ok {
+			icvByStores[order.StoreID.Hex()]++
+		} else {
+			icvByStores[order.StoreID.Hex()] = int64(1)
 		}
+
+		order.InvoiceCountValue = icvByStores[order.StoreID.Hex()]
+		order.UUID = uuid.New().String()
+
+		err = order.Update()
+		if err != nil {
+			return errors.New("Error updating: " + err.Error())
+		}
+
+		//order.MakeHash()
+		/*
+			order.UUID = uuid.New().String()
+			err = order.Update()
+			if err != nil {
+				return errors.New("Error updating order: " + err.Error())
+			}
+		*/
 
 		/*
 			err = order.ClearProductsSalesHistory()
