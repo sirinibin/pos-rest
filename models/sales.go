@@ -1769,12 +1769,15 @@ func (order *Order) MakeCode() error {
 		return err
 	}
 
+	var icv int
+
 	if lastOrder == nil {
 		store, err := FindStoreByID(order.StoreID, bson.M{})
 		if err != nil {
 			return err
 		}
 		order.Code = store.Code + "-100000"
+		icv = 1
 	} else {
 		splits := strings.Split(lastOrder.Code, "-")
 		if len(splits) == 2 {
@@ -1786,10 +1789,10 @@ func (order *Order) MakeCode() error {
 			}
 			codeInt++
 			order.Code = storeCode + "-" + strconv.Itoa(codeInt)
+			icv = codeInt
 		}
 	}
 
-	var codeInt int
 	for {
 		exists, err := order.IsCodeExists()
 		if err != nil {
@@ -1802,16 +1805,17 @@ func (order *Order) MakeCode() error {
 		splits := strings.Split(lastOrder.Code, "-")
 		storeCode := splits[0]
 		codeStr := splits[1]
-		codeInt, err = strconv.Atoi(codeStr)
+		codeInt, err := strconv.Atoi(codeStr)
 		if err != nil {
 			return err
 		}
 		codeInt++
 
 		order.Code = storeCode + "-" + strconv.Itoa(codeInt)
+		icv = codeInt
 	}
 
-	order.InvoiceCountValue = int64(codeInt)
+	order.InvoiceCountValue = int64(icv)
 
 	return nil
 }

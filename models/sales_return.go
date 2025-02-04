@@ -1561,6 +1561,7 @@ func (salesReturn *SalesReturn) MakeCode() error {
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
+	var icv int
 
 	if lastSalesReturn == nil {
 		store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
@@ -1568,6 +1569,7 @@ func (salesReturn *SalesReturn) MakeCode() error {
 			return err
 		}
 		salesReturn.Code = store.Code + "-200000"
+		icv = 1
 	} else {
 		splits := strings.Split(lastSalesReturn.Code, "-")
 		if len(splits) == 2 {
@@ -1579,10 +1581,10 @@ func (salesReturn *SalesReturn) MakeCode() error {
 			}
 			codeInt++
 			salesReturn.Code = storeCode + "-" + strconv.Itoa(codeInt)
+			icv = codeInt
 		}
 	}
 
-	var codeInt int
 	for {
 		exists, err := salesReturn.IsCodeExists()
 		if err != nil {
@@ -1595,15 +1597,16 @@ func (salesReturn *SalesReturn) MakeCode() error {
 		splits := strings.Split(lastSalesReturn.Code, "-")
 		storeCode := splits[0]
 		codeStr := splits[1]
-		codeInt, err = strconv.Atoi(codeStr)
+		codeInt, err := strconv.Atoi(codeStr)
 		if err != nil {
 			return err
 		}
 		codeInt++
 		salesReturn.Code = storeCode + "-" + strconv.Itoa(codeInt)
+		icv = codeInt
 	}
 
-	salesReturn.InvoiceCountValue = int64(codeInt)
+	salesReturn.InvoiceCountValue = int64(icv)
 
 	return nil
 }
