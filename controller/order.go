@@ -153,8 +153,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Print("Order code Created")
-
 	err = order.CalculateOrderProfit()
 	if err != nil {
 		response.Status = false

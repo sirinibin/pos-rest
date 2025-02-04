@@ -1543,6 +1543,7 @@ func (model *SalesReturn) MakeRedisCode() error {
 
 	returnInvoiceID := fmt.Sprintf("SR-INV-"+store.Code+"-%06d", incr) // INV-000001, INV-000002...
 	model.Code = returnInvoiceID
+	model.InvoiceCountValue = incr
 	return nil
 }
 
@@ -1581,6 +1582,7 @@ func (salesReturn *SalesReturn) MakeCode() error {
 		}
 	}
 
+	var codeInt int
 	for {
 		exists, err := salesReturn.IsCodeExists()
 		if err != nil {
@@ -1593,13 +1595,15 @@ func (salesReturn *SalesReturn) MakeCode() error {
 		splits := strings.Split(lastSalesReturn.Code, "-")
 		storeCode := splits[0]
 		codeStr := splits[1]
-		codeInt, err := strconv.Atoi(codeStr)
+		codeInt, err = strconv.Atoi(codeStr)
 		if err != nil {
 			return err
 		}
 		codeInt++
 		salesReturn.Code = storeCode + "-" + strconv.Itoa(codeInt)
 	}
+
+	salesReturn.InvoiceCountValue = int64(codeInt)
 
 	return nil
 }
@@ -1616,7 +1620,7 @@ func FindLastSalesReturnByStoreID(
 	if len(selectFields) > 0 {
 		findOneOptions.SetProjection(selectFields)
 	}
-	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+	findOneOptions.SetSort(map[string]interface{}{"created_at": -1})
 
 	err = collection.FindOne(ctx,
 		bson.M{"store_id": storeID}, findOneOptions).

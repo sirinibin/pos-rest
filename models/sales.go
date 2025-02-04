@@ -1750,6 +1750,7 @@ func (order *Order) MakeRedisCode() error {
 
 	invoiceID := fmt.Sprintf("S-INV-"+store.Code+"-%06d", incr) // INV-000001, INV-000002...
 	order.Code = invoiceID
+	order.InvoiceCountValue = incr
 	return nil
 }
 
@@ -1788,6 +1789,7 @@ func (order *Order) MakeCode() error {
 		}
 	}
 
+	var codeInt int
 	for {
 		exists, err := order.IsCodeExists()
 		if err != nil {
@@ -1800,7 +1802,7 @@ func (order *Order) MakeCode() error {
 		splits := strings.Split(lastOrder.Code, "-")
 		storeCode := splits[0]
 		codeStr := splits[1]
-		codeInt, err := strconv.Atoi(codeStr)
+		codeInt, err = strconv.Atoi(codeStr)
 		if err != nil {
 			return err
 		}
@@ -1808,6 +1810,8 @@ func (order *Order) MakeCode() error {
 
 		order.Code = storeCode + "-" + strconv.Itoa(codeInt)
 	}
+
+	order.InvoiceCountValue = int64(codeInt)
 
 	return nil
 }
@@ -1825,7 +1829,7 @@ func FindLastOrderByStoreID(
 	if len(selectFields) > 0 {
 		findOneOptions.SetProjection(selectFields)
 	}
-	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+	findOneOptions.SetSort(map[string]interface{}{"created_at": -1})
 
 	err = collection.FindOne(ctx,
 		bson.M{"store_id": storeID}, findOneOptions).
