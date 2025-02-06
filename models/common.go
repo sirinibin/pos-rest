@@ -18,6 +18,8 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+var BANK_PAYMENT_METHODS = []string{"debit_card", "credit_card", "bank_card", "bank_transfer", "cheque"}
+
 type SearchCriterias struct {
 	Page     int                    `bson:"page,omitempty" json:"page,omitempty"`
 	Size     int                    `bson:"size,omitempty" json:"size,omitempty"`

@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -1028,7 +1029,7 @@ func (capital *Capital) CreateLedger() (ledger *Ledger, err error) {
 	receivingAccount := Account{}
 	if capital.PaymentMethod == "cash" {
 		receivingAccount = *cashAccount
-	} else if capital.PaymentMethod == "bank_account" {
+	} else if slices.Contains(BANK_PAYMENT_METHODS, capital.PaymentMethod) {
 		receivingAccount = *bankAccount
 	}
 

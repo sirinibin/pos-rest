@@ -13,6 +13,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -568,17 +569,45 @@ func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, o
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
+	err := models.ProcessOrders()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}
-	*/
+	err = models.ProcessSalesPayments()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessSalesReturnPayments()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessPurchases()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessPurchasePayments()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessPurchaseReturns()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessPurchaseReturnPayments()
+	if err != nil {
+		log.Print(err)
+	}
 
 	/*
 			err := models.ProcessSalesHistory()
@@ -624,15 +653,7 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 
-		err = models.ProcessPurchases()
-		if err != nil {
-			log.Print(err)
-		}
 
-		err = models.ProcessPurchaseReturns()
-		if err != nil {
-			log.Print(err)
-		}
 
 		err = models.ProcessQuotations()
 		if err != nil {

@@ -320,9 +320,27 @@ func GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err e
 						"as":    "payment",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": []interface{}{"$$payment.method", "bank_account"}},
-									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								bson.M{"$or": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "debit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "credit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_transfer"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
 								}},
 								"$$payment.amount",
 								0,
@@ -1811,6 +1829,23 @@ func ProcessPurchases() error {
 			return errors.New("Cursor decoding purchase error:" + err.Error())
 		}
 
+		for i, paymentMethod := range model.PaymentMethods {
+			if paymentMethod == "bank_account" {
+				model.PaymentMethods[i] = "bank_card"
+			}
+		}
+
+		for i, payment := range model.Payments {
+			if payment.Method == "bank_account" {
+				model.Payments[i].Method = "bank_card"
+			}
+		}
+
+		err = model.Update()
+		if err != nil {
+			return errors.New("Error updating: " + err.Error())
+		}
+
 		/*
 			err = model.ClearProductsPurchaseHistory()
 			if err != nil {
@@ -2442,7 +2477,7 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 		cashPayingAccount := Account{}
 		if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" {
 			referenceModel := "vendor"
@@ -2564,7 +2599,7 @@ func MakeJournalsForPurchaseExtraPayments(
 		cashPayingAccount := Account{}
 		if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" {
 			referenceModel := "vendor"

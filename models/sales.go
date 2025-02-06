@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
-	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -369,9 +368,27 @@ func GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) 
 						"as":    "payment",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": []interface{}{"$$payment.method", "bank_account"}},
-									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								bson.M{"$or": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "debit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "credit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_transfer"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
 								}},
 								"$$payment.amount",
 								0,
@@ -2102,7 +2119,7 @@ func ProcessOrders() error {
 		defer cur.Close(ctx)
 	}
 
-	icvByStores := map[string]int64{}
+	//icvByStores := map[string]int64{}
 
 	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
@@ -2116,15 +2133,29 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		_, ok := icvByStores[order.StoreID.Hex()]
-		if ok {
-			icvByStores[order.StoreID.Hex()]++
-		} else {
-			icvByStores[order.StoreID.Hex()] = int64(1)
+		/*
+			_, ok := icvByStores[order.StoreID.Hex()]
+			if ok {
+				icvByStores[order.StoreID.Hex()]++
+			} else {
+				icvByStores[order.StoreID.Hex()] = int64(1)
+			}
+
+			order.InvoiceCountValue = icvByStores[order.StoreID.Hex()]
+			order.UUID = uuid.New().String()
+		*/
+
+		for i, paymentMethod := range order.PaymentMethods {
+			if paymentMethod == "bank_account" {
+				order.PaymentMethods[i] = "bank_card"
+			}
 		}
 
-		order.InvoiceCountValue = icvByStores[order.StoreID.Hex()]
-		order.UUID = uuid.New().String()
+		for i, payment := range order.Payments {
+			if payment.Method == "bank_account" {
+				order.Payments[i].Method = "bank_card"
+			}
+		}
 
 		err = order.Update()
 		if err != nil {
@@ -2658,7 +2689,7 @@ func MakeJournalsForSalesPaymentsByDatetime(
 		cashReceivingAccount := Account{}
 		if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "customer_account" {
 			referenceModel := "customer"
@@ -2798,7 +2829,7 @@ func MakeJournalsForSalesExtraPayments(
 		cashReceivingAccount := Account{}
 		if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "customer_account" {
 			referenceModel := "customer"

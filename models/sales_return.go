@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
-	"github.com/google/uuid"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -286,9 +285,27 @@ func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats,
 						"as":    "payment",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": []interface{}{"$$payment.method", "bank_account"}},
-									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								bson.M{"$or": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "debit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "credit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_transfer"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
 								}},
 								"$$payment.amount",
 								0,
@@ -1898,7 +1915,7 @@ func ProcessSalesReturns() error {
 		defer cur.Close(ctx)
 	}
 
-	icvByStores := map[string]int64{}
+	//icvByStores := map[string]int64{}
 
 	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
@@ -1914,15 +1931,29 @@ func ProcessSalesReturns() error {
 
 		//salesReturn.InvoiceCountValue = int64(i + 1)
 
-		_, ok := icvByStores[salesReturn.StoreID.Hex()]
-		if ok {
-			icvByStores[salesReturn.StoreID.Hex()]++
-		} else {
-			icvByStores[salesReturn.StoreID.Hex()] = int64(1)
+		/*
+			_, ok := icvByStores[salesReturn.StoreID.Hex()]
+			if ok {
+				icvByStores[salesReturn.StoreID.Hex()]++
+			} else {
+				icvByStores[salesReturn.StoreID.Hex()] = int64(1)
+			}
+
+			salesReturn.InvoiceCountValue = icvByStores[salesReturn.StoreID.Hex()]
+			salesReturn.UUID = uuid.New().String()
+		*/
+		for i, paymentMethod := range salesReturn.PaymentMethods {
+			if paymentMethod == "bank_account" {
+				salesReturn.PaymentMethods[i] = "bank_card"
+			}
 		}
 
-		salesReturn.InvoiceCountValue = icvByStores[salesReturn.StoreID.Hex()]
-		salesReturn.UUID = uuid.New().String()
+		for i, payment := range salesReturn.Payments {
+			if payment.Method == "bank_account" {
+				salesReturn.Payments[i].Method = "bank_card"
+			}
+		}
+
 		err = salesReturn.Update()
 		if err != nil {
 			return errors.New("Error updating: " + err.Error())
@@ -2623,7 +2654,7 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 		cashPayingAccount := Account{}
 		if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "customer_account" {
 			referenceModel := "customer"
@@ -2745,7 +2776,7 @@ func MakeJournalsForSalesReturnExtraPayments(
 		cashPayingAccount := Account{}
 		if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "customer_account" {
 			referenceModel := "customer"

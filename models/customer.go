@@ -54,33 +54,36 @@ type CustomerStore struct {
 
 // Customer : Customer structure
 type Customer struct {
-	ID              primitive.ObjectID       `json:"id,omitempty" bson:"_id,omitempty"`
-	Name            string                   `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic    string                   `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	VATNo           string                   `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
-	VATNoInArabic   string                   `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	Phone           string                   `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic   string                   `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
-	Title           string                   `bson:"title,omitempty" json:"title,omitempty"`
-	TitleInArabic   string                   `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
-	Email           string                   `bson:"email,omitempty" json:"email,omitempty"`
-	Address         string                   `bson:"address,omitempty" json:"address,omitempty"`
-	AddressInArabic string                   `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	Deleted         bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy       *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser   *User                    `json:"deleted_by_user,omitempty"`
-	DeletedAt       *time.Time               `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt       *time.Time               `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time               `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy       *primitive.ObjectID      `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy       *primitive.ObjectID      `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser   *User                    `json:"created_by_user,omitempty"`
-	UpdatedByUser   *User                    `json:"updated_by_user,omitempty"`
-	CreatedByName   string                   `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName   string                   `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName   string                   `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	SearchLabel     string                   `json:"search_label"`
-	Stores          map[string]CustomerStore `bson:"stores" json:"stores"`
+	ID                         primitive.ObjectID       `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                       string                   `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic               string                   `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	VATNo                      string                   `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
+	VATNoInArabic              string                   `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
+	Phone                      string                   `bson:"phone,omitempty" json:"phone,omitempty"`
+	PhoneInArabic              string                   `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	Title                      string                   `bson:"title,omitempty" json:"title,omitempty"`
+	TitleInArabic              string                   `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
+	Email                      string                   `bson:"email,omitempty" json:"email,omitempty"`
+	Address                    string                   `bson:"address,omitempty" json:"address,omitempty"`
+	AddressInArabic            string                   `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
+	NationalAddresss           NationalAddresss         `bson:"national_address,omitempty" json:"national_address,omitempty"`
+	RegistrationNumber         string                   `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
+	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
+	Deleted                    bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                  *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser              *User                    `json:"deleted_by_user,omitempty"`
+	DeletedAt                  *time.Time               `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                  *time.Time               `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                  *time.Time               `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                  *primitive.ObjectID      `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                  *primitive.ObjectID      `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser              *User                    `json:"created_by_user,omitempty"`
+	UpdatedByUser              *User                    `json:"updated_by_user,omitempty"`
+	CreatedByName              string                   `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName              string                   `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName              string                   `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	SearchLabel                string                   `json:"search_label"`
+	Stores                     map[string]CustomerStore `bson:"stores" json:"stores"`
 }
 
 /*

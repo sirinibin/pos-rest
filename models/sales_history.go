@@ -646,15 +646,17 @@ func ProcessSalesHistory() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		order, err := FindOrderByID(model.OrderID, map[string]interface{}{})
-		if err != nil {
-			return errors.New("Error finding order:" + err.Error())
-		}
-		model.Date = order.Date
-		err = model.Update()
-		if err != nil {
-			return errors.New("Error updating history:" + err.Error())
-		}
+		/*
+				order, err := FindOrderByID(model.OrderID, map[string]interface{}{})
+				if err != nil {
+					return errors.New("Error finding order:" + err.Error())
+				}
+				model.Date = order.Date
+			err = model.Update()
+			if err != nil {
+				return errors.New("Error updating history:" + err.Error())
+			}
+		*/
 		bar.Add(1)
 	}
 

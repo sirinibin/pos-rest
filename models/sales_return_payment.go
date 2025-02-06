@@ -699,10 +699,16 @@ func ProcessSalesReturnPayments() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		model.Date = model.CreatedAt
+		if model.Method == "bank_account" {
+			model.Method = "bank_card"
+		}
+
+		//model.Date = model.CreatedAt
 		//log.Print("Date updated")
 		err = model.Update()
 		if err != nil {
+			log.Print("Sales ID: " + model.OrderCode)
+			log.Print("SalesReturn ID: " + model.SalesReturnCode)
 			log.Print(err)
 
 			//return err

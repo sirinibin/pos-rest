@@ -270,9 +270,27 @@ func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturn
 						"as":    "payment",
 						"in": bson.M{
 							"$cond": []interface{}{
-								bson.M{"$and": []interface{}{
-									bson.M{"$eq": []interface{}{"$$payment.method", "bank_account"}},
-									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								bson.M{"$or": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "debit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "credit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_transfer"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
 								}},
 								"$$payment.amount",
 								0,
@@ -1727,15 +1745,34 @@ func ProcessPurchaseReturns() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = model.ClearProductsPurchaseReturnHistory()
-		if err != nil {
-			return errors.New("error deleting product purchase return history: " + err.Error())
+		for i, paymentMethod := range model.PaymentMethods {
+			if paymentMethod == "bank_account" {
+				model.PaymentMethods[i] = "bank_card"
+			}
 		}
 
-		err = model.AddProductsPurchaseReturnHistory()
-		if err != nil {
-			return errors.New("error Adding product purchase return history: " + err.Error())
+		for i, payment := range model.Payments {
+			if payment.Method == "bank_account" {
+				model.Payments[i].Method = "bank_card"
+			}
 		}
+
+		err = model.Update()
+		if err != nil {
+			return errors.New("Error updating: " + err.Error())
+		}
+
+		/*
+			err = model.ClearProductsPurchaseReturnHistory()
+			if err != nil {
+				return errors.New("error deleting product purchase return history: " + err.Error())
+			}
+
+			err = model.AddProductsPurchaseReturnHistory()
+			if err != nil {
+				return errors.New("error Adding product purchase return history: " + err.Error())
+			}
+		*/
 
 		/*
 			model.PaymentStatus = "paid"
@@ -2322,7 +2359,7 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 		cashReceivingAccount := Account{}
 		if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" {
 			referenceModel := "vendor"
@@ -2462,7 +2499,7 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 		cashReceivingAccount := Account{}
 		if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
-		} else if payment.Method == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" {
 			referenceModel := "vendor"

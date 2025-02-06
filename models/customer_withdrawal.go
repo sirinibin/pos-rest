@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -607,13 +608,13 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			spendingAccount = cashAccount
 			spendingAccountName = "cash"
 
-		} else if customerwithdrawal.PaymentMethod == "bank_account" {
+		} else if slices.Contains(BANK_PAYMENT_METHODS, customerwithdrawal.PaymentMethod) {
 			bankAccount, err := CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Bank", nil)
 			if err != nil {
 				errs["payment_method"] = "error fetching bank account"
 			}
 
-			if scenario == "update" && oldCustomerWithdrawl.PaymentMethod == "bank_account" {
+			if scenario == "update" && slices.Contains(BANK_PAYMENT_METHODS, oldCustomerWithdrawl.PaymentMethod) {
 				bankAccount.Balance += oldCustomerWithdrawl.Amount
 			}
 
@@ -1106,7 +1107,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 	spendingAccount := Account{}
 	if customerWithdrawal.PaymentMethod == "cash" {
 		spendingAccount = *cashAccount
-	} else if customerWithdrawal.PaymentMethod == "bank_account" {
+	} else if slices.Contains(BANK_PAYMENT_METHODS, customerWithdrawal.PaymentMethod) {
 		spendingAccount = *bankAccount
 	}
 

@@ -530,76 +530,6 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	/*
-		if salesPayment.Method == "customer_account" {
-			e
-			oldSalesPayment := &SalesPayment{}
-
-			if scenario == "update" {
-				oldSalesPayment, _ = FindSalesPaymentByID(&salesPayment.ID, bson.M{})
-				if customerAccount.CreditTotal > (customerAccount.DebitTotal - *oldSalesPayment.Amount) {
-					accountType = "liability"
-					customerBalance += *oldSalesPayment.Amount
-				} else {
-					accountType = "asset"
-				}
-			}
-
-			if customerBalance == 0 {
-				errs["method"] = "customer account balance is zero"
-			} else if accountType == "asset" {
-				errs["method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
-			} else if accountType == "liability" && customerBalance < *salesPayment.Amount {
-				errs["method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
-			}
-
-			//Check balances of cash or bank accounts (Spending accounts)
-			/*
-				spendingAccount := &Account{}
-				spendingAccountName := ""
-				if salesPayment.Method == "customer_account" {
-					if *salesPayment.PayFromAccount == "cash_account" {
-						cashAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", nil)
-						if err != nil {
-							errs["pay_from_account"] = "error fetching cash account"
-						}
-
-						if scenario == "update" && oldSalesPayment.Method == "cash" {
-							cashAccount.Balance += *oldSalesPayment.Amount
-						}
-
-						spendingAccount = cashAccount
-						spendingAccountName = "cash"
-
-					} else if *salesPayment.PayFromAccount == "bank_account" {
-						bankAccount, err := CreateAccountIfNotExists(order.StoreID, nil, nil, "Bank", nil)
-						if err != nil {
-							errs["pay_from_account"] = "error fetching bank account"
-						}
-
-						if scenario == "update" && oldSalesPayment.Method == "bank_account" {
-							bankAccount.Balance += *oldSalesPayment.Amount
-						}
-
-						spendingAccount = bankAccount
-						spendingAccountName = "bank"
-					}
-
-					spendingAccountBalance := spendingAccount.Balance
-
-					if oldSalesPayment != nil && oldSalesPayment.Amount != nil {
-						spendingAccountBalance += *oldSalesPayment.Amount
-					}
-
-					if spendingAccountBalance == 0 {
-						errs["pay_from_account"] = spendingAccountName + " account balance is zero"
-					} else if spendingAccountBalance < *salesPayment.Amount {
-						errs["pay_from_account"] = spendingAccountName + " account balance is only: " + fmt.Sprintf("%.02f", spendingAccountBalance)
-					}
-				}
-	*/
-	//}
-
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -772,7 +702,11 @@ func ProcessSalesPayments() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		model.Date = model.CreatedAt
+		if model.Method == "bank_account" {
+			model.Method = "bank_card"
+		}
+
+		//model.Date = model.CreatedAt
 		//log.Print("Date updated")
 		err = model.Update()
 		if err != nil {
