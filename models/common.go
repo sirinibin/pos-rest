@@ -49,8 +49,6 @@ func RoundToTwoDecimal(number float64) float64 {
 
 	//numStr := strconv.FormatFloat(number, 'f', -1, 64)
 	//numStr := FormatFloat(number, 2)
-	log.Print("numStr:")
-	log.Print(numStr)
 	numFloat, _ := strconv.ParseFloat(numStr, 32)
 	return RoundFloat(numFloat, 2)
 }

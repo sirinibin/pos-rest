@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2">
+	<cbc:ProfileID>reporting:1.0</cbc:ProfileID>
+	<cbc:ID>GUOJ-111705</cbc:ID>
+	<cbc:UUID>27f30aca-29c0-48e8-b96f-4e9365ba5146</cbc:UUID>
+	<cbc:IssueDate>2025-01-29</cbc:IssueDate>
+	<cbc:IssueTime>11:38:03</cbc:IssueTime>
+	<cbc:InvoiceTypeCode name="0200000">388</cbc:InvoiceTypeCode>
+	<cbc:Note languageID="ar">ABC</cbc:Note>
+	<cbc:DocumentCurrencyCode>SAR</cbc:DocumentCurrencyCode>
+	<cbc:TaxCurrencyCode>SAR</cbc:TaxCurrencyCode>
+    <cac:AdditionalDocumentReference>
+		<cbc:ID>ICV</cbc:ID>
+		<cbc:UUID>10</cbc:UUID>
+	</cac:AdditionalDocumentReference>
+	<cac:AdditionalDocumentReference>
+		<cbc:ID>PIH</cbc:ID>
+		<cac:Attachment>
+			<cbc:EmbeddedDocumentBinaryObject mimeCode="text/plain">NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==</cbc:EmbeddedDocumentBinaryObject>
+		</cac:Attachment>
+	</cac:AdditionalDocumentReference>
+	<cac:AccountingSupplierParty>
+		<cac:Party>
+			<cac:PartyIdentification>
+				<cbc:ID schemeID="CRN">5903506195</cbc:ID>
+			</cac:PartyIdentification>
+			<cac:PostalAddress>
+				<cbc:StreetName>طريق الملك فيصل | King Faisal Rd</cbc:StreetName>
+				<cbc:BuildingNumber>1234</cbc:BuildingNumber>
+				<cbc:CitySubdivisionName>حي الصفا | Al-Safa district</cbc:CitySubdivisionName>
+				<cbc:CityName>أملج | Umluj</cbc:CityName>
+				<cbc:PostalZone>48323</cbc:PostalZone>
+				<cac:Country>
+					<cbc:IdentificationCode>SA</cbc:IdentificationCode>
+				</cac:Country>
+			</cac:PostalAddress>
+			<cac:PartyTaxScheme>
+				<cbc:CompanyID>311592828300003</cbc:CompanyID>
+				<cac:TaxScheme>
+					<cbc:ID>VAT</cbc:ID>
+				</cac:TaxScheme>
+			</cac:PartyTaxScheme>
+			<cac:PartyLegalEntity>
+				<cbc:RegistrationName>Gulf Union Ozone Trading Co.</cbc:RegistrationName>
+			</cac:PartyLegalEntity>
+		</cac:Party>
+	</cac:AccountingSupplierParty>
+	<cac:AccountingCustomerParty>
+		<cac:Party>
+			<cac:PostalAddress>
+				<cbc:StreetName>طريق الأمير محمد بن عبد العزيز - العليا | prince mohammed ibn abdulaziz rd-al ulaya</cbc:StreetName>
+				<cbc:BuildingNumber>unit no.2207</cbc:BuildingNumber>
+				<cbc:CitySubdivisionName>العليا | Al ulaya</cbc:CitySubdivisionName>
+				<cbc:CityName>الرياض | Riyadh</cbc:CityName>
+				<cbc:PostalZone>12222</cbc:PostalZone>
+				<cac:Country>
+					<cbc:IdentificationCode>SA</cbc:IdentificationCode>
+				</cac:Country>
+			</cac:PostalAddress>
+			<cac:PartyTaxScheme>
+				<cbc:CompanyID>300345658600003</cbc:CompanyID>
+				<cac:TaxScheme>
+					<cbc:ID>VAT</cbc:ID>
+				</cac:TaxScheme>
+			</cac:PartyTaxScheme>
+			<cac:PartyLegalEntity>
+				<cbc:RegistrationName>CHINA COMMUNICATIONS CONSTRUCTION CO.</cbc:RegistrationName>
+			</cac:PartyLegalEntity>
+		</cac:Party>
+	</cac:AccountingCustomerParty>
+	<cac:Delivery>
+		<cbc:ActualDeliveryDate>2025-01-29</cbc:ActualDeliveryDate>
+	</cac:Delivery>
+	<cac:PaymentMeans>
+		<cbc:PaymentMeansCode>42</cbc:PaymentMeansCode>
+	</cac:PaymentMeans>
+	<cac:AllowanceCharge>
+		<cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+		<cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>
+		<cbc:Amount currencyID="SAR">0.00</cbc:Amount>
+		<cac:TaxCategory>
+			<cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">S</cbc:ID>
+			<cbc:Percent>15</cbc:Percent>
+			<cac:TaxScheme>
+				<cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>
+			</cac:TaxScheme>
+		</cac:TaxCategory>
+		<cac:TaxCategory>
+			<cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">S</cbc:ID>
+			<cbc:Percent>15</cbc:Percent>
+			<cac:TaxScheme>
+				<cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>
+			</cac:TaxScheme>
+		</cac:TaxCategory>
+	</cac:AllowanceCharge>
+	<cac:TaxTotal>
+		<cbc:TaxAmount currencyID="SAR">63.00</cbc:TaxAmount>
+	</cac:TaxTotal>
+	<cac:TaxTotal>
+		<cbc:TaxAmount currencyID="SAR">63.00</cbc:TaxAmount>
+		<cac:TaxSubtotal>
+			<cbc:TaxableAmount currencyID="SAR">420.00</cbc:TaxableAmount>
+			<cbc:TaxAmount currencyID="SAR">63.00</cbc:TaxAmount>
+			<cac:TaxCategory>
+				<cbc:ID schemeID="UN/ECE 5305" schemeAgencyID="6">S</cbc:ID>
+				<cbc:Percent>15.00</cbc:Percent>
+				<cac:TaxScheme>
+					<cbc:ID schemeID="UN/ECE 5153" schemeAgencyID="6">VAT</cbc:ID>
+				</cac:TaxScheme>
+			</cac:TaxCategory>
+		</cac:TaxSubtotal>
+	</cac:TaxTotal>
+	<cac:LegalMonetaryTotal>
+		<cbc:LineExtensionAmount currencyID="SAR">420.00</cbc:LineExtensionAmount>
+		<cbc:TaxExclusiveAmount currencyID="SAR">420.00</cbc:TaxExclusiveAmount>
+		<cbc:TaxInclusiveAmount currencyID="SAR">483.00</cbc:TaxInclusiveAmount>
+		<cbc:AllowanceTotalAmount currencyID="SAR">0.00</cbc:AllowanceTotalAmount>
+		<cbc:PrepaidAmount currencyID="SAR">0.00</cbc:PrepaidAmount>
+		<cbc:PayableAmount currencyID="SAR">483.00</cbc:PayableAmount>
+	</cac:LegalMonetaryTotal>
+	<cac:InvoiceLine>
+		<cbc:ID>1</cbc:ID>
+		<cbc:InvoicedQuantity unitCode="PCE">1</cbc:InvoicedQuantity>
+		<cbc:LineExtensionAmount currencyID="SAR">420.00</cbc:LineExtensionAmount>
+		<cac:TaxTotal>
+			<cbc:TaxAmount currencyID="SAR">63.00</cbc:TaxAmount>
+			<cbc:RoundingAmount currencyID="SAR">483.00</cbc:RoundingAmount>
+		</cac:TaxTotal>
+		<cac:Item>
+			<cbc:Name>CLUTCH SERVO / مخلب سيرفو</cbc:Name>
+			<cac:ClassifiedTaxCategory>
+				<cbc:ID>S</cbc:ID>
+				<cbc:Percent>15.00</cbc:Percent>
+				<cac:TaxScheme>
+					<cbc:ID>VAT</cbc:ID>
+				</cac:TaxScheme>
+			</cac:ClassifiedTaxCategory>
+		</cac:Item>
+		<cac:Price>
+			<cbc:PriceAmount currencyID="SAR">420.00</cbc:PriceAmount>
+			<cac:AllowanceCharge>
+				<cbc:ChargeIndicator>true</cbc:ChargeIndicator>
+				<cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>
+				<cbc:Amount currencyID="SAR">0.00</cbc:Amount>
+			</cac:AllowanceCharge>
+		</cac:Price>
+	</cac:InvoiceLine>
+</Invoice>
