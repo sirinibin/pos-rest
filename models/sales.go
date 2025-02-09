@@ -2146,16 +2146,24 @@ func ProcessOrders() error {
 			order.InvoiceCountValue = icvByStores[order.StoreID.Hex()]
 			order.UUID = uuid.New().String()
 		*/
-
-		for i, paymentMethod := range order.PaymentMethods {
-			if paymentMethod == "bank_account" {
-				order.PaymentMethods[i] = "bank_card"
+		/*
+			for i, paymentMethod := range order.PaymentMethods {
+				if paymentMethod == "bank_account" {
+					order.PaymentMethods[i] = "bank_card"
+				}
 			}
-		}
 
-		for i, payment := range order.Payments {
-			if payment.Method == "bank_account" {
-				order.Payments[i].Method = "bank_card"
+			for i, payment := range order.Payments {
+				if payment.Method == "bank_account" {
+					order.Payments[i].Method = "bank_card"
+				}
+			}
+		*/
+
+		for i, product := range order.Products {
+			if product.Discount > 0 {
+				order.Products[i].UnitDiscount = product.Discount / product.Quantity
+				order.Products[i].UnitDiscountPercent = product.DiscountPercent
 			}
 		}
 

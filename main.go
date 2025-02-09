@@ -573,18 +573,7 @@ func cronJobsEveryHour() error {
 	if err != nil {
 		log.Print(err)
 	}
-
-	err = models.ProcessSalesPayments()
-	if err != nil {
-		log.Print(err)
-	}
-
 	err = models.ProcessSalesReturns()
-	if err != nil {
-		log.Print(err)
-	}
-
-	err = models.ProcessSalesReturnPayments()
 	if err != nil {
 		log.Print(err)
 	}
@@ -594,20 +583,37 @@ func cronJobsEveryHour() error {
 		log.Print(err)
 	}
 
-	err = models.ProcessPurchasePayments()
-	if err != nil {
-		log.Print(err)
-	}
-
 	err = models.ProcessPurchaseReturns()
 	if err != nil {
 		log.Print(err)
 	}
 
-	err = models.ProcessPurchaseReturnPayments()
+	err = models.ProcessQuotations()
 	if err != nil {
 		log.Print(err)
 	}
+
+	/*
+		err = models.ProcessSalesPayments()
+		if err != nil {
+			log.Print(err)
+		}
+
+		err = models.ProcessSalesReturnPayments()
+		if err != nil {
+			log.Print(err)
+		}
+
+		err = models.ProcessPurchasePayments()
+		if err != nil {
+			log.Print(err)
+		}
+
+		err = models.ProcessPurchaseReturnPayments()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	/*
 			err := models.ProcessSalesHistory()
@@ -655,10 +661,7 @@ func cronJobsEveryHour() error {
 
 
 
-		err = models.ProcessQuotations()
-		if err != nil {
-			log.Print(err)
-		}
+
 
 		err = models.ProcessDeliveryNotes()
 		if err != nil {

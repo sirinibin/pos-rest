@@ -1831,15 +1831,23 @@ func ProcessPurchases() error {
 			return errors.New("Cursor decoding purchase error:" + err.Error())
 		}
 
-		for i, paymentMethod := range model.PaymentMethods {
-			if paymentMethod == "bank_account" {
-				model.PaymentMethods[i] = "bank_card"
+		/*
+			for i, paymentMethod := range model.PaymentMethods {
+				if paymentMethod == "bank_account" {
+					model.PaymentMethods[i] = "bank_card"
+				}
 			}
-		}
 
-		for i, payment := range model.Payments {
-			if payment.Method == "bank_account" {
-				model.Payments[i].Method = "bank_card"
+			for i, payment := range model.Payments {
+				if payment.Method == "bank_account" {
+					model.Payments[i].Method = "bank_card"
+				}
+			}*/
+
+		for i, product := range model.Products {
+			if product.Discount > 0 {
+				model.Products[i].UnitDiscount = product.Discount / product.Quantity
+				model.Products[i].UnitDiscountPercent = product.DiscountPercent
 			}
 		}
 

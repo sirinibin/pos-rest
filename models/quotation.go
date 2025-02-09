@@ -1284,8 +1284,21 @@ func ProcessQuotations() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		quotation.ClearProductsQuotationHistory()
-		err = quotation.AddProductsQuotationHistory()
+		/*
+			quotation.ClearProductsQuotationHistory()
+			err = quotation.AddProductsQuotationHistory()
+			if err != nil {
+				return err
+			}*/
+
+		for i, product := range quotation.Products {
+			if product.Discount > 0 {
+				quotation.Products[i].UnitDiscount = product.Discount / product.Quantity
+				quotation.Products[i].UnitDiscountPercent = product.DiscountPercent
+			}
+		}
+
+		err = quotation.Update()
 		if err != nil {
 			return err
 		}

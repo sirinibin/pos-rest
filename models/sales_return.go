@@ -1944,15 +1944,24 @@ func ProcessSalesReturns() error {
 			salesReturn.InvoiceCountValue = icvByStores[salesReturn.StoreID.Hex()]
 			salesReturn.UUID = uuid.New().String()
 		*/
-		for i, paymentMethod := range salesReturn.PaymentMethods {
-			if paymentMethod == "bank_account" {
-				salesReturn.PaymentMethods[i] = "bank_card"
+		/*
+			for i, paymentMethod := range salesReturn.PaymentMethods {
+				if paymentMethod == "bank_account" {
+					salesReturn.PaymentMethods[i] = "bank_card"
+				}
 			}
-		}
 
-		for i, payment := range salesReturn.Payments {
-			if payment.Method == "bank_account" {
-				salesReturn.Payments[i].Method = "bank_card"
+			for i, payment := range salesReturn.Payments {
+				if payment.Method == "bank_account" {
+					salesReturn.Payments[i].Method = "bank_card"
+				}
+			}
+		*/
+
+		for i, product := range salesReturn.Products {
+			if product.Discount > 0 {
+				salesReturn.Products[i].UnitDiscount = product.Discount / product.Quantity
+				salesReturn.Products[i].UnitDiscountPercent = product.DiscountPercent
 			}
 		}
 
