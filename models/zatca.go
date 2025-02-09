@@ -253,8 +253,8 @@ type Price struct {
 // Allowance Charge
 type AllowanceCharge struct {
 	ChargeIndicator           bool         `xml:"cbc:ChargeIndicator"`
-	AllowanceChargeReason     string       `xml:"cbc:AllowanceChargeReason"`
 	AllowanceChargeReasonCode string       `xml:"cbc:AllowanceChargeReasonCode"`
+	AllowanceChargeReason     string       `xml:"cbc:AllowanceChargeReason"`
 	Amount                    Amount       `xml:"cbc:Amount"`
 	BaseAmount                *BaseAmount  `xml:"cbc:BaseAmount"`
 	TaxCategory               *TaxCategory `xml:"cac:TaxCategory"`
@@ -589,8 +589,8 @@ func (order *Order) MakeXMLContent() (string, error) {
 		invoice.AllowanceCharge = append(invoice.AllowanceCharge,
 			AllowanceCharge{
 				ChargeIndicator:           true,
-				AllowanceChargeReason:     "shipping",
 				AllowanceChargeReasonCode: "SAA",
+				AllowanceChargeReason:     "Shipping and handling",
 				Amount: Amount{
 					//Value:      ToFixed(order.ShippingOrHandlingFees+(order.ShippingOrHandlingFees*(store.VatPercent/100)), 2),
 					Value:      ToFixed(order.ShippingOrHandlingFees, 2),
@@ -659,11 +659,12 @@ func (order *Order) MakeXMLContent() (string, error) {
 	}
 
 	prePaidAmount := float64(0.00)
-	for _, payment := range order.Payments {
-		if payment.Method == "customer_account" {
-			prePaidAmount += *payment.Amount
-		}
-	}
+	/*
+		for _, payment := range order.Payments {
+			if payment.Method == "customer_account" {
+				prePaidAmount += *payment.Amount
+			}
+		}*/
 
 	totalAllowance := float64(0.00)
 	chargeTotalAmount := float64(0.00)
@@ -683,19 +684,19 @@ func (order *Order) MakeXMLContent() (string, error) {
 		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed(totalAllowance, 2), CurrencyID: "SAR"},
 		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed(chargeTotalAmount, 2), CurrencyID: "SAR"},
 		PrepaidAmount:        MonetaryAmount{Value: ToFixed(prePaidAmount, 2), CurrencyID: "SAR"},
-		PayableAmount:        MonetaryAmount{Value: ToFixed(order.NetTotal, 2), CurrencyID: "SAR"},
+		PayableAmount:        MonetaryAmount{Value: ToFixed((order.NetTotal), 2), CurrencyID: "SAR"},
 	}
 
 	invoice.InvoiceLines = []InvoiceLine{}
 
 	for i, product := range order.Products {
 		//lineExtensionAmount := (product.UnitPrice - (product.Discount / product.Quantity)) * product.Quantity
-		lineExtensionAmount := (product.UnitPrice * product.Quantity) - product.Discount
+		lineExtensionAmount := ((product.UnitPrice - product.UnitDiscount) * product.Quantity)
 		taxTotal := lineExtensionAmount * (*order.VatPercent / 100)
 
 		price := Price{
 			PriceAmount: PriceAmount{
-				Value:      ToFixed((product.UnitPrice - (product.Discount / product.Quantity)), 2),
+				Value:      ToFixed((product.UnitPrice - product.UnitDiscount), 2),
 				CurrencyID: "SAR",
 			},
 			BaseQuantity: BaseQuantity{
@@ -709,7 +710,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				ChargeIndicator:       false,
 				AllowanceChargeReason: "discount",
 				Amount: Amount{
-					Value:      ToFixed((product.Discount / product.Quantity), 2),
+					Value:      ToFixed(product.UnitDiscount, 2),
 					CurrencyID: "SAR",
 				},
 				BaseAmount: &BaseAmount{

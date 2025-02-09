@@ -33,6 +33,8 @@ type PurchaseReturnProduct struct {
 	PurchaseReturnUnitPrice float64            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
 	Discount                float64            `bson:"discount" json:"discount"`
 	DiscountPercent         float64            `bson:"discount_percent" json:"discount_percent"`
+	UnitDiscount            float64            `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountPercent     float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
 	Selected                bool               `bson:"selected" json:"selected"`
 }
 
@@ -435,7 +437,7 @@ func (purchasereturn *PurchaseReturn) FindNetTotal() {
 			continue
 		}
 
-		netTotal += (product.Quantity * product.PurchaseReturnUnitPrice) - product.Discount
+		netTotal += (product.Quantity * (product.PurchaseReturnUnitPrice - product.UnitDiscount))
 	}
 
 	netTotal += purchasereturn.ShippingOrHandlingFees
@@ -455,7 +457,7 @@ func (purchasereturn *PurchaseReturn) FindTotal() {
 			continue
 		}
 
-		total += (product.Quantity * product.PurchaseReturnUnitPrice) - product.Discount
+		total += (product.Quantity * (product.PurchaseReturnUnitPrice - product.UnitDiscount))
 	}
 
 	purchasereturn.Total = RoundFloat(total, 2)
@@ -1176,8 +1178,8 @@ func (purchasereturn *PurchaseReturn) Validate(
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
 		}
 
-		if purchaseReturnProduct.Discount > (purchaseReturnProduct.PurchaseReturnUnitPrice*purchaseReturnProduct.Quantity) && purchaseReturnProduct.PurchaseReturnUnitPrice > 0 {
-			errs["discount_"+strconv.Itoa(index)] = "Discount shouldn't be greater than product price"
+		if purchaseReturnProduct.UnitDiscount > purchaseReturnProduct.PurchaseReturnUnitPrice && purchaseReturnProduct.PurchaseReturnUnitPrice > 0 {
+			errs["unit_discount_"+strconv.Itoa(index)] = "Unit discount should not be greater than unit price"
 		}
 
 		for _, purchaseProduct := range purchase.Products {

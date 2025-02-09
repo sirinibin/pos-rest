@@ -35,6 +35,8 @@ type PurchaseProduct struct {
 	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 	Discount                float64            `bson:"discount" json:"discount"`
 	DiscountPercent         float64            `bson:"discount_percent" json:"discount_percent"`
+	UnitDiscount            float64            `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountPercent     float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
 	ExpectedRetailProfit    float64            `bson:"retail_profit" json:"retail_profit"`
 	ExpectedWholesaleProfit float64            `bson:"wholesale_profit" json:"wholesale_profit"`
 	ExpectedWholesaleLoss   float64            `bson:"wholesale_loss" json:"wholesale_loss"`
@@ -380,7 +382,7 @@ func (purchase *Purchase) CalculatePurchaseExpectedProfit() error {
 	for index, purchaseProduct := range purchase.Products {
 		quantity := purchaseProduct.Quantity
 
-		purchasePrice := (quantity * purchaseProduct.PurchaseUnitPrice) - purchaseProduct.Discount
+		purchasePrice := (quantity * (purchaseProduct.PurchaseUnitPrice - purchaseProduct.UnitDiscount))
 		retailPrice := quantity * purchaseProduct.RetailUnitPrice
 		wholesalePrice := quantity * purchaseProduct.WholesaleUnitPrice
 
@@ -528,7 +530,7 @@ func (purchase *Purchase) FindNetTotal() {
 	netTotal := float64(0.0)
 	total := float64(0.0)
 	for _, product := range purchase.Products {
-		total += (product.Quantity * product.PurchaseUnitPrice) - product.Discount
+		total += (product.Quantity * (product.PurchaseUnitPrice - product.UnitDiscount))
 	}
 
 	netTotal = total
@@ -548,7 +550,7 @@ func (purchase *Purchase) FindNetTotal() {
 func (purchase *Purchase) FindTotal() {
 	total := float64(0.0)
 	for _, product := range purchase.Products {
-		total += (product.Quantity * product.PurchaseUnitPrice) - product.Discount
+		total += (product.Quantity * (product.PurchaseUnitPrice - product.UnitDiscount))
 	}
 
 	purchase.Total = RoundFloat(total, 2)
@@ -1339,8 +1341,8 @@ func (purchase *Purchase) Validate(
 			errs["quantity_"+strconv.Itoa(i)] = "Quantity is required"
 		}
 
-		if product.Discount > (product.PurchaseUnitPrice*product.Quantity) && product.PurchaseUnitPrice > 0 {
-			errs["discount_"+strconv.Itoa(i)] = "Discount shouldn't be greater than product price"
+		if product.UnitDiscount > product.PurchaseUnitPrice && product.PurchaseUnitPrice > 0 {
+			errs["unit_discount_"+strconv.Itoa(i)] = "Unit discount should not be greater than unit price"
 		}
 
 		if scenario == "update" {

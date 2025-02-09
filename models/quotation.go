@@ -19,19 +19,21 @@ import (
 )
 
 type QuotationProduct struct {
-	ProductID         primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name              string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic      string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode          string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PartNumber        string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity          float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	Discount          float64            `bson:"discount" json:"discount"`
-	DiscountPercent   float64            `bson:"discount_percent" json:"discount_percent"`
-	Profit            float64            `bson:"profit" json:"profit"`
-	Loss              float64            `bson:"loss" json:"loss"`
+	ProductID           primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name                string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic        string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode            string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PartNumber          string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity            float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit                string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitPrice           float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	PurchaseUnitPrice   float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Discount            float64            `bson:"discount" json:"discount"`
+	DiscountPercent     float64            `bson:"discount_percent" json:"discount_percent"`
+	UnitDiscount        float64            `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountPercent float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	Profit              float64            `bson:"profit" json:"profit"`
+	Loss                float64            `bson:"loss" json:"loss"`
 }
 
 // Quotation : Quotation structure
@@ -188,7 +190,7 @@ func (model *Quotation) CalculateQuotationProfit() error {
 		*/
 		quantity := quotationProduct.Quantity
 
-		salesPrice := (quantity * quotationProduct.UnitPrice) - quotationProduct.Discount
+		salesPrice := (quantity * (quotationProduct.UnitPrice - quotationProduct.UnitDiscount))
 		purchaseUnitPrice := quotationProduct.PurchaseUnitPrice
 
 		/*
@@ -475,7 +477,7 @@ func (model *Quotation) FindNetTotal() {
 	netTotal := float64(0.0)
 	total := float64(0.0)
 	for _, product := range model.Products {
-		total += (product.Quantity * product.UnitPrice) - product.Discount
+		total += (product.Quantity * (product.UnitPrice - product.UnitDiscount))
 	}
 
 	netTotal = total
@@ -495,7 +497,7 @@ func (model *Quotation) FindNetTotal() {
 func (quotation *Quotation) FindTotal() {
 	total := float64(0.0)
 	for _, product := range quotation.Products {
-		total += (product.Quantity * product.UnitPrice) - product.Discount
+		total += (product.Quantity * (product.UnitPrice - product.UnitDiscount))
 	}
 
 	quotation.Total = RoundFloat(total, 2)
@@ -993,8 +995,8 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["unit_price_"+strconv.Itoa(index)] = "Unit Price is required"
 		}
 
-		if product.Discount > (product.UnitPrice*product.Quantity) && product.UnitPrice > 0 {
-			errs["discount_"+strconv.Itoa(index)] = "Discount shouldn't be greater than product price"
+		if product.UnitDiscount > product.UnitPrice && product.UnitPrice > 0 {
+			errs["unit_discount_"+strconv.Itoa(index)] = "Unit discount should not be greater than unit price"
 		}
 
 		if product.PurchaseUnitPrice == 0 {

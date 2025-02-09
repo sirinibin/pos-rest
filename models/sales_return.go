@@ -23,20 +23,22 @@ import (
 )
 
 type SalesReturnProduct struct {
-	ProductID         primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name              string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic      string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode          string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PartNumber        string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity          float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit              string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitPrice         float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	PurchaseUnitPrice float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	Discount          float64            `bson:"discount" json:"discount"`
-	DiscountPercent   float64            `bson:"discount_percent" json:"discount_percent"`
-	Profit            float64            `bson:"profit" json:"profit"`
-	Loss              float64            `bson:"loss" json:"loss"`
-	Selected          bool               `bson:"selected" json:"selected"`
+	ProductID           primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name                string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic        string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode            string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PartNumber          string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity            float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit                string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitPrice           float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	PurchaseUnitPrice   float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	Discount            float64            `bson:"discount" json:"discount"`
+	DiscountPercent     float64            `bson:"discount_percent" json:"discount_percent"`
+	UnitDiscount        float64            `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountPercent float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	Profit              float64            `bson:"profit" json:"profit"`
+	Loss                float64            `bson:"loss" json:"loss"`
+	Selected            bool               `bson:"selected" json:"selected"`
 }
 
 // SalesReturn : SalesReturn structure
@@ -442,7 +444,7 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 		if !product.Selected {
 			continue
 		}
-		netTotal += (product.Quantity * product.UnitPrice) - product.Discount
+		netTotal += (product.Quantity * (product.UnitPrice - product.UnitDiscount))
 	}
 
 	netTotal += salesreturn.ShippingOrHandlingFees
@@ -462,7 +464,7 @@ func (salesreturn *SalesReturn) FindTotal() {
 			continue
 		}
 
-		total += (product.Quantity * product.UnitPrice) - product.Discount
+		total += (product.Quantity * (product.UnitPrice - product.UnitDiscount))
 	}
 	salesreturn.Total = RoundFloat(total, 2)
 }
@@ -1202,8 +1204,8 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
 		}
 
-		if salesReturnProduct.Discount > (salesReturnProduct.UnitPrice*salesReturnProduct.Quantity) && salesReturnProduct.UnitPrice > 0 {
-			errs["discount_"+strconv.Itoa(index)] = "Discount shouldn't be greater than product price"
+		if salesReturnProduct.UnitDiscount > salesReturnProduct.UnitPrice && salesReturnProduct.UnitPrice > 0 {
+			errs["unit_discount_"+strconv.Itoa(index)] = "Unit discount should not be greater than unit price"
 		}
 
 		for _, orderProduct := range order.Products {
@@ -1488,7 +1490,7 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 		}
 
 		quantity := product.Quantity
-		salesPrice := (quantity * product.UnitPrice) - product.Discount
+		salesPrice := (quantity * (product.UnitPrice - product.UnitDiscount))
 		//purchaseUnitPrice := product.PurchaseUnitPrice
 		/*
 			for _, orderProduct := range order.Products {
