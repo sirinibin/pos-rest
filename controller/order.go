@@ -413,13 +413,15 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = order.MakeHash()
-	if err != nil {
-		response.Status = false
-		response.Errors["hash"] = "Error making hash: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	/*
+		err = order.MakeHash()
+		if err != nil {
+			response.Status = false
+			response.Errors["hash"] = "Error making hash: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	*/
 
 	response.Status = true
 	response.Result = order
