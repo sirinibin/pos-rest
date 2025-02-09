@@ -1015,6 +1015,10 @@ func ProcessCustomerWithdrawals() error {
 			model.StoreID = &store.ID
 		*/
 
+		if model.PaymentMethod == "bank_account" {
+			model.PaymentMethod = "bank_card"
+		}
+
 		err = model.Update()
 		if err != nil {
 			return err

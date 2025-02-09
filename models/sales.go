@@ -2160,17 +2160,18 @@ func ProcessOrders() error {
 			}
 		*/
 
-		for i, product := range order.Products {
-			if product.Discount > 0 {
-				order.Products[i].UnitDiscount = product.Discount / product.Quantity
-				order.Products[i].UnitDiscountPercent = product.DiscountPercent
-			}
-		}
+		/*
+				for i, product := range order.Products {
+					if product.Discount > 0 {
+						order.Products[i].UnitDiscount = product.Discount / product.Quantity
+						order.Products[i].UnitDiscountPercent = product.DiscountPercent
+					}
+				}
 
-		err = order.Update()
-		if err != nil {
-			return errors.New("Error updating: " + err.Error())
-		}
+			err = order.Update()
+			if err != nil {
+				return errors.New("Error updating: " + err.Error())
+			}*/
 
 		//order.MakeHash()
 		/*

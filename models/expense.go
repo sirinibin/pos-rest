@@ -954,22 +954,26 @@ func ProcessExpenses() error {
 			model.StoreID = &store.ID
 		*/
 
-		err = model.UndoAccounting()
-		if err != nil {
-			return errors.New("error undo accounting: " + err.Error())
-		}
-
-		err = model.DoAccounting()
-		if err != nil {
-			return errors.New("error doing accounting: " + err.Error())
-		}
-
 		/*
-			err = model.Update()
+			err = model.UndoAccounting()
 			if err != nil {
-				return err
+				return errors.New("error undo accounting: " + err.Error())
+			}
+
+			err = model.DoAccounting()
+			if err != nil {
+				return errors.New("error doing accounting: " + err.Error())
 			}
 		*/
+
+		if model.PaymentMethod == "bank_account" {
+			model.PaymentMethod = "bank_card"
+		}
+
+		err = model.Update()
+		if err != nil {
+			return err
+		}
 
 		bar.Add(1)
 	}
