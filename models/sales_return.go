@@ -1550,18 +1550,44 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 }
 
 func (model *SalesReturn) MakeRedisCode() error {
-	store, err := FindStoreByID(model.StoreID, bson.M{"code": 1})
+	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	incr, err := db.RedisClient.Incr(model.StoreID.Hex() + "_return_invoice_counter").Result()
+	redisKey := model.StoreID.Hex() + "_return_invoice_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	returnInvoiceID := fmt.Sprintf("SR-INV-"+store.Code+"-%06d", incr) // INV-000001, INV-000002...
-	model.Code = returnInvoiceID
+	if exists == 0 {
+		count, err := store.GetSalesReturnCount()
+		if err != nil {
+			return err
+		}
+
+		startFrom := store.SalesReturnSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	paddingCount := store.SalesReturnSerialNumber.PaddingCount
+
+	invoiceID := fmt.Sprintf("%s-%0*d", store.SalesReturnSerialNumber.Prefix, paddingCount, incr)
+	model.Code = invoiceID
 	model.InvoiceCountValue = incr
 	return nil
 }

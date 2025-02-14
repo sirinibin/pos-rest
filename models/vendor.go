@@ -57,7 +57,7 @@ type Vendor struct {
 	VatPercent                 *float32               `bson:"vat_percent" json:"vat_percent"`
 	RegistrationNumber         string                 `bson:"registration_number,omitempty" json:"registration_number"`
 	RegistrationNumberInArabic string                 `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic"`
-	NationalAddresss           NationalAddresss       `bson:"national_address,omitempty" json:"national_address"`
+	NationalAddresss           NationalAddress        `bson:"national_address,omitempty" json:"national_address"`
 	Logo                       string                 `bson:"logo,omitempty" json:"logo"`
 	LogoContent                string                 `json:"logo_content,omitempty"`
 	Deleted                    bool                   `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -78,29 +78,6 @@ type Vendor struct {
 }
 
 //Stores2                    []VendorStore          `bson:"stores,omitempty" json:"stores,omitempty"`
-
-type NationalAddresss struct {
-	ApplicationNo           string `bson:"application_no,omitempty" json:"application_no"`
-	ApplicationNoArabic     string `bson:"application_no_arabic,omitempty" json:"application_no_arabic"`
-	ServiceNo               string `bson:"service_no,omitempty" json:"service_no"`
-	ServiceNoArabic         string `bson:"service_no_arabic,omitempty" json:"service_no_arabic"`
-	CustomerAccountNo       string `bson:"customer_account_no,omitempty" json:"customer_account_no"`
-	CustomerAccountNoArabic string `bson:"customer_account_no_arabic,omitempty" json:"customer_account_no_arabic"`
-	BuildingNo              string `bson:"building_no,omitempty" json:"building_no"`
-	BuildingNoArabic        string `bson:"building_no_arabic,omitempty" json:"building_no_arabic"`
-	StreetName              string `bson:"street_name,omitempty" json:"street_name"`
-	StreetNameArabic        string `bson:"street_name_arabic,omitempty" json:"street_name_arabic"`
-	DistrictName            string `bson:"district_name,omitempty" json:"district_name"`
-	DistrictNameArabic      string `bson:"district_name_arabic,omitempty" json:"district_name_arabic"`
-	CityName                string `bson:"city_name,omitempty" json:"city_name"`
-	CityNameArabic          string `bson:"city_name_arabic,omitempty" json:"city_name_arabic"`
-	ZipCode                 string `bson:"zipcode,omitempty" json:"zipcode"`
-	ZipCodeArabic           string `bson:"zipcode_arabic,omitempty" json:"zipcode_arabic"`
-	AdditionalNo            string `bson:"additional_no,omitempty" json:"additional_no"`
-	AdditionalNoArabic      string `bson:"additional_no_arabic,omitempty" json:"additional_no_arabic"`
-	UnitNo                  string `bson:"unit_no,omitempty" json:"unit_no"`
-	UnitNoArabic            string `bson:"unit_no_arabic,omitempty" json:"unit_no_arabic"`
-}
 
 func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 

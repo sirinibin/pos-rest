@@ -13,6 +13,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -24,6 +25,7 @@ type Store struct {
 	NameInArabic               string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	Code                       string                `bson:"code" json:"code"`
 	BranchName                 string                `bson:"branch_name" json:"branch_name"`
+	BusinessCategory           string                `bson:"business_category" json:"business_category"`
 	Title                      string                `bson:"title,omitempty" json:"title,omitempty"`
 	TitleInArabic              string                `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
 	RegistrationNumber         string                `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
@@ -40,7 +42,7 @@ type Store struct {
 	VatPercent                 float64               `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	Logo                       string                `bson:"logo,omitempty" json:"logo,omitempty"`
 	LogoContent                string                `json:"logo_content,omitempty"`
-	NationalAddresss           NationalAddresss      `bson:"national_address,omitempty" json:"national_address,omitempty"`
+	NationalAddress            NationalAddress       `bson:"national_address,omitempty" json:"national_address,omitempty"`
 	Deleted                    bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                  *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser              *User                 `json:"deleted_by_user,omitempty"`
@@ -56,9 +58,39 @@ type Store struct {
 	DeletedByName              string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	UseProductsFromStoreID     []*primitive.ObjectID `json:"use_products_from_store_id" bson:"use_products_from_store_id"`
 	UseProductsFromStoreNames  []string              `json:"use_products_from_store_names" bson:"use_products_from_store_names"`
-	ChangeLog                  []ChangeLog           `json:"change_log,omitempty" bson:"change_log,omitempty"`
+	Zatca                      Zatca                 `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	SalesSerialNumber          SerialNumber          `bson:"sales_serial_number,omitempty" json:"sales_serial_number,omitempty"`
+	SalesReturnSerialNumber    SerialNumber          `bson:"sales_return_serial_number,omitempty" json:"sales_return_serial_number,omitempty"`
+	PurchaseSerialNumber       SerialNumber          `bson:"purchase_serial_number,omitempty" json:"purchase_serial_number,omitempty"`
+	PurchaseReturnSerialNumber SerialNumber          `bson:"purchase_return_serial_number,omitempty" json:"purchase_return_serial_number,omitempty"`
+	QuotationSerialNumber      SerialNumber          `bson:"quotation_serial_number,omitempty" json:"quotation_serial_number,omitempty"`
 }
 
+type SerialNumber struct {
+	Prefix         string `bson:"prefix,omitempty" json:"prefix"` //1 or 2
+	StartFromCount int64  `bson:"start_from_count,omitempty" json:"start_from_count"`
+	PaddingCount   int64  `bson:"padding_count,omitempty" json:"padding_count"`
+}
+
+type Zatca struct {
+	Phase                         string              `bson:"phase,omitempty" json:"phase"` //1 or 2
+	Otp                           string              `bson:"otp,omitempty" json:"otp"`     //Need to obtain from zatca when going to production level
+	PrivateKey                    string              `bson:"private_key,omitempty" json:"private_key"`
+	Csr                           string              `bson:"csr,omitempty" json:"csr"` //Need to generate from store details, update it whenever the store details updates
+	ComplianceRequestID           int64               `bson:"compliance_request_id,omitempty" json:"compliance_request_id"`
+	BinarySecurityToken           string              `bson:"binary_security_token,omitempty" json:"binary_security_token"`
+	Secret                        string              `bson:"secret,omitempty" json:"secret"`
+	ProductionRequestID           int64               `bson:"production_request_id,omitempty" json:"production_request_id"`
+	ProductionBinarySecurityToken string              `bson:"production_binary_security_token,omitempty" json:"production_binary_security_token"`
+	ProductionSecret              string              `bson:"production_secret,omitempty" json:"production_secret"`
+	Connected                     bool                `bson:"connected,omitempty" json:"connected,omitempty"`
+	LastConnectedAt               *time.Time          `bson:"last_connected_at,omitempty" json:"last_connected_at,omitempty"`
+	ConnectedBy                   *primitive.ObjectID `json:"connected_by,omitempty" bson:"connected_by,omitempty"`
+	DisconnectedBy                *primitive.ObjectID `json:"disconnected_by,omitempty" bson:"disconnected_by,omitempty"`
+	LastDisconnectedAt            *time.Time          `bson:"last_disconnected_at,omitempty" json:"last_disconnected_at,omitempty"`
+}
+
+/*
 func (store *Store) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
@@ -88,6 +120,7 @@ func (store *Store) SetChangeLog(
 		},
 	)
 }
+*/
 
 func (store *Store) AttributesValueChangeEvent(storeOld *Store) error {
 
@@ -229,6 +262,11 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[branch_name]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["branch_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
@@ -337,6 +375,12 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 }
 
 func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+	oldStore, err := FindStoreByID(&store.ID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["id"] = err.Error()
+		return errs
+	}
 
 	errs = make(map[string]string)
 
@@ -371,6 +415,165 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			}
 		}
 
+	}
+
+	if govalidator.IsNull(store.BusinessCategory) {
+		errs["business_category"] = "Business category is required"
+	}
+
+	//National address
+	if govalidator.IsNull(store.NationalAddress.BuildingNo) {
+		errs["national_address_building_no"] = "Building number is required"
+	}
+
+	if govalidator.IsNull(store.NationalAddress.StreetName) {
+		errs["national_address_street_name"] = "Street name is required"
+	}
+
+	if govalidator.IsNull(store.NationalAddress.StreetNameArabic) {
+		errs["national_address_street_name_arabic"] = "Street name in arabic is required"
+	}
+
+	if govalidator.IsNull(store.NationalAddress.DistrictName) {
+		errs["national_address_district_name"] = "District name is required"
+	}
+
+	if govalidator.IsNull(store.NationalAddress.DistrictNameArabic) {
+		errs["national_address_district_name_arabic"] = "District name in arabic is required"
+	}
+
+	if govalidator.IsNull(store.NationalAddress.CityName) {
+		errs["national_address_city_name"] = "City name is required"
+	}
+
+	if govalidator.IsNull(store.NationalAddress.CityNameArabic) {
+		errs["national_address_city_name_arabic"] = "City name in arabic is required"
+	}
+
+	if govalidator.IsNull(store.NationalAddress.ZipCode) {
+		errs["national_address_zipcode"] = "Zipcode is required"
+	}
+
+	//sales serial number
+	if govalidator.IsNull(store.SalesSerialNumber.Prefix) {
+		errs["sales_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.SalesSerialNumber.PaddingCount <= 0 {
+		errs["sales_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.SalesSerialNumber.StartFromCount <= 0 {
+		errs["sales_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
+	//sales return serial number
+	if govalidator.IsNull(store.SalesReturnSerialNumber.Prefix) {
+		errs["sales_return_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.SalesReturnSerialNumber.PaddingCount <= 0 {
+		errs["sales_return_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.SalesReturnSerialNumber.StartFromCount <= 0 {
+		errs["sales_return_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
+	//purchase serial number
+	if govalidator.IsNull(store.PurchaseSerialNumber.Prefix) {
+		errs["purchase_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.SalesReturnSerialNumber.PaddingCount <= 0 {
+		errs["purchase_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.SalesReturnSerialNumber.StartFromCount <= 0 {
+		errs["purchase_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
+	//purchase return serial number
+	if govalidator.IsNull(store.PurchaseReturnSerialNumber.Prefix) {
+		errs["purchase_return_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.PurchaseReturnSerialNumber.PaddingCount <= 0 {
+		errs["purchase_return_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.PurchaseReturnSerialNumber.StartFromCount <= 0 {
+		errs["purchase_return_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
+	//quotation return serial number
+	if govalidator.IsNull(store.QuotationSerialNumber.Prefix) {
+		errs["quotation_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.QuotationSerialNumber.PaddingCount <= 0 {
+		errs["quotation_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.QuotationSerialNumber.StartFromCount <= 0 {
+		errs["quotation_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
+	if !store.ID.IsZero() && oldStore != nil && store.Code != "GUOJ" && store.Code != "GUOCJ" {
+		if store.SalesSerialNumber.StartFromCount != oldStore.SalesSerialNumber.StartFromCount {
+			salesCount, err := oldStore.GetSalesCount()
+			if err != nil {
+				errs["sales_serial_number_start_from_count"] = "Error finding sales count"
+			}
+
+			if salesCount > 0 {
+				errs["sales_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
+			}
+		}
+
+		if store.SalesReturnSerialNumber.StartFromCount != oldStore.SalesReturnSerialNumber.StartFromCount {
+			salesReturnCount, err := oldStore.GetSalesReturnCount()
+			if err != nil {
+				errs["sales_return_serial_number_start_from_count"] = "Error finding sales return count"
+			}
+
+			if salesReturnCount > 0 {
+				errs["sales_return_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(salesReturnCount, 10) + " sales returns"
+			}
+		}
+
+		if store.PurchaseSerialNumber.StartFromCount != oldStore.PurchaseSerialNumber.StartFromCount {
+			purchaseCount, err := oldStore.GetPurchaseCount()
+			if err != nil {
+				errs["purchase_serial_number_start_from_count"] = "Error finding purchase count"
+			}
+
+			if purchaseCount > 0 {
+				errs["purchase_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(purchaseCount, 10) + " purchase"
+			}
+		}
+
+		if store.PurchaseReturnSerialNumber.StartFromCount != oldStore.PurchaseReturnSerialNumber.StartFromCount {
+			purchaseReturnCount, err := oldStore.GetPurchaseReturnCount()
+			if err != nil {
+				errs["purchase_return_serial_number_start_from_count"] = "Error finding purchase return count"
+			}
+
+			if purchaseReturnCount > 0 {
+				errs["purchase_return_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(purchaseReturnCount, 10) + " purchase return"
+			}
+		}
+
+		if store.QuotationSerialNumber.StartFromCount != oldStore.QuotationSerialNumber.StartFromCount {
+			quotationCount, err := oldStore.GetQuotationCount()
+			if err != nil {
+				errs["quotation_serial_number_start_from_count"] = "Error finding quotation count"
+			}
+
+			if quotationCount > 0 {
+				errs["quotation_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(quotationCount, 10) + " quotation"
+			}
+		}
 	}
 
 	if govalidator.IsNull(store.Name) {
@@ -576,8 +779,6 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 	now := time.Now()
 	store.DeletedAt = &now
 
-	store.SetChangeLog("delete", nil, nil, nil)
-
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": store.ID},
@@ -735,4 +936,59 @@ func ProcessStores() error {
 
 	log.Print("DONE!")
 	return nil
+}
+
+func (store *Store) GetSalesCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (store *Store) GetSalesReturnCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (store *Store) GetPurchaseCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (store *Store) GetPurchaseReturnCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (store *Store) GetQuotationCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
 }

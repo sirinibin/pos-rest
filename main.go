@@ -13,6 +13,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -239,6 +240,8 @@ func main() {
 	router.HandleFunc("/v1/store/{id}", controller.ViewStore).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.UpdateStore).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
+	router.HandleFunc("/v1/store/zatca/connect", controller.ConnectStoreToZatca).Methods("POST")
+	router.HandleFunc("/v1/store/zatca/disconnect", controller.DisconnectStoreFromZatca).Methods("POST")
 
 	//Customer
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")
@@ -567,6 +570,10 @@ func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, o
 
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
+	err := models.ProcessCustomers()
+	if err != nil {
+		log.Print(err)
+	}
 
 	/*
 		err := models.ProcessExpenses()

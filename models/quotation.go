@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -1050,7 +1051,69 @@ func (quotation *Quotation) Insert() error {
 	return nil
 }
 
+func (store *Store) GetQuotationsCount() (count int64, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (model *Quotation) MakeRedisCode() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := model.StoreID.Hex() + "_quotation_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists == 0 {
+		count, err := store.GetQuotationCount()
+		if err != nil {
+			return err
+		}
+
+		startFrom := store.QuotationSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	paddingCount := store.QuotationSerialNumber.PaddingCount
+
+	invoiceID := fmt.Sprintf("%s-%0*d", store.QuotationSerialNumber.Prefix, paddingCount, incr)
+	model.Code = invoiceID
+	return nil
+}
+
 func (quotation *Quotation) MakeCode() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return err
+	}
+
+	if store.Code != "GUOCJ" && store.Code != "GUOJ" {
+		return quotation.MakeRedisCode()
+	}
+
 	lastQuotation, err := FindLastQuotationByStoreID(quotation.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err

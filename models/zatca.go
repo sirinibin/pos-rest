@@ -455,15 +455,16 @@ func (order *Order) MakeXMLContent() (string, error) {
 			PartyIdentification: PartyIdentification{
 				ID: IdentificationID{
 					SchemeID: "CRN",
-					Value:    store.RegistrationNumber,
+					//Value:    "5903506195",
+					Value: store.RegistrationNumber,
 				},
 			},
 			PostalAddress: Address{
-				StreetName:      store.NationalAddresss.StreetName,
-				BuildingNumber:  store.NationalAddresss.BuildingNo,
-				CitySubdivision: store.NationalAddresss.DistrictName,
-				CityName:        store.NationalAddresss.CityName,
-				PostalZone:      store.NationalAddresss.ZipCode,
+				StreetName:      store.NationalAddress.StreetName,
+				BuildingNumber:  store.NationalAddress.BuildingNo,
+				CitySubdivision: store.NationalAddress.DistrictName,
+				CityName:        store.NationalAddress.CityName,
+				PostalZone:      store.NationalAddress.ZipCode,
 				CountryCode:     "SA",
 			},
 			PartyTaxScheme: PartyTaxScheme{
@@ -488,11 +489,11 @@ func (order *Order) MakeXMLContent() (string, error) {
 				},
 			},
 			PostalAddress: Address{
-				StreetName:      customer.NationalAddresss.StreetName,
-				BuildingNumber:  customer.NationalAddresss.BuildingNo,
-				CitySubdivision: customer.NationalAddresss.DistrictName,
-				CityName:        customer.NationalAddresss.CityName,
-				PostalZone:      customer.NationalAddresss.ZipCode,
+				StreetName:      customer.NationalAddress.StreetName,
+				BuildingNumber:  customer.NationalAddress.BuildingNo,
+				CitySubdivision: customer.NationalAddress.DistrictName,
+				CityName:        customer.NationalAddress.CityName,
+				PostalZone:      customer.NationalAddress.ZipCode,
 				CountryCode:     "SA",
 			},
 			PartyTaxScheme: PartyTaxScheme{
@@ -545,7 +546,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
 				PaymentMeansCode: "30",
 			})
-		} else if paymentMethod == "cheque" {
+		} else if paymentMethod == "bank_cheque" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
 				PaymentMeansCode: "20",
 			})

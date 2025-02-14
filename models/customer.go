@@ -3,12 +3,14 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -66,7 +68,7 @@ type Customer struct {
 	Email                      string                   `bson:"email,omitempty" json:"email,omitempty"`
 	Address                    string                   `bson:"address,omitempty" json:"address,omitempty"`
 	AddressInArabic            string                   `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	NationalAddresss           NationalAddresss         `bson:"national_address,omitempty" json:"national_address,omitempty"`
+	NationalAddress            NationalAddress          `bson:"national_address,omitempty" json:"national_address,omitempty"`
 	RegistrationNumber         string                   `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
 	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
 	Deleted                    bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -83,6 +85,7 @@ type Customer struct {
 	UpdatedByName              string                   `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName              string                   `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	SearchLabel                string                   `json:"search_label"`
+	StoreID                    *primitive.ObjectID      `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Stores                     map[string]CustomerStore `bson:"stores" json:"stores"`
 }
 
@@ -213,6 +216,7 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 		if err != nil {
 			return customers, criterias, err
 		}
+		criterias.SearchBy["store_id"] = storeID
 	}
 
 	keys, ok = r.URL.Query()["sort"]
@@ -867,6 +871,47 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	}
 
+	store, err := FindStoreByID(customer.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = err.Error()
+	}
+
+	//National address
+	if customer.VATNo != "" && store.Zatca.Phase == "2" {
+		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+			errs["national_address_building_number"] = "Building number is required"
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.StreetName) {
+			errs["national_address_street_name"] = "Street name is required"
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.StreetNameArabic) {
+			errs["national_address_street_name_arabic"] = "Street name in arabic is required"
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
+			errs["national_address_district_name"] = "District name is required"
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.DistrictNameArabic) {
+			errs["national_address_district_name_arabic"] = "District name in arabic is required"
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.CityName) {
+			errs["national_address_city_name"] = "City name is required"
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.CityNameArabic) {
+			errs["national_address_city_name_arabic"] = "City name in arabic is required"
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
+			errs["national_address_zipcode"] = "Zipcode is required"
+		}
+	}
+
 	if govalidator.IsNull(customer.Name) {
 		errs["name"] = "Name is required"
 	}
@@ -1051,4 +1096,53 @@ func IsCustomerExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func ProcessCustomers() error {
+	log.Printf("Processing customers")
+	totalCount, err := GetTotalCount(bson.M{}, "customer")
+	if err != nil {
+		return err
+	}
+	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching products" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	bar := progressbar.Default(totalCount)
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		customer := Customer{}
+		err = cur.Decode(&customer)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		for _, store := range customer.Stores {
+			customer.StoreID = &store.StoreID
+			break
+		}
+
+		err = customer.Update()
+		if err != nil {
+			return err
+		}
+
+		bar.Add(1)
+	}
+
+	log.Print("DONE!")
+	return nil
 }
