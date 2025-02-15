@@ -570,7 +570,13 @@ func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, o
 
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
-	err := models.ProcessCustomers()
+
+	err := models.ProcessProductCategories()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessExpenseCategories()
 	if err != nil {
 		log.Print(err)
 	}

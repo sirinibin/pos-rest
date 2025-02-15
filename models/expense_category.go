@@ -3,12 +3,14 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -34,6 +36,7 @@ type ExpenseCategory struct {
 	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	StoreID       *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 }
 
 func (expenseCategory *ExpenseCategory) AttributesValueChangeEvent(expenseCategoryOld *ExpenseCategory) error {
@@ -122,6 +125,16 @@ func SearchExpenseCategory(w http.ResponseWriter, r *http.Request) (expenseCateg
 			timeZoneOffset = s
 		}
 
+	}
+
+	var storeID primitive.ObjectID
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return expenseCategories, criterias, err
+		}
+		criterias.SearchBy["store_id"] = storeID
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]
@@ -490,4 +503,62 @@ func IsExpenseCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
 	})
 
 	return (count == 1), err
+}
+
+func ProcessExpenseCategories() error {
+	log.Printf("Processing expense categories")
+	totalCount, err := GetTotalCount(bson.M{}, "expense_category")
+	if err != nil {
+		return err
+	}
+	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching products" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	bar := progressbar.Default(totalCount)
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		category := ExpenseCategory{}
+		err = cur.Decode(&category)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		if category.CreatedByName == "Shanoob" {
+			store, err := FindStoreByCode("GUOCJ", bson.M{})
+			if err != nil {
+				return errors.New("Error finding store: " + err.Error())
+			}
+			category.StoreID = &store.ID
+		} else {
+			store, err := FindStoreByCode("GUOJ", bson.M{})
+			if err != nil {
+				return errors.New("Error finding store: " + err.Error())
+			}
+			category.StoreID = &store.ID
+		}
+
+		err = category.Update()
+		if err != nil {
+			return err
+		}
+
+		bar.Add(1)
+	}
+
+	log.Print("DONE!")
+	return nil
 }
