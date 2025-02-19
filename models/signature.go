@@ -19,7 +19,7 @@ import (
 )
 
 // Signature : Signature structure
-type Signature struct {
+type UserSignature struct {
 	ID               primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Name             string              `bson:"name,omitempty" json:"name,omitempty"`
 	Signature        string              `bson:"signature,omitempty" json:"signature,omitempty"`
@@ -40,7 +40,7 @@ type Signature struct {
 	ChangeLog        []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
-func (signature *Signature) SetChangeLog(
+func (signature *UserSignature) SetChangeLog(
 	event string,
 	name, oldValue, newValue interface{},
 ) {
@@ -70,7 +70,7 @@ func (signature *Signature) SetChangeLog(
 	)
 }
 
-func (signature *Signature) UpdateForeignLabelFields() error {
+func (signature *UserSignature) UpdateForeignLabelFields() error {
 
 	if signature.CreatedBy != nil {
 		createdByUser, err := FindUserByID(signature.CreatedBy, bson.M{"id": 1, "name": 1})
@@ -99,7 +99,7 @@ func (signature *Signature) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signature, criterias SearchCriterias, err error) {
+func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []UserSignature, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -244,7 +244,7 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 		if err != nil {
 			return signatures, criterias, errors.New("Cursor error:" + err.Error())
 		}
-		signature := Signature{}
+		signature := UserSignature{}
 		err = cur.Decode(&signature)
 		if err != nil {
 			return signatures, criterias, errors.New("Cursor decode error:" + err.Error())
@@ -266,7 +266,7 @@ func SearchSignature(w http.ResponseWriter, r *http.Request) (signatures []Signa
 	return signatures, criterias, nil
 }
 
-func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (signature *UserSignature) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 
 	errs = make(map[string]string)
 
@@ -335,7 +335,7 @@ func (signature *Signature) Validate(w http.ResponseWriter, r *http.Request, sce
 	return errs
 }
 
-func (signature *Signature) IsNameExists() (exists bool, err error) {
+func (signature *UserSignature) IsNameExists() (exists bool, err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -367,7 +367,7 @@ func GetFileExtensionFromBase64(content []byte) (ext string, err error) {
 	return extensions[len(extensions)-1], nil
 }
 
-func (signature *Signature) Insert() error {
+func (signature *UserSignature) Insert() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -395,7 +395,7 @@ func (signature *Signature) Insert() error {
 	return nil
 }
 
-func (signature *Signature) SaveSignatureFile() error {
+func (signature *UserSignature) SaveSignatureFile() error {
 	content, err := base64.StdEncoding.DecodeString(signature.SignatureContent)
 	if err != nil {
 		return err
@@ -436,7 +436,7 @@ func SaveBase64File(filename string, content []byte) error {
 	return nil
 }
 
-func (signature *Signature) Update() error {
+func (signature *UserSignature) Update() error {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
@@ -470,7 +470,7 @@ func (signature *Signature) Update() error {
 	return nil
 }
 
-func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error) {
+func (signature *UserSignature) DeleteSignature(tokenClaims TokenClaims) (err error) {
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
@@ -510,7 +510,7 @@ func (signature *Signature) DeleteSignature(tokenClaims TokenClaims) (err error)
 func FindSignatureByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
-) (signature *Signature, err error) {
+) (signature *UserSignature, err error) {
 
 	collection := db.Client().Database(db.GetPosDB()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

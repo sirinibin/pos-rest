@@ -10,6 +10,7 @@ import traceback
 
 def main():
     try:
+
         dataFromGo = sys.stdin.read().strip()
         if not dataFromGo:
             #print("No input received", file=sys.stderr)
@@ -26,7 +27,7 @@ def main():
             print("Invalid JSON received", file=sys.stderr)
             #resp_data["error"]="Invalid JSON received:"
             #print(json.dumps(resp_data))
-            return
+            return  
       
           
 
@@ -37,8 +38,9 @@ def main():
         environment_type = payloadFromGo["env"]
         #environment_type = 'Simulation'
         
-        #OTP = 'bjkbj'  # For Simulation and Production Get OTP from fatooraPortal
+        #OTP = '12345'  # For Simulation and Production Get OTP from fatooraPortal
         OTP = payloadFromGo["otp"]
+
         csr_config = {
         "csr.common.name": payloadFromGo["crn"],    #CR No.
         #"csr.common.name": "5903506195",   
@@ -64,6 +66,7 @@ def main():
         }
 
 
+
         '''
         csr_config = {
         "csr.common.name": "TST-886431145-399999999900003",
@@ -77,6 +80,7 @@ def main():
         "csr.industry.business.category": "Supply activities"
         }
         '''
+
 
 
         #config_file_path = 'certificates/csr-config-example-EN.properties'
@@ -128,7 +132,7 @@ def main():
         cert_info["csr"] = csr_base64
         cert_info["privateKey"] = private_key_content
 
-        #api_helper.save_json_to_file("certificates/certificateInfo.json", cert_info)
+        api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
 
         # 2. Get Compliance CSID
         #print("\n2. Get Compliance CSID\n")
@@ -145,7 +149,7 @@ def main():
             cert_info["ccsid_binarySecurityToken"] = json_decoded_response["binarySecurityToken"]
             cert_info["ccsid_secret"] = json_decoded_response["secret"]
 
-            #api_helper.save_json_to_file("certificates/certificateInfo.json", cert_info)
+            api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
 
             #print("\ncomplianceCSID Server Response: \n" + clean_response)
             
@@ -257,7 +261,7 @@ def main():
             cert_info["pcsid_binarySecurityToken"] = json_decoded_response["binarySecurityToken"]
             cert_info["pcsid_secret"] = json_decoded_response["secret"]
 
-        #api_helper.save_json_to_file("certificates/certificateInfo.json", cert_info)
+            api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
 
             #print(f"Production CSID Server Response: \n{clean_response}")
 
@@ -283,6 +287,6 @@ def main():
             "traceback": traceback.format_exc()
         }
         print(json.dumps(error_data))  # Print error in JSON format
-        exit(1)  # Ensure Go detects failure
+        #exit(1)  # Ensure Go detects failure
 if __name__ == "__main__":
     main()

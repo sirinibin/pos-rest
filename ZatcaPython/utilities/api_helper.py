@@ -18,7 +18,7 @@ class api_helper:
                 return response.text
             
             except requests.exceptions.ConnectionError as e:
-                print(f"ConnectionError: {e}. Attempt {attempt + 1} of {retries}.")
+                #print(f"ConnectionError: {e}. Attempt {attempt + 1} of {retries}.")
                 if attempt < retries - 1:
                     time.sleep(backoff_factor * (2 ** attempt))  # Exponential backoff
                 else:

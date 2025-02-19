@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -848,9 +849,30 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 
 }
 
-func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (customer *Customer) TrimSpaceFromFields() {
+	customer.Name = strings.TrimSpace(customer.Name)
+	customer.NameInArabic = strings.TrimSpace(customer.NameInArabic)
+	customer.Phone = strings.TrimSpace(customer.Phone)
+	customer.VATNo = strings.TrimSpace(customer.VATNo)
+	customer.RegistrationNumber = strings.TrimSpace(customer.RegistrationNumber)
+	customer.Email = strings.TrimSpace(customer.Email)
+	customer.Address = strings.TrimSpace(customer.Address)
+	customer.AddressInArabic = strings.TrimSpace(customer.AddressInArabic)
+	customer.NationalAddress.BuildingNo = strings.TrimSpace(customer.NationalAddress.BuildingNo)
+	customer.NationalAddress.StreetName = strings.TrimSpace(customer.NationalAddress.StreetName)
+	customer.NationalAddress.StreetNameArabic = strings.TrimSpace(customer.NationalAddress.StreetNameArabic)
+	customer.NationalAddress.DistrictName = strings.TrimSpace(customer.NationalAddress.DistrictName)
+	customer.NationalAddress.DistrictNameArabic = strings.TrimSpace(customer.NationalAddress.DistrictNameArabic)
+	customer.NationalAddress.CityName = strings.TrimSpace(customer.NationalAddress.CityName)
+	customer.NationalAddress.CityNameArabic = strings.TrimSpace(customer.NationalAddress.CityNameArabic)
+	customer.NationalAddress.ZipCode = strings.TrimSpace(customer.NationalAddress.ZipCode)
+	customer.NationalAddress.AdditionalNo = strings.TrimSpace(customer.NationalAddress.AdditionalNo)
+	customer.NationalAddress.UnitNo = strings.TrimSpace(customer.NationalAddress.UnitNo)
+}
 
+func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 	errs = make(map[string]string)
+	customer.TrimSpaceFromFields()
 
 	if scenario == "update" {
 		if customer.ID.IsZero() {
@@ -877,38 +899,44 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		errs["store_id"] = err.Error()
 	}
 
+	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsValidDigitNumber(strings.TrimSpace(customer.VATNo), "15") {
+		errs["vat_no"] = "VAT No. should be 15 digits"
+	} else if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(customer.VATNo), "3") {
+		errs["vat_no"] = "VAT No. should start and end with 3"
+	}
+
+	if !govalidator.IsNull(customer.RegistrationNumber) && !IsAlphanumeric(customer.RegistrationNumber) {
+		errs["registration_number"] = "Registration Number should be alpha numeric(a-zA-Z|0-9)"
+	}
+
 	//National address
-	if customer.VATNo != "" && store.Zatca.Phase == "2" {
+	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && store.Zatca.Phase == "2" {
 		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
-			errs["national_address_building_number"] = "Building number is required"
+			errs["national_address_building_no"] = "Building number is required"
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+				errs["national_address_building_no"] = "Building number should be 4 digits"
+			}
 		}
 
 		if govalidator.IsNull(customer.NationalAddress.StreetName) {
 			errs["national_address_street_name"] = "Street name is required"
 		}
 
-		if govalidator.IsNull(customer.NationalAddress.StreetNameArabic) {
-			errs["national_address_street_name_arabic"] = "Street name in arabic is required"
-		}
-
 		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
 			errs["national_address_district_name"] = "District name is required"
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.DistrictNameArabic) {
-			errs["national_address_district_name_arabic"] = "District name in arabic is required"
 		}
 
 		if govalidator.IsNull(customer.NationalAddress.CityName) {
 			errs["national_address_city_name"] = "City name is required"
 		}
 
-		if govalidator.IsNull(customer.NationalAddress.CityNameArabic) {
-			errs["national_address_city_name_arabic"] = "City name in arabic is required"
-		}
-
 		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
-			errs["national_address_zipcode"] = "Zipcode is required"
+			errs["national_address_zipcode"] = "Zip code is required"
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+				errs["national_address_zipcode"] = "Zip code should be 5 digits"
+			}
 		}
 	}
 
@@ -916,22 +944,33 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		errs["name"] = "Name is required"
 	}
 
-	if govalidator.IsNull(customer.Phone) {
+	if govalidator.IsNull(strings.TrimSpace(customer.Phone)) {
 		errs["phone"] = "Phone is required"
+	} else if !ValidateSaudiPhone(strings.TrimSpace(customer.Phone)) {
+		errs["phone"] = "Invalid phone no."
+	} else {
+
+		if strings.HasPrefix(customer.Phone, "+966") {
+			customer.Phone = strings.TrimPrefix(customer.Phone, "+966")
+			customer.Phone = "0" + customer.Phone
+		}
+
+		phoneExists, err := customer.IsPhoneExists()
+		if err != nil {
+			errs["phone"] = err.Error()
+		}
+
+		if phoneExists {
+			errs["phone"] = "Phone No. Already exists."
+		}
+
+		if phoneExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
 	}
 
-	phoneExists, err := customer.IsPhoneExists()
-	if err != nil {
-		errs["phone"] = err.Error()
-	}
-
-	if phoneExists {
-		errs["phone"] = "Phone No. Already exists."
-	}
-
-	if phoneExists {
-		w.WriteHeader(http.StatusConflict)
-	} else if len(errs) > 0 {
+	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
@@ -1005,6 +1044,12 @@ func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
 	}
 
 	return nil
+}
+
+func IsValidDigitNumber(s string, digitsCount string) bool {
+	// Regular expression to match exactly 4 digits
+	re := regexp.MustCompile(`^\d{` + digitsCount + `}$`)
+	return re.MatchString(s)
 }
 
 func FindCustomerByID(

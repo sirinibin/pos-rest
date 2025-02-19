@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/env"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
@@ -87,30 +87,6 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/*
-		pythonPath := "/Users/sirin/go/src/github.com/sirinibin/ZatcaPython/venv/bin/python" // Change this to match your system
-		scriptPath := "csr_and_onboarding.py"                                                // Ensure this path is correct
-
-		cmd := exec.Command(pythonPath, scriptPath)
-
-		// Redirect output and error messages
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err = cmd.Run()
-		if err != nil {
-			fmt.Println("Error executing Python script:", err)
-		}
-	*/
-
-	// Run the script with venv activated
-	//cmd := exec.Command("bash", "-c", "source /Users/sirin/go/src/github.com/sirinibin/ZatcaPython/venv/bin/activate && python /Users/sirin/go/src/github.com/sirinibin/ZatcaPython/csr_and_onboarding.py")
-	//cmd := exec.Command("/opt/homebrew/Cellar/python@3.13/3.13.1/Frameworks/Python.framework/Versions/3.13/bin/python3.13", "/Users/sirin/go/src/github.com/sirinibin/ZatcaPython/csr_and_onboarding.py")
-
-	//1-GUOJ|2-111708|3-4bd41220-f619-47bc-830b-7fedd3b33032
-	//uid := "4bd41220-f619-47bc-830b-7fedd3b33032"
-
-	//strings.Split(store.SalesSerialNumber.Prefix, "-")
 	serialNumberTemplate := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, 1)
 
 	parts := strings.Split(serialNumberTemplate, "-")
@@ -121,7 +97,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 
 	serialNumber += strconv.Itoa((len(parts) + 1)) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
 
-	log.Print("serialNumber:" + serialNumber)
+	//log.Print("serialNumber:" + serialNumber)
 
 	// Create JSON payload
 	payload := map[string]interface{}{
@@ -163,7 +139,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	// Run the command
 	err = cmd.Run()
 	if err != nil {
-		fmt.Println("Error running Python script:", err)
+		//fmt.Println("Error running Python script:", err)
 		response.Status = false
 		// Parse JSON response
 		var pythonResponse PythonResponse
@@ -179,49 +155,21 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		if pythonResponse.Error != "" {
 			response.Status = false
 			response.Errors["otp"] = "Error connecting to zatac: " + pythonResponse.Error
+			store.Zatca.ConnectionFailedCount++
+			now := time.Now()
+			store.Zatca.ConnectionLastFailedAt = &now
+			store.Zatca.ConnectionErrors = append(store.Zatca.ConnectionErrors, "Connection failure1: "+pythonResponse.Error)
+			err = store.Update()
+			if err != nil {
+				fmt.Println("Error saving store: ", err)
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
 		return
 	}
-
-	/*
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		err = cmd.Run()
-		if err != nil {
-			fmt.Println("Error executing Python script:", err)
-		}
-	*/
-
-	// Capture output
-	/*
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			response.Status = false
-			// Parse JSON response
-			var pythonResponse PythonResponse
-			err = json.Unmarshal(output, &pythonResponse)
-			if err != nil {
-				response.Errors["otp"] = "Error parsing error messages from zatca:" + err.Error()
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
-			//log.Print(pythonResponse.Error)
-			if pythonResponse.Error != "" {
-				response.Status = false
-				response.Errors["otp"] = "Error connecting to zatac: " + pythonResponse.Error
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
-		}
-	*/
 
 	// Parse JSON response
 	var pythonResponse PythonResponse
@@ -231,13 +179,23 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Print("pythonResponse:")
-	log.Print(pythonResponse)
+	//log.Print("pythonResponse:")
+	//log.Print(pythonResponse)
 
 	if pythonResponse.Error != "" {
-		log.Print(pythonResponse.Error)
+		//log.Print(pythonResponse.Error)
 		response.Status = false
 		response.Errors["otp"] = "Error connecting to zatac: " + pythonResponse.Error
+		store.Zatca.ConnectionFailedCount++
+		now := time.Now()
+		store.Zatca.ConnectionLastFailedAt = &now
+		store.Zatca.ConnectionErrors = append(store.Zatca.ConnectionErrors, "Connection failure2: "+pythonResponse.Error)
+		err = store.Update()
+		if err != nil {
+			fmt.Println("Error saving store: ", err)
+			return
+		}
+
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
@@ -257,11 +215,20 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	store.Zatca.ProductionBinarySecurityToken = pythonResponse.PcsidBinarySecurityToken
 	store.Zatca.ProductionSecret = pythonResponse.PcsidSecret
 
-	store.Zatca.Connected = true
-	store.Zatca.ConnectedBy = &userID
+	if !govalidator.IsNull(store.Zatca.PrivateKey) &&
+		!govalidator.IsNull(store.Zatca.Csr) &&
+		!govalidator.IsNull(store.Zatca.Secret) &&
+		!govalidator.IsNull(store.Zatca.BinarySecurityToken) &&
+		!govalidator.IsNull(store.Zatca.ProductionSecret) &&
+		!govalidator.IsNull(store.Zatca.ProductionBinarySecurityToken) &&
+		store.Zatca.ComplianceRequestID > 0 &&
+		store.Zatca.ProductionRequestID > 0 {
 
-	now := time.Now()
-	store.Zatca.LastConnectedAt = &now
+		store.Zatca.Connected = true
+		store.Zatca.ConnectedBy = &userID
+		now := time.Now()
+		store.Zatca.LastConnectedAt = &now
+	}
 
 	err = store.Update()
 	if err != nil {

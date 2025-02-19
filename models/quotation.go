@@ -54,7 +54,7 @@ type Quotation struct {
 	SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
 	DeliveredByUser          *User               `json:"delivered_by_user,omitempty"`
-	DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
+	DeliveredBySignature     *UserSignature          `json:"delivered_by_signature,omitempty"`
 	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float64             `bson:"discount" json:"discount"`
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`

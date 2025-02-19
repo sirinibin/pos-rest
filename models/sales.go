@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -50,7 +51,6 @@ type Order struct {
 	UUID              string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
 	Hash              string              `bson:"hash,omitempty" json:"hash,omitempty"`
 	PrevHash          string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
-	CSID              string              `bson:"csid,omitempty" json:"csid,omitempty"`
 	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Store             *Store              `json:"store,omitempty"`
@@ -104,7 +104,32 @@ type Order struct {
 	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	//DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Zatca ZatcaReporting `bson:"zatca,omitempty" json:"zatca,omitempty"`
+}
 
+type ZatcaReporting struct {
+	CompliancePassed      bool       `bson:"compliance_passed,omitempty" json:"compliance_passed,omitempty"`
+	CompliancePassedAt    *time.Time `bson:"compliance_passed_at,omitempty" json:"compliance_passed_at,omitempty"`
+	ComplianceInvoiceHash string     `bson:"compliance_invoice_hash,omitempty" json:"compliance_invoice_hash,omitempty"`
+	ReportingPassed       bool       `bson:"reporting_passed,omitempty" json:"reporting_passed,omitempty"`
+	ReportedAt            *time.Time `bson:"reporting_passed_at,omitempty" json:"reporting_passed_at,omitempty"`
+	ReportingInvoiceHash  string     `bson:"reporting_invoice_hash,omitempty" json:"reporting_invoice_hash,omitempty"`
+	QrCode                string     `bson:"qr_code,omitempty" json:"qr_code,omitempty"`
+	ECDSASignature        string     `bson:"ecdsa_signature,omitempty" json:"ecdsa_signature,omitempty"`
+	//ECDSAPublicKey                     *ecdsa.PublicKey `bson:"ecdsa_public_key,omitempty" json:"ecdsa_public_key,omitempty"`
+	ECDSAPublicKey                     *secp256k1.PublicKey `bson:"ecdsa_public_key,omitempty" json:"ecdsa_public_key,omitempty"`
+	X509DigitalCertificate             string               `bson:"x509_digital_certificate,omitempty" json:"x509_digital_certificate,omitempty"`
+	SigningTime                        *time.Time           `bson:"signing_time,omitempty" json:"signing_time,omitempty"`
+	SigningCertificateHash             string               `bson:"signing_certificate_hash,omitempty" json:"signing_certificate_hash,omitempty"`
+	X509DigitalCertificateIssuerName   string               `bson:"x509_digital_certificate_issuer_name,omitempty" json:"x509_digital_certificate_issuer_name,omitempty"`
+	X509DigitalCertificateSerialNumber string               `bson:"x509_digital_certificate_serial_number,omitempty" json:"x509_digital_certificate_serial_number,omitempty"`
+	XadesSignedPropertiesHash          string               `bson:"xades_signed_properties_hash,omitempty" json:"xades_signed_properties_hash,omitempty"`
+	ComplianceCheckFailedCount         int64                `bson:"compliance_check_failed_count,omitempty" json:"compliance_check_failed_count,omitempty"`
+	ComplianceCheckErrors              []string             `bson:"compliance_check_errors,omitempty" json:"compliance_check_errors,omitempty"`
+	ComplianceCheckLastFailedAt        *time.Time           `bson:"compliance_check_last_failed_at,omitempty" json:"compliance_check_last_failed_at,omitempty"`
+	ReportingFailedCount               int64                `bson:"reporting_failed_count,omitempty" json:"reporting_failed_count,omitempty"`
+	ReportingErrors                    []string             `bson:"reporting_errors,omitempty" json:"reporting_errors,omitempty"`
+	ReportingLastFailedAt              *time.Time           `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
 }
 
 func UpdateOrderProfit() error {
@@ -964,7 +989,6 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 }
 
 func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldOrder *Order) (errs map[string]string) {
-
 	errs = make(map[string]string)
 
 	if govalidator.IsNull(order.DateStr) {
@@ -993,6 +1017,58 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
 		errs["customer_id"] = "Customer is required"
+	}
+
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		errs["store_id"] = "Store is required"
+	}
+
+	if customer.VATNo != "" && store.Zatca.Phase == "2" {
+		customerErrorMessages := []string{}
+
+		if !IsValidDigitNumber(customer.VATNo, "15") {
+			customerErrorMessages = append(customerErrorMessages, "VAT No. should be 15 digits")
+		} else if !IsNumberStartAndEndWith(customer.VATNo, "3") {
+			customerErrorMessages = append(customerErrorMessages, "VAT No. should start and end with 3")
+		}
+
+		if !govalidator.IsNull(customer.RegistrationNumber) && !IsAlphanumeric(customer.RegistrationNumber) {
+			customerErrorMessages = append(customerErrorMessages, "Registration Number should be alpha numeric(a-zA-Z|0-9)")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+			customerErrorMessages = append(customerErrorMessages, "Building number is required")
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+				customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+			}
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.StreetName) {
+			customerErrorMessages = append(customerErrorMessages, "Street name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
+			customerErrorMessages = append(customerErrorMessages, "District name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.CityName) {
+			customerErrorMessages = append(customerErrorMessages, "City name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
+			customerErrorMessages = append(customerErrorMessages, "Zip code is required")
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+				customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+			}
+		}
+
+		if len(customerErrorMessages) > 0 {
+			errs["customer_id"] = "Fix the customer errors: " + strings.Join(customerErrorMessages, ",")
+		}
+
 	}
 
 	var customerAccount *Account
@@ -2076,6 +2152,29 @@ func FindOrderByID(
 		}*/
 
 	return order, err
+}
+
+func (order *Order) FindPreviousOrder(selectFields map[string]interface{}) (previousOrder *Order, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"invoice_count_value": (order.InvoiceCountValue - 1),
+			"store_id":            order.StoreID,
+		}, findOneOptions).
+		Decode(&previousOrder)
+	if err != nil {
+		return nil, err
+	}
+
+	return previousOrder, err
 }
 
 func IsOrderExists(ID *primitive.ObjectID) (exists bool, err error) {

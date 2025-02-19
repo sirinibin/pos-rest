@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -88,6 +90,9 @@ type Zatca struct {
 	ConnectedBy                   *primitive.ObjectID `json:"connected_by,omitempty" bson:"connected_by,omitempty"`
 	DisconnectedBy                *primitive.ObjectID `json:"disconnected_by,omitempty" bson:"disconnected_by,omitempty"`
 	LastDisconnectedAt            *time.Time          `bson:"last_disconnected_at,omitempty" json:"last_disconnected_at,omitempty"`
+	ConnectionFailedCount         int64               `bson:"connection_failed_count,omitempty" json:"connection_failed_count,omitempty"`
+	ConnectionErrors              []string            `bson:"connection_errors,omitempty" json:"connection_errors,omitempty"`
+	ConnectionLastFailedAt        *time.Time          `bson:"connection_last_failed_at,omitempty" json:"connection_last_failed_at,omitempty"`
 }
 
 /*
@@ -374,7 +379,61 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 
 }
 
+func IsNumberStartAndEndWith(num string, startEnd string) bool {
+	// Create a dynamic regex pattern using the provided digit
+	pattern := fmt.Sprintf(`^%s\d*%s$`, startEnd, startEnd)
+	re := regexp.MustCompile(pattern)
+	return re.MatchString(num)
+}
+
+func IsAlphanumeric(s string) bool {
+	re := regexp.MustCompile(`^[a-zA-Z0-9]+$`) // Only allows letters (a-z, A-Z) and numbers (0-9)
+	return re.MatchString(s)
+}
+
+// ValidateSaudiPhone checks if a phone number is a valid Saudi number
+func ValidateSaudiPhone(phone string) bool {
+	// Regular expression for Saudi phone numbers
+	re := regexp.MustCompile(`^(?:\+966|0)5\d{8}$`)
+
+	return re.MatchString(phone)
+}
+
+func (store *Store) TrimSpaceFromFields() {
+	store.BusinessCategory = strings.TrimSpace(store.BusinessCategory)
+	store.Name = strings.TrimSpace(store.Name)
+	store.NameInArabic = strings.TrimSpace(store.NameInArabic)
+	store.Code = strings.TrimSpace(store.Code)
+	store.BranchName = strings.TrimSpace(store.BranchName)
+	store.Title = strings.TrimSpace(store.Title)
+	store.TitleInArabic = strings.TrimSpace(store.TitleInArabic)
+	store.RegistrationNumber = strings.TrimSpace(store.RegistrationNumber)
+	store.ZipCode = strings.TrimSpace(store.ZipCode)
+	store.Phone = strings.TrimSpace(store.Phone)
+	store.VATNo = strings.TrimSpace(store.VATNo)
+	store.Email = strings.TrimSpace(store.Email)
+	store.Address = strings.TrimSpace(store.Address)
+	store.AddressInArabic = strings.TrimSpace(store.AddressInArabic)
+	store.NationalAddress.BuildingNo = strings.TrimSpace(store.NationalAddress.BuildingNo)
+	store.NationalAddress.StreetName = strings.TrimSpace(store.NationalAddress.StreetName)
+	store.NationalAddress.StreetNameArabic = strings.TrimSpace(store.NationalAddress.StreetNameArabic)
+	store.NationalAddress.DistrictName = strings.TrimSpace(store.NationalAddress.DistrictName)
+	store.NationalAddress.DistrictNameArabic = strings.TrimSpace(store.NationalAddress.DistrictNameArabic)
+	store.NationalAddress.CityName = strings.TrimSpace(store.NationalAddress.CityName)
+	store.NationalAddress.CityNameArabic = strings.TrimSpace(store.NationalAddress.CityNameArabic)
+	store.NationalAddress.ZipCode = strings.TrimSpace(store.NationalAddress.ZipCode)
+	store.NationalAddress.AdditionalNo = strings.TrimSpace(store.NationalAddress.AdditionalNo)
+	store.NationalAddress.UnitNo = strings.TrimSpace(store.NationalAddress.UnitNo)
+	store.SalesSerialNumber.Prefix = strings.TrimSpace(store.SalesSerialNumber.Prefix)
+	store.SalesReturnSerialNumber.Prefix = strings.TrimSpace(store.SalesReturnSerialNumber.Prefix)
+	store.PurchaseSerialNumber.Prefix = strings.TrimSpace(store.PurchaseSerialNumber.Prefix)
+	store.PurchaseReturnSerialNumber.Prefix = strings.TrimSpace(store.PurchaseReturnSerialNumber.Prefix)
+	store.QuotationSerialNumber.Prefix = strings.TrimSpace(store.QuotationSerialNumber.Prefix)
+}
+
 func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+	store.TrimSpaceFromFields()
+
 	oldStore, err := FindStoreByID(&store.ID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		w.WriteHeader(http.StatusBadRequest)
@@ -417,6 +476,80 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	}
 
+	if govalidator.IsNull(store.Name) {
+		errs["name"] = "Name is required"
+	}
+
+	if govalidator.IsNull(store.Code) {
+		errs["code"] = "Branch code is required"
+	}
+
+	if govalidator.IsNull(store.BranchName) {
+		errs["branch_name"] = "Branch name is required"
+	}
+
+	if govalidator.IsNull(store.NameInArabic) {
+		errs["name_in_arabic"] = "Name in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.RegistrationNumber) {
+		errs["registration_number"] = "Registration Number / CRN is required"
+	} else if !IsAlphanumeric(store.RegistrationNumber) {
+		errs["registration_number"] = "Registration Number should be alpha numeric(a-zA-Z|0-9)"
+	}
+
+	if govalidator.IsNull(store.NameInArabic) {
+		errs["registration_number_in_arabic"] = "Registration Number/C.R NO. in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.ZipCode) {
+		errs["zipcode"] = "Zipcode is required"
+	} else if !IsValidDigitNumber(store.NationalAddress.ZipCode, "5") {
+		errs["zipcode"] = "Zipcode should be 5 digits"
+	}
+
+	if govalidator.IsNull(store.NameInArabic) {
+		errs["zipcode_in_arabic"] = "ZIP/PIN Code in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.Email) {
+		errs["email"] = "E-mail is required"
+	}
+
+	if govalidator.IsNull(store.Address) {
+		errs["address"] = "Address is required"
+	}
+
+	if govalidator.IsNull(store.AddressInArabic) {
+		errs["address_in_arabic"] = "Address in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.Phone) {
+		errs["phone"] = "Phone is required"
+	} else if !ValidateSaudiPhone(store.Phone) {
+		errs["phone"] = "Invalid phone no."
+	}
+
+	if govalidator.IsNull(store.PhoneInArabic) {
+		errs["phone_in_arabic"] = "Phone in Arabic is required"
+	}
+
+	if govalidator.IsNull(store.VATNo) {
+		errs["vat_no"] = "VAT NO. is required"
+	} else if !IsValidDigitNumber(store.VATNo, "15") {
+		errs["vat_no"] = "VAT No. should be 15 digits"
+	} else if !IsNumberStartAndEndWith(store.VATNo, "3") {
+		errs["vat_no"] = "VAT No. should start and end with 3"
+	}
+
+	if govalidator.IsNull(store.VATNoInArabic) {
+		errs["vat_no_in_arabic"] = "VAT NO. is required"
+	}
+
+	if store.VatPercent == 0 {
+		errs["vat_percent"] = "VAT Percentage is required"
+	}
+
 	if govalidator.IsNull(store.BusinessCategory) {
 		errs["business_category"] = "Business category is required"
 	}
@@ -424,6 +557,10 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	//National address
 	if govalidator.IsNull(store.NationalAddress.BuildingNo) {
 		errs["national_address_building_no"] = "Building number is required"
+	} else {
+		if !IsValidDigitNumber(store.NationalAddress.BuildingNo, "4") {
+			errs["national_address_building_no"] = "Building number should be 4 digits"
+		}
 	}
 
 	if govalidator.IsNull(store.NationalAddress.StreetName) {
@@ -451,7 +588,9 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	if govalidator.IsNull(store.NationalAddress.ZipCode) {
-		errs["national_address_zipcode"] = "Zipcode is required"
+		errs["national_address_zipcode"] = "Zip code is required"
+	} else if !IsValidDigitNumber(store.NationalAddress.ZipCode, "5") {
+		errs["national_address_zipcode"] = "Zip code should be 5 digits"
 	}
 
 	//sales serial number
@@ -574,66 +713,6 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["quotation_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(quotationCount, 10) + " quotation"
 			}
 		}
-	}
-
-	if govalidator.IsNull(store.Name) {
-		errs["name"] = "Name is required"
-	}
-
-	if govalidator.IsNull(store.Code) {
-		errs["code"] = "Code is required"
-	}
-
-	if govalidator.IsNull(store.NameInArabic) {
-		errs["name_in_arabic"] = "Name in Arabic is required"
-	}
-
-	if govalidator.IsNull(store.Name) {
-		errs["registration_number"] = "Registration Number/C.R NO. is required"
-	}
-
-	if govalidator.IsNull(store.NameInArabic) {
-		errs["registration_number_in_arabic"] = "Registration Number/C.R NO. in Arabic is required"
-	}
-
-	if govalidator.IsNull(store.Name) {
-		errs["zipcode"] = "ZIP/PIN Code is required"
-	}
-
-	if govalidator.IsNull(store.NameInArabic) {
-		errs["zipcode_in_arabic"] = "ZIP/PIN Code in Arabic is required"
-	}
-
-	if govalidator.IsNull(store.Email) {
-		errs["email"] = "E-mail is required"
-	}
-
-	if govalidator.IsNull(store.Address) {
-		errs["address"] = "Address is required"
-	}
-
-	if govalidator.IsNull(store.AddressInArabic) {
-		errs["address_in_arabic"] = "Address in Arabic is required"
-	}
-
-	if govalidator.IsNull(store.Phone) {
-		errs["phone"] = "Phone is required"
-	}
-
-	if govalidator.IsNull(store.PhoneInArabic) {
-		errs["phone_in_arabic"] = "Phone in Arabic is required"
-	}
-
-	if govalidator.IsNull(store.VATNo) {
-		errs["vat_no"] = "VAT NO. is required"
-	}
-
-	if govalidator.IsNull(store.VATNoInArabic) {
-		errs["vat_no_in_arabic"] = "VAT NO. is required"
-	}
-
-	if store.VatPercent == 0 {
-		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
 	if store.ID.IsZero() {

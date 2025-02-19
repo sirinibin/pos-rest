@@ -75,13 +75,13 @@ class einvoice_signer:
     #     return einvoice_signer.sign_simplified_invoice(canonical_xml, base64_hash, x509_certificate_content, private_key_content, resource_paths["ubl_template"], resource_paths["signature"], uuid)
 
     @staticmethod
-    def get_request_api(xml, x509_certificate_content, private_key_content):
+    def get_request_api(xml, x509_certificate_content, private_key_content,basePath):
         """Main function to process the invoice request."""
         # Define resource file paths
         resource_paths = {
-            "xsl_file": 'resources/xslfile.xsl',
-            "ubl_template": 'resources/zatca_ubl.xml',
-            "signature": 'resources/zatca_signature.xml'
+            "xsl_file": basePath+'resources/xslfile.xsl',
+            "ubl_template": basePath+'resources/zatca_ubl.xml',
+            "signature": basePath+'resources/zatca_signature.xml'
         }
 
         xml_declaration = '<?xml version="1.0" encoding="UTF-8"?>'

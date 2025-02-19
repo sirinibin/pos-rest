@@ -27,7 +27,7 @@ func ListSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signatures := []models.Signature{}
+	signatures := []models.UserSignature{}
 
 	signatures, criterias, err := models.SearchSignature(w, r)
 	if err != nil {
@@ -72,7 +72,7 @@ func CreateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var signature *models.Signature
+	var signature *models.UserSignature
 	// Decode data
 	if !utils.Decode(w, r, &signature) {
 		return
@@ -133,7 +133,7 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var signature *models.Signature
+	var signature *models.UserSignature
 
 	params := mux.Vars(r)
 
@@ -227,7 +227,7 @@ func ViewSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var signature *models.Signature
+	var signature *models.UserSignature
 
 	selectFields := map[string]interface{}{}
 	keys, ok := r.URL.Query()["select"]

@@ -1,43 +1,49 @@
 package models
 
 import (
-	"context"
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/beevik/etree"
 	dsig "github.com/russellhaering/goxmldsig"
-	"github.com/sirinibin/pos-rest/db"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/sirinibin/pos-rest/env"
 	"gopkg.in/mgo.v2/bson"
 )
 
 // Invoice struct to hold XML data
 type Invoice struct {
-	XMLName                 xml.Name                `xml:"Invoice"`
-	Xmlns                   string                  `xml:"xmlns,attr"`
-	Cac                     string                  `xml:"xmlns:cac,attr"`
-	Cbc                     string                  `xml:"xmlns:cbc,attr"`
-	Ext                     string                  `xml:"xmlns:ext,attr"`
-	ProfileID               string                  `xml:"cbc:ProfileID"`
-	ID                      string                  `xml:"cbc:ID"`
-	UUID                    string                  `xml:"cbc:UUID"`
-	IssueDate               string                  `xml:"cbc:IssueDate"`
-	IssueTime               string                  `xml:"cbc:IssueTime"`
-	InvoiceTypeCode         InvoiceTypeCode         `xml:"cbc:InvoiceTypeCode"`
-	DocumentCurrencyCode    string                  `xml:"cbc:DocumentCurrencyCode"`
-	TaxCurrencyCode         string                  `xml:"cbc:TaxCurrencyCode"`
-	Note                    *Note                   `xml:"cbc:Note"`
-	AdditionalDocumentRefs  []AdditionalDocumentRef `xml:"cac:AdditionalDocumentReference"`
+	XMLName xml.Name `xml:"Invoice"`
+	Xmlns   string   `xml:"xmlns,attr"`
+	Cac     string   `xml:"xmlns:cac,attr"`
+	Cbc     string   `xml:"xmlns:cbc,attr"`
+	Ext     string   `xml:"xmlns:ext,attr"`
+	//UBLExtensions          *UBLExtensions          `xml:"UBLExtensions"`
+	UBLExtensions          *UBLExtensions          `xml:"ext:UBLExtensions"`
+	ProfileID              string                  `xml:"cbc:ProfileID"`
+	ID                     string                  `xml:"cbc:ID"`
+	UUID                   string                  `xml:"cbc:UUID"`
+	IssueDate              string                  `xml:"cbc:IssueDate"`
+	IssueTime              string                  `xml:"cbc:IssueTime"`
+	InvoiceTypeCode        InvoiceTypeCode         `xml:"cbc:InvoiceTypeCode"`
+	DocumentCurrencyCode   string                  `xml:"cbc:DocumentCurrencyCode"`
+	TaxCurrencyCode        string                  `xml:"cbc:TaxCurrencyCode"`
+	Note                   *Note                   `xml:"cbc:Note"`
+	AdditionalDocumentRefs []AdditionalDocumentRef `xml:"cac:AdditionalDocumentReference"`
+	//AdditionalDocumentRefsResponse []AdditionalDocumentRef `xml:"AdditionalDocumentReference"`
 	AccountingSupplierParty AccountingSupplierParty `xml:"cac:AccountingSupplierParty"`
 	AccountingCustomerParty AccountingCustomerParty `xml:"cac:AccountingCustomerParty"`
 	Delivery                Delivery                `xml:"cac:Delivery"`
@@ -46,6 +52,33 @@ type Invoice struct {
 	TaxTotals               []TaxTotal              `xml:"cac:TaxTotal"`
 	LegalMonetaryTotal      LegalMonetaryTotal      `xml:"cac:LegalMonetaryTotal"`
 	InvoiceLines            []InvoiceLine           `xml:"cac:InvoiceLine"`
+}
+
+type InvoiceToRead struct {
+	XMLName                 xml.Name                      `xml:"Invoice"`
+	Xmlns                   string                        `xml:"xmlns,attr"`
+	Cac                     string                        `xml:"xmlns:cac,attr"`
+	Cbc                     string                        `xml:"xmlns:cbc,attr"`
+	Ext                     string                        `xml:"xmlns:ext,attr"`
+	UBLExtensions           *UBLExtensions                `xml:"UBLExtensions"`
+	ProfileID               string                        `xml:"cbc:ProfileID"`
+	ID                      string                        `xml:"cbc:ID"`
+	UUID                    string                        `xml:"cbc:UUID"`
+	IssueDate               string                        `xml:"cbc:IssueDate"`
+	IssueTime               string                        `xml:"cbc:IssueTime"`
+	InvoiceTypeCode         InvoiceTypeCode               `xml:"cbc:InvoiceTypeCode"`
+	DocumentCurrencyCode    string                        `xml:"cbc:DocumentCurrencyCode"`
+	TaxCurrencyCode         string                        `xml:"cbc:TaxCurrencyCode"`
+	Note                    *Note                         `xml:"cbc:Note"`
+	AdditionalDocumentRefs  []AdditionalDocumentRefToRead `xml:"AdditionalDocumentReference"`
+	AccountingSupplierParty AccountingSupplierParty       `xml:"cac:AccountingSupplierParty"`
+	AccountingCustomerParty AccountingCustomerParty       `xml:"cac:AccountingCustomerParty"`
+	Delivery                Delivery                      `xml:"cac:Delivery"`
+	PaymentMeans            []PaymentMeans                `xml:"cac:PaymentMeans"`
+	AllowanceCharge         []AllowanceCharge             `xml:"cac:AllowanceCharge"`
+	TaxTotals               []TaxTotal                    `xml:"cac:TaxTotal"`
+	LegalMonetaryTotal      LegalMonetaryTotal            `xml:"cac:LegalMonetaryTotal"`
+	InvoiceLines            []InvoiceLine                 `xml:"cac:InvoiceLine"`
 }
 
 type AccountingSupplierParty struct {
@@ -92,10 +125,24 @@ type AdditionalDocumentRef struct {
 	ID         string      `xml:"cbc:ID"`
 	UUID       string      `xml:"cbc:UUID,omitempty"`
 	Attachment *Attachment `xml:"cac:Attachment,omitempty"`
+	//AttachmentResponse *Attachment `xml:"Attachment,omitempty"`
+}
+
+type AdditionalDocumentRefToRead struct {
+	ID         string            `xml:"ID"`
+	UUID       string            `xml:"UUID,omitempty"`
+	Attachment *AttachmentToRead `xml:"Attachment,omitempty"`
+	//AttachmentResponse *Attachment `xml:"Attachment,omitempty"`
+}
+
+type AttachmentToRead struct {
+	EmbeddedDocumentBinaryObject BinaryObject `xml:"EmbeddedDocumentBinaryObject"`
+	//EmbeddedDocumentBinaryObjectResponse *BinaryObject `xml:"EmbeddedDocumentBinaryObject"`
 }
 
 type Attachment struct {
 	EmbeddedDocumentBinaryObject BinaryObject `xml:"cbc:EmbeddedDocumentBinaryObject"`
+	//EmbeddedDocumentBinaryObjectResponse *BinaryObject `xml:"EmbeddedDocumentBinaryObject"`
 }
 
 type BinaryObject struct {
@@ -346,22 +393,6 @@ func GenerateInvoiceHash(xmlInput string) (string, error) {
 	// Convert Hash to Base64
 	return base64Str, nil
 }
-func (order *Order) GetPreviousRecord() (previousOrder *Order, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("order")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err = collection.FindOne(
-		ctx,
-		bson.M{
-			"created_at": bson.M{"$lt": order.CreatedAt},
-			"store_id":   order.StoreID,
-		}, // Find where `_id` is less than the given ID
-		options.FindOne().SetSort(bson.D{{"created_at", -1}}), // Sort in descending order to get the latest previous record
-	).Decode(&previousOrder)
-
-	return previousOrder, nil
-}
 
 func (order *Order) MakeXMLContent() (string, error) {
 	var err error
@@ -405,8 +436,15 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	invoice.ID = order.Code
 	invoice.UUID = order.UUID
-	invoice.IssueDate = order.Date.Format("2006-01-02")
-	invoice.IssueTime = order.Date.Format("15:04:05")
+	// Load Saudi Arabia timezone (AST is UTC+3)
+	loc, err := time.LoadLocation("Asia/Riyadh")
+	if err != nil {
+		fmt.Println("Error loading location:", err)
+		return "", err
+	}
+
+	invoice.IssueDate = order.Date.In(loc).Format("2006-01-02")
+	invoice.IssueTime = order.Date.In(loc).Format("15:04:05")
 
 	if strings.TrimSpace(customer.VATNo) != "" {
 		invoice.InvoiceTypeCode.Name = "0100000" //standard invoice
@@ -425,7 +463,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 		},
 	}
 
-	previousOrder, err := order.GetPreviousRecord()
+	previousOrder, err := order.FindPreviousOrder(bson.M{})
 	if err != nil {
 		return xmlContent, err
 	}
@@ -450,6 +488,26 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	//invoice.Note.LanguageID = "ar"
 
+	storeStreetName := store.NationalAddress.StreetName
+	if !govalidator.IsNull(strings.TrimSpace(store.NationalAddress.StreetNameArabic)) {
+		storeStreetName = store.NationalAddress.StreetName + " | " + store.NationalAddress.StreetNameArabic
+	}
+
+	storeDistrictName := store.NationalAddress.DistrictName
+	if !govalidator.IsNull(strings.TrimSpace(store.NationalAddress.DistrictNameArabic)) {
+		storeDistrictName = store.NationalAddress.DistrictName + " | " + store.NationalAddress.DistrictNameArabic
+	}
+
+	storeCityName := store.NationalAddress.CityName
+	if !govalidator.IsNull(strings.TrimSpace(store.NationalAddress.CityNameArabic)) {
+		storeCityName = store.NationalAddress.CityName + " | " + store.NationalAddress.CityNameArabic
+	}
+
+	storeName := store.Name
+	if !govalidator.IsNull(strings.TrimSpace(store.NameInArabic)) {
+		storeName = store.Name + " | " + store.NameInArabic
+	}
+
 	invoice.AccountingSupplierParty = AccountingSupplierParty{
 		Party: Party{
 			PartyIdentification: PartyIdentification{
@@ -460,10 +518,10 @@ func (order *Order) MakeXMLContent() (string, error) {
 				},
 			},
 			PostalAddress: Address{
-				StreetName:      store.NationalAddress.StreetName,
+				StreetName:      storeStreetName,
 				BuildingNumber:  store.NationalAddress.BuildingNo,
-				CitySubdivision: store.NationalAddress.DistrictName,
-				CityName:        store.NationalAddress.CityName,
+				CitySubdivision: storeDistrictName,
+				CityName:        storeCityName,
 				PostalZone:      store.NationalAddress.ZipCode,
 				CountryCode:     "SA",
 			},
@@ -476,9 +534,29 @@ func (order *Order) MakeXMLContent() (string, error) {
 				},
 			},
 			PartyLegalEntity: LegalEntity{
-				RegistrationName: store.Name,
+				RegistrationName: storeName,
 			},
 		}}
+
+	customerStreetName := customer.NationalAddress.StreetName
+	if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.StreetNameArabic)) {
+		customerStreetName = customer.NationalAddress.StreetName + " | " + customer.NationalAddress.StreetNameArabic
+	}
+
+	customerDistrictName := customer.NationalAddress.DistrictName
+	if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.DistrictNameArabic)) {
+		customerDistrictName = customer.NationalAddress.DistrictName + " | " + customer.NationalAddress.DistrictNameArabic
+	}
+
+	customerCityName := customer.NationalAddress.CityName
+	if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.CityNameArabic)) {
+		customerCityName = customer.NationalAddress.CityName + " | " + customer.NationalAddress.CityNameArabic
+	}
+
+	customerName := customer.Name
+	if !govalidator.IsNull(strings.TrimSpace(customer.NameInArabic)) {
+		customerName = customer.Name + " | " + customer.NameInArabic
+	}
 
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
 		Party: Party{
@@ -489,10 +567,10 @@ func (order *Order) MakeXMLContent() (string, error) {
 				},
 			},
 			PostalAddress: Address{
-				StreetName:      customer.NationalAddress.StreetName,
+				StreetName:      customerStreetName,
 				BuildingNumber:  customer.NationalAddress.BuildingNo,
-				CitySubdivision: customer.NationalAddress.DistrictName,
-				CityName:        customer.NationalAddress.CityName,
+				CitySubdivision: customerDistrictName,
+				CityName:        customerCityName,
 				PostalZone:      customer.NationalAddress.ZipCode,
 				CountryCode:     "SA",
 			},
@@ -505,12 +583,12 @@ func (order *Order) MakeXMLContent() (string, error) {
 				},
 			},
 			PartyLegalEntity: LegalEntity{
-				RegistrationName: customer.Name,
+				RegistrationName: customerName,
 			},
 		}}
 
 	invoice.Delivery = Delivery{
-		ActualDeliveryDate: order.Date.Format("2006-01-02"),
+		ActualDeliveryDate: order.Date.In(loc).Format("2006-01-02"),
 	}
 
 	// 10: Cash
@@ -685,7 +763,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed(totalAllowance, 2), CurrencyID: "SAR"},
 		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed(chargeTotalAmount, 2), CurrencyID: "SAR"},
 		PrepaidAmount:        MonetaryAmount{Value: ToFixed(prePaidAmount, 2), CurrencyID: "SAR"},
-		PayableAmount:        MonetaryAmount{Value: ToFixed((order.NetTotal), 2), CurrencyID: "SAR"},
+		PayableAmount:        MonetaryAmount{Value: ToFixed(order.NetTotal, 2), CurrencyID: "SAR"},
 	}
 
 	invoice.InvoiceLines = []InvoiceLine{}
@@ -767,7 +845,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	updatedXML2 := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + string(updatedXML)
 
-	filePath := "/Users/sirin/go/src/github.com/sirinibin/ZatcaPython/templates/invoice.xml"
+	filePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
 	// **Save Updated XML**
 	err = os.WriteFile(filePath, []byte(updatedXML2), 0644)
 	if err != nil {
@@ -777,23 +855,320 @@ func (order *Order) MakeXMLContent() (string, error) {
 	//log.Print("Going to write file8:")
 
 	// Verify file exists
-	/*
-		if _, err := os.Stat("zatca/updated_standard_invoice.xml"); os.IsNotExist(err) {
-			fmt.Println("File not created:", err)
-		} else {
-			fmt.Println("File successfully written:", "zatca/updated_standard_invoice.xml")
-		}
-	*/
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		fmt.Println("File not created:", err)
+	} else {
+		//fmt.Println("File successfully written:", filePath)
+	}
 
 	return xmlContent, nil
 }
 
-func (order *Order) MakeHash() error {
+type ZatcaComplianceCheckResponse struct {
+	InvoiceHash      string `json:"invoice_hash"`
+	CompliancePassed bool   `json:"compliance_passed"`
+	Error            string `json:"error"`
+	Traceback        string `json:"traceback,omitempty"`
+}
+type ZatcaReportingResponse struct {
+	InvoiceHash     string `json:"invoice_hash"`
+	ReportingPassed bool   `json:"reporting_passed"`
+	Error           string `json:"error"`
+	ClearedInvoice  string `json:"cleared_invoice"`
+	Traceback       string `json:"traceback,omitempty"`
+}
+
+func (order *Order) ReportToZatca() error {
 	var err error
+
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	_, err = order.MakeXMLContent()
 	if err != nil {
 		return err
+	}
+	var isSimplified bool
+	if customer.VATNo != "" {
+		isSimplified = false
+	} else {
+		isSimplified = true
+	}
+
+	// Create JSON payload
+	payload := map[string]interface{}{
+		"env":                   env.Getenv("ZATCA_ENV", "NonProduction"),
+		"private_key":           store.Zatca.PrivateKey,
+		"binary_security_token": store.Zatca.BinarySecurityToken,
+		"secret":                store.Zatca.Secret,
+		"xml_file_path":         "ZatcaPython/templates/invoice_" + order.Code + ".xml",
+		"is_simplified":         isSimplified,
+	}
+
+	// Convert payload to JSON
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	pythonBinary := "ZatcaPython/venv/bin/python"
+	scriptPath := "ZatcaPython/compliance_check.py"
+
+	// Create command
+	cmd := exec.Command(pythonBinary, scriptPath)
+
+	// Set up pipes
+	cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin
+	var output bytes.Buffer
+	cmd.Stdout = &output // Capture stdout
+	cmd.Stderr = &output // Capture stderr
+
+	var pythonResponse ZatcaComplianceCheckResponse
+
+	// Run the command
+	err = cmd.Run()
+	if err != nil {
+		fmt.Println("Error running Python script1:", err)
+		// Parse JSON response
+
+		err = json.Unmarshal(output.Bytes(), &pythonResponse)
+		if err != nil {
+			return errors.New("Error parsing error messages from zatca: " + err.Error())
+		}
+
+		if pythonResponse.Error != "" {
+			return errors.New("Error connecting to zatac: " + pythonResponse.Error)
+		}
+	}
+
+	// Parse JSON response
+
+	err = json.Unmarshal(output.Bytes(), &pythonResponse)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return errors.New("Error parsing JSON:" + err.Error())
+	}
+
+	//log.Print("pythonResponse:")
+	//log.Print(pythonResponse)
+	now := time.Now()
+
+	order.Zatca.CompliancePassed = pythonResponse.CompliancePassed
+
+	if pythonResponse.Error != "" || !order.Zatca.CompliancePassed {
+		order.Zatca.ComplianceCheckFailedCount++
+		order.Zatca.ComplianceCheckErrors = append(order.Zatca.ComplianceCheckErrors, "Compliance check error: "+pythonResponse.Error)
+		order.Zatca.ComplianceCheckLastFailedAt = &now
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+		return nil
+
+		//return errors.New("Compliance check error: " + pythonResponse.Error)
+	}
+
+	if order.Zatca.CompliancePassed {
+		order.Zatca.CompliancePassedAt = &now
+		order.Zatca.ComplianceInvoiceHash = pythonResponse.InvoiceHash
+		order.Hash = pythonResponse.InvoiceHash
+	}
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	if order.Zatca.CompliancePassed {
+
+		// Create JSON payload
+		payload = map[string]interface{}{
+			"env":                              env.Getenv("ZATCA_ENV", "NonProduction"),
+			"private_key":                      store.Zatca.PrivateKey,
+			"production_binary_security_token": store.Zatca.ProductionBinarySecurityToken,
+			"production_secret":                store.Zatca.ProductionSecret,
+			"xml_file_path":                    "ZatcaPython/templates/invoice_" + order.Code + ".xml",
+			"is_simplified":                    isSimplified,
+		}
+
+		// Convert payload to JSON
+		jsonData, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+
+		pythonBinary := "ZatcaPython/venv/bin/python"
+		scriptPath := "ZatcaPython/reporting_and_clearance.py"
+
+		// Create command
+		cmd := exec.Command(pythonBinary, scriptPath)
+
+		// Set up pipes
+		cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin
+		var output bytes.Buffer
+		cmd.Stdout = &output // Capture stdout
+		cmd.Stderr = &output // Capture stderr
+
+		var pythonReportingResponse ZatcaReportingResponse
+
+		// Run the command
+		err = cmd.Run()
+		if err != nil {
+			fmt.Println("Error running Python script2:", err)
+			// Parse JSON response
+
+			err = json.Unmarshal(output.Bytes(), &pythonReportingResponse)
+			if err != nil {
+				return errors.New("Error parsing error messages from zatca: " + err.Error())
+			}
+
+			if pythonReportingResponse.Error != "" {
+				order.Zatca.ReportingFailedCount++
+				order.Zatca.ReportingErrors = append(order.Zatca.ReportingErrors, "Reporting error: "+pythonReportingResponse.Error)
+				//return errors.New("Error connecting to zatac: " + pythonReportingResponse.Error)
+			}
+		}
+
+		// Parse JSON response
+
+		err = json.Unmarshal(output.Bytes(), &pythonReportingResponse)
+		if err != nil {
+			fmt.Println("Error parsing JSON:", err)
+			return errors.New("Error parsing JSON:" + err.Error())
+		}
+
+		//log.Print("pythonReportingResponse:")
+		//log.Print(pythonReportingResponse)
+		now = time.Now()
+
+		order.Zatca.ReportingPassed = pythonReportingResponse.ReportingPassed
+
+		if pythonReportingResponse.Error != "" || !order.Zatca.ReportingPassed {
+			order.Zatca.ReportingFailedCount++
+			order.Zatca.ReportingErrors = append(order.Zatca.ReportingErrors, "Reporting error: "+pythonReportingResponse.Error)
+			order.Zatca.ReportingLastFailedAt = &now
+			err = order.Update()
+			if err != nil {
+				return err
+			}
+			return nil
+
+			//return errors.New("Error connecting to zatac: " + pythonReportingResponse.Error)
+		}
+
+		if order.Zatca.ReportingPassed {
+			order.Zatca.ReportedAt = &now
+			order.Zatca.ReportingInvoiceHash = pythonReportingResponse.InvoiceHash
+			order.Hash = pythonReportingResponse.InvoiceHash
+		}
+
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+
+		//Trying to get the UBL contents from the xml invoice received from zatca
+		// Step 1: Decode Base64
+
+		xmlData, err := base64.StdEncoding.DecodeString(pythonReportingResponse.ClearedInvoice)
+		if err != nil {
+			fmt.Println("Error decoding Base64:", err)
+			return err
+		}
+
+		// Step 2: Save to an XML file
+		//fileName := "output.xml"
+		filePath := "ZatcaPython/templates/invoice_" + order.Code + "_response.xml"
+		err = os.WriteFile(filePath, xmlData, 0644)
+		if err != nil {
+			fmt.Println("Error writing file:", err)
+			return err
+		}
+
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			fmt.Println("Error reading file:", err)
+			return err
+		}
+
+		//var ublFromInvoice UBLExtension
+		var invoice InvoiceToRead
+
+		err = xml.Unmarshal(data, &invoice)
+		if err != nil {
+			fmt.Println("Error unmarshaling XML:", err)
+			return err
+		}
+
+		order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
+		order.Zatca.XadesSignedPropertiesHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[1].DigestValue
+
+		order.Zatca.ReportingInvoiceHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[0].DigestValue
+		if order.Zatca.ReportingInvoiceHash != order.Hash {
+			return errors.New("invalid hash")
+		}
+
+		order.Zatca.ECDSASignature = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignatureValue
+		order.Zatca.X509DigitalCertificate = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.KeyInfo.X509Data.X509Certificate
+		// Load Saudi Arabia timezone (AST is UTC+3)
+		loc, err := time.LoadLocation("Asia/Riyadh")
+		if err != nil {
+			fmt.Println("Error loading location:", err)
+			return err
+		}
+
+		signingTime, err := time.ParseInLocation("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
+		if err != nil {
+			fmt.Println("Error parsing Saudi time:", err)
+			return err
+		}
+
+		signingTime = signingTime.UTC() //converting saudi time to utc
+		order.Zatca.SigningTime = &signingTime
+		order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
+		order.Zatca.X509DigitalCertificateIssuerName = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.IssuerSerial.X509IssuerName
+		order.Zatca.X509DigitalCertificateSerialNumber = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.IssuerSerial.X509SerialNumber
+
+		order.Zatca.QrCode = invoice.AdditionalDocumentRefs[2].Attachment.EmbeddedDocumentBinaryObject.Value
+		//log.Print("invoice.AdditionalDocumentRefs[2].Attachment.EmbeddedDocumentBinaryObject.Value:")
+		//log.Print(invoice.AdditionalDocumentRefs[2].Attachment.EmbeddedDocumentBinaryObject.Value)
+
+		for _, doc := range invoice.AdditionalDocumentRefs {
+			if doc.ID == "QR" { // Match <cbc:ID>QR</cbc:ID>
+				order.Zatca.QrCode = doc.Attachment.EmbeddedDocumentBinaryObject.Value
+				//qrBase64 = doc.Attachment.EmbeddedDocumentBinaryObject
+
+				/*
+					// Decode Base64 string
+					qrDecoded, err := base64.StdEncoding.DecodeString(order.Zatca.QrCode)
+					if err != nil {
+						//http.Error(w, "Error decoding Base64 QR content", http.StatusInternalServerError)
+						return err
+					}
+
+					qrFilePath := "qrcode.png"
+					err = qrcode.WriteFile(string(qrDecoded), qrcode.Medium, 256, qrFilePath)
+					if err != nil {
+						http.Error(w, "Error generating QR code", http.StatusInternalServerError)
+						return
+					}*/
+				break
+			}
+		}
+
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+		//order.Zatca.ReportingInvoiceHash = ublFromInvoice.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[0].DigestValue
 	}
 
 	return nil
