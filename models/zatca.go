@@ -876,8 +876,60 @@ type ZatcaReportingResponse struct {
 	InvoiceHash     string `json:"invoice_hash"`
 	ReportingPassed bool   `json:"reporting_passed"`
 	Error           string `json:"error"`
-	ClearedInvoice  string `json:"cleared_invoice"`
+	ClearedInvoice  string `json:"cleared_invoice"` //only for b2b (customers with VAT no.)
 	Traceback       string `json:"traceback,omitempty"`
+}
+
+func (order *Order) RecordZatcaComplianceCheckFailure(errorMessage string) error {
+	now := time.Now()
+	order.Zatca.CompliancePassed = false
+	order.Zatca.ComplianceCheckFailedCount++
+	order.Zatca.ComplianceCheckErrors = append(order.Zatca.ComplianceCheckErrors, errorMessage)
+	order.Zatca.ComplianceCheckLastFailedAt = &now
+	err := order.Update()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (order *Order) RecordZatcaComplianceCheckSuccess(complianceCheckResponse ZatcaComplianceCheckResponse) error {
+	now := time.Now()
+	order.Zatca.CompliancePassed = true
+	order.Zatca.CompliancePassedAt = &now
+	order.Zatca.ComplianceInvoiceHash = complianceCheckResponse.InvoiceHash
+	err := order.Update()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (order *Order) RecordZatcaReportingFailure(errorMessage string) error {
+	now := time.Now()
+	order.Zatca.ReportingPassed = false
+	order.Zatca.ReportingFailedCount++
+	order.Zatca.ReportingErrors = append(order.Zatca.ReportingErrors, errorMessage)
+	order.Zatca.ReportingLastFailedAt = &now
+	err := order.Update()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (order *Order) RecordZatcaReportingSuccess(reportingResponse ZatcaReportingResponse) error {
+	now := time.Now()
+	order.Zatca.ReportingPassed = true
+	order.Zatca.ReportedAt = &now
+	order.Zatca.ReportingInvoiceHash = reportingResponse.InvoiceHash
+	order.Hash = reportingResponse.InvoiceHash
+	err := order.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (order *Order) ReportToZatca() error {
@@ -917,7 +969,7 @@ func (order *Order) ReportToZatca() error {
 	// Convert payload to JSON
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return errors.New("error marshal payload to paython script: " + err.Error())
+		return errors.New("error marshal payload to compliance check: " + err.Error())
 	}
 
 	pythonBinary := "ZatcaPython/venv/bin/python"
@@ -932,7 +984,7 @@ func (order *Order) ReportToZatca() error {
 	cmd.Stdout = &output // Capture stdout
 	cmd.Stderr = &output // Capture stderr
 
-	var pythonResponse ZatcaComplianceCheckResponse
+	var complianceCheckResponse ZatcaComplianceCheckResponse
 
 	// Run the command
 	err = cmd.Run()
@@ -940,56 +992,54 @@ func (order *Order) ReportToZatca() error {
 		fmt.Println("Error running Python script1:", err)
 		// Parse JSON response
 
-		err = json.Unmarshal(output.Bytes(), &pythonResponse)
+		err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
 		if err != nil {
-			return errors.New("Error parsing error messages from zatca compliance api: " + err.Error())
+			err = order.RecordZatcaComplianceCheckFailure("error unmarshaling compliance check response: " + complianceCheckResponse.Error)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 
-		if pythonResponse.Error != "" {
-			return errors.New("Error connecting to zatac: " + pythonResponse.Error)
+		if complianceCheckResponse.Error != "" {
+			err = order.RecordZatcaComplianceCheckFailure("Compliance check error: " + complianceCheckResponse.Error)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 	}
 
 	// Parse JSON response
 
-	err = json.Unmarshal(output.Bytes(), &pythonResponse)
+	err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
 	if err != nil {
-		fmt.Println("Error parsing JSON:", err)
-		return errors.New("Error parsing JSON:" + err.Error())
-	}
-
-	//log.Print("pythonResponse:")
-	//log.Print(pythonResponse)
-	now := time.Now()
-
-	order.Zatca.CompliancePassed = pythonResponse.CompliancePassed
-
-	if pythonResponse.Error != "" || !order.Zatca.CompliancePassed {
-		order.Zatca.ComplianceCheckFailedCount++
-		order.Zatca.ComplianceCheckErrors = append(order.Zatca.ComplianceCheckErrors, "Compliance check error: "+pythonResponse.Error)
-		order.Zatca.ComplianceCheckLastFailedAt = &now
-		err = order.Update()
+		err = order.RecordZatcaComplianceCheckFailure("error unmarshal compliance check response: " + err.Error())
 		if err != nil {
 			return err
 		}
 		return nil
-
-		//return errors.New("Compliance check error: " + pythonResponse.Error)
 	}
 
-	if order.Zatca.CompliancePassed {
-		order.Zatca.CompliancePassedAt = &now
-		order.Zatca.ComplianceInvoiceHash = pythonResponse.InvoiceHash
-		order.Hash = pythonResponse.InvoiceHash
+	//log.Print("pythonResponse:")
+	//log.Print(pythonResponse)
+
+	if complianceCheckResponse.Error != "" || !complianceCheckResponse.CompliancePassed {
+		err = order.RecordZatcaComplianceCheckFailure("compliance check error: " + complianceCheckResponse.Error)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
-	err = order.Update()
-	if err != nil {
-		return err
+	if complianceCheckResponse.CompliancePassed {
+		err = order.RecordZatcaComplianceCheckSuccess(complianceCheckResponse)
+		if err != nil {
+			return err
+		}
 	}
 
-	if order.Zatca.CompliancePassed {
-
+	if complianceCheckResponse.CompliancePassed {
 		// Create JSON payload
 		payload = map[string]interface{}{
 			"env":                              env.Getenv("ZATCA_ENV", "NonProduction"),
@@ -1018,158 +1068,152 @@ func (order *Order) ReportToZatca() error {
 		cmd.Stdout = &output // Capture stdout
 		cmd.Stderr = &output // Capture stderr
 
-		var pythonReportingResponse ZatcaReportingResponse
+		var reportingResponse ZatcaReportingResponse
 
 		// Run the command
 		err = cmd.Run()
 		if err != nil {
-			fmt.Println("Error running Python script2:", err)
-			// Parse JSON response
-
-			err = json.Unmarshal(output.Bytes(), &pythonReportingResponse)
+			err = json.Unmarshal(output.Bytes(), &reportingResponse)
 			if err != nil {
-				return errors.New("Error parsing error messages from zatca reporting api: " + err.Error())
+				err = order.RecordZatcaReportingFailure("error running reporting script &  unmarshal reporting response : " + err.Error())
+				if err != nil {
+					return err
+				}
+				return nil
 			}
 
-			if pythonReportingResponse.Error != "" {
-				order.Zatca.ReportingFailedCount++
-				order.Zatca.ReportingErrors = append(order.Zatca.ReportingErrors, "Reporting error: "+pythonReportingResponse.Error)
-				//return errors.New("Error connecting to zatac: " + pythonReportingResponse.Error)
+			if reportingResponse.Error != "" {
+				err = order.RecordZatcaReportingFailure("error running reporting script: " + reportingResponse.Error)
+				if err != nil {
+					return err
+				}
+				return nil
 			}
 		}
 
 		// Parse JSON response
-
-		err = json.Unmarshal(output.Bytes(), &pythonReportingResponse)
+		err = json.Unmarshal(output.Bytes(), &reportingResponse)
 		if err != nil {
-			fmt.Println("Error parsing JSON:", err)
-			return errors.New("Error parsing JSON:" + err.Error())
-		}
-
-		//log.Print("pythonReportingResponse:")
-		//log.Print(pythonReportingResponse)
-		now = time.Now()
-
-		order.Zatca.ReportingPassed = pythonReportingResponse.ReportingPassed
-
-		if pythonReportingResponse.Error != "" || !order.Zatca.ReportingPassed {
-			order.Zatca.ReportingFailedCount++
-			order.Zatca.ReportingErrors = append(order.Zatca.ReportingErrors, "Reporting error: "+pythonReportingResponse.Error)
-			order.Zatca.ReportingLastFailedAt = &now
-			err = order.Update()
+			err = order.RecordZatcaReportingFailure("error unmarshal reporting response: " + err.Error())
 			if err != nil {
 				return err
 			}
 			return nil
-
-			//return errors.New("Error connecting to zatac: " + pythonReportingResponse.Error)
 		}
 
-		if order.Zatca.ReportingPassed {
-			order.Zatca.ReportedAt = &now
-			order.Zatca.ReportingInvoiceHash = pythonReportingResponse.InvoiceHash
-			order.Hash = pythonReportingResponse.InvoiceHash
-		}
-
-		err = order.Update()
-		if err != nil {
-			return err
-		}
-
-		//Trying to get the UBL contents from the xml invoice received from zatca
-		// Step 1: Decode Base64
-
-		xmlData, err := base64.StdEncoding.DecodeString(pythonReportingResponse.ClearedInvoice)
-		if err != nil {
-			fmt.Println("Error decoding Base64:", err)
-			return err
-		}
-
-		// Step 2: Save to an XML file
-		//fileName := "output.xml"
-		filePath := "ZatcaPython/templates/invoice_" + order.Code + "_response.xml"
-		err = os.WriteFile(filePath, xmlData, 0644)
-		if err != nil {
-			fmt.Println("Error writing file:", err)
-			return err
-		}
-
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			fmt.Println("Error reading file:", err)
-			return err
-		}
-
-		//var ublFromInvoice UBLExtension
-		var invoice InvoiceToRead
-
-		err = xml.Unmarshal(data, &invoice)
-		if err != nil {
-			fmt.Println("Error unmarshaling XML:", err)
-			return err
-		}
-
-		order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
-		order.Zatca.XadesSignedPropertiesHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[1].DigestValue
-
-		order.Zatca.ReportingInvoiceHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[0].DigestValue
-		if order.Zatca.ReportingInvoiceHash != order.Hash {
-			return errors.New("invalid hash")
-		}
-
-		order.Zatca.ECDSASignature = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignatureValue
-		order.Zatca.X509DigitalCertificate = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.KeyInfo.X509Data.X509Certificate
-		// Load Saudi Arabia timezone (AST is UTC+3)
-		loc, err := time.LoadLocation("Asia/Riyadh")
-		if err != nil {
-			fmt.Println("Error loading location:", err)
-			return err
-		}
-
-		signingTime, err := time.ParseInLocation("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
-		if err != nil {
-			fmt.Println("Error parsing Saudi time:", err)
-			return err
-		}
-
-		signingTime = signingTime.UTC() //converting saudi time to utc
-		order.Zatca.SigningTime = &signingTime
-		order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
-		order.Zatca.X509DigitalCertificateIssuerName = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.IssuerSerial.X509IssuerName
-		order.Zatca.X509DigitalCertificateSerialNumber = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.IssuerSerial.X509SerialNumber
-
-		order.Zatca.QrCode = invoice.AdditionalDocumentRefs[2].Attachment.EmbeddedDocumentBinaryObject.Value
-		//log.Print("invoice.AdditionalDocumentRefs[2].Attachment.EmbeddedDocumentBinaryObject.Value:")
-		//log.Print(invoice.AdditionalDocumentRefs[2].Attachment.EmbeddedDocumentBinaryObject.Value)
-
-		for _, doc := range invoice.AdditionalDocumentRefs {
-			if doc.ID == "QR" { // Match <cbc:ID>QR</cbc:ID>
-				order.Zatca.QrCode = doc.Attachment.EmbeddedDocumentBinaryObject.Value
-				//qrBase64 = doc.Attachment.EmbeddedDocumentBinaryObject
-
-				/*
-					// Decode Base64 string
-					qrDecoded, err := base64.StdEncoding.DecodeString(order.Zatca.QrCode)
-					if err != nil {
-						//http.Error(w, "Error decoding Base64 QR content", http.StatusInternalServerError)
-						return err
-					}
-
-					qrFilePath := "qrcode.png"
-					err = qrcode.WriteFile(string(qrDecoded), qrcode.Medium, 256, qrFilePath)
-					if err != nil {
-						http.Error(w, "Error generating QR code", http.StatusInternalServerError)
-						return
-					}*/
-				break
+		if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
+			err = order.RecordZatcaReportingFailure("error reporting: " + reportingResponse.Error)
+			if err != nil {
+				return err
 			}
+			return nil
 		}
 
-		err = order.Update()
+		err = order.RecordZatcaReportingSuccess(reportingResponse)
 		if err != nil {
 			return err
 		}
-		//order.Zatca.ReportingInvoiceHash = ublFromInvoice.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[0].DigestValue
+
+		err = order.SaveClearedInvoiceData(reportingResponse.ClearedInvoice)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func (order *Order) SaveClearedInvoiceData(ClearedInvoiceBase64 string) error {
+
+	//Trying to get the UBL contents from the xml invoice received from zatca
+	// Step 1: Decode Base64
+	xmlData, err := base64.StdEncoding.DecodeString(ClearedInvoiceBase64)
+	if err != nil {
+		fmt.Println("Error decoding Base64:", err)
+		return err
+	}
+
+	// Step 2: Save to an XML file
+	//fileName := "output.xml"
+	xmlResponseFilePath := "ZatcaPython/templates/invoice_" + order.Code + "_response.xml"
+	err = os.WriteFile(xmlResponseFilePath, xmlData, 0644)
+	if err != nil {
+		fmt.Println("Error writing file:", err)
+		return err
+	}
+
+	data, err := os.ReadFile(xmlResponseFilePath)
+	if err != nil {
+		fmt.Println("Error reading file:", err)
+		return err
+	}
+
+	var invoice InvoiceToRead
+
+	err = xml.Unmarshal(data, &invoice)
+	if err != nil {
+		fmt.Println("Error unmarshaling XML:", err)
+		return err
+	}
+
+	order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
+	order.Zatca.XadesSignedPropertiesHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[1].DigestValue
+
+	order.Zatca.ReportingInvoiceHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignedInfo.References[0].DigestValue
+	if order.Zatca.ReportingInvoiceHash != order.Hash {
+		return errors.New("invalid hash")
+	}
+
+	order.Zatca.ECDSASignature = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.SignatureValue
+	order.Zatca.X509DigitalCertificate = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.KeyInfo.X509Data.X509Certificate
+	// Load Saudi Arabia timezone (AST is UTC+3)
+	loc, err := time.LoadLocation("Asia/Riyadh")
+	if err != nil {
+		fmt.Println("Error loading location:", err)
+		return err
+	}
+
+	signingTime, err := time.ParseInLocation("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
+	if err != nil {
+		fmt.Println("Error parsing Saudi time:", err)
+		return err
+	}
+
+	signingTime = signingTime.UTC() //converting saudi time to utc
+	order.Zatca.SigningTime = &signingTime
+	order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
+	order.Zatca.X509DigitalCertificateIssuerName = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.IssuerSerial.X509IssuerName
+	order.Zatca.X509DigitalCertificateSerialNumber = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.IssuerSerial.X509SerialNumber
+
+	order.Zatca.QrCode = invoice.AdditionalDocumentRefs[2].Attachment.EmbeddedDocumentBinaryObject.Value
+
+	for _, doc := range invoice.AdditionalDocumentRefs {
+		if doc.ID == "QR" { // Match <cbc:ID>QR</cbc:ID>
+			order.Zatca.QrCode = doc.Attachment.EmbeddedDocumentBinaryObject.Value
+			break
+		}
+	}
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	// Delete xml files
+	xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
+	if _, err := os.Stat(xmlFilePath); err == nil {
+		err = os.Remove(xmlFilePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	if _, err := os.Stat(xmlResponseFilePath); err == nil {
+		err = os.Remove(xmlResponseFilePath)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

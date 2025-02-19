@@ -498,7 +498,20 @@ func SearchOrder(w http.ResponseWriter, r *http.Request) (orders []Order, criter
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[zatca.reporting_passed]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": false}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[date_str]"]
@@ -1022,6 +1035,27 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "Store is required"
+	}
+
+	if store.Zatca.Phase == "2" {
+		var lastOrder *Order
+		if order.ID.IsZero() {
+			lastOrder, err = FindLastOrderByStoreID(&store.ID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+				errs["store_id"] = "Error finding last order"
+			}
+		} else {
+			lastOrder, err = order.FindPreviousOrder(bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+				errs["store_id"] = "Error finding last order"
+			}
+		}
+
+		if lastOrder != nil {
+			if lastOrder.Zatca.ReportingFailedCount > 0 && !lastOrder.Zatca.ReportingPassed {
+				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+			}
+		}
 	}
 
 	if customer.VATNo != "" && store.Zatca.Phase == "2" {
