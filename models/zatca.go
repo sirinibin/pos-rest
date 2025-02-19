@@ -21,6 +21,7 @@ import (
 	"github.com/beevik/etree"
 	dsig "github.com/russellhaering/goxmldsig"
 	"github.com/sirinibin/pos-rest/env"
+	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -464,8 +465,8 @@ func (order *Order) MakeXMLContent() (string, error) {
 	}
 
 	previousOrder, err := order.FindPreviousOrder(bson.M{})
-	if err != nil {
-		return xmlContent, err
+	if err != nil && err != mongo.ErrNoDocuments {
+		return xmlContent, errors.New("error finding previous order: " + err.Error())
 	}
 
 	if previousOrder != nil && previousOrder.Hash != "" {
@@ -884,17 +885,17 @@ func (order *Order) ReportToZatca() error {
 
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
-		return err
+		return errors.New("error finding store: " + err.Error())
 	}
 
 	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
-		return err
+		return errors.New("error finding customer: " + err.Error())
 	}
 
 	_, err = order.MakeXMLContent()
 	if err != nil {
-		return err
+		return errors.New("error making xml: " + err.Error())
 	}
 	var isSimplified bool
 	if customer.VATNo != "" {
@@ -916,7 +917,7 @@ func (order *Order) ReportToZatca() error {
 	// Convert payload to JSON
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return errors.New("error marshal payload to paython script: " + err.Error())
 	}
 
 	pythonBinary := "ZatcaPython/venv/bin/python"
