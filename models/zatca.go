@@ -942,7 +942,7 @@ func (order *Order) ReportToZatca() error {
 
 		err = json.Unmarshal(output.Bytes(), &pythonResponse)
 		if err != nil {
-			return errors.New("Error parsing error messages from zatca: " + err.Error())
+			return errors.New("Error parsing error messages from zatca compliance api: " + err.Error())
 		}
 
 		if pythonResponse.Error != "" {
@@ -1028,7 +1028,7 @@ func (order *Order) ReportToZatca() error {
 
 			err = json.Unmarshal(output.Bytes(), &pythonReportingResponse)
 			if err != nil {
-				return errors.New("Error parsing error messages from zatca: " + err.Error())
+				return errors.New("Error parsing error messages from zatca reporting api: " + err.Error())
 			}
 
 			if pythonReportingResponse.Error != "" {
