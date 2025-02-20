@@ -877,6 +877,7 @@ type ZatcaReportingResponse struct {
 	ReportingPassed bool   `json:"reporting_passed"`
 	Error           string `json:"error"`
 	ClearedInvoice  string `json:"cleared_invoice"` //only for b2b (customers with VAT no.)
+	IsSimplified    bool   `json:"is_simplified"`   //only for b2b (customers with VAT no.)
 	Traceback       string `json:"traceback,omitempty"`
 }
 
@@ -1114,7 +1115,7 @@ func (order *Order) ReportToZatca() error {
 			return err
 		}
 
-		err = order.SaveClearedInvoiceData(reportingResponse.ClearedInvoice)
+		err = order.SaveClearedInvoiceData(reportingResponse)
 		if err != nil {
 			return err
 		}
@@ -1124,11 +1125,11 @@ func (order *Order) ReportToZatca() error {
 	return nil
 }
 
-func (order *Order) SaveClearedInvoiceData(ClearedInvoiceBase64 string) error {
+func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingResponse) error {
 
 	//Trying to get the UBL contents from the xml invoice received from zatca
 	// Step 1: Decode Base64
-	xmlData, err := base64.StdEncoding.DecodeString(ClearedInvoiceBase64)
+	xmlData, err := base64.StdEncoding.DecodeString(reportingResponse.ClearedInvoice)
 	if err != nil {
 		fmt.Println("Error decoding Base64:", err)
 		return err
@@ -1175,13 +1176,28 @@ func (order *Order) SaveClearedInvoiceData(ClearedInvoiceBase64 string) error {
 		return err
 	}
 
-	signingTime, err := time.ParseInLocation("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
-	if err != nil {
-		fmt.Println("Error parsing Saudi time:", err)
-		return err
+	/*
+		if !govalidator.IsNull(Customer.Name) {
+
+		}*/
+	var signingTime time.Time
+
+	if reportingResponse.IsSimplified {
+		signingTime, err = time.Parse("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
+		if err != nil {
+			fmt.Println("Error parsing utc time:", err)
+			return err
+		}
+
+	} else {
+		signingTime, err = time.ParseInLocation("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
+		if err != nil {
+			fmt.Println("Error parsing Saudi time:", err)
+			return err
+		}
+		signingTime = signingTime.UTC() //converting saudi time to utc
 	}
 
-	signingTime = signingTime.UTC() //converting saudi time to utc
 	order.Zatca.SigningTime = &signingTime
 	order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
 	order.Zatca.X509DigitalCertificateIssuerName = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.IssuerSerial.X509IssuerName

@@ -138,6 +138,7 @@ def main():
             "invoice_hash": json_payload["invoiceHash"],
             "reporting_passed": True,
             "cleared_invoice": clearedInvoice,
+            "is_simplified": is_simplified,
             "error":   cert_info["error"],
             }
             
