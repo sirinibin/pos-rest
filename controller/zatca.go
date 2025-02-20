@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/env"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -266,6 +268,98 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 
+}
+
+// UpdateOrder : handler function for PUT /v1/order call
+func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var order *models.Order
+
+	params := mux.Vars(r)
+
+	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["order_id"] = "Invalid Order ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err = models.FindOrderByID(&orderID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["find_order"] = "Unable to find order:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := models.FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["store"] = "invalid store: " + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		var lastOrder *models.Order
+
+		lastOrder, err = order.FindPreviousOrder(bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+			response.Status = false
+			response.Errors["previous_order"] = "Error finding previous order"
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		if lastOrder != nil {
+			if lastOrder.Zatca.ReportingFailedCount > 0 && !lastOrder.Zatca.ReportingPassed {
+				response.Status = false
+				response.Errors["previous_order"] = "Previous sale is not reported to Zatca. please report it and try again"
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
+
+		err = order.ReportToZatca()
+		if err != nil {
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	response.Status = true
+	response.Result = order
+	json.NewEncoder(w).Encode(response)
 }
 
 // ConnectStoreToZatc : handler for POST /store/zatca/connect

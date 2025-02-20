@@ -1136,7 +1136,8 @@ func (order *Order) SaveClearedInvoiceData(ClearedInvoiceBase64 string) error {
 
 	// Step 2: Save to an XML file
 	//fileName := "output.xml"
-	xmlResponseFilePath := "ZatcaPython/templates/invoice_" + order.Code + "_response.xml"
+	//xmlResponseFilePath := "ZatcaPython/templates/invoice_" + order.Code + "_response.xml"
+	xmlResponseFilePath := "zatca/xml/" + order.Code + ".xml"
 	err = os.WriteFile(xmlResponseFilePath, xmlData, 0644)
 	if err != nil {
 		fmt.Println("Error writing file:", err)
@@ -1209,12 +1210,14 @@ func (order *Order) SaveClearedInvoiceData(ClearedInvoiceBase64 string) error {
 		}
 	}
 
-	if _, err := os.Stat(xmlResponseFilePath); err == nil {
-		err = os.Remove(xmlResponseFilePath)
-		if err != nil {
-			return err
+	/*
+		if _, err := os.Stat(xmlResponseFilePath); err == nil {
+			err = os.Remove(xmlResponseFilePath)
+			if err != nil {
+				return err
+			}
 		}
-	}
+	*/
 
 	return nil
 }

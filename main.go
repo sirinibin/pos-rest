@@ -239,8 +239,6 @@ func main() {
 	router.HandleFunc("/v1/store/{id}", controller.ViewStore).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.UpdateStore).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
-	router.HandleFunc("/v1/store/zatca/connect", controller.ConnectStoreToZatca).Methods("POST")
-	router.HandleFunc("/v1/store/zatca/disconnect", controller.DisconnectStoreFromZatca).Methods("POST")
 
 	//Customer
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")
@@ -359,7 +357,6 @@ func main() {
 	router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 	router.HandleFunc("/v1/order", controller.ListOrder).Methods("GET")
 	router.HandleFunc("/v1/order/{id}", controller.ViewOrder).Methods("GET")
-	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
 
 	//SalesHistory
 	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")
@@ -441,6 +438,11 @@ func main() {
 	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.UpdatePurchaseReturnPayment).Methods("PUT")
 	router.HandleFunc("/v1/purchase-return-payment/{id}", controller.DeletePurchaseReturnPayment).Methods("DELETE")
 
+	//Zatca
+	router.HandleFunc("/v1/store/zatca/connect", controller.ConnectStoreToZatca).Methods("POST")
+	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
+	router.HandleFunc("/v1/store/zatca/disconnect", controller.DisconnectStoreFromZatca).Methods("POST")
+
 	//Ledger
 	router.HandleFunc("/v1/ledger", controller.ListLedger).Methods("GET")
 	//Accounts
@@ -450,6 +452,7 @@ func main() {
 	router.HandleFunc("/v1/posting", controller.ListPostings).Methods("GET")
 
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
+	router.PathPrefix("/zatca/").Handler(http.StripPrefix("/zatca/", http.FileServer(http.Dir("./zatca/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
 	//cronJobsEveryHour()
