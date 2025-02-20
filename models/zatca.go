@@ -1183,7 +1183,7 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 	var signingTime time.Time
 
 	if reportingResponse.IsSimplified {
-		signingTime, err = time.Parse("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
+		signingTime, err = time.Parse("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime)
 		if err != nil {
 			fmt.Println("Error parsing utc time:", err)
 			return err
