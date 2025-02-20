@@ -395,6 +395,26 @@ func GenerateInvoiceHash(xmlInput string) (string, error) {
 	return base64Str, nil
 }
 
+func (orderProduct OrderProduct) GetZatcaUnit() string {
+	if orderProduct.Unit == "drum" {
+		return "DRM"
+	} else if orderProduct.Unit == "Kg" {
+		return "KGM"
+	} else if orderProduct.Unit == "Meter(s)" {
+		return "MTR"
+	} else if orderProduct.Unit == "Gm" {
+		return "GRM"
+	} else if orderProduct.Unit == "L" {
+		return "LTR"
+	} else if orderProduct.Unit == "Mg" {
+		return "MG"
+	} else if orderProduct.Unit == "set" {
+		return "SET"
+	}
+
+	return "PCE"
+}
+
 func (order *Order) MakeXMLContent() (string, error) {
 	var err error
 	xmlContent := ""
@@ -780,7 +800,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				CurrencyID: "SAR",
 			},
 			BaseQuantity: BaseQuantity{
-				UnitCode: "PCE",
+				UnitCode: product.GetZatcaUnit(),
 				Value:    1,
 			},
 		}
@@ -803,7 +823,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 		invoice.InvoiceLines = append(invoice.InvoiceLines, InvoiceLine{
 			ID: strconv.Itoa((i + 1)),
 			InvoicedQuantity: InvoicedQuantity{
-				UnitCode: "PCE",
+				UnitCode: product.GetZatcaUnit(),
 				Value:    ToFixed(product.Quantity, 2),
 			},
 			LineExtensionAmount: LineAmount{
