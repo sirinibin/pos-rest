@@ -106,7 +106,7 @@ def main():
             request_type = "Clearance Api"
             api_url = cert_info["clearanceUrl"]
 
-        clean_response = api_helper.clean_up_json(response, request_type, api_url)
+        #clean_response = api_helper.clean_up_json(response, request_type, api_url)
 
         json_decoded_response = json.loads(response)
 
@@ -123,9 +123,13 @@ def main():
         '''    
 
         status = json_decoded_response["reportingStatus"] if is_simplified else json_decoded_response["clearanceStatus"]
+       
         clearedInvoice = ""
         if is_simplified == False: 
             clearedInvoice = json_decoded_response["clearedInvoice"]
+        else:     
+            simplifiedPayload = json.loads(json_payload)
+            clearedInvoice = simplifiedPayload["invoice"]
 
         if "REPORTED" in status or "CLEARED" in status:
             json_payload = json.loads(json_payload)
@@ -136,6 +140,7 @@ def main():
             "cleared_invoice": clearedInvoice,
             "error":   cert_info["error"],
             }
+            
             print(json.dumps(data))  # Print JSON output
             #print(f"\n\npih:\n")
             #print(pih)

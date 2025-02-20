@@ -1201,14 +1201,16 @@ func (order *Order) SaveClearedInvoiceData(ClearedInvoiceBase64 string) error {
 		return err
 	}
 
-	// Delete xml files
-	xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
-	if _, err := os.Stat(xmlFilePath); err == nil {
-		err = os.Remove(xmlFilePath)
-		if err != nil {
-			return err
+	/*
+		// Delete xml files
+		xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
+		if _, err := os.Stat(xmlFilePath); err == nil {
+			err = os.Remove(xmlFilePath)
+			if err != nil {
+				return err
+			}
 		}
-	}
+	*/
 
 	/*
 		if _, err := os.Stat(xmlResponseFilePath); err == nil {

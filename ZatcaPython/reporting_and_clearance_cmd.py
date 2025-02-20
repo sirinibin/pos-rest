@@ -25,7 +25,7 @@ def main():
         #print("\n3: Clearance & Reporting Documents\n")
 
         cert_info = api_helper.load_json_from_file("certificates/certificateInfo.json")
-        xml_template_path = "templates/invoice_S-INV-YUGU-000005.xml"
+        xml_template_path = "templates/invoice_S-INV-YUGU-000007.xml"
         private_key = cert_info["privateKey"]
         x509_certificate_content = base64.b64decode(cert_info["pcsid_binarySecurityToken"]).decode('utf-8')
         #print(f"x509_certificate_content: {x509_certificate_content}\n")
@@ -45,7 +45,7 @@ def main():
         #icv = 0
         #pih = "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ=="
         #is_simplified = payloadFromGo["is_simplified"]  
-        is_simplified = False  
+        is_simplified = True 
 
         
         new_doc = base_document
@@ -65,7 +65,7 @@ def main():
             request_type = "Clearance Api"
             api_url = cert_info["clearanceUrl"]
 
-        clean_response = api_helper.clean_up_json(response, request_type, api_url)
+        #clean_response = api_helper.clean_up_json(response, request_type, api_url)
 
         json_decoded_response = json.loads(response)
 
@@ -80,11 +80,14 @@ def main():
             print(f"Failed to process {description}: serverResult is null.\n")
             exit(1)
         '''    
-
+        
         status = json_decoded_response["reportingStatus"] if is_simplified else json_decoded_response["clearanceStatus"]
         clearedInvoice = ""
         if is_simplified == False: 
             clearedInvoice = json_decoded_response["clearedInvoice"]
+        else:     
+            simplifiedPayload = json.loads(json_payload)
+            clearedInvoice = simplifiedPayload["invoice"]
 
         if "REPORTED" in status or "CLEARED" in status:
             json_payload = json.loads(json_payload)
