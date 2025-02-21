@@ -1015,7 +1015,7 @@ func (order *Order) ReportToZatca() error {
 
 		err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
 		if err != nil {
-			err = order.RecordZatcaComplianceCheckFailure("error unmarshaling compliance check response: " + complianceCheckResponse.Error)
+			err = order.RecordZatcaComplianceCheckFailure("error unmarshaling compliance check response: " + complianceCheckResponse.Error + ", " + err.Error())
 			if err != nil {
 				return err
 			}
@@ -1202,21 +1202,14 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 		}*/
 	var signingTime time.Time
 
-	if reportingResponse.IsSimplified {
-		signingTime, err = time.Parse("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime)
-		if err != nil {
-			fmt.Println("Error parsing utc time:", err)
-			return err
-		}
-
-	} else {
-		signingTime, err = time.ParseInLocation("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
-		if err != nil {
-			fmt.Println("Error parsing Saudi time:", err)
-			return err
-		}
-		signingTime = signingTime.UTC() //converting saudi time to utc
+	// Note: signing time coming from zatca is already in saudi timezone
+	signingTime, err = time.ParseInLocation("2006-01-02T15:04:05", invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningTime, loc)
+	if err != nil {
+		fmt.Println("Error parsing Saudi time:", err)
+		return err
 	}
+
+	signingTime = signingTime.UTC() //converting saudi time to utc
 
 	order.Zatca.SigningTime = &signingTime
 	order.Zatca.SigningCertificateHash = invoice.UBLExtensions.UBLExtension.ExtensionContent.UBLDocumentSignatures.SignatureInformation.Signature.Object.QualifyingProperties.SignedProperties.SignedSignatureProperties.SigningCertificate.Cert.CertDigest.DigestValue
@@ -1232,6 +1225,7 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 		}
 	}
 
+	order.Zatca.IsSimplified = reportingResponse.IsSimplified
 	err = order.Update()
 	if err != nil {
 		return err

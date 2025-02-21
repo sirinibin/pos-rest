@@ -27,7 +27,7 @@ def main():
   
 
         cert_info = api_helper.load_json_from_file("certificates/certificateInfo.json")
-        xml_template_path = "templates/invoice_S-INV-YUGU-000005.xml"
+        xml_template_path = "templates/invoice_S-INV-YUGU-000007.xml"
 
         #cert_info["ccsid_requestID"] = payloadFromGo["compliance_request_id"]
         #cert_info["ccsid_binarySecurityToken"] =  payloadFromGo["binary_security_token"]
@@ -76,7 +76,7 @@ def main():
             )
         '''
 
-        is_simplified = False
+        is_simplified = True
         #is_simplified = payloadFromGo["is_simplified"]    
             
         new_doc = base_document
@@ -108,7 +108,7 @@ def main():
         '''    
 
     
-
+        #print(json_decoded_response)
         status = json_decoded_response["reportingStatus"] if is_simplified else json_decoded_response["clearanceStatus"]
 
         if "REPORTED" in status or "CLEARED" in status:

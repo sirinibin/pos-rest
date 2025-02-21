@@ -5,7 +5,7 @@ import os
 import re
 import tempfile
 from lxml import etree
-from datetime import datetime
+from datetime import datetime,timezone
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -13,6 +13,7 @@ from cryptography.hazmat.backends import default_backend
 from OpenSSL import crypto
 from utilities.qr_code_generator import qr_code_generator
 from cryptography.hazmat.primitives.asymmetric import ec
+import pytz
 
 class einvoice_signer:
     @staticmethod
@@ -167,7 +168,19 @@ class einvoice_signer:
     @staticmethod
     def sign_simplified_invoice(canonical_xml, base64_hash, x509_certificate_content, private_key_content, ubl_template_path, signature_path, uuid):
         """Sign the simplified invoice and return the signed invoice."""
-        signature_timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        # Get current time in UTC (timezone-aware)
+      
+        utc_now = datetime.now(timezone.utc)
+
+        # Convert to Saudi Arabia timezone (UTC+3)
+        saudi_tz = pytz.timezone("Asia/Riyadh")
+        saudi_time = utc_now.astimezone(saudi_tz)
+
+        # Format the timestamp
+        signature_timestamp = saudi_time.strftime("%Y-%m-%dT%H:%M:%S")
+
+        
+        #signature_timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
         # Generate public key hashing
         public_key_hashing = einvoice_signer.generate_public_key_hashing(x509_certificate_content)

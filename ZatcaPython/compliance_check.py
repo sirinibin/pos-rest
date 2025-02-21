@@ -12,15 +12,29 @@ def main():
     try:
         dataFromGo = sys.stdin.read().strip()
         if not dataFromGo:
-            dataFromGo["error"]="No input received"
-            print(json.dumps(data))
+            #dataFromGo["error"]="No input received"
+            #print(json.dumps(data))
+            error_data = {
+            "invoice_hash": "",
+            "compliance_passed": False,
+            "error": "No input received",
+            "traceback": traceback.format_exc()
+            }
+            print(json.dumps(error_data)) 
             return
         
         try:
             payloadFromGo = json.loads(dataFromGo)  # Parse JSON
  
         except json.JSONDecodeError:
-            print("Invalid JSON received", file=sys.stderr)
+            #print("Invalid JSON received", file=sys.stderr)
+            error_data = {
+            "invoice_hash": "",
+            "compliance_passed": False,
+            "error": "Invalid JSON received",
+            "traceback": traceback.format_exc()
+            }
+            print(json.dumps(error_data)) 
             return    
       
         
@@ -126,10 +140,10 @@ def main():
     
         
         response = api_helper.compliance_checks(cert_info, json_payload)
-        request_type = "Compliance Checks"
-        api_url = cert_info["complianceChecksUrl"]
+        #request_type = "Compliance Checks"
+        #api_url = cert_info["complianceChecksUrl"]
 
-        clean_response = api_helper.clean_up_json(response, request_type, api_url)
+        #clean_response = api_helper.clean_up_json(response, request_type, api_url)
 
         json_decoded_response = json.loads(response)
 

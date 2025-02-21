@@ -108,6 +108,7 @@ type Order struct {
 }
 
 type ZatcaReporting struct {
+	IsSimplified          bool       `bson:"is_simplified" json:"is_simplified"`
 	CompliancePassed      bool       `bson:"compliance_passed,omitempty" json:"compliance_passed,omitempty"`
 	CompliancePassedAt    *time.Time `bson:"compliance_passed_at,omitempty" json:"compliance_passed_at,omitempty"`
 	ComplianceInvoiceHash string     `bson:"compliance_invoice_hash,omitempty" json:"compliance_invoice_hash,omitempty"`
