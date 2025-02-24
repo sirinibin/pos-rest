@@ -361,6 +361,14 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = order.UpdateSalesReturnCustomer()
+	if err != nil {
+		response.Status = false
+		response.Errors["updating_sales_return_customer"] = "Error updating sales returns " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	order.ClearProductsSalesHistory()
 	order.CreateProductsSalesHistory()
 

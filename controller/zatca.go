@@ -362,6 +362,98 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// UpdateOrder : handler function for PUT /v1/order call
+func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var salesReturn *models.SalesReturn
+
+	params := mux.Vars(r)
+
+	salesReturnID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["sales_return_id"] = "invalid sales return ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesReturn, err = models.FindSalesReturnByID(&salesReturnID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["find_sales_return"] = "Unable to find sales return:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := models.FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["store"] = "invalid store: " + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		var lastSalesReturn *models.SalesReturn
+
+		lastSalesReturn, err = salesReturn.FindPreviousSalesReturn(bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+			response.Status = false
+			response.Errors["previous_order"] = "Error finding previous sales return"
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		if lastSalesReturn != nil {
+			if lastSalesReturn.Zatca.ReportingFailedCount > 0 && !lastSalesReturn.Zatca.ReportingPassed {
+				response.Status = false
+				response.Errors["previous_sales_return"] = "Previous sales return is not reported to Zatca. please report it and try again"
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
+
+		err = salesReturn.ReportToZatca()
+		if err != nil {
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	response.Status = true
+	response.Result = salesReturn
+	json.NewEncoder(w).Encode(response)
+}
+
 // ConnectStoreToZatc : handler for POST /store/zatca/connect
 func DisconnectStoreFromZatca(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

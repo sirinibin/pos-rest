@@ -105,6 +105,7 @@ type SalesReturn struct {
 	Payments         []SalesReturnPayment `bson:"payments" json:"payments"`
 	PaymentsInput    []SalesReturnPayment `bson:"-" json:"payments_input"`
 	PaymentsCount    int64                `bson:"payments_count" json:"payments_count"`
+	Zatca            ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
 }
 
 func (salesReturn *SalesReturn) AddPayments() error {
@@ -969,8 +970,84 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 }
 
 func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldSalesReturn *SalesReturn) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
+	if err != nil {
+		errs["store_id"] = "Store is required"
+	}
+
+	customer, err := FindCustomerByID(salesreturn.CustomerID, bson.M{})
+	if err != nil {
+		errs["customer_id"] = "invalid customer"
+	}
+
+	if store.Zatca.Phase == "2" {
+		var lastSalesReturn *SalesReturn
+		if salesreturn.ID.IsZero() {
+			lastSalesReturn, err = FindLastSalesReturnByStoreID(&store.ID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+				errs["store_id"] = "Error finding last sales return"
+			}
+		} else {
+			lastSalesReturn, err = salesreturn.FindPreviousSalesReturn(bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+				errs["store_id"] = "Error finding last sales return"
+			}
+		}
+
+		if lastSalesReturn != nil {
+			if lastSalesReturn.Zatca.ReportingFailedCount > 0 && !lastSalesReturn.Zatca.ReportingPassed {
+				errs["last_sales_return"] = "Last sales return is not reported to Zatca. please report it and try again"
+			}
+		}
+	}
+
+	if customer.VATNo != "" && store.Zatca.Phase == "2" {
+		customerErrorMessages := []string{}
+
+		if !IsValidDigitNumber(customer.VATNo, "15") {
+			customerErrorMessages = append(customerErrorMessages, "VAT No. should be 15 digits")
+		} else if !IsNumberStartAndEndWith(customer.VATNo, "3") {
+			customerErrorMessages = append(customerErrorMessages, "VAT No. should start and end with 3")
+		}
+
+		if !govalidator.IsNull(customer.RegistrationNumber) && !IsAlphanumeric(customer.RegistrationNumber) {
+			customerErrorMessages = append(customerErrorMessages, "Registration Number should be alpha numeric(a-zA-Z|0-9)")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+			customerErrorMessages = append(customerErrorMessages, "Building number is required")
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+				customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+			}
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.StreetName) {
+			customerErrorMessages = append(customerErrorMessages, "Street name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
+			customerErrorMessages = append(customerErrorMessages, "District name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.CityName) {
+			customerErrorMessages = append(customerErrorMessages, "City name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
+			customerErrorMessages = append(customerErrorMessages, "Zip code is required")
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+				customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+			}
+		}
+
+		if len(customerErrorMessages) > 0 {
+			errs["customer_id"] = "Fix the customer errors: " + strings.Join(customerErrorMessages, ",")
+		}
+	}
 
 	if govalidator.IsNull(salesreturn.DateStr) {
 		errs["date_str"] = "Date is required"
@@ -3039,4 +3116,27 @@ func (salesReturn *SalesReturn) UndoAccounting() error {
 	}
 
 	return nil
+}
+
+func (salesReturn *SalesReturn) FindPreviousSalesReturn(selectFields map[string]interface{}) (previousSalesReturn *SalesReturn, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"invoice_count_value": (salesReturn.InvoiceCountValue - 1),
+			"store_id":            salesReturn.StoreID,
+		}, findOneOptions).
+		Decode(&previousSalesReturn)
+	if err != nil {
+		return nil, err
+	}
+
+	return previousSalesReturn, err
 }

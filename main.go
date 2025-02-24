@@ -441,6 +441,7 @@ func main() {
 	//Zatca
 	router.HandleFunc("/v1/store/zatca/connect", controller.ConnectStoreToZatca).Methods("POST")
 	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
+	router.HandleFunc("/v1/sales-return/zatca/report/{id}", controller.ReportSalesReturnToZatca).Methods("POST")
 	router.HandleFunc("/v1/store/zatca/disconnect", controller.DisconnectStoreFromZatca).Methods("POST")
 
 	//Ledger

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -108,29 +107,27 @@ type Order struct {
 }
 
 type ZatcaReporting struct {
-	IsSimplified          bool       `bson:"is_simplified" json:"is_simplified"`
-	CompliancePassed      bool       `bson:"compliance_passed,omitempty" json:"compliance_passed,omitempty"`
-	CompliancePassedAt    *time.Time `bson:"compliance_passed_at,omitempty" json:"compliance_passed_at,omitempty"`
-	ComplianceInvoiceHash string     `bson:"compliance_invoice_hash,omitempty" json:"compliance_invoice_hash,omitempty"`
-	ReportingPassed       bool       `bson:"reporting_passed,omitempty" json:"reporting_passed,omitempty"`
-	ReportedAt            *time.Time `bson:"reporting_passed_at,omitempty" json:"reporting_passed_at,omitempty"`
-	ReportingInvoiceHash  string     `bson:"reporting_invoice_hash,omitempty" json:"reporting_invoice_hash,omitempty"`
-	QrCode                string     `bson:"qr_code,omitempty" json:"qr_code,omitempty"`
-	ECDSASignature        string     `bson:"ecdsa_signature,omitempty" json:"ecdsa_signature,omitempty"`
-	//ECDSAPublicKey                     *ecdsa.PublicKey `bson:"ecdsa_public_key,omitempty" json:"ecdsa_public_key,omitempty"`
-	ECDSAPublicKey                     *secp256k1.PublicKey `bson:"ecdsa_public_key,omitempty" json:"ecdsa_public_key,omitempty"`
-	X509DigitalCertificate             string               `bson:"x509_digital_certificate,omitempty" json:"x509_digital_certificate,omitempty"`
-	SigningTime                        *time.Time           `bson:"signing_time,omitempty" json:"signing_time,omitempty"`
-	SigningCertificateHash             string               `bson:"signing_certificate_hash,omitempty" json:"signing_certificate_hash,omitempty"`
-	X509DigitalCertificateIssuerName   string               `bson:"x509_digital_certificate_issuer_name,omitempty" json:"x509_digital_certificate_issuer_name,omitempty"`
-	X509DigitalCertificateSerialNumber string               `bson:"x509_digital_certificate_serial_number,omitempty" json:"x509_digital_certificate_serial_number,omitempty"`
-	XadesSignedPropertiesHash          string               `bson:"xades_signed_properties_hash,omitempty" json:"xades_signed_properties_hash,omitempty"`
-	ComplianceCheckFailedCount         int64                `bson:"compliance_check_failed_count,omitempty" json:"compliance_check_failed_count,omitempty"`
-	ComplianceCheckErrors              []string             `bson:"compliance_check_errors,omitempty" json:"compliance_check_errors,omitempty"`
-	ComplianceCheckLastFailedAt        *time.Time           `bson:"compliance_check_last_failed_at,omitempty" json:"compliance_check_last_failed_at,omitempty"`
-	ReportingFailedCount               int64                `bson:"reporting_failed_count,omitempty" json:"reporting_failed_count,omitempty"`
-	ReportingErrors                    []string             `bson:"reporting_errors,omitempty" json:"reporting_errors,omitempty"`
-	ReportingLastFailedAt              *time.Time           `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
+	IsSimplified                       bool       `bson:"is_simplified" json:"is_simplified"`
+	CompliancePassed                   bool       `bson:"compliance_passed,omitempty" json:"compliance_passed,omitempty"`
+	CompliancePassedAt                 *time.Time `bson:"compliance_passed_at,omitempty" json:"compliance_passed_at,omitempty"`
+	ComplianceInvoiceHash              string     `bson:"compliance_invoice_hash,omitempty" json:"compliance_invoice_hash,omitempty"`
+	ReportingPassed                    bool       `bson:"reporting_passed,omitempty" json:"reporting_passed,omitempty"`
+	ReportedAt                         *time.Time `bson:"reporting_passed_at,omitempty" json:"reporting_passed_at,omitempty"`
+	ReportingInvoiceHash               string     `bson:"reporting_invoice_hash,omitempty" json:"reporting_invoice_hash,omitempty"`
+	QrCode                             string     `bson:"qr_code,omitempty" json:"qr_code,omitempty"`
+	ECDSASignature                     string     `bson:"ecdsa_signature,omitempty" json:"ecdsa_signature,omitempty"`
+	X509DigitalCertificate             string     `bson:"x509_digital_certificate,omitempty" json:"x509_digital_certificate,omitempty"`
+	SigningTime                        *time.Time `bson:"signing_time,omitempty" json:"signing_time,omitempty"`
+	SigningCertificateHash             string     `bson:"signing_certificate_hash,omitempty" json:"signing_certificate_hash,omitempty"`
+	X509DigitalCertificateIssuerName   string     `bson:"x509_digital_certificate_issuer_name,omitempty" json:"x509_digital_certificate_issuer_name,omitempty"`
+	X509DigitalCertificateSerialNumber string     `bson:"x509_digital_certificate_serial_number,omitempty" json:"x509_digital_certificate_serial_number,omitempty"`
+	XadesSignedPropertiesHash          string     `bson:"xades_signed_properties_hash,omitempty" json:"xades_signed_properties_hash,omitempty"`
+	ComplianceCheckFailedCount         int64      `bson:"compliance_check_failed_count,omitempty" json:"compliance_check_failed_count,omitempty"`
+	ComplianceCheckErrors              []string   `bson:"compliance_check_errors,omitempty" json:"compliance_check_errors,omitempty"`
+	ComplianceCheckLastFailedAt        *time.Time `bson:"compliance_check_last_failed_at,omitempty" json:"compliance_check_last_failed_at,omitempty"`
+	ReportingFailedCount               int64      `bson:"reporting_failed_count,omitempty" json:"reporting_failed_count,omitempty"`
+	ReportingErrors                    []string   `bson:"reporting_errors,omitempty" json:"reporting_errors,omitempty"`
+	ReportingLastFailedAt              *time.Time `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
 }
 
 func UpdateOrderProfit() error {
@@ -199,6 +196,55 @@ func (order *Order) AttributesValueChangeEvent(orderOld *Order) error {
 		//}
 	}
 
+	return nil
+}
+
+func (order *Order) GetSalesReturns() (salesReturns []SalesReturn, err error) {
+	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"order_id": order.ID}, findOptions)
+	if err != nil {
+		return salesReturns, errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return salesReturns, errors.New("Cursor error:" + err.Error())
+		}
+		salesReturn := SalesReturn{}
+		err = cur.Decode(&salesReturn)
+		if err != nil {
+			return salesReturns, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		salesReturns = append(salesReturns, salesReturn)
+	}
+
+	return salesReturns, nil
+}
+
+func (order *Order) UpdateSalesReturnCustomer() error {
+	salesReturns, err := order.GetSalesReturns()
+	if err != nil {
+		return err
+	}
+
+	for _, salesReturn := range salesReturns {
+		salesReturn.CustomerID = order.CustomerID
+		salesReturn.CustomerName = order.CustomerName
+		err = salesReturn.Update()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

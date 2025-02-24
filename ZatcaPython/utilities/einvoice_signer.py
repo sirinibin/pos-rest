@@ -184,6 +184,8 @@ class einvoice_signer:
 
         # Generate public key hashing
         public_key_hashing = einvoice_signer.generate_public_key_hashing(x509_certificate_content)
+        #print("public_key_hashing:"+public_key_hashing)
+        
 
         # Parse the X.509 certificate
         pem_certificate = einvoice_signer.wrap_certificate(x509_certificate_content)
