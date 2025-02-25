@@ -521,7 +521,10 @@ func (store *Store) FindSalesCashDiscountByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions).
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&salesCashDiscount)
 	if err != nil {
 		return nil, err

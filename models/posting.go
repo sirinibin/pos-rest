@@ -1083,7 +1083,10 @@ func (store *Store) FindPostingByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&posting)
 	if err != nil {
 		return nil, err

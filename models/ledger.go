@@ -432,7 +432,7 @@ func (store *Store) FindLedgerByReferenceID(
 	err = collection.FindOne(ctx,
 		bson.M{
 			"reference_id": referenceID,
-			"store_id":     storeID,
+			"store_id":     store.ID,
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&ledger)
 	if err != nil {

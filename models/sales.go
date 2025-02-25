@@ -2161,7 +2161,10 @@ func (store *Store) FindOrderByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions).
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&order)
 	if err != nil {
 		return nil, err

@@ -1071,7 +1071,10 @@ func (store *Store) FindCustomerByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&customer)
 	if err != nil {
 		return nil, err

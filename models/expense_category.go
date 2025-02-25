@@ -481,7 +481,10 @@ func (store *Store) FindExpenseCategoryByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions).
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&expenseCategory)
 	if err != nil {
 		return nil, err

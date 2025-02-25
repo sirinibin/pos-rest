@@ -610,7 +610,10 @@ func (store *Store) FindSalesReturnPaymentByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions).
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&salesreturnPayment)
 	if err != nil {
 		return nil, err

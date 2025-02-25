@@ -1892,7 +1892,9 @@ func (store *Store) FindLastProduct(
 	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
 
 	err = collection.FindOne(ctx,
-		bson.M{}, findOneOptions).
+		bson.M{
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&product)
 	if err != nil {
 		return nil, err
@@ -2150,7 +2152,10 @@ func (store *Store) FindProductByItemCode(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"item_code": itemCode}, findOneOptions).
+		bson.M{
+			"item_code": itemCode,
+			"store_id":  store.ID,
+		}, findOneOptions).
 		Decode(&product)
 	if err != nil {
 		return nil, err
@@ -2175,6 +2180,8 @@ func (store *Store) FindProductByBarCode(
 	}
 
 	criteria := make(map[string]interface{})
+	criteria["store_id"] = store.ID
+
 	criteria["$or"] = []bson.M{
 		{"bar_code": barCode},
 		{"ean_12": barCode},
@@ -2205,7 +2212,10 @@ func (store *Store) FindProductByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions).
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&product)
 	if err != nil {
 		return nil, err
