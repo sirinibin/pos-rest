@@ -1952,74 +1952,12 @@ func (order *Order) MakeRedisCode() error {
 
 	invoiceID := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, paddingCount, incr)
 	order.Code = invoiceID
-	order.InvoiceCountValue = incr
+	order.InvoiceCountValue = incr - (store.SalesSerialNumber.StartFromCount - 1)
 	return nil
 }
 
 func (order *Order) MakeCode() error {
-	store, err := FindStoreByID(order.StoreID, bson.M{"code": 1})
-	if err != nil {
-		return err
-	}
-
-	if store.Code != "GUOCJ" && store.Code != "GUOJ" {
-		return order.MakeRedisCode()
-	}
-
-	lastOrder, err := FindLastOrderByStoreID(order.StoreID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return err
-	}
-
-	var icv int
-
-	if lastOrder == nil {
-		store, err := FindStoreByID(order.StoreID, bson.M{})
-		if err != nil {
-			return err
-		}
-		order.Code = store.Code + "-100000"
-		icv = 1
-	} else {
-		splits := strings.Split(lastOrder.Code, "-")
-		if len(splits) == 2 {
-			storeCode := splits[0]
-			codeStr := splits[1]
-			codeInt, err := strconv.Atoi(codeStr)
-			if err != nil {
-				return err
-			}
-			codeInt++
-			order.Code = storeCode + "-" + strconv.Itoa(codeInt)
-			icv = codeInt
-		}
-	}
-
-	for {
-		exists, err := order.IsCodeExists()
-		if err != nil {
-			return err
-		}
-		if !exists {
-			break
-		}
-
-		splits := strings.Split(lastOrder.Code, "-")
-		storeCode := splits[0]
-		codeStr := splits[1]
-		codeInt, err := strconv.Atoi(codeStr)
-		if err != nil {
-			return err
-		}
-		codeInt++
-
-		order.Code = storeCode + "-" + strconv.Itoa(codeInt)
-		icv = codeInt
-	}
-
-	order.InvoiceCountValue = int64(icv)
-
-	return nil
+	return order.MakeRedisCode()
 }
 
 func FindLastOrderByStoreID(
@@ -2327,7 +2265,7 @@ func ProcessOrders() error {
 		defer cur.Close(ctx)
 	}
 
-	//icvByStores := map[string]int64{}
+	icvByStores := map[string]int64{}
 
 	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
@@ -2341,17 +2279,20 @@ func ProcessOrders() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		/*
-			_, ok := icvByStores[order.StoreID.Hex()]
-			if ok {
-				icvByStores[order.StoreID.Hex()]++
-			} else {
-				icvByStores[order.StoreID.Hex()] = int64(1)
-			}
+		_, ok := icvByStores[order.StoreID.Hex()]
+		if ok {
+			icvByStores[order.StoreID.Hex()]++
+		} else {
+			icvByStores[order.StoreID.Hex()] = int64(1)
+		}
 
-			order.InvoiceCountValue = icvByStores[order.StoreID.Hex()]
-			order.UUID = uuid.New().String()
-		*/
+		order.InvoiceCountValue = icvByStores[order.StoreID.Hex()]
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+		//order.UUID = uuid.New().String()
+
 		/*
 			for i, paymentMethod := range order.PaymentMethods {
 				if paymentMethod == "bank_account" {
@@ -2367,17 +2308,15 @@ func ProcessOrders() error {
 		*/
 
 		/*
-				for i, product := range order.Products {
-					if product.Discount > 0 {
-						order.Products[i].UnitDiscount = product.Discount / product.Quantity
-						order.Products[i].UnitDiscountPercent = product.DiscountPercent
-					}
+			for i, product := range order.Products {
+				if product.Discount > 0 {
+					order.Products[i].UnitDiscount = product.Discount / product.Quantity
+					order.Products[i].UnitDiscountPercent = product.DiscountPercent
 				}
+			}
 
-			err = order.Update()
-			if err != nil {
-				return errors.New("Error updating: " + err.Error())
-			}*/
+			return errors.New("Error updating: " + err.Error())
+		}*/
 
 		//order.MakeHash()
 		/*
