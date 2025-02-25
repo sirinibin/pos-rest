@@ -24,7 +24,7 @@ func main() {
 	db.Client("")
 	db.InitRedis()
 	go func() {
-		db.StartCleanupRoutine(10 * time.Minute)
+		db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
 	}()
 	/*
 		RemoveAllIndexes()

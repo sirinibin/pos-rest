@@ -594,7 +594,9 @@ func (store *Store) FindLastCustomerDeposit(
 	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
 
 	err = collection.FindOne(ctx,
-		bson.M{}, findOneOptions).
+		bson.M{
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&customerdeposit)
 	if err != nil {
 		return nil, err
@@ -819,7 +821,10 @@ func (store *Store) FindCustomerDepositByCode(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"code": code}, findOneOptions).
+		bson.M{
+			"code":     code,
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&customerdeposit)
 	if err != nil {
 		return nil, err
@@ -842,7 +847,10 @@ func (store *Store) FindCustomerDepositByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions).
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions).
 		Decode(&customerdeposit)
 	if err != nil {
 		return nil, err

@@ -1023,6 +1023,39 @@ func ProcessStores() error {
 	return nil
 }
 
+func GetAllStores() (stores []Store, err error) {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return stores, errors.New("Error fetching products" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return stores, errors.New("Cursor error:" + err.Error())
+		}
+		store := Store{}
+		err = cur.Decode(&store)
+		if err != nil {
+			return stores, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		stores = append(stores, store)
+
+	}
+
+	return stores, nil
+}
+
 func (store *Store) GetSalesCount() (count int64, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1085,37 +1118,4 @@ func (store *Store) CreateDB() (*mongo.Database, error) {
 	storeDB := db.GetDB("store_" + store.ID.Hex())
 	fmt.Println("✅ Database created for store:", dbName)
 	return storeDB, nil
-}
-
-func GetAllStores() (stores []Store, err error) {
-	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return stores, errors.New("Error fetching products" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return stores, errors.New("Cursor error:" + err.Error())
-		}
-		store := Store{}
-		err = cur.Decode(&store)
-		if err != nil {
-			return stores, errors.New("Cursor decode error:" + err.Error())
-		}
-
-		stores = append(stores, store)
-
-	}
-
-	return stores, nil
 }

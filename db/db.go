@@ -16,16 +16,22 @@ var once sync.Once
 var (
 	mu             sync.Mutex
 	clientInstance *mongo.Client
-	connections    = make(map[string]*mongo.Client)
+	connections    = make(map[string]*StoreConnection)
 	dbs            = make(map[string]*mongo.Database)
 )
+
+type StoreConnection struct {
+	Client   *mongo.Client
+	LastUsed time.Time
+}
 
 func GetDB(dbName string) *mongo.Database {
 	if dbName != "" {
 		_, dbExists := dbs[dbName]
-		_, connectionExists := connections[dbName]
+		connection, connectionExists := connections[dbName]
 
 		if dbExists && connectionExists {
+			connection.LastUsed = time.Now()
 			return dbs[dbName]
 		}
 
@@ -43,19 +49,27 @@ func Client(dbName string) *mongo.Client {
 		if dbName == "" {
 			clientInstance = Connect(GetPosDB())
 		} else {
-			_, exists := connections[dbName]
+			connection, exists := connections[dbName]
 			if !exists {
-				connections[dbName] = Connect(dbName)
+				connection.Client = Connect(dbName)
+				connection.LastUsed = time.Now()
 			}
 		}
 	})
 
 	if dbName != "" {
-		_, connectionExists := connections[dbName]
+		connection, connectionExists := connections[dbName]
 		if !connectionExists {
-			connections[dbName] = Connect(dbName)
+			newClient := Connect(dbName)
+			connections[dbName] = &StoreConnection{
+				Client:   newClient,
+				LastUsed: time.Now(),
+			}
+			return connections[dbName].Client
 		}
-		return connections[dbName]
+
+		connection.LastUsed = time.Now()
+		return connection.Client
 	}
 
 	return clientInstance
@@ -104,7 +118,7 @@ func GetMongoClient(dbName string) (*mongo.Client, error) {
 		mongoConnect += port
 	}
 
-	mongoConnect += "/?"
+	mongoConnect += "/" + MongoDb + "?"
 
 	if user != "" {
 		mongoConnect += "authSource=" + MongoDb
@@ -144,23 +158,30 @@ func Getenv(key, fallback string) string {
 	return value
 }
 
-// Cleanup function to close unused connections
-func CloseConnections() {
-	mu.Lock()
-	defer mu.Unlock()
-
-	for storeID, client := range connections {
-		_ = client.Disconnect(context.Background())
-		delete(connections, storeID)
-	}
-}
-
 // Periodic cleanup (can be run in a separate goroutine)
-func StartCleanupRoutine(interval time.Duration) {
+func StartCleanupRoutine(interval time.Duration, maxIdleConnectionDuration time.Duration) {
+	log.Print("Starting periodic connection cleanup every " + interval.String() + " to delete unused db connections")
 	ticker := time.NewTicker(interval)
 	go func() {
 		for range ticker.C {
-			CloseConnections()
+			CloseConnections(maxIdleConnectionDuration)
 		}
 	}()
+}
+
+// Cleanup function to close unused connections
+func CloseConnections(maxIdleConnectionDuration time.Duration) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for storeID, connection := range connections {
+		if time.Since(connection.LastUsed) > maxIdleConnectionDuration {
+			_ = connection.Client.Disconnect(context.Background())
+			delete(connections, storeID)
+			log.Print("Disconnected & Deleted connection from db: " + storeID + " as its idle for last " + time.Since(connection.LastUsed).String())
+		} else {
+			//log.Print("Max. idle duration not reached for db: " + storeID)
+			//log.Print("Last used since: " + time.Since(connection.LastUsed).String())
+		}
+	}
 }

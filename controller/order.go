@@ -33,7 +33,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	store, err := ParseStore(r)
 	if err != nil {
 		response.Status = false
-		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

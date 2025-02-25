@@ -674,7 +674,10 @@ func (store *Store) FindAccountByID(
 	}
 
 	err = collection.FindOne(ctx,
-		bson.M{"_id": ID}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		bson.M{
+			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
 	if err != nil {
 		return nil, err
@@ -700,7 +703,7 @@ func (store *Store) FindAccountByReferenceID(
 	err = collection.FindOne(ctx,
 		bson.M{
 			"reference_id": referenceID,
-			"store_id":     storeID,
+			"store_id":     store.ID,
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
 	if err != nil {
@@ -730,7 +733,7 @@ func (store *Store) FindAccountByReferenceIDByName(
 		bson.M{
 			"reference_id": referenceID,
 			"name":         name,
-			"store_id":     storeID,
+			"store_id":     store.ID,
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
 	if err != nil {
@@ -813,7 +816,7 @@ func (store *Store) FindAccountByName(
 
 	filter := bson.M{
 		"name":     name,
-		"store_id": storeID,
+		"store_id": store.ID,
 	}
 
 	if referenceID != nil {
