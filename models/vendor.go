@@ -141,6 +141,9 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		SortBy: map[string]interface{}{},
 	}
 
+	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+
 	var storeID primitive.ObjectID
 	keys, ok := r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
@@ -148,6 +151,7 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		if err != nil {
 			return vendors, criterias, err
 		}
+		criterias.SearchBy["store_id"] = storeID
 	}
 
 	keys, ok = r.URL.Query()["sort"]
@@ -155,9 +159,6 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		keys[0] = strings.Replace(keys[0], "stores.", "stores."+storeID.Hex()+".", -1)
 		criterias.SortBy = GetSortByFields(keys[0])
 	}
-
-	criterias.SearchBy = make(map[string]interface{})
-	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	timeZoneOffset := 0.0
 	keys, ok = r.URL.Query()["search[timezone_offset]"]

@@ -1853,124 +1853,65 @@ func (store *Store) IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err e
 	return (count == 1), err
 }
 
-func (store *Store) ProcessPurchases() error {
+func ProcessPurchases() error {
 	log.Print("Processing purchases")
-	totalCount, err := store.GetTotalCount(bson.M{}, "purchase")
+
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
 
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching purchases:" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	/*
-		orders, err := GetAllOrders()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "purchase")
 		if err != nil {
-			return errors.New("Error fetching orders:" + err.Error())
-		}
-	*/
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		model := Purchase{}
-		err = cur.Decode(&model)
-		if err != nil {
-			return errors.New("Cursor decoding purchase error:" + err.Error())
+			return err
 		}
 
-		/*
-			for i, paymentMethod := range model.PaymentMethods {
-				if paymentMethod == "bank_account" {
-					model.PaymentMethods[i] = "bank_card"
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching purchases:" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			purchase := Purchase{}
+			err = cur.Decode(&purchase)
+			if err != nil {
+				return errors.New("Cursor decoding purchase error:" + err.Error())
+			}
+
+			vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			vendor.StoreID = purchase.StoreID
+			err = vendor.Update()
+			if err != nil {
+				return err
+			}
+
+			/*
+				err = model.Update()
+				if err != nil {
+					return errors.New("Error updating: " + err.Error())
 				}
-			}
+			*/
 
-			for i, payment := range model.Payments {
-				if payment.Method == "bank_account" {
-					model.Payments[i].Method = "bank_card"
-				}
-			}*/
-
-		for i, product := range model.Products {
-			if product.Discount > 0 {
-				model.Products[i].UnitDiscount = product.Discount / product.Quantity
-				model.Products[i].UnitDiscountPercent = product.DiscountPercent
-			}
+			bar.Add(1)
 		}
-
-		err = model.Update()
-		if err != nil {
-			return errors.New("Error updating: " + err.Error())
-		}
-
-		/*
-			err = model.ClearProductsPurchaseHistory()
-			if err != nil {
-				return errors.New("error deleting product purchase history: " + err.Error())
-			}
-
-			err = model.AddProductsPurchaseHistory()
-			if err != nil {
-				return errors.New("error Adding product purchase history: " + err.Error())
-			}
-
-
-
-
-				model.GetPayments()
-		*/
-
-		/*
-			err = model.SetProductsPurchaseStats()
-			if err != nil {
-				return errors.New("error set product purchase stats: " + err.Error())
-			}
-		*/
-
-		/*
-			model.GetPayments()
-
-			err = model.UndoAccounting()
-			if err != nil {
-				return errors.New("error undo accounting: " + err.Error())
-			}
-
-			err = model.DoAccounting()
-			if err != nil {
-				return errors.New("error doing accounting: " + err.Error())
-			}
-		*/
-
-		/*
-			err = model.Update()
-			if err != nil {
-				return errors.New("error updating purchase: " + err.Error())
-			}*/
-
-		/*
-			err = model.SetVendorPurchaseStats()
-			if err != nil {
-				return errors.New("Error setting vendor purchase stats: " + err.Error())
-			}
-
-
-		*/
-
-		bar.Add(1)
 	}
 	log.Print("Purchases DONE!")
 

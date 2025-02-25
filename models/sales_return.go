@@ -1981,158 +1981,58 @@ func (salesreturn *SalesReturn) HardDelete() (err error) {
 	return nil
 }
 
-func (store *Store) ProcessSalesReturns() error {
+func ProcessSalesReturns() error {
 	log.Print("Processing sales returns")
-	totalCount, err := store.GetTotalCount(bson.M{}, "salesreturn")
+
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-	findOptions.SetSort(GetSortByFields("created_at"))
 
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching quotations:" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	icvByStores := map[string]int64{}
-
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "salesreturn")
 		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
+			return err
 		}
-		salesReturn := SalesReturn{}
-		err = cur.Decode(&salesReturn)
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+		findOptions.SetSort(GetSortByFields("created_at"))
+
+		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
 		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
+			return errors.New("Error fetching quotations:" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
 		}
 
-		//salesReturn.InvoiceCountValue = int64(i + 1)
+		icv := int64(0)
 
-		_, ok := icvByStores[salesReturn.StoreID.Hex()]
-		if ok {
-			icvByStores[salesReturn.StoreID.Hex()]++
-		} else {
-			icvByStores[salesReturn.StoreID.Hex()] = int64(1)
-		}
-
-		salesReturn.InvoiceCountValue = icvByStores[salesReturn.StoreID.Hex()]
-
-		err = salesReturn.Update()
-		if err != nil {
-			return errors.New("Error updating: " + err.Error())
-		}
-		//salesReturn.UUID = uuid.New().String()
-
-		/*
-			for i, paymentMethod := range salesReturn.PaymentMethods {
-				if paymentMethod == "bank_account" {
-					salesReturn.PaymentMethods[i] = "bank_card"
-				}
-			}
-
-			for i, payment := range salesReturn.Payments {
-				if payment.Method == "bank_account" {
-					salesReturn.Payments[i].Method = "bank_card"
-				}
-			}
-		*/
-
-		/*
-			for i, product := range salesReturn.Products {
-				if product.Discount > 0 {
-					salesReturn.Products[i].UnitDiscount = product.Discount / product.Quantity
-					salesReturn.Products[i].UnitDiscountPercent = product.DiscountPercent
-				}
-			}
-		*/
-
-		/*salesReturn.UUID = uuid.New().String()
-		err = salesReturn.Update()
-		if err != nil {
-			return errors.New("Error updating sales return: " + err.Error())
-		}*/
-
-		/*
-			err = salesReturn.ClearProductsSalesReturnHistory()
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
 			if err != nil {
-				return err
+				return errors.New("Cursor error:" + err.Error())
 			}
-
-			err = salesReturn.CreateProductsSalesReturnHistory()
+			salesReturn := SalesReturn{}
+			err = cur.Decode(&salesReturn)
 			if err != nil {
-				return err
+				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-
-				err = salesReturn.CalculateSalesReturnProfit()
-				if err != nil {
-					return err
-				}
-
-
-
-				salesReturn.GetPayments()
-
-				err = salesReturn.SetProductsSalesReturnStats()
-				if err != nil {
-					return err
-				}
-		*/
-
-		/*
-			err = salesReturn.SetCustomerSalesReturnStats()
-			if err != nil {
-				return err
-			}
-		*/
-
-		/*
-			err = salesReturn.CalculateSalesReturnProfit()
-			if err != nil {
-				return err
-			}
-		*/
-
-		//salesReturn.UpdateOrderReturnCount()
-
-		/*
-				salesReturn.GetPayments()
-
-				err = salesReturn.UndoAccounting()
-				if err != nil {
-					return errors.New("error undo accounting: " + err.Error())
-				}
-
-				err = salesReturn.DoAccounting()
-				if err != nil {
-					return errors.New("error doing accounting: " + err.Error())
-				}
-
+			icv++
+			salesReturn.InvoiceCountValue = icv
 
 			err = salesReturn.Update()
 			if err != nil {
-				return err
+				return errors.New("Error updating: " + err.Error())
 			}
 
-			/*
-				if salesReturn.Code == "GUOJ-200042" {
-					err = salesReturn.HardDelete()
-					if err != nil {
-						return err
-					}
-				}
-		*/
-		bar.Add(1)
+			bar.Add(1)
+		}
 	}
 	log.Print("Sales Returns DONE!")
 	return nil
