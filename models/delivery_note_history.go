@@ -37,8 +37,8 @@ type DeliveryNoteHistoryStats struct {
 	TotalQuantity float64             `json:"total_quantity" bson:"total_quantity"`
 }
 
-func GetDeliveryNoteHistoryStats(filter map[string]interface{}) (stats DeliveryNoteHistoryStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+func (store *Store) GetDeliveryNoteHistoryStats(filter map[string]interface{}) (stats DeliveryNoteHistoryStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_delivery_note_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -71,7 +71,7 @@ func GetDeliveryNoteHistoryStats(filter map[string]interface{}) (stats DeliveryN
 	return stats, nil
 }
 
-func SearchDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) (models []ProductDeliveryNoteHistory, criterias SearchCriterias, err error) {
+func (store *Store) SearchDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) (models []ProductDeliveryNoteHistory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -336,7 +336,8 @@ func SearchDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) (models [
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_delivery_note_history")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -380,7 +381,12 @@ func SearchDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) (models [
 }
 
 func (deliverynote *DeliveryNote) AddProductsDeliveryNoteHistory() error {
-	exists, err := IsDeliveryNoteHistoryExistsByDeliveryNoteID(&deliverynote.ID)
+	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	exists, err := store.IsDeliveryNoteHistoryExistsByDeliveryNoteID(&deliverynote.ID)
 	if err != nil {
 		return err
 	}
@@ -389,7 +395,7 @@ func (deliverynote *DeliveryNote) AddProductsDeliveryNoteHistory() error {
 		return nil
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("product_delivery_note_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -420,8 +426,8 @@ func (deliverynote *DeliveryNote) AddProductsDeliveryNoteHistory() error {
 	return nil
 }
 
-func IsDeliveryNoteHistoryExistsByDeliveryNoteID(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+func (store *Store) IsDeliveryNoteHistoryExistsByDeliveryNoteID(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_delivery_note_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -433,25 +439,25 @@ func IsDeliveryNoteHistoryExistsByDeliveryNoteID(ID *primitive.ObjectID) (exists
 	return (count > 0), err
 }
 
-func (model *DeliveryNote) ClearProductsDeliveryNoteHistory() error {
+func (deliverynote *DeliveryNote) ClearProductsDeliveryNoteHistory() error {
 	//log.Printf("Clearing Sales history of order id:%s", order.Code)
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("product_delivery_note_history")
 	ctx := context.Background()
-	_, err := collection.DeleteMany(ctx, bson.M{"delivery_note_id": model.ID})
+	_, err := collection.DeleteMany(ctx, bson.M{"delivery_note_id": deliverynote.ID})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func ProcessDeliveryNoteHistory() error {
+func (store *Store) ProcessDeliveryNoteHistory() error {
 	log.Print("Processing delivery note history")
-	totalCount, err := GetTotalCount(bson.M{}, "product_delivery_note_history")
+	totalCount, err := store.GetTotalCount(bson.M{}, "product_delivery_note_history")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_delivery_note_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -477,7 +483,7 @@ func ProcessDeliveryNoteHistory() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		deliveryNote, err := FindDeliveryNoteByID(model.DeliveryNoteID, map[string]interface{}{})
+		deliveryNote, err := store.FindDeliveryNoteByID(model.DeliveryNoteID, map[string]interface{}{})
 		if err != nil {
 			return errors.New("Error finding delivery note:" + err.Error())
 		}
@@ -494,7 +500,7 @@ func ProcessDeliveryNoteHistory() error {
 }
 
 func (model *ProductDeliveryNoteHistory) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_delivery_note_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)

@@ -27,9 +27,17 @@ func ListCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	capitalwithdrawals := []models.CapitalWithdrawal{}
 
-	capitalwithdrawals, criterias, err := models.SearchCapitalWithdrawal(w, r)
+	capitalwithdrawals, criterias, err := store.SearchCapitalWithdrawal(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find capitalwithdrawals:" + err.Error()
@@ -39,7 +47,7 @@ func ListCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "capitalwithdrawal")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "capitalwithdrawal")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of capitalwithdrawals:" + err.Error()
@@ -47,7 +55,7 @@ func ListCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capitalwithdrawalStats, err := models.GetCapitalWithdrawalStats(criterias.SearchBy)
+	capitalwithdrawalStats, err := store.GetCapitalWithdrawalStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total"] = "Unable to find total amount of capitalwithdrawals:" + err.Error()
@@ -157,7 +165,28 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capitalwithdrawalOld, err = models.FindCapitalWithdrawalByID(&capitalwithdrawalID, bson.M{})
+	if !utils.Decode(w, r, &capitalwithdrawal) {
+		return
+	}
+
+	var store *models.Store
+
+	if capitalwithdrawal.StoreID.IsZero() {
+		response.Status = false
+		response.Errors["store_id"] = "store id is required: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	} else {
+		store, err = models.FindStoreByID(capitalwithdrawal.StoreID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors["store"] = "invalid store: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	capitalwithdrawalOld, err = store.FindCapitalWithdrawalByID(&capitalwithdrawalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["capitalwithdrawal"] = "Unable to find capitalwithdrawal:" + err.Error()
@@ -166,15 +195,11 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capitalwithdrawal, err = models.FindCapitalWithdrawalByID(&capitalwithdrawalID, bson.M{})
+	capitalwithdrawal, err = store.FindCapitalWithdrawalByID(&capitalwithdrawalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["capitalwithdrawal"] = "Unable to find capitalwithdrawal:" + err.Error()
 		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	if !utils.Decode(w, r, &capitalwithdrawal) {
 		return
 	}
 
@@ -220,7 +245,7 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capitalwithdrawal, err = models.FindCapitalWithdrawalByID(&capitalwithdrawal.ID, bson.M{})
+	capitalwithdrawal, err = store.FindCapitalWithdrawalByID(&capitalwithdrawal.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find capitalwithdrawal:" + err.Error()
@@ -265,7 +290,15 @@ func ViewCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	capitalwithdrawal, err = models.FindCapitalWithdrawalByID(&capitalwithdrawalID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capitalwithdrawal, err = store.FindCapitalWithdrawalByID(&capitalwithdrawalID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -311,7 +344,15 @@ func ViewCapitalWithdrawalByCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	capitalwithdrawal, err = models.FindCapitalWithdrawalByCode(code, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capitalwithdrawal, err = store.FindCapitalWithdrawalByCode(code, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -351,7 +392,15 @@ func DeleteCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capitalwithdrawal, err := models.FindCapitalWithdrawalByID(&capitalwithdrawalID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capitalwithdrawal, err := store.FindCapitalWithdrawalByID(&capitalwithdrawalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

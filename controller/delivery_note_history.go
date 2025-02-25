@@ -22,7 +22,15 @@ func ListDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	histories, criterias, err := models.SearchDeliveryNoteHistory(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	histories, criterias, err := store.SearchDeliveryNoteHistory(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find deliverynote history:" + err.Error()
@@ -32,7 +40,7 @@ func ListDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product_delivery_note_history")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_delivery_note_history")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
@@ -40,7 +48,7 @@ func ListDeliveryNoteHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deliveryNoteHistoryStats, err := models.GetDeliveryNoteHistoryStats(criterias.SearchBy)
+	deliveryNoteHistoryStats, err := store.GetDeliveryNoteHistoryStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_quantity"] = "Unable to find total quantity of delivery notes:" + err.Error()

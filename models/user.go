@@ -83,76 +83,76 @@ func (user *User) SetChangeLog(
 func (user *User) AttributesValueChangeEvent(userOld *User) error {
 
 	if user.Name != userOld.Name {
-
-		err := UpdateManyByCollectionName(
-			"quotation",
-			bson.M{"delivered_by": user.ID},
-			bson.M{"delivered_by_name": user.Name},
-		)
-		if err != nil {
-			return nil
-		}
-
-		err = UpdateManyByCollectionName(
-			"purchase",
-			bson.M{"order_placed_by": user.ID},
-			bson.M{"order_placed_by_name": user.Name},
-		)
-		if err != nil {
-			return nil
-		}
-
-		usedInCollections := []string{
-			"order",
-			"customer",
-			"purchase",
-			"product_category",
-			"product",
-			"quotation",
-			"signature",
-			"store",
-			"vendor",
-		}
-
-		for _, collectionName := range usedInCollections {
-
-			err := UpdateManyByCollectionName(
-				collectionName,
-				bson.M{"created_by": user.ID},
-				bson.M{"created_by_name": user.Name},
+		/*
+			err := store.UpdateManyByCollectionName(
+				"quotation",
+				bson.M{"delivered_by": user.ID},
+				bson.M{"delivered_by_name": user.Name},
 			)
 			if err != nil {
 				return nil
 			}
 
-			err = UpdateManyByCollectionName(
-				collectionName,
-				bson.M{"updated_by": user.ID},
-				bson.M{"updated_by_name": user.Name},
+			err = store.UpdateManyByCollectionName(
+				"purchase",
+				bson.M{"order_placed_by": user.ID},
+				bson.M{"order_placed_by_name": user.Name},
 			)
 			if err != nil {
 				return nil
 			}
 
-			err = UpdateManyByCollectionName(
-				collectionName,
-				bson.M{"deleted_by": user.ID},
-				bson.M{"deleted_by_name": user.Name},
-			)
-			if err != nil {
-				return nil
+			usedInCollections := []string{
+				"order",
+				"customer",
+				"purchase",
+				"product_category",
+				"product",
+				"quotation",
+				"signature",
+				"store",
+				"vendor",
 			}
 
-			err = UpdateManyByCollectionName(
-				collectionName,
-				bson.M{"change_logs.created_by": user.ID},
-				bson.M{"change_logs.$.created_by_name": user.Name},
-			)
-			if err != nil {
-				return nil
-			}
+			for _, collectionName := range usedInCollections {
 
-		}
+				err := store.UpdateManyByCollectionName(
+					collectionName,
+					bson.M{"created_by": user.ID},
+					bson.M{"created_by_name": user.Name},
+				)
+				if err != nil {
+					return nil
+				}
+
+				err = store.UpdateManyByCollectionName(
+					collectionName,
+					bson.M{"updated_by": user.ID},
+					bson.M{"updated_by_name": user.Name},
+				)
+				if err != nil {
+					return nil
+				}
+
+				err = store.UpdateManyByCollectionName(
+					collectionName,
+					bson.M{"deleted_by": user.ID},
+					bson.M{"deleted_by_name": user.Name},
+				)
+				if err != nil {
+					return nil
+				}
+
+				err = store.UpdateManyByCollectionName(
+					collectionName,
+					bson.M{"change_logs.created_by": user.ID},
+					bson.M{"change_logs.$.created_by_name": user.Name},
+				)
+				if err != nil {
+					return nil
+				}
+
+			}*/
 
 	}
 
@@ -189,7 +189,7 @@ func (user *User) UpdateForeignLabelFields() error {
 }
 
 func FindUserByEmail(email string) (user *User, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -400,7 +400,7 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -478,7 +478,7 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 }
 
 func (user *User) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -527,7 +527,7 @@ func (user *User) SavePhoto() error {
 }
 
 func (user *User) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -566,7 +566,7 @@ func (user *User) Update() error {
 }
 
 func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -606,7 +606,7 @@ func FindUserByID(
 	ID *primitive.ObjectID,
 	selectFields bson.M,
 ) (user *User, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -641,7 +641,7 @@ func FindUserByID(
 }
 
 func (user *User) IsEmailExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -661,7 +661,7 @@ func (user *User) IsEmailExists() (exists bool, err error) {
 }
 
 func (user *User) IsPhoneExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -681,7 +681,7 @@ func (user *User) IsPhoneExists() (exists bool, err error) {
 }
 
 func IsUserExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("user")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)

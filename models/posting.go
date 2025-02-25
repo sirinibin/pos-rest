@@ -55,8 +55,8 @@ type PostingListStats struct {
 	CreditTotalBoughtDown float64             `json:"credit_total_bought_down" bson:"credit_total_bought_down"`
 }
 
-func GetPostingListStats(filter map[string]interface{}, startDate time.Time, endDate time.Time) (stats PostingListStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+func (store *Store) GetPostingListStats(filter map[string]interface{}, startDate time.Time, endDate time.Time) (stats PostingListStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -286,7 +286,7 @@ func GetPostingListStats(filter map[string]interface{}, startDate time.Time, end
 	return stats, nil
 }
 
-func SearchPosting(w http.ResponseWriter, r *http.Request) (
+func (store *Store) SearchPosting(w http.ResponseWriter, r *http.Request) (
 	models []Posting,
 	criterias SearchCriterias,
 	err error,
@@ -697,7 +697,7 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -741,9 +741,9 @@ func SearchPosting(w http.ResponseWriter, r *http.Request) (
 
 }
 
-func RemovePostingsByReferenceID(referenceID primitive.ObjectID) error {
+func (store *Store) RemovePostingsByReferenceID(referenceID primitive.ObjectID) error {
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	_, err := collection.DeleteMany(ctx, bson.M{
 		"reference_id": referenceID,
 	})
@@ -755,13 +755,18 @@ func RemovePostingsByReferenceID(referenceID primitive.ObjectID) error {
 }
 
 func (ledger *Ledger) GetRelatedAccounts() (map[string]Account, error) {
+	store, err := FindStoreByID(ledger.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	accounts := map[string]Account{}
 	for _, journal := range ledger.Journals {
 		if journal.AccountID.IsZero() {
 			continue
 		}
 
-		account, err := FindAccountByID(journal.AccountID, bson.M{})
+		account, err := store.FindAccountByID(journal.AccountID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
@@ -809,6 +814,11 @@ func GetGroupString(groups []string) string {
 }
 
 func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
+	store, err := FindStoreByID(ledger.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 
 	for k1, journal := range ledger.Journals {
@@ -817,7 +827,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			continue
 		}
 
-		account, err := FindAccountByID(journal.AccountID, bson.M{})
+		account, err := store.FindAccountByID(journal.AccountID, bson.M{})
 		if err != nil {
 			return nil, errors.New("error finding account: " + journal.AccountName)
 		}
@@ -1021,7 +1031,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 }
 
 func (posting *Posting) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	collection := db.GetDB("store_" + posting.StoreID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1036,7 +1046,7 @@ func (posting *Posting) Insert() error {
 }
 
 func (posting *Posting) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	collection := db.GetDB("store_" + posting.StoreID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1059,11 +1069,11 @@ func (posting *Posting) Update() error {
 	return nil
 }
 
-func FindPostingByID(
+func (store *Store) FindPostingByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (posting *Posting, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1082,8 +1092,8 @@ func FindPostingByID(
 	return posting, err
 }
 
-func IsPostingExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+func (store *Store) IsPostingExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1095,13 +1105,12 @@ func IsPostingExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessPostings() error {
+func (store *Store) ProcessPostings() error {
 	log.Print("Processing postings")
 	//postingCount := 0
 
 	//counts := map[string]int{}
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)

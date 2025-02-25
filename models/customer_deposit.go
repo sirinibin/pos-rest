@@ -57,11 +57,15 @@ func (customerdeposit *CustomerDeposit) AttributesValueChangeEvent(customerdepos
 }
 
 func (customerdeposit *CustomerDeposit) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	customerdeposit.CategoryName = []string{}
 
 	if customerdeposit.CustomerID != nil {
-		customer, err := FindCustomerByID(customerdeposit.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -109,8 +113,8 @@ type CustomerDepositStats struct {
 	Total float64             `json:"total" bson:"total"`
 }
 
-func GetCustomerDepositStats(filter map[string]interface{}) (stats CustomerDepositStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+func (store *Store) GetCustomerDepositStats(filter map[string]interface{}) (stats CustomerDepositStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -142,7 +146,7 @@ func GetCustomerDepositStats(filter map[string]interface{}) (stats CustomerDepos
 	return stats, nil
 }
 
-func SearchCustomerDeposit(w http.ResponseWriter, r *http.Request) (customerdeposits []CustomerDeposit, criterias SearchCriterias, err error) {
+func (store *Store) SearchCustomerDeposit(w http.ResponseWriter, r *http.Request) (customerdeposits []CustomerDeposit, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -383,7 +387,7 @@ func SearchCustomerDeposit(w http.ResponseWriter, r *http.Request) (customerdepo
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -463,8 +467,14 @@ func SearchCustomerDeposit(w http.ResponseWriter, r *http.Request) (customerdepo
 }
 
 func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if scenario == "update" {
 		if customerdeposit.ID.IsZero() {
@@ -472,7 +482,7 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsCustomerDepositExists(&customerdeposit.ID)
+		exists, err := store.IsCustomerDepositExists(&customerdeposit.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -503,7 +513,7 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 	if customerdeposit.CustomerID == nil || customerdeposit.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {
-		exists, err := IsCustomerExists(customerdeposit.CustomerID)
+		exists, err := store.IsCustomerExists(customerdeposit.CustomerID)
 		if err != nil {
 			errs["customer_id"] = err.Error()
 			return errs
@@ -568,11 +578,10 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 	return errs
 }
 
-func FindLastCustomerDeposit(
+func (store *Store) FindLastCustomerDeposit(
 	selectFields map[string]interface{},
 ) (customerdeposit *CustomerDeposit, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -594,12 +603,11 @@ func FindLastCustomerDeposit(
 	return customerdeposit, err
 }
 
-func FindLastCustomerDepositByStoreID(
+func (store *Store) FindLastCustomerDepositByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (customerdeposit *CustomerDeposit, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -620,10 +628,16 @@ func FindLastCustomerDepositByStoreID(
 }
 
 func (customerdeposit *CustomerDeposit) MakeCode() error {
-	lastCustomerDeposit, err := FindLastCustomerDepositByStoreID(customerdeposit.StoreID, bson.M{})
+	store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	lastCustomerDeposit, err := store.FindLastCustomerDepositByStoreID(customerdeposit.StoreID, bson.M{})
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
+
 	if lastCustomerDeposit == nil {
 		store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
 		if err != nil {
@@ -669,7 +683,7 @@ func (customerdeposit *CustomerDeposit) MakeCode() error {
 }
 
 func (customerdeposit *CustomerDeposit) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + customerdeposit.StoreID.Hex()).Collection("customerdeposit")
 	customerdeposit.ID = primitive.NewObjectID()
 
 	if len(customerdeposit.Code) == 0 {
@@ -729,7 +743,7 @@ func (customerdeposit *CustomerDeposit) SaveImages() error {
 }
 
 func (customerdeposit *CustomerDeposit) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + customerdeposit.StoreID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -757,7 +771,7 @@ func (customerdeposit *CustomerDeposit) Update() error {
 }
 
 func (customerdeposit *CustomerDeposit) DeleteCustomerDeposit(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + customerdeposit.StoreID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -791,12 +805,11 @@ func (customerdeposit *CustomerDeposit) DeleteCustomerDeposit(tokenClaims TokenC
 	return nil
 }
 
-func FindCustomerDepositByCode(
+func (store *Store) FindCustomerDepositByCode(
 	code string,
 	selectFields map[string]interface{},
 ) (customerdeposit *CustomerDeposit, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -815,12 +828,11 @@ func FindCustomerDepositByCode(
 	return customerdeposit, err
 }
 
-func FindCustomerDepositByID(
+func (store *Store) FindCustomerDepositByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (customerdeposit *CustomerDeposit, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -855,7 +867,7 @@ func FindCustomerDepositByID(
 }
 
 func (customerdeposit *CustomerDeposit) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + customerdeposit.StoreID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -874,8 +886,8 @@ func (customerdeposit *CustomerDeposit) IsCodeExists() (exists bool, err error) 
 	return (count > 0), err
 }
 
-func IsCustomerDepositExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+func (store *Store) IsCustomerDepositExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -887,8 +899,8 @@ func IsCustomerDepositExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessCustomerDeposits() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerdeposit")
+func (store *Store) ProcessCustomerDeposits() error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -949,7 +961,12 @@ func (customerDeposit *CustomerDeposit) DoAccounting() error {
 }
 
 func (customerDeposit *CustomerDeposit) UndoAccounting() error {
-	ledger, err := FindLedgerByReferenceID(customerDeposit.ID, *customerDeposit.StoreID, bson.M{})
+	store, err := FindStoreByID(customerDeposit.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(customerDeposit.ID, *customerDeposit.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
@@ -963,12 +980,12 @@ func (customerDeposit *CustomerDeposit) UndoAccounting() error {
 		}
 	}
 
-	err = RemoveLedgerByReferenceID(customerDeposit.ID)
+	err = store.RemoveLedgerByReferenceID(customerDeposit.ID)
 	if err != nil {
 		return err
 	}
 
-	err = RemovePostingsByReferenceID(customerDeposit.ID)
+	err = store.RemovePostingsByReferenceID(customerDeposit.ID)
 	if err != nil {
 		return err
 	}
@@ -982,15 +999,20 @@ func (customerDeposit *CustomerDeposit) UndoAccounting() error {
 }
 
 func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err error) {
+	store, err := FindStoreByID(customerDeposit.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 
-	customer, err := FindCustomerByID(customerDeposit.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(customerDeposit.CustomerID, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
 	referenceModel := "customer"
-	customerAccount, err := CreateAccountIfNotExists(
+	customerAccount, err := store.CreateAccountIfNotExists(
 		customerDeposit.StoreID,
 		&customer.ID,
 		&referenceModel,
@@ -1001,12 +1023,12 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err erro
 		return nil, err
 	}
 
-	cashAccount, err := CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Bank", nil)
 	if err != nil {
 		return nil, err
 	}

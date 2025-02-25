@@ -54,7 +54,7 @@ type Quotation struct {
 	SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	SignatureDateStr         string              `json:"signature_date_str,omitempty"`
 	DeliveredByUser          *User               `json:"delivered_by_user,omitempty"`
-	DeliveredBySignature     *UserSignature          `json:"delivered_by_signature,omitempty"`
+	DeliveredBySignature     *UserSignature      `json:"delivered_by_signature,omitempty"`
 	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float64             `bson:"discount" json:"discount"`
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
@@ -90,8 +90,8 @@ type Quotation struct {
 	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
-func UpdateQuotationProfit() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+func (store *Store) UpdateQuotationProfit() error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -248,8 +248,8 @@ func (model *Quotation) CalculateQuotationProfit() error {
 	return nil
 }
 
-func GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+func (store *Store) GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -403,6 +403,10 @@ func (quotation *Quotation) AttributesValueChangeEvent(quotationOld *Quotation) 
 }
 
 func (quotation *Quotation) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if quotation.StoreID != nil {
 		store, err := FindStoreByID(quotation.StoreID, bson.M{"id": 1, "name": 1})
@@ -413,7 +417,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	}
 
 	if quotation.CustomerID != nil {
-		customer, err := FindCustomerByID(quotation.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -429,7 +433,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	}
 
 	if quotation.DeliveredBySignatureID != nil {
-		deliveredBySignature, err := FindSignatureByID(quotation.DeliveredBySignatureID, bson.M{"id": 1, "name": 1})
+		deliveredBySignature, err := store.FindSignatureByID(quotation.DeliveredBySignatureID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -461,7 +465,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range quotation.Products {
-		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
 		}
@@ -518,7 +522,7 @@ func (quotation *Quotation) FindVatPrice() {
 	quotation.VatPrice = vatPrice
 }
 
-func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quotation, criterias SearchCriterias, err error) {
+func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quotation, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -756,7 +760,7 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -829,7 +833,7 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 			quotation.Store, _ = FindStoreByID(quotation.StoreID, storeSelectFields)
 		}
 		if _, ok := criterias.Select["customer.id"]; ok {
-			quotation.Customer, _ = FindCustomerByID(quotation.CustomerID, customerSelectFields)
+			quotation.Customer, _ = store.FindCustomerByID(quotation.CustomerID, customerSelectFields)
 		}
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
 			quotation.CreatedByUser, _ = FindUserByID(quotation.CreatedBy, createdByUserSelectFields)
@@ -848,8 +852,12 @@ func SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quota
 }
 
 func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		errs["store_id"] = "invalid store id"
+	}
 
 	if govalidator.IsNull(quotation.Status) {
 		errs["status"] = "Status is required"
@@ -904,7 +912,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsQuotationExists(&quotation.ID)
+		exists, err := store.IsQuotationExists(&quotation.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -933,7 +941,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 	if quotation.CustomerID == nil || quotation.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {
-		exists, err := IsCustomerExists(quotation.CustomerID)
+		exists, err := store.IsCustomerExists(quotation.CustomerID)
 		if err != nil {
 			errs["customer_id"] = err.Error()
 		}
@@ -962,7 +970,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 	}
 
 	if quotation.DeliveredBySignatureID != nil && !quotation.DeliveredBySignatureID.IsZero() {
-		exists, err := IsSignatureExists(quotation.DeliveredBySignatureID)
+		exists, err := store.IsSignatureExists(quotation.DeliveredBySignatureID)
 		if err != nil {
 			errs["delivered_by_signature_id"] = err.Error()
 			return errs
@@ -977,7 +985,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		if product.ProductID.IsZero() {
 			errs["product_id_"+strconv.Itoa(index)] = "Product is required for quotation"
 		} else {
-			exists, err := IsProductExists(&product.ProductID)
+			exists, err := store.IsProductExists(&product.ProductID)
 			if err != nil {
 				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
@@ -1029,7 +1037,12 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 }
 
 func (quotation *Quotation) GenerateCode(startFrom int, storeCode string) (string, error) {
-	count, err := GetTotalCount(bson.M{"store_id": quotation.StoreID}, "quotation")
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return "", err
+	}
+
+	count, err := store.GetTotalCount(bson.M{"store_id": quotation.StoreID}, "quotation")
 	if err != nil {
 		return "", err
 	}
@@ -1038,7 +1051,7 @@ func (quotation *Quotation) GenerateCode(startFrom int, storeCode string) (strin
 }
 
 func (quotation *Quotation) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1052,7 +1065,7 @@ func (quotation *Quotation) Insert() error {
 }
 
 func (store *Store) GetQuotationsCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1114,7 +1127,7 @@ func (quotation *Quotation) MakeCode() error {
 		return quotation.MakeRedisCode()
 	}
 
-	lastQuotation, err := FindLastQuotationByStoreID(quotation.StoreID, bson.M{})
+	lastQuotation, err := store.FindLastQuotationByStoreID(quotation.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
@@ -1161,11 +1174,11 @@ func (quotation *Quotation) MakeCode() error {
 	return nil
 }
 
-func FindLastQuotationByStoreID(
+func (store *Store) FindLastQuotationByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (quotation *Quotation, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1186,7 +1199,7 @@ func FindLastQuotationByStoreID(
 }
 
 func (quotation *Quotation) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1206,7 +1219,7 @@ func (quotation *Quotation) IsCodeExists() (exists bool, err error) {
 }
 
 func (quotation *Quotation) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1225,7 +1238,7 @@ func (quotation *Quotation) Update() error {
 }
 
 func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1259,11 +1272,11 @@ func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error)
 	return nil
 }
 
-func FindQuotationByID(
+func (store *Store) FindQuotationByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (quotation *Quotation, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1286,7 +1299,7 @@ func FindQuotationByID(
 
 	if _, ok := selectFields["customer.id"]; ok {
 		customerSelectFields := ParseRelationalSelectString(selectFields, "customer")
-		quotation.Customer, _ = FindCustomerByID(quotation.CustomerID, customerSelectFields)
+		quotation.Customer, _ = store.FindCustomerByID(quotation.CustomerID, customerSelectFields)
 	}
 
 	if _, ok := selectFields["created_by_user.id"]; ok {
@@ -1307,8 +1320,8 @@ func FindQuotationByID(
 	return quotation, err
 }
 
-func IsQuotationExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+func (store *Store) IsQuotationExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1320,9 +1333,9 @@ func IsQuotationExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessQuotations() error {
+func (store *Store) ProcessQuotations() error {
 	log.Print("Processing quotations")
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -1397,7 +1410,7 @@ type ProductQuotationStats struct {
 }
 
 func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1469,8 +1482,13 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 }
 
 func (quotation *Quotation) SetProductsQuotationStats() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	for _, quotationProduct := range quotation.Products {
-		product, err := FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
+		product, err := store.FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
 		if err != nil {
 			return err
 		}
@@ -1492,7 +1510,7 @@ type CustomerQuotationStats struct {
 }
 
 func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1574,8 +1592,12 @@ func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.O
 }
 
 func (quotation *Quotation) SetCustomerQuotationStats() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
-	customer, err := FindCustomerByID(quotation.CustomerID, map[string]interface{}{})
+	customer, err := store.FindCustomerByID(quotation.CustomerID, map[string]interface{}{})
 	if err != nil {
 		return err
 	}

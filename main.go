@@ -13,7 +13,6 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
-	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
@@ -22,8 +21,11 @@ import (
 // testing
 func main() {
 	fmt.Println("Start POS Restful API")
-	db.Client()
+	db.Client("")
 	db.InitRedis()
+	go func() {
+		db.StartCleanupRoutine(10 * time.Minute)
+	}()
 	/*
 		RemoveAllIndexes()
 
@@ -488,7 +490,7 @@ func main() {
 }
 
 func ListAllIndexes(collectionName string) {
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	collection := db.Client("").Database(db.GetPosDB()).Collection(collectionName)
 	indexView := collection.Indexes()
 	opts := options.ListIndexes().SetMaxTime(2 * time.Second)
 	cursor, err := indexView.List(context.TODO(), opts)
@@ -512,26 +514,26 @@ func ListAllIndexes(collectionName string) {
 
 func RemoveAllIndexes() {
 	log.Print("Removing all indexes")
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("product")
 	collection.Indexes().DropAll(context.Background())
 
-	collection = db.Client().Database(db.GetPosDB()).Collection("order")
+	collection = db.Client("").Database(db.GetPosDB()).Collection("order")
 	collection.Indexes().DropAll(context.Background())
 
-	collection = db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection = db.Client("").Database(db.GetPosDB()).Collection("salesreturn")
 	collection.Indexes().DropAll(context.Background())
 
-	collection = db.Client().Database(db.GetPosDB()).Collection("purchase")
+	collection = db.Client("").Database(db.GetPosDB()).Collection("purchase")
 	collection.Indexes().DropAll(context.Background())
 
-	collection = db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection = db.Client("").Database(db.GetPosDB()).Collection("purchasereturn")
 	collection.Indexes().DropAll(context.Background())
 
 }
 
 // CreateIndex - creates an index for a specific field in a collection
 func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, overrideLang string) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	collection := db.Client("").Database(db.GetPosDB()).Collection(collectionName)
 	//collection.Indexes().DropAll(context.Background())
 
 	indexOptions := options.Index()
@@ -575,11 +577,6 @@ func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, o
 
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
-	err := models.ProcessSalesReturns()
-	if err != nil {
-		log.Print(err)
-	}
-
 	/*
 		err := models.ProcessProductCategories()
 		if err != nil {

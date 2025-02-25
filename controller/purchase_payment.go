@@ -28,7 +28,15 @@ func ListPurchasePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasepayments, criterias, err := models.SearchPurchasePayment(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasepayments, criterias, err := store.SearchPurchasePayment(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find purchasepayments:" + err.Error()
@@ -38,7 +46,7 @@ func ListPurchasePayment(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchase_payment")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchase_payment")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of purchasepayments:" + err.Error()
@@ -46,7 +54,7 @@ func ListPurchasePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasepaymentStats, err := models.GetPurchasePaymentStats(criterias.SearchBy)
+	purchasepaymentStats, err := store.GetPurchasePaymentStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_payment"] = "Unable to find total amount of purchasepayment:" + err.Error()
@@ -120,8 +128,16 @@ func CreatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	//Updating purchase.payments
-	purchase, _ := models.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
+	purchase, _ := store.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
 	purchase.GetPayments()
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()
@@ -160,7 +176,15 @@ func UpdatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasepayment, err = models.FindPurchasePaymentByID(&purchasepaymentID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasepayment, err = store.FindPurchasePaymentByID(&purchasepaymentID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -206,12 +230,12 @@ func UpdatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Updating purchase.payments
-	purchase, _ := models.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
+	purchase, _ := store.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
 	purchase.GetPayments()
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()
 
-	purchasepayment, err = models.FindPurchasePaymentByID(&purchasepayment.ID, bson.M{})
+	purchasepayment, err = store.FindPurchasePaymentByID(&purchasepayment.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find purchase payment:" + err.Error()
@@ -258,7 +282,15 @@ func ViewPurchasePayment(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	purchasepayment, err = models.FindPurchasePaymentByID(&purchasepaymentID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasepayment, err = store.FindPurchasePaymentByID(&purchasepaymentID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -306,7 +338,15 @@ func DeletePurchasePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasePayment, err := models.FindPurchasePaymentByID(&purchasePaymentID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasePayment, err := store.FindPurchasePaymentByID(&purchasePaymentID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Error finding purchase payment: " + err.Error()
@@ -328,7 +368,7 @@ func DeletePurchasePayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Updating purchase.payments
-	purchase, _ := models.FindPurchaseByID(purchasePayment.PurchaseID, map[string]interface{}{})
+	purchase, _ := store.FindPurchaseByID(purchasePayment.PurchaseID, map[string]interface{}{})
 	purchase.GetPayments()
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()

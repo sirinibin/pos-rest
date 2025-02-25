@@ -58,11 +58,15 @@ func (expense *Expense) AttributesValueChangeEvent(expenseOld *Expense) error {
 }
 
 func (expense *Expense) UpdateForeignLabelFields() error {
-
 	expense.CategoryName = []string{}
 
+	store, err := FindStoreByID(expense.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	for _, categoryID := range expense.CategoryID {
-		expenseCategory, err := FindExpenseCategoryByID(categoryID, bson.M{"id": 1, "name": 1})
+		expenseCategory, err := store.FindExpenseCategoryByID(categoryID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error Finding expense category id:" + categoryID.Hex() + ",error:" + err.Error())
 		}
@@ -70,7 +74,7 @@ func (expense *Expense) UpdateForeignLabelFields() error {
 	}
 
 	for _, category := range expense.Category {
-		expenseCategory, err := FindExpenseCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
+		expenseCategory, err := store.FindExpenseCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error Finding expense category id:" + category.ID.Hex() + ",error:" + err.Error())
 		}
@@ -118,8 +122,8 @@ type ExpenseStats struct {
 	Total float64             `json:"total" bson:"total"`
 }
 
-func GetExpenseStats(filter map[string]interface{}) (stats ExpenseStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func (store *Store) GetExpenseStats(filter map[string]interface{}) (stats ExpenseStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -151,7 +155,7 @@ func GetExpenseStats(filter map[string]interface{}) (stats ExpenseStats, err err
 	return stats, nil
 }
 
-func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, criterias SearchCriterias, err error) {
+func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -387,7 +391,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -454,7 +458,7 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 
 		if _, ok := criterias.Select["category.id"]; ok {
 			for _, categoryID := range expense.CategoryID {
-				category, _ := FindExpenseCategoryByID(categoryID, categorySelectFields)
+				category, _ := store.FindExpenseCategoryByID(categoryID, categorySelectFields)
 				expense.Category = append(expense.Category, category)
 			}
 		}
@@ -479,8 +483,14 @@ func SearchExpense(w http.ResponseWriter, r *http.Request) (expenses []Expense, 
 }
 
 func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(expense.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if scenario == "update" {
 		if expense.ID.IsZero() {
@@ -488,7 +498,7 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsExpenseExists(&expense.ID)
+		exists, err := store.IsExpenseExists(&expense.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -547,7 +557,7 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 		errs["category_id"] = "Atleast 1 category is required"
 	} else {
 		for i, categoryID := range expense.CategoryID {
-			exists, err := IsExpenseCategoryExists(categoryID)
+			exists, err := store.IsExpenseCategoryExists(categoryID)
 			if err != nil {
 				errs["category_id_"+strconv.Itoa(i)] = err.Error()
 			}
@@ -585,11 +595,10 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 	return errs
 }
 
-func FindLastExpense(
+func (store *Store) FindLastExpense(
 	selectFields map[string]interface{},
 ) (expense *Expense, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -611,12 +620,11 @@ func FindLastExpense(
 	return expense, err
 }
 
-func FindLastExpenseByStoreID(
+func (store *Store) FindLastExpenseByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (expense *Expense, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -637,7 +645,12 @@ func FindLastExpenseByStoreID(
 }
 
 func (expense *Expense) MakeCode() error {
-	lastExpense, err := FindLastExpenseByStoreID(expense.StoreID, bson.M{})
+	store, err := FindStoreByID(expense.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	lastExpense, err := store.FindLastExpenseByStoreID(expense.StoreID, bson.M{})
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
@@ -686,7 +699,7 @@ func (expense *Expense) MakeCode() error {
 }
 
 func (expense *Expense) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")
 	expense.ID = primitive.NewObjectID()
 
 	if len(expense.Code) == 0 {
@@ -746,7 +759,7 @@ func (expense *Expense) SaveImages() error {
 }
 
 func (expense *Expense) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -774,7 +787,7 @@ func (expense *Expense) Update() error {
 }
 
 func (expense *Expense) DeleteExpense(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -808,12 +821,11 @@ func (expense *Expense) DeleteExpense(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindExpenseByCode(
+func (store *Store) FindExpenseByCode(
 	code string,
 	selectFields map[string]interface{},
 ) (expense *Expense, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -832,12 +844,11 @@ func FindExpenseByCode(
 	return expense, err
 }
 
-func FindExpenseByID(
+func (store *Store) FindExpenseByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (expense *Expense, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -856,7 +867,7 @@ func FindExpenseByID(
 	if _, ok := selectFields["category.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "category")
 		for _, categoryID := range expense.CategoryID {
-			category, _ := FindExpenseCategoryByID(categoryID, fields)
+			category, _ := store.FindExpenseCategoryByID(categoryID, fields)
 			expense.Category = append(expense.Category, category)
 		}
 
@@ -881,7 +892,7 @@ func FindExpenseByID(
 }
 
 func (expense *Expense) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -900,8 +911,8 @@ func (expense *Expense) IsCodeExists() (exists bool, err error) {
 	return (count > 0), err
 }
 
-func IsExpenseExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+func (store *Store) IsExpenseExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -913,14 +924,14 @@ func IsExpenseExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessExpenses() error {
+func (store *Store) ProcessExpenses() error {
 	log.Print("Processing expenses")
-	totalCount, err := GetTotalCount(bson.M{}, "expense")
+	totalCount, err := store.GetTotalCount(bson.M{}, "expense")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -997,7 +1008,12 @@ func (expense *Expense) DoAccounting() error {
 }
 
 func (expense *Expense) UndoAccounting() error {
-	ledger, err := FindLedgerByReferenceID(expense.ID, *expense.StoreID, bson.M{})
+	store, err := FindStoreByID(expense.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(expense.ID, *expense.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
@@ -1011,12 +1027,12 @@ func (expense *Expense) UndoAccounting() error {
 		}
 	}
 
-	err = RemoveLedgerByReferenceID(expense.ID)
+	err = store.RemoveLedgerByReferenceID(expense.ID)
 	if err != nil {
 		return err
 	}
 
-	err = RemovePostingsByReferenceID(expense.ID)
+	err = store.RemovePostingsByReferenceID(expense.ID)
 	if err != nil {
 		return err
 	}
@@ -1030,14 +1046,19 @@ func (expense *Expense) UndoAccounting() error {
 }
 
 func (expense *Expense) CreateLedger() (ledger *Ledger, err error) {
+	store, err := FindStoreByID(expense.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
-	expenseCategory, err := FindExpenseCategoryByID(expense.CategoryID[0], bson.M{})
+	expenseCategory, err := store.FindExpenseCategoryByID(expense.CategoryID[0], bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
 	referenceModel := "expense_category"
-	expenseAccount, err := CreateAccountIfNotExists(
+	expenseAccount, err := store.CreateAccountIfNotExists(
 		expense.StoreID,
 		&expenseCategory.ID,
 		&referenceModel,
@@ -1048,12 +1069,12 @@ func (expense *Expense) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
-	cashAccount, err := CreateAccountIfNotExists(expense.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(expense.StoreID, nil, nil, "Cash", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := CreateAccountIfNotExists(expense.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(expense.StoreID, nil, nil, "Bank", nil)
 	if err != nil {
 		return nil, err
 	}

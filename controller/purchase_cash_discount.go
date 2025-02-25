@@ -28,7 +28,15 @@ func ListPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasecashdiscounts, criterias, err := models.SearchPurchaseCashDiscount(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasecashdiscounts, criterias, err := store.SearchPurchaseCashDiscount(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find purchasecashdiscounts:" + err.Error()
@@ -38,7 +46,7 @@ func ListPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchase_cash_discount")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchase_cash_discount")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of purchasecashdiscounts:" + err.Error()
@@ -46,7 +54,7 @@ func ListPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasecashdiscountStats, err := models.GetPurchaseCashDiscountStats(criterias.SearchBy)
+	purchasecashdiscountStats, err := store.GetPurchaseCashDiscountStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_purchase"] = "Unable to find total amount of purchasecashdiscount:" + err.Error()
@@ -153,8 +161,15 @@ func UpdatePurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	purchasecashdiscount, err = models.FindPurchaseCashDiscountByID(&purchasecashdiscountID, bson.M{})
+	purchasecashdiscount, err = store.FindPurchaseCashDiscountByID(&purchasecashdiscountID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -199,7 +214,7 @@ func UpdatePurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasecashdiscount, err = models.FindPurchaseCashDiscountByID(&purchasecashdiscount.ID, bson.M{})
+	purchasecashdiscount, err = store.FindPurchaseCashDiscountByID(&purchasecashdiscount.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find purchase cash discount:" + err.Error()
@@ -246,7 +261,15 @@ func ViewPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	purchasecashdiscount, err = models.FindPurchaseCashDiscountByID(&purchasecashdiscountID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasecashdiscount, err = store.FindPurchaseCashDiscountByID(&purchasecashdiscountID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

@@ -22,7 +22,15 @@ func ListPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	histories, criterias, err := models.SearchPurchaseReturnHistory(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	histories, criterias, err := store.SearchPurchaseReturnHistory(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find purchase return history:" + err.Error()
@@ -32,7 +40,7 @@ func ListPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product_purchase_return_history")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_purchase_return_history")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of purchase return:" + err.Error()
@@ -40,7 +48,7 @@ func ListPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchaseReturnHistoryStats, err := models.GetPurchaseReturnHistoryStats(criterias.SearchBy)
+	purchaseReturnHistoryStats, err := store.GetPurchaseReturnHistoryStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_purchase"] = "Unable to find total amount of purchase return:" + err.Error()

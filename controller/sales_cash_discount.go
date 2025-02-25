@@ -28,7 +28,15 @@ func ListSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salescashdiscounts, criterias, err := models.SearchSalesCashDiscount(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salescashdiscounts, criterias, err := store.SearchSalesCashDiscount(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find salescashdiscounts:" + err.Error()
@@ -38,7 +46,7 @@ func ListSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "sales_cash_discount")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "sales_cash_discount")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of salescashdiscounts:" + err.Error()
@@ -46,7 +54,7 @@ func ListSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salescashdiscountStats, err := models.GetSalesCashDiscountStats(criterias.SearchBy)
+	salescashdiscountStats, err := store.GetSalesCashDiscountStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_cash_discount"] = "Unable to find total amount of salescashdiscount:" + err.Error()
@@ -120,7 +128,15 @@ func CreateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := models.FindOrderByID(salescashdiscount.OrderID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err := store.FindOrderByID(salescashdiscount.OrderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["sales"] = "Failed to find sales: " + err.Error()
@@ -178,7 +194,15 @@ func UpdateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salescashdiscount, err = models.FindSalesCashDiscountByID(&salescashdiscountID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salescashdiscount, err = store.FindSalesCashDiscountByID(&salescashdiscountID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -223,7 +247,7 @@ func UpdateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salescashdiscount, err = models.FindSalesCashDiscountByID(&salescashdiscount.ID, bson.M{})
+	salescashdiscount, err = store.FindSalesCashDiscountByID(&salescashdiscount.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find sales cash discount:" + err.Error()
@@ -231,7 +255,7 @@ func UpdateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := models.FindOrderByID(salescashdiscount.OrderID, bson.M{})
+	order, err := store.FindOrderByID(salescashdiscount.OrderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["sales"] = "Failed to find sales: " + err.Error()
@@ -294,7 +318,15 @@ func ViewSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	salescashdiscount, err = models.FindSalesCashDiscountByID(&salescashdiscountID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salescashdiscount, err = store.FindSalesCashDiscountByID(&salescashdiscountID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

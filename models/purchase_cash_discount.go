@@ -63,6 +63,10 @@ func (purchaseCashDiscount *PurchaseCashDiscount) AttributesValueChangeEvent(pur
 */
 
 func (purchaseCashDiscount *PurchaseCashDiscount) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(purchaseCashDiscount.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if purchaseCashDiscount.StoreID != nil && !purchaseCashDiscount.StoreID.IsZero() {
 		store, err := FindStoreByID(purchaseCashDiscount.StoreID, bson.M{"id": 1, "name": 1})
@@ -75,7 +79,7 @@ func (purchaseCashDiscount *PurchaseCashDiscount) UpdateForeignLabelFields() err
 	}
 
 	if purchaseCashDiscount.PurchaseID != nil && !purchaseCashDiscount.PurchaseID.IsZero() {
-		purchase, err := FindPurchaseByID(purchaseCashDiscount.PurchaseID, bson.M{"id": 1, "code": 1})
+		purchase, err := store.FindPurchaseByID(purchaseCashDiscount.PurchaseID, bson.M{"id": 1, "code": 1})
 		if err != nil {
 			return err
 		}
@@ -103,7 +107,7 @@ func (purchaseCashDiscount *PurchaseCashDiscount) UpdateForeignLabelFields() err
 	return nil
 }
 
-func SearchPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) (models []PurchaseCashDiscount, criterias SearchCriterias, err error) {
+func (store *Store) SearchPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) (models []PurchaseCashDiscount, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -267,7 +271,8 @@ func SearchPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) (models 
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_cash_discount")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_cash_discount")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -310,8 +315,14 @@ func SearchPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) (models 
 }
 
 func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(purchaseCashDiscount.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	var oldPurchaseCashDiscount *PurchaseCashDiscount
 
@@ -321,7 +332,7 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsPurchaseCashDiscountExists(&purchaseCashDiscount.ID)
+		exists, err := store.IsPurchaseCashDiscountExists(&purchaseCashDiscount.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -332,7 +343,7 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 			errs["id"] = "Invalid purchase cash discount:" + purchaseCashDiscount.ID.Hex()
 		}
 
-		oldPurchaseCashDiscount, err = FindPurchaseCashDiscountByID(&purchaseCashDiscount.ID, bson.M{})
+		oldPurchaseCashDiscount, err = store.FindPurchaseCashDiscountByID(&purchaseCashDiscount.ID, bson.M{})
 		if err != nil {
 			errs["sales_cash_discount"] = err.Error()
 			return errs
@@ -348,12 +359,12 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 		errs["amount"] = "Amount should be > 0"
 	}
 
-	purchaseCashDiscountStats, err := GetPurchaseCashDiscountStats(bson.M{"purchase_id": purchaseCashDiscount.PurchaseID})
+	purchaseCashDiscountStats, err := store.GetPurchaseCashDiscountStats(bson.M{"purchase_id": purchaseCashDiscount.PurchaseID})
 	if err != nil {
 		return errs
 	}
 
-	purchase, err := FindPurchaseByID(purchaseCashDiscount.PurchaseID, bson.M{})
+	purchase, err := store.FindPurchaseByID(purchaseCashDiscount.PurchaseID, bson.M{})
 	if err != nil {
 		return errs
 	}
@@ -375,7 +386,7 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Validate(w http.ResponseWriter
 }
 
 func (purchaseCashDiscount *PurchaseCashDiscount) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_cash_discount")
+	collection := db.GetDB("store_" + purchaseCashDiscount.StoreID.Hex()).Collection("purchase_cash_discount")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -393,7 +404,7 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Insert() error {
 }
 
 func (purchaseCashDiscount *PurchaseCashDiscount) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_cash_discount")
+	collection := db.GetDB("store_" + purchaseCashDiscount.StoreID.Hex()).Collection("purchase_cash_discount")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -413,12 +424,11 @@ func (purchaseCashDiscount *PurchaseCashDiscount) Update() error {
 	return err
 }
 
-func FindPurchaseCashDiscountByID(
+func (store *Store) FindPurchaseCashDiscountByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (purchaseCashDiscount *PurchaseCashDiscount, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_cash_discount")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_cash_discount")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -437,8 +447,8 @@ func FindPurchaseCashDiscountByID(
 	return purchaseCashDiscount, err
 }
 
-func IsPurchaseCashDiscountExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_cash_discount")
+func (store *Store) IsPurchaseCashDiscountExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_cash_discount")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -455,8 +465,8 @@ type PurchaseCashDiscountStats struct {
 	TotalCashDiscount float64             `json:"total_cash_discount" bson:"total_cash_discount"`
 }
 
-func GetPurchaseCashDiscountStats(filter map[string]interface{}) (stats PurchaseCashDiscountStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_cash_discount")
+func (store *Store) GetPurchaseCashDiscountStats(filter map[string]interface{}) (stats PurchaseCashDiscountStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_cash_discount")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

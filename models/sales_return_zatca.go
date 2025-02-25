@@ -50,7 +50,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 		return xmlContent, err
 	}
 
-	customer, err := FindCustomerByID(salesReturn.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
 	if err != nil {
 		return xmlContent, err
 	}
@@ -109,7 +109,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 	invoice.DocumentCurrencyCode = "SAR"
 	invoice.TaxCurrencyCode = "SAR"
 
-	order, err := FindOrderByID(salesReturn.OrderID, bson.M{})
+	order, err := store.FindOrderByID(salesReturn.OrderID, bson.M{})
 	if err != nil {
 		return xmlContent, err
 	}
@@ -613,7 +613,7 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 		return errors.New("error finding store: " + err.Error())
 	}
 
-	customer, err := FindCustomerByID(salesReturn.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
 	if err != nil {
 		return errors.New("error finding customer: " + err.Error())
 	}

@@ -28,8 +28,15 @@ func ListExpenseCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expenseCategories := []models.ExpenseCategory{}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	expenseCategories, criterias, err := models.SearchExpenseCategory(w, r)
+	expenseCategories, criterias, err := store.SearchExpenseCategory(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find expense categories:" + err.Error()
@@ -39,7 +46,7 @@ func ListExpenseCategory(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "expense_category")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "expense_category")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of expense categories:" + err.Error()
@@ -146,7 +153,15 @@ func UpdateExpenseCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expenseCategory, err = models.FindExpenseCategoryByID(&expenseCategoryID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	expenseCategory, err = store.FindExpenseCategoryByID(&expenseCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -155,7 +170,7 @@ func UpdateExpenseCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expenseCategoryOld, err = models.FindExpenseCategoryByID(&expenseCategoryID, bson.M{})
+	expenseCategoryOld, err = store.FindExpenseCategoryByID(&expenseCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -211,7 +226,7 @@ func UpdateExpenseCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expenseCategory, err = models.FindExpenseCategoryByID(&expenseCategory.ID, bson.M{})
+	expenseCategory, err = store.FindExpenseCategoryByID(&expenseCategory.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find expense category:" + err.Error()
@@ -258,7 +273,15 @@ func ViewExpenseCategory(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	expenseCategory, err = models.FindExpenseCategoryByID(&expenseCategoryID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	expenseCategory, err = store.FindExpenseCategoryByID(&expenseCategoryID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -299,7 +322,15 @@ func DeleteExpenseCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expenseCategory, err := models.FindExpenseCategoryByID(&expenseCategoryID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	expenseCategory, err := store.FindExpenseCategoryByID(&expenseCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

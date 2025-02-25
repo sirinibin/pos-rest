@@ -28,8 +28,14 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchasereturns := []models.PurchaseReturn{}
-
-	purchasereturns, criterias, err := models.SearchPurchaseReturn(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	purchasereturns, criterias, err := store.SearchPurchaseReturn(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find purchasereturns:" + err.Error()
@@ -45,7 +51,7 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchasereturn")
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchasereturn")
 			if err != nil {
 				response.Status = false
 				response.Errors["total_count"] = "Unable to find total count of purchasereturns:" + err.Error()
@@ -53,7 +59,7 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			purchaseReturnStats, err = models.GetPurchaseReturnStats(criterias.SearchBy)
+			purchaseReturnStats, err = store.GetPurchaseReturnStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
 				response.Errors["purchase_return_stats"] = "Unable to find purchase return stats:" + err.Error()
@@ -227,8 +233,15 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	purchasereturnOld, err = models.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
+	purchasereturnOld, err = store.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_purchasereturn"] = "Unable to find purchasereturn:" + err.Error()
@@ -237,7 +250,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasereturn, err = models.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
+	purchasereturn, err = store.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_purchasereturn"] = "Unable to find purchasereturn:" + err.Error()
@@ -379,7 +392,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 
-	purchasereturn, err = models.FindPurchaseReturnByID(&purchasereturn.ID, bson.M{})
+	purchasereturn, err = store.FindPurchaseReturnByID(&purchasereturn.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find purchasereturn:" + err.Error()
@@ -426,7 +439,15 @@ func ViewPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	purchasereturn, err = models.FindPurchaseReturnByID(&purchasereturnID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasereturn, err = store.FindPurchaseReturnByID(&purchasereturnID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -467,7 +488,15 @@ func DeletePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasereturn, err := models.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchasereturn, err := store.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

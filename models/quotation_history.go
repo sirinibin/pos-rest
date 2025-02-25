@@ -51,8 +51,8 @@ type QuotationHistoryStats struct {
 	TotalVat       float64             `json:"total_vat" bson:"total_vat"`
 }
 
-func GetQuotationHistoryStats(filter map[string]interface{}) (stats QuotationHistoryStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+func (store *Store) GetQuotationHistoryStats(filter map[string]interface{}) (stats QuotationHistoryStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -91,7 +91,7 @@ func GetQuotationHistoryStats(filter map[string]interface{}) (stats QuotationHis
 	return stats, nil
 }
 
-func SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []ProductQuotationHistory, criterias SearchCriterias, err error) {
+func (store *Store) SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []ProductQuotationHistory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -427,7 +427,7 @@ func SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []Pr
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_quotation_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -479,7 +479,7 @@ func SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []Pr
 			model.Store, _ = FindStoreByID(model.StoreID, storeSelectFields)
 		}
 		if _, ok := criterias.Select["customer.id"]; ok {
-			model.Customer, _ = FindCustomerByID(model.CustomerID, customerSelectFields)
+			model.Customer, _ = store.FindCustomerByID(model.CustomerID, customerSelectFields)
 		}
 
 		models = append(models, model)
@@ -489,7 +489,12 @@ func SearchQuotationHistory(w http.ResponseWriter, r *http.Request) (models []Pr
 }
 
 func (quotation *Quotation) AddProductsQuotationHistory() error {
-	exists, err := IsQuotationHistoryExistsByQuotationID(&quotation.ID)
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	exists, err := store.IsQuotationHistoryExistsByQuotationID(&quotation.ID)
 	if err != nil {
 		return err
 	}
@@ -498,7 +503,7 @@ func (quotation *Quotation) AddProductsQuotationHistory() error {
 		return nil
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -541,8 +546,8 @@ func (quotation *Quotation) AddProductsQuotationHistory() error {
 	return nil
 }
 
-func IsQuotationHistoryExistsByQuotationID(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+func (store *Store) IsQuotationHistoryExistsByQuotationID(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -556,7 +561,7 @@ func IsQuotationHistoryExistsByQuotationID(ID *primitive.ObjectID) (exists bool,
 
 func (model *Quotation) ClearProductsQuotationHistory() error {
 	//log.Printf("Clearing Sales history of order id:%s", order.Code)
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_quotation_history")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{"quotation_id": model.ID})
 	if err != nil {
@@ -565,14 +570,14 @@ func (model *Quotation) ClearProductsQuotationHistory() error {
 	return nil
 }
 
-func ProcessQuotationHistory() error {
+func (store *Store) ProcessQuotationHistory() error {
 	log.Print("Processing quotation history")
-	totalCount, err := GetTotalCount(bson.M{}, "product_quotation_history")
+	totalCount, err := store.GetTotalCount(bson.M{}, "product_quotation_history")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_quotation_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -598,7 +603,7 @@ func ProcessQuotationHistory() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		quotation, err := FindQuotationByID(model.QuotationID, map[string]interface{}{})
+		quotation, err := store.FindQuotationByID(model.QuotationID, map[string]interface{}{})
 		if err != nil {
 			return errors.New("Error finding purchase:" + err.Error())
 		}
@@ -615,7 +620,7 @@ func ProcessQuotationHistory() error {
 }
 
 func (model *ProductQuotationHistory) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)

@@ -40,9 +40,13 @@ type ProductCategory struct {
 }
 
 func (productCategory *ProductCategory) AttributesValueChangeEvent(productCategoryOld *ProductCategory) error {
+	store, err := FindStoreByID(productCategory.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if productCategory.Name != productCategoryOld.Name {
-		err := UpdateManyByCollectionName(
+		err := store.UpdateManyByCollectionName(
 			"product",
 			bson.M{"category_id": productCategory.ID},
 			bson.M{"$pull": bson.M{
@@ -53,7 +57,7 @@ func (productCategory *ProductCategory) AttributesValueChangeEvent(productCatego
 			return nil
 		}
 
-		err = UpdateManyByCollectionName(
+		err = store.UpdateManyByCollectionName(
 			"product",
 			bson.M{"category_id": productCategory.ID},
 			bson.M{"$push": bson.M{
@@ -76,9 +80,13 @@ func (productCategory *ProductCategory) AttributesValueChangeEvent(productCatego
 }
 
 func (productCategory *ProductCategory) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(productCategory.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if productCategory.ParentID != nil && !productCategory.ParentID.IsZero() {
-		parentCategory, err := FindProductCategoryByID(productCategory.ParentID, bson.M{"id": 1, "name": 1})
+		parentCategory, err := store.FindProductCategoryByID(productCategory.ParentID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -114,7 +122,7 @@ func (productCategory *ProductCategory) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCategories []ProductCategory, criterias SearchCriterias, err error) {
+func (store *Store) SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCategories []ProductCategory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -245,7 +253,8 @@ func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCateg
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -322,8 +331,14 @@ func SearchProductCategory(w http.ResponseWriter, r *http.Request) (productCateg
 }
 
 func (productCategory *ProductCategory) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(productCategory.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if scenario == "update" {
 		if productCategory.ID.IsZero() {
@@ -331,7 +346,7 @@ func (productCategory *ProductCategory) Validate(w http.ResponseWriter, r *http.
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsProductCategoryExists(&productCategory.ID)
+		exists, err := store.IsProductCategoryExists(&productCategory.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -367,7 +382,7 @@ func (productCategory *ProductCategory) Validate(w http.ResponseWriter, r *http.
 }
 
 func (productCategory *ProductCategory) IsNameExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -387,7 +402,7 @@ func (productCategory *ProductCategory) IsNameExists() (exists bool, err error) 
 }
 
 func (productCategory *ProductCategory) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -405,7 +420,7 @@ func (productCategory *ProductCategory) Insert() error {
 }
 
 func (productCategory *ProductCategory) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -426,7 +441,7 @@ func (productCategory *ProductCategory) Update() error {
 }
 
 func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -462,12 +477,11 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 	return nil
 }
 
-func FindProductCategoryByID(
+func (store *Store) FindProductCategoryByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (productCategory *ProductCategory, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -501,8 +515,8 @@ func FindProductCategoryByID(
 	return productCategory, err
 }
 
-func IsProductCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+func (store *Store) IsProductCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -514,13 +528,13 @@ func IsProductCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessProductCategories() error {
+func (store *Store) ProcessProductCategories() error {
 	log.Printf("Processing product categories")
-	totalCount, err := GetTotalCount(bson.M{}, "product_category")
+	totalCount, err := store.GetTotalCount(bson.M{}, "product_category")
 	if err != nil {
 		return err
 	}
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_category")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)

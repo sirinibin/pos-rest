@@ -49,8 +49,8 @@ type AccountListStats struct {
 	CreditBalanceTotal float64             `json:"credit_balance_total" bson:"credit_balance_total"`
 }
 
-func GetAccountListStats(filter map[string]interface{}) (stats AccountListStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+func (store *Store) GetAccountListStats(filter map[string]interface{}) (stats AccountListStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -94,7 +94,7 @@ func GetAccountListStats(filter map[string]interface{}) (stats AccountListStats,
 }
 
 func (account *Account) CalculateBalance() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("posting")
+	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -477,7 +477,13 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	var collection *mongo.Collection
+	if !storeID.IsZero() {
+		collection = db.GetDB("store_" + storeID.Hex()).Collection("account")
+	} else {
+		collection = db.GetDB("").Collection("account")
+	}
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -533,7 +539,7 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 
 }
 
-func CreateAccountIfNotExists(
+func (store *Store) CreateAccountIfNotExists(
 	storeID *primitive.ObjectID,
 	referenceID *primitive.ObjectID,
 	referenceModel *string,
@@ -541,19 +547,19 @@ func CreateAccountIfNotExists(
 	phone *string,
 ) (account *Account, err error) {
 	if phone != nil {
-		account, err = FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
+		account, err = store.FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
 	} else if referenceID != nil {
-		account, err = FindAccountByReferenceIDByName(*referenceID, name, *storeID, bson.M{})
+		account, err = store.FindAccountByReferenceIDByName(*referenceID, name, *storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
 
 	} else if referenceID == nil {
 		//Only for accounts like Cash,Bank,Sales
-		account, err = FindAccountByName(name, storeID, nil, bson.M{})
+		account, err = store.FindAccountByName(name, storeID, nil, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
@@ -564,7 +570,7 @@ func CreateAccountIfNotExists(
 	}
 
 	startFrom := 1000
-	count, err := GetTotalCount(bson.M{"store_id": storeID}, "account")
+	count, err := store.GetTotalCount(bson.M{"store_id": storeID}, "account")
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +621,8 @@ func CreateAccountIfNotExists(
 }
 
 func (account *Account) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("account")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -630,7 +637,7 @@ func (account *Account) Insert() error {
 }
 
 func (account *Account) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -653,11 +660,11 @@ func (account *Account) Update() error {
 	return nil
 }
 
-func FindAccountByID(
+func (store *Store) FindAccountByID(
 	ID primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (account *Account, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -676,12 +683,12 @@ func FindAccountByID(
 	return account, err
 }
 
-func FindAccountByReferenceID(
+func (store *Store) FindAccountByReferenceID(
 	referenceID primitive.ObjectID,
 	storeID primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (account *Account, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -703,13 +710,14 @@ func FindAccountByReferenceID(
 	return account, err
 }
 
-func FindAccountByReferenceIDByName(
+func (store *Store) FindAccountByReferenceIDByName(
 	referenceID primitive.ObjectID,
 	name string,
 	storeID primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (account *Account, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -732,13 +740,13 @@ func FindAccountByReferenceIDByName(
 	return account, err
 }
 
-func FindAccountByPhoneByName(
+func (store *Store) FindAccountByPhoneByName(
 	phone string,
 	name string,
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (account *Account, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -761,12 +769,12 @@ func FindAccountByPhoneByName(
 	return account, err
 }
 
-func FindAccountByPhone(
+func (store *Store) FindAccountByPhone(
 	phone string,
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (account *Account, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -788,13 +796,13 @@ func FindAccountByPhone(
 	return account, err
 }
 
-func FindAccountByName(
+func (store *Store) FindAccountByName(
 	name string,
 	storeID *primitive.ObjectID,
 	referenceID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (account *Account, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -822,7 +830,7 @@ func FindAccountByName(
 }
 
 func (account *Account) IsPhoneExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -843,8 +851,8 @@ func (account *Account) IsPhoneExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func IsAccountExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+func (store *Store) IsAccountExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -866,14 +874,14 @@ func SetAccountBalances(accounts map[string]Account) error {
 	return nil
 }
 
-func ProcessAccounts() error {
+func (store *Store) ProcessAccounts() error {
 	log.Print("Processing accounts")
-	totalCount, err := GetTotalCount(bson.M{}, "account")
+	totalCount, err := store.GetTotalCount(bson.M{}, "account")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("account")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)

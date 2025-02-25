@@ -29,8 +29,14 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotations := []models.Quotation{}
-
-	quotations, criterias, err := models.SearchQuotation(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	quotations, criterias, err := store.SearchQuotation(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find quotations:" + err.Error()
@@ -40,7 +46,7 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "quotation")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "quotation")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of quotations:" + err.Error()
@@ -48,7 +54,7 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotationStats, err := models.GetQuotationStats(criterias.SearchBy)
+	quotationStats, err := store.GetQuotationStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_sales"] = "Unable to find total amount of quotation:" + err.Error()
@@ -184,7 +190,14 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 
-	quotation, err = models.FindQuotationByID(&quotationID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	quotation, err = store.FindQuotationByID(&quotationID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -236,7 +249,6 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.UpdateForeignLabelFields()
-
 	quotation.ClearProductsQuotationHistory()
 	quotation.AddProductsQuotationHistory()
 
@@ -256,7 +268,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.SetProductsQuotationStats()
 	quotation.SetCustomerQuotationStats()
 
-	quotation, err = models.FindQuotationByID(&quotation.ID, bson.M{})
+	quotation, err = store.FindQuotationByID(&quotation.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find quotation:" + err.Error()
@@ -303,7 +315,15 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	quotation, err = models.FindQuotationByID(&quotationID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	quotation, err = store.FindQuotationByID(&quotationID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -343,8 +363,15 @@ func DeleteQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	quotation, err := models.FindQuotationByID(&quotationID, bson.M{})
+	quotation, err := store.FindQuotationByID(&quotationID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

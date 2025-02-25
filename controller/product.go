@@ -18,7 +18,15 @@ func ListProductJson(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	products, err := models.GetBarTenderProducts(r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	products, err := store.GetBarTenderProducts(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -57,7 +65,15 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	products, criterias, err = models.SearchProduct(w, r, loadData)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	products, criterias, err = store.SearchProduct(w, r, loadData)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find products:" + err.Error()
@@ -66,7 +82,7 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if loadData {
-		response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product")
+		response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product")
 		if err != nil {
 			response.Status = false
 			response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
@@ -95,7 +111,7 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 	keys, ok = r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			productStats, err = models.GetProductStats(criterias.SearchBy, storeID)
+			productStats, err = store.GetProductStats(criterias.SearchBy, storeID)
 			if err != nil {
 				response.Status = false
 				response.Errors["product_stats"] = "Unable to find product stats:" + err.Error()
@@ -228,7 +244,15 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 
-	product, err = models.FindProductByID(&productID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	product, err = store.FindProductByID(&productID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["product"] = "Unable to find product:" + err.Error()
@@ -291,7 +315,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 
-	product, err = models.FindProductByID(&product.ID, bson.M{})
+	product, err = store.FindProductByID(&product.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find product:" + err.Error()
@@ -343,7 +367,15 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	product, err = models.FindProductByID(&productID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	product, err = store.FindProductByID(&productID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -408,7 +440,15 @@ func ViewProductByItemCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	product, err = models.FindProductByItemCode(itemCode, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	product, err = store.FindProductByItemCode(itemCode, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -448,7 +488,15 @@ func DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, err := models.FindProductByID(&productID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	product, err := store.FindProductByID(&productID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -503,7 +551,15 @@ func ViewProductByBarCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	product, err = models.FindProductByBarCode(itemCode, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	product, err = store.FindProductByBarCode(itemCode, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false

@@ -29,7 +29,15 @@ func ListCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 
 	customerdeposits := []models.CustomerDeposit{}
 
-	customerdeposits, criterias, err := models.SearchCustomerDeposit(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerdeposits, criterias, err := store.SearchCustomerDeposit(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find customerdeposits:" + err.Error()
@@ -39,7 +47,7 @@ func ListCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "customerdeposit")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "customerdeposit")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of customerdeposits:" + err.Error()
@@ -47,7 +55,7 @@ func ListCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerdepositStats, err := models.GetCustomerDepositStats(criterias.SearchBy)
+	customerdepositStats, err := store.GetCustomerDepositStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total"] = "Unable to find total amount of customerdeposits:" + err.Error()
@@ -165,7 +173,15 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerdepositOld, err = models.FindCustomerDepositByID(&customerdepositID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerdepositOld, err = store.FindCustomerDepositByID(&customerdepositID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["customerdeposit"] = "Unable to find customerdeposit:" + err.Error()
@@ -174,7 +190,7 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerdeposit, err = models.FindCustomerDepositByID(&customerdepositID, bson.M{})
+	customerdeposit, err = store.FindCustomerDepositByID(&customerdepositID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["customerdeposit"] = "Unable to find customerdeposit:" + err.Error()
@@ -228,7 +244,7 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerdeposit, err = models.FindCustomerDepositByID(&customerdeposit.ID, bson.M{})
+	customerdeposit, err = store.FindCustomerDepositByID(&customerdeposit.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find customerdeposit:" + err.Error()
@@ -289,7 +305,15 @@ func ViewCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	customerdeposit, err = models.FindCustomerDepositByID(&customerdepositID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerdeposit, err = store.FindCustomerDepositByID(&customerdepositID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -335,7 +359,15 @@ func ViewCustomerDepositByCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	customerdeposit, err = models.FindCustomerDepositByCode(code, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerdeposit, err = store.FindCustomerDepositByCode(code, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -375,7 +407,15 @@ func DeleteCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerdeposit, err := models.FindCustomerDepositByID(&customerdepositID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerdeposit, err := store.FindCustomerDepositByID(&customerdepositID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

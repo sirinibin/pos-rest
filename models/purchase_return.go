@@ -127,6 +127,11 @@ func (model *PurchaseReturn) AddPayments() error {
 }
 
 func (model *PurchaseReturn) UpdatePayments() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	model.GetPayments()
 	now := time.Now()
 	for _, payment := range model.PaymentsInput {
@@ -155,7 +160,7 @@ func (model *PurchaseReturn) UpdatePayments() error {
 			}
 		} else {
 			//Update
-			purchaseReturnPayment, err := FindPurchaseReturnPaymentByID(&payment.ID, bson.M{})
+			purchaseReturnPayment, err := store.FindPurchaseReturnPaymentByID(&payment.ID, bson.M{})
 			if err != nil {
 				return err
 			}
@@ -217,8 +222,8 @@ type PurchaseReturnStats struct {
 	ShippingOrHandlingFees    float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 }
 
-func GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturnStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+func (store *Store) GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturnStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -357,6 +362,10 @@ func (purchasereturn *PurchaseReturn) AttributesValueChangeEvent(purchasereturnO
 }
 
 func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if purchasereturn.StoreID != nil {
 		store, err := FindStoreByID(purchasereturn.StoreID, bson.M{"id": 1, "name": 1})
@@ -367,7 +376,7 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 	}
 
 	if purchasereturn.VendorID != nil {
-		vendor, err := FindVendorByID(purchasereturn.VendorID, bson.M{"id": 1, "name": 1})
+		vendor, err := store.FindVendorByID(purchasereturn.VendorID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -417,7 +426,7 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 		}*/
 
 	for i, product := range purchasereturn.Products {
-		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
 		}
@@ -481,7 +490,7 @@ func (model *PurchaseReturn) FindVatPrice() {
 	model.VatPrice = vatPrice
 }
 
-func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchasereturns []PurchaseReturn, criterias SearchCriterias, err error) {
+func (store *Store) SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchasereturns []PurchaseReturn, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -827,7 +836,8 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -913,7 +923,7 @@ func SearchPurchaseReturn(w http.ResponseWriter, r *http.Request) (purchaseretur
 		}
 
 		if _, ok := criterias.Select["vendor.id"]; ok {
-			purchasereturn.Vendor, _ = FindVendorByID(purchasereturn.VendorID, vendorSelectFields)
+			purchasereturn.Vendor, _ = store.FindVendorByID(purchasereturn.VendorID, vendorSelectFields)
 		}
 
 		if _, ok := criterias.Select["purchase_returned_by_user.id"]; ok {
@@ -948,10 +958,16 @@ func (purchasereturn *PurchaseReturn) Validate(
 	scenario string,
 	oldPurchaseReturn *PurchaseReturn,
 ) (errs map[string]string) {
-
 	errs = make(map[string]string)
 
-	purchase, err := FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
+
+	purchase, err := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		errs["purchase_id"] = err.Error()
@@ -1082,7 +1098,7 @@ func (purchasereturn *PurchaseReturn) Validate(
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsPurchaseReturnExists(&purchasereturn.ID)
+		exists, err := store.IsPurchaseReturnExists(&purchasereturn.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -1113,7 +1129,7 @@ func (purchasereturn *PurchaseReturn) Validate(
 	if purchasereturn.VendorID == nil || purchasereturn.VendorID.IsZero() {
 		errs["vendor_id"] = "Vendor is required"
 	} else {
-		exists, err := IsVendorExists(purchasereturn.VendorID)
+		exists, err := store.IsVendorExists(purchasereturn.VendorID)
 		if err != nil {
 			errs["vendor_id"] = err.Error()
 			return errs
@@ -1163,7 +1179,7 @@ func (purchasereturn *PurchaseReturn) Validate(
 		if purchaseReturnProduct.ProductID.IsZero() {
 			errs["product_id_"+strconv.Itoa(index)] = "Product is required for purchase return"
 		} else {
-			exists, err := IsProductExists(&purchaseReturnProduct.ProductID)
+			exists, err := store.IsProductExists(&purchaseReturnProduct.ProductID)
 			if err != nil {
 				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
@@ -1234,7 +1250,12 @@ func (purchasereturn *PurchaseReturn) Validate(
 }
 
 func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(purchaseReturnOld *PurchaseReturn) error {
-	purchase, err := FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	purchase, err := store.FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
 	if err != nil {
 		return err
 	}
@@ -1279,12 +1300,17 @@ func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(pu
 }
 
 func (purchasereturn *PurchaseReturn) AddStock() (err error) {
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	for _, purchasereturnProduct := range purchasereturn.Products {
 		if !purchasereturnProduct.Selected {
 			continue
 		}
 
-		product, err := FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
+		product, err := store.FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -1328,12 +1354,17 @@ func (purchasereturn *PurchaseReturn) AddStock() (err error) {
 }
 
 func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	for _, purchasereturnProduct := range purchasereturn.Products {
 		if !purchasereturnProduct.Selected {
 			continue
 		}
 
-		product, err := FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
+		product, err := store.FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -1358,13 +1389,17 @@ func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
 }
 
 func (purchasereturn *PurchaseReturn) UpdateProductUnitPriceInStore() (err error) {
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	for _, purchasereturnProduct := range purchasereturn.Products {
 		if !purchasereturnProduct.Selected {
 			continue
 		}
 
-		product, err := FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
+		product, err := store.FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -1418,7 +1453,12 @@ func (purchasereturn *PurchaseReturn) UpdateProductUnitPriceInStore() (err error
 }
 
 func (purchasereturn *PurchaseReturn) GenerateCode(startFrom int, storeCode string) (string, error) {
-	count, err := GetTotalCount(bson.M{"store_id": purchasereturn.StoreID}, "purchasereturn")
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		return "", err
+	}
+
+	count, err := store.GetTotalCount(bson.M{"store_id": purchasereturn.StoreID}, "purchasereturn")
 	if err != nil {
 		return "", err
 	}
@@ -1427,7 +1467,7 @@ func (purchasereturn *PurchaseReturn) GenerateCode(startFrom int, storeCode stri
 }
 
 func (purchasereturn *PurchaseReturn) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + purchasereturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1493,7 +1533,7 @@ func (purchaseReturn *PurchaseReturn) MakeCode() error {
 		return purchaseReturn.MakeRedisCode()
 	}
 
-	lastQuotation, err := FindLastPurchaseReturnByStoreID(purchaseReturn.StoreID, bson.M{})
+	lastQuotation, err := store.FindLastPurchaseReturnByStoreID(purchaseReturn.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
@@ -1540,11 +1580,11 @@ func (purchaseReturn *PurchaseReturn) MakeCode() error {
 	return nil
 }
 
-func FindLastPurchaseReturnByStoreID(
+func (store *Store) FindLastPurchaseReturnByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (purchaseReturn *PurchaseReturn, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1565,7 +1605,7 @@ func FindLastPurchaseReturnByStoreID(
 }
 
 func (purchasereturn *PurchaseReturn) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + purchasereturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1585,7 +1625,13 @@ func (purchasereturn *PurchaseReturn) Update() error {
 }
 
 func (purchasereturn *PurchaseReturn) UpdatePurchaseReturnDiscount(replace bool) error {
-	purchase, err := FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+
+	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	purchase, err := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
 	if err != nil {
 		return err
 	}
@@ -1599,7 +1645,7 @@ func (purchasereturn *PurchaseReturn) UpdatePurchaseReturnDiscount(replace bool)
 }
 
 func (purchasereturn *PurchaseReturn) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + purchasereturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1629,7 +1675,7 @@ func GeneratePurchaseReturnCode(n int) string {
 }
 
 func (purchasereturn *PurchaseReturn) DeletePurchaseReturn(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + purchasereturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1666,7 +1712,7 @@ func (purchasereturn *PurchaseReturn) DeletePurchaseReturn(tokenClaims TokenClai
 }
 
 func (purchasereturn *PurchaseReturn) HardDelete() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + purchasereturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1677,12 +1723,11 @@ func (purchasereturn *PurchaseReturn) HardDelete() (err error) {
 	return nil
 }
 
-func FindPurchaseReturnByID(
+func (store *Store) FindPurchaseReturnByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (purchasereturn *PurchaseReturn, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1728,8 +1773,8 @@ func FindPurchaseReturnByID(
 	return purchasereturn, err
 }
 
-func IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+func (store *Store) IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1741,13 +1786,13 @@ func IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessPurchaseReturns() error {
+func (store *Store) ProcessPurchaseReturns() error {
 	log.Print("Processing purchase returns")
-	totalCount, err := GetTotalCount(bson.M{}, "purchasereturn")
+	totalCount, err := store.GetTotalCount(bson.M{}, "purchasereturn")
 	if err != nil {
 		return err
 	}
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -1905,7 +1950,7 @@ func ProcessPurchaseReturns() error {
 }
 
 func (model *PurchaseReturn) GetPaymentsCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("purchase_return_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1916,8 +1961,7 @@ func (model *PurchaseReturn) GetPaymentsCount() (count int64, err error) {
 }
 
 func (model *PurchaseReturn) GetPayments() (payments []PurchaseReturnPayment, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("purchase_return_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
 	sortBy := map[string]interface{}{}
@@ -1978,7 +2022,7 @@ func (model *PurchaseReturn) GetPayments() (payments []PurchaseReturnPayment, er
 
 func (model *PurchaseReturn) ClearPayments() error {
 	//log.Printf("Clearing Purchase payment history of purchase id:%s", model.Code)
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("purchase_return_payment")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{"purchase_return_id": model.ID})
 	if err != nil {
@@ -1994,7 +2038,7 @@ type ProductPurchaseReturnStats struct {
 }
 
 func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_return_history")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_purchase_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2058,8 +2102,13 @@ func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive
 }
 
 func (purchaseReturn *PurchaseReturn) SetProductsPurchaseReturnStats() error {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
-		product, err := FindProductByID(&purchaseReturnProduct.ProductID, map[string]interface{}{})
+		product, err := store.FindProductByID(&purchaseReturnProduct.ProductID, map[string]interface{}{})
 		if err != nil {
 			return err
 		}
@@ -2086,7 +2135,7 @@ type VendorPurchaseReturnStats struct {
 }
 
 func (vendor *Vendor) SetVendorPurchaseReturnStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2211,8 +2260,12 @@ func (vendor *Vendor) SetVendorPurchaseReturnStatsByStoreID(storeID primitive.Ob
 }
 
 func (purchaseReturn *PurchaseReturn) SetVendorPurchaseReturnStats() error {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
-	vendor, err := FindVendorByID(purchaseReturn.VendorID, map[string]interface{}{})
+	vendor, err := store.FindVendorByID(purchaseReturn.VendorID, map[string]interface{}{})
 	if err != nil {
 		return err
 	}
@@ -2226,7 +2279,7 @@ func (purchaseReturn *PurchaseReturn) SetVendorPurchaseReturnStats() error {
 }
 
 func (purchaseReturnPayment *PurchaseReturnPayment) DeletePurchaseReturnPayment() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	collection := db.GetDB("store_" + purchaseReturnPayment.StoreID.Hex()).Collection("purchase_return_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -2246,7 +2299,12 @@ func (purchaseReturnPayment *PurchaseReturnPayment) DeletePurchaseReturnPayment(
 }
 
 func (purchaseReturn *PurchaseReturn) UpdatePurchaseReturnCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return 0, err
+	}
+
+	collection := db.GetDB("store_" + purchaseReturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2258,7 +2316,7 @@ func (purchaseReturn *PurchaseReturn) UpdatePurchaseReturnCount() (count int64, 
 		return 0, err
 	}
 
-	purchase, err := FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
+	purchase, err := store.FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
 	if err != nil {
 		return 0, err
 	}
@@ -2344,6 +2402,12 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 	cashDiscountAllowedAccount *Account,
 	paymentsByDatetimeNumber int,
 ) ([]Journal, error) {
+
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	groupID := primitive.NewObjectID()
 
@@ -2399,7 +2463,7 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" {
 			referenceModel := "vendor"
-			vendorAccount, err := CreateAccountIfNotExists(
+			vendorAccount, err := store.CreateAccountIfNotExists(
 				purchaseReturn.StoreID,
 				&vendor.ID,
 				&referenceModel,
@@ -2446,7 +2510,7 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate) {
 		referenceModel := "vendor"
-		vendorAccount, err := CreateAccountIfNotExists(
+		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchaseReturn.StoreID,
 			&vendor.ID,
 			&referenceModel,
@@ -2484,7 +2548,7 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate) {
 		referenceModel := "vendor"
-		vendorAccount, err := CreateAccountIfNotExists(
+		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchaseReturn.StoreID,
 			&vendor.ID,
 			&referenceModel,
@@ -2522,6 +2586,11 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 	bankAccount *Account,
 	extraPayments []PurchaseReturnPayment,
 ) ([]Journal, error) {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	journals := []Journal{}
 	groupID := primitive.NewObjectID()
@@ -2539,7 +2608,7 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" {
 			referenceModel := "vendor"
-			vendorAccount, err := CreateAccountIfNotExists(
+			vendorAccount, err := store.CreateAccountIfNotExists(
 				purchaseReturn.StoreID,
 				&vendor.ID,
 				&referenceModel,
@@ -2567,7 +2636,7 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 	} //end for
 
 	referenceModel := "vendor"
-	vendorAccount, err := CreateAccountIfNotExists(
+	vendorAccount, err := store.CreateAccountIfNotExists(
 		purchaseReturn.StoreID,
 		&vendor.ID,
 		&referenceModel,
@@ -2612,29 +2681,34 @@ func RegroupPurchaseReturnPaymentsByDatetime(payments []PurchaseReturnPayment) [
 }
 
 func (purchaseReturn *PurchaseReturn) CreateLedger() (ledger *Ledger, err error) {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 
-	vendor, err := FindVendorByID(purchaseReturn.VendorID, bson.M{})
+	vendor, err := store.FindVendorByID(purchaseReturn.VendorID, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
-	cashAccount, err := CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Cash", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Bank", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	purchaseReturnAccount, err := CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Purchase Return", nil)
+	purchaseReturnAccount, err := store.CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Purchase Return", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	cashDiscountAllowedAccount, err := CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Cash discount allowed", nil)
+	cashDiscountAllowedAccount, err := store.CreateAccountIfNotExists(purchaseReturn.StoreID, nil, nil, "Cash discount allowed", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2649,7 +2723,7 @@ func (purchaseReturn *PurchaseReturn) CreateLedger() (ledger *Ledger, err error)
 	if len(purchaseReturn.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate)) {
 		//Case: UnPaid
 		referenceModel := "vendor"
-		vendorAccount, err := CreateAccountIfNotExists(
+		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchaseReturn.StoreID,
 			&vendor.ID,
 			&referenceModel,
@@ -2748,7 +2822,12 @@ func (purchaseReturn *PurchaseReturn) DoAccounting() error {
 }
 
 func (purchaseReturn *PurchaseReturn) UndoAccounting() error {
-	ledger, err := FindLedgerByReferenceID(purchaseReturn.ID, *purchaseReturn.StoreID, bson.M{})
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(purchaseReturn.ID, *purchaseReturn.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return errors.New("Error finding ledger by reference id: " + err.Error())
 	}
@@ -2766,12 +2845,12 @@ func (purchaseReturn *PurchaseReturn) UndoAccounting() error {
 		}
 	}
 
-	err = RemoveLedgerByReferenceID(purchaseReturn.ID)
+	err = store.RemoveLedgerByReferenceID(purchaseReturn.ID)
 	if err != nil {
 		return errors.New("Error removing ledger by reference id: " + err.Error())
 	}
 
-	err = RemovePostingsByReferenceID(purchaseReturn.ID)
+	err = store.RemovePostingsByReferenceID(purchaseReturn.ID)
 	if err != nil {
 		return errors.New("Error removing postings by reference id: " + err.Error())
 	}

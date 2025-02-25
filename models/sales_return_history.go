@@ -53,8 +53,8 @@ type SalesReturnHistoryStats struct {
 	TotalVatReturn   float64             `json:"total_vat_return" bson:"total_vat_return"`
 }
 
-func GetSalesReturnHistoryStats(filter map[string]interface{}) (stats SalesReturnHistoryStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+func (store *Store) GetSalesReturnHistoryStats(filter map[string]interface{}) (stats SalesReturnHistoryStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -95,7 +95,7 @@ func GetSalesReturnHistoryStats(filter map[string]interface{}) (stats SalesRetur
 	return stats, nil
 }
 
-func SearchSalesReturnHistory(w http.ResponseWriter, r *http.Request) (models []ProductSalesReturnHistory, criterias SearchCriterias, err error) {
+func (store *Store) SearchSalesReturnHistory(w http.ResponseWriter, r *http.Request) (models []ProductSalesReturnHistory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -409,7 +409,7 @@ func SearchSalesReturnHistory(w http.ResponseWriter, r *http.Request) (models []
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_return_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -461,7 +461,7 @@ func SearchSalesReturnHistory(w http.ResponseWriter, r *http.Request) (models []
 			model.Store, _ = FindStoreByID(model.StoreID, storeSelectFields)
 		}
 		if _, ok := criterias.Select["customer.id"]; ok {
-			model.Customer, _ = FindCustomerByID(model.CustomerID, customerSelectFields)
+			model.Customer, _ = store.FindCustomerByID(model.CustomerID, customerSelectFields)
 		}
 
 		models = append(models, model)
@@ -471,7 +471,12 @@ func SearchSalesReturnHistory(w http.ResponseWriter, r *http.Request) (models []
 }
 
 func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
-	exists, err := IsSalesReturnHistoryExistsBySalesReturnID(&salesReturn.ID)
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	exists, err := store.IsSalesReturnHistoryExistsBySalesReturnID(&salesReturn.ID)
 	if err != nil {
 		return err
 	}
@@ -480,7 +485,7 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 		return nil
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("product_sales_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -528,8 +533,8 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 	return nil
 }
 
-func IsSalesReturnHistoryExistsBySalesReturnID(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+func (store *Store) IsSalesReturnHistoryExistsBySalesReturnID(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -543,7 +548,7 @@ func IsSalesReturnHistoryExistsBySalesReturnID(ID *primitive.ObjectID) (exists b
 
 func (salesReturn *SalesReturn) ClearProductsSalesReturnHistory() error {
 	//log.Printf("Clearing Sales history of order id:%s", order.Code)
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("product_sales_return_history")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{"sales_return_id": salesReturn.ID})
 	if err != nil {
@@ -552,14 +557,14 @@ func (salesReturn *SalesReturn) ClearProductsSalesReturnHistory() error {
 	return nil
 }
 
-func ProcessSalesReturnHistory() error {
+func (store *Store) ProcessSalesReturnHistory() error {
 	log.Print("Processing sales return history")
-	totalCount, err := GetTotalCount(bson.M{}, "product_sales_return_history")
+	totalCount, err := store.GetTotalCount(bson.M{}, "product_sales_return_history")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_return_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -585,7 +590,7 @@ func ProcessSalesReturnHistory() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		salesReturn, err := FindSalesReturnByID(model.SalesReturnID, map[string]interface{}{})
+		salesReturn, err := store.FindSalesReturnByID(model.SalesReturnID, map[string]interface{}{})
 		if err != nil {
 			return errors.New("Error finding order:" + err.Error())
 		}
@@ -602,7 +607,7 @@ func ProcessSalesReturnHistory() error {
 }
 
 func (model *ProductSalesReturnHistory) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_sales_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)

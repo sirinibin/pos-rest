@@ -109,8 +109,8 @@ type DividentStats struct {
 	Total float64             `json:"total" bson:"total"`
 }
 
-func GetDividentStats(filter map[string]interface{}) (stats DividentStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+func (store *Store) GetDividentStats(filter map[string]interface{}) (stats DividentStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -142,7 +142,7 @@ func GetDividentStats(filter map[string]interface{}) (stats DividentStats, err e
 	return stats, nil
 }
 
-func SearchDivident(w http.ResponseWriter, r *http.Request) (dividents []Divident, criterias SearchCriterias, err error) {
+func (store *Store) SearchDivident(w http.ResponseWriter, r *http.Request) (dividents []Divident, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -383,7 +383,7 @@ func SearchDivident(w http.ResponseWriter, r *http.Request) (dividents []Dividen
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -463,8 +463,14 @@ func SearchDivident(w http.ResponseWriter, r *http.Request) (dividents []Dividen
 }
 
 func (divident *Divident) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(divident.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if scenario == "update" {
 		if divident.ID.IsZero() {
@@ -472,7 +478,7 @@ func (divident *Divident) Validate(w http.ResponseWriter, r *http.Request, scena
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsDividentExists(&divident.ID)
+		exists, err := store.IsDividentExists(&divident.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -567,11 +573,10 @@ func (divident *Divident) Validate(w http.ResponseWriter, r *http.Request, scena
 	return errs
 }
 
-func FindLastDivident(
+func (store *Store) FindLastDivident(
 	selectFields map[string]interface{},
 ) (divident *Divident, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -593,12 +598,11 @@ func FindLastDivident(
 	return divident, err
 }
 
-func FindLastDividentByStoreID(
+func (store *Store) FindLastDividentByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (divident *Divident, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -619,7 +623,12 @@ func FindLastDividentByStoreID(
 }
 
 func (divident *Divident) MakeCode() error {
-	lastDivident, err := FindLastDividentByStoreID(divident.StoreID, bson.M{})
+	store, err := FindStoreByID(divident.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	lastDivident, err := store.FindLastDividentByStoreID(divident.StoreID, bson.M{})
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
@@ -668,7 +677,7 @@ func (divident *Divident) MakeCode() error {
 }
 
 func (divident *Divident) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + divident.StoreID.Hex()).Collection("divident")
 	divident.ID = primitive.NewObjectID()
 
 	if len(divident.Code) == 0 {
@@ -728,7 +737,7 @@ func (divident *Divident) SaveImages() error {
 }
 
 func (divident *Divident) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + divident.StoreID.Hex()).Collection("divident")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -756,7 +765,7 @@ func (divident *Divident) Update() error {
 }
 
 func (divident *Divident) DeleteDivident(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + divident.StoreID.Hex()).Collection("divident")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -790,12 +799,11 @@ func (divident *Divident) DeleteDivident(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindDividentByCode(
+func (store *Store) FindDividentByCode(
 	code string,
 	selectFields map[string]interface{},
 ) (divident *Divident, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -814,12 +822,11 @@ func FindDividentByCode(
 	return divident, err
 }
 
-func FindDividentByID(
+func (store *Store) FindDividentByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (divident *Divident, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -854,7 +861,8 @@ func FindDividentByID(
 }
 
 func (divident *Divident) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+	collection := db.GetDB("store_" + divident.StoreID.Hex()).Collection("divident")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -873,8 +881,9 @@ func (divident *Divident) IsCodeExists() (exists bool, err error) {
 	return (count > 0), err
 }
 
-func IsDividentExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+func (store *Store) IsDividentExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -886,8 +895,9 @@ func IsDividentExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessDividents() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("divident")
+func (store *Store) ProcessDividents() error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("divident")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -950,7 +960,12 @@ func (divident *Divident) DoAccounting() error {
 }
 
 func (divident *Divident) UndoAccounting() error {
-	ledger, err := FindLedgerByReferenceID(divident.ID, *divident.StoreID, bson.M{})
+	store, err := FindStoreByID(divident.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(divident.ID, *divident.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
@@ -964,12 +979,12 @@ func (divident *Divident) UndoAccounting() error {
 		}
 	}
 
-	err = RemoveLedgerByReferenceID(divident.ID)
+	err = store.RemoveLedgerByReferenceID(divident.ID)
 	if err != nil {
 		return err
 	}
 
-	err = RemovePostingsByReferenceID(divident.ID)
+	err = store.RemovePostingsByReferenceID(divident.ID)
 	if err != nil {
 		return err
 	}
@@ -985,13 +1000,18 @@ func (divident *Divident) UndoAccounting() error {
 func (divident *Divident) CreateLedger() (ledger *Ledger, err error) {
 	now := time.Now()
 
+	store, err := FindStoreByID(divident.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	drawingUser, err := FindUserByID(divident.WithdrawnByUserID, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
 	referenceModel := "withdrawer"
-	drawingAccount, err := CreateAccountIfNotExists(
+	drawingAccount, err := store.CreateAccountIfNotExists(
 		divident.StoreID,
 		&drawingUser.ID,
 		&referenceModel,
@@ -1002,12 +1022,12 @@ func (divident *Divident) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
-	cashAccount, err := CreateAccountIfNotExists(divident.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(divident.StoreID, nil, nil, "Cash", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := CreateAccountIfNotExists(divident.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(divident.StoreID, nil, nil, "Bank", nil)
 	if err != nil {
 		return nil, err
 	}

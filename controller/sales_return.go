@@ -29,8 +29,14 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salesreturns := []models.SalesReturn{}
-
-	salesreturns, criterias, err := models.SearchSalesReturn(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	salesreturns, criterias, err := store.SearchSalesReturn(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find salesreturns:" + err.Error()
@@ -46,7 +52,7 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "salesreturn")
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "salesreturn")
 			if err != nil {
 				response.Status = false
 				response.Errors["total_count"] = "Unable to find total count of salesreturns:" + err.Error()
@@ -54,7 +60,7 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			salesReturnStats, err = models.GetSalesReturnStats(criterias.SearchBy)
+			salesReturnStats, err = store.GetSalesReturnStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
 				response.Errors["total_return_sales"] = "Unable to find total amount of sales return:" + err.Error()
@@ -268,7 +274,15 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturnOld, err = models.FindSalesReturnByID(&salesreturnID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturnOld, err = store.FindSalesReturnByID(&salesreturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_salesreturn"] = "Unable to find salesreturn:" + err.Error()
@@ -277,7 +291,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn, err = models.FindSalesReturnByID(&salesreturnID, bson.M{})
+	salesreturn, err = store.FindSalesReturnByID(&salesreturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_salesreturn"] = "Unable to find salesreturn:" + err.Error()
@@ -420,18 +434,10 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn, err = models.FindSalesReturnByID(&salesreturn.ID, bson.M{})
+	salesreturn, err = store.FindSalesReturnByID(&salesreturn.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find salesreturn:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	store, err := models.FindStoreByID(salesreturn.StoreID, bson.M{})
-	if err != nil {
-		response.Status = false
-		response.Errors["store"] = "invalid store: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -485,7 +491,15 @@ func ViewSalesReturn(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	salesreturn, err = models.FindSalesReturnByID(&salesreturnID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturn, err = store.FindSalesReturnByID(&salesreturnID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -526,7 +540,15 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn, err := models.FindSalesReturnByID(&salesreturnID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturn, err := store.FindSalesReturnByID(&salesreturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

@@ -52,8 +52,8 @@ type SalesHistoryStats struct {
 	TotalVat    float64             `json:"total_vat" bson:"total_vat"`
 }
 
-func GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+func (store *Store) GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -92,7 +92,7 @@ func GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStat
 	return stats, nil
 }
 
-func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []ProductSalesHistory, criterias SearchCriterias, err error) {
+func (store *Store) SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []ProductSalesHistory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -426,7 +426,7 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -478,7 +478,7 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 			model.Store, _ = FindStoreByID(model.StoreID, storeSelectFields)
 		}
 		if _, ok := criterias.Select["customer.id"]; ok {
-			model.Customer, _ = FindCustomerByID(model.CustomerID, customerSelectFields)
+			model.Customer, _ = store.FindCustomerByID(model.CustomerID, customerSelectFields)
 		}
 
 		models = append(models, model)
@@ -489,7 +489,7 @@ func SearchSalesHistory(w http.ResponseWriter, r *http.Request) (models []Produc
 
 func (order *Order) ClearProductsSalesHistory() error {
 	//log.Printf("Clearing Sales history of order id:%s", order.Code)
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("product_sales_history")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{"order_id": order.ID})
 	if err != nil {
@@ -499,8 +499,13 @@ func (order *Order) ClearProductsSalesHistory() error {
 }
 
 func (order *Order) CreateProductsSalesHistory() error {
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	//log.Printf("Creating Sales history of order id:%s", order.Code)
-	exists, err := IsSalesHistoryExistsByOrderID(&order.ID)
+	exists, err := store.IsSalesHistoryExistsByOrderID(&order.ID)
 	if err != nil {
 		return err
 	}
@@ -509,7 +514,7 @@ func (order *Order) CreateProductsSalesHistory() error {
 		return nil
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -554,8 +559,8 @@ func (order *Order) CreateProductsSalesHistory() error {
 	return nil
 }
 
-func IsSalesHistoryExistsByOrderID(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+func (store *Store) IsSalesHistoryExistsByOrderID(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -567,8 +572,8 @@ func IsSalesHistoryExistsByOrderID(ID *primitive.ObjectID) (exists bool, err err
 	return (count > 0), err
 }
 
-func GetSalesHistoriesCountByProductID(productID *primitive.ObjectID) (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+func (store *Store) GetSalesHistoriesCountByProductID(productID *primitive.ObjectID) (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return collection.CountDocuments(ctx, bson.M{
@@ -576,10 +581,10 @@ func GetSalesHistoriesCountByProductID(productID *primitive.ObjectID) (count int
 	})
 }
 
-func GetSalesHistoriesByProductID(productID *primitive.ObjectID) (models []ProductSalesHistory, err error) {
+func (store *Store) GetSalesHistoriesByProductID(productID *primitive.ObjectID) (models []ProductSalesHistory, err error) {
 	//log.Print("Fetching sales histories")
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -613,14 +618,14 @@ func GetSalesHistoriesByProductID(productID *primitive.ObjectID) (models []Produ
 	return models, nil
 }
 
-func ProcessSalesHistory() error {
+func (store *Store) ProcessSalesHistory() error {
 	log.Print("Processing sales history")
-	totalCount, err := GetTotalCount(bson.M{}, "product_sales_history")
+	totalCount, err := store.GetTotalCount(bson.M{}, "product_sales_history")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -665,7 +670,7 @@ func ProcessSalesHistory() error {
 }
 
 func (model *ProductSalesHistory) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)

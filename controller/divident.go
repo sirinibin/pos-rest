@@ -29,7 +29,15 @@ func ListDivident(w http.ResponseWriter, r *http.Request) {
 
 	dividents := []models.Divident{}
 
-	dividents, criterias, err := models.SearchDivident(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	dividents, criterias, err := store.SearchDivident(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find dividents:" + err.Error()
@@ -39,7 +47,7 @@ func ListDivident(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "divident")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "divident")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of dividents:" + err.Error()
@@ -47,7 +55,7 @@ func ListDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dividentStats, err := models.GetDividentStats(criterias.SearchBy)
+	dividentStats, err := store.GetDividentStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total"] = "Unable to find total amount of dividents:" + err.Error()
@@ -165,7 +173,15 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dividentOld, err = models.FindDividentByID(&dividentID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	dividentOld, err = store.FindDividentByID(&dividentID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["divident"] = "Unable to find divident:" + err.Error()
@@ -174,7 +190,7 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	divident, err = models.FindDividentByID(&dividentID, bson.M{})
+	divident, err = store.FindDividentByID(&dividentID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["divident"] = "Unable to find divident:" + err.Error()
@@ -228,7 +244,7 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	divident, err = models.FindDividentByID(&divident.ID, bson.M{})
+	divident, err = store.FindDividentByID(&divident.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find divident:" + err.Error()
@@ -289,7 +305,15 @@ func ViewDivident(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	divident, err = models.FindDividentByID(&dividentID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	divident, err = store.FindDividentByID(&dividentID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -335,7 +359,15 @@ func ViewDividentByCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	divident, err = models.FindDividentByCode(code, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	divident, err = store.FindDividentByCode(code, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -375,7 +407,15 @@ func DeleteDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	divident, err := models.FindDividentByID(&dividentID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	divident, err := store.FindDividentByID(&dividentID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

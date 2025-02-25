@@ -71,6 +71,10 @@ func (purchasePayment *PurchasePayment) AttributesValueChangeEvent(purchasePayme
 */
 
 func (purchasePayment *PurchasePayment) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(purchasePayment.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if purchasePayment.StoreID != nil && !purchasePayment.StoreID.IsZero() {
 		store, err := FindStoreByID(purchasePayment.StoreID, bson.M{"id": 1, "name": 1})
@@ -83,7 +87,7 @@ func (purchasePayment *PurchasePayment) UpdateForeignLabelFields() error {
 	}
 
 	if purchasePayment.PurchaseID != nil && !purchasePayment.PurchaseID.IsZero() {
-		purchase, err := FindPurchaseByID(purchasePayment.PurchaseID, bson.M{"id": 1, "code": 1})
+		purchase, err := store.FindPurchaseByID(purchasePayment.PurchaseID, bson.M{"id": 1, "code": 1})
 		if err != nil {
 			return err
 		}
@@ -111,7 +115,7 @@ func (purchasePayment *PurchasePayment) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []PurchasePayment, criterias SearchCriterias, err error) {
+func (store *Store) SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []PurchasePayment, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -352,7 +356,7 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -395,8 +399,14 @@ func SearchPurchasePayment(w http.ResponseWriter, r *http.Request) (models []Pur
 }
 
 func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(purchasePayment.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	//var oldPurchasePayment *PurchasePayment
 
@@ -421,7 +431,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsPurchasePaymentExists(&purchasePayment.ID)
+		exists, err := store.IsPurchasePaymentExists(&purchasePayment.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -489,7 +499,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 }
 
 func (purchasePayment *PurchasePayment) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	collection := db.GetDB("store_" + purchasePayment.StoreID.Hex()).Collection("purchase_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -507,7 +517,7 @@ func (purchasePayment *PurchasePayment) Insert() error {
 }
 
 func (purchasePayment *PurchasePayment) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	collection := db.GetDB("store_" + purchasePayment.StoreID.Hex()).Collection("purchase_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -527,12 +537,11 @@ func (purchasePayment *PurchasePayment) Update() error {
 	return err
 }
 
-func FindPurchasePaymentByID(
+func (store *Store) FindPurchasePaymentByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (purchasePayment *PurchasePayment, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -551,8 +560,8 @@ func FindPurchasePaymentByID(
 	return purchasePayment, err
 }
 
-func IsPurchasePaymentExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+func (store *Store) IsPurchasePaymentExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -569,8 +578,8 @@ type PurchasePaymentStats struct {
 	TotalPayment float64             `json:"total_payment" bson:"total_payment"`
 }
 
-func GetPurchasePaymentStats(filter map[string]interface{}) (stats PurchasePaymentStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+func (store *Store) GetPurchasePaymentStats(filter map[string]interface{}) (stats PurchasePaymentStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -609,9 +618,9 @@ func GetPurchasePaymentStats(filter map[string]interface{}) (stats PurchasePayme
 	return stats, nil
 }
 
-func ProcessPurchasePayments() error {
+func (store *Store) ProcessPurchasePayments() error {
 	log.Print("Processing purchase payments")
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)

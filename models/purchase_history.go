@@ -55,8 +55,8 @@ type PurchaseHistoryStats struct {
 	TotalVat             float64             `json:"total_vat" bson:"total_vat"`
 }
 
-func GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHistoryStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+func (store *Store) GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHistoryStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -99,7 +99,7 @@ func GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHisto
 	return stats, nil
 }
 
-func SearchPurchaseHistory(w http.ResponseWriter, r *http.Request) (models []ProductPurchaseHistory, criterias SearchCriterias, err error) {
+func (store *Store) SearchPurchaseHistory(w http.ResponseWriter, r *http.Request) (models []ProductPurchaseHistory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -436,7 +436,7 @@ func SearchPurchaseHistory(w http.ResponseWriter, r *http.Request) (models []Pro
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -488,7 +488,7 @@ func SearchPurchaseHistory(w http.ResponseWriter, r *http.Request) (models []Pro
 			model.Store, _ = FindStoreByID(model.StoreID, storeSelectFields)
 		}
 		if _, ok := criterias.Select["vendor.id"]; ok {
-			model.Vendor, _ = FindVendorByID(model.VendorID, vendorSelectFields)
+			model.Vendor, _ = store.FindVendorByID(model.VendorID, vendorSelectFields)
 		}
 
 		models = append(models, model)
@@ -498,8 +498,12 @@ func SearchPurchaseHistory(w http.ResponseWriter, r *http.Request) (models []Pro
 }
 
 func (purchase *Purchase) AddProductsPurchaseHistory() error {
+	store, err := FindStoreByID(purchase.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
-	exists, err := IsPurchaseHistoryExistsByPurchaseID(&purchase.ID)
+	exists, err := store.IsPurchaseHistoryExistsByPurchaseID(&purchase.ID)
 	if err != nil {
 		return err
 	}
@@ -508,7 +512,7 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 		return nil
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -556,7 +560,7 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 
 func (purchase *Purchase) ClearProductsPurchaseHistory() error {
 	//log.Printf("Clearing product purchase history of purchase id:%s", purchase.Code)
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("product_purchase_history")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{"purchase_id": purchase.ID})
 	if err != nil {
@@ -565,8 +569,8 @@ func (purchase *Purchase) ClearProductsPurchaseHistory() error {
 	return nil
 }
 
-func IsPurchaseHistoryExistsByPurchaseID(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+func (store *Store) IsPurchaseHistoryExistsByPurchaseID(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -578,8 +582,8 @@ func IsPurchaseHistoryExistsByPurchaseID(ID *primitive.ObjectID) (exists bool, e
 	return (count > 0), err
 }
 
-func GetPurchaseHistoriesCountByProductID(productID *primitive.ObjectID) (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+func (store *Store) GetPurchaseHistoriesCountByProductID(productID *primitive.ObjectID) (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return collection.CountDocuments(ctx, bson.M{
@@ -587,12 +591,12 @@ func GetPurchaseHistoriesCountByProductID(productID *primitive.ObjectID) (count 
 	})
 }
 
-func GetPurchaseHistoriesByProductID(productID *primitive.ObjectID) (models []ProductPurchaseHistory, err error) {
+func (store *Store) GetPurchaseHistoriesByProductID(productID *primitive.ObjectID) (models []ProductPurchaseHistory, err error) {
 	var criterias SearchCriterias
 	criterias.SearchBy = make(map[string]interface{})
 
 	criterias.SearchBy["product_id"] = productID
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -630,7 +634,6 @@ func FindPurchaseHistoryByPurchaseID(
 	selectFields map[string]interface{},
 ) (purchaseHistory *ProductPurchaseHistory, err error) {
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -650,14 +653,14 @@ func FindPurchaseHistoryByPurchaseID(
 }
 */
 
-func ProcessPurchaseHistory() error {
+func (store *Store) ProcessPurchaseHistory() error {
 	log.Print("Processing purchase history")
-	totalCount, err := GetTotalCount(bson.M{}, "product_purchase_history")
+	totalCount, err := store.GetTotalCount(bson.M{}, "product_purchase_history")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -683,7 +686,7 @@ func ProcessPurchaseHistory() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		purchase, err := FindPurchaseByID(model.PurchaseID, map[string]interface{}{})
+		purchase, err := store.FindPurchaseByID(model.PurchaseID, map[string]interface{}{})
 		if err != nil {
 			return errors.New("Error finding purchase:" + err.Error())
 		}
@@ -700,7 +703,7 @@ func ProcessPurchaseHistory() error {
 }
 
 func (model *ProductPurchaseHistory) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)

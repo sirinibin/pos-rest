@@ -136,6 +136,11 @@ func (salesReturn *SalesReturn) AddPayments() error {
 }
 
 func (salesReturn *SalesReturn) UpdatePayments() error {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	salesReturn.GetPayments()
 	now := time.Now()
 	for _, payment := range salesReturn.PaymentsInput {
@@ -165,7 +170,7 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 
 		} else {
 			//Update
-			salesReturnPayment, err := FindSalesReturnPaymentByID(&payment.ID, bson.M{})
+			salesReturnPayment, err := store.FindSalesReturnPaymentByID(&payment.ID, bson.M{})
 			if err != nil {
 				return err
 			}
@@ -230,8 +235,8 @@ type SalesReturnStats struct {
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 }
 
-func GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -363,6 +368,10 @@ func (salesreturn *SalesReturn) AttributesValueChangeEvent(salesreturnOld *Sales
 }
 
 func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if salesreturn.StoreID != nil {
 		store, err := FindStoreByID(salesreturn.StoreID, bson.M{"id": 1, "name": 1})
@@ -373,7 +382,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 	}
 
 	if salesreturn.CustomerID != nil {
-		customer, err := FindCustomerByID(salesreturn.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -426,7 +435,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		}*/
 
 	for i, product := range salesreturn.Products {
-		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
 		}
@@ -488,7 +497,7 @@ func (model *SalesReturn) FindVatPrice() {
 	model.VatPrice = vatPrice
 }
 
-func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []SalesReturn, criterias SearchCriterias, err error) {
+func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []SalesReturn, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -876,7 +885,8 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -950,7 +960,7 @@ func SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []S
 			salesreturn.Store, _ = FindStoreByID(salesreturn.StoreID, storeSelectFields)
 		}
 		if _, ok := criterias.Select["customer.id"]; ok {
-			salesreturn.Customer, _ = FindCustomerByID(salesreturn.CustomerID, customerSelectFields)
+			salesreturn.Customer, _ = store.FindCustomerByID(salesreturn.CustomerID, customerSelectFields)
 		}
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
 			salesreturn.CreatedByUser, _ = FindUserByID(salesreturn.CreatedBy, createdByUserSelectFields)
@@ -977,7 +987,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["store_id"] = "Store is required"
 	}
 
-	customer, err := FindCustomerByID(salesreturn.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
 	if err != nil {
 		errs["customer_id"] = "invalid customer"
 	}
@@ -985,7 +995,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	if store.Zatca.Phase == "2" {
 		var lastSalesReturn *SalesReturn
 		if salesreturn.ID.IsZero() {
-			lastSalesReturn, err = FindLastSalesReturnByStoreID(&store.ID, bson.M{})
+			lastSalesReturn, err = store.FindLastSalesReturnByStoreID(&store.ID, bson.M{})
 			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
 				errs["store_id"] = "Error finding last sales return"
 			}
@@ -1123,7 +1133,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		return errs
 	}
 
-	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
+	order, err := store.FindOrderByID(salesreturn.OrderID, bson.M{})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		errs["order_id"] = err.Error()
@@ -1182,7 +1192,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsSalesReturnExists(&salesreturn.ID)
+		exists, err := store.IsSalesReturnExists(&salesreturn.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -1213,7 +1223,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	if salesreturn.CustomerID == nil || salesreturn.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {
-		exists, err := IsCustomerExists(salesreturn.CustomerID)
+		exists, err := store.IsCustomerExists(salesreturn.CustomerID)
 		if err != nil {
 			errs["customer_id"] = err.Error()
 			return errs
@@ -1266,7 +1276,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		if salesReturnProduct.ProductID.IsZero() {
 			errs["product_id"] = "Product is required for Sales Return"
 		} else {
-			exists, err := IsProductExists(&salesReturnProduct.ProductID)
+			exists, err := store.IsProductExists(&salesReturnProduct.ProductID)
 			if err != nil {
 				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
@@ -1345,7 +1355,12 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 }
 
 func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct(salesReturnOld *SalesReturn) error {
-	order, err := FindOrderByID(salesreturn.OrderID, bson.M{})
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	order, err := store.FindOrderByID(salesreturn.OrderID, bson.M{})
 	if err != nil {
 		return err
 	}
@@ -1467,6 +1482,11 @@ func (salesreturn *SalesReturn) RemoveStock() (err error) {
 */
 
 func (salesreturn *SalesReturn) AddStock() (err error) {
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	if len(salesreturn.Products) == 0 {
 		return nil
 	}
@@ -1476,7 +1496,7 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 			continue
 		}
 
-		product, err := FindProductByID(&salesreturnProduct.ProductID, bson.M{})
+		product, err := store.FindProductByID(&salesreturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -1528,7 +1548,12 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 }
 
 func (salesreturn *SalesReturn) GenerateCode(startFrom int, storeCode string) (string, error) {
-	count, err := GetTotalCount(bson.M{"store_id": salesreturn.StoreID}, "salesreturn")
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
+	if err != nil {
+		return "", err
+	}
+
+	count, err := store.GetTotalCount(bson.M{"store_id": salesreturn.StoreID}, "salesreturn")
 	if err != nil {
 		return "", err
 	}
@@ -1537,7 +1562,7 @@ func (salesreturn *SalesReturn) GenerateCode(startFrom int, storeCode string) (s
 }
 
 func (salesreturn *SalesReturn) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1673,11 +1698,11 @@ func (salesReturn *SalesReturn) MakeCode() error {
 	return salesReturn.MakeRedisCode()
 }
 
-func FindLastSalesReturnByStoreID(
+func (store *Store) FindLastSalesReturnByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (salesReturn *SalesReturn, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1698,7 +1723,12 @@ func FindLastSalesReturnByStoreID(
 }
 
 func (salesReturn *SalesReturn) UpdateOrderReturnDiscount(salesReturnOld *SalesReturn) error {
-	order, err := FindOrderByID(salesReturn.OrderID, bson.M{})
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	order, err := store.FindOrderByID(salesReturn.OrderID, bson.M{})
 	if err != nil {
 		return err
 	}
@@ -1712,9 +1742,14 @@ func (salesReturn *SalesReturn) UpdateOrderReturnDiscount(salesReturnOld *SalesR
 }
 
 func (salesReturn *SalesReturn) UpdateOrderReturnCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return 0, err
+	}
 
 	returnCount, err := collection.CountDocuments(ctx, bson.M{
 		"order_id": salesReturn.OrderID,
@@ -1724,7 +1759,7 @@ func (salesReturn *SalesReturn) UpdateOrderReturnCount() (count int64, err error
 		return 0, err
 	}
 
-	order, err := FindOrderByID(salesReturn.OrderID, bson.M{})
+	order, err := store.FindOrderByID(salesReturn.OrderID, bson.M{})
 	if err != nil {
 		return 0, err
 	}
@@ -1739,7 +1774,12 @@ func (salesReturn *SalesReturn) UpdateOrderReturnCount() (count int64, err error
 }
 
 func (salesReturn *SalesReturn) UpdateOrderReturnCashDiscount(salesReturnOld *SalesReturn) error {
-	order, err := FindOrderByID(salesReturn.OrderID, bson.M{})
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	order, err := store.FindOrderByID(salesReturn.OrderID, bson.M{})
 	if err != nil {
 		return err
 	}
@@ -1753,7 +1793,7 @@ func (salesReturn *SalesReturn) UpdateOrderReturnCashDiscount(salesReturnOld *Sa
 }
 
 func (salesreturn *SalesReturn) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1783,7 +1823,7 @@ func GenerateSalesReturnCode(n int) string {
 }
 
 func (salesreturn *SalesReturn) UpdateSalesReturnStatus(status string) (*SalesReturn, error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1805,7 +1845,7 @@ func (salesreturn *SalesReturn) UpdateSalesReturnStatus(status string) (*SalesRe
 }
 
 func (salesreturn *SalesReturn) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1828,7 +1868,7 @@ func (salesreturn *SalesReturn) Update() error {
 }
 
 func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1863,12 +1903,11 @@ func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err 
 	return nil
 }
 
-func FindSalesReturnByID(
+func (store *Store) FindSalesReturnByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (salesreturn *SalesReturn, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1891,7 +1930,7 @@ func FindSalesReturnByID(
 
 	if _, ok := selectFields["customer.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "customer")
-		salesreturn.Customer, _ = FindCustomerByID(salesreturn.CustomerID, fields)
+		salesreturn.Customer, _ = store.FindCustomerByID(salesreturn.CustomerID, fields)
 	}
 
 	if _, ok := selectFields["created_by_user.id"]; ok {
@@ -1914,8 +1953,8 @@ func FindSalesReturnByID(
 	return salesreturn, err
 }
 
-func IsSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+func (store *Store) IsSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1928,7 +1967,7 @@ func IsSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func (salesreturn *SalesReturn) HardDelete() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1939,13 +1978,13 @@ func (salesreturn *SalesReturn) HardDelete() (err error) {
 	return nil
 }
 
-func ProcessSalesReturns() error {
+func (store *Store) ProcessSalesReturns() error {
 	log.Print("Processing sales returns")
-	totalCount, err := GetTotalCount(bson.M{}, "salesreturn")
+	totalCount, err := store.GetTotalCount(bson.M{}, "salesreturn")
 	if err != nil {
 		return err
 	}
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -2097,8 +2136,7 @@ func ProcessSalesReturns() error {
 }
 
 func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
 	sortBy := map[string]interface{}{}
@@ -2159,6 +2197,11 @@ func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, er
 }
 
 func (salesReturn *SalesReturn) RemoveStock() (err error) {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	if len(salesReturn.Products) == 0 {
 		return nil
 	}
@@ -2168,7 +2211,7 @@ func (salesReturn *SalesReturn) RemoveStock() (err error) {
 			continue
 		}
 
-		product, err := FindProductByID(&salesReturnProduct.ProductID, bson.M{})
+		product, err := store.FindProductByID(&salesReturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
@@ -2218,7 +2261,7 @@ func (salesReturn *SalesReturn) RemoveStock() (err error) {
 
 func (salesReturn *SalesReturn) ClearPayments() error {
 	//log.Printf("Clearing Sales history of order id:%s", order.Code)
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{"sales_return_id": salesReturn.ID})
 	if err != nil {
@@ -2228,7 +2271,7 @@ func (salesReturn *SalesReturn) ClearPayments() error {
 }
 
 func (salesReturn *SalesReturn) GetPaymentsCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2247,7 +2290,7 @@ type ProductSalesReturnStats struct {
 }
 
 func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_sales_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2327,12 +2370,17 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 }
 
 func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	for _, salesReturnProduct := range salesReturn.Products {
 		if !salesReturnProduct.Selected {
 			continue
 		}
 
-		product, err := FindProductByID(&salesReturnProduct.ProductID, map[string]interface{}{})
+		product, err := store.FindProductByID(&salesReturnProduct.ProductID, map[string]interface{}{})
 		if err != nil {
 			return err
 		}
@@ -2360,7 +2408,7 @@ type CustomerSalesReturnStats struct {
 }
 
 func (customer *Customer) SetCustomerSalesReturnStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2492,8 +2540,12 @@ func (customer *Customer) SetCustomerSalesReturnStatsByStoreID(storeID primitive
 }
 
 func (salesReturn *SalesReturn) SetCustomerSalesReturnStats() error {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
-	customer, err := FindCustomerByID(salesReturn.CustomerID, map[string]interface{}{})
+	customer, err := store.FindCustomerByID(salesReturn.CustomerID, map[string]interface{}{})
 	if err != nil {
 		return err
 	}
@@ -2578,6 +2630,11 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	cashDiscountReceivedAccount *Account,
 	paymentsByDatetimeNumber int,
 ) ([]Journal, error) {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	groupID := primitive.NewObjectID()
 
@@ -2639,7 +2696,7 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(salesReturn.Date, firstPaymentDate) {
 		referenceModel := "customer"
-		customerAccount, err := CreateAccountIfNotExists(
+		customerAccount, err := store.CreateAccountIfNotExists(
 			salesReturn.StoreID,
 			&customer.ID,
 			&referenceModel,
@@ -2713,7 +2770,7 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "customer_account" {
 			referenceModel := "customer"
-			customerAccount, err := CreateAccountIfNotExists(
+			customerAccount, err := store.CreateAccountIfNotExists(
 				salesReturn.StoreID,
 				&customer.ID,
 				&referenceModel,
@@ -2760,7 +2817,7 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(salesReturn.Date, firstPaymentDate) {
 		referenceModel := "customer"
-		customerAccount, err := CreateAccountIfNotExists(
+		customerAccount, err := store.CreateAccountIfNotExists(
 			salesReturn.StoreID,
 			&customer.ID,
 			&referenceModel,
@@ -2794,6 +2851,11 @@ func MakeJournalsForSalesReturnExtraPayments(
 	bankAccount *Account,
 	extraPayments []SalesReturnPayment,
 ) ([]Journal, error) {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	journals := []Journal{}
 	groupID := primitive.NewObjectID()
@@ -2804,7 +2866,7 @@ func MakeJournalsForSalesReturnExtraPayments(
 	}
 
 	referenceModel := "customer"
-	customerAccount, err := CreateAccountIfNotExists(
+	customerAccount, err := store.CreateAccountIfNotExists(
 		salesReturn.StoreID,
 		&customer.ID,
 		&referenceModel,
@@ -2835,7 +2897,7 @@ func MakeJournalsForSalesReturnExtraPayments(
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "customer_account" {
 			referenceModel := "customer"
-			customerAccount, err := CreateAccountIfNotExists(
+			customerAccount, err := store.CreateAccountIfNotExists(
 				salesReturn.StoreID,
 				&customer.ID,
 				&referenceModel,
@@ -2887,29 +2949,34 @@ func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]Sal
 //End customer account journals
 
 func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 
-	customer, err := FindCustomerByID(salesReturn.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
-	cashAccount, err := CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Cash", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Bank", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	salesReturnAccount, err := CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Sales Return", nil)
+	salesReturnAccount, err := store.CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Sales Return", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	cashDiscountReceivedAccount, err := CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Cash discount received", nil)
+	cashDiscountReceivedAccount, err := store.CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Cash discount received", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2924,7 +2991,7 @@ func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
 	if len(salesReturn.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(firstPaymentDate, salesReturn.Date)) {
 		//Case: UnPaid
 		referenceModel := "customer"
-		customerAccount, err := CreateAccountIfNotExists(
+		customerAccount, err := store.CreateAccountIfNotExists(
 			salesReturn.StoreID,
 			&customer.ID,
 			&referenceModel,
@@ -3023,7 +3090,12 @@ func (salesReturn *SalesReturn) DoAccounting() error {
 }
 
 func (salesReturn *SalesReturn) UndoAccounting() error {
-	ledger, err := FindLedgerByReferenceID(salesReturn.ID, *salesReturn.StoreID, bson.M{})
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(salesReturn.ID, *salesReturn.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return errors.New("Error finding ledger by reference id: " + err.Error())
 	}
@@ -3041,12 +3113,12 @@ func (salesReturn *SalesReturn) UndoAccounting() error {
 		}
 	}
 
-	err = RemoveLedgerByReferenceID(salesReturn.ID)
+	err = store.RemoveLedgerByReferenceID(salesReturn.ID)
 	if err != nil {
 		return errors.New("Error removing ledger by reference id: " + err.Error())
 	}
 
-	err = RemovePostingsByReferenceID(salesReturn.ID)
+	err = store.RemovePostingsByReferenceID(salesReturn.ID)
 	if err != nil {
 		return errors.New("Error removing postings by reference id: " + err.Error())
 	}
@@ -3060,7 +3132,7 @@ func (salesReturn *SalesReturn) UndoAccounting() error {
 }
 
 func (salesReturn *SalesReturn) FindPreviousSalesReturn(selectFields map[string]interface{}) (previousSalesReturn *SalesReturn, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

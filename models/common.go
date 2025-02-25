@@ -89,8 +89,16 @@ func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {
 	return date.Add(time.Hour*time.Duration(hrs) + time.Minute*time.Duration(mins))
 }
 
+func (store *Store) GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, filter)
+}
+
 func GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	collection := db.Client("").Database(db.GetPosDB()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -215,9 +223,9 @@ func ParseRelationalSelectString(selectFields interface{}, prefix string) (field
 	return fields
 }
 
-func ClearSalesHistory() error {
+func (store *Store) ClearSalesHistory() error {
 	log.Print("Clearing Sales history")
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
 	ctx := context.Background()
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
@@ -226,10 +234,10 @@ func ClearSalesHistory() error {
 	return nil
 }
 
-func ClearSalesReturnHistory() error {
+func (store *Store) ClearSalesReturnHistory() error {
 	log.Print("Clearing Sales Return hsitory")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_sales_return_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_return_history")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err
@@ -238,10 +246,10 @@ func ClearSalesReturnHistory() error {
 	return nil
 }
 
-func ClearPurchaseHistory() error {
+func (store *Store) ClearPurchaseHistory() error {
 	log.Print("Clearing Purchase hsitory")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err
@@ -250,10 +258,10 @@ func ClearPurchaseHistory() error {
 	return nil
 }
 
-func ClearPurchaseReturnHistory() error {
+func (store *Store) ClearPurchaseReturnHistory() error {
 	log.Print("Clearing Purchase Return hsitory")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_purchase_return_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_return_history")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err
@@ -261,10 +269,10 @@ func ClearPurchaseReturnHistory() error {
 	return nil
 }
 
-func ClearQuotationHistory() error {
+func (store *Store) ClearQuotationHistory() error {
 	log.Print("Clearing Quotation history")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_quotation_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_quotation_history")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err
@@ -273,10 +281,10 @@ func ClearQuotationHistory() error {
 	return nil
 }
 
-func ClearDeliveryNoteHistory() error {
+func (store *Store) ClearDeliveryNoteHistory() error {
 	log.Print("Clearing Delivery Note history")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_delivery_note_history")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err
@@ -285,10 +293,10 @@ func ClearDeliveryNoteHistory() error {
 	return nil
 }
 
-func ClearSalesReturnPayments() error {
+func (store *Store) ClearSalesReturnPayments() error {
 	log.Print("Clearing Sales Return payments")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_return_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("sales_return_payment")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err
@@ -297,10 +305,10 @@ func ClearSalesReturnPayments() error {
 	return nil
 }
 
-func ClearPurchaseReturnPayments() error {
+func (store *Store) ClearPurchaseReturnPayments() error {
 	log.Print("Clearing Purchase Return payments")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase_return_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase_return_payment")
 	_, err := collection.DeleteMany(ctx, bson.M{})
 	if err != nil {
 		return err

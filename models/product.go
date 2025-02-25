@@ -125,11 +125,11 @@ type ProductStats struct {
 	PurchaseStockValue  float64             `json:"purchase_stock_value" bson:"purchase_stock_value"`
 }
 
-func GetProductStats(
+func (store *Store) GetProductStats(
 	filter map[string]interface{},
 	storeID primitive.ObjectID,
 ) (stats ProductStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
@@ -429,6 +429,10 @@ func (product *Product) SetChangeLog(
 }
 
 func (product *Product) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	product.CategoryName = []string{}
 
@@ -446,7 +450,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	for _, categoryID := range product.CategoryID {
-		productCategory, err := FindProductCategoryByID(categoryID, bson.M{"id": 1, "name": 1})
+		productCategory, err := store.FindProductCategoryByID(categoryID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error Finding product category id:" + categoryID.Hex() + ",error:" + err.Error())
 		}
@@ -454,7 +458,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	for _, category := range product.Category {
-		productCategory, err := FindProductCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
+		productCategory, err := store.FindProductCategoryByID(&category.ID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error Finding product category id:" + category.ID.Hex() + ",error:" + err.Error())
 		}
@@ -506,7 +510,7 @@ type BarTenderProductData struct {
 	PurchaseUnitPriceSecret string `json:"purchase_unit_price_secret"`
 }
 
-func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err error) {
+func (store *Store) GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err error) {
 	products = []BarTenderProductData{}
 
 	criterias := SearchCriterias{
@@ -523,14 +527,16 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 		return products, errors.New("store_code is required")
 	}
 
-	store, err := FindStoreByCode(storeCode, bson.M{})
-	if err != nil {
-		return products, err
-	}
+	/*
+		store, err = FindStoreByCode(storeCode, bson.M{})
+		if err != nil {
+			return products, err
+		}
+	*/
 
 	criterias.Select = ParseSelectString("id,name,barcode,unit_prices,rack")
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSort(criterias.SortBy)
@@ -606,7 +612,7 @@ func GetBarTenderProducts(r *http.Request) (products []BarTenderProductData, err
 	return products, nil
 }
 
-func SearchProduct(w http.ResponseWriter, r *http.Request, loadData bool) (products []Product, criterias SearchCriterias, err error) {
+func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadData bool) (products []Product, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -1593,7 +1599,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request, loadData bool) (produ
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -1670,7 +1676,7 @@ func SearchProduct(w http.ResponseWriter, r *http.Request, loadData bool) (produ
 
 		if _, ok := criterias.Select["category.id"]; ok {
 			for _, categoryID := range product.CategoryID {
-				category, _ := FindProductCategoryByID(categoryID, categorySelectFields)
+				category, _ := store.FindProductCategoryByID(categoryID, categorySelectFields)
 				product.Category = append(product.Category, category)
 			}
 		}
@@ -1737,8 +1743,14 @@ func GenerateSecretCode(n int) string {
 }
 
 func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = err.Error()
+		return errs
+	}
 
 	if scenario == "update" {
 		if product.ID.IsZero() {
@@ -1746,7 +1758,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsProductExists(&product.ID)
+		exists, err := store.IsProductExists(&product.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -1812,7 +1824,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		errs["category_id"] = "Atleast 1 category is required"
 	} else {
 		for i, categoryID := range product.CategoryID {
-			exists, err := IsProductCategoryExists(categoryID)
+			exists, err := store.IsProductCategoryExists(categoryID)
 			if err != nil {
 				errs["category_id_"+strconv.Itoa(i)] = err.Error()
 			}
@@ -1864,11 +1876,10 @@ func (product *Product) GenerateBarCode(startFrom int, count int64) (string, err
 	return strconv.Itoa(code + 1), nil
 }
 
-func FindLastProduct(
+func (store *Store) FindLastProduct(
 	selectFields map[string]interface{},
 ) (product *Product, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1909,8 +1920,13 @@ func (product *Product) SetPartNumber() (err error) {
 }
 
 func (product *Product) SetBarcode() (err error) {
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	if len(product.Ean12) == 0 {
-		lastProduct, err := FindLastProduct(bson.M{})
+		lastProduct, err := store.FindLastProduct(bson.M{})
 		if err != nil {
 			return err
 		}
@@ -2024,7 +2040,7 @@ func (product *Product) CalculateUnitProfit() (err error) {
 }
 
 func (product *Product) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 	_, err = collection.InsertOne(ctx, &product)
@@ -2064,7 +2080,7 @@ func (product *Product) SaveImages() error {
 }
 
 func (product *Product) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -2084,7 +2100,7 @@ func (product *Product) Update() error {
 }
 
 func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -2120,12 +2136,11 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindProductByItemCode(
+func (store *Store) FindProductByItemCode(
 	itemCode string,
 	selectFields map[string]interface{},
 ) (product *Product, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2146,12 +2161,11 @@ func FindProductByItemCode(
 	return product, err
 }
 
-func FindProductByBarCode(
+func (store *Store) FindProductByBarCode(
 	barCode string,
 	selectFields map[string]interface{},
 ) (product *Product, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2177,12 +2191,11 @@ func FindProductByBarCode(
 	return product, err
 }
 
-func FindProductByID(
+func (store *Store) FindProductByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (product *Product, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -2201,7 +2214,7 @@ func FindProductByID(
 	if _, ok := selectFields["category.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "category")
 		for _, categoryID := range product.CategoryID {
-			category, _ := FindProductCategoryByID(categoryID, fields)
+			category, _ := store.FindProductCategoryByID(categoryID, fields)
 			product.Category = append(product.Category, category)
 		}
 
@@ -2226,7 +2239,7 @@ func FindProductByID(
 }
 
 func (product *Product) IsItemCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -2246,7 +2259,7 @@ func (product *Product) IsItemCodeExists() (exists bool, err error) {
 }
 
 func (product *Product) IsPartNumberExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -2266,7 +2279,7 @@ func (product *Product) IsPartNumberExists() (exists bool, err error) {
 }
 
 func (product *Product) IsBarCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -2286,7 +2299,7 @@ func (product *Product) IsBarCodeExists() (exists bool, err error) {
 }
 
 func (product *Product) IsEan12Exists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -2305,8 +2318,8 @@ func (product *Product) IsEan12Exists() (exists bool, err error) {
 	return (count > 0), err
 }
 
-func IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+func (store *Store) IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -2319,7 +2332,12 @@ func IsProductExists(ID *primitive.ObjectID) (exists bool, err error) {
 }
 
 func (product *Product) ReflectValidPurchaseUnitPrice() error {
-	salesHistories, err := GetSalesHistoriesByProductID(&product.ID)
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	salesHistories, err := store.GetSalesHistoriesByProductID(&product.ID)
 	if err != nil {
 		return errors.New("Error fetching sales history of product:" + err.Error())
 	}
@@ -2329,7 +2347,7 @@ func (product *Product) ReflectValidPurchaseUnitPrice() error {
 	}
 
 	for _, salesHistory := range salesHistories {
-		order, err := FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
+		order, err := store.FindOrderByID(salesHistory.OrderID, map[string]interface{}{})
 		if err != nil {
 			return errors.New("Error fetching order:" + err.Error())
 		}
@@ -2356,13 +2374,13 @@ func (product *Product) ReflectValidPurchaseUnitPrice() error {
 	return nil
 }
 
-func ProcessProducts() error {
+func (store *Store) ProcessProducts() error {
 	log.Printf("Processing products")
-	totalCount, err := GetTotalCount(bson.M{}, "product")
+	totalCount, err := store.GetTotalCount(bson.M{}, "product")
 	if err != nil {
 		return err
 	}
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -2423,7 +2441,7 @@ func ProcessProducts() error {
 func (product *Product) HardDelete() error {
 	log.Print("Deleting product")
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("product")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	_, err := collection.DeleteOne(ctx, bson.M{
 		"_id": product.ID,
 	})

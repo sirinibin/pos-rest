@@ -25,8 +25,14 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	postings := []models.Posting{}
-
-	postings, criterias, err, startDate, endDate := models.SearchPosting(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	postings, criterias, err, startDate, endDate := store.SearchPosting(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find postings:" + err.Error()
@@ -38,7 +44,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "posting")
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "posting")
 			if err != nil {
 				response.Status = false
 				response.Errors["total_count"] = "Unable to find total count of accounts:" + err.Error()
@@ -46,7 +52,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			postingListStats, err = models.GetPostingListStats(criterias.SearchBy, startDate, endDate)
+			postingListStats, err = store.GetPostingListStats(criterias.SearchBy, startDate, endDate)
 			if err != nil {
 				response.Status = false
 				response.Errors["posting_list_stats"] = "Unable to find posting list stats:" + err.Error()
@@ -68,7 +74,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		account, err = models.FindAccountByID(accountID, bson.M{})
+		account, err = store.FindAccountByID(accountID, bson.M{})
 		if err != nil {
 			response.Status = false
 			response.Errors["account_id"] = "Invalid account id:" + err.Error()

@@ -58,11 +58,15 @@ func (customerwithdrawal *CustomerWithdrawal) AttributesValueChangeEvent(custome
 }
 
 func (customerwithdrawal *CustomerWithdrawal) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	customerwithdrawal.CategoryName = []string{}
 
 	if customerwithdrawal.CustomerID != nil {
-		customer, err := FindCustomerByID(customerwithdrawal.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -110,8 +114,9 @@ type CustomerWithdrawalStats struct {
 	Total float64             `json:"total" bson:"total"`
 }
 
-func GetCustomerWithdrawalStats(filter map[string]interface{}) (stats CustomerWithdrawalStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+func (store *Store) GetCustomerWithdrawalStats(filter map[string]interface{}) (stats CustomerWithdrawalStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -143,7 +148,7 @@ func GetCustomerWithdrawalStats(filter map[string]interface{}) (stats CustomerWi
 	return stats, nil
 }
 
-func SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Request) (customerwithdrawals []CustomerWithdrawal, criterias SearchCriterias, err error) {
+func (store *Store) SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Request) (customerwithdrawals []CustomerWithdrawal, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -384,7 +389,7 @@ func SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Request) (customerw
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -464,8 +469,14 @@ func SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Request) (customerw
 }
 
 func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if scenario == "update" {
 		if customerwithdrawal.ID.IsZero() {
@@ -473,7 +484,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsCustomerWithdrawalExists(&customerwithdrawal.ID)
+		exists, err := store.IsCustomerWithdrawalExists(&customerwithdrawal.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -504,7 +515,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 	if customerwithdrawal.CustomerID == nil || customerwithdrawal.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {
-		exists, err := IsCustomerExists(customerwithdrawal.CustomerID)
+		exists, err := store.IsCustomerExists(customerwithdrawal.CustomerID)
 		if err != nil {
 			errs["customer_id"] = err.Error()
 			return errs
@@ -543,7 +554,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		customerwithdrawal.Date = &date
 	}
 
-	customer, err := FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
 	if err != nil {
 		errs["customer_id"] = "Invalid Customer:" + customerwithdrawal.CustomerID.Hex()
 	}
@@ -558,7 +569,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 	}
 
 	referenceModel := "customer"
-	customerAccount, err := CreateAccountIfNotExists(
+	customerAccount, err := store.CreateAccountIfNotExists(
 		customerwithdrawal.StoreID,
 		&customer.ID,
 		&referenceModel,
@@ -576,7 +587,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 
 	if customerAccount != nil {
 		if scenario == "update" {
-			oldCustomerWithdrawl, _ = FindCustomerWithdrawalByID(&customerwithdrawal.ID, bson.M{})
+			oldCustomerWithdrawl, _ = store.FindCustomerWithdrawalByID(&customerwithdrawal.ID, bson.M{})
 			if customerAccount.CreditTotal > (customerAccount.DebitTotal - oldCustomerWithdrawl.Amount) {
 				accountType = "liability"
 				customerBalance += oldCustomerWithdrawl.Amount
@@ -596,7 +607,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		spendingAccount := &Account{}
 		spendingAccountName := ""
 		if customerwithdrawal.PaymentMethod == "cash" {
-			cashAccount, err := CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Cash", nil)
+			cashAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Cash", nil)
 			if err != nil {
 				errs["payment_method"] = "error fetching cash account"
 			}
@@ -609,7 +620,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			spendingAccountName = "cash"
 
 		} else if slices.Contains(BANK_PAYMENT_METHODS, customerwithdrawal.PaymentMethod) {
-			bankAccount, err := CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Bank", nil)
+			bankAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Bank", nil)
 			if err != nil {
 				errs["payment_method"] = "error fetching bank account"
 			}
@@ -662,11 +673,10 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 	return errs
 }
 
-func FindLastCustomerWithdrawal(
+func (store *Store) FindLastCustomerWithdrawal(
 	selectFields map[string]interface{},
 ) (customerwithdrawal *CustomerWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -688,12 +698,11 @@ func FindLastCustomerWithdrawal(
 	return customerwithdrawal, err
 }
 
-func FindLastCustomerWithdrawalByStoreID(
+func (store *Store) FindLastCustomerWithdrawalByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (customerwithdrawal *CustomerWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -714,7 +723,12 @@ func FindLastCustomerWithdrawalByStoreID(
 }
 
 func (customerwithdrawal *CustomerWithdrawal) MakeCode() error {
-	lastCustomerWithdrawal, err := FindLastCustomerWithdrawalByStoreID(customerwithdrawal.StoreID, bson.M{})
+	store, err := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	lastCustomerWithdrawal, err := store.FindLastCustomerWithdrawalByStoreID(customerwithdrawal.StoreID, bson.M{})
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
@@ -763,7 +777,7 @@ func (customerwithdrawal *CustomerWithdrawal) MakeCode() error {
 }
 
 func (customerwithdrawal *CustomerWithdrawal) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
 	customerwithdrawal.ID = primitive.NewObjectID()
 
 	if len(customerwithdrawal.Code) == 0 {
@@ -823,7 +837,7 @@ func (customerwithdrawal *CustomerWithdrawal) SaveImages() error {
 }
 
 func (customerwithdrawal *CustomerWithdrawal) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -851,7 +865,7 @@ func (customerwithdrawal *CustomerWithdrawal) Update() error {
 }
 
 func (customerwithdrawal *CustomerWithdrawal) DeleteCustomerWithdrawal(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -885,12 +899,11 @@ func (customerwithdrawal *CustomerWithdrawal) DeleteCustomerWithdrawal(tokenClai
 	return nil
 }
 
-func FindCustomerWithdrawalByCode(
+func (store *Store) FindCustomerWithdrawalByCode(
 	code string,
 	selectFields map[string]interface{},
 ) (customerwithdrawal *CustomerWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -909,12 +922,11 @@ func FindCustomerWithdrawalByCode(
 	return customerwithdrawal, err
 }
 
-func FindCustomerWithdrawalByID(
+func (store *Store) FindCustomerWithdrawalByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (customerwithdrawal *CustomerWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -949,7 +961,7 @@ func FindCustomerWithdrawalByID(
 }
 
 func (customerwithdrawal *CustomerWithdrawal) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -968,8 +980,8 @@ func (customerwithdrawal *CustomerWithdrawal) IsCodeExists() (exists bool, err e
 	return (count > 0), err
 }
 
-func IsCustomerWithdrawalExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+func (store *Store) IsCustomerWithdrawalExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -981,8 +993,8 @@ func IsCustomerWithdrawalExists(ID *primitive.ObjectID) (exists bool, err error)
 	return (count == 1), err
 }
 
-func ProcessCustomerWithdrawals() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customerwithdrawal")
+func (store *Store) ProcessCustomerWithdrawals() error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -1044,7 +1056,12 @@ func (customerWithdrawal *CustomerWithdrawal) DoAccounting() error {
 }
 
 func (customerWithdrawal *CustomerWithdrawal) UndoAccounting() error {
-	ledger, err := FindLedgerByReferenceID(customerWithdrawal.ID, *customerWithdrawal.StoreID, bson.M{})
+	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(customerWithdrawal.ID, *customerWithdrawal.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
@@ -1058,12 +1075,12 @@ func (customerWithdrawal *CustomerWithdrawal) UndoAccounting() error {
 		}
 	}
 
-	err = RemoveLedgerByReferenceID(customerWithdrawal.ID)
+	err = store.RemoveLedgerByReferenceID(customerWithdrawal.ID)
 	if err != nil {
 		return err
 	}
 
-	err = RemovePostingsByReferenceID(customerWithdrawal.ID)
+	err = store.RemovePostingsByReferenceID(customerWithdrawal.ID)
 	if err != nil {
 		return err
 	}
@@ -1077,15 +1094,20 @@ func (customerWithdrawal *CustomerWithdrawal) UndoAccounting() error {
 }
 
 func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, err error) {
+	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 
-	customer, err := FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 
 	referenceModel := "customer"
-	customerAccount, err := CreateAccountIfNotExists(
+	customerAccount, err := store.CreateAccountIfNotExists(
 		customerWithdrawal.StoreID,
 		&customer.ID,
 		&referenceModel,
@@ -1096,12 +1118,12 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 		return nil, err
 	}
 
-	cashAccount, err := CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Bank", nil)
 	if err != nil {
 		return nil, err
 	}

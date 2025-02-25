@@ -137,7 +137,7 @@ func (store *Store) AttributesValueChangeEvent(storeOld *Store) error {
 		}
 
 		for _, collectionName := range usedInCollections {
-			err := UpdateManyByCollectionName(
+			err := store.UpdateManyByCollectionName(
 				collectionName,
 				bson.M{"store_id": store.ID},
 				bson.M{"store_name": store.Name},
@@ -302,7 +302,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -759,7 +759,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 }
 
 func (store *Store) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	store.ID = primitive.NewObjectID()
@@ -805,7 +805,7 @@ func (store *Store) SaveLogoFile() error {
 }
 
 func (store *Store) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -837,7 +837,7 @@ func (store *Store) Update() error {
 }
 
 func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -875,7 +875,7 @@ func FindStoreByCode(
 	Code string,
 	selectFields map[string]interface{},
 ) (store *Store, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -913,7 +913,7 @@ func FindStoreByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (store *Store, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -948,7 +948,7 @@ func FindStoreByID(
 }
 
 func (store *Store) IsEmailExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -968,7 +968,7 @@ func (store *Store) IsEmailExists() (exists bool, err error) {
 }
 
 func IsStoreExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -982,7 +982,7 @@ func IsStoreExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 func ProcessStores() error {
 	log.Printf("Processing stores")
-	collection := db.Client().Database(db.GetPosDB()).Collection("store")
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -1007,10 +1007,16 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		err = store.Update()
+		_, err = store.CreateDB()
 		if err != nil {
 			return err
 		}
+		/*
+			err = store.Update()
+			if err != nil {
+				return err
+			}
+		*/
 	}
 
 	log.Print("DONE!")
@@ -1018,7 +1024,7 @@ func ProcessStores() error {
 }
 
 func (store *Store) GetSalesCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("order")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1029,7 +1035,7 @@ func (store *Store) GetSalesCount() (count int64, err error) {
 }
 
 func (store *Store) GetSalesReturnCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("salesreturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1040,7 +1046,7 @@ func (store *Store) GetSalesReturnCount() (count int64, err error) {
 }
 
 func (store *Store) GetPurchaseCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchase")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1051,7 +1057,7 @@ func (store *Store) GetPurchaseCount() (count int64, err error) {
 }
 
 func (store *Store) GetPurchaseReturnCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("purchasereturn")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1062,7 +1068,7 @@ func (store *Store) GetPurchaseReturnCount() (count int64, err error) {
 }
 
 func (store *Store) GetQuotationCount() (count int64, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("quotation")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1070,4 +1076,46 @@ func (store *Store) GetQuotationCount() (count int64, err error) {
 		"store_id": store.ID,
 		"deleted":  bson.M{"$ne": true},
 	})
+}
+
+// Function to create a new DB for a store
+func (store *Store) CreateDB() (*mongo.Database, error) {
+	// Naming the database dynamically based on storeID
+	dbName := "store_" + store.ID.Hex()
+	storeDB := db.GetDB("store_" + store.ID.Hex())
+	fmt.Println("✅ Database created for store:", dbName)
+	return storeDB, nil
+}
+
+func GetAllStores() (stores []Store, err error) {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	if err != nil {
+		return stores, errors.New("Error fetching products" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return stores, errors.New("Cursor error:" + err.Error())
+		}
+		store := Store{}
+		err = cur.Decode(&store)
+		if err != nil {
+			return stores, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		stores = append(stores, store)
+
+	}
+
+	return stores, nil
 }

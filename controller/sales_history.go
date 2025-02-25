@@ -24,7 +24,15 @@ func ListSalesHistory(w http.ResponseWriter, r *http.Request) {
 
 	histories := []models.ProductSalesHistory{}
 
-	histories, criterias, err := models.SearchSalesHistory(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	histories, criterias, err := store.SearchSalesHistory(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find sales history:" + err.Error()
@@ -34,7 +42,7 @@ func ListSalesHistory(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product_sales_history")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_sales_history")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
@@ -42,7 +50,7 @@ func ListSalesHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesHistoryStats, err := models.GetSalesHistoryStats(criterias.SearchBy)
+	salesHistoryStats, err := store.GetSalesHistoryStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_sales"] = "Unable to find total amount of sales:" + err.Error()

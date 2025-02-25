@@ -75,6 +75,7 @@ type Vendor struct {
 	DeletedByName              string                 `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	Stores                     map[string]VendorStore `bson:"stores" json:"stores"`
 	SearchLabel                string                 `json:"search_label"`
+	StoreID                    *primitive.ObjectID    `json:"store_id,omitempty" bson:"store_id,omitempty"`
 }
 
 //Stores2                    []VendorStore          `bson:"stores,omitempty" json:"stores,omitempty"`
@@ -82,20 +83,22 @@ type Vendor struct {
 func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 
 	if vendor.Name != vendorOld.Name {
-		usedInCollections := []string{
-			"purchase",
-		}
-
-		for _, collectionName := range usedInCollections {
-			err := UpdateManyByCollectionName(
-				collectionName,
-				bson.M{"vendor_id": vendor.ID},
-				bson.M{"vendor_name": vendor.Name},
-			)
-			if err != nil {
-				return nil
+		/*
+			usedInCollections := []string{
+				"purchase",
 			}
-		}
+
+			for _, collectionName := range usedInCollections {
+				err := UpdateManyByCollectionName(
+					collectionName,
+					bson.M{"vendor_id": vendor.ID},
+					bson.M{"vendor_name": vendor.Name},
+				)
+				if err != nil {
+					return nil
+				}
+			}
+		*/
 	}
 
 	return nil
@@ -130,7 +133,7 @@ func (vendor *Vendor) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, criterias SearchCriterias, err error) {
+func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -568,7 +571,8 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -663,8 +667,12 @@ func SearchVendor(w http.ResponseWriter, r *http.Request) (vendors []Vendor, cri
 }
 
 func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(vendor.StoreID, bson.M{})
+	if err != nil {
+		errs["store_id"] = "invalid store id"
+	}
 
 	if scenario == "update" {
 		if vendor.ID.IsZero() {
@@ -672,7 +680,7 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsVendorExists(&vendor.ID)
+		exists, err := store.IsVendorExists(&vendor.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -786,7 +794,7 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 }
 
 func (vendor *Vendor) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	vendor.ID = primitive.NewObjectID()
@@ -832,7 +840,7 @@ func (vendor *Vendor) SaveLogoFile() error {
 }
 
 func (vendor *Vendor) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -865,7 +873,7 @@ func (vendor *Vendor) Update() error {
 }
 
 func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -899,12 +907,11 @@ func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindVendorByID(
+func (store *Store) FindVendorByID(
 	ID *primitive.ObjectID,
 	selectFields bson.M,
 ) (vendor *Vendor, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -939,7 +946,7 @@ func FindVendorByID(
 }
 
 func (vendor *Vendor) IsEmailExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -958,8 +965,8 @@ func (vendor *Vendor) IsEmailExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func IsVendorExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("vendor")
+func (store *Store) IsVendorExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)

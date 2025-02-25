@@ -28,8 +28,14 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchases := []models.Purchase{}
-
-	purchases, criterias, err := models.SearchPurchase(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	purchases, criterias, err := store.SearchPurchase(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find purchases:" + err.Error()
@@ -45,7 +51,7 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "purchase")
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchase")
 			if err != nil {
 				response.Status = false
 				response.Errors["total_count"] = "Unable to find total count of purchases:" + err.Error()
@@ -53,7 +59,7 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			purchaseStats, err = models.GetPurchaseStats(criterias.SearchBy)
+			purchaseStats, err = store.GetPurchaseStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
 				response.Errors["purchase_stats"] = "Unable to find purchase stats:" + err.Error()
@@ -230,7 +236,15 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchaseOld, err = models.FindPurchaseByID(&purchaseID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchaseOld, err = store.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_purchase"] = "Unable to find purchase:" + err.Error()
@@ -239,7 +253,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase, err = models.FindPurchaseByID(&purchaseID, bson.M{})
+	purchase, err = store.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_purchase"] = "Unable to find purchase:" + err.Error()
@@ -368,7 +382,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase, err = models.FindPurchaseByID(&purchase.ID, bson.M{})
+	purchase, err = store.FindPurchaseByID(&purchase.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find purchase:" + err.Error()
@@ -415,7 +429,15 @@ func ViewPurchase(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	purchase, err = models.FindPurchaseByID(&purchaseID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchase, err = store.FindPurchaseByID(&purchaseID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -456,7 +478,15 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase, err := models.FindPurchaseByID(&purchaseID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchase, err := store.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

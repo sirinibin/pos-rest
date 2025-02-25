@@ -26,6 +26,14 @@ func ListAccounts(w http.ResponseWriter, r *http.Request) {
 
 	accounts := []models.Account{}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	accounts, criterias, err := models.SearchAccount(w, r)
 	if err != nil {
 		response.Status = false
@@ -38,7 +46,7 @@ func ListAccounts(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "account")
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "account")
 			if err != nil {
 				response.Status = false
 				response.Errors["total_count"] = "Unable to find total count of accounts:" + err.Error()
@@ -46,7 +54,7 @@ func ListAccounts(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			accountListStats, err = models.GetAccountListStats(criterias.SearchBy)
+			accountListStats, err = store.GetAccountListStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
 				response.Errors["account_list_stats"] = "Unable to find account list stats:" + err.Error()
@@ -117,7 +125,15 @@ func ViewAccount(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	account, err = models.FindAccountByID(accountID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	account, err = store.FindAccountByID(accountID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

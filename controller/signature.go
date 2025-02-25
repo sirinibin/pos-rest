@@ -28,8 +28,14 @@ func ListSignature(w http.ResponseWriter, r *http.Request) {
 	}
 
 	signatures := []models.UserSignature{}
-
-	signatures, criterias, err := models.SearchSignature(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	signatures, criterias, err := store.SearchSignature(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find signatures:" + err.Error()
@@ -39,7 +45,7 @@ func ListSignature(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "signature")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "signature")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of signatures:" + err.Error()
@@ -145,7 +151,15 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err = models.FindSignatureByID(&signatureID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	signature, err = store.FindSignatureByID(&signatureID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -189,7 +203,7 @@ func UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err = models.FindSignatureByID(&signature.ID, bson.M{})
+	signature, err = store.FindSignatureByID(&signature.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find signature:" + err.Error()
@@ -235,7 +249,15 @@ func ViewSignature(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	signature, err = models.FindSignatureByID(&signatureID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	signature, err = store.FindSignatureByID(&signatureID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -274,7 +296,15 @@ func DeleteSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signature, err := models.FindSignatureByID(&signatureID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	signature, err := store.FindSignatureByID(&signatureID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

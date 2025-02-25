@@ -30,8 +30,15 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orders := []models.Order{}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	orders, criterias, err := models.SearchOrder(w, r)
+	orders, criterias, err := store.SearchOrder(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find orders:" + err.Error()
@@ -47,7 +54,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "order")
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "order")
 			if err != nil {
 				response.Status = false
 				response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
@@ -55,7 +62,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			salesStats, err = models.GetSalesStats(criterias.SearchBy)
+			salesStats, err = store.GetSalesStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
 				response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()
@@ -299,7 +306,15 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orderOld, err = models.FindOrderByID(&orderID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	orderOld, err = store.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_order"] = "Unable to find order:" + err.Error()
@@ -308,7 +323,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err = models.FindOrderByID(&orderID, bson.M{})
+	order, err = store.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_order"] = "Unable to find order:" + err.Error()
@@ -415,7 +430,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.SetProductsSalesStats()
 	order.SetCustomerSalesStats()
 
-	order, err = models.FindOrderByID(&order.ID, bson.M{})
+	order, err = store.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find order:" + err.Error()
@@ -435,14 +450,6 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	store, err := models.FindStoreByID(order.StoreID, bson.M{})
-	if err != nil {
-		response.Status = false
-		response.Errors["store"] = "invalid store: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -496,7 +503,15 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	order, err = models.FindOrderByID(&orderID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err = store.FindOrderByID(&orderID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -537,7 +552,15 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := models.FindOrderByID(&orderID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err := store.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

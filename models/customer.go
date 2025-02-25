@@ -124,8 +124,13 @@ func (customer *Customer) SetChangeLog(
 
 func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) error {
 
+	store, err := FindStoreByID(customer.StoreID, bson.M{})
+	if err != nil {
+		return nil
+	}
+
 	if customer.Name != customerOld.Name {
-		err := UpdateManyByCollectionName(
+		err := store.UpdateManyByCollectionName(
 			"order",
 			bson.M{"customer_id": customer.ID},
 			bson.M{"customer_name": customer.Name},
@@ -134,7 +139,7 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 			return nil
 		}
 
-		err = UpdateManyByCollectionName(
+		err = store.UpdateManyByCollectionName(
 			"quotation",
 			bson.M{"customer_id": customer.ID},
 			bson.M{"customer_name": customer.Name},
@@ -147,13 +152,12 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 	return nil
 }
 
-func UpdateManyByCollectionName(
+func (store *Store) UpdateManyByCollectionName(
 	collectionName string,
 	filter bson.M,
 	updateValues bson.M,
 ) error {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection(collectionName)
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	defer cancel()
@@ -199,7 +203,7 @@ func (customer *Customer) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Customer, criterias SearchCriterias, err error) {
+func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Customer, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -758,7 +762,7 @@ func SearchCustomer(w http.ResponseWriter, r *http.Request) (customers []Custome
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -874,13 +878,20 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 	errs = make(map[string]string)
 	customer.TrimSpaceFromFields()
 
+	store, err := FindStoreByID(customer.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
+
 	if scenario == "update" {
 		if customer.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsCustomerExists(&customer.ID)
+		exists, err := store.IsCustomerExists(&customer.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -891,12 +902,6 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 			errs["id"] = "Invalid Customer:" + customer.ID.Hex()
 		}
 
-	}
-
-	store, err := FindStoreByID(customer.StoreID, bson.M{})
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		errs["store_id"] = err.Error()
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsValidDigitNumber(strings.TrimSpace(customer.VATNo), "15") {
@@ -978,7 +983,7 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 }
 
 func (customer *Customer) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -993,7 +998,7 @@ func (customer *Customer) Insert() error {
 }
 
 func (customer *Customer) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1012,7 +1017,7 @@ func (customer *Customer) Update() error {
 }
 
 func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -1052,11 +1057,11 @@ func IsValidDigitNumber(s string, digitsCount string) bool {
 	return re.MatchString(s)
 }
 
-func FindCustomerByID(
+func (store *Store) FindCustomerByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (customer *Customer, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -1091,7 +1096,7 @@ func FindCustomerByID(
 }
 
 func (customer *Customer) IsEmailExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1111,7 +1116,7 @@ func (customer *Customer) IsEmailExists() (exists bool, err error) {
 }
 
 func (customer *Customer) IsPhoneExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1130,8 +1135,8 @@ func (customer *Customer) IsPhoneExists() (exists bool, err error) {
 	return (count == 1), err
 }
 
-func IsCustomerExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+func (store *Store) IsCustomerExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -1143,13 +1148,14 @@ func IsCustomerExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessCustomers() error {
+func (store *Store) ProcessCustomers() error {
 	log.Printf("Processing customers")
-	totalCount, err := GetTotalCount(bson.M{}, "customer")
+	totalCount, err := store.GetTotalCount(bson.M{}, "customer")
 	if err != nil {
 		return err
 	}
-	collection := db.Client().Database(db.GetPosDB()).Collection("customer")
+
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)

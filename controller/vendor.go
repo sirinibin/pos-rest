@@ -29,7 +29,15 @@ func ListVendor(w http.ResponseWriter, r *http.Request) {
 
 	vendors := []models.Vendor{}
 
-	vendors, criterias, err := models.SearchVendor(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vendors, criterias, err := store.SearchVendor(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find vendors:" + err.Error()
@@ -39,7 +47,7 @@ func ListVendor(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "vendor")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "vendor")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of vendors:" + err.Error()
@@ -145,7 +153,15 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendorOld, err := models.FindVendorByID(&vendorID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vendorOld, err := store.FindVendorByID(&vendorID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -153,7 +169,7 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, err = models.FindVendorByID(&vendorID, bson.M{})
+	vendor, err = store.FindVendorByID(&vendorID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -208,7 +224,7 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, err = models.FindVendorByID(&vendor.ID, bson.M{})
+	vendor, err = store.FindVendorByID(&vendor.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find vendor:" + err.Error()
@@ -255,7 +271,15 @@ func ViewVendor(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	vendor, err = models.FindVendorByID(&vendorID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vendor, err = store.FindVendorByID(&vendorID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -295,7 +319,15 @@ func DeleteVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, err := models.FindVendorByID(&vendorID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vendor, err := store.FindVendorByID(&vendorID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

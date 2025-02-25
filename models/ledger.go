@@ -42,7 +42,7 @@ type Journal struct {
 	UpdatedAt     *time.Time         `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
-func SearchLedger(w http.ResponseWriter, r *http.Request) (models []Ledger, criterias SearchCriterias, err error) {
+func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models []Ledger, criterias SearchCriterias, err error) {
 	criterias = SearchCriterias{
 		Page:   1,
 		Size:   10,
@@ -310,7 +310,7 @@ func SearchLedger(w http.ResponseWriter, r *http.Request) (models []Ledger, crit
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("ledger")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -360,9 +360,9 @@ func SearchLedger(w http.ResponseWriter, r *http.Request) (models []Ledger, crit
 
 }
 
-func RemoveLedgerByReferenceID(referenceID primitive.ObjectID) error {
+func (store *Store) RemoveLedgerByReferenceID(referenceID primitive.ObjectID) error {
 	ctx := context.Background()
-	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("ledger")
 	_, err := collection.DeleteOne(ctx, bson.M{
 		"reference_id": referenceID,
 	})
@@ -374,7 +374,8 @@ func RemoveLedgerByReferenceID(referenceID primitive.ObjectID) error {
 }
 
 func (ledger *Ledger) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	collection := db.GetDB("store_" + ledger.StoreID.Hex()).Collection("ledger")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -389,7 +390,8 @@ func (ledger *Ledger) Insert() error {
 }
 
 func (ledger *Ledger) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	collection := db.GetDB("store_" + ledger.StoreID.Hex()).Collection("ledger")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -412,12 +414,13 @@ func (ledger *Ledger) Update() error {
 	return nil
 }
 
-func FindLedgerByReferenceID(
+func (store *Store) FindLedgerByReferenceID(
 	referenceID primitive.ObjectID,
 	storeID primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (ledger *Ledger, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("ledger")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("ledger")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

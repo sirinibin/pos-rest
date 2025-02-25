@@ -28,7 +28,15 @@ func ListSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturnpayments, criterias, err := models.SearchSalesReturnPayment(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturnpayments, criterias, err := store.SearchSalesReturnPayment(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find sales return payments:" + err.Error()
@@ -38,7 +46,7 @@ func ListSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "sales_return_payment")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "sales_return_payment")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of salesreturnpayments:" + err.Error()
@@ -46,7 +54,7 @@ func ListSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturnpaymentStats, err := models.GetSalesReturnPaymentStats(criterias.SearchBy)
+	salesreturnpaymentStats, err := store.GetSalesReturnPaymentStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_payment"] = "Unable to find total amount of sales return payment:" + err.Error()
@@ -120,8 +128,16 @@ func CreateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	//Updating salesReturn.payments
-	salesReturn, _ := models.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
+	salesReturn, _ := store.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
 	salesReturn.GetPayments()
 	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
@@ -160,7 +176,15 @@ func UpdateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturnpayment, err = models.FindSalesReturnPaymentByID(&salesreturnpaymentID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturnpayment, err = store.FindSalesReturnPaymentByID(&salesreturnpaymentID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -206,12 +230,12 @@ func UpdateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Updating salesReturn.payments
-	salesReturn, _ := models.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
+	salesReturn, _ := store.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
 	salesReturn.GetPayments()
 	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
 
-	salesreturnpayment, err = models.FindSalesReturnPaymentByID(&salesreturnpayment.ID, bson.M{})
+	salesreturnpayment, err = store.FindSalesReturnPaymentByID(&salesreturnpayment.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find salesreturn payment:" + err.Error()
@@ -258,7 +282,15 @@ func ViewSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	salesreturnpayment, err = models.FindSalesReturnPaymentByID(&salesreturnpaymentID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturnpayment, err = store.FindSalesReturnPaymentByID(&salesreturnpaymentID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -306,7 +338,15 @@ func DeleteSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesReturnPayment, err := models.FindSalesReturnPaymentByID(&salesReturnPaymentID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesReturnPayment, err := store.FindSalesReturnPaymentByID(&salesReturnPaymentID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Error finding sales return payement: " + err.Error()
@@ -329,7 +369,7 @@ func DeleteSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating salesReturn.payments
 	if salesReturnPayment.SalesReturnID != nil {
-		salesReturn, _ := models.FindSalesReturnByID(salesReturnPayment.SalesReturnID, map[string]interface{}{})
+		salesReturn, _ := store.FindSalesReturnByID(salesReturnPayment.SalesReturnID, map[string]interface{}{})
 		salesReturn.GetPayments()
 		salesReturn.SetCustomerSalesReturnStats()
 		salesReturn.Update()

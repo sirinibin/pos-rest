@@ -29,7 +29,15 @@ func ListCapital(w http.ResponseWriter, r *http.Request) {
 
 	capitals := []models.Capital{}
 
-	capitals, criterias, err := models.SearchCapital(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capitals, criterias, err := store.SearchCapital(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find capitals:" + err.Error()
@@ -39,7 +47,7 @@ func ListCapital(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "capital")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "capital")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of capitals:" + err.Error()
@@ -47,7 +55,7 @@ func ListCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capitalStats, err := models.GetCapitalStats(criterias.SearchBy)
+	capitalStats, err := store.GetCapitalStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total"] = "Unable to find total amount of capitals:" + err.Error()
@@ -165,7 +173,15 @@ func UpdateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capitalOld, err = models.FindCapitalByID(&capitalID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capitalOld, err = store.FindCapitalByID(&capitalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["capital"] = "Unable to find capital:" + err.Error()
@@ -174,7 +190,7 @@ func UpdateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capital, err = models.FindCapitalByID(&capitalID, bson.M{})
+	capital, err = store.FindCapitalByID(&capitalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["capital"] = "Unable to find capital:" + err.Error()
@@ -228,7 +244,7 @@ func UpdateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capital, err = models.FindCapitalByID(&capital.ID, bson.M{})
+	capital, err = store.FindCapitalByID(&capital.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find capital:" + err.Error()
@@ -289,7 +305,15 @@ func ViewCapital(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	capital, err = models.FindCapitalByID(&capitalID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capital, err = store.FindCapitalByID(&capitalID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -335,7 +359,15 @@ func ViewCapitalByCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	capital, err = models.FindCapitalByCode(code, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capital, err = store.FindCapitalByCode(code, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -375,7 +407,15 @@ func DeleteCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	capital, err := models.FindCapitalByID(&capitalID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	capital, err := store.FindCapitalByID(&capitalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

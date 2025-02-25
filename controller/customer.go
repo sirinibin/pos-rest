@@ -27,8 +27,15 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	Customers := []models.Customer{}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	Customers, criterias, err := models.SearchCustomer(w, r)
+	Customers, criterias, err := store.SearchCustomer(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find Customers:" + err.Error()
@@ -38,7 +45,7 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "customer")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "customer")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of customers:" + err.Error()
@@ -146,7 +153,15 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerOld, err = models.FindCustomerByID(&customerID, nil)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerOld, err = store.FindCustomerByID(&customerID, nil)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -154,7 +169,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, err = models.FindCustomerByID(&customerID, nil)
+	customer, err = store.FindCustomerByID(&customerID, nil)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -210,7 +225,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, err = models.FindCustomerByID(&customer.ID, nil)
+	customer, err = store.FindCustomerByID(&customer.ID, nil)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find customer:" + err.Error()
@@ -257,7 +272,15 @@ func ViewCustomer(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	customer, err = models.FindCustomerByID(&customerID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customer, err = store.FindCustomerByID(&customerID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -297,7 +320,15 @@ func DeleteCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, err := models.FindCustomerByID(&customerID, nil)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customer, err := store.FindCustomerByID(&customerID, nil)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

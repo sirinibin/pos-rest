@@ -14,45 +14,72 @@ import (
 var once sync.Once
 
 var (
+	mu             sync.Mutex
 	clientInstance *mongo.Client
+	connections    = make(map[string]*mongo.Client)
+	dbs            = make(map[string]*mongo.Database)
 )
 
+func GetDB(dbName string) *mongo.Database {
+	if dbName != "" {
+		_, dbExists := dbs[dbName]
+		_, connectionExists := connections[dbName]
+
+		if dbExists && connectionExists {
+			return dbs[dbName]
+		}
+
+		dbs[dbName] = Client(dbName).Database(dbName)
+		return dbs[dbName]
+	} else {
+		return Client(GetPosDB()).Database(GetPosDB())
+	}
+}
+
 // Client : function to get Mongo Client
-func Client() *mongo.Client {
+func Client(dbName string) *mongo.Client {
 
 	once.Do(func() { // <-- atomic, does not allow repeating
-		clientInstance = Connect()
+		if dbName == "" {
+			clientInstance = Connect(GetPosDB())
+		} else {
+			_, exists := connections[dbName]
+			if !exists {
+				connections[dbName] = Connect(dbName)
+			}
+		}
 	})
+
+	if dbName != "" {
+		_, connectionExists := connections[dbName]
+		if !connectionExists {
+			connections[dbName] = Connect(dbName)
+		}
+		return connections[dbName]
+	}
 
 	return clientInstance
 }
 
 // Connect : To connect to the mongoDb
-func Connect() *mongo.Client {
+func Connect(dbName string) *mongo.Client {
 	//mongo-go-driver settings
-	mongoClient, err := GetMongoClient()
+	mongoClient, err := GetMongoClient(dbName)
 	if err != nil {
 		panic(err)
 	}
 	return mongoClient
 }
 
-// GetPantahubBaseDB : Get Pantahub Base DB
-func GetPosDB() string {
-	return Getenv("MONGO_DB", "pos")
-}
-
-func Getenv(key, fallback string) string {
-	value := os.Getenv(key)
-	if len(value) == 0 {
-		return fallback
-	}
-	return value
-}
-
 // GetMongoClient : To Get Mongo Client Object
-func GetMongoClient() (*mongo.Client, error) {
-	MongoDb := GetPosDB()
+func GetMongoClient(dbName string) (*mongo.Client, error) {
+	var MongoDb string
+	if dbName != "" {
+		MongoDb = dbName
+	} else {
+		MongoDb = GetPosDB()
+	}
+
 	user := os.Getenv("MONGO_USER")
 	pass := os.Getenv("MONGO_PASS")
 	host := Getenv("MONGO_HOST", "localhost")
@@ -102,4 +129,38 @@ func GetMongoClient() (*mongo.Client, error) {
 	}
 
 	return client, err
+}
+
+// GetPantahubBaseDB : Get Pantahub Base DB
+func GetPosDB() string {
+	return Getenv("MONGO_DB", "pos")
+}
+
+func Getenv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
+}
+
+// Cleanup function to close unused connections
+func CloseConnections() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for storeID, client := range connections {
+		_ = client.Disconnect(context.Background())
+		delete(connections, storeID)
+	}
+}
+
+// Periodic cleanup (can be run in a separate goroutine)
+func StartCleanupRoutine(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			CloseConnections()
+		}
+	}()
 }

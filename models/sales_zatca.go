@@ -50,7 +50,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 		return xmlContent, err
 	}
 
-	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
 		return xmlContent, err
 	}
@@ -586,7 +586,7 @@ func (order *Order) ReportToZatca() error {
 		return errors.New("error finding store: " + err.Error())
 	}
 
-	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
 		return errors.New("error finding customer: " + err.Error())
 	}

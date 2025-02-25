@@ -28,8 +28,15 @@ func ListCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	customerwithdrawals := []models.CustomerWithdrawal{}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	customerwithdrawals, criterias, err := models.SearchCustomerWithdrawal(w, r)
+	customerwithdrawals, criterias, err := store.SearchCustomerWithdrawal(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find customerwithdrawals:" + err.Error()
@@ -39,7 +46,8 @@ func ListCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "customerwithdrawal")
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "customerwithdrawal")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of customerwithdrawals:" + err.Error()
@@ -47,7 +55,7 @@ func ListCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerwithdrawalStats, err := models.GetCustomerWithdrawalStats(criterias.SearchBy)
+	customerwithdrawalStats, err := store.GetCustomerWithdrawalStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total"] = "Unable to find total amount of customerwithdrawals:" + err.Error()
@@ -165,7 +173,15 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerwithdrawalOld, err = models.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerwithdrawalOld, err = store.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["customerwithdrawal"] = "Unable to find customerwithdrawal:" + err.Error()
@@ -174,7 +190,7 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerwithdrawal, err = models.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
+	customerwithdrawal, err = store.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["customerwithdrawal"] = "Unable to find customerwithdrawal:" + err.Error()
@@ -228,7 +244,7 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerwithdrawal, err = models.FindCustomerWithdrawalByID(&customerwithdrawal.ID, bson.M{})
+	customerwithdrawal, err = store.FindCustomerWithdrawalByID(&customerwithdrawal.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find customerwithdrawal:" + err.Error()
@@ -289,7 +305,15 @@ func ViewCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	customerwithdrawal, err = models.FindCustomerWithdrawalByID(&customerwithdrawalID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerwithdrawal, err = store.FindCustomerWithdrawalByID(&customerwithdrawalID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -335,7 +359,15 @@ func ViewCustomerWithdrawalByCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	customerwithdrawal, err = models.FindCustomerWithdrawalByCode(code, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerwithdrawal, err = store.FindCustomerWithdrawalByCode(code, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -375,7 +407,15 @@ func DeleteCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerwithdrawal, err := models.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customerwithdrawal, err := store.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

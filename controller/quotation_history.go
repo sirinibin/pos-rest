@@ -22,7 +22,15 @@ func ListQuotationHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	histories, criterias, err := models.SearchQuotationHistory(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	histories, criterias, err := store.SearchQuotationHistory(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find quotation history:" + err.Error()
@@ -32,7 +40,7 @@ func ListQuotationHistory(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product_quotation_history")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_quotation_history")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
@@ -40,7 +48,7 @@ func ListQuotationHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotationHistoryStats, err := models.GetQuotationHistoryStats(criterias.SearchBy)
+	quotationHistoryStats, err := store.GetQuotationHistoryStats(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_quotation"] = "Unable to find total amount of quotation:" + err.Error()

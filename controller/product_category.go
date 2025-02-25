@@ -28,8 +28,14 @@ func ListProductCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	productCategories := []models.ProductCategory{}
-
-	productCategories, criterias, err := models.SearchProductCategory(w, r)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	productCategories, criterias, err := store.SearchProductCategory(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find product categories:" + err.Error()
@@ -39,7 +45,7 @@ func ListProductCategory(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "product_category")
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_category")
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of product categories:" + err.Error()
@@ -146,7 +152,15 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory, err = models.FindProductCategoryByID(&productCategoryID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productCategory, err = store.FindProductCategoryByID(&productCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -155,7 +169,7 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategoryOld, err = models.FindProductCategoryByID(&productCategoryID, bson.M{})
+	productCategoryOld, err = store.FindProductCategoryByID(&productCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -211,7 +225,7 @@ func UpdateProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory, err = models.FindProductCategoryByID(&productCategory.ID, bson.M{})
+	productCategory, err = store.FindProductCategoryByID(&productCategory.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find product category:" + err.Error()
@@ -258,7 +272,15 @@ func ViewProductCategory(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	productCategory, err = models.FindProductCategoryByID(&productCategoryID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productCategory, err = store.FindProductCategoryByID(&productCategoryID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -299,7 +321,15 @@ func DeleteProductCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productCategory, err := models.FindProductCategoryByID(&productCategoryID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productCategory, err := store.FindProductCategoryByID(&productCategoryID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

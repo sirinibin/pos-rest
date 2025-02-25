@@ -110,8 +110,8 @@ type CapitalStats struct {
 	Total float64             `json:"total" bson:"total"`
 }
 
-func GetCapitalStats(filter map[string]interface{}) (stats CapitalStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+func (store *Store) GetCapitalStats(filter map[string]interface{}) (stats CapitalStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -143,7 +143,7 @@ func GetCapitalStats(filter map[string]interface{}) (stats CapitalStats, err err
 	return stats, nil
 }
 
-func SearchCapital(w http.ResponseWriter, r *http.Request) (capitals []Capital, criterias SearchCriterias, err error) {
+func (store *Store) SearchCapital(w http.ResponseWriter, r *http.Request) (capitals []Capital, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -384,7 +384,7 @@ func SearchCapital(w http.ResponseWriter, r *http.Request) (capitals []Capital, 
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -464,6 +464,12 @@ func SearchCapital(w http.ResponseWriter, r *http.Request) (capitals []Capital, 
 }
 
 func (capital *Capital) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+	store, err := FindStoreByID(capital.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	errs = make(map[string]string)
 
@@ -473,7 +479,7 @@ func (capital *Capital) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsCapitalExists(&capital.ID)
+		exists, err := store.IsCapitalExists(&capital.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -569,11 +575,10 @@ func (capital *Capital) Validate(w http.ResponseWriter, r *http.Request, scenari
 	return errs
 }
 
-func FindLastCapital(
+func (store *Store) FindLastCapital(
 	selectFields map[string]interface{},
 ) (capital *Capital, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -595,12 +600,11 @@ func FindLastCapital(
 	return capital, err
 }
 
-func FindLastCapitalByStoreID(
+func (store *Store) FindLastCapitalByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (capital *Capital, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -621,15 +625,16 @@ func FindLastCapitalByStoreID(
 }
 
 func (capital *Capital) MakeCode() error {
-	lastCapital, err := FindLastCapitalByStoreID(capital.StoreID, bson.M{})
+	store, err := FindStoreByID(capital.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	lastCapital, err := store.FindLastCapitalByStoreID(capital.StoreID, bson.M{})
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
 	if lastCapital == nil {
-		store, err := FindStoreByID(capital.StoreID, bson.M{})
-		if err != nil {
-			return err
-		}
 		capital.Code = store.Code + "-100000"
 	} else {
 		splits := strings.Split(lastCapital.Code, "-")
@@ -670,7 +675,7 @@ func (capital *Capital) MakeCode() error {
 }
 
 func (capital *Capital) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + capital.StoreID.Hex()).Collection("capital")
 	capital.ID = primitive.NewObjectID()
 
 	if len(capital.Code) == 0 {
@@ -730,7 +735,7 @@ func (capital *Capital) SaveImages() error {
 }
 
 func (capital *Capital) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + capital.StoreID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -758,7 +763,7 @@ func (capital *Capital) Update() error {
 }
 
 func (capital *Capital) DeleteCapital(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + capital.StoreID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -792,12 +797,11 @@ func (capital *Capital) DeleteCapital(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-func FindCapitalByCode(
+func (store *Store) FindCapitalByCode(
 	code string,
 	selectFields map[string]interface{},
 ) (capital *Capital, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -816,12 +820,11 @@ func FindCapitalByCode(
 	return capital, err
 }
 
-func FindCapitalByID(
+func (store *Store) FindCapitalByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (capital *Capital, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -856,7 +859,7 @@ func FindCapitalByID(
 }
 
 func (capital *Capital) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + capital.StoreID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -875,8 +878,8 @@ func (capital *Capital) IsCodeExists() (exists bool, err error) {
 	return (count > 0), err
 }
 
-func IsCapitalExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+func (store *Store) IsCapitalExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -888,13 +891,13 @@ func IsCapitalExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessCapitals() error {
-	totalCount, err := GetTotalCount(bson.M{}, "capital")
+func (store *Store) ProcessCapitals() error {
+	totalCount, err := store.GetTotalCount(bson.M{}, "capital")
 	if err != nil {
 		return err
 	}
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("capital")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -969,7 +972,12 @@ func (capital *Capital) DoAccounting() error {
 }
 
 func (capital *Capital) UndoAccounting() error {
-	ledger, err := FindLedgerByReferenceID(capital.ID, *capital.StoreID, bson.M{})
+	store, err := FindStoreByID(capital.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(capital.ID, *capital.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
@@ -983,12 +991,12 @@ func (capital *Capital) UndoAccounting() error {
 		}
 	}
 
-	err = RemoveLedgerByReferenceID(capital.ID)
+	err = store.RemoveLedgerByReferenceID(capital.ID)
 	if err != nil {
 		return err
 	}
 
-	err = RemovePostingsByReferenceID(capital.ID)
+	err = store.RemovePostingsByReferenceID(capital.ID)
 	if err != nil {
 		return err
 	}
@@ -1002,6 +1010,11 @@ func (capital *Capital) UndoAccounting() error {
 }
 
 func (capital *Capital) CreateLedger() (ledger *Ledger, err error) {
+	store, err := FindStoreByID(capital.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 
 	investor, err := FindUserByID(capital.InvestedByUserID, bson.M{})
@@ -1010,7 +1023,7 @@ func (capital *Capital) CreateLedger() (ledger *Ledger, err error) {
 	}
 
 	referenceModel := "investor"
-	investorAccount, err := CreateAccountIfNotExists(
+	investorAccount, err := store.CreateAccountIfNotExists(
 		capital.StoreID,
 		&investor.ID,
 		&referenceModel,
@@ -1021,12 +1034,12 @@ func (capital *Capital) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
-	cashAccount, err := CreateAccountIfNotExists(capital.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(capital.StoreID, nil, nil, "Cash", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := CreateAccountIfNotExists(capital.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(capital.StoreID, nil, nil, "Bank", nil)
 	if err != nil {
 		return nil, err
 	}

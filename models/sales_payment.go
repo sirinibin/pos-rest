@@ -73,6 +73,10 @@ func (salesPayment *SalesPayment) AttributesValueChangeEvent(salesPaymentOld *Sa
 */
 
 func (salesPayment *SalesPayment) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(salesPayment.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if salesPayment.StoreID != nil && !salesPayment.StoreID.IsZero() {
 		store, err := FindStoreByID(salesPayment.StoreID, bson.M{"id": 1, "name": 1})
@@ -85,7 +89,7 @@ func (salesPayment *SalesPayment) UpdateForeignLabelFields() error {
 	}
 
 	if salesPayment.OrderID != nil && !salesPayment.OrderID.IsZero() {
-		order, err := FindOrderByID(salesPayment.OrderID, bson.M{"id": 1, "code": 1})
+		order, err := store.FindOrderByID(salesPayment.OrderID, bson.M{"id": 1, "code": 1})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return err
 		}
@@ -116,7 +120,7 @@ func (salesPayment *SalesPayment) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchSalesPayment(w http.ResponseWriter, r *http.Request) (models []SalesPayment, criterias SearchCriterias, err error) {
+func (store *Store) SearchSalesPayment(w http.ResponseWriter, r *http.Request) (models []SalesPayment, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -363,7 +367,7 @@ func SearchSalesPayment(w http.ResponseWriter, r *http.Request) (models []SalesP
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("sales_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -406,8 +410,12 @@ func SearchSalesPayment(w http.ResponseWriter, r *http.Request) (models []SalesP
 }
 
 func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(salesPayment.StoreID, bson.M{})
+	if err != nil {
+		errs["store_id"] = "invalid store id"
+	}
 
 	var oldSalesPayment *SalesPayment
 
@@ -432,7 +440,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsSalesPaymentExists(&salesPayment.ID)
+		exists, err := store.IsSalesPaymentExists(&salesPayment.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -443,7 +451,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 			errs["id"] = "Invalid sales payment :" + salesPayment.ID.Hex()
 		}
 
-		oldSalesPayment, err = FindSalesPaymentByID(&salesPayment.ID, bson.M{})
+		oldSalesPayment, err = store.FindSalesPaymentByID(&salesPayment.ID, bson.M{})
 		if err != nil {
 			errs["sales_payment"] = err.Error()
 			return errs
@@ -465,7 +473,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		}
 	*/
 
-	order, err := FindOrderByID(salesPayment.OrderID, bson.M{})
+	order, err := store.FindOrderByID(salesPayment.OrderID, bson.M{})
 	if err != nil {
 		return errs
 	}
@@ -484,12 +492,12 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		}
 	*/
 
-	customer, err := FindCustomerByID(order.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
 		errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
 	}
 
-	customerAccount, err := FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
+	customerAccount, err := store.FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_account"] = "Error finding customer account: " + err.Error()
 	}
@@ -538,7 +546,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 }
 
 func (salesPayment *SalesPayment) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	collection := db.GetDB("store_" + salesPayment.StoreID.Hex()).Collection("sales_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -557,7 +565,7 @@ func (salesPayment *SalesPayment) Insert() error {
 }
 
 func (salesPayment *SalesPayment) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	collection := db.GetDB("store_" + salesPayment.StoreID.Hex()).Collection("sales_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -578,12 +586,11 @@ func (salesPayment *SalesPayment) Update() error {
 	return err
 }
 
-func FindSalesPaymentByID(
+func (store *Store) FindSalesPaymentByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (salesPayment *SalesPayment, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("sales_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -602,8 +609,8 @@ func FindSalesPaymentByID(
 	return salesPayment, err
 }
 
-func IsSalesPaymentExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+func (store *Store) IsSalesPaymentExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("sales_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -620,8 +627,8 @@ type SalesPaymentStats struct {
 	TotalPayment float64             `json:"total_payment" bson:"total_payment"`
 }
 
-func GetSalesPaymentStats(filter map[string]interface{}) (stats SalesPaymentStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+func (store *Store) GetSalesPaymentStats(filter map[string]interface{}) (stats SalesPaymentStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("sales_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -672,9 +679,9 @@ func GetSalesPaymentStats(filter map[string]interface{}) (stats SalesPaymentStat
 	return stats, nil
 }
 
-func ProcessSalesPayments() error {
+func (store *Store) ProcessSalesPayments() error {
 	log.Print("Processing sales payments")
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("sales_payment")
 
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -720,7 +727,7 @@ func ProcessSalesPayments() error {
 }
 
 func (salesPayment *SalesPayment) DeleteSalesPayment() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("sales_payment")
+	collection := db.GetDB("store_" + salesPayment.StoreID.Hex()).Collection("sales_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)

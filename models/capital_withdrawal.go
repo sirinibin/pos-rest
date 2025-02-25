@@ -108,8 +108,8 @@ type CapitalWithdrawalStats struct {
 	Total float64             `json:"total" bson:"total"`
 }
 
-func GetCapitalWithdrawalStats(filter map[string]interface{}) (stats CapitalWithdrawalStats, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+func (store *Store) GetCapitalWithdrawalStats(filter map[string]interface{}) (stats CapitalWithdrawalStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -141,7 +141,7 @@ func GetCapitalWithdrawalStats(filter map[string]interface{}) (stats CapitalWith
 	return stats, nil
 }
 
-func SearchCapitalWithdrawal(w http.ResponseWriter, r *http.Request) (capitalwithdrawals []CapitalWithdrawal, criterias SearchCriterias, err error) {
+func (store *Store) SearchCapitalWithdrawal(w http.ResponseWriter, r *http.Request) (capitalwithdrawals []CapitalWithdrawal, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -382,7 +382,8 @@ func SearchCapitalWithdrawal(w http.ResponseWriter, r *http.Request) (capitalwit
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
+
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -462,8 +463,14 @@ func SearchCapitalWithdrawal(w http.ResponseWriter, r *http.Request) (capitalwit
 }
 
 func (capitalwithdrawal *CapitalWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(capitalwithdrawal.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["id"] = "invalid store id"
+		return errs
+	}
 
 	if scenario == "update" {
 		if capitalwithdrawal.ID.IsZero() {
@@ -471,7 +478,7 @@ func (capitalwithdrawal *CapitalWithdrawal) Validate(w http.ResponseWriter, r *h
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsCapitalWithdrawalExists(&capitalwithdrawal.ID)
+		exists, err := store.IsCapitalWithdrawalExists(&capitalwithdrawal.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -567,11 +574,10 @@ func (capitalwithdrawal *CapitalWithdrawal) Validate(w http.ResponseWriter, r *h
 	return errs
 }
 
-func FindLastCapitalWithdrawal(
+func (store *Store) FindLastCapitalWithdrawal(
 	selectFields map[string]interface{},
 ) (capitalwithdrawal *CapitalWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -593,12 +599,11 @@ func FindLastCapitalWithdrawal(
 	return capitalwithdrawal, err
 }
 
-func FindLastCapitalWithdrawalByStoreID(
+func (store *Store) FindLastCapitalWithdrawalByStoreID(
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (capitalwithdrawal *CapitalWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -619,7 +624,12 @@ func FindLastCapitalWithdrawalByStoreID(
 }
 
 func (capitalwithdrawal *CapitalWithdrawal) MakeCode() error {
-	lastCapitalWithdrawal, err := FindLastCapitalWithdrawalByStoreID(capitalwithdrawal.StoreID, bson.M{})
+	store, err := FindStoreByID(capitalwithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	lastCapitalWithdrawal, err := store.FindLastCapitalWithdrawalByStoreID(capitalwithdrawal.StoreID, bson.M{})
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
@@ -668,7 +678,7 @@ func (capitalwithdrawal *CapitalWithdrawal) MakeCode() error {
 }
 
 func (capitalwithdrawal *CapitalWithdrawal) Insert() (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + capitalwithdrawal.StoreID.Hex()).Collection("capitalwithdrawal")
 	capitalwithdrawal.ID = primitive.NewObjectID()
 
 	if len(capitalwithdrawal.Code) == 0 {
@@ -728,7 +738,7 @@ func (capitalwithdrawal *CapitalWithdrawal) SaveImages() error {
 }
 
 func (capitalwithdrawal *CapitalWithdrawal) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + capitalwithdrawal.StoreID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -756,7 +766,7 @@ func (capitalwithdrawal *CapitalWithdrawal) Update() error {
 }
 
 func (capitalwithdrawal *CapitalWithdrawal) DeleteCapitalWithdrawal(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + capitalwithdrawal.StoreID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -790,12 +800,11 @@ func (capitalwithdrawal *CapitalWithdrawal) DeleteCapitalWithdrawal(tokenClaims 
 	return nil
 }
 
-func FindCapitalWithdrawalByCode(
+func (store *Store) FindCapitalWithdrawalByCode(
 	code string,
 	selectFields map[string]interface{},
 ) (capitalwithdrawal *CapitalWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -814,12 +823,11 @@ func FindCapitalWithdrawalByCode(
 	return capitalwithdrawal, err
 }
 
-func FindCapitalWithdrawalByID(
+func (store *Store) FindCapitalWithdrawalByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (capitalwithdrawal *CapitalWithdrawal, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -854,7 +862,7 @@ func FindCapitalWithdrawalByID(
 }
 
 func (capitalwithdrawal *CapitalWithdrawal) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+	collection := db.GetDB("store_" + capitalwithdrawal.StoreID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -873,8 +881,8 @@ func (capitalwithdrawal *CapitalWithdrawal) IsCodeExists() (exists bool, err err
 	return (count > 0), err
 }
 
-func IsCapitalWithdrawalExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+func (store *Store) IsCapitalWithdrawalExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -886,8 +894,8 @@ func IsCapitalWithdrawalExists(ID *primitive.ObjectID) (exists bool, err error) 
 	return (count == 1), err
 }
 
-func ProcessCapitalWithdrawals() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("capitalwithdrawal")
+func (store *Store) ProcessCapitalWithdrawals() error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)

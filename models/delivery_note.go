@@ -48,6 +48,10 @@ type DeliveryNote struct {
 }
 
 func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
 	if deliverynote.StoreID != nil {
 		store, err := FindStoreByID(deliverynote.StoreID, bson.M{"id": 1, "name": 1})
@@ -58,7 +62,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 	}
 
 	if deliverynote.CustomerID != nil {
-		customer, err := FindCustomerByID(deliverynote.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(deliverynote.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -90,7 +94,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range deliverynote.Products {
-		productObject, err := FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
 		if err != nil {
 			return err
 		}
@@ -104,7 +108,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchDeliveryNote(w http.ResponseWriter, r *http.Request) (deliverynotes []DeliveryNote, criterias SearchCriterias, err error) {
+func (store *Store) SearchDeliveryNote(w http.ResponseWriter, r *http.Request) (deliverynotes []DeliveryNote, criterias SearchCriterias, err error) {
 	criterias = SearchCriterias{
 		Page:   1,
 		Size:   10,
@@ -338,7 +342,7 @@ func SearchDeliveryNote(w http.ResponseWriter, r *http.Request) (deliverynotes [
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -386,8 +390,14 @@ func SearchDeliveryNote(w http.ResponseWriter, r *http.Request) (deliverynotes [
 }
 
 func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if govalidator.IsNull(deliverynote.DateStr) {
 		errs["date_str"] = "date_str is required"
@@ -406,7 +416,7 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsDeliveryNoteExists(&deliverynote.ID)
+		exists, err := store.IsDeliveryNoteExists(&deliverynote.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -435,7 +445,7 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 	if deliverynote.CustomerID == nil || deliverynote.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
 	} else {
-		exists, err := IsCustomerExists(deliverynote.CustomerID)
+		exists, err := store.IsCustomerExists(deliverynote.CustomerID)
 		if err != nil {
 			errs["customer_id"] = err.Error()
 		}
@@ -467,7 +477,7 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 		if product.ProductID.IsZero() {
 			errs["product_id_"+strconv.Itoa(index)] = "Product is required for deliverynote"
 		} else {
-			exists, err := IsProductExists(&product.ProductID)
+			exists, err := store.IsProductExists(&product.ProductID)
 			if err != nil {
 				errs["product_id_"+strconv.Itoa(index)] = err.Error()
 				return errs
@@ -491,7 +501,12 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 }
 
 func (deliverynote *DeliveryNote) GenerateCode(startFrom int, storeCode string) (string, error) {
-	count, err := GetTotalCount(bson.M{"store_id": deliverynote.StoreID}, "delivery_note")
+	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
+	if err != nil {
+		return "", err
+	}
+
+	count, err := store.GetTotalCount(bson.M{"store_id": deliverynote.StoreID}, "delivery_note")
 	if err != nil {
 		return "", err
 	}
@@ -500,7 +515,7 @@ func (deliverynote *DeliveryNote) GenerateCode(startFrom int, storeCode string) 
 }
 
 func (deliverynote *DeliveryNote) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("delivery_note")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -542,7 +557,7 @@ func (deliverynote *DeliveryNote) Insert() error {
 }
 
 func (deliverynote *DeliveryNote) IsCodeExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("delivery_note")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -562,7 +577,7 @@ func (deliverynote *DeliveryNote) IsCodeExists() (exists bool, err error) {
 }
 
 func (deliverynote *DeliveryNote) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("delivery_note")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -585,11 +600,11 @@ func (deliverynote *DeliveryNote) Update() error {
 	return nil
 }
 
-func FindDeliveryNoteByID(
+func (store *Store) FindDeliveryNoteByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (deliverynote *DeliveryNote, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -608,8 +623,8 @@ func FindDeliveryNoteByID(
 	return deliverynote, err
 }
 
-func IsDeliveryNoteExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+func (store *Store) IsDeliveryNoteExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -621,9 +636,9 @@ func IsDeliveryNoteExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessDeliveryNotes() error {
+func (store *Store) ProcessDeliveryNotes() error {
 	log.Print("Processing delivery notes")
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
@@ -687,7 +702,7 @@ type ProductDeliveryNoteStats struct {
 }
 
 func (product *Product) SetProductDeliveryNoteStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("product_delivery_note_history")
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_delivery_note_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -744,8 +759,13 @@ func (product *Product) SetProductDeliveryNoteStatsByStoreID(storeID primitive.O
 }
 
 func (deliveryNote *DeliveryNote) SetProductsDeliveryNoteStats() error {
+	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	for _, deliveryNoteProduct := range deliveryNote.Products {
-		product, err := FindProductByID(&deliveryNoteProduct.ProductID, map[string]interface{}{})
+		product, err := store.FindProductByID(&deliveryNoteProduct.ProductID, map[string]interface{}{})
 		if err != nil {
 			return err
 		}
@@ -764,7 +784,7 @@ type CustomerDeliveryNoteStats struct {
 }
 
 func (customer *Customer) SetCustomerDeliveryNoteStatsByStoreID(storeID primitive.ObjectID) error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("delivery_note")
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("delivery_note")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -834,8 +854,12 @@ func (customer *Customer) SetCustomerDeliveryNoteStatsByStoreID(storeID primitiv
 }
 
 func (deliveryNote *DeliveryNote) SetCustomerDeliveryNoteStats() error {
+	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
 
-	customer, err := FindCustomerByID(deliveryNote.CustomerID, map[string]interface{}{})
+	customer, err := store.FindCustomerByID(deliveryNote.CustomerID, map[string]interface{}{})
 	if err != nil {
 		return err
 	}

@@ -40,9 +40,13 @@ type ExpenseCategory struct {
 }
 
 func (expenseCategory *ExpenseCategory) AttributesValueChangeEvent(expenseCategoryOld *ExpenseCategory) error {
+	store, err := FindStoreByID(expenseCategory.StoreID, bson.M{})
+	if err != nil {
+		return nil
+	}
 
 	if expenseCategory.Name != expenseCategoryOld.Name {
-		err := UpdateManyByCollectionName(
+		err := store.UpdateManyByCollectionName(
 			"expense",
 			bson.M{"category_id": expenseCategory.ID},
 			bson.M{"$pull": bson.M{
@@ -53,7 +57,7 @@ func (expenseCategory *ExpenseCategory) AttributesValueChangeEvent(expenseCatego
 			return nil
 		}
 
-		err = UpdateManyByCollectionName(
+		err = store.UpdateManyByCollectionName(
 			"expense",
 			bson.M{"category_id": expenseCategory.ID},
 			bson.M{"$push": bson.M{
@@ -69,9 +73,13 @@ func (expenseCategory *ExpenseCategory) AttributesValueChangeEvent(expenseCatego
 }
 
 func (expenseCategory *ExpenseCategory) UpdateForeignLabelFields() error {
+	store, err := FindStoreByID(expenseCategory.StoreID, bson.M{})
+	if err != nil {
+		return nil
+	}
 
 	if expenseCategory.ParentID != nil && !expenseCategory.ParentID.IsZero() {
-		parentCategory, err := FindExpenseCategoryByID(expenseCategory.ParentID, bson.M{"id": 1, "name": 1})
+		parentCategory, err := store.FindExpenseCategoryByID(expenseCategory.ParentID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
@@ -107,7 +115,7 @@ func (expenseCategory *ExpenseCategory) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchExpenseCategory(w http.ResponseWriter, r *http.Request) (expenseCategories []ExpenseCategory, criterias SearchCriterias, err error) {
+func (store *Store) SearchExpenseCategory(w http.ResponseWriter, r *http.Request) (expenseCategories []ExpenseCategory, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -238,7 +246,7 @@ func SearchExpenseCategory(w http.ResponseWriter, r *http.Request) (expenseCateg
 
 	offset := (criterias.Page - 1) * criterias.Size
 
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense_category")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
@@ -315,8 +323,14 @@ func SearchExpenseCategory(w http.ResponseWriter, r *http.Request) (expenseCateg
 }
 
 func (expenseCategory *ExpenseCategory) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
-
 	errs = make(map[string]string)
+
+	store, err := FindStoreByID(expenseCategory.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if scenario == "update" {
 		if expenseCategory.ID.IsZero() {
@@ -324,7 +338,7 @@ func (expenseCategory *ExpenseCategory) Validate(w http.ResponseWriter, r *http.
 			errs["id"] = "ID is required"
 			return errs
 		}
-		exists, err := IsExpenseCategoryExists(&expenseCategory.ID)
+		exists, err := store.IsExpenseCategoryExists(&expenseCategory.ID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = err.Error()
@@ -360,7 +374,7 @@ func (expenseCategory *ExpenseCategory) Validate(w http.ResponseWriter, r *http.
 }
 
 func (expenseCategory *ExpenseCategory) IsNameExists() (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	collection := db.GetDB("store_" + expenseCategory.StoreID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -380,7 +394,7 @@ func (expenseCategory *ExpenseCategory) IsNameExists() (exists bool, err error) 
 }
 
 func (expenseCategory *ExpenseCategory) Insert() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	collection := db.GetDB("store_" + expenseCategory.StoreID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -398,7 +412,7 @@ func (expenseCategory *ExpenseCategory) Insert() error {
 }
 
 func (expenseCategory *ExpenseCategory) Update() error {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	collection := db.GetDB("store_" + expenseCategory.StoreID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -419,7 +433,7 @@ func (expenseCategory *ExpenseCategory) Update() error {
 }
 
 func (expenseCategory *ExpenseCategory) DeleteExpenseCategory(tokenClaims TokenClaims) (err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	collection := db.GetDB("store_" + expenseCategory.StoreID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(true)
@@ -453,12 +467,11 @@ func (expenseCategory *ExpenseCategory) DeleteExpenseCategory(tokenClaims TokenC
 	return nil
 }
 
-func FindExpenseCategoryByID(
+func (store *Store) FindExpenseCategoryByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (expenseCategory *ExpenseCategory, err error) {
-
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -492,8 +505,8 @@ func FindExpenseCategoryByID(
 	return expenseCategory, err
 }
 
-func IsExpenseCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+func (store *Store) IsExpenseCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	count := int64(0)
@@ -505,13 +518,13 @@ func IsExpenseCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
 	return (count == 1), err
 }
 
-func ProcessExpenseCategories() error {
+func (store *Store) ProcessExpenseCategories() error {
 	log.Printf("Processing expense categories")
-	totalCount, err := GetTotalCount(bson.M{}, "expense_category")
+	totalCount, err := store.GetTotalCount(bson.M{}, "expense_category")
 	if err != nil {
 		return err
 	}
-	collection := db.Client().Database(db.GetPosDB()).Collection("expense_category")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("expense_category")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)

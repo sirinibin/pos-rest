@@ -298,7 +298,15 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err = models.FindOrderByID(&orderID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err = store.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_order"] = "Unable to find order:" + err.Error()
@@ -311,15 +319,6 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	store, err := models.FindStoreByID(order.StoreID, bson.M{})
-	if err != nil {
-		response.Status = false
-		response.Errors["store"] = "invalid store: " + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
@@ -390,7 +389,15 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesReturn, err = models.FindSalesReturnByID(&salesReturnID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesReturn, err = store.FindSalesReturnByID(&salesReturnID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["find_sales_return"] = "Unable to find sales return:" + err.Error()
@@ -403,15 +410,6 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	store, err := models.FindStoreByID(salesReturn.StoreID, bson.M{})
-	if err != nil {
-		response.Status = false
-		response.Errors["store"] = "invalid store: " + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return

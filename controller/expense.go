@@ -28,8 +28,15 @@ func ListExpense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expenses := []models.Expense{}
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	expenses, criterias, err := models.SearchExpense(w, r)
+	expenses, criterias, err := store.SearchExpense(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find expenses:" + err.Error()
@@ -45,7 +52,7 @@ func ListExpense(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "expense")
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "expense")
 			if err != nil {
 				response.Status = false
 				response.Errors["total_count"] = "Unable to find total count of expenses:" + err.Error()
@@ -53,7 +60,7 @@ func ListExpense(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			expenseStats, err = models.GetExpenseStats(criterias.SearchBy)
+			expenseStats, err = store.GetExpenseStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
 				response.Errors["total"] = "Unable to find total amount of expenses:" + err.Error()
@@ -173,7 +180,15 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expenseOld, err = models.FindExpenseByID(&expenseID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	expenseOld, err = store.FindExpenseByID(&expenseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["expense"] = "Unable to find expense:" + err.Error()
@@ -182,7 +197,7 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expense, err = models.FindExpenseByID(&expenseID, bson.M{})
+	expense, err = store.FindExpenseByID(&expenseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["expense"] = "Unable to find expense:" + err.Error()
@@ -252,7 +267,7 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expense, err = models.FindExpenseByID(&expense.ID, bson.M{})
+	expense, err = store.FindExpenseByID(&expense.ID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find expense:" + err.Error()
@@ -297,7 +312,15 @@ func ViewExpense(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	expense, err = models.FindExpenseByID(&expenseID, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	expense, err = store.FindExpenseByID(&expenseID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -343,7 +366,15 @@ func ViewExpenseByCode(w http.ResponseWriter, r *http.Request) {
 		selectFields = models.ParseSelectString(keys[0])
 	}
 
-	expense, err = models.FindExpenseByCode(code, selectFields)
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	expense, err = store.FindExpenseByCode(code, selectFields)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -383,7 +414,15 @@ func DeleteExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expense, err := models.FindExpenseByID(&expenseID, bson.M{})
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	expense, err := store.FindExpenseByID(&expenseID, bson.M{})
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
