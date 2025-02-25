@@ -1665,72 +1665,12 @@ func (model *SalesReturn) MakeRedisCode() error {
 
 	invoiceID := fmt.Sprintf("%s-%0*d", store.SalesReturnSerialNumber.Prefix, paddingCount, incr)
 	model.Code = invoiceID
-	model.InvoiceCountValue = incr
+	model.InvoiceCountValue = incr - (store.SalesReturnSerialNumber.StartFromCount - 1)
 	return nil
 }
 
 func (salesReturn *SalesReturn) MakeCode() error {
-	store, err := FindStoreByID(salesReturn.StoreID, bson.M{"code": 1})
-	if err != nil {
-		return err
-	}
-
-	if store.Code != "GUOCJ" && store.Code != "GUOJ" {
-		return salesReturn.MakeRedisCode()
-	}
-
-	lastSalesReturn, err := FindLastSalesReturnByStoreID(salesReturn.StoreID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return err
-	}
-	var icv int
-
-	if lastSalesReturn == nil {
-		store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
-		if err != nil {
-			return err
-		}
-		salesReturn.Code = store.Code + "-200000"
-		icv = 1
-	} else {
-		splits := strings.Split(lastSalesReturn.Code, "-")
-		if len(splits) == 2 {
-			storeCode := splits[0]
-			codeStr := splits[1]
-			codeInt, err := strconv.Atoi(codeStr)
-			if err != nil {
-				return err
-			}
-			codeInt++
-			salesReturn.Code = storeCode + "-" + strconv.Itoa(codeInt)
-			icv = codeInt
-		}
-	}
-
-	for {
-		exists, err := salesReturn.IsCodeExists()
-		if err != nil {
-			return err
-		}
-		if !exists {
-			break
-		}
-
-		splits := strings.Split(lastSalesReturn.Code, "-")
-		storeCode := splits[0]
-		codeStr := splits[1]
-		codeInt, err := strconv.Atoi(codeStr)
-		if err != nil {
-			return err
-		}
-		codeInt++
-		salesReturn.Code = storeCode + "-" + strconv.Itoa(codeInt)
-		icv = codeInt
-	}
-
-	salesReturn.InvoiceCountValue = int64(icv)
-
-	return nil
+	return salesReturn.MakeRedisCode()
 }
 
 func FindLastSalesReturnByStoreID(
@@ -2020,7 +1960,7 @@ func ProcessSalesReturns() error {
 		defer cur.Close(ctx)
 	}
 
-	//icvByStores := map[string]int64{}
+	icvByStores := map[string]int64{}
 
 	bar := progressbar.Default(totalCount)
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
@@ -2036,17 +1976,21 @@ func ProcessSalesReturns() error {
 
 		//salesReturn.InvoiceCountValue = int64(i + 1)
 
-		/*
-			_, ok := icvByStores[salesReturn.StoreID.Hex()]
-			if ok {
-				icvByStores[salesReturn.StoreID.Hex()]++
-			} else {
-				icvByStores[salesReturn.StoreID.Hex()] = int64(1)
-			}
+		_, ok := icvByStores[salesReturn.StoreID.Hex()]
+		if ok {
+			icvByStores[salesReturn.StoreID.Hex()]++
+		} else {
+			icvByStores[salesReturn.StoreID.Hex()] = int64(1)
+		}
 
-			salesReturn.InvoiceCountValue = icvByStores[salesReturn.StoreID.Hex()]
-			salesReturn.UUID = uuid.New().String()
-		*/
+		salesReturn.InvoiceCountValue = icvByStores[salesReturn.StoreID.Hex()]
+
+		err = salesReturn.Update()
+		if err != nil {
+			return errors.New("Error updating: " + err.Error())
+		}
+		//salesReturn.UUID = uuid.New().String()
+
 		/*
 			for i, paymentMethod := range salesReturn.PaymentMethods {
 				if paymentMethod == "bank_account" {
@@ -2061,17 +2005,14 @@ func ProcessSalesReturns() error {
 			}
 		*/
 
-		for i, product := range salesReturn.Products {
-			if product.Discount > 0 {
-				salesReturn.Products[i].UnitDiscount = product.Discount / product.Quantity
-				salesReturn.Products[i].UnitDiscountPercent = product.DiscountPercent
+		/*
+			for i, product := range salesReturn.Products {
+				if product.Discount > 0 {
+					salesReturn.Products[i].UnitDiscount = product.Discount / product.Quantity
+					salesReturn.Products[i].UnitDiscountPercent = product.DiscountPercent
+				}
 			}
-		}
-
-		err = salesReturn.Update()
-		if err != nil {
-			return errors.New("Error updating: " + err.Error())
-		}
+		*/
 
 		/*salesReturn.UUID = uuid.New().String()
 		err = salesReturn.Update()
