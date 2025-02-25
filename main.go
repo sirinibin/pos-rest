@@ -14,7 +14,6 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
 	"github.com/sirinibin/pos-rest/models"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -24,190 +23,8 @@ func main() {
 	fmt.Println("Start POS Restful API")
 	db.Client("")
 	db.InitRedis()
-	go func() {
-		db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
-	}()
-	/*
-		RemoveAllIndexes()
-
-		fields := bson.M{"ean_12": 1}
-		CreateIndex("product", fields, true, false, "")
-
-		fields = bson.M{"part_number": 1}
-		CreateIndex("product", fields, true, false, "")
-
-		fields = bson.M{"name": "text"}
-		CreateIndex("product", fields, false, true, "")
-
-		/*
-			fields = bson.M{"name": "text", "name_in_arabic": "text"}
-			CreateIndex("product", fields, false, true, "arabic")
-	*/
-
-	/*
-		fields = bson.M{"created_at": -1}
-		CreateIndex("product", fields, false, false, "")
-	*/
-
-	/*
-		fields = bson.M{"created_at": -1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"store_id": 1}
-		CreateIndex("order", fields, false, false, "")
-		fields = bson.M{"store_id": 1}
-		CreateIndex("salesreturn", fields, false, false, "")
-
-		fields = bson.M{"store_id": 1}
-		CreateIndex("product", fields, false, false, "")
-
-		/*
-			fields = bson.M{"stores.store_id": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.purchase_unit_price": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.wholesale_unit_price": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.retail_unit_price": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.wholesale_unit_profit": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.retail_unit_profit": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.wholesale_unit_profit_perc": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.retail_unit_profit_perc": 1}
-			CreateIndex("product", fields, false, false, "")
-
-			fields = bson.M{"stores.stock": 1}
-			CreateIndex("product", fields, false, false, "")
-	*/
-
-	/*
-		fields = bson.M{"category_id": 1}
-		CreateIndex("product", fields, false, false, "")
-
-		fields = bson.M{"created_by": 1}
-		CreateIndex("product", fields, false, false, "")
-
-		fields = bson.M{"store_id": 1}
-		CreateIndex("purchase", fields, false, false, "")
-		fields = bson.M{"store_id": 1}
-		CreateIndex("purchasereturn", fields, false, false, "")
-
-		fields = bson.M{"created_by": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"customer_id": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"discount": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"discount_percent": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"date": -1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"code": 1}
-		CreateIndex("order", fields, true, false, "")
-
-		fields = bson.M{"date": -1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"net_total": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"payment_status": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"net_profit": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"loss": 1}
-		CreateIndex("order", fields, false, false, "")
-
-		fields = bson.M{"date": -1}
-		CreateIndex("expense", fields, false, false, "")
-
-		fields = bson.M{"amount": 1}
-		CreateIndex("expense", fields, false, false, "")
-
-		fields = bson.M{"vendor_invoice_no": "text"}
-		CreateIndex("purchase", fields, false, true, "")
-
-		fields = bson.M{"vendor_id": 1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"discount": 1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"vat_price": 1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"net_retail_profit": 1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"net_wholesale_profit": 1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"created_by": 1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"created_at": -1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"date": -1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		fields = bson.M{"net_total": 1}
-		CreateIndex("purchase", fields, false, false, "")
-
-		//Sales Return indexes
-		fields = bson.M{"date": -1}
-		CreateIndex("salesreturn", fields, false, false, "")
-
-		fields = bson.M{"net_total": 1}
-		CreateIndex("salesreturn", fields, false, false, "")
-
-		fields = bson.M{"net_profit": 1}
-		CreateIndex("salesreturn", fields, false, false, "")
-
-		fields = bson.M{"loss": 1}
-		CreateIndex("salesreturn", fields, false, false, "")
-
-		fields = bson.M{"code": 1}
-		CreateIndex("salesreturn", fields, true, false, "")
-
-		fields = bson.M{"order_code": 1}
-		CreateIndex("salesreturn", fields, false, false, "")
-
-		fields = bson.M{"code": 1}
-		CreateIndex("purchase", fields, true, false, "")
-
-		fields = bson.M{"code": 1}
-		CreateIndex("purchasereturn", fields, true, false, "")
-
-		fields = bson.M{"date": -1}
-		CreateIndex("purchasereturn", fields, false, false, "")
-
-		fields = bson.M{"net_total": 1}
-		CreateIndex("purchasereturn", fields, false, false, "")
-
-		fields = bson.M{"purchase_code": 1}
-		CreateIndex("purchasereturn", fields, false, false, "")
-
-		fields = bson.M{"code": 1}
-		CreateIndex("quotation", fields, true, false, "")
-	*/
+	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
+	go models.SetIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -513,75 +330,14 @@ func ListAllIndexes(collectionName string) {
 	}
 }
 
-func RemoveAllIndexes() {
-	log.Print("Removing all indexes")
-	collection := db.Client("").Database(db.GetPosDB()).Collection("product")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.Client("").Database(db.GetPosDB()).Collection("order")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.Client("").Database(db.GetPosDB()).Collection("salesreturn")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.Client("").Database(db.GetPosDB()).Collection("purchase")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.Client("").Database(db.GetPosDB()).Collection("purchasereturn")
-	collection.Indexes().DropAll(context.Background())
-
-}
-
-// CreateIndex - creates an index for a specific field in a collection
-func CreateIndex(collectionName string, fields bson.M, unique bool, text bool, overrideLang string) error {
-	collection := db.Client("").Database(db.GetPosDB()).Collection(collectionName)
-	//collection.Indexes().DropAll(context.Background())
-
-	indexOptions := options.Index()
-	if text {
-		indexOptions.SetDefaultLanguage("english")
-	}
-
-	if unique {
-		indexOptions.SetUnique(true)
-	}
-
-	if overrideLang != "" {
-		indexOptions.SetLanguageOverride(overrideLang)
-	}
-
-	// 1. Lets define the keys for the index we want to create
-	//var mod mongo.IndexModel
-	mod := mongo.IndexModel{
-		Keys:    fields, // index in ascending order or -1 for descending order
-		Options: indexOptions,
-	}
-
-	// 2. Create the context for this operation
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// 4. Create a single index
-	indexName, err := collection.Indexes().CreateOne(ctx, mod)
-	if err != nil {
-		// 5. Something went wrong, we log it and return false
-		log.Printf("Failed to create Index for field:%v", fields)
-		fmt.Println(err.Error())
-		return err
-	}
-
-	log.Printf("Created Index:%s for collection:%s for fields %v", indexName, collectionName, fields)
-
-	// 6. All went well, we return true
-	return nil
-}
-
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
-	err := models.ProcessPurchases()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessPurchases()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 	/*
 		err := models.ProcessPurchases()
 		if err != nil {
