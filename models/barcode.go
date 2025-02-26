@@ -100,6 +100,8 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	price := "N/A"
 
 	if !storeID.IsZero() {
+		log.Print("storeID")
+		log.Print(storeID)
 
 		retailUnitPrice, err := product.getRetailUnitPriceByStoreID(storeID)
 		if err != nil {

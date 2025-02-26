@@ -382,19 +382,7 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var storeID primitive.ObjectID
-
-	keys, ok = r.URL.Query()["store_id"]
-	if ok && len(keys[0]) >= 1 {
-		storeID, err = primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			response.Errors["store_id"] = "Invalid store_id" + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	}
-
-	err = product.GenerateBarCodeBase64ByStoreID(storeID)
+	err = product.GenerateBarCodeBase64ByStoreID(store.ID)
 	if err != nil {
 		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
