@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -153,6 +154,14 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	var product *models.Product
 	// Decode data
 	if !utils.Decode(w, r, &product) {
@@ -172,6 +181,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	product.CreatedAt = &now
 	product.UpdatedAt = &now
+	product.StoreID = &store.ID
 
 	// Validate data
 	if errs := product.Validate(w, r, "create"); len(errs) > 0 {
@@ -199,7 +209,10 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Status = true
+	log.Print("ID: " + product.ID.Hex())
+
+	//store.FindProductByID()
+
 	response.Result = product
 
 	json.NewEncoder(w).Encode(response)

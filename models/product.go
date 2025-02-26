@@ -1907,8 +1907,6 @@ func (product *Product) SetPartNumber() (err error) {
 	if len(product.PartNumber) == 0 {
 		for {
 			product.PartNumber = strings.ToUpper(GeneratePartNumber(10))
-			log.Print("product.PartNumber:")
-			log.Print(product.PartNumber)
 			exists, err := product.IsPartNumberExists()
 			if err != nil {
 				return err
@@ -2045,10 +2043,14 @@ func (product *Product) Insert() (err error) {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
+
+	product.ID = primitive.NewObjectID()
+
 	_, err = collection.InsertOne(ctx, &product)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

@@ -667,19 +667,21 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 
 		err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
 		if err != nil {
-			err = salesReturn.RecordZatcaComplianceCheckFailure("error unmarshaling compliance check response: " + complianceCheckResponse.Error + ", " + err.Error())
+			errorMessage := "error unmarshaling compliance check response: " + complianceCheckResponse.Error + ", " + err.Error()
+			err = salesReturn.RecordZatcaComplianceCheckFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 
 		if complianceCheckResponse.Error != "" {
-			err = salesReturn.RecordZatcaComplianceCheckFailure("Compliance check error: " + complianceCheckResponse.Error)
+			errorMessage := "compliance check error: " + complianceCheckResponse.Error
+			err = salesReturn.RecordZatcaComplianceCheckFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 	}
 
@@ -687,22 +689,24 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 
 	err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
 	if err != nil {
-		err = salesReturn.RecordZatcaComplianceCheckFailure("error unmarshal compliance check response: " + err.Error())
+		errorMessage := "error unmarshal compliance check response: " + err.Error()
+		err = salesReturn.RecordZatcaComplianceCheckFailure(errorMessage)
 		if err != nil {
 			return err
 		}
-		return nil
+		return errors.New(errorMessage)
 	}
 
 	//log.Print("pythonResponse:")
 	//log.Print(pythonResponse)
 
 	if complianceCheckResponse.Error != "" || !complianceCheckResponse.CompliancePassed {
-		err = salesReturn.RecordZatcaComplianceCheckFailure("compliance check error: " + complianceCheckResponse.Error)
+		errorMessage := "compliance check error: " + complianceCheckResponse.Error
+		err = salesReturn.RecordZatcaComplianceCheckFailure(errorMessage)
 		if err != nil {
 			return err
 		}
-		return nil
+		return errors.New(errorMessage)
 	}
 
 	if complianceCheckResponse.CompliancePassed {
@@ -748,38 +752,42 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 		if err != nil {
 			err = json.Unmarshal(output.Bytes(), &reportingResponse)
 			if err != nil {
-				err = salesReturn.RecordZatcaReportingFailure("error running reporting script &  unmarshal reporting response : " + err.Error())
+				errorMessage := "error running reporting script &  unmarshal reporting response : " + err.Error()
+				err = salesReturn.RecordZatcaReportingFailure(errorMessage)
 				if err != nil {
 					return err
 				}
-				return nil
+				return errors.New(errorMessage)
 			}
 
 			if reportingResponse.Error != "" {
-				err = salesReturn.RecordZatcaReportingFailure("error running reporting script: " + reportingResponse.Error)
+				errorMessage := "error running reporting script: " + reportingResponse.Error
+				err = salesReturn.RecordZatcaReportingFailure(errorMessage)
 				if err != nil {
 					return err
 				}
-				return nil
+				return errors.New(errorMessage)
 			}
 		}
 
 		// Parse JSON response
 		err = json.Unmarshal(output.Bytes(), &reportingResponse)
 		if err != nil {
-			err = salesReturn.RecordZatcaReportingFailure("error unmarshal reporting response: " + err.Error())
+			errorMessage := "error unmarshal reporting response: " + err.Error()
+			err = salesReturn.RecordZatcaReportingFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 
 		if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
-			err = salesReturn.RecordZatcaReportingFailure("error reporting: " + reportingResponse.Error)
+			errorMessage := "error reporting: " + reportingResponse.Error
+			err = salesReturn.RecordZatcaReportingFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 
 		err = salesReturn.RecordZatcaReportingSuccess(reportingResponse)

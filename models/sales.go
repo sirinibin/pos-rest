@@ -108,10 +108,10 @@ type Order struct {
 
 type ZatcaReporting struct {
 	IsSimplified                       bool       `bson:"is_simplified" json:"is_simplified"`
-	CompliancePassed                   bool       `bson:"compliance_passed,omitempty" json:"compliance_passed,omitempty"`
+	CompliancePassed                   bool       `bson:"compliance_passed" json:"compliance_passed"`
 	CompliancePassedAt                 *time.Time `bson:"compliance_passed_at,omitempty" json:"compliance_passed_at,omitempty"`
 	ComplianceInvoiceHash              string     `bson:"compliance_invoice_hash,omitempty" json:"compliance_invoice_hash,omitempty"`
-	ReportingPassed                    bool       `bson:"reporting_passed,omitempty" json:"reporting_passed,omitempty"`
+	ReportingPassed                    bool       `bson:"reporting_passed" json:"reporting_passed"`
 	ReportedAt                         *time.Time `bson:"reporting_passed_at,omitempty" json:"reporting_passed_at,omitempty"`
 	ReportingInvoiceHash               string     `bson:"reporting_invoice_hash,omitempty" json:"reporting_invoice_hash,omitempty"`
 	QrCode                             string     `bson:"qr_code,omitempty" json:"qr_code,omitempty"`
@@ -551,6 +551,21 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[zatca.compliance_passed]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			log.Print("ok")
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": false}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[zatca.reporting_passed]"]
 	if ok && len(keys[0]) >= 1 {
 		value, err := strconv.ParseInt(keys[0], 10, 64)
@@ -561,7 +576,7 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 		if value == 1 {
 			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": true}
 		} else if value == 0 {
-			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": false}
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
 		}
 	}
 
@@ -1479,6 +1494,88 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
+	return errs
+}
+
+func (order *Order) ValidateZatcaReporting() (errs map[string]string) {
+	errs = make(map[string]string)
+
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		errs["store_id"] = "invalid store id"
+	}
+
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil {
+		errs["customer_id"] = "Customer is required"
+	}
+
+	var lastOrder *Order
+	if order.ID.IsZero() {
+		lastOrder, err = store.FindLastOrderByStoreID(&store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+			errs["store_id"] = "Error finding last order"
+		}
+	} else {
+		lastOrder, err = order.FindPreviousOrder(bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+			errs["store_id"] = "Error finding last order"
+		}
+	}
+
+	if lastOrder != nil {
+		if lastOrder.Zatca.ReportingFailedCount > 0 && !lastOrder.Zatca.ReportingPassed {
+			errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+		}
+	}
+
+	if customer.VATNo != "" {
+		customerErrorMessages := []string{}
+
+		if !IsValidDigitNumber(customer.VATNo, "15") {
+			customerErrorMessages = append(customerErrorMessages, "VAT No. should be 15 digits")
+		} else if !IsNumberStartAndEndWith(customer.VATNo, "3") {
+			customerErrorMessages = append(customerErrorMessages, "VAT No. should start and end with 3")
+		}
+
+		if !govalidator.IsNull(customer.RegistrationNumber) && !IsAlphanumeric(customer.RegistrationNumber) {
+			customerErrorMessages = append(customerErrorMessages, "Registration Number should be alpha numeric(a-zA-Z|0-9)")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+			customerErrorMessages = append(customerErrorMessages, "Building number is required")
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+				customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+			}
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.StreetName) {
+			customerErrorMessages = append(customerErrorMessages, "Street name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
+			customerErrorMessages = append(customerErrorMessages, "District name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.CityName) {
+			customerErrorMessages = append(customerErrorMessages, "City name is required")
+		}
+
+		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
+			customerErrorMessages = append(customerErrorMessages, "Zip code is required")
+		} else {
+			if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+				customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+			}
+		}
+
+		if len(customerErrorMessages) > 0 {
+			errs["customer_id"] = "Fix the customer errors: " + strings.Join(customerErrorMessages, ", ")
+		}
+
+	}
+
 	return errs
 }
 

@@ -324,6 +324,15 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate data
+	if errs := order.ValidateZatcaReporting(); len(errs) > 0 {
+		response.Status = false
+		response.Errors = errs
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
 		var lastOrder *models.Order
 
@@ -410,6 +419,15 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Validate data
+	if errs := salesReturn.ValidateZatcaReporting(); len(errs) > 0 {
+		response.Status = false
+		response.Errors = errs
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return

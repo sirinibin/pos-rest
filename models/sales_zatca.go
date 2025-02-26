@@ -640,19 +640,21 @@ func (order *Order) ReportToZatca() error {
 
 		err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
 		if err != nil {
-			err = order.RecordZatcaComplianceCheckFailure("error unmarshaling compliance check response: " + complianceCheckResponse.Error + ", " + err.Error())
+			errorMessage := "error unmarshaling compliance check response: " + complianceCheckResponse.Error + ", " + err.Error()
+			err = order.RecordZatcaComplianceCheckFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 
 		if complianceCheckResponse.Error != "" {
-			err = order.RecordZatcaComplianceCheckFailure("Compliance check error: " + complianceCheckResponse.Error)
+			errorMessage := "Compliance check error: " + complianceCheckResponse.Error
+			err = order.RecordZatcaComplianceCheckFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 	}
 
@@ -660,22 +662,24 @@ func (order *Order) ReportToZatca() error {
 
 	err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
 	if err != nil {
-		err = order.RecordZatcaComplianceCheckFailure("error unmarshal compliance check response: " + err.Error())
+		errorMessage := "error unmarshal compliance check response: " + err.Error()
+		err = order.RecordZatcaComplianceCheckFailure(errorMessage)
 		if err != nil {
 			return err
 		}
-		return nil
+		return errors.New(errorMessage)
 	}
 
 	//log.Print("pythonResponse:")
 	//log.Print(pythonResponse)
 
 	if complianceCheckResponse.Error != "" || !complianceCheckResponse.CompliancePassed {
+		errorMessage := "compliance check error: " + complianceCheckResponse.Error
 		err = order.RecordZatcaComplianceCheckFailure("compliance check error: " + complianceCheckResponse.Error)
 		if err != nil {
 			return err
 		}
-		return nil
+		return errors.New(errorMessage)
 	}
 
 	if complianceCheckResponse.CompliancePassed {
@@ -721,38 +725,42 @@ func (order *Order) ReportToZatca() error {
 		if err != nil {
 			err = json.Unmarshal(output.Bytes(), &reportingResponse)
 			if err != nil {
-				err = order.RecordZatcaReportingFailure("error running reporting script &  unmarshal reporting response : " + err.Error())
+				errorMessage := "error running reporting script &  unmarshal reporting response : " + err.Error()
+				err = order.RecordZatcaReportingFailure(errorMessage)
 				if err != nil {
 					return err
 				}
-				return nil
+				return errors.New(errorMessage)
 			}
 
 			if reportingResponse.Error != "" {
-				err = order.RecordZatcaReportingFailure("error running reporting script: " + reportingResponse.Error)
+				errorMessage := "error running reporting script: " + reportingResponse.Error
+				err = order.RecordZatcaReportingFailure(errorMessage)
 				if err != nil {
 					return err
 				}
-				return nil
+				return errors.New(errorMessage)
 			}
 		}
 
 		// Parse JSON response
 		err = json.Unmarshal(output.Bytes(), &reportingResponse)
 		if err != nil {
-			err = order.RecordZatcaReportingFailure("error unmarshal reporting response: " + err.Error())
+			errorMessage := "error unmarshal reporting response: " + err.Error()
+			err = order.RecordZatcaReportingFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 
 		if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
-			err = order.RecordZatcaReportingFailure("error reporting: " + reportingResponse.Error)
+			errorMessage := "error reporting: " + reportingResponse.Error
+			err = order.RecordZatcaReportingFailure(errorMessage)
 			if err != nil {
 				return err
 			}
-			return nil
+			return errors.New(errorMessage)
 		}
 
 		err = order.RecordZatcaReportingSuccess(reportingResponse)
@@ -857,16 +865,14 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 		return err
 	}
 
-	/*
-		// Delete xml files
-		xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
-		if _, err := os.Stat(xmlFilePath); err == nil {
-			err = os.Remove(xmlFilePath)
-			if err != nil {
-				return err
-			}
+	// Delete xml files
+	xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
+	if _, err := os.Stat(xmlFilePath); err == nil {
+		err = os.Remove(xmlFilePath)
+		if err != nil {
+			return err
 		}
-	*/
+	}
 
 	/*
 		if _, err := os.Stat(xmlResponseFilePath); err == nil {
