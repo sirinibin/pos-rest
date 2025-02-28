@@ -478,6 +478,61 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	return nil
 }
 
+func (quotation *Quotation) FindNetTotal() {
+	netTotal := float64(0.0)
+	quotation.FindTotal()
+	netTotal = quotation.Total
+
+	quotation.ShippingOrHandlingFees = RoundTo2Decimals(quotation.ShippingOrHandlingFees)
+	quotation.Discount = RoundTo2Decimals(quotation.Discount)
+	quotation.CalculateDiscountPercentage()
+
+	netTotal += quotation.ShippingOrHandlingFees
+	netTotal -= quotation.Discount
+
+	quotation.FindVatPrice()
+	netTotal += quotation.VatPrice
+
+	quotation.NetTotal = RoundTo2Decimals(netTotal)
+}
+func (quotation *Quotation) CalculateDiscountPercentage() {
+	if quotation.NetTotal == 0 {
+		quotation.DiscountPercent = 0
+	}
+
+	percentage := (quotation.Discount / quotation.NetTotal) * 100
+	quotation.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
+}
+
+func (quotation *Quotation) FindTotal() {
+	total := float64(0.0)
+	for i, product := range quotation.Products {
+		quotation.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPrice)
+		quotation.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscount)
+
+		if quotation.Products[i].UnitDiscount > 0 {
+			quotation.Products[i].UnitDiscountPercent = RoundTo2Decimals((quotation.Products[i].UnitDiscount / quotation.Products[i].UnitPrice) * 100)
+		}
+		total += RoundTo2Decimals(product.Quantity * (quotation.Products[i].UnitPrice - quotation.Products[i].UnitDiscount))
+	}
+
+	quotation.Total = RoundTo2Decimals(total)
+}
+
+func (quotation *Quotation) FindVatPrice() {
+	vatPrice := ((*quotation.VatPercent / float64(100.00)) * ((quotation.Total + quotation.ShippingOrHandlingFees) - quotation.Discount))
+	quotation.VatPrice = RoundTo2Decimals(vatPrice)
+}
+
+func (quotation *Quotation) FindTotalQuantity() {
+	totalQuantity := float64(0.0)
+	for _, product := range quotation.Products {
+		totalQuantity += product.Quantity
+	}
+	quotation.TotalQuantity = totalQuantity
+}
+
+/*
 func (model *Quotation) FindNetTotal() {
 	netTotal := float64(0.0)
 	total := float64(0.0)
@@ -521,6 +576,7 @@ func (quotation *Quotation) FindVatPrice() {
 	vatPrice = RoundFloat(vatPrice, 2)
 	quotation.VatPrice = vatPrice
 }
+*/
 
 func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quotation, criterias SearchCriterias, err error) {
 

@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
@@ -330,33 +332,49 @@ func (order *Order) UpdateForeignLabelFields() error {
 
 func (order *Order) FindNetTotal() {
 	netTotal := float64(0.0)
-	total := float64(0.0)
-	for _, product := range order.Products {
-		total += product.Quantity * (product.UnitPrice - product.UnitDiscount)
-	}
+	order.FindTotal()
+	netTotal = order.Total
 
-	netTotal = total
+	order.ShippingOrHandlingFees = RoundTo2Decimals(order.ShippingOrHandlingFees)
+	order.Discount = RoundTo2Decimals(order.Discount)
+	order.CalculateDiscountPercentage()
+
 	netTotal += order.ShippingOrHandlingFees
 	netTotal -= order.Discount
 
-	vatPrice := float64(0.00)
-	if order.VatPercent != nil {
-		vatPrice += (netTotal * (*order.VatPercent / float64(100.00)))
-		netTotal += vatPrice
+	order.FindVatPrice()
+	netTotal += order.VatPrice
+
+	order.NetTotal = RoundTo2Decimals(netTotal)
+}
+func (order *Order) CalculateDiscountPercentage() {
+	if order.NetTotal == 0 {
+		order.DiscountPercent = 0
 	}
 
-	//order.NetTotal = netTotal
-	order.NetTotal = RoundFloat(netTotal, 2)
+	percentage := (order.Discount / order.NetTotal) * 100
+	order.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
 }
 
 func (order *Order) FindTotal() {
 	total := float64(0.0)
-	for _, product := range order.Products {
-		total += product.Quantity * (product.UnitPrice - product.UnitDiscount)
+	for i, product := range order.Products {
+		order.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPrice)
+		order.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscount)
+
+		if order.Products[i].UnitDiscount > 0 {
+			order.Products[i].UnitDiscountPercent = RoundTo2Decimals((order.Products[i].UnitDiscount / order.Products[i].UnitPrice) * 100)
+		}
+
+		total += RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
 	}
 
-	//order.Total = total
-	order.Total = RoundFloat(total, 2)
+	order.Total = RoundTo2Decimals(total)
+}
+
+func (order *Order) FindVatPrice() {
+	vatPrice := ((*order.VatPercent / float64(100.00)) * ((order.Total + order.ShippingOrHandlingFees) - order.Discount))
+	order.VatPrice = RoundTo2Decimals(vatPrice)
 }
 
 func (order *Order) FindTotalQuantity() {
@@ -365,12 +383,6 @@ func (order *Order) FindTotalQuantity() {
 		totalQuantity += product.Quantity
 	}
 	order.TotalQuantity = totalQuantity
-}
-
-func (order *Order) FindVatPrice() {
-	vatPrice := ((*order.VatPercent / float64(100.00)) * ((order.Total + order.ShippingOrHandlingFees) - order.Discount))
-	vatPrice = RoundFloat(vatPrice, 2)
-	order.VatPrice = vatPrice
 }
 
 type SalesStats struct {
@@ -551,34 +563,39 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 		}
 	}
 
-	keys, ok = r.URL.Query()["search[zatca.compliance_passed]"]
-	if ok && len(keys[0]) >= 1 {
-		value, err := strconv.ParseInt(keys[0], 10, 64)
-		if err != nil {
-			return orders, criterias, err
-		}
-
-		if value == 1 {
-			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": true}
-		} else if value == 0 {
-			log.Print("ok")
-			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": false}
-		}
-	}
-
 	keys, ok = r.URL.Query()["search[zatca.reporting_passed]"]
 	if ok && len(keys[0]) >= 1 {
-		value, err := strconv.ParseInt(keys[0], 10, 64)
-		if err != nil {
-			return orders, criterias, err
-		}
+		value := keys[0]
 
-		if value == 1 {
-			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": true}
-		} else if value == 0 {
-			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
+		if value == "reported" {
+			criterias.SearchBy["zatca.reporting_passed"] = true //ok
+		} else if value == "reporting_failed" {
+			//criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": false}
+		} else if value == "not_reported" { //ok
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": nil}
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": nil}
+		} else if value == "compliance_passed" {
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": true}
+		} else if value == "compliance_failed" {
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": false} //pl
 		}
 	}
+
+	/*
+		keys, ok = r.URL.Query()["search[zatca.reporting_passed]"]
+		if ok && len(keys[0]) >= 1 {
+			value, err := strconv.ParseInt(keys[0], 10, 64)
+			if err != nil {
+				return orders, criterias, err
+			}
+
+			if value == 1 {
+				criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": true}
+			} else if value == 0 {
+				criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
+			}
+		}*/
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
@@ -1086,8 +1103,14 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		order.Date = &date
 	}
 
+	if order.Discount < 0 {
+		errs["discount"] = "Cash discount should not be < 0"
+	}
+
 	if order.CashDiscount >= order.NetTotal {
 		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", order.NetTotal)
+	} else if order.CashDiscount < 0 {
+		errs["cash_discount"] = "Cash discount should not < 0 "
 	}
 
 	totalPayment := float64(0.00)
@@ -1118,7 +1141,13 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 
 		if lastOrder != nil {
-			if lastOrder.Zatca.ReportingFailedCount > 0 && !lastOrder.Zatca.ReportingPassed {
+			/*
+				if (lastOrder.Zatca.ReportingFailedCount > 0 || lastOrder.Zatca.ComplianceCheckFailedCount > 0) && !lastOrder.Zatca.ReportingPassed {
+					errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+				}
+			*/
+
+			if !lastOrder.Zatca.ReportingPassed {
 				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
 			}
 		}
@@ -1502,12 +1531,14 @@ func (order *Order) ValidateZatcaReporting() (errs map[string]string) {
 
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
-		errs["store_id"] = "invalid store id"
+		errs["store_id"] = "invalid store"
+		return errs
 	}
 
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
-		errs["customer_id"] = "Customer is required"
+		errs["customer_id"] = "invalid customer"
+		return errs
 	}
 
 	var lastOrder *Order
@@ -1524,7 +1555,13 @@ func (order *Order) ValidateZatcaReporting() (errs map[string]string) {
 	}
 
 	if lastOrder != nil {
-		if lastOrder.Zatca.ReportingFailedCount > 0 && !lastOrder.Zatca.ReportingPassed {
+		/*
+			if (lastOrder.Zatca.ReportingFailedCount > 0 || lastOrder.Zatca.ComplianceCheckFailedCount > 0) && !lastOrder.Zatca.ReportingPassed {
+				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+			}
+		*/
+
+		if !lastOrder.Zatca.ReportingPassed {
 			errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
 		}
 	}
@@ -2363,6 +2400,27 @@ func (order *Order) HardDeleteSalesReturn() error {
 	return nil
 }
 
+func GenerateRandom15DigitNumber() string {
+	rand.Seed(time.Now().UnixNano())
+
+	// Generate 13 random digits
+	middle := rand.Int63n(1e13) // 13 digits (from 0000000000000 to 9999999999999)
+
+	// Format the number with start and end 3
+	randomNumber := fmt.Sprintf("3%013d3", middle)
+
+	return randomNumber
+}
+
+func GetDecimalPoints(num float64) int {
+	str := strconv.FormatFloat(num, 'f', -1, 64) // Convert float to string without rounding
+	parts := strings.Split(str, ".")
+	if len(parts) == 2 {
+		return len(parts[1]) // Return length of the decimal part
+	}
+	return 0
+}
+
 func ProcessOrders() error {
 	log.Print("Processing sales")
 	stores, err := GetAllStores()
@@ -2371,7 +2429,16 @@ func ProcessOrders() error {
 	}
 
 	for _, store := range stores {
-		totalCount, err := store.GetTotalCount(bson.M{}, "order")
+		if store.Code != "GUOJ" {
+			break
+		}
+
+		totalCount, err := store.GetTotalCount(bson.M{
+			"store_id":                store.ID,
+			"zatca.compliance_passed": bson.M{"$eq": false},
+			//"zatca.reporting_passed":              bson.M{"$ne": true},
+			//"zatca.compliance_check_failed_count": nil,
+		}, "order")
 		if err != nil {
 			return err
 		}
@@ -2382,16 +2449,20 @@ func ProcessOrders() error {
 		findOptions.SetAllowDiskUse(true)
 		findOptions.SetSort(GetSortByFields("created_at"))
 
-		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
+		//	criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
+		//"zatca.compliance_check_failed_count": bson.M{"$lt": 1},
+		cur, err := collection.Find(ctx, bson.M{
+			"store_id":                store.ID,
+			"zatca.compliance_passed": bson.M{"$eq": false},
+			//"zatca.reporting_passed":              bson.M{"$ne": true},
+			//"zatca.compliance_check_failed_count": nil,
+		}, findOptions)
 		if err != nil {
 			return errors.New("Error fetching quotations:" + err.Error())
 		}
 		if cur != nil {
 			defer cur.Close(ctx)
 		}
-
-		//icvByStores := map[string]int64{}
-		icv := int64(0)
 
 		bar := progressbar.Default(totalCount)
 		for i := 0; cur != nil && cur.Next(ctx); i++ {
@@ -2406,12 +2477,86 @@ func ProcessOrders() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			icv++
-			order.InvoiceCountValue = icv
-			err = order.Update()
+			log.Print("Order ID: " + order.Code)
+			err = order.ReportToZatca()
 			if err != nil {
-				return errors.New("error updating sale:" + err.Error())
+				log.Print("Failed 1st time, trying 2nd time")
+
+				if GetDecimalPoints(order.ShippingOrHandlingFees) > 2 {
+					log.Print("Trimming shipping cost to 2 decimals")
+					order.ShippingOrHandlingFees = RoundTo2Decimals(order.ShippingOrHandlingFees)
+				}
+
+				if GetDecimalPoints(order.Discount) > 2 {
+					log.Print("Trimming discount to 2 decimals")
+					order.Discount = RoundTo2Decimals(order.Discount)
+				}
+
+				order.FindNetTotal()
+				order.Update()
+
+				err = order.ReportToZatca()
+				if err != nil {
+					log.Print("Failed  2nd time. ")
+					customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+					if customer != nil {
+						log.Print("Trying 3rd time ")
+						if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+							customer.NationalAddress.BuildingNo = "1234"
+							customer.NationalAddress.StreetName = "test"
+							customer.NationalAddress.DistrictName = "test"
+							customer.NationalAddress.CityName = "test"
+							customer.NationalAddress.ZipCode = "12345"
+
+							log.Print("Setting national address for customer")
+						}
+
+						if utf8.RuneCountInString(customer.VATNo) != 15 || !IsValidDigitNumber(customer.VATNo, "15") || !IsNumberStartAndEndWith(customer.VATNo, "3") {
+
+							customer.VATNo = GenerateRandom15DigitNumber()
+							log.Print("Replaced invalid vat no.")
+						}
+
+						customer.Update()
+						err = order.ReportToZatca()
+						if err != nil {
+							log.Print("Failed  3rd time. dropping")
+						} else {
+							log.Print("REPORTED 3rd time")
+						}
+
+					} else {
+						log.Print("dropping (coz: no customer found)")
+					}
+				} else {
+					log.Print("REPORTED 2nd time")
+				}
+			} else {
+				log.Print("REPORTED")
 			}
+			/* to get missing customers
+			customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+			if err != nil && err != mongo.ErrNilCursor && err != mongo.ErrNoDocuments {
+				return errors.New("error finding customer" + err.Error())
+			}
+
+			if customer != nil {
+				if customer.StoreID.Hex() != order.StoreID.Hex() {
+					customer.StoreID = order.StoreID
+					err = customer.Update()
+					if err != nil {
+						log.Print("Error updating customer: " + err.Error())
+					}
+				}
+			}
+			*/
+
+			/*
+				err = order.Update()
+				if err != nil {
+					return errors.New("error updating sale:" + err.Error())
+				}
+			*/
 			bar.Add(1)
 		}
 

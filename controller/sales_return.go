@@ -325,10 +325,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salesreturn.FindNetTotal()
-	salesreturn.FindTotal()
 	salesreturn.FindTotalQuantity()
-	salesreturn.FindVatPrice()
-
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()
 

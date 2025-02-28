@@ -537,32 +537,49 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 
 func (purchase *Purchase) FindNetTotal() {
 	netTotal := float64(0.0)
-	total := float64(0.0)
-	for _, product := range purchase.Products {
-		total += (product.Quantity * (product.PurchaseUnitPrice - product.UnitDiscount))
-	}
+	purchase.FindTotal()
+	netTotal = purchase.Total
 
-	netTotal = total
+	purchase.ShippingOrHandlingFees = RoundTo2Decimals(purchase.ShippingOrHandlingFees)
+	purchase.Discount = RoundTo2Decimals(purchase.Discount)
+	purchase.CalculateDiscountPercentage()
+
 	netTotal += purchase.ShippingOrHandlingFees
 	netTotal -= purchase.Discount
 
-	vatPrice := float64(0.00)
-	if purchase.VatPercent != nil {
-		vatPrice += (netTotal * (*purchase.VatPercent / float64(100.00)))
-		netTotal += vatPrice
+	purchase.FindVatPrice()
+	netTotal += purchase.VatPrice
+
+	purchase.NetTotal = RoundTo2Decimals(netTotal)
+}
+func (purchase *Purchase) CalculateDiscountPercentage() {
+	if purchase.NetTotal == 0 {
+		purchase.DiscountPercent = 0
 	}
 
-	//order.NetTotal = netTotal
-	purchase.NetTotal = RoundFloat(netTotal, 2)
+	percentage := (purchase.Discount / purchase.NetTotal) * 100
+	purchase.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
 }
 
 func (purchase *Purchase) FindTotal() {
 	total := float64(0.0)
-	for _, product := range purchase.Products {
-		total += (product.Quantity * (product.PurchaseUnitPrice - product.UnitDiscount))
+	for i, product := range purchase.Products {
+		purchase.Products[i].PurchaseUnitPrice = RoundTo2Decimals(product.PurchaseUnitPrice)
+		purchase.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscount)
+
+		if purchase.Products[i].UnitDiscount > 0 {
+			purchase.Products[i].UnitDiscountPercent = RoundTo2Decimals((purchase.Products[i].UnitDiscount / purchase.Products[i].PurchaseUnitPrice) * 100)
+		}
+
+		total += RoundTo2Decimals(product.Quantity * (purchase.Products[i].PurchaseUnitPrice - purchase.Products[i].UnitDiscount))
 	}
 
-	purchase.Total = RoundFloat(total, 2)
+	purchase.Total = RoundTo2Decimals(total)
+}
+
+func (purchase *Purchase) FindVatPrice() {
+	vatPrice := ((*purchase.VatPercent / float64(100.00)) * ((purchase.Total + purchase.ShippingOrHandlingFees) - purchase.Discount))
+	purchase.VatPrice = RoundTo2Decimals(vatPrice)
 }
 
 func (purchase *Purchase) FindTotalQuantity() {
@@ -571,12 +588,6 @@ func (purchase *Purchase) FindTotalQuantity() {
 		totalQuantity += product.Quantity
 	}
 	purchase.TotalQuantity = totalQuantity
-}
-
-func (purchase *Purchase) FindVatPrice() {
-	vatPrice := ((*purchase.VatPercent / 100) * (purchase.Total - purchase.Discount + purchase.ShippingOrHandlingFees))
-	vatPrice = RoundFloat(vatPrice, 2)
-	purchase.VatPrice = vatPrice
 }
 
 func (store *Store) SearchPurchase(w http.ResponseWriter, r *http.Request) (purchases []Purchase, criterias SearchCriterias, err error) {

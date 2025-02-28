@@ -36,6 +36,10 @@ func (orderProduct OrderProduct) GetZatcaUnit() string {
 		return "MG"
 	} else if orderProduct.Unit == "set" {
 		return "SET"
+	} else if orderProduct.Unit == "MMT" {
+		return "MMT"
+	} else if orderProduct.Unit == "CMT" {
+		return "CMT"
 	}
 
 	return "PCE"
@@ -256,11 +260,11 @@ func (order *Order) MakeXMLContent() (string, error) {
 			})
 		} else if paymentMethod == "debit_card" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
-				PaymentMeansCode: "54",
+				PaymentMeansCode: "55",
 			})
 		} else if paymentMethod == "credit_card" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
-				PaymentMeansCode: "55",
+				PaymentMeansCode: "54",
 			})
 		} else if paymentMethod == "bank_card" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
@@ -281,6 +285,12 @@ func (order *Order) MakeXMLContent() (string, error) {
 		}
 	}
 
+	if len(order.PaymentMethods) == 0 {
+		invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
+			PaymentMeansCode: "1",
+		})
+	}
+
 	invoice.AllowanceCharge = []AllowanceCharge{}
 
 	if order.Discount > 0 {
@@ -289,7 +299,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				ChargeIndicator:       false,
 				AllowanceChargeReason: "discount",
 				Amount: Amount{
-					Value:      ToFixed(order.Discount, 2),
+					Value:      ToFixed2(order.Discount, 2),
 					CurrencyID: "SAR",
 				},
 				TaxCategory: &TaxCategory{
@@ -298,7 +308,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed(store.VatPercent, 2),
+					Percent: ToFixed2(store.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -318,7 +328,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				AllowanceChargeReason:     "Shipping and handling",
 				Amount: Amount{
 					//Value:      ToFixed(order.ShippingOrHandlingFees+(order.ShippingOrHandlingFees*(store.VatPercent/100)), 2),
-					Value:      ToFixed(order.ShippingOrHandlingFees, 2),
+					Value:      ToFixed2(order.ShippingOrHandlingFees, 2),
 					CurrencyID: "SAR",
 				},
 				/*BaseAmount: &BaseAmount{
@@ -331,7 +341,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed(store.VatPercent, 2),
+					Percent: ToFixed2(store.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -346,22 +356,22 @@ func (order *Order) MakeXMLContent() (string, error) {
 	invoice.TaxTotals = []TaxTotal{
 		TaxTotal{
 			TaxAmount: TaxAmount{
-				Value:      ToFixed(order.VatPrice, 2),
+				Value:      ToFixed2(order.VatPrice, 2),
 				CurrencyID: "SAR",
 			},
 		},
 		TaxTotal{
 			TaxAmount: TaxAmount{
-				Value:      ToFixed(order.VatPrice, 2),
+				Value:      ToFixed2(order.VatPrice, 2),
 				CurrencyID: "SAR",
 			},
 			TaxSubtotal: &TaxSubtotal{
 				TaxableAmount: TaxableAmount{
-					Value:      ToFixed((order.NetTotal - order.VatPrice), 2),
+					Value:      ToFixed2((order.NetTotal - order.VatPrice), 2),
 					CurrencyID: "SAR",
 				},
 				TaxAmount: TaxAmount{
-					Value:      ToFixed(order.VatPrice, 2),
+					Value:      ToFixed2(order.VatPrice, 2),
 					CurrencyID: "SAR",
 				},
 				TaxCategory: TaxCategory{
@@ -370,7 +380,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed(store.VatPercent, 2),
+					Percent: ToFixed2(store.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -402,14 +412,19 @@ func (order *Order) MakeXMLContent() (string, error) {
 	totalAllowance += order.Discount
 	chargeTotalAmount += order.ShippingOrHandlingFees
 
+	taxExclusiveAmount := RoundTo2Decimals(order.NetTotal - order.VatPrice)
+	//taxExclusiveAmount := (order.Total - totalAllowance + chargeTotalAmount)
+	// Fix floating-point error by rounding
+	//taxExclusiveAmount = math.Round(taxExclusiveAmount*100) / 100
+
 	invoice.LegalMonetaryTotal = LegalMonetaryTotal{
-		LineExtensionAmount:  MonetaryAmount{Value: ToFixed(order.Total, 2), CurrencyID: "SAR"},
-		TaxExclusiveAmount:   MonetaryAmount{Value: ToFixed(((order.Total + order.ShippingOrHandlingFees) - order.Discount), 2), CurrencyID: "SAR"},
-		TaxInclusiveAmount:   MonetaryAmount{Value: ToFixed(order.NetTotal, 2), CurrencyID: "SAR"},
-		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed(totalAllowance, 2), CurrencyID: "SAR"},
-		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed(chargeTotalAmount, 2), CurrencyID: "SAR"},
-		PrepaidAmount:        MonetaryAmount{Value: ToFixed(prePaidAmount, 2), CurrencyID: "SAR"},
-		PayableAmount:        MonetaryAmount{Value: ToFixed(order.NetTotal, 2), CurrencyID: "SAR"},
+		LineExtensionAmount:  MonetaryAmount{Value: ToFixed2(order.Total, 2), CurrencyID: "SAR"},
+		TaxExclusiveAmount:   MonetaryAmount{Value: ToFixed2(taxExclusiveAmount, 2), CurrencyID: "SAR"},
+		TaxInclusiveAmount:   MonetaryAmount{Value: ToFixed2(order.NetTotal, 2), CurrencyID: "SAR"},
+		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed2(totalAllowance, 2), CurrencyID: "SAR"},
+		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed2(chargeTotalAmount, 2), CurrencyID: "SAR"},
+		PrepaidAmount:        MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"},
+		PayableAmount:        MonetaryAmount{Value: ToFixed2(order.NetTotal, 2), CurrencyID: "SAR"},
 	}
 
 	invoice.InvoiceLines = []InvoiceLine{}
@@ -417,11 +432,12 @@ func (order *Order) MakeXMLContent() (string, error) {
 	for i, product := range order.Products {
 		//lineExtensionAmount := (product.UnitPrice - (product.Discount / product.Quantity)) * product.Quantity
 		lineExtensionAmount := ((product.UnitPrice - product.UnitDiscount) * product.Quantity)
+		lineExtensionAmount = RoundTo2Decimals(lineExtensionAmount)
 		taxTotal := lineExtensionAmount * (*order.VatPercent / 100)
 
 		price := Price{
 			PriceAmount: PriceAmount{
-				Value:      ToFixed((product.UnitPrice - product.UnitDiscount), 2),
+				Value:      RoundTo2Decimals(product.UnitPrice - product.UnitDiscount),
 				CurrencyID: "SAR",
 			},
 			BaseQuantity: BaseQuantity{
@@ -430,7 +446,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 			},
 		}
 
-		if product.Discount > 0 {
+		if product.UnitDiscount > 0 {
 			price.AllowanceCharge = &AllowanceCharge{
 				ChargeIndicator:       false,
 				AllowanceChargeReason: "discount",
@@ -452,16 +468,16 @@ func (order *Order) MakeXMLContent() (string, error) {
 				Value:    ToFixed(product.Quantity, 2),
 			},
 			LineExtensionAmount: LineAmount{
-				Value:      ToFixed(lineExtensionAmount, 2),
+				Value:      ToFixed2(lineExtensionAmount, 2),
 				CurrencyID: "SAR",
 			},
 			TaxTotal: TaxTotal{
 				TaxAmount: TaxAmount{
-					Value:      ToFixed(taxTotal, 2),
+					Value:      ToFixed2(taxTotal, 2),
 					CurrencyID: "SAR",
 				},
 				RoundingAmount: &RoundingAmount{
-					Value:      ToFixed((lineExtensionAmount + taxTotal), 2),
+					Value:      ToFixed2((lineExtensionAmount + taxTotal), 2),
 					CurrencyID: "SAR",
 				},
 			},
@@ -469,7 +485,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				Name: product.Name,
 				ClassifiedTaxCategory: ClassifiedTaxCategory{
 					ID:      "S",
-					Percent: ToFixed(*order.VatPercent, 2),
+					Percent: ToFixed2(*order.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -649,7 +665,7 @@ func (order *Order) ReportToZatca() error {
 		}
 
 		if complianceCheckResponse.Error != "" {
-			errorMessage := "Compliance check error: " + complianceCheckResponse.Error
+			errorMessage := "Compliance check error 1: " + complianceCheckResponse.Error
 			err = order.RecordZatcaComplianceCheckFailure(errorMessage)
 			if err != nil {
 				return err
@@ -674,8 +690,8 @@ func (order *Order) ReportToZatca() error {
 	//log.Print(pythonResponse)
 
 	if complianceCheckResponse.Error != "" || !complianceCheckResponse.CompliancePassed {
-		errorMessage := "compliance check error: " + complianceCheckResponse.Error
-		err = order.RecordZatcaComplianceCheckFailure("compliance check error: " + complianceCheckResponse.Error)
+		errorMessage := "compliance check error 2: " + complianceCheckResponse.Error
+		err = order.RecordZatcaComplianceCheckFailure(errorMessage)
 		if err != nil {
 			return err
 		}

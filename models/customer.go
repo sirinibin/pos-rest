@@ -1151,50 +1151,61 @@ func (store *Store) IsCustomerExists(ID *primitive.ObjectID) (exists bool, err e
 	return (count == 1), err
 }
 
-func (store *Store) ProcessCustomers() error {
+func ProcessCustomers() error {
 	log.Printf("Processing customers")
-	totalCount, err := store.GetTotalCount(bson.M{}, "customer")
+
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
 
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching products" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		customer := Customer{}
-		err = cur.Decode(&customer)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
-		}
-
-		for _, store := range customer.Stores {
-			customer.StoreID = &store.StoreID
-			break
-		}
-
-		err = customer.Update()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customer")
 		if err != nil {
 			return err
 		}
 
-		bar.Add(1)
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching products" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			customer := Customer{}
+			err = cur.Decode(&customer)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if customer.VATNo != "" && govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+				customer.NationalAddress.BuildingNo = "1234"
+				customer.NationalAddress.StreetName = "test"
+				customer.NationalAddress.DistrictName = "test"
+				customer.NationalAddress.CityName = "test"
+				customer.NationalAddress.ZipCode = "12345"
+			}
+
+			err = customer.Update()
+			if err != nil {
+				return err
+			}
+
+			bar.Add(1)
+		}
 	}
 
 	log.Print("DONE!")

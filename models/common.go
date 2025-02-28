@@ -28,40 +28,59 @@ type SearchCriterias struct {
 	SortBy   map[string]interface{} `bson:"sort_by,omitempty" json:"sort_by,omitempty"`
 }
 
-func FormatFloat(num float64, prc int) string {
-	var (
-		zero, dot = "0", "."
-
-		str = fmt.Sprintf("%."+strconv.Itoa(prc)+"f", num)
-	)
-
-	return strings.TrimRight(strings.TrimRight(str, zero), dot)
-}
-
-func TruncateToTwoDecimals(some float64) float64 {
-	return float64(int(some*100)) / 100
-}
-
-func RoundToTwoDecimal(number float64) float64 {
-
-	//numStr := fmt.Sprintf("%.2f", TruncateToTwoDecimals(number))
-	numStr := fmt.Sprintf("%.2f", number)
-
-	//numStr := strconv.FormatFloat(number, 'f', -1, 64)
-	//numStr := FormatFloat(number, 2)
-	numFloat, _ := strconv.ParseFloat(numStr, 32)
-	return RoundFloat(numFloat, 2)
-}
-
 func RoundFloat(val float64, precision uint) float64 {
-	ratio := math.Pow(10, float64(precision))
-	return math.Round(val*ratio) / ratio
-	//return math.Floor(val*ratio) / ratio
+	return math.Round(val*100) / 100
+	//return val
+	/*
+		ratio := math.Pow(10, float64(precision))
+		return math.Round(val*ratio) / ratio
+		//return math.Floor(val*ratio) / ratio
+	*/
 }
 
 func ToFixed(num float64, precision int) float64 {
-	output := math.Pow(10, float64(precision))
-	return float64(math.Round(num*output)) / output
+	return num
+	/*
+		output := math.Pow(10, float64(precision))
+		return float64(math.Round(num*output)) / output
+	*/
+}
+
+func RoundTo2Decimals(num float64) float64 {
+	return math.Round(num*100) / 100
+}
+
+// Just trim to 2 decimal places
+func ToFixed2(num float64, precision int) float64 {
+	//return math.Trunc(num*100) / 100
+	// Add a small epsilon (1e-9) to prevent precision loss
+	return math.Trunc((num+1e-9)*100) / 100
+
+	/*
+		strValue := fmt.Sprintf("%.2f", num)
+		trimmedValue, _ := strconv.ParseFloat(strValue, 64)
+		return trimmedValue
+	*/
+	//return RoundFloat(num, uint(precision))
+	/*
+		output := math.Pow(10, float64(precision))
+		return float64(math.Round(num*output)) / output
+	*/
+}
+
+// Just trim to 2 decimal places
+func RoundTo2(num float64, precision int) float64 {
+	//return math.Trunc(num*100) / 100
+
+	strValue := fmt.Sprintf("%.2f", num)
+	trimmedValue, _ := strconv.ParseFloat(strValue, 64)
+	return trimmedValue
+
+	//return RoundFloat(num, uint(precision))
+	/*
+		output := math.Pow(10, float64(precision))
+		return float64(math.Round(num*output)) / output
+	*/
 }
 
 func GenerateFileName(prefix, suffix string) string {
@@ -94,7 +113,6 @@ func (store *Store) GetTotalCount(filter map[string]interface{}, collectionName 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	filter["store_id"] = store.ID
 	return collection.CountDocuments(ctx, filter)
 }
 

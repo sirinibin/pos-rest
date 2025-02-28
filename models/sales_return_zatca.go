@@ -36,6 +36,10 @@ func (salesReturnProduct SalesReturnProduct) GetZatcaUnit() string {
 		return "MG"
 	} else if salesReturnProduct.Unit == "set" {
 		return "SET"
+	} else if salesReturnProduct.Unit == "MMT" {
+		return "MMT"
+	} else if salesReturnProduct.Unit == "CMT" {
+		return "CMT"
 	}
 
 	return "PCE"
@@ -276,14 +280,14 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 			})
 		} else if paymentMethod == "debit_card" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
-				PaymentMeansCode: "54",
+				PaymentMeansCode: "55",
 				InstructionNote: &InstructionNote{
 					Value: "Return goods or services",
 				},
 			})
 		} else if paymentMethod == "credit_card" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
-				PaymentMeansCode: "55",
+				PaymentMeansCode: "54",
 				InstructionNote: &InstructionNote{
 					Value: "Return goods or services",
 				},
@@ -319,6 +323,15 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 		}
 	}
 
+	if len(salesReturn.PaymentMethods) == 0 {
+		invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
+			PaymentMeansCode: "1",
+			InstructionNote: &InstructionNote{
+				Value: "Return goods or services",
+			},
+		})
+	}
+
 	invoice.AllowanceCharge = []AllowanceCharge{}
 
 	if salesReturn.Discount > 0 {
@@ -336,7 +349,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed(store.VatPercent, 2),
+					Percent: ToFixed(*salesReturn.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -369,7 +382,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed(store.VatPercent, 2),
+					Percent: ToFixed(*salesReturn.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -384,22 +397,22 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 	invoice.TaxTotals = []TaxTotal{
 		TaxTotal{
 			TaxAmount: TaxAmount{
-				Value:      ToFixed(salesReturn.VatPrice, 2),
+				Value:      ToFixed2(salesReturn.VatPrice, 2),
 				CurrencyID: "SAR",
 			},
 		},
 		TaxTotal{
 			TaxAmount: TaxAmount{
-				Value:      ToFixed(salesReturn.VatPrice, 2),
+				Value:      ToFixed2(salesReturn.VatPrice, 2),
 				CurrencyID: "SAR",
 			},
 			TaxSubtotal: &TaxSubtotal{
 				TaxableAmount: TaxableAmount{
-					Value:      ToFixed((salesReturn.NetTotal - salesReturn.VatPrice), 2),
+					Value:      ToFixed2((salesReturn.NetTotal - salesReturn.VatPrice), 2),
 					CurrencyID: "SAR",
 				},
 				TaxAmount: TaxAmount{
-					Value:      ToFixed(salesReturn.VatPrice, 2),
+					Value:      ToFixed2(salesReturn.VatPrice, 2),
 					CurrencyID: "SAR",
 				},
 				TaxCategory: TaxCategory{
@@ -408,7 +421,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed(store.VatPercent, 2),
+					Percent: ToFixed2(store.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -440,26 +453,32 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 	totalAllowance += salesReturn.Discount
 	chargeTotalAmount += salesReturn.ShippingOrHandlingFees
 
+	taxExclusiveAmount := RoundTo2Decimals(salesReturn.NetTotal - salesReturn.VatPrice)
+
 	invoice.LegalMonetaryTotal = LegalMonetaryTotal{
-		LineExtensionAmount:  MonetaryAmount{Value: ToFixed(salesReturn.Total, 2), CurrencyID: "SAR"},
-		TaxExclusiveAmount:   MonetaryAmount{Value: ToFixed(((salesReturn.Total + salesReturn.ShippingOrHandlingFees) - salesReturn.Discount), 2), CurrencyID: "SAR"},
-		TaxInclusiveAmount:   MonetaryAmount{Value: ToFixed(salesReturn.NetTotal, 2), CurrencyID: "SAR"},
-		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed(totalAllowance, 2), CurrencyID: "SAR"},
-		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed(chargeTotalAmount, 2), CurrencyID: "SAR"},
-		PrepaidAmount:        MonetaryAmount{Value: ToFixed(prePaidAmount, 2), CurrencyID: "SAR"},
-		PayableAmount:        MonetaryAmount{Value: ToFixed(salesReturn.NetTotal, 2), CurrencyID: "SAR"},
+		LineExtensionAmount:  MonetaryAmount{Value: ToFixed2(salesReturn.Total, 2), CurrencyID: "SAR"},
+		TaxExclusiveAmount:   MonetaryAmount{Value: ToFixed2(taxExclusiveAmount, 2), CurrencyID: "SAR"},
+		TaxInclusiveAmount:   MonetaryAmount{Value: ToFixed2(salesReturn.NetTotal, 2), CurrencyID: "SAR"},
+		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed2(totalAllowance, 2), CurrencyID: "SAR"},
+		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed2(chargeTotalAmount, 2), CurrencyID: "SAR"},
+		PrepaidAmount:        MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"},
+		PayableAmount:        MonetaryAmount{Value: ToFixed2(salesReturn.NetTotal, 2), CurrencyID: "SAR"},
 	}
 
 	invoice.InvoiceLines = []InvoiceLine{}
 
 	for i, product := range salesReturn.Products {
+		if !product.Selected {
+			continue
+		}
 		//lineExtensionAmount := (product.UnitPrice - (product.Discount / product.Quantity)) * product.Quantity
 		lineExtensionAmount := ((product.UnitPrice - product.UnitDiscount) * product.Quantity)
+		lineExtensionAmount = RoundTo2Decimals(lineExtensionAmount)
 		taxTotal := lineExtensionAmount * (*salesReturn.VatPercent / 100)
 
 		price := Price{
 			PriceAmount: PriceAmount{
-				Value:      ToFixed((product.UnitPrice - product.UnitDiscount), 2),
+				Value:      RoundTo2Decimals((product.UnitPrice - product.UnitDiscount)),
 				CurrencyID: "SAR",
 			},
 			BaseQuantity: BaseQuantity{
@@ -468,7 +487,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 			},
 		}
 
-		if product.Discount > 0 {
+		if product.UnitDiscount > 0 {
 			price.AllowanceCharge = &AllowanceCharge{
 				ChargeIndicator:       false,
 				AllowanceChargeReason: "discount",
@@ -494,16 +513,16 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 				Value:    ToFixed(product.Quantity, 2),
 			},
 			LineExtensionAmount: LineAmount{
-				Value:      ToFixed(lineExtensionAmount, 2),
+				Value:      ToFixed2(lineExtensionAmount, 2),
 				CurrencyID: "SAR",
 			},
 			TaxTotal: TaxTotal{
 				TaxAmount: TaxAmount{
-					Value:      ToFixed(taxTotal, 2),
+					Value:      ToFixed2(taxTotal, 2),
 					CurrencyID: "SAR",
 				},
 				RoundingAmount: &RoundingAmount{
-					Value:      ToFixed((lineExtensionAmount + taxTotal), 2),
+					Value:      ToFixed2((lineExtensionAmount + taxTotal), 2),
 					CurrencyID: "SAR",
 				},
 			},
@@ -511,7 +530,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 				Name: product.Name,
 				ClassifiedTaxCategory: ClassifiedTaxCategory{
 					ID:      "S",
-					Percent: ToFixed(*salesReturn.VatPercent, 2),
+					Percent: ToFixed2(*salesReturn.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -890,16 +909,14 @@ func (salesReturn *SalesReturn) SaveClearedInvoiceData(reportingResponse ZatcaRe
 		return err
 	}
 
-	/*
-		// Delete xml files
-		xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
-		if _, err := os.Stat(xmlFilePath); err == nil {
-			err = os.Remove(xmlFilePath)
-			if err != nil {
-				return err
-			}
+	// Delete xml files
+	xmlFilePath := "ZatcaPython/templates/invoice_" + salesReturn.Code + ".xml"
+	if _, err := os.Stat(xmlFilePath); err == nil {
+		err = os.Remove(xmlFilePath)
+		if err != nil {
+			return err
 		}
-	*/
+	}
 
 	/*
 		if _, err := os.Stat(xmlResponseFilePath); err == nil {

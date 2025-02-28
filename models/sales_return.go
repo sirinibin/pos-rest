@@ -448,6 +448,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 	return nil
 }
 
+/*
 func (salesreturn *SalesReturn) FindNetTotal() {
 	netTotal := float64(0.0)
 	for _, product := range salesreturn.Products {
@@ -464,9 +465,60 @@ func (salesreturn *SalesReturn) FindNetTotal() {
 		netTotal += netTotal * (*salesreturn.VatPercent / float64(100))
 	}
 
-	salesreturn.NetTotal = RoundFloat(salesreturn.NetTotal, 2)
+	salesreturn.NetTotal = ToFixed2(netTotal, 2)
+}
+*/
+
+func (salesReturn *SalesReturn) FindNetTotal() {
+	netTotal := float64(0.0)
+	salesReturn.FindTotal()
+	netTotal = salesReturn.Total
+	salesReturn.ShippingOrHandlingFees = RoundTo2Decimals(salesReturn.ShippingOrHandlingFees)
+	salesReturn.Discount = RoundTo2Decimals(salesReturn.Discount)
+	salesReturn.CalculateDiscountPercentage()
+	netTotal += salesReturn.ShippingOrHandlingFees
+	netTotal -= salesReturn.Discount
+
+	salesReturn.FindVatPrice()
+	netTotal += salesReturn.VatPrice
+
+	salesReturn.NetTotal = RoundTo2Decimals(netTotal)
 }
 
+func (salesReturn *SalesReturn) CalculateDiscountPercentage() {
+	if salesReturn.NetTotal == 0 {
+		salesReturn.DiscountPercent = 0
+	}
+
+	percentage := (salesReturn.Discount / salesReturn.NetTotal) * 100
+	salesReturn.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
+}
+
+func (salesReturn *SalesReturn) FindTotal() {
+	total := float64(0.0)
+	for i, product := range salesReturn.Products {
+		if !product.Selected {
+			continue
+		}
+
+		salesReturn.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPrice)
+		salesReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscount)
+		if salesReturn.Products[i].UnitDiscount > 0 {
+			salesReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((salesReturn.Products[i].UnitDiscount / salesReturn.Products[i].UnitPrice) * 100)
+		}
+
+		total += RoundTo2Decimals(product.Quantity * (salesReturn.Products[i].UnitPrice - salesReturn.Products[i].UnitDiscount))
+	}
+
+	salesReturn.Total = RoundTo2Decimals(total)
+}
+
+func (salesReturn *SalesReturn) FindVatPrice() {
+	vatPrice := ((*salesReturn.VatPercent / float64(100.00)) * ((salesReturn.Total + salesReturn.ShippingOrHandlingFees) - salesReturn.Discount))
+	salesReturn.VatPrice = RoundTo2Decimals(vatPrice)
+}
+
+/*
 func (salesreturn *SalesReturn) FindTotal() {
 	total := float64(0.0)
 	for _, product := range salesreturn.Products {
@@ -478,6 +530,7 @@ func (salesreturn *SalesReturn) FindTotal() {
 	}
 	salesreturn.Total = RoundFloat(total, 2)
 }
+*/
 
 func (salesreturn *SalesReturn) FindTotalQuantity() {
 	totalQuantity := float64(0)
@@ -491,11 +544,13 @@ func (salesreturn *SalesReturn) FindTotalQuantity() {
 	salesreturn.TotalQuantity = totalQuantity
 }
 
+/*
 func (model *SalesReturn) FindVatPrice() {
 	vatPrice := ((*model.VatPercent / float64(100.00)) * ((model.Total + model.ShippingOrHandlingFees) - model.Discount))
 	vatPrice = RoundFloat(vatPrice, 2)
 	model.VatPrice = vatPrice
 }
+*/
 
 func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (salesreturns []SalesReturn, criterias SearchCriterias, err error) {
 
@@ -513,6 +568,25 @@ func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (s
 		paymentStatusList := strings.Split(keys[0], ",")
 		if len(paymentStatusList) > 0 {
 			criterias.SearchBy["payment_status"] = bson.M{"$in": paymentStatusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[zatca.reporting_passed]"]
+	if ok && len(keys[0]) >= 1 {
+		value := keys[0]
+
+		if value == "reported" {
+			criterias.SearchBy["zatca.reporting_passed"] = true //ok
+		} else if value == "reporting_failed" {
+			//criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": false}
+		} else if value == "not_reported" { //ok
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": nil}
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": nil}
+		} else if value == "compliance_passed" {
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": true}
+		} else if value == "compliance_failed" {
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": false} //pl
 		}
 	}
 
@@ -992,6 +1066,10 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["customer_id"] = "invalid customer"
 	}
 
+	if salesreturn.Discount < 0 {
+		errs["discount"] = "Cash discount should not be < 0"
+	}
+
 	if store.Zatca.Phase == "2" {
 		var lastSalesReturn *SalesReturn
 		if salesreturn.ID.IsZero() {
@@ -1007,8 +1085,14 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 
 		if lastSalesReturn != nil {
-			if lastSalesReturn.Zatca.ReportingFailedCount > 0 && !lastSalesReturn.Zatca.ReportingPassed {
-				errs["last_sales_return"] = "Last sales return is not reported to Zatca. please report it and try again"
+			/*
+				if (lastSalesReturn.Zatca.ReportingFailedCount > 0 || lastSalesReturn.Zatca.ComplianceCheckFailedCount > 0) && !lastSalesReturn.Zatca.ReportingPassed {
+					errs["last_sales_return"] = "Last sales return is not reported to Zatca. please report it and try again"
+				}
+			*/
+
+			if !lastSalesReturn.Zatca.ReportingPassed {
+				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
 			}
 		}
 	}
@@ -1153,6 +1237,8 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	if salesreturn.NetTotal > 0 && salesreturn.CashDiscount >= salesreturn.NetTotal {
 		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", salesreturn.NetTotal)
+	} else if salesreturn.CashDiscount < 0 {
+		errs["cash_discount"] = "Cash discount should not < 0 "
 	}
 
 	/*
@@ -1990,7 +2076,16 @@ func ProcessSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		totalCount, err := store.GetTotalCount(bson.M{}, "salesreturn")
+		if store.Code != "GUOJ" {
+			break
+		}
+
+		totalCount, err := store.GetTotalCount(bson.M{
+			"store_id":                store.ID,
+			"zatca.compliance_passed": bson.M{"$eq": false},
+			//"zatca.reporting_passed":              bson.M{"$ne": true},
+			//"zatca.compliance_check_failed_count": nil,
+		}, "salesreturn")
 		if err != nil {
 			return err
 		}
@@ -2001,15 +2096,18 @@ func ProcessSalesReturns() error {
 		findOptions.SetAllowDiskUse(true)
 		findOptions.SetSort(GetSortByFields("created_at"))
 
-		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
+		cur, err := collection.Find(ctx, bson.M{
+			"store_id":                store.ID,
+			"zatca.compliance_passed": bson.M{"$eq": false},
+			//"zatca.reporting_passed":              bson.M{"$ne": true},
+			//"zatca.compliance_check_failed_count": nil,
+		}, findOptions)
 		if err != nil {
 			return errors.New("Error fetching quotations:" + err.Error())
 		}
 		if cur != nil {
 			defer cur.Close(ctx)
 		}
-
-		icv := int64(0)
 
 		bar := progressbar.Default(totalCount)
 		for i := 0; cur != nil && cur.Next(ctx); i++ {
@@ -2023,13 +2121,69 @@ func ProcessSalesReturns() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			icv++
-			salesReturn.InvoiceCountValue = icv
-
-			err = salesReturn.Update()
+			log.Print("Sales Return ID: " + salesReturn.Code)
+			err = salesReturn.ReportToZatca()
 			if err != nil {
-				return errors.New("Error updating: " + err.Error())
+				log.Print("Failed 1st time, trying 2nd time")
+
+				if GetDecimalPoints(salesReturn.ShippingOrHandlingFees) > 2 {
+					log.Print("Trimming shipping cost to 2 decimals")
+					salesReturn.ShippingOrHandlingFees = RoundTo2Decimals(salesReturn.ShippingOrHandlingFees)
+				}
+
+				if GetDecimalPoints(salesReturn.Discount) > 2 {
+					log.Print("Trimming discount to 2 decimals")
+					salesReturn.Discount = RoundTo2Decimals(salesReturn.Discount)
+				}
+
+				salesReturn.FindNetTotal()
+				salesReturn.Update()
+
+				err = salesReturn.ReportToZatca()
+				if err != nil {
+					log.Print("Failed  2nd time. ")
+					customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
+					if customer != nil {
+						log.Print("Trying 3rd time ")
+						if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+							customer.NationalAddress.BuildingNo = "1234"
+							customer.NationalAddress.StreetName = "test"
+							customer.NationalAddress.DistrictName = "test"
+							customer.NationalAddress.CityName = "test"
+							customer.NationalAddress.ZipCode = "12345"
+
+							log.Print("Setting national address for customer")
+						}
+
+						if !IsValidDigitNumber(customer.VATNo, "15") || !IsNumberStartAndEndWith(customer.VATNo, "3") {
+
+							customer.VATNo = GenerateRandom15DigitNumber()
+							log.Print("Replaced invalid vat no.")
+						}
+
+						customer.Update()
+						err = salesReturn.ReportToZatca()
+						if err != nil {
+							log.Print("Failed  3rd time. dropping")
+						} else {
+							log.Print("REPORTED 3rd time")
+						}
+
+					} else {
+						log.Print("dropping (coz: no customer found)")
+					}
+				} else {
+					log.Print("REPORTED 2nd time")
+				}
+			} else {
+				log.Print("REPORTED")
 			}
+			/*
+				err = salesReturn.Update()
+				if err != nil {
+					return errors.New("Error updating: " + err.Error())
+				}
+			*/
 
 			bar.Add(1)
 		}
@@ -3085,10 +3239,17 @@ func (salesReturn *SalesReturn) ValidateZatcaReporting() (errs map[string]string
 		}
 
 		if lastSalesReturn != nil {
-			if lastSalesReturn.Zatca.ReportingFailedCount > 0 && !lastSalesReturn.Zatca.ReportingPassed {
-				errs["last_sales_return"] = "Last sales return is not reported to Zatca. please report it and try again"
+			/*
+				if (lastSalesReturn.Zatca.ReportingFailedCount > 0 || lastSalesReturn.Zatca.ComplianceCheckFailedCount > 0) && !lastSalesReturn.Zatca.ReportingPassed {
+					errs["last_sales_return"] = "Last sales return is not reported to Zatca. please report it and try again"
+				}
+			*/
+
+			if !lastSalesReturn.Zatca.ReportingPassed {
+				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
 			}
 		}
+
 	}
 
 	if customer.VATNo != "" && store.Zatca.Phase == "2" {
