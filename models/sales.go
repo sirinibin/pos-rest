@@ -2114,8 +2114,31 @@ func (order *Order) MakeRedisCode() error {
 	return nil
 }
 
+func (order *Order) UnMakeRedisCode() error {
+	redisKey := order.StoreID.Hex() + "_invoice_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists != 0 {
+		_, err := db.RedisClient.Decr(redisKey).Result()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (order *Order) MakeCode() error {
 	return order.MakeRedisCode()
+}
+
+func (order *Order) UnMakeCode() error {
+	return order.UnMakeRedisCode()
 }
 
 func (store *Store) FindLastOrderByStoreID(

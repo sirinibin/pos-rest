@@ -125,6 +125,14 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	order.CreatedBy = &userID
 	order.UpdatedBy = &userID
 	now := time.Now()
@@ -170,8 +178,29 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.UUID = uuid.New().String()
 
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		err = order.ReportToZatca()
+		if err != nil {
+			log.Print("reporting failed")
+			redisErr := order.UnMakeRedisCode()
+			if redisErr != nil {
+				response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+			}
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	err = order.Insert()
 	if err != nil {
+		redisErr := order.UnMakeRedisCode()
+		if redisErr != nil {
+			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+		}
+
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["insert"] = "Unable to insert to db:" + err.Error()
@@ -180,7 +209,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Order Created")
 
 	err = order.CreateProductsSalesHistory()
 	if err != nil {
@@ -189,7 +217,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Products sales history created")
 
 	err = order.AddPayments()
 	if err != nil {
@@ -215,8 +242,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Print("Order updated")
-
 	err = order.RemoveStock()
 	if err != nil {
 		response.Status = false
@@ -227,7 +252,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	log.Print("Stock removed")
 
 	err = order.SetProductsSalesStats()
 	if err != nil {
@@ -254,24 +278,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
-	}
-
-	store, err := models.FindStoreByID(order.StoreID, bson.M{})
-	if err != nil {
-		response.Status = false
-		response.Errors["store"] = "invalid store: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	if store.Zatca.Phase == "2" && store.Zatca.Connected {
-		err = order.ReportToZatca()
-		if err != nil {
-			response.Status = false
-			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
 	}
 
 	json.NewEncoder(w).Encode(response)
@@ -357,13 +363,21 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.FindNetTotal()
-	order.FindTotal()
 	order.FindTotalQuantity()
-	order.FindVatPrice()
-
 	order.UpdateForeignLabelFields()
 	order.CalculateOrderProfit()
 	//order.GetPayments()
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		err = order.ReportToZatca()
+		if err != nil {
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
 
 	err = order.Update()
 	if err != nil {

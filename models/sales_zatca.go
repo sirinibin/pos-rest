@@ -548,10 +548,11 @@ func (order *Order) RecordZatcaComplianceCheckFailure(errorMessage string) error
 	order.Zatca.ComplianceCheckFailedCount++
 	order.Zatca.ComplianceCheckErrors = append(order.Zatca.ComplianceCheckErrors, errorMessage)
 	order.Zatca.ComplianceCheckLastFailedAt = &now
-	err := order.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := order.Update()
+		if err != nil {
+			return err
+		}*/
 	return nil
 }
 
@@ -560,10 +561,11 @@ func (order *Order) RecordZatcaComplianceCheckSuccess(complianceCheckResponse Za
 	order.Zatca.CompliancePassed = true
 	order.Zatca.CompliancePassedAt = &now
 	order.Zatca.ComplianceInvoiceHash = complianceCheckResponse.InvoiceHash
-	err := order.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := order.Update()
+		if err != nil {
+			return err
+		}*/
 	return nil
 }
 
@@ -573,10 +575,11 @@ func (order *Order) RecordZatcaReportingFailure(errorMessage string) error {
 	order.Zatca.ReportingFailedCount++
 	order.Zatca.ReportingErrors = append(order.Zatca.ReportingErrors, errorMessage)
 	order.Zatca.ReportingLastFailedAt = &now
-	err := order.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := order.Update()
+		if err != nil {
+			return err
+		}*/
 	return nil
 }
 
@@ -586,10 +589,11 @@ func (order *Order) RecordZatcaReportingSuccess(reportingResponse ZatcaReporting
 	order.Zatca.ReportedAt = &now
 	order.Zatca.ReportingInvoiceHash = reportingResponse.InvoiceHash
 	order.Hash = reportingResponse.InvoiceHash
-	err := order.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := order.Update()
+		if err != nil {
+			return err
+		}*/
 
 	return nil
 }
@@ -876,10 +880,11 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 	}
 
 	order.Zatca.IsSimplified = reportingResponse.IsSimplified
-	err = order.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err = order.Update()
+		if err != nil {
+			return err
+		}*/
 
 	// Delete xml files
 	xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"

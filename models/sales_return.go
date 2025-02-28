@@ -1780,8 +1780,31 @@ func (model *SalesReturn) MakeRedisCode() error {
 	return nil
 }
 
+func (salesReturn *SalesReturn) UnMakeRedisCode() error {
+	redisKey := salesReturn.StoreID.Hex() + "_return_invoice_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists != 0 {
+		_, err := db.RedisClient.Decr(redisKey).Result()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (salesReturn *SalesReturn) MakeCode() error {
 	return salesReturn.MakeRedisCode()
+}
+
+func (salesReturn *SalesReturn) UnMakeCode() error {
+	return salesReturn.UnMakeRedisCode()
 }
 
 func (store *Store) FindLastSalesReturnByStoreID(

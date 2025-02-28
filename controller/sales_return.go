@@ -123,6 +123,14 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	salesreturn.CreatedBy = &userID
 	salesreturn.UpdatedBy = &userID
 	now := time.Now()
@@ -138,9 +146,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salesreturn.FindNetTotal()
-	salesreturn.FindTotal()
 	salesreturn.FindTotalQuantity()
-	salesreturn.FindVatPrice()
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()
 
@@ -156,8 +162,27 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 	salesreturn.UUID = uuid.New().String()
 
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		err = salesreturn.ReportToZatca()
+		if err != nil {
+			redisErr := salesreturn.UnMakeCode()
+			if redisErr != nil {
+				response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+			}
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	err = salesreturn.Insert()
 	if err != nil {
+		redisErr := salesreturn.UnMakeCode()
+		if redisErr != nil {
+			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+		}
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["insert"] = "Unable to insert to db:" + err.Error()
@@ -219,24 +244,6 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
-	}
-
-	store, err := models.FindStoreByID(salesreturn.StoreID, bson.M{})
-	if err != nil {
-		response.Status = false
-		response.Errors["store"] = "invalid store: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	if store.Zatca.Phase == "2" && store.Zatca.Connected {
-		err = salesreturn.ReportToZatca()
-		if err != nil {
-			response.Status = false
-			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
 	}
 
 	response.Status = true
@@ -328,6 +335,17 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.FindTotalQuantity()
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		err = salesreturn.ReportToZatca()
+		if err != nil {
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
 
 	err = salesreturn.Update()
 	if err != nil {
@@ -437,16 +455,6 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to find salesreturn:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
-	}
-
-	if store.Zatca.Phase == "2" && store.Zatca.Connected {
-		err = salesreturn.ReportToZatca()
-		if err != nil {
-			response.Status = false
-			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
 	}
 
 	response.Status = true

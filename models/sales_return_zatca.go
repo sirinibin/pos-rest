@@ -578,10 +578,11 @@ func (salesReturn *SalesReturn) RecordZatcaComplianceCheckFailure(errorMessage s
 	salesReturn.Zatca.ComplianceCheckFailedCount++
 	salesReturn.Zatca.ComplianceCheckErrors = append(salesReturn.Zatca.ComplianceCheckErrors, errorMessage)
 	salesReturn.Zatca.ComplianceCheckLastFailedAt = &now
-	err := salesReturn.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := salesReturn.Update()
+		if err != nil {
+			return err
+		}*/
 	return nil
 }
 
@@ -590,10 +591,11 @@ func (salesReturn *SalesReturn) RecordZatcaComplianceCheckSuccess(complianceChec
 	salesReturn.Zatca.CompliancePassed = true
 	salesReturn.Zatca.CompliancePassedAt = &now
 	salesReturn.Zatca.ComplianceInvoiceHash = complianceCheckResponse.InvoiceHash
-	err := salesReturn.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := salesReturn.Update()
+		if err != nil {
+			return err
+		}*/
 	return nil
 }
 
@@ -603,10 +605,11 @@ func (salesReturn *SalesReturn) RecordZatcaReportingFailure(errorMessage string)
 	salesReturn.Zatca.ReportingFailedCount++
 	salesReturn.Zatca.ReportingErrors = append(salesReturn.Zatca.ReportingErrors, errorMessage)
 	salesReturn.Zatca.ReportingLastFailedAt = &now
-	err := salesReturn.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := salesReturn.Update()
+		if err != nil {
+			return err
+		}*/
 	return nil
 }
 
@@ -616,10 +619,11 @@ func (salesReturn *SalesReturn) RecordZatcaReportingSuccess(reportingResponse Za
 	salesReturn.Zatca.ReportedAt = &now
 	salesReturn.Zatca.ReportingInvoiceHash = reportingResponse.InvoiceHash
 	salesReturn.Hash = reportingResponse.InvoiceHash
-	err := salesReturn.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := salesReturn.Update()
+		if err != nil {
+			return err
+		}*/
 
 	return nil
 }
@@ -904,10 +908,11 @@ func (salesReturn *SalesReturn) SaveClearedInvoiceData(reportingResponse ZatcaRe
 	}
 
 	salesReturn.Zatca.IsSimplified = reportingResponse.IsSimplified
-	err = salesReturn.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err = salesReturn.Update()
+		if err != nil {
+			return err
+		}*/
 
 	// Delete xml files
 	xmlFilePath := "ZatcaPython/templates/invoice_" + salesReturn.Code + ".xml"
