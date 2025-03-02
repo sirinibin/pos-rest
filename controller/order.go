@@ -468,15 +468,16 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if store.Zatca.Phase == "2" && store.Zatca.Connected {
-		err = order.ReportToZatca()
-		if err != nil {
-			response.Status = false
-			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	}
+	/*
+		if store.Zatca.Phase == "2" && store.Zatca.Connected {
+			err = order.ReportToZatca()
+			if err != nil {
+				response.Status = false
+				response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}*/
 
 	response.Status = true
 	response.Result = order
