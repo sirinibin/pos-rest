@@ -120,9 +120,9 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.FindNetTotal()
-	quotation.FindTotal()
+	//quotation.FindTotal()
 	quotation.FindTotalQuantity()
-	quotation.FindVatPrice()
+	//	quotation.FindVatPrice()
 	quotation.UpdateForeignLabelFields()
 	quotation.MakeCode()
 

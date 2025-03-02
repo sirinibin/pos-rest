@@ -352,6 +352,11 @@ func (order *Order) CalculateDiscountPercentage() {
 		order.DiscountPercent = 0
 	}
 
+	if order.Discount <= 0 {
+		order.DiscountPercent = 0.00
+		return
+	}
+
 	percentage := (order.Discount / order.NetTotal) * 100
 	order.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
 }

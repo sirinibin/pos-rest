@@ -485,7 +485,7 @@ func (quotation *Quotation) FindNetTotal() {
 
 	quotation.ShippingOrHandlingFees = RoundTo2Decimals(quotation.ShippingOrHandlingFees)
 	quotation.Discount = RoundTo2Decimals(quotation.Discount)
-	quotation.CalculateDiscountPercentage()
+	//quotation.CalculateDiscountPercentage()
 
 	netTotal += quotation.ShippingOrHandlingFees
 	netTotal -= quotation.Discount
@@ -495,9 +495,15 @@ func (quotation *Quotation) FindNetTotal() {
 
 	quotation.NetTotal = RoundTo2Decimals(netTotal)
 }
+
 func (quotation *Quotation) CalculateDiscountPercentage() {
 	if quotation.NetTotal == 0 {
 		quotation.DiscountPercent = 0
+	}
+
+	if quotation.Discount <= 0 {
+		quotation.DiscountPercent = 0.00
+		return
 	}
 
 	percentage := (quotation.Discount / quotation.NetTotal) * 100
@@ -553,6 +559,7 @@ func (model *Quotation) FindNetTotal() {
 	//order.NetTotal = netTotal
 	model.NetTotal = RoundFloat(netTotal, 2)
 }
+
 
 func (quotation *Quotation) FindTotal() {
 	total := float64(0.0)

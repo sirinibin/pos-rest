@@ -460,6 +460,11 @@ func (purchaseReturn *PurchaseReturn) CalculateDiscountPercentage() {
 		purchaseReturn.DiscountPercent = 0
 	}
 
+	if purchaseReturn.Discount <= 0 {
+		purchaseReturn.DiscountPercent = 0.00
+		return
+	}
+
 	percentage := (purchaseReturn.Discount / purchaseReturn.NetTotal) * 100
 	purchaseReturn.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
 }

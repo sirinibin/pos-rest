@@ -557,6 +557,11 @@ func (purchase *Purchase) CalculateDiscountPercentage() {
 		purchase.DiscountPercent = 0
 	}
 
+	if purchase.Discount <= 0 {
+		purchase.DiscountPercent = 0.00
+		return
+	}
+
 	percentage := (purchase.Discount / purchase.NetTotal) * 100
 	purchase.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
 }
