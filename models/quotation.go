@@ -485,7 +485,6 @@ func (quotation *Quotation) FindNetTotal() {
 
 	quotation.ShippingOrHandlingFees = RoundTo2Decimals(quotation.ShippingOrHandlingFees)
 	quotation.Discount = RoundTo2Decimals(quotation.Discount)
-	//quotation.CalculateDiscountPercentage()
 
 	netTotal += quotation.ShippingOrHandlingFees
 	netTotal -= quotation.Discount
@@ -494,6 +493,7 @@ func (quotation *Quotation) FindNetTotal() {
 	netTotal += quotation.VatPrice
 
 	quotation.NetTotal = RoundTo2Decimals(netTotal)
+	quotation.CalculateDiscountPercentage()
 }
 
 func (quotation *Quotation) CalculateDiscountPercentage() {

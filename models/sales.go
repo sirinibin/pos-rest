@@ -337,7 +337,6 @@ func (order *Order) FindNetTotal() {
 
 	order.ShippingOrHandlingFees = RoundTo2Decimals(order.ShippingOrHandlingFees)
 	order.Discount = RoundTo2Decimals(order.Discount)
-	order.CalculateDiscountPercentage()
 
 	netTotal += order.ShippingOrHandlingFees
 	netTotal -= order.Discount
@@ -346,6 +345,7 @@ func (order *Order) FindNetTotal() {
 	netTotal += order.VatPrice
 
 	order.NetTotal = RoundTo2Decimals(netTotal)
+	order.CalculateDiscountPercentage()
 }
 func (order *Order) CalculateDiscountPercentage() {
 	if order.NetTotal == 0 {

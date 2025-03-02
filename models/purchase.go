@@ -542,8 +542,6 @@ func (purchase *Purchase) FindNetTotal() {
 
 	purchase.ShippingOrHandlingFees = RoundTo2Decimals(purchase.ShippingOrHandlingFees)
 	purchase.Discount = RoundTo2Decimals(purchase.Discount)
-	purchase.CalculateDiscountPercentage()
-
 	netTotal += purchase.ShippingOrHandlingFees
 	netTotal -= purchase.Discount
 
@@ -551,6 +549,7 @@ func (purchase *Purchase) FindNetTotal() {
 	netTotal += purchase.VatPrice
 
 	purchase.NetTotal = RoundTo2Decimals(netTotal)
+	purchase.CalculateDiscountPercentage()
 }
 func (purchase *Purchase) CalculateDiscountPercentage() {
 	if purchase.NetTotal == 0 {

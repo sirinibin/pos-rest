@@ -475,7 +475,7 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 	netTotal = salesReturn.Total
 	salesReturn.ShippingOrHandlingFees = RoundTo2Decimals(salesReturn.ShippingOrHandlingFees)
 	salesReturn.Discount = RoundTo2Decimals(salesReturn.Discount)
-	salesReturn.CalculateDiscountPercentage()
+
 	netTotal += salesReturn.ShippingOrHandlingFees
 	netTotal -= salesReturn.Discount
 
@@ -483,6 +483,7 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 	netTotal += salesReturn.VatPrice
 
 	salesReturn.NetTotal = RoundTo2Decimals(netTotal)
+	salesReturn.CalculateDiscountPercentage()
 }
 
 func (salesReturn *SalesReturn) CalculateDiscountPercentage() {
