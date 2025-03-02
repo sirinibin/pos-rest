@@ -474,7 +474,6 @@ func (store *Store) SearchPosting(w http.ResponseWriter, r *http.Request) (
 		/*criterias.SearchBy["posts"] = bson.M{"$elemMatch": bson.M{
 			"date": bson.M{"$gte": startDate, "$lte": endDate},
 		}}*/
-		log.Print("Okk1")
 	}
 
 	keys, ok = r.URL.Query()["search[from_date]"]

@@ -66,6 +66,7 @@ type Store struct {
 	PurchaseSerialNumber       SerialNumber          `bson:"purchase_serial_number,omitempty" json:"purchase_serial_number,omitempty"`
 	PurchaseReturnSerialNumber SerialNumber          `bson:"purchase_return_serial_number,omitempty" json:"purchase_return_serial_number,omitempty"`
 	QuotationSerialNumber      SerialNumber          `bson:"quotation_serial_number,omitempty" json:"quotation_serial_number,omitempty"`
+	BankAccount                BankAccount           `bson:"bank_account,omitempty" json:"bank_account,omitempty"`
 }
 
 type SerialNumber struct {
