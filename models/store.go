@@ -665,20 +665,18 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	/*
-		if !store.ID.IsZero() && oldStore != nil {
-			if store.Zatca.Env != oldStore.Zatca.Env {
-				salesCount, err := oldStore.GetSalesCount()
-				if err != nil {
-					errs["sales_count"] = "Error finding sales count"
-				}
+	if !store.ID.IsZero() && oldStore != nil && !govalidator.IsNull(oldStore.Zatca.Env) {
+		if store.Zatca.Env != oldStore.Zatca.Env {
+			salesCount, err := oldStore.GetSalesCount()
+			if err != nil {
+				errs["sales_count"] = "Error finding sales count"
+			}
 
-				if salesCount > 0 {
-					errs["zatca_env"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
-				}
+			if salesCount > 0 {
+				errs["zatca_env"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
 			}
 		}
-	*/
+	}
 
 	if !store.ID.IsZero() && oldStore != nil {
 		if store.SalesSerialNumber.StartFromCount != oldStore.SalesSerialNumber.StartFromCount {
