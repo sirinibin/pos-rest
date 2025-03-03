@@ -434,6 +434,7 @@ func (store *Store) TrimSpaceFromFields() {
 
 func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 	store.TrimSpaceFromFields()
+	errs = make(map[string]string)
 
 	oldStore, err := FindStoreByID(&store.ID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
@@ -441,8 +442,6 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["id"] = err.Error()
 		return errs
 	}
-
-	errs = make(map[string]string)
 
 	if scenario == "update" {
 		if store.ID.IsZero() {
@@ -716,11 +715,12 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	if store.ID.IsZero() {
-		if govalidator.IsNull(store.LogoContent) {
-			errs["logo_content"] = "Logo is required"
-		}
-	}
+	/*
+		if store.ID.IsZero() {
+			if govalidator.IsNull(store.LogoContent) {
+				errs["logo_content"] = "Logo is required"
+			}
+		}*/
 
 	if !govalidator.IsNull(store.LogoContent) {
 		splits := strings.Split(store.LogoContent, ",")
