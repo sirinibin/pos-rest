@@ -77,6 +77,7 @@ type SerialNumber struct {
 
 type Zatca struct {
 	Phase                         string              `bson:"phase,omitempty" json:"phase"` //1 or 2
+	Env                           string              `bson:"env,omitempty" json:"env"`     //NonProduction | Simulation | Production
 	Otp                           string              `bson:"otp,omitempty" json:"otp"`     //Need to obtain from zatca when going to production level
 	PrivateKey                    string              `bson:"private_key,omitempty" json:"private_key"`
 	Csr                           string              `bson:"csr,omitempty" json:"csr"` //Need to generate from store details, update it whenever the store details updates
@@ -658,7 +659,28 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["quotation_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
-	if !store.ID.IsZero() && oldStore != nil && store.Code != "GUOJ" && store.Code != "GUOCJ" {
+	if store.Zatca.Phase == "2" {
+		if govalidator.IsNull(store.Zatca.Env) {
+			errs["zatca_env"] = "Environment is required"
+		}
+	}
+
+	/*
+		if !store.ID.IsZero() && oldStore != nil {
+			if store.Zatca.Env != oldStore.Zatca.Env {
+				salesCount, err := oldStore.GetSalesCount()
+				if err != nil {
+					errs["sales_count"] = "Error finding sales count"
+				}
+
+				if salesCount > 0 {
+					errs["zatca_env"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
+				}
+			}
+		}
+	*/
+
+	if !store.ID.IsZero() && oldStore != nil {
 		if store.SalesSerialNumber.StartFromCount != oldStore.SalesSerialNumber.StartFromCount {
 			salesCount, err := oldStore.GetSalesCount()
 			if err != nil {

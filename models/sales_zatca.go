@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
-	"github.com/sirinibin/pos-rest/env"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -624,7 +623,7 @@ func (order *Order) ReportToZatca() error {
 
 	// Create JSON payload
 	payload := map[string]interface{}{
-		"env":                   env.Getenv("ZATCA_ENV", "NonProduction"),
+		"env":                   store.Zatca.Env,
 		"private_key":           store.Zatca.PrivateKey,
 		"binary_security_token": store.Zatca.BinarySecurityToken,
 		"secret":                store.Zatca.Secret,
@@ -712,7 +711,7 @@ func (order *Order) ReportToZatca() error {
 	if complianceCheckResponse.CompliancePassed {
 		// Create JSON payload
 		payload = map[string]interface{}{
-			"env":                              env.Getenv("ZATCA_ENV", "NonProduction"),
+			"env":                              store.Zatca.Env,
 			"private_key":                      store.Zatca.PrivateKey,
 			"production_binary_security_token": store.Zatca.ProductionBinarySecurityToken,
 			"production_secret":                store.Zatca.ProductionSecret,
