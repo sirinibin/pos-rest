@@ -44,6 +44,14 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "salesreturn")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of salesreturns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Criterias = criterias
 
@@ -52,14 +60,6 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "salesreturn")
-			if err != nil {
-				response.Status = false
-				response.Errors["total_count"] = "Unable to find total count of salesreturns:" + err.Error()
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
 			salesReturnStats, err = store.GetSalesReturnStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false

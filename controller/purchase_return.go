@@ -43,6 +43,14 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchasereturn")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of purchasereturns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Criterias = criterias
 
@@ -51,14 +59,6 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchasereturn")
-			if err != nil {
-				response.Status = false
-				response.Errors["total_count"] = "Unable to find total count of purchasereturns:" + err.Error()
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
 			purchaseReturnStats, err = store.GetPurchaseReturnStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
@@ -75,6 +75,7 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["vat_price"] = purchaseReturnStats.VatPrice
 	response.Meta["discount"] = purchaseReturnStats.Discount
 	response.Meta["cash_discount"] = purchaseReturnStats.CashDiscount
+	response.Meta["shipping_handling_fees"] = purchaseReturnStats.ShippingOrHandlingFees
 	response.Meta["paid_purchase_return"] = purchaseReturnStats.PaidPurchaseReturn
 	response.Meta["unpaid_purchase_return"] = purchaseReturnStats.UnPaidPurchaseReturn
 	response.Meta["cash_purchase_return"] = purchaseReturnStats.CashPurchaseReturn

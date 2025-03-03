@@ -43,6 +43,14 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchase")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of purchases:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Criterias = criterias
 
@@ -51,14 +59,6 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchase")
-			if err != nil {
-				response.Status = false
-				response.Errors["total_count"] = "Unable to find total count of purchases:" + err.Error()
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
 			purchaseStats, err = store.GetPurchaseStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false

@@ -46,6 +46,14 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "order")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Criterias = criterias
 
@@ -54,14 +62,6 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "order")
-			if err != nil {
-				response.Status = false
-				response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-
 			salesStats, err = store.GetSalesStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false

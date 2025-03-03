@@ -82,15 +82,23 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if loadData {
-		response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product")
-		if err != nil {
-			response.Status = false
-			response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
+	/*
+		if loadData {
+			response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product")
+			if err != nil {
+				response.Status = false
+				response.Errors["total_count"] = "Unable to find total count of products:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}*/
 
 	response.Status = true
 	response.Criterias = criterias

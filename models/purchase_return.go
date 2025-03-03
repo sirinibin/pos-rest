@@ -233,11 +233,12 @@ func (store *Store) GetPurchaseReturnStats(filter map[string]interface{}) (stats
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":           nil,
-				"net_total":     bson.M{"$sum": "$net_total"},
-				"vat_price":     bson.M{"$sum": "$vat_price"},
-				"discount":      bson.M{"$sum": "$discount"},
-				"cash_discount": bson.M{"$sum": "$cash_discount"},
+				"_id":                    nil,
+				"net_total":              bson.M{"$sum": "$net_total"},
+				"vat_price":              bson.M{"$sum": "$vat_price"},
+				"discount":               bson.M{"$sum": "$discount"},
+				"cash_discount":          bson.M{"$sum": "$cash_discount"},
+				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
 				"paid_purchase_return": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",
