@@ -192,7 +192,7 @@ func (store *Store) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, criterias SearchCriterias, err error) {
+func SearchStore(w http.ResponseWriter, r *http.Request) (stores []Store, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
 		Page:   1,
@@ -202,6 +202,32 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+
+	tokenClaims, err := AuthenticateByAccessToken(r)
+	if err != nil {
+		return stores, criterias, err
+	}
+
+	accessingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+	}
+
+	accessingUser, err := FindUserByID(&accessingUserID, bson.M{})
+	if err != nil {
+		return stores, criterias, err
+	}
+
+	if accessingUser.Role != "Admin" {
+		/*
+			criterias.SearchBy["$or"] = []bson.M{
+				{"store_id": storeID},
+				{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
+			}
+		*/
+		if len(accessingUser.StoreIDs) > 0 {
+			criterias.SearchBy["_id"] = bson.M{"$in": accessingUser.StoreIDs}
+		}
+	}
 
 	timeZoneOffset := 0.0
 	keys, ok := r.URL.Query()["search[timezone_offset]"]
@@ -219,7 +245,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
-			return storees, criterias, err
+			return stores, criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -236,7 +262,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 		const shortForm = "Jan 02 2006"
 		createdAtStartDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return storees, criterias, err
+			return stores, criterias, err
 		}
 	}
 
@@ -245,7 +271,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 		const shortForm = "Jan 02 2006"
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return storees, criterias, err
+			return stores, criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -347,7 +373,7 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 	*/
 	cur, err := collection.Find(ctx, criterias.SearchBy, findOptions)
 	if err != nil {
-		return storees, criterias, errors.New("Error fetching storees:" + err.Error())
+		return stores, criterias, errors.New("Error fetching stores:" + err.Error())
 	}
 	if cur != nil {
 		defer cur.Close(ctx)
@@ -356,12 +382,12 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
-			return storees, criterias, errors.New("Cursor error:" + err.Error())
+			return stores, criterias, errors.New("Cursor error:" + err.Error())
 		}
 		store := Store{}
 		err = cur.Decode(&store)
 		if err != nil {
-			return storees, criterias, errors.New("Cursor decode error:" + err.Error())
+			return stores, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
@@ -374,10 +400,10 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (storees []Store, crite
 			store.DeletedByUser, _ = FindUserByID(store.DeletedBy, deletedByUserSelectFields)
 		}
 
-		storees = append(storees, store)
+		stores = append(stores, store)
 	} //end for loop
 
-	return storees, criterias, nil
+	return stores, criterias, nil
 
 }
 

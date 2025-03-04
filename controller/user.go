@@ -20,11 +20,34 @@ func ListUser(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
 		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	accessingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "invalid user id: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	accessingUser, err := models.FindUserByID(&accessingUserID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "invalid user: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if accessingUser.Role != "Admin" {
+		response.Status = false
+		response.Errors["user_id"] = "unauthorized access"
 		json.NewEncoder(w).Encode(response)
 		return
 	}

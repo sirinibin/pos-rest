@@ -86,6 +86,21 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accessingUser, err := models.FindUserByID(&userID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "invalid user: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if accessingUser.Role != "Admin" {
+		response.Status = false
+		response.Errors["user_id"] = "unauthorized access"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	store.CreatedBy = &userID
 	store.UpdatedBy = &userID
 	now := time.Now()
@@ -126,6 +141,15 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 
+}
+
+func ObjectIDExists(id primitive.ObjectID, list []*primitive.ObjectID) bool {
+	for _, v := range list {
+		if *v == id {
+			return true
+		}
+	}
+	return false
 }
 
 // UpdateStore : handler function for PUT /v1/store call
@@ -185,6 +209,21 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	accessingUser, err := models.FindUserByID(&userID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "invalid user: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if !ObjectIDExists(store.ID, accessingUser.StoreIDs) {
+		response.Status = false
+		response.Errors["user_id"] = "unauthorized access"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	store.UpdatedBy = &userID
 	now := time.Now()
 	store.UpdatedAt = &now
@@ -239,7 +278,7 @@ func ViewStore(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -270,6 +309,29 @@ func ViewStore(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	accessingUser, err := models.FindUserByID(&userID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "invalid user: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if !ObjectIDExists(store.ID, accessingUser.StoreIDs) {
+		response.Status = false
+		response.Errors["user_id"] = "unauthorized access"
 		json.NewEncoder(w).Encode(response)
 		return
 	}

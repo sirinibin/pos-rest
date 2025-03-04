@@ -141,11 +141,11 @@ func (user *User) UpdateForeignLabelFields() error {
 	user.StoreNames = []string{}
 
 	for _, storeID := range user.StoreIDs {
-		storeTemp, err := FindStoreByID(storeID, bson.M{"id": 1, "name": 1})
+		storeTemp, err := FindStoreByID(storeID, bson.M{"id": 1, "name": 1, "branch_name": 1})
 		if err != nil {
 			return errors.New("Error Finding store id:" + storeID.Hex() + ",error:" + err.Error())
 		}
-		user.StoreNames = append(user.StoreNames, storeTemp.Name)
+		user.StoreNames = append(user.StoreNames, storeTemp.Name+" - "+storeTemp.BranchName)
 	}
 
 	if user.CreatedBy != nil {
