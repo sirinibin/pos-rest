@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,65 +18,43 @@ import (
 ) //import "encoding/json"
 
 type User struct {
-	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
-	Email         string              `bson:"email,omitempty" json:"email,omitempty"`
-	Mob           string              `bson:"mob,omitempty" json:"mob,omitempty"`
-	Password      string              `bson:"password,omitempty" json:"password,omitempty"`
-	Photo         string              `bson:"photo,omitempty" json:"photo,omitempty"`
-	PhotoContent  string              `json:"photo_content,omitempty"`
-	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
-	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog     []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
-	Admin         bool                `bson:"admin" json:"admin"`
+	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
+	Email         string                `bson:"email,omitempty" json:"email,omitempty"`
+	Mob           string                `bson:"mob,omitempty" json:"mob,omitempty"`
+	Password      string                `bson:"password,omitempty" json:"password,omitempty"`
+	Photo         string                `bson:"photo,omitempty" json:"photo,omitempty"`
+	PhotoContent  string                `json:"photo_content,omitempty"`
+	Deleted       bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy     *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser *User                 `json:"deleted_by_user,omitempty"`
+	DeletedAt     *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt     *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser *User                 `json:"created_by_user,omitempty"`
+	UpdatedByUser *User                 `json:"updated_by_user,omitempty"`
+	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Admin         bool                  `bson:"admin" json:"admin"`
+	StoreIDs      []*primitive.ObjectID `json:"store_ids" bson:"store_ids"`
+	StoreNames    []string              `json:"store_names" bson:"store_names"`
+	Role          string                `json:"role,omitempty" bson:"role,omitempty"` //Admin | Manager | SalesMen
 }
-
-func (user *User) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "register" {
-		description = "Registered"
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	}
-
-	changeLog := ChangeLog{
-		Event:       event,
-		Description: description,
-		CreatedAt:   &now,
-	}
-
-	if UserObject != nil && !UserObject.ID.IsZero() {
-		changeLog.CreatedBy = &UserObject.ID
-		changeLog.CreatedByName = UserObject.Name
-	}
-
-	user.ChangeLog = append(
-		user.ChangeLog,
-		changeLog,
-	)
+type UserForm struct {
+	ID           primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name         string                `bson:"name,omitempty" json:"name,omitempty"`
+	Email        string                `bson:"email,omitempty" json:"email,omitempty"`
+	Mob          string                `bson:"mob,omitempty" json:"mob,omitempty"`
+	Password     string                `bson:"password,omitempty" json:"password,omitempty"`
+	Photo        string                `bson:"photo,omitempty" json:"photo,omitempty"`
+	PhotoContent string                `json:"photo_content,omitempty"`
+	Role         string                `bson:"role,omitempty" json:"role,omitempty"`
+	StoreIDs     []*primitive.ObjectID `json:"store_ids" bson:"store_ids"`
+	StoreNames   []string              `json:"store_names" bson:"store_names"`
+	Admin        bool                  `bson:"admin" json:"admin"`
 }
 
 func (user *User) AttributesValueChangeEvent(userOld *User) error {
@@ -161,6 +138,16 @@ func (user *User) AttributesValueChangeEvent(userOld *User) error {
 
 func (user *User) UpdateForeignLabelFields() error {
 
+	user.StoreNames = []string{}
+
+	for _, storeID := range user.StoreIDs {
+		storeTemp, err := FindStoreByID(storeID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error Finding store id:" + storeID.Hex() + ",error:" + err.Error())
+		}
+		user.StoreNames = append(user.StoreNames, storeTemp.Name)
+	}
+
 	if user.CreatedBy != nil {
 		createdByUser, err := FindUserByID(user.CreatedBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
@@ -237,7 +224,7 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 		errs["mob"] = "Mob is required"
 	}
 
-	if govalidator.IsNull(user.Password) {
+	if user.ID.IsZero() && govalidator.IsNull(user.Password) {
 		errs["password"] = "Password is required"
 	}
 
@@ -482,23 +469,7 @@ func (user *User) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := user.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	user.ID = primitive.NewObjectID()
-	// Insert new record
-	user.Password = HashPassword(user.Password)
-
-	if !govalidator.IsNull(user.PhotoContent) {
-		err := user.SavePhoto()
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = collection.InsertOne(ctx, &user)
+	_, err := collection.InsertOne(ctx, &user)
 	if err != nil {
 		return err
 	}
@@ -533,26 +504,7 @@ func (user *User) Update() error {
 	updateOptions.SetUpsert(true)
 	defer cancel()
 
-	err := user.UpdateForeignLabelFields()
-	if err != nil {
-		return err
-	}
-
-	now := time.Now()
-	user.UpdatedAt = &now
-
-	if !govalidator.IsNull(user.Password) {
-		user.Password = HashPassword(user.Password)
-	}
-
-	if !govalidator.IsNull(user.PhotoContent) {
-		err := user.SavePhoto()
-		if err != nil {
-			return err
-		}
-	}
-	log.Print(user.Admin)
-	_, err = collection.UpdateOne(
+	_, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": user.ID},
 		bson.M{"$set": user},
@@ -586,8 +538,6 @@ func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
 	user.DeletedBy = &userID
 	now := time.Now()
 	user.DeletedAt = &now
-
-	user.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,

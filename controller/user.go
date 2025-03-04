@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/models"
@@ -101,7 +102,34 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user.SetChangeLog("create", nil, nil, nil)
+	err = user.UpdateForeignLabelFields()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["updating_labels"] = "error updating labels:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	user.ID = primitive.NewObjectID()
+	// Insert new record
+	user.Password = models.HashPassword(user.Password)
+
+	if !govalidator.IsNull(user.PhotoContent) {
+		err := user.SavePhoto()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["updating_photo"] = "error updating photo: " + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	err = user.Insert()
 	if err != nil {
 		response.Status = false
@@ -155,10 +183,23 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var userForm *models.UserForm
 	// Decode data
-	if !utils.Decode(w, r, &user) {
+	if !utils.Decode(w, r, &userForm) {
 		return
 	}
+
+	user.Admin = userForm.Admin
+	user.Email = userForm.Email
+	user.Mob = userForm.Mob
+	if !govalidator.IsNull(userForm.Password) {
+		user.Password = models.HashPassword(userForm.Password)
+	}
+	user.Name = userForm.Name
+	user.Photo = userForm.Photo
+	user.PhotoContent = userForm.PhotoContent
+	user.Role = userForm.Role
+	user.StoreIDs = userForm.StoreIDs
 
 	accessingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -180,6 +221,29 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = user.UpdateForeignLabelFields()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["updating_labels"] = "error updating labels: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+	}
+
+	now = time.Now()
+	user.UpdatedAt = &now
+
+	if !govalidator.IsNull(user.PhotoContent) {
+		err := user.SavePhoto()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["saving_photo"] = "error saving photo: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+		}
+	}
+
 	err = user.Update()
 	if err != nil {
 		response.Status = false
@@ -198,6 +262,8 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	user.Password = ""
 
 	response.Status = true
 	response.Result = user
@@ -245,8 +311,6 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	user.SetChangeLog("view", nil, nil, nil)
 
 	user.Password = ""
 	response.Status = true
@@ -399,7 +463,6 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	user.UpdatedAt = &now
 	user.CreatedAt = &now
 
-	user.SetChangeLog("register", nil, nil, nil)
 	err := user.Insert()
 	if err != nil {
 		response.Status = false
