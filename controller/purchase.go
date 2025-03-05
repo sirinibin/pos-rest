@@ -522,3 +522,34 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// CreateOrder : handler for POST /order
+func CalculatePurchaseNetTotal(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var purchase *models.Purchase
+	// Decode data
+	if !utils.Decode(w, r, &purchase) {
+		return
+	}
+
+	purchase.FindNetTotal()
+	purchase.FindTotal()
+	purchase.FindVatPrice()
+
+	response.Status = true
+	response.Result = purchase
+
+	json.NewEncoder(w).Encode(response)
+}

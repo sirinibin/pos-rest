@@ -401,3 +401,34 @@ func DeleteQuotation(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// CreateOrder : handler for POST /order
+func CalculateQuotationNetTotal(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var quotation *models.Quotation
+	// Decode data
+	if !utils.Decode(w, r, &quotation) {
+		return
+	}
+
+	quotation.FindNetTotal()
+	quotation.FindTotal()
+	quotation.FindVatPrice()
+
+	response.Status = true
+	response.Result = quotation
+
+	json.NewEncoder(w).Encode(response)
+}

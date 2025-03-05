@@ -158,6 +158,7 @@ func main() {
 
 	//Quotation
 	router.HandleFunc("/v1/quotation", controller.CreateQuotation).Methods("POST")
+	router.HandleFunc("/v1/quotation/calculate-net-total", controller.CalculateQuotationNetTotal).Methods("POST")
 	router.HandleFunc("/v1/quotation", controller.ListQuotation).Methods("GET")
 	router.HandleFunc("/v1/quotation/{id}", controller.ViewQuotation).Methods("GET")
 	router.HandleFunc("/v1/quotation/{id}", controller.UpdateQuotation).Methods("PUT")
@@ -174,6 +175,7 @@ func main() {
 
 	//Order
 	router.HandleFunc("/v1/order", controller.CreateOrder).Methods("POST")
+	router.HandleFunc("/v1/order/calculate-net-total", controller.CalculateSalesNetTotal).Methods("POST")
 	router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 	router.HandleFunc("/v1/order", controller.ListOrder).Methods("GET")
 	router.HandleFunc("/v1/order/{id}", controller.ViewOrder).Methods("GET")
@@ -189,6 +191,7 @@ func main() {
 
 	//SalesReturn
 	router.HandleFunc("/v1/sales-return", controller.CreateSalesReturn).Methods("POST")
+	router.HandleFunc("/v1/sales-return/calculate-net-total", controller.CalculateSalesReturnNetTotal).Methods("POST")
 	router.HandleFunc("/v1/sales-return/{id}", controller.UpdateSalesReturn).Methods("PUT")
 	router.HandleFunc("/v1/sales-return", controller.ListSalesReturn).Methods("GET")
 	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
@@ -206,6 +209,7 @@ func main() {
 
 	//Purchase
 	router.HandleFunc("/v1/purchase", controller.CreatePurchase).Methods("POST")
+	router.HandleFunc("/v1/purchase/calculate-net-total", controller.CalculatePurchaseNetTotal).Methods("POST")
 	router.HandleFunc("/v1/purchase", controller.ListPurchase).Methods("GET")
 	router.HandleFunc("/v1/purchase/{id}", controller.ViewPurchase).Methods("GET")
 	router.HandleFunc("/v1/purchase/{id}", controller.UpdatePurchase).Methods("PUT")
@@ -219,6 +223,7 @@ func main() {
 
 	//Purchase Return
 	router.HandleFunc("/v1/purchase-return", controller.CreatePurchaseReturn).Methods("POST")
+	router.HandleFunc("/v1/purchase-return/calculate-net-total", controller.CalculatePurchaseReturnNetTotal).Methods("POST")
 	router.HandleFunc("/v1/purchase-return", controller.ListPurchaseReturn).Methods("GET")
 	router.HandleFunc("/v1/purchase-return/{id}", controller.ViewPurchaseReturn).Methods("GET")
 	router.HandleFunc("/v1/purchase-return/{id}", controller.UpdatePurchaseReturn).Methods("PUT")

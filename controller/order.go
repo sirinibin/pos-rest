@@ -283,6 +283,37 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// CreateOrder : handler for POST /order
+func CalculateSalesNetTotal(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var order *models.Order
+	// Decode data
+	if !utils.Decode(w, r, &order) {
+		return
+	}
+
+	order.FindNetTotal()
+	order.FindTotal()
+	order.FindVatPrice()
+
+	response.Status = true
+	response.Result = order
+
+	json.NewEncoder(w).Encode(response)
+}
+
 // UpdateOrder : handler function for PUT /v1/order call
 func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
