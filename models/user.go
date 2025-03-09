@@ -18,31 +18,70 @@ import (
 ) //import "encoding/json"
 
 type User struct {
-	ID            primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	Name          string                `bson:"name,omitempty" json:"name,omitempty"`
-	Email         string                `bson:"email,omitempty" json:"email,omitempty"`
-	Mob           string                `bson:"mob,omitempty" json:"mob,omitempty"`
-	Password      string                `bson:"password,omitempty" json:"password,omitempty"`
-	Photo         string                `bson:"photo,omitempty" json:"photo,omitempty"`
-	PhotoContent  string                `json:"photo_content,omitempty"`
-	Deleted       bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User                 `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt     *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User                 `json:"created_by_user,omitempty"`
-	UpdatedByUser *User                 `json:"updated_by_user,omitempty"`
-	CreatedByName string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Admin         bool                  `bson:"admin" json:"admin"`
-	StoreIDs      []*primitive.ObjectID `json:"store_ids" bson:"store_ids"`
-	StoreNames    []string              `json:"store_names" bson:"store_names"`
-	Role          string                `json:"role,omitempty" bson:"role,omitempty"` //Admin | Manager | SalesMen
+	ID                 primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name               string                `bson:"name,omitempty" json:"name,omitempty"`
+	Email              string                `bson:"email,omitempty" json:"email,omitempty"`
+	Mob                string                `bson:"mob,omitempty" json:"mob,omitempty"`
+	Password           string                `bson:"password,omitempty" json:"password,omitempty"`
+	Photo              string                `bson:"photo,omitempty" json:"photo,omitempty"`
+	PhotoContent       string                `json:"photo_content,omitempty"`
+	Deleted            bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy          *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser      *User                 `json:"deleted_by_user,omitempty"`
+	DeletedAt          *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt          *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt          *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy          *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy          *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser      *User                 `json:"created_by_user,omitempty"`
+	UpdatedByUser      *User                 `json:"updated_by_user,omitempty"`
+	CreatedByName      string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName      string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName      string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Admin              bool                  `bson:"admin" json:"admin"`
+	StoreIDs           []*primitive.ObjectID `json:"store_ids" bson:"store_ids"`
+	StoreNames         []string              `json:"store_names" bson:"store_names"`
+	Role               string                `json:"role,omitempty" bson:"role,omitempty"` //Admin | Manager | SalesMen
+	Online             bool                  `bson:"online" json:"online"`
+	LastOnlineAt       *time.Time            `bson:"last_online_at,omitempty" json:"last_online_at,omitempty"`
+	LastOfflineAt      *time.Time            `bson:"last_offline_at,omitempty" json:"last_offline_at,omitempty"`
+	ConnectedMobiles   int                   `json:"connected_mobiles" bson:"connected_mobiles"`
+	ConnectedTabs      int                   `json:"connected_tabs" bson:"connected_tabs"`
+	ConnectedComputers int                   `json:"connected_computers" bson:"connected_computers"`
+	Devices            map[string]*Device    `bson:"devices" json:"devices"`
 }
+
+// Device represents detailed information about a user's device
+type Device struct {
+	DeviceID           string     `json:"device_id" bson:"device_id"`         // Unique device identifier (UUID stored in localStorage)
+	Fingerprint        string     `json:"fingerprint" bson:"fingerprint"`     // FingerprintJS-generated visitor ID
+	UserAgent          string     `json:"user_agent" bson:"user_agent"`       // Browser user agent string
+	Platform           string     `json:"platform" bson:"platform"`           // OS platform (e.g., Windows, macOS, Linux, iOS, Android)
+	DeviceType         string     `json:"device_type" bson:"device_type"`     // Device type (Mobile, Tablet, Computer)
+	ScreenWidth        string     `json:"screen_width" bson:"screen_width"`   // Screen width in pixels
+	ScreenHeight       string     `json:"screen_height" bson:"screen_height"` // Screen height in pixels
+	CPUCores           string     `json:"cpu_cores" bson:"cpu_cores"`         // Number of CPU cores
+	RAM                string     `json:"ram" bson:"ram"`                     // Estimated RAM size in GB (if available)
+	Timezone           string     `json:"timezone" bson:"timezone"`           // User's time zone
+	Touch              bool       `json:"touch" bson:"touch"`                 // Whether the device has touch capabilities
+	Connected          bool       `json:"connected" bson:"connected"`         // Whether the device is currently online
+	Battery            string     `json:"battery" bson:"battery"`             // Battery level (0 to 1), -1 if unknown
+	IPAddress          string     `json:"ip_address" bson:"ip_address"`       // Device's IP address (optional)
+	TabsOpen           int        `json:"tabs_open" bson:"tabs_open"`
+	FirstConnectedAt   *time.Time `bson:"first_connected_at,omitempty" json:"first_connected_at,omitempty"`
+	LastConnectedAt    *time.Time `bson:"last_connected_at,omitempty" json:"last_connected_at,omitempty"`
+	LastDisConnectedAt *time.Time `bson:"last_disconnected_at,omitempty" json:"last_disconnected_at,omitempty"`
+	Location           Location   `json:"location" bson:"location"`
+}
+
+type Location struct {
+	Latitude      string     `json:"latitude" bson:"latitude"`
+	Longitude     string     `json:"longitude" bson:"longitude"`
+	City          string     `json:"city" bson:"city"`
+	Country       string     `json:"country" bson:"country"`
+	LastUpdatedAt *time.Time `bson:"last_updated_at,omitempty" json:"last_updated_at,omitempty"`
+}
+
 type UserForm struct {
 	ID           primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	Name         string                `bson:"name,omitempty" json:"name,omitempty"`
@@ -57,6 +96,83 @@ type UserForm struct {
 	Admin        bool                  `bson:"admin" json:"admin"`
 }
 
+func (user *User) SetOnlineStatus() error {
+	connectedDevicesCount := 0
+	for _, device := range user.Devices {
+		if device.Connected {
+			connectedDevicesCount++
+		}
+	}
+
+	now := time.Now()
+	if connectedDevicesCount > 0 && !user.Online {
+		user.Online = true
+		user.LastOfflineAt = &now
+
+	} else if connectedDevicesCount == 0 && user.Online {
+		user.Online = false
+		user.LastOnlineAt = &now
+	}
+
+	return nil
+}
+
+func (user *User) SetDeviceCounts() error {
+	connectedMobiles := 0
+	connectedTabs := 0
+	connectedComputers := 0
+	for _, device := range user.Devices {
+		if device.Connected {
+			if device.DeviceType == "Computer" {
+				connectedComputers++
+			} else if device.DeviceType == "Tablet" {
+				connectedTabs++
+			} else if device.DeviceType == "Mobile" {
+				connectedMobiles++
+			}
+		}
+	}
+
+	user.ConnectedMobiles = connectedMobiles
+	user.ConnectedTabs = connectedTabs
+	user.ConnectedComputers = connectedComputers
+
+	return nil
+}
+
+func GetOnlineAdminUsers() (users []User, err error) {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+	filter := map[string]interface{}{
+		"role":   "Admin",
+		"online": true,
+	}
+	cur, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return users, errors.New("Error fetching users:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return users, errors.New("Cursor error:" + err.Error())
+		}
+		user := User{}
+		err = cur.Decode(&user)
+		if err != nil {
+			return users, errors.New("Cursor decode error:" + err.Error())
+		}
+		users = append(users, user)
+	} //end for loop
+
+	return users, nil
+}
 func (user *User) AttributesValueChangeEvent(userOld *User) error {
 
 	if user.Name != userOld.Name {
@@ -281,6 +397,20 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[online]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return users, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["online"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["online"] = bson.M{"$ne": true}
 		}
 	}
 

@@ -10,7 +10,10 @@ require (
 	github.com/go-co-op/gocron v1.11.0
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/google/uuid v1.6.0
+	github.com/googollee/go-socket.io v1.7.0
+	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/hennedo/escpos v0.0.1
 	github.com/jameskeane/bcrypt v0.0.0-20120420032655-c3cd44c1e20f
 	github.com/jung-kurt/gofpdf v1.16.2
@@ -23,8 +26,11 @@ require (
 )
 
 require (
+	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
+	github.com/gofrs/uuid v4.0.0+incompatible // indirect
 	github.com/golang/snappy v0.0.1 // indirect
+	github.com/gomodule/redigo v1.8.4 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
@@ -36,6 +42,8 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/rogpeppe/go-internal v1.8.0 // indirect
+	github.com/rs/cors v1.11.1 // indirect
+	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.0.2 // indirect
 	github.com/xdg-go/stringprep v1.0.2 // indirect

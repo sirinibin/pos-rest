@@ -9,13 +9,17 @@ import (
 	"time"
 
 	"github.com/go-co-op/gocron"
+	socketio "github.com/googollee/go-socket.io"
 	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
+
+var socketServer *socketio.Server
 
 // testing
 func main() {
@@ -281,33 +285,83 @@ func main() {
 	router.PathPrefix("/zatca/").Handler(http.StripPrefix("/zatca/", http.FileServer(http.Dir("./zatca/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
+	router.HandleFunc("/v1/socket", controller.WebSocketHandler).Methods("GET")
+	//router.HandleFunc("/sockjs-node", controller.WebSocketHandler).Methods("GET")
+
+	server := socketio.NewServer(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	server.OnConnect("/", func(s socketio.Conn) error {
+		fmt.Println("New connection:", s.ID())
+		s.SetContext("")
+		return nil
+	})
+
+	server.OnError("/", func(s socketio.Conn, e error) {
+		fmt.Println("Socket error:", e)
+	})
+
+	server.OnDisconnect("/", func(s socketio.Conn, reason string) {
+		fmt.Println("Client disconnected:", reason)
+	})
+
+	//log.Fatal(server.Serve())
+
+	//http.HandleFunc("/ws", controller.WebSocketHandler)
+	// Enable CORS
+	corsHandler := cors.Default().Handler(router) // Apply CORS middleware
+
+	//router.HandleFunc("/v1/account", controller.ListAccounts)
+
+	//http.HandleFunc("/socket.io", server) // WebSocket Endpoint
 	//cronJobsEveryHour()
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(8).Hour().Do(cronJobsEveryHour)
 	s.StartAsync()
 
 	go func() {
-		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", router))
+		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", corsHandler))
 	}()
 
+	// Initialize the Socket.io server
+
 	/*
-		ifaces, _ := net.Interfaces()
-		for _, i := range ifaces {
-			addrs, _ := i.Addrs()
-			for _, addr := range addrs {
-				var ip net.IP
-				switch v := addr.(type) {
-				case *net.IPNet:
-					ip = v.IP
-				case *net.IPAddr:
-					ip = v.IP
-				}
-				log.Printf("Serving @ https://" + ip.String() + ":" + strconv.Itoa(httpsPort) + " /\n")
-				log.Printf("Serving @ http://" + ip.String() + ":" + httpPort + " /\n")
-			}
-		}*/
+		socketServer = socketio.NewServer(nil) // Default server options
+
+		socketServer.OnConnect("/", func(s socketio.Conn) error {
+			fmt.Println("New client connected")
+			s.SetContext("")
+			return nil
+		})
+
+		socketServer.OnDisconnect("/", func(s socketio.Conn, reason string) {
+			fmt.Println("Client disconnected:", reason)
+		})
+
+		socketServer.OnEvent("/", "chat", func(s socketio.Conn, msg string) {
+			fmt.Println("Received message:", msg)
+			s.Emit("reply", "Message received")
+		})
+
+		socketServer.OnError("/", func(s socketio.Conn, err error) {
+			fmt.Println("Error", err.Error())
+		}) */
+
+	//log.Fatal(socketServer.Serve())
+	//http.HandleFunc("/socket.io", socketServer)
+
+	//http.HandleFunc("/socket.io", controller.WebSocketHandler)
+	//router.HandleFunc("/socket.io", controller.WebSocketHandler).Methods("GET")
+
+	//socketServer.ServeHTTP(controller.WebSocketHandler())
+	//log.Fatal(socketServer.Serve())
+
+	//router.Handle("/socket.io/", controller.WebSocketHandler())
+
 	log.Printf("API serving @ http://localhost:%s\n", httpPort)
-	log.Fatal(http.ListenAndServe(":"+httpPort, router))
+	log.Fatal(http.ListenAndServe(":"+httpPort, corsHandler))
 
 }
 
