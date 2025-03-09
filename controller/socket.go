@@ -69,8 +69,8 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
-			fmt.Println("User Disconnected:", userID)
-			fmt.Println("error: " + err.Error())
+			//fmt.Println("User Disconnected:", userID)
+			//fmt.Println("error: " + err.Error())
 			mutex.Lock()
 
 			connections := models.Clients[userID][deviceID]
