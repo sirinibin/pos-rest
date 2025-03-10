@@ -209,28 +209,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				user.Devices[deviceID] = &deviceData
 
-				/*
-					oldOnlineStatus := user.Online
-					err = user.SetOnlineStatus()
-					if err != nil {
-						fmt.Println("error setting online status:", err.Error())
-					}
-
-					err = user.Update()
-					if err != nil {
-						fmt.Println("error updating user:", err.Error())
-					}
-
-					if user.Online != oldOnlineStatus {
-						log.Print("Online status changed for user:" + user.Name)
-						err = models.NotifyUserStatusChange()
-						if err != nil {
-							fmt.Println("error sending status change notification:", err.Error())
-						}
-					}
-
-				*/
-
 				oldOnlineStatus := user.Online
 				oldConnectedComputers := user.ConnectedComputers
 				oldConnectedMobiles := user.ConnectedMobiles
@@ -291,6 +269,14 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 					}
 					//log.Print("Updating existing device location, device id:" + deviceID)
 				}
+			} else if event.Event == "ping" {
+				//log.Print("Ping received")
+				err = models.SendPong(conn)
+				if err != nil {
+					fmt.Println("error sending pong: ", err.Error())
+				}
+
+				//models.Emit(userID, deviceID, "pong", map[string]interface{}{"message": "pong"})
 			}
 
 			// You can add more custom event handling here...

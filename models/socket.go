@@ -50,6 +50,27 @@ func NotifyUserDeviceCountChange() error {
 	return nil
 }
 
+func SendPong(conn *websocket.Conn) error {
+	event := "pong"
+	data := map[string]interface{}{
+		"message": "pong",
+	}
+	payload := Event{
+		Event: event,
+		Data:  data,
+	}
+
+	jsonData, _ := json.Marshal(payload)
+
+	err := conn.WriteMessage(websocket.TextMessage, jsonData)
+	if err != nil {
+		conn.Close()
+		return err
+	}
+
+	return nil
+}
+
 func Emit(userID string, deviceID string, event string, data interface{}) {
 	mutex.Lock()
 	defer mutex.Unlock()
