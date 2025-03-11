@@ -98,6 +98,14 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	var quotation *models.Quotation
 	// Decode data
 	if !utils.Decode(w, r, &quotation) {
@@ -151,6 +159,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.SetProductsQuotationStats()
 	quotation.SetCustomerQuotationStats()
 
+	store.NotifyUsers("quotation_updated")
 	response.Status = true
 	response.Result = quotation
 
@@ -244,6 +253,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.FindVatPrice()
 	quotation.CalculateQuotationProfit()
 
+	quotation.UpdateForeignLabelFields()
 	err = quotation.Update()
 	if err != nil {
 		response.Status = false
@@ -255,7 +265,6 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.UpdateForeignLabelFields()
 	quotation.ClearProductsQuotationHistory()
 	quotation.AddProductsQuotationHistory()
 
@@ -283,6 +292,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store.NotifyUsers("quotation_updated")
 	response.Status = true
 	response.Result = quotation
 	json.NewEncoder(w).Encode(response)

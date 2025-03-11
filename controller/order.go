@@ -280,6 +280,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store.NotifyUsers("sales_updated")
+
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -511,6 +513,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 			}
 		}*/
 
+	store.NotifyUsers("sales_updated")
 	response.Status = true
 	response.Result = order
 	json.NewEncoder(w).Encode(response)

@@ -173,6 +173,48 @@ func GetOnlineAdminUsers() (users []User, err error) {
 
 	return users, nil
 }
+
+func GetOnlineUsersByStoreID(storeID *primitive.ObjectID) (users []User, err error) {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+	/*
+		criterias.SearchBy["$or"] = []bson.M{
+			{"store_id": storeID},
+			{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
+		}*/
+	filter := map[string]interface{}{
+		"$or": []bson.M{
+			{"store_ids": storeID},
+			{"role": "Admin"},
+		},
+		"online": true,
+	}
+	cur, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return users, errors.New("Error fetching users:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return users, errors.New("Cursor error:" + err.Error())
+		}
+		user := User{}
+		err = cur.Decode(&user)
+		if err != nil {
+			return users, errors.New("Cursor decode error:" + err.Error())
+		}
+		users = append(users, user)
+	} //end for loop
+
+	return users, nil
+}
 func (user *User) AttributesValueChangeEvent(userOld *User) error {
 
 	if user.Name != userOld.Name {

@@ -139,3 +139,20 @@ func ConvertToLocation(data interface{}) (Location, error) {
 
 	return location, nil
 }
+
+func (store *Store) NotifyUsers(event string) error {
+	users, err := GetOnlineUsersByStoreID(&store.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, user := range users {
+		for _, device := range user.Devices {
+			if device.Connected {
+				Emit(user.ID.Hex(), device.DeviceID, event, nil)
+			}
+		}
+	}
+
+	return nil
+}

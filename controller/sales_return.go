@@ -246,6 +246,8 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store.NotifyUsers("sales_return_updated")
+
 	response.Status = true
 	response.Result = salesreturn
 
@@ -458,6 +460,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	store.NotifyUsers("sales_return_updated")
 
 	response.Status = true
 	response.Result = salesreturn

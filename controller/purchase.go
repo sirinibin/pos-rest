@@ -108,6 +108,14 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	var purchase *models.Purchase
 	// Decode data
 	if !utils.Decode(w, r, &purchase) {
@@ -201,6 +209,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store.NotifyUsers("purchase_updated")
 	response.Status = true
 	response.Result = purchase
 
@@ -390,6 +399,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store.NotifyUsers("purchase_updated")
 	response.Status = true
 	response.Result = purchase
 	json.NewEncoder(w).Encode(response)

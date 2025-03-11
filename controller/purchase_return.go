@@ -107,6 +107,14 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	var purchasereturn *models.PurchaseReturn
 	// Decode data
 	if !utils.Decode(w, r, &purchasereturn) {
@@ -199,6 +207,8 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	store.NotifyUsers("purchase_return_updated")
 
 	response.Status = true
 	response.Result = purchasereturn
@@ -400,6 +410,8 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	store.NotifyUsers("purchase_return_updated")
 
 	response.Status = true
 	response.Result = purchasereturn
