@@ -217,7 +217,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !ObjectIDExists(store.ID, accessingUser.StoreIDs) {
+	if !ObjectIDExists(store.ID, accessingUser.StoreIDs) && accessingUser.Role != "Admin" {
 		response.Status = false
 		response.Errors["user_id"] = "unauthorized access"
 		json.NewEncoder(w).Encode(response)
@@ -329,7 +329,7 @@ func ViewStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !ObjectIDExists(store.ID, accessingUser.StoreIDs) {
+	if !ObjectIDExists(store.ID, accessingUser.StoreIDs) && accessingUser.Role != "Admin" {
 		response.Status = false
 		response.Errors["user_id"] = "unauthorized access"
 		json.NewEncoder(w).Encode(response)
