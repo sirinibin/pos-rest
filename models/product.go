@@ -43,36 +43,36 @@ type ProductStore struct {
 	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
 	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	PurchaseUnitPrice       float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
-	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
-	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
-	RetailUnitPrice         float64            `bson:"retail_unit_price" json:"retail_unit_price"`
-	Stock                   float64            `bson:"stock" json:"stock"`
-	RetailUnitProfit        float64            `bson:"retail_unit_profit" json:"retail_unit_profit"`
-	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc" json:"retail_unit_profit_perc"`
-	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit" json:"wholesale_unit_profit"`
-	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc" json:"wholesale_unit_profit_perc"`
-	SalesCount              int64              `bson:"sales_count" json:"sales_count"`
-	SalesQuantity           float64            `bson:"sales_quantity" json:"sales_quantity"`
-	Sales                   float64            `bson:"sales" json:"sales"`
-	SalesReturnCount        int64              `bson:"sales_return_count" json:"sales_return_count"`
-	SalesReturnQuantity     float64            `bson:"sales_return_quantity" json:"sales_return_quantity"`
-	SalesReturn             float64            `bson:"sales_return" json:"sales_return"`
-	SalesProfit             float64            `bson:"sales_profit" json:"sales_profit"`
-	SalesLoss               float64            `bson:"sales_loss" json:"sales_loss"`
-	PurchaseCount           int64              `bson:"purchase_count" json:"purchase_count"`
-	PurchaseQuantity        float64            `bson:"purchase_quantity" json:"purchase_quantity"`
-	Purchase                float64            `bson:"purchase" json:"purchase"`
-	PurchaseReturnCount     int64              `bson:"purchase_return_count" json:"purchase_return_count"`
-	PurchaseReturnQuantity  float64            `bson:"purchase_return_quantity" json:"purchase_return_quantity"`
-	PurchaseReturn          float64            `bson:"purchase_return" json:"purchase_return"`
-	SalesReturnProfit       float64            `bson:"sales_return_profit" json:"sales_return_profit"`
-	SalesReturnLoss         float64            `bson:"sales_return_loss" json:"sales_return_loss"`
-	QuotationCount          int64              `bson:"quotation_count" json:"quotation_count"`
-	QuotationQuantity       float64            `bson:"quotation_quantity" json:"quotation_quantity"`
-	Quotation               float64            `bson:"quotation" json:"quotation"`
-	DeliveryNoteCount       int64              `bson:"delivery_note_count" json:"delivery_note_count"`
-	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity" json:"delivery_note_quantity"`
+	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty,omitempty" json:"purchase_unit_price_secret,omitempty"`
+	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	Stock                   float64            `bson:"stock,omitempty" json:"stock,omitempty"`
+	RetailUnitProfit        float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
+	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
+	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
+	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
+	SalesCount              int64              `bson:"sales_count,omitempty" json:"sales_count,omitempty"`
+	SalesQuantity           float64            `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
+	Sales                   float64            `bson:"sales" json:"sales,omitempty"`
+	SalesReturnCount        int64              `bson:"sales_return_count,omitempty" json:"sales_return_count,omitempty"`
+	SalesReturnQuantity     float64            `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
+	SalesReturn             float64            `bson:"sales_return,omitempty" json:"sales_return,omitempty"`
+	SalesProfit             float64            `bson:"sales_profit,omitempty" json:"sales_profit,omitempty"`
+	SalesLoss               float64            `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
+	PurchaseCount           int64              `bson:"purchase_count,omitempty" json:"purchase_count,omitempty"`
+	PurchaseQuantity        float64            `bson:"purchase_quantity,omitempty" json:"purchase_quantity,omitempty"`
+	Purchase                float64            `bson:"purchase,omitempty" json:"purchase,omitempty"`
+	PurchaseReturnCount     int64              `bson:"purchase_return_count,omitempty" json:"purchase_return_count,omitempty"`
+	PurchaseReturnQuantity  float64            `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity"`
+	PurchaseReturn          float64            `bson:"purchase_return,omitempty" json:"purchase_return,omitempty"`
+	SalesReturnProfit       float64            `bson:"sales_return_profit,omitempty" json:"sales_return_profit,omitempty"`
+	SalesReturnLoss         float64            `bson:"sales_return_loss,omitempty" json:"sales_return_loss,omitempty"`
+	QuotationCount          int64              `bson:"quotation_count,omitempty" json:"quotation_count,omitempty"`
+	QuotationQuantity       float64            `bson:"quotation_quantity,omitempty" json:"quotation_quantity,omitempty"`
+	Quotation               float64            `bson:"quotation,omitempty" json:"quotation"`
+	DeliveryNoteCount       int64              `bson:"delivery_note_count,omitempty" json:"delivery_note_count"`
+	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity"`
 }
 
 // Product : Product structure
@@ -1995,8 +1995,8 @@ func (product *Product) InitStoreUnitPrice() (err error) {
 func (product *Product) CalculateUnitProfit() (err error) {
 	for i, _ := range product.ProductStores {
 		if productStoreTemp, ok := product.ProductStores[i]; ok {
-			productStoreTemp.RetailUnitProfit = product.ProductStores[i].RetailUnitPrice - product.ProductStores[i].PurchaseUnitPrice
-			productStoreTemp.WholesaleUnitProfit = product.ProductStores[i].WholesaleUnitPrice - product.ProductStores[i].PurchaseUnitPrice
+			productStoreTemp.RetailUnitProfit = RoundTo2Decimals(product.ProductStores[i].RetailUnitPrice - product.ProductStores[i].PurchaseUnitPrice)
+			productStoreTemp.WholesaleUnitProfit = RoundTo2Decimals(product.ProductStores[i].WholesaleUnitPrice - product.ProductStores[i].PurchaseUnitPrice)
 			productStoreTemp.RetailUnitProfitPerc = 0
 			productStoreTemp.WholesaleUnitProfitPerc = 0
 			product.ProductStores[i] = productStoreTemp
@@ -2017,6 +2017,7 @@ func (product *Product) CalculateUnitProfit() (err error) {
 		} else if product.ProductStores[i].PurchaseUnitPrice != 0 {
 			if productStoreTemp, ok := product.ProductStores[i]; ok {
 				productStoreTemp.RetailUnitProfitPerc = (product.ProductStores[i].RetailUnitProfit / product.ProductStores[i].PurchaseUnitPrice) * 100
+				productStoreTemp.RetailUnitProfitPerc = RoundTo2Decimals(productStoreTemp.RetailUnitProfitPerc)
 				product.ProductStores[i] = productStoreTemp
 			}
 			//product.ProductStores[i].RetailUnitProfitPerc = (product.ProductStores[i].RetailUnitProfit / product.ProductStores[i].PurchaseUnitPrice) * 100
@@ -2031,6 +2032,7 @@ func (product *Product) CalculateUnitProfit() (err error) {
 		} else if product.ProductStores[i].PurchaseUnitPrice != 0 {
 			if productStoreTemp, ok := product.ProductStores[i]; ok {
 				productStoreTemp.WholesaleUnitProfitPerc = (product.ProductStores[i].WholesaleUnitProfit / product.ProductStores[i].PurchaseUnitPrice) * 100
+				productStoreTemp.WholesaleUnitProfitPerc = RoundTo2Decimals(productStoreTemp.WholesaleUnitProfitPerc)
 				product.ProductStores[i] = productStoreTemp
 			}
 			//product.ProductStores[i].WholesaleUnitProfitPerc = (product.Stores[i].WholesaleUnitProfit / product.Stores[i].PurchaseUnitPrice) * 100
