@@ -652,8 +652,8 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
-		criterias.SortBy = bson.M{"name": 1}
+		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		//criterias.SortBy = bson.M{"name": 1}
 
 		/*
 			criterias.SearchBy["$or"] = []bson.M{
