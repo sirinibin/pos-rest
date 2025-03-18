@@ -15,6 +15,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -27,7 +28,7 @@ func main() {
 	db.Client("")
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
-	//go models.SetIndexes()
+	go models.SetIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)

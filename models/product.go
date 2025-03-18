@@ -650,6 +650,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 
+		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
 		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
 
 		/*

@@ -30,6 +30,17 @@ func SetIndexes() error {
 }
 
 func (store *Store) CreateAllIndexes() error {
+	/*
+		textFields := bson.D{
+			{"name", "text"},
+			{"part_number", "text"},
+			{"name_in_arabic", "text"},
+		}
+		err := store.CreateTextIndex("product", textFields, "name_text_part_number_text_name_in_arabic_text")
+		if err != nil {
+			return err
+		}*/
+
 	fields := bson.M{"ean_12": 1}
 	err := store.CreateIndex("product", fields, true, false, "")
 	if err != nil {
@@ -42,11 +53,13 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	fields = bson.M{"name": "text"}
-	err = store.CreateIndex("product", fields, false, true, "")
-	if err != nil {
-		return err
-	}
+	/*
+		fields = bson.M{"name": "text"}
+		err = store.CreateIndex("product", fields, false, true, "")
+		if err != nil {
+			return err
+		}
+	*/
 
 	fields = bson.M{"category_id": 1}
 	err = store.CreateIndex("product", fields, false, false, "")
@@ -173,6 +186,36 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	return nil
+}
+
+/*
+name_text_part_number_text_name_in_arabic_text
+
+	bson.D{
+	            {"name", "text"},
+	            {"part_number", "text"},
+	            {"name_in_arabic", "text"},
+	        }
+*/
+func (store *Store) CreateTextIndex(collectionName string, fields bson.D, indexName string) error {
+	log.Print("inside CreateTextIndex")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	indexModel := mongo.IndexModel{
+		Keys:    fields,
+		Options: options.Index().SetName(indexName).SetUnique(false),
+	}
+
+	createdIndexName, err := collection.Indexes().CreateOne(ctx, indexModel)
+	if err != nil {
+		log.Printf("Failed to create text index: %v", err)
+		return err
+	}
+
+	fmt.Println("Created text index:", createdIndexName)
 	return nil
 }
 
