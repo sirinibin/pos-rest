@@ -681,7 +681,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["quotation_serial_number_padding_count"] = "Padding count is required"
 	}
 
-	if store.QuotationSerialNumber.StartFromCount <= 0 {
+	if store.QuotationSerialNumber.StartFromCount < 0 {
 		errs["quotation_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
