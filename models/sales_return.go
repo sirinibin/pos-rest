@@ -91,21 +91,22 @@ type SalesReturn struct {
 	CreatedByUser *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 	//ReceivedByName   string               `json:"received_by_name,omitempty" bson:"received_by_name,omitempty"`
-	CustomerName     string               `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	StoreName        string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName    string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName    string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName    string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Profit           float64              `bson:"profit" json:"profit"`
-	NetProfit        float64              `bson:"net_profit" json:"net_profit"`
-	Loss             float64              `bson:"loss" json:"loss"`
-	NetLoss          float64              `bson:"net_loss" json:"net_loss"`
-	TotalPaymentPaid float64              `bson:"total_payment_paid" json:"total_payment_paid"`
-	BalanceAmount    float64              `bson:"balance_amount" json:"balance_amount"`
-	Payments         []SalesReturnPayment `bson:"payments" json:"payments"`
-	PaymentsInput    []SalesReturnPayment `bson:"-" json:"payments_input"`
-	PaymentsCount    int64                `bson:"payments_count" json:"payments_count"`
-	Zatca            ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	CustomerName       string               `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	StoreName          string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName      string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName      string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName      string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Profit             float64              `bson:"profit" json:"profit"`
+	NetProfit          float64              `bson:"net_profit" json:"net_profit"`
+	Loss               float64              `bson:"loss" json:"loss"`
+	NetLoss            float64              `bson:"net_loss" json:"net_loss"`
+	TotalPaymentPaid   float64              `bson:"total_payment_paid" json:"total_payment_paid"`
+	BalanceAmount      float64              `bson:"balance_amount" json:"balance_amount"`
+	Payments           []SalesReturnPayment `bson:"payments" json:"payments"`
+	PaymentsInput      []SalesReturnPayment `bson:"-" json:"payments_input"`
+	PaymentsCount      int64                `bson:"payments_count" json:"payments_count"`
+	Zatca              ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	SkipZatcaReporting bool                 `json:"skip_zatca_reporting,omitempty" bson:"-"`
 }
 
 func (salesReturn *SalesReturn) AddPayments() error {
@@ -1097,9 +1098,15 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 				}
 			*/
 
-			if !lastSalesReturn.Zatca.ReportingPassed {
-				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+			if !salesreturn.SkipZatcaReporting && !lastSalesReturn.Zatca.ReportingPassed {
+				errs["reporting_to_zatca"] = "Last sale is not reported to Zatca. please report it and try again"
 			}
+
+			/*
+				if !lastSalesReturn.Zatca.ReportingPassed {
+					errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+				}*/
+
 		}
 	}
 

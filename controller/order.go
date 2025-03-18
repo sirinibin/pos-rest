@@ -139,8 +139,11 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.CreatedAt = &now
 	order.UpdatedAt = &now
 
+	//log.Print("order.SkipZatcaReporting:")
+	//log.Print(order.SkipZatcaReporting)
 	// Validate data
 	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -178,7 +181,15 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.UUID = uuid.New().String()
 
-	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+	if !order.SkipZatcaReporting && !IsConnectedToInternet() {
+		response.Status = false
+		response.Errors["reporting_to_zatca"] = "not connected to internet"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected && !order.SkipZatcaReporting {
 		err = order.ReportToZatca()
 		if err != nil {
 			log.Print("reporting failed")
@@ -192,6 +203,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+
 	}
 
 	err = order.Insert()
@@ -389,6 +401,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := order.Validate(w, r, "update", orderOld); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -400,9 +413,8 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.UpdateForeignLabelFields()
 	order.CalculateOrderProfit()
 	//order.GetPayments()
-
 	/*
-		if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		if store.Zatca.Phase == "2" && store.Zatca.Connected && !order.SkipZatcaReporting {
 			err = order.ReportToZatca()
 			if err != nil {
 				response.Status = false

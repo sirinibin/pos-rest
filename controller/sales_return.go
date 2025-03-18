@@ -139,6 +139,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := salesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -162,7 +163,15 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 	salesreturn.UUID = uuid.New().String()
 
-	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+	if !salesreturn.SkipZatcaReporting && !IsConnectedToInternet() {
+		response.Status = false
+		response.Errors["reporting_to_zatca"] = "not connected to internet"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected && !salesreturn.SkipZatcaReporting {
 		err = salesreturn.ReportToZatca()
 		if err != nil {
 			redisErr := salesreturn.UnMakeCode()
@@ -327,6 +336,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := salesreturn.Validate(w, r, "update", salesreturnOld); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)

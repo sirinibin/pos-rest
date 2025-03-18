@@ -105,7 +105,8 @@ type Order struct {
 	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	//DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Zatca ZatcaReporting `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	Zatca              ZatcaReporting `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	SkipZatcaReporting bool           `json:"skip_zatca_reporting,omitempty" bson:"-"`
 }
 
 type ZatcaReporting struct {
@@ -1129,6 +1130,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil {
 		errs["customer_id"] = "Customer is required"
+		return errs
 	}
 
 	if store.Zatca.Phase == "2" {
@@ -1152,8 +1154,8 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				}
 			*/
 
-			if !lastOrder.Zatca.ReportingPassed {
-				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+			if !order.SkipZatcaReporting && !lastOrder.Zatca.ReportingPassed {
+				errs["reporting_to_zatca"] = "Last sale is not reported to Zatca. please report it and try again"
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -333,6 +334,14 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !IsConnectedToInternet() {
+		response.Status = false
+		response.Errors["internet"] = "not connected to internet"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
 		var lastOrder *models.Order
 
@@ -363,6 +372,18 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+
+		err = order.Update()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["update"] = "Unable to update:" + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
 	}
 
 	response.Status = true
@@ -433,6 +454,14 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !IsConnectedToInternet() {
+		response.Status = false
+		response.Errors["internet"] = "not connected to internet"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
 		var lastSalesReturn *models.SalesReturn
 
@@ -463,6 +492,18 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+
+		err = salesReturn.Update()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["update"] = "Unable to update:" + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
 	}
 
 	response.Status = true
@@ -557,4 +598,13 @@ func DisconnectStoreFromZatca(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 
+}
+
+func IsConnectedToInternet() bool {
+	timeout := 3 * time.Second
+	_, err := net.DialTimeout("tcp", "8.8.8.8:53", timeout) // Google's DNS server
+	if err != nil {
+		return false
+	}
+	return true
 }

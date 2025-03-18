@@ -44,7 +44,7 @@ type ProductStore struct {
 	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
 	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
 	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty,omitempty" json:"purchase_unit_price_secret,omitempty"`
+	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
 	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 	Stock                   float64            `bson:"stock,omitempty" json:"stock,omitempty"`
@@ -54,7 +54,7 @@ type ProductStore struct {
 	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
 	SalesCount              int64              `bson:"sales_count,omitempty" json:"sales_count,omitempty"`
 	SalesQuantity           float64            `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
-	Sales                   float64            `bson:"sales" json:"sales,omitempty"`
+	Sales                   float64            `bson:"sales,omitempty" json:"sales,omitempty"`
 	SalesReturnCount        int64              `bson:"sales_return_count,omitempty" json:"sales_return_count,omitempty"`
 	SalesReturnQuantity     float64            `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
 	SalesReturn             float64            `bson:"sales_return,omitempty" json:"sales_return,omitempty"`
@@ -64,15 +64,15 @@ type ProductStore struct {
 	PurchaseQuantity        float64            `bson:"purchase_quantity,omitempty" json:"purchase_quantity,omitempty"`
 	Purchase                float64            `bson:"purchase,omitempty" json:"purchase,omitempty"`
 	PurchaseReturnCount     int64              `bson:"purchase_return_count,omitempty" json:"purchase_return_count,omitempty"`
-	PurchaseReturnQuantity  float64            `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity"`
+	PurchaseReturnQuantity  float64            `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity,omitempty"`
 	PurchaseReturn          float64            `bson:"purchase_return,omitempty" json:"purchase_return,omitempty"`
 	SalesReturnProfit       float64            `bson:"sales_return_profit,omitempty" json:"sales_return_profit,omitempty"`
 	SalesReturnLoss         float64            `bson:"sales_return_loss,omitempty" json:"sales_return_loss,omitempty"`
 	QuotationCount          int64              `bson:"quotation_count,omitempty" json:"quotation_count,omitempty"`
 	QuotationQuantity       float64            `bson:"quotation_quantity,omitempty" json:"quotation_quantity,omitempty"`
-	Quotation               float64            `bson:"quotation,omitempty" json:"quotation"`
-	DeliveryNoteCount       int64              `bson:"delivery_note_count,omitempty" json:"delivery_note_count"`
-	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity"`
+	Quotation               float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
+	DeliveryNoteCount       int64              `bson:"delivery_note_count,omitempty" json:"delivery_note_count,omitempty"`
+	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
 }
 
 // Product : Product structure
@@ -87,15 +87,15 @@ type Product struct {
 	BarCode      string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
 	Ean12        string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
 	SearchLabel  string                `json:"search_label"`
-	Rack         string                `bson:"rack,omitempty" json:"rack"`
+	Rack         string                `bson:"rack,omitempty" json:"rack,omitempty"`
 	PartNumber   string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	CategoryID   []*primitive.ObjectID `json:"category_id" bson:"category_id"`
+	CategoryID   []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
 	Category     []*ProductCategory    `json:"category,omitempty"`
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
 	//Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
 	ProductStores map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
-	Unit          string                  `bson:"unit" json:"unit"`
+	Unit          string                  `bson:"unit,omitempty" json:"unit,omitempty"`
 	Images        []string                `bson:"images,omitempty" json:"images,omitempty"`
 	ImagesContent []string                `json:"images_content,omitempty"`
 	Deleted       bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -109,12 +109,12 @@ type Product struct {
 	CreatedByUser *User                   `json:"created_by_user,omitempty"`
 	UpdatedByUser *User                   `json:"updated_by_user,omitempty"`
 	BrandName     string                  `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
-	CategoryName  []string                `json:"category_name" bson:"category_name"`
+	CategoryName  []string                `json:"category_name,omitempty" bson:"category_name,omitempty"`
 	CreatedByName string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog     []ChangeLog             `json:"change_log,omitempty" bson:"change_log,omitempty"`
-	BarcodeBase64 string                  `json:"barcode_base64"`
+	BarcodeBase64 string                  `json:"barcode_base64,omitempty"`
 }
 
 type ProductStats struct {
