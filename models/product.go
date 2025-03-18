@@ -1565,6 +1565,26 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[product_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		productIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range productIds {
+			productID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return products, criterias, err
+			}
+			objecIds = append(objecIds, productID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[created_by]"]
 	if ok && len(keys[0]) >= 1 {
 
