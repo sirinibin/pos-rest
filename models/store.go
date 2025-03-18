@@ -629,7 +629,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["sales_serial_number_padding_count"] = "Padding count is required"
 	}
 
-	if store.SalesSerialNumber.StartFromCount <= 0 {
+	if store.SalesSerialNumber.StartFromCount < 0 {
 		errs["sales_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
@@ -642,7 +642,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["sales_return_serial_number_padding_count"] = "Padding count is required"
 	}
 
-	if store.SalesReturnSerialNumber.StartFromCount <= 0 {
+	if store.SalesReturnSerialNumber.StartFromCount < 0 {
 		errs["sales_return_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
@@ -655,7 +655,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["purchase_serial_number_padding_count"] = "Padding count is required"
 	}
 
-	if store.SalesReturnSerialNumber.StartFromCount <= 0 {
+	if store.SalesReturnSerialNumber.StartFromCount < 0 {
 		errs["purchase_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
@@ -668,7 +668,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["purchase_return_serial_number_padding_count"] = "Padding count is required"
 	}
 
-	if store.PurchaseReturnSerialNumber.StartFromCount <= 0 {
+	if store.PurchaseReturnSerialNumber.StartFromCount < 0 {
 		errs["purchase_return_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
