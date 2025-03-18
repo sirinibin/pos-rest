@@ -1790,8 +1790,16 @@ func GenerateSecretCode(n int) string {
 	return str
 }
 
+func (product *Product) TrimSpaceFromFields() {
+	product.Name = strings.TrimSpace(product.Name)
+	product.NameInArabic = strings.TrimSpace(product.NameInArabic)
+	product.PartNumber = strings.TrimSpace(product.PartNumber)
+	product.ItemCode = strings.TrimSpace(product.ItemCode)
+}
+
 func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 	errs = make(map[string]string)
+	product.TrimSpaceFromFields()
 
 	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
@@ -1823,16 +1831,18 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		errs["name"] = "Name is required"
 	}
 
-	if !govalidator.IsNull(product.ItemCode) {
-		exists, err := product.IsItemCodeExists()
-		if err != nil {
-			errs["item_code"] = err.Error()
-		}
+	/*
+		if !govalidator.IsNull(product.ItemCode) {
+			exists, err := product.IsItemCodeExists()
+			if err != nil {
+				errs["item_code"] = err.Error()
+			}
 
-		if exists {
-			errs["item_code"] = "Item Code Already Exists"
+			if exists {
+				errs["item_code"] = "Item Code Already Exists"
+			}
 		}
-	}
+	*/
 
 	if !govalidator.IsNull(product.PartNumber) {
 		exists, err := product.IsPartNumberExists()
@@ -2436,64 +2446,54 @@ func (product *Product) ReflectValidPurchaseUnitPrice() error {
 	return nil
 }
 
-func (store *Store) ProcessProducts() error {
+func ProcessProducts() error {
 	log.Printf("Processing products")
-	totalCount, err := store.GetTotalCount(bson.M{}, "product")
+
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching products" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		product := Product{}
-		err = cur.Decode(&product)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
-		}
-
-		/*
-			err = product.ReflectValidPurchaseUnitPrice()
-			if err != nil {
-				return err
-			}
-		*/
-		/*
-			if len(product.ProductStores) == 0 {
-				product.ProductStores = map[string]ProductStore{}
-			}
-
-			for _, store := range product.Stores {
-				if !store.StoreID.IsZero() && store.StoreID.Hex() != "" {
-					product.ProductStores[store.StoreID.Hex()] = store
-				}
-			}
-		*/
-
-		product.CalculateUnitProfit()
-
-		err = product.Update()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
 			return err
 		}
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
 
-		bar.Add(1)
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching products" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			product := Product{}
+			err = cur.Decode(&product)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			product.TrimSpaceFromFields()
+
+			err = product.Update()
+			if err != nil {
+				return err
+			}
+
+			bar.Add(1)
+		}
 	}
 
 	log.Print("DONE!")
