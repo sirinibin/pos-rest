@@ -634,7 +634,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 	textSearching := false
 
-	keys, ok = r.URL.Query()["search[name]"]
+	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
@@ -652,15 +652,51 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-
-		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
-		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		criterias.SortBy = bson.M{"name": 1}
 
 		criterias.SearchBy["$or"] = []bson.M{
 			{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[name]"]
+	if ok && len(keys[0]) >= 1 {
+		textSearching = true
+		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
+		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
+		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
+		searchWord = strings.Replace(searchWord, "{", `\{`, -1)
+		searchWord = strings.Replace(searchWord, "}", `\}`, -1)
+		searchWord = strings.Replace(searchWord, "[", `\[`, -1)
+		searchWord = strings.Replace(searchWord, "]", `\]`, -1)
+		searchWord = strings.Replace(searchWord, `*`, `\*`, -1)
+
+		searchWord = strings.Replace(searchWord, "_", `\_`, -1)
+		searchWord = strings.Replace(searchWord, "+", `\\+`, -1)
+		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
+		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
+
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+		}
+
+		criterias.SortBy = bson.M{"name": 1}
+
+		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+
+		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
+		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+
+		//criterias.SearchBy["$or"] = []bson.M{
+		//{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
+		//{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+		//{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+		//{"$text": bson.M{"$search": searchWord}},
+		//}
 
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord, "$language": "en"}
 	}
