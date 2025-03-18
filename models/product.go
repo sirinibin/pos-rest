@@ -648,11 +648,17 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		criterias.SearchBy["$or"] = []bson.M{
-			{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
-		}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+
+		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+
+		/*
+			criterias.SearchBy["$or"] = []bson.M{
+				{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
+				{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+				{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+			}
+		*/
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord, "$language": "en"}
 	}
 	var storeID primitive.ObjectID
