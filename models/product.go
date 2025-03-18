@@ -632,8 +632,11 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 	}
 
+	textSearching := false
+
 	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
+		textSearching = true
 		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
 		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
 		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
@@ -688,7 +691,10 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	keys, ok = r.URL.Query()["sort"]
 	if ok && len(keys[0]) >= 1 {
 		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
-		criterias.SortBy = GetSortByFields(keys[0])
+		if !textSearching {
+			criterias.SortBy = GetSortByFields(keys[0])
+		}
+
 	}
 
 	keys, ok = r.URL.Query()["search[retail_unit_profit]"]
