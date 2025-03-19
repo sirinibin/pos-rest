@@ -8,9 +8,12 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
@@ -77,20 +80,22 @@ type ProductStore struct {
 
 // Product : Product structure
 type Product struct {
-	ID           primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	Name         string                `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode     string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	StoreID      *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName    string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	StoreCode    string                `json:"store_code,omitempty" bson:"store_code,omitempty"`
-	BarCode      string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
-	Ean12        string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
-	SearchLabel  string                `json:"search_label"`
-	Rack         string                `bson:"rack,omitempty" json:"rack,omitempty"`
-	PartNumber   string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	CategoryID   []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
-	Category     []*ProductCategory    `json:"category,omitempty"`
+	ID                   primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                 string                `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic         string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	NamePrefixes         []string              `bson:"name_prefixes" json:"name_prefixes"`
+	NameInArabicPrefixes []string              `bson:"name_in_arabic_prefixes" json:"name_in_arabic_prefixes"`
+	ItemCode             string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	StoreID              *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName            string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	StoreCode            string                `json:"store_code,omitempty" bson:"store_code,omitempty"`
+	BarCode              string                `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
+	Ean12                string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
+	SearchLabel          string                `json:"search_label"`
+	Rack                 string                `bson:"rack,omitempty" json:"rack,omitempty"`
+	PartNumber           string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	CategoryID           []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
+	Category             []*ProductCategory    `json:"category,omitempty"`
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
 	//Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
@@ -651,15 +656,16 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
 
-		criterias.SearchBy["$or"] = []bson.M{
-			{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
-		}
-		criterias.SortBy = bson.M{"name": 1}
+		/*
+			criterias.SearchBy["$or"] = []bson.M{
+				{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
+				{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+				{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+			}
+			criterias.SortBy = bson.M{"name": 1}*/
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]
@@ -679,14 +685,16 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		criterias.SearchBy["$or"] = []bson.M{
-			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
-		}
-		criterias.SortBy = bson.M{"name": 1}
+		/*
+			criterias.SearchBy["$or"] = []bson.M{
+				{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+				{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+			}
+			criterias.SortBy = bson.M{"name": 1}
+		*/
 
-		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
 
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 
@@ -2507,7 +2515,66 @@ func ProcessProducts() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			product.TrimSpaceFromFields()
+			//if product.PartNumber == `GI RED BUSH 1X1/2"` {
+			product.GeneratePrefixes()
+
+			/*
+				if !isValidUTF8(product.Name) {
+					log.Print("Name:" + product.Name)
+					log.Print(product.Name)
+					log.Print(product.ID)
+					log.Print(product.PartNumber)
+					log.Print("Invalid UTF-8 detected in product name")
+					//log.Fatal("Invalid UTF-8 detected in product name")
+				}
+
+				if !isValidUTF8(product.NameInArabic) {
+					log.Print("Name in Arabic:" + product.NameInArabic)
+					log.Print(product.NameInArabic)
+					log.Print(product.ID)
+					log.Print(product.PartNumber)
+					log.Print("Invalid UTF-8 detected in product arabic name")
+					//log.Fatal("Invalid UTF-8 detected in product name")
+				}
+				//log.Print(product.NamePrefixes)
+				//log.Print(product.NameInArabicPrefixes)
+
+				for _, word := range product.NamePrefixes {
+					if word == "" {
+						log.Fatal("Empty prefix found")
+					}
+
+					if !isValidUTF8(word) {
+						log.Print("Word:" + word)
+						log.Print(product.Name)
+						log.Print(product.ID)
+						log.Print(product.PartNumber)
+						log.Print("Invalid UTF-8 detected in product name")
+						//log.Fatal("Invalid UTF-8 detected in product name")
+					}
+				}
+
+				for _, word := range product.NameInArabicPrefixes {
+					if word == "" {
+						log.Fatal("Empty prefix found")
+					}
+
+					if !isValidUTF8(word) {
+						log.Print("Word:" + word)
+						log.Print(product.Name)
+						log.Print(product.ID)
+						log.Print("Invalid UTF-8 detected in product name in arabic")
+						//log.Fatal("Invalid UTF-8 detected in product name in arabic")
+					}
+				}*/
+			//}
+
+			//product.TrimSpaceFromFields()
+			//log.Print(product.PartNumber)
+
+			//product.NamePrefixes = []string{}
+			//product.NameInArabicPrefixes = []string{}
+			product.GeneratePrefixes()
 
 			err = product.Update()
 			if err != nil {
@@ -2522,6 +2589,11 @@ func ProcessProducts() error {
 	return nil
 }
 
+func isValidUTF8(str string) bool {
+	// Check if the string is valid UTF-8
+	return utf8.ValidString(str)
+}
+
 func (product *Product) HardDelete() error {
 	log.Print("Deleting product")
 	ctx := context.Background()
@@ -2534,4 +2606,159 @@ func (product *Product) HardDelete() error {
 	}
 
 	return nil
+}
+
+func removeInvalidChars(input string) string {
+	var cleaned []rune
+
+	// Loop through each character in the input string
+	for _, r := range input {
+		// Check if the character is a valid UTF-8 character or space
+		if utf8.ValidRune(r) && (unicode.IsPrint(r) || r == ' ') {
+			cleaned = append(cleaned, r)
+		}
+	}
+
+	// Return the cleaned string
+	return removeSpecialCharacter(string(cleaned))
+}
+
+// Function to generate prefixes for a string with both English and Arabic words
+func generatePrefixes(input string) []string {
+	var prefixes []string
+	words := strings.Fields(input) // split into words (no need to lowercase, as both languages are case-insensitive)
+
+	for _, word := range words {
+		//word = CleanString(word)
+		//word = removeInvalidChars(word)
+
+		word = removeSpecialCharacter(word)
+		if word == "" {
+			continue
+		}
+		// Process each word separately
+		//sanitizedWord := sanitizeArabString(word) // Apply sanitization (remove unwanted chars)
+
+		// Generate prefixes for each word
+		for i := 1; i <= len(word); i++ {
+			newWord := word[:i]
+			//log.Print("Before removing:" + newWord + "|")
+			newWord = CleanString(newWord)
+			newWord = removeSpecialCharacter(newWord)
+			//log.Print("After removing:" + newWord + "|")
+			if newWord == "" {
+				continue
+			}
+
+			//newWord = removeSpecialCharacter(newWord)
+
+			prefixes = append(prefixes, newWord)
+		}
+	}
+
+	return prefixes
+}
+
+func generateArabicPrefixes(input string) []string {
+	var prefixes []string
+	words := strings.Fields(input) // split on spaces, Arabic-friendly
+
+	for _, word := range words {
+		//word = removeInvalidChars(word)
+
+		word = removeSpecialCharacter(word)
+		if word == "" {
+			continue
+		}
+
+		//word := sanitizeArabString(word) // Apply sanit
+
+		runes := []rune(word) // convert to runes for correct Unicode handling
+		for i := 1; i <= len(runes); i++ {
+			newWord := string(runes[:i])
+			//log.Print("Before removing:" + newWord + "|")
+			newWord = CleanString(newWord)
+			newWord = removeSpecialCharacter(newWord)
+			if newWord == "" {
+				continue
+			}
+
+			prefixes = append(prefixes, newWord)
+		}
+	}
+	return prefixes
+}
+
+func containsArabic(input string) bool {
+	for _, r := range input {
+		// Check if the rune is within the Arabic Unicode range
+		if (r >= '\u0600' && r <= '\u06FF') || (r >= '\u0750' && r <= '\u077F') || (r >= '\u08A0' && r <= '\u08FF') {
+			return true // Arabic character found
+		}
+	}
+	return false // No Arabic characters found
+}
+
+func removeSpecialCharacter(input string) string {
+	// Replace the '�' character with an empty string
+	return strings.ReplaceAll(input, "�", "")
+}
+
+func (product *Product) GeneratePrefixes() {
+	// Sanitize and clean the product name and Arabic name
+	//product.Name = sanitizeUTF8(product.Name)
+	//product.NameInArabic = sanitizeUTF8(product.NameInArabic)
+
+	// Generate name prefixes after sanitization
+	if containsArabic(product.Name) {
+		//log.Print("name contains arabic")
+		product.NamePrefixes = generateArabicPrefixes(CleanString(product.Name))
+	} else {
+		product.NamePrefixes = generatePrefixes(CleanString(product.Name))
+	}
+
+	if product.NameInArabic != "" {
+		product.NameInArabicPrefixes = generateArabicPrefixes(CleanString(product.NameInArabic))
+	}
+}
+
+var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
+
+func CleanString(input string) string {
+	// Replace special characters with a space
+	cleaned := specialCharEscaper.ReplaceAllString(input, " ")
+	// Now sanitize the result
+	//cleaned = sanitizeString(cleaned)
+	// Remove extra spaces and trim leading/trailing spaces
+	cleaned = strings.Join(strings.Fields(cleaned), " ")
+	cleaned = sanitizeUTF8(cleaned)
+	//cleaned = sanitizeArabString(cleaned)
+	cleaned = removeSpecialCharacter(cleaned)
+	cleaned = removeInvalidChars(cleaned)
+	return cleaned
+}
+
+func sanitizeUTF8(input string) string {
+	// Ensure that we keep only valid UTF-8 characters and replace any invalid sequences
+	if !utf8.ValidString(input) {
+		// Replace invalid characters with a placeholder or remove them entirely
+		input = regexp.MustCompile(`[^a-zA-Z0-9\u0600-\u06FF]+`).ReplaceAllString(input, " ")
+	}
+	return input
+}
+
+func sanitizeString(input string) string {
+	// Ensure the string is valid UTF-8
+	if !utf8.ValidString(input) {
+		input = regexp.MustCompile(`[^a-zA-Z0-9\u0600-\u06FF]+`).ReplaceAllString(input, " ")
+	}
+	return input
+}
+
+func replaceSpecialCharsWithSpace(input string) string {
+	// This matches anything not a letter or number
+	re := regexp.MustCompile(`[^\\p{L}\\p{N}]+`)
+	// Replace all special characters with a space
+	cleaned := re.ReplaceAllString(input, " ")
+	return strings.TrimSpace(cleaned)
 }

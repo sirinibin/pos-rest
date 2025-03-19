@@ -205,6 +205,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 	product.UpdateForeignLabelFields()
 	product.InitStoreUnitPrice()
 	product.CalculateUnitProfit()
+	product.GeneratePrefixes()
 
 	err = product.Insert()
 	if err != nil {
@@ -311,6 +312,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	product.SetPartNumber()
 	product.InitStoreUnitPrice()
 	product.CalculateUnitProfit()
+	product.GeneratePrefixes()
 
 	err = product.Update()
 	if err != nil {

@@ -47,11 +47,12 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	fields = bson.M{"part_number": 1}
-	err = store.CreateIndex("product", fields, true, false, "")
-	if err != nil {
-		return err
-	}
+	/*
+		fields = bson.M{"part_number": 1}
+		err = store.CreateIndex("product", fields, true, false, "")
+		if err != nil {
+			return err
+		}*/
 
 	/*
 		fields = bson.M{"name": "text"}
