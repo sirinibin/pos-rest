@@ -2441,6 +2441,10 @@ func ProcessProducts() error {
 
 	for _, store := range stores {
 		log.Print("Branch name:" + store.BranchName)
+		if store.BranchName == "UMLUJ" {
+			continue
+		}
+
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
 			return err
