@@ -2598,16 +2598,10 @@ func generatePrefixes(input string) []string {
 	words := strings.Fields(input) // split into words (no need to lowercase, as both languages are case-insensitive)
 
 	for _, word := range words {
-		//word = CleanString(word)
-		//word = removeInvalidChars(word)
-
 		word = removeSpecialCharacter(word)
 		if word == "" {
 			continue
 		}
-		// Process each word separately
-		//sanitizedWord := sanitizeArabString(word) // Apply sanitization (remove unwanted chars)
-
 		// Generate prefixes for each word
 		for i := 1; i <= len(word); i++ {
 			newWord := word[:i]
@@ -2618,9 +2612,6 @@ func generatePrefixes(input string) []string {
 			if newWord == "" {
 				continue
 			}
-
-			//newWord = removeSpecialCharacter(newWord)
-
 			prefixes = append(prefixes, newWord)
 		}
 	}
@@ -2628,20 +2619,55 @@ func generatePrefixes(input string) []string {
 	return prefixes
 }
 
+func generatePrefixesAndSuffixes(input string) []string {
+	uniqueWords := make(map[string]struct{})
+	words := strings.Fields(input)
+
+	for _, word := range words {
+		word = removeSpecialCharacter(word)
+		if word == "" {
+			continue
+		}
+		runes := []rune(word)
+		length := len(runes)
+
+		// Prefixes
+		for i := 1; i <= length; i++ {
+			newWord := string(runes[:i])
+			newWord = CleanString(removeSpecialCharacter(newWord))
+			if newWord != "" {
+				uniqueWords[newWord] = struct{}{}
+			}
+		}
+
+		// Suffixes
+		for i := 0; i < length; i++ {
+			newWord := string(runes[i:])
+			newWord = CleanString(removeSpecialCharacter(newWord))
+			if newWord != "" {
+				uniqueWords[newWord] = struct{}{}
+			}
+		}
+	}
+
+	// Convert map keys to slice
+	var result []string
+	for key := range uniqueWords {
+		result = append(result, key)
+	}
+
+	return result
+}
+
 func generateArabicPrefixes(input string) []string {
 	var prefixes []string
 	words := strings.Fields(input) // split on spaces, Arabic-friendly
 
 	for _, word := range words {
-		//word = removeInvalidChars(word)
-
 		word = removeSpecialCharacter(word)
 		if word == "" {
 			continue
 		}
-
-		//word := sanitizeArabString(word) // Apply sanit
-
 		runes := []rune(word) // convert to runes for correct Unicode handling
 		for i := 1; i <= len(runes); i++ {
 			newWord := string(runes[:i])
@@ -2658,29 +2684,25 @@ func generateArabicPrefixes(input string) []string {
 	return prefixes
 }
 
-func containsArabic(input string) bool {
-	for _, r := range input {
-		// Check if the rune is within the Arabic Unicode range
-		if (r >= '\u0600' && r <= '\u06FF') || (r >= '\u0750' && r <= '\u077F') || (r >= '\u08A0' && r <= '\u08FF') {
-			return true // Arabic character found
-		}
-	}
-	return false // No Arabic characters found
-}
-
 func removeSpecialCharacter(input string) string {
 	// Replace the '�' character with an empty string
 	return strings.ReplaceAll(input, "�", "")
 }
 
 func (product *Product) GeneratePrefixes() {
-	// Sanitize and clean the product name and Arabic name
-	//product.Name = sanitizeUTF8(product.Name)
-	//product.NameInArabic = sanitizeUTF8(product.NameInArabic)
+	cleanName := CleanString(product.Name)
+	cleanNameArabic := CleanString(product.NameInArabic)
 
-	// Generate name prefixes after sanitization
+	product.NamePrefixes = generatePrefixesAndSuffixes(cleanName)
+	if cleanNameArabic != "" {
+		product.NameInArabicPrefixes = generatePrefixesAndSuffixes(cleanNameArabic)
+	}
+}
+
+/*
+func (product *Product) GeneratePrefixes() {
+
 	if containsArabic(product.Name) {
-		//log.Print("name contains arabic")
 		product.NamePrefixes = generateArabicPrefixes(CleanString(product.Name))
 	} else {
 		product.NamePrefixes = generatePrefixes(CleanString(product.Name))
@@ -2689,6 +2711,17 @@ func (product *Product) GeneratePrefixes() {
 	if product.NameInArabic != "" {
 		product.NameInArabicPrefixes = generateArabicPrefixes(CleanString(product.NameInArabic))
 	}
+}
+*/
+
+func containsArabic(input string) bool {
+	for _, r := range input {
+		// Check if the rune is within the Arabic Unicode range
+		if (r >= '\u0600' && r <= '\u06FF') || (r >= '\u0750' && r <= '\u077F') || (r >= '\u08A0' && r <= '\u08FF') {
+			return true // Arabic character found
+		}
+	}
+	return false // No Arabic characters found
 }
 
 var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
