@@ -2540,6 +2540,10 @@ func ProcessProducts() error {
 			//product.GeneratePrefixes()
 			//product.BarcodeBase64 = ""
 
+			if product.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
+
 			err = product.SetStock()
 			if err != nil {
 				return err
