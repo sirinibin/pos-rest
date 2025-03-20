@@ -2070,11 +2070,6 @@ func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.Objec
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
-	err = product.Update(nil)
-	if err != nil {
-		return err
-	}
-
 	/*
 		for storeIndex, store := range product.Stores {
 			if store.StoreID.Hex() == storeID.Hex() {
@@ -2093,6 +2088,54 @@ func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.Objec
 	return nil
 }
 
+func (product *Product) SetProductPurchaseQuantityByStoreID(storeID primitive.ObjectID) error {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_purchase_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductPurchaseStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":               nil,
+				"purchase_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+
+		stats.Purchase = RoundFloat(stats.Purchase, 2)
+	}
+
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		productStoreTemp.PurchaseQuantity = stats.PurchaseQuantity
+		product.ProductStores[storeID.Hex()] = productStoreTemp
+	}
+
+	return nil
+}
+
 func (purchase *Purchase) SetProductsPurchaseStats() error {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
@@ -2106,6 +2149,11 @@ func (purchase *Purchase) SetProductsPurchaseStats() error {
 		}
 
 		err = product.SetProductPurchaseStatsByStoreID(*purchase.StoreID)
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}

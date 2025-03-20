@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -218,8 +217,6 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Print("ID: " + product.ID.Hex())
-
 	//store.FindProductByID()
 
 	response.Result = product
@@ -314,6 +311,10 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	product.CalculateUnitProfit()
 	product.GeneratePrefixes()
 
+	product.SetProductQuotationStatsByStoreID(*product.StoreID)
+	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
+	product.SetStock()
+
 	err = product.Update(nil)
 	if err != nil {
 		response.Status = false
@@ -345,13 +346,6 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	product.SetProductSalesStatsByStoreID(*product.StoreID)
-	product.SetProductSalesReturnStatsByStoreID(*product.StoreID)
-	product.SetProductPurchaseStatsByStoreID(*product.StoreID)
-	product.SetProductPurchaseReturnStatsByStoreID(*product.StoreID)
-	product.SetProductQuotationStatsByStoreID(*product.StoreID)
-	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
 
 	response.Status = true
 	response.Result = product

@@ -2437,11 +2437,6 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
-	err = product.Update(nil)
-	if err != nil {
-		return err
-	}
-
 	/*
 		for storeIndex, store := range product.ProductStores {
 			if store.StoreID.Hex() == storeID.Hex() {
@@ -2458,6 +2453,52 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 			}
 		}
 	*/
+
+	return nil
+}
+
+func (product *Product) SetProductSalesReturnQuantityByStoreID(storeID primitive.ObjectID) error {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_sales_return_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductSalesReturnStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                   nil,
+				"sales_return_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		productStoreTemp.SalesReturnQuantity = stats.SalesReturnQuantity
+		product.ProductStores[storeID.Hex()] = productStoreTemp
+	}
 
 	return nil
 }
@@ -2479,6 +2520,11 @@ func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
 		}
 
 		err = product.SetProductSalesReturnStatsByStoreID(*salesReturn.StoreID)
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}

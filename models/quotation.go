@@ -1524,11 +1524,6 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
-	err = product.Update(nil)
-	if err != nil {
-		return err
-	}
-
 	/*
 		for storeIndex, store := range product.Stores {
 			if store.StoreID.Hex() == storeID.Hex() {
@@ -1560,6 +1555,11 @@ func (quotation *Quotation) SetProductsQuotationStats() error {
 		}
 
 		err = product.SetProductQuotationStatsByStoreID(*quotation.StoreID)
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}

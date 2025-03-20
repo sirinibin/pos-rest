@@ -750,10 +750,7 @@ func (product *Product) SetProductDeliveryNoteStatsByStoreID(storeID primitive.O
 				productStore.DeliveryNoteQuantity = stats.DeliveryNoteQuantity
 				product.ProductStores[storeIndex] = productStore
 			}
-			err = product.Update(nil)
-			if err != nil {
-				return err
-			}
+
 			break
 		}
 	}
@@ -774,6 +771,11 @@ func (deliveryNote *DeliveryNote) SetProductsDeliveryNoteStats() error {
 		}
 
 		err = product.SetProductDeliveryNoteStatsByStoreID(*deliveryNote.StoreID)
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}

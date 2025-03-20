@@ -2675,9 +2675,50 @@ func (product *Product) SetProductSalesStatsByStoreID(storeID primitive.ObjectID
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
-	err = product.Update(nil)
+	return nil
+}
+
+func (product *Product) SetProductSalesQuantityByStoreID(storeID primitive.ObjectID) error {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_sales_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductSalesStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":            nil,
+				"sales_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		productStoreTemp.SalesQuantity = stats.SalesQuantity
+		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
 	return nil
@@ -2696,6 +2737,11 @@ func (order *Order) SetProductsSalesStats() error {
 		}
 
 		err = product.SetProductSalesStatsByStoreID(*order.StoreID)
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
