@@ -2441,6 +2441,7 @@ func ProcessProducts() error {
 		ctx := context.Background()
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetProjection(bson.M{"_id": 1, "name": 1, "name_in_arabic": 1, "store_id": 1})
 		findOptions.SetAllowDiskUse(true)
 
 		cur, err := collection.Find(ctx, bson.M{}, findOptions)
@@ -2522,8 +2523,7 @@ func ProcessProducts() error {
 
 			//product.NamePrefixes = []string{}
 			//product.NameInArabicPrefixes = []string{}
-			//product.GeneratePrefixes()
-
+			product.GeneratePrefixes()
 			product.BarcodeBase64 = ""
 
 			err = product.Update()
