@@ -1361,7 +1361,7 @@ func (purchasereturn *PurchaseReturn) AddStock() (err error) {
 			}
 		*/
 
-		err = product.Update()
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
@@ -1396,7 +1396,7 @@ func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
 			}
 		}
 
-		err = product.Update()
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
@@ -1459,7 +1459,7 @@ func (purchasereturn *PurchaseReturn) UpdateProductUnitPriceInStore() (err error
 				//product.ProductStores = append(product.ProductStores, productStore)
 			}
 		*/
-		err = product.Update()
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
@@ -2109,7 +2109,7 @@ func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive
 			//product.Stores[storeIndex].PurchaseReturnCount = stats.PurchaseReturnCount
 			//product.Stores[storeIndex].PurchaseReturnQuantity = stats.PurchaseReturnQuantity
 			//product.Stores[storeIndex].PurchaseReturn = stats.PurchaseReturn
-			err = product.Update()
+			err = product.Update(nil)
 			if err != nil {
 				return err
 			}

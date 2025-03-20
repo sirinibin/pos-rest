@@ -19,6 +19,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -519,7 +520,7 @@ func (store *Store) GetBarTenderProducts(r *http.Request) (products []BarTenderP
 		}
 
 		if len(product.BarCode) == 0 {
-			err = product.Update()
+			err = product.Update(nil)
 			if err != nil {
 				return products, err
 			}
@@ -536,7 +537,7 @@ func (store *Store) GetBarTenderProducts(r *http.Request) (products []BarTenderP
 							product.ProductStores[i] = productStoreTemp
 						}
 						//product.ProductStores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
-						err = product.Update()
+						err = product.Update(nil)
 						if err != nil {
 							return products, err
 						}
@@ -2123,8 +2124,14 @@ func (product *Product) SaveImages() error {
 	return nil
 }
 
-func (product *Product) Update() error {
-	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
+func (product *Product) Update(storeID *primitive.ObjectID) error {
+	var collection *mongo.Collection
+	if storeID != nil {
+		collection = db.GetDB("store_" + storeID.Hex()).Collection("product")
+	} else {
+		collection = db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
@@ -2433,6 +2440,7 @@ func ProcessProducts() error {
 	}
 
 	for _, store := range stores {
+		log.Print("Branch name:" + store.BranchName)
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
 			return err
@@ -2523,10 +2531,12 @@ func ProcessProducts() error {
 
 			//product.NamePrefixes = []string{}
 			//product.NameInArabicPrefixes = []string{}
+
+			//product.StoreID = &store.ID
 			product.GeneratePrefixes()
 			product.BarcodeBase64 = ""
 
-			err = product.Update()
+			err = product.Update(&store.ID)
 			if err != nil {
 				return err
 			}

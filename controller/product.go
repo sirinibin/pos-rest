@@ -314,7 +314,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	product.CalculateUnitProfit()
 	product.GeneratePrefixes()
 
-	err = product.Update()
+	err = product.Update(nil)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

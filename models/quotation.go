@@ -1524,7 +1524,7 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
-	err = product.Update()
+	err = product.Update(nil)
 	if err != nil {
 		return err
 	}

@@ -1631,7 +1631,7 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 			}
 		*/
 
-		err = product.Update()
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
@@ -2338,7 +2338,7 @@ func (salesReturn *SalesReturn) RemoveStock() (err error) {
 			}
 		*/
 
-		err = product.Update()
+		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
@@ -2437,7 +2437,7 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
-	err = product.Update()
+	err = product.Update(nil)
 	if err != nil {
 		return err
 	}
