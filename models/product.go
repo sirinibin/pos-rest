@@ -2441,9 +2441,6 @@ func ProcessProducts() error {
 
 	for _, store := range stores {
 		log.Print("Branch name:" + store.BranchName)
-		if store.BranchName == "UMLUJ" {
-			continue
-		}
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
@@ -2536,19 +2533,18 @@ func ProcessProducts() error {
 			//product.NamePrefixes = []string{}
 			//product.NameInArabicPrefixes = []string{}
 
-			//product.StoreID = &store.ID
-			//product.GeneratePrefixes()
 			//product.BarcodeBase64 = ""
 
 			if product.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
 
-			err = product.SetStock()
-			if err != nil {
-				return err
-			}
-
+			/*
+				err = product.SetStock()
+				if err != nil {
+					return err
+				}*/
+			product.GeneratePrefixes()
 			err = product.Update(&store.ID)
 			if err != nil {
 				return err
