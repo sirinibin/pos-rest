@@ -2619,41 +2619,47 @@ func generatePrefixes(input string) []string {
 	return prefixes
 }
 
-func generatePrefixesAndSuffixes(input string) []string {
-	uniqueWords := make(map[string]struct{})
+func generatePrefixesSuffixesSubstrings(input string) []string {
+	uniqueSet := make(map[string]struct{})
 	words := strings.Fields(input)
 
 	for _, word := range words {
-		word = removeSpecialCharacter(word)
+		word = CleanString(removeSpecialCharacter(word))
 		if word == "" {
 			continue
 		}
+
 		runes := []rune(word)
 		length := len(runes)
 
-		// Prefixes
+		// Generate prefixes
 		for i := 1; i <= length; i++ {
-			newWord := string(runes[:i])
-			newWord = CleanString(removeSpecialCharacter(newWord))
-			if newWord != "" {
-				uniqueWords[newWord] = struct{}{}
-			}
+			prefix := string(runes[:i])
+			uniqueSet[prefix] = struct{}{}
 		}
 
-		// Suffixes
+		// Generate suffixes
 		for i := 0; i < length; i++ {
-			newWord := string(runes[i:])
-			newWord = CleanString(removeSpecialCharacter(newWord))
-			if newWord != "" {
-				uniqueWords[newWord] = struct{}{}
+			suffix := string(runes[i:])
+			uniqueSet[suffix] = struct{}{}
+		}
+
+		// Generate all substrings
+		for start := 0; start < length; start++ {
+			for end := start + 1; end <= length; end++ {
+				substring := string(runes[start:end])
+				uniqueSet[substring] = struct{}{}
 			}
 		}
 	}
 
 	// Convert map keys to slice
 	var result []string
-	for key := range uniqueWords {
-		result = append(result, key)
+	for str := range uniqueSet {
+		cleaned := CleanString(removeSpecialCharacter(str))
+		if cleaned != "" {
+			result = append(result, cleaned)
+		}
 	}
 
 	return result
@@ -2693,9 +2699,9 @@ func (product *Product) GeneratePrefixes() {
 	cleanName := CleanString(product.Name)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
-	product.NamePrefixes = generatePrefixesAndSuffixes(cleanName)
+	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
 	if cleanNameArabic != "" {
-		product.NameInArabicPrefixes = generatePrefixesAndSuffixes(cleanNameArabic)
+		product.NameInArabicPrefixes = generatePrefixesSuffixesSubstrings(cleanNameArabic)
 	}
 }
 
