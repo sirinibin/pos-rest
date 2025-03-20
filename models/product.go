@@ -118,7 +118,7 @@ type Product struct {
 	CreatedByName string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	BarcodeBase64 string                  `json:"barcode_base64" bson:"-"`
+	BarcodeBase64 string                  `json:"barcode_base64"`
 }
 
 type ProductStats struct {
