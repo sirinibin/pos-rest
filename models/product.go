@@ -119,7 +119,7 @@ type Product struct {
 	UpdatedByName string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ChangeLog     []ChangeLog             `json:"change_log,omitempty" bson:"change_log,omitempty"`
-	BarcodeBase64 string                  `json:"barcode_base64,omitempty"`
+	BarcodeBase64 string                  `json:"barcode_base64"`
 }
 
 type ProductStats struct {
@@ -2516,7 +2516,7 @@ func ProcessProducts() error {
 			}
 
 			//if product.PartNumber == `GI RED BUSH 1X1/2"` {
-			product.GeneratePrefixes()
+			//product.GeneratePrefixes()
 
 			/*
 				if !isValidUTF8(product.Name) {
@@ -2574,7 +2574,9 @@ func ProcessProducts() error {
 
 			//product.NamePrefixes = []string{}
 			//product.NameInArabicPrefixes = []string{}
-			product.GeneratePrefixes()
+			//product.GeneratePrefixes()
+
+			product.BarcodeBase64 = ""
 
 			err = product.Update()
 			if err != nil {
