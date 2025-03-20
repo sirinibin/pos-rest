@@ -118,8 +118,7 @@ type Product struct {
 	CreatedByName string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	ChangeLog     []ChangeLog             `json:"change_log,omitempty" bson:"change_log,omitempty"`
-	BarcodeBase64 string                  `json:"barcode_base64"`
+	BarcodeBase64 string                  `json:"barcode_base64" bson:"-"`
 }
 
 type ProductStats struct {
@@ -375,62 +374,13 @@ func (product *Product) getPurchaseUnitPriceSecretByStoreID(storeID primitive.Ob
 func (product *Product) AttributesValueChangeEvent(productOld *Product) error {
 
 	if product.Name != productOld.Name {
-		product.SetChangeLog(
-			"attribute_value_change",
-			"name",
-			productOld.Name,
-			product.Name,
-		)
+
 	}
 	if product.NameInArabic != productOld.NameInArabic {
-		product.SetChangeLog(
-			"attribute_value_change",
-			"name_in_arabic",
-			productOld.NameInArabic,
-			product.NameInArabic,
-		)
+
 	}
 
 	return nil
-}
-
-func (product *Product) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	} else if event == "remove_stock" && name != nil {
-		description = "Stock reduced from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64)) + " by " + UserObject.Name
-	} else if event == "add_stock" && name != nil {
-		description = "Stock raised from " + fmt.Sprintf("%.02f", oldValue.(float64)) + " to " + fmt.Sprintf("%.02f", newValue.(float64)) + " by " + UserObject.Name
-	} else if event == "add_image" {
-		description = "Added " + strconv.Itoa(newValue.(int)) + " new images by " + UserObject.Name
-	} else if event == "remove_image" {
-		description = "Removed " + strconv.Itoa(newValue.(int)) + " images by " + UserObject.Name
-	}
-
-	product.ChangeLog = append(
-		product.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
 }
 
 func (product *Product) UpdateForeignLabelFields() error {
@@ -2214,8 +2164,6 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	product.DeletedBy = &userID
 	now := time.Now()
 	product.DeletedAt = &now
-
-	product.SetChangeLog("delete", nil, nil, nil)
 
 	_, err = collection.UpdateOne(
 		ctx,
