@@ -636,16 +636,16 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		/*
-			criterias.SearchBy["$or"] = []bson.M{
-				{"name": bson.M{"$regex": searchWord, "$options": "i"}},
-				{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
-			}
-			criterias.SortBy = bson.M{"name": 1}
-		*/
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+		}
+		criterias.SortBy = bson.M{"name": 1}
 
-		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		/*
+			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+			criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		*/
 
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 
@@ -660,6 +660,16 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord, "$language": "en"}
 	}
+
+	keys, ok = r.URL.Query()["search[part_number]"]
+	if ok && len(keys[0]) >= 1 {
+		/*
+			criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+			criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		*/
+		criterias.SearchBy["part_number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	var storeID primitive.ObjectID
 	keys, ok = r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {
@@ -1493,12 +1503,6 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			{"ean_12": keys[0]},
 			{"bar_code": keys[0]},
 		}
-	}
-
-	keys, ok = r.URL.Query()["search[part_number]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
-		//criterias.SearchBy["part_number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[category_id]"]
@@ -2450,7 +2454,7 @@ func ProcessProducts() error {
 		ctx := context.Background()
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
-		findOptions.SetProjection(bson.M{"_id": 1, "name": 1, "name_in_arabic": 1, "store_id": 1, "product_stores": 1})
+		findOptions.SetProjection(bson.M{"_id": 1, "name": 1, "part_number": 1, "name_in_arabic": 1, "store_id": 1, "product_stores": 1})
 		findOptions.SetAllowDiskUse(true)
 
 		cur, err := collection.Find(ctx, bson.M{}, findOptions)
@@ -2665,38 +2669,13 @@ func generatePrefixesSuffixesSubstrings(input string) []string {
 	return result
 }
 
-func generateArabicPrefixes(input string) []string {
-	var prefixes []string
-	words := strings.Fields(input) // split on spaces, Arabic-friendly
-
-	for _, word := range words {
-		word = removeSpecialCharacter(word)
-		if word == "" {
-			continue
-		}
-		runes := []rune(word) // convert to runes for correct Unicode handling
-		for i := 1; i <= len(runes); i++ {
-			newWord := string(runes[:i])
-			//log.Print("Before removing:" + newWord + "|")
-			newWord = CleanString(newWord)
-			newWord = removeSpecialCharacter(newWord)
-			if newWord == "" {
-				continue
-			}
-
-			prefixes = append(prefixes, newWord)
-		}
-	}
-	return prefixes
-}
-
 func removeSpecialCharacter(input string) string {
 	// Replace the '�' character with an empty string
 	return strings.ReplaceAll(input, "�", "")
 }
 
 func (product *Product) GeneratePrefixes() {
-	cleanName := CleanString(product.Name)
+	cleanName := CleanString(product.Name + " " + product.PartNumber)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
