@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -306,6 +307,7 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 
 	_, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
 		w.WriteHeader(http.StatusUnauthorized)
@@ -317,9 +319,9 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 
 	quotationID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["product_id"] = "Invalid Quotation ID:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -334,6 +336,7 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 
 	store, err := ParseStore(r)
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -342,12 +345,16 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 
 	quotation, err = store.FindQuotationByID(&quotationID, selectFields)
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	log.Print("quotation:")
+	log.Print(quotation)
 
 	response.Status = true
 	response.Result = quotation

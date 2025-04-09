@@ -56,26 +56,26 @@ type ProductStore struct {
 	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
 	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
 	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
-	SalesCount              int64              `bson:"sales_count,omitempty" json:"sales_count,omitempty"`
+	SalesCount              int64              `bson:"sales_count" json:"sales_count"`
 	SalesQuantity           float64            `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
 	Sales                   float64            `bson:"sales,omitempty" json:"sales,omitempty"`
-	SalesReturnCount        int64              `bson:"sales_return_count,omitempty" json:"sales_return_count,omitempty"`
+	SalesReturnCount        int64              `bson:"sales_return_count" json:"sales_return_count"`
 	SalesReturnQuantity     float64            `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
 	SalesReturn             float64            `bson:"sales_return,omitempty" json:"sales_return,omitempty"`
 	SalesProfit             float64            `bson:"sales_profit,omitempty" json:"sales_profit,omitempty"`
 	SalesLoss               float64            `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
-	PurchaseCount           int64              `bson:"purchase_count,omitempty" json:"purchase_count,omitempty"`
+	PurchaseCount           int64              `bson:"purchase_count" json:"purchase_count"`
 	PurchaseQuantity        float64            `bson:"purchase_quantity,omitempty" json:"purchase_quantity,omitempty"`
 	Purchase                float64            `bson:"purchase,omitempty" json:"purchase,omitempty"`
-	PurchaseReturnCount     int64              `bson:"purchase_return_count,omitempty" json:"purchase_return_count,omitempty"`
+	PurchaseReturnCount     int64              `bson:"purchase_return_count" json:"purchase_return_count"`
 	PurchaseReturnQuantity  float64            `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity,omitempty"`
 	PurchaseReturn          float64            `bson:"purchase_return,omitempty" json:"purchase_return,omitempty"`
 	SalesReturnProfit       float64            `bson:"sales_return_profit,omitempty" json:"sales_return_profit,omitempty"`
 	SalesReturnLoss         float64            `bson:"sales_return_loss,omitempty" json:"sales_return_loss,omitempty"`
-	QuotationCount          int64              `bson:"quotation_count,omitempty" json:"quotation_count,omitempty"`
+	QuotationCount          int64              `bson:"quotation_count" json:"quotation_count"`
 	QuotationQuantity       float64            `bson:"quotation_quantity,omitempty" json:"quotation_quantity,omitempty"`
 	Quotation               float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
-	DeliveryNoteCount       int64              `bson:"delivery_note_count,omitempty" json:"delivery_note_count,omitempty"`
+	DeliveryNoteCount       int64              `bson:"delivery_note_count" json:"delivery_note_count"`
 	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
 }
 
@@ -2548,7 +2548,7 @@ func ProcessProducts() error {
 				if err != nil {
 					return err
 				}*/
-			product.GeneratePrefixes()
+			//product.GeneratePrefixes()
 			err = product.Update(&store.ID)
 			if err != nil {
 				return err
