@@ -1050,7 +1050,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	}
 
 	// Sales return
-	keys, ok = r.URL.Query()["search[sales_reutrn_count]"]
+	keys, ok = r.URL.Query()["search[sales_return_count]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
