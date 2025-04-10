@@ -994,6 +994,7 @@ func (store *Store) GetVendorCount() (count int64, err error) {
 	})
 }
 
+// make vendor code
 func (vendor *Vendor) MakeCode() error {
 	store, err := FindStoreByID(vendor.StoreID, bson.M{})
 	if err != nil {
