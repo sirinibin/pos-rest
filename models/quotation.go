@@ -87,7 +87,6 @@ type Quotation struct {
 	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ValidityDays             *int64              `bson:"validity_days,omitempty" json:"validity_days,omitempty"`
 	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
-	ChangeLog                []ChangeLog         `json:"change_log,omitempty" bson:"change_log,omitempty"`
 }
 
 func (store *Store) UpdateQuotationProfit() error {
@@ -355,36 +354,6 @@ func (quotation *Quotation) GeneratePDF() error {
 	return nil
 }
 */
-
-func (quotation *Quotation) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	}
-
-	quotation.ChangeLog = append(
-		quotation.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
-}
 
 func (quotation *Quotation) AttributesValueChangeEvent(quotationOld *Quotation) error {
 

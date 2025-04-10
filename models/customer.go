@@ -18,14 +18,6 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-type ChangeLog struct {
-	Event         string              `bson:"event,omitempty" json:"event,omitempty"`
-	Description   string              `bson:"description,omitempty" json:"description,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-}
-
 type CustomerStore struct {
 	StoreID                       primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName                     string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
@@ -662,6 +654,18 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[query]"]
+	if ok && len(keys[0]) >= 1 {
+		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
 	}
 

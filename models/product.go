@@ -84,8 +84,8 @@ type Product struct {
 	ID                   primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	Name                 string                `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic         string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	NamePrefixes         []string              `bson:"name_prefixes" json:"name_prefixes"`
-	NameInArabicPrefixes []string              `bson:"name_in_arabic_prefixes" json:"name_in_arabic_prefixes"`
+	NamePrefixes         []string              `bson:"name_prefixes,omitempty" json:"name_prefixes,omitempty"`
+	NameInArabicPrefixes []string              `bson:"name_in_arabic_prefixes,omitempty" json:"name_in_arabic_prefixes,omitempty"`
 	ItemCode             string                `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	StoreID              *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName            string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
@@ -2548,7 +2548,7 @@ func ProcessProducts() error {
 				if err != nil {
 					return err
 				}*/
-			//product.GeneratePrefixes()
+			product.GeneratePrefixes()
 			err = product.Update(&store.ID)
 			if err != nil {
 				return err
