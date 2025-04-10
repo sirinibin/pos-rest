@@ -67,6 +67,8 @@ type Store struct {
 	PurchaseReturnSerialNumber SerialNumber          `bson:"purchase_return_serial_number,omitempty" json:"purchase_return_serial_number,omitempty"`
 	QuotationSerialNumber      SerialNumber          `bson:"quotation_serial_number,omitempty" json:"quotation_serial_number,omitempty"`
 	BankAccount                BankAccount           `bson:"bank_account,omitempty" json:"bank_account,omitempty"`
+	CustomerSerialNumber       SerialNumber          `bson:"customer_serial_number,omitempty" json:"customer_serial_number,omitempty"`
+	VendorSerialNumber         SerialNumber          `bson:"vendor_serial_number,omitempty" json:"vendor_serial_number,omitempty"`
 }
 
 type SerialNumber struct {
@@ -457,6 +459,8 @@ func (store *Store) TrimSpaceFromFields() {
 	store.PurchaseSerialNumber.Prefix = strings.TrimSpace(store.PurchaseSerialNumber.Prefix)
 	store.PurchaseReturnSerialNumber.Prefix = strings.TrimSpace(store.PurchaseReturnSerialNumber.Prefix)
 	store.QuotationSerialNumber.Prefix = strings.TrimSpace(store.QuotationSerialNumber.Prefix)
+	store.CustomerSerialNumber.Prefix = strings.TrimSpace(store.CustomerSerialNumber.Prefix)
+	store.VendorSerialNumber.Prefix = strings.TrimSpace(store.VendorSerialNumber.Prefix)
 }
 
 func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
@@ -685,6 +689,32 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["quotation_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
+	//customer serial number
+	if govalidator.IsNull(store.CustomerSerialNumber.Prefix) {
+		errs["customer_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.CustomerSerialNumber.PaddingCount <= 0 {
+		errs["customer_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.CustomerSerialNumber.StartFromCount < 0 {
+		errs["customer_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
+	//vendor serial number
+	if govalidator.IsNull(store.VendorSerialNumber.Prefix) {
+		errs["vendor_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.VendorSerialNumber.PaddingCount <= 0 {
+		errs["vendor_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.VendorSerialNumber.StartFromCount < 0 {
+		errs["vendor_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
 	if store.Zatca.Phase == "2" {
 		if govalidator.IsNull(store.Zatca.Env) {
 			errs["zatca_env"] = "Environment is required"
@@ -756,9 +786,32 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			}
 
 			if quotationCount > 0 {
-				errs["quotation_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(quotationCount, 10) + " quotation"
+				errs["quotation_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(quotationCount, 10) + " quotations"
 			}
 		}
+
+		/*
+			if store.CustomerSerialNumber.StartFromCount != oldStore.CustomerSerialNumber.StartFromCount {
+				customerCount, err := oldStore.GetCustomerCount()
+				if err != nil {
+					errs["customer_serial_number_start_from_count"] = "Error finding customer count"
+				}
+
+				if customerCount > 0 {
+					errs["customer_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(customerCount, 10) + " customers"
+				}
+			}
+
+			if store.VendorSerialNumber.StartFromCount != oldStore.VendorSerialNumber.StartFromCount {
+				vendorCount, err := oldStore.GetVendorCount()
+				if err != nil {
+					errs["vendor_serial_number_start_from_count"] = "Error finding vendor count"
+				}
+
+				if vendorCount > 0 {
+					errs["vendor_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(vendorCount, 10) + " vendors"
+				}
+			}*/
 	}
 
 	/*
@@ -1101,17 +1154,6 @@ func GetAllStores() (stores []Store, err error) {
 	}
 
 	return stores, nil
-}
-
-func (store *Store) GetSalesCount() (count int64, err error) {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("order")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return collection.CountDocuments(ctx, bson.M{
-		"store_id": store.ID,
-		"deleted":  bson.M{"$ne": true},
-	})
 }
 
 func (store *Store) GetSalesReturnCount() (count int64, err error) {

@@ -2454,7 +2454,7 @@ func ProcessProducts() error {
 		ctx := context.Background()
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
-		findOptions.SetProjection(bson.M{"_id": 1, "name": 1, "part_number": 1, "name_in_arabic": 1, "store_id": 1, "product_stores": 1})
+		//findOptions.SetProjection(bson.M{"_id": 1, "name": 1, "part_number": 1, "name_in_arabic": 1, "store_id": 1, "product_stores": 1})
 		findOptions.SetAllowDiskUse(true)
 
 		cur, err := collection.Find(ctx, bson.M{}, findOptions)

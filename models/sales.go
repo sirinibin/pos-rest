@@ -2121,6 +2121,17 @@ func (order *Order) MakeRedisCode() error {
 	return nil
 }
 
+func (store *Store) GetSalesCount() (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
 func (order *Order) UnMakeRedisCode() error {
 	redisKey := order.StoreID.Hex() + "_invoice_counter"
 

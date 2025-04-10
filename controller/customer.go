@@ -107,6 +107,14 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	customer.UpdatedAt = &now
 	customer.UpdateForeignLabelFields()
 
+	err = customer.MakeCode()
+	if err != nil {
+		response.Status = false
+		response.Errors["code"] = "Error making code: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = customer.Insert()
 	if err != nil {
 		response.Status = false

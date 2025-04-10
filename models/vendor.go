@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -43,6 +46,7 @@ type VendorStore struct {
 // Vendor : Vendor structure
 type Vendor struct {
 	ID                         primitive.ObjectID     `json:"id,omitempty" bson:"_id,omitempty"`
+	Code                       string                 `bson:"code,omitempty" json:"code,omitempty"`
 	Name                       string                 `bson:"name" json:"name"`
 	NameInArabic               string                 `bson:"name_in_arabic" json:"name_in_arabic"`
 	Title                      string                 `bson:"title" json:"title"`
@@ -977,4 +981,119 @@ func (store *Store) IsVendorExists(ID *primitive.ObjectID) (exists bool, err err
 	})
 
 	return (count == 1), err
+}
+
+func (store *Store) GetVendorCount() (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (vendor *Vendor) MakeCode() error {
+	store, err := FindStoreByID(vendor.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := vendor.StoreID.Hex() + "_vendor_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists == 0 {
+		count, err := store.GetVendorCount()
+		if err != nil {
+			return err
+		}
+
+		startFrom := store.VendorSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	paddingCount := store.VendorSerialNumber.PaddingCount
+
+	vendorID := fmt.Sprintf("%s-%0*d", store.VendorSerialNumber.Prefix, paddingCount, incr)
+	vendor.Code = vendorID
+	return nil
+}
+
+func ProcessVendors() error {
+	log.Printf("Processing vendors")
+
+	stores, err := GetAllStores()
+	if err != nil {
+		return err
+	}
+
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "vendor")
+		if err != nil {
+			return err
+		}
+
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetSort(map[string]interface{}{"created_at": 1})
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching vendors" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			vendor := Vendor{}
+			err = cur.Decode(&vendor)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if vendor.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
+
+			//vendor.MakeCode()
+
+			vendor.Code = fmt.Sprintf("%s-%0*d", store.VendorSerialNumber.Prefix, store.VendorSerialNumber.PaddingCount, i+1)
+
+			err = vendor.Update()
+			if err != nil {
+				return err
+			}
+
+			bar.Add(1)
+		}
+	}
+
+	log.Print("DONE!")
+	return nil
 }

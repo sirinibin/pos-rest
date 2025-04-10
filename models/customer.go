@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -50,6 +51,7 @@ type CustomerStore struct {
 // Customer : Customer structure
 type Customer struct {
 	ID                         primitive.ObjectID       `json:"id,omitempty" bson:"_id,omitempty"`
+	Code                       string                   `bson:"code,omitempty" json:"code,omitempty"`
 	Name                       string                   `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic               string                   `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	VATNo                      string                   `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
@@ -1173,6 +1175,7 @@ func ProcessCustomers() error {
 		ctx := context.Background()
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetSort(map[string]interface{}{"created_at": 1})
 		findOptions.SetAllowDiskUse(true)
 
 		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
@@ -1195,13 +1198,21 @@ func ProcessCustomers() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if customer.VATNo != "" && govalidator.IsNull(customer.NationalAddress.BuildingNo) {
-				customer.NationalAddress.BuildingNo = "1234"
-				customer.NationalAddress.StreetName = "test"
-				customer.NationalAddress.DistrictName = "test"
-				customer.NationalAddress.CityName = "test"
-				customer.NationalAddress.ZipCode = "12345"
+			if customer.StoreID.Hex() != store.ID.Hex() {
+				continue
 			}
+
+			/*
+				if customer.VATNo != "" && govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+					customer.NationalAddress.BuildingNo = "1234"
+					customer.NationalAddress.StreetName = "test"
+					customer.NationalAddress.DistrictName = "test"
+					customer.NationalAddress.CityName = "test"
+					customer.NationalAddress.ZipCode = "12345"
+				}
+			*/
+			//customer.MakeCode()
+			customer.Code = fmt.Sprintf("%s-%0*d", store.CustomerSerialNumber.Prefix, store.CustomerSerialNumber.PaddingCount, i+1)
 
 			err = customer.Update()
 			if err != nil {
@@ -1213,5 +1224,58 @@ func ProcessCustomers() error {
 	}
 
 	log.Print("DONE!")
+	return nil
+}
+
+func (store *Store) GetCustomerCount() (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (customer *Customer) MakeCode() error {
+	store, err := FindStoreByID(customer.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := customer.StoreID.Hex() + "_customer_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists == 0 {
+		count, err := store.GetCustomerCount()
+		if err != nil {
+			return err
+		}
+
+		startFrom := store.CustomerSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	paddingCount := store.CustomerSerialNumber.PaddingCount
+
+	customerID := fmt.Sprintf("%s-%0*d", store.CustomerSerialNumber.Prefix, paddingCount, incr)
+	customer.Code = customerID
 	return nil
 }
