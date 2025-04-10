@@ -848,6 +848,10 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			customer.SearchLabel += " / " + customer.PhoneInArabic
 		}
 
+		if customer.VATNo != "" {
+			customer.SearchLabel += " VAT #" + customer.VATNo
+		}
+
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
 			customer.CreatedByUser, _ = FindUserByID(customer.CreatedBy, createdByUserSelectFields)
 		}

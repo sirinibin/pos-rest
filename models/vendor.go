@@ -658,7 +658,7 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 			return vendors, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		vendor.SearchLabel = vendor.Name
+		vendor.SearchLabel = "#" + vendor.Code + " " + vendor.Name
 
 		if vendor.NameInArabic != "" {
 			vendor.SearchLabel += " / " + vendor.NameInArabic
@@ -670,6 +670,10 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 
 		if vendor.PhoneInArabic != "" {
 			vendor.SearchLabel += " / " + vendor.PhoneInArabic
+		}
+
+		if vendor.VATNo != "" {
+			vendor.SearchLabel += " VAT #" + vendor.VATNo
 		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
