@@ -232,6 +232,11 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	//sales
 	keys, ok = r.URL.Query()["search[sales_count]"]
 	if ok && len(keys[0]) >= 1 {
@@ -654,8 +659,8 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		criterias.SearchBy["$or"] = []bson.M{
 			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+			//{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+			//{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
 	}
 
@@ -668,6 +673,7 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"code": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
 	}
 
@@ -828,7 +834,7 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			return customers, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		customer.SearchLabel = customer.Name
+		customer.SearchLabel = "#" + customer.Code + " " + customer.Name
 
 		if customer.NameInArabic != "" {
 			customer.SearchLabel += " / " + customer.NameInArabic
@@ -1212,7 +1218,7 @@ func ProcessCustomers() error {
 				}
 			*/
 			//customer.MakeCode()
-			customer.Code = fmt.Sprintf("%s-%0*d", store.CustomerSerialNumber.Prefix, store.CustomerSerialNumber.PaddingCount, i+1)
+			customer.Code = fmt.Sprintf("%s%0*d", store.CustomerSerialNumber.Prefix, store.CustomerSerialNumber.PaddingCount, i+1)
 
 			err = customer.Update()
 			if err != nil {
@@ -1275,7 +1281,7 @@ func (customer *Customer) MakeCode() error {
 
 	paddingCount := store.CustomerSerialNumber.PaddingCount
 
-	customerID := fmt.Sprintf("%s-%0*d", store.CustomerSerialNumber.Prefix, paddingCount, incr)
+	customerID := fmt.Sprintf("%s%0*d", store.CustomerSerialNumber.Prefix, paddingCount, incr)
 	customer.Code = customerID
 	return nil
 }

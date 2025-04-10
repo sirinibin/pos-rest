@@ -208,6 +208,11 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_amount", operator, &storeID, value)
 	}
 
+	keys, ok = r.URL.Query()["search[code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[purchase_paid_amount]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -555,8 +560,21 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		criterias.SearchBy["$or"] = []bson.M{
 			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+			//{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+			//	{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[query]"]
+	if ok && len(keys[0]) >= 1 {
+		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"code": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
 	}
 
@@ -1032,7 +1050,7 @@ func (vendor *Vendor) MakeCode() error {
 
 	paddingCount := store.VendorSerialNumber.PaddingCount
 
-	vendorID := fmt.Sprintf("%s-%0*d", store.VendorSerialNumber.Prefix, paddingCount, incr)
+	vendorID := fmt.Sprintf("%s%0*d", store.VendorSerialNumber.Prefix, paddingCount, incr)
 	vendor.Code = vendorID
 	return nil
 }
@@ -1084,7 +1102,7 @@ func ProcessVendors() error {
 
 			//vendor.MakeCode()
 
-			vendor.Code = fmt.Sprintf("%s-%0*d", store.VendorSerialNumber.Prefix, store.VendorSerialNumber.PaddingCount, i+1)
+			vendor.Code = fmt.Sprintf("%s%0*d", store.VendorSerialNumber.Prefix, store.VendorSerialNumber.PaddingCount, i+1)
 
 			err = vendor.Update()
 			if err != nil {

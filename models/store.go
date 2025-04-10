@@ -690,30 +690,32 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	//customer serial number
-	if govalidator.IsNull(store.CustomerSerialNumber.Prefix) {
-		errs["customer_serial_number_prefix"] = "Prefix is required"
-	}
+	/*
+		if govalidator.IsNull(store.CustomerSerialNumber.Prefix) {
+			errs["customer_serial_number_prefix"] = "Prefix is required"
+		}
 
-	if store.CustomerSerialNumber.PaddingCount <= 0 {
-		errs["customer_serial_number_padding_count"] = "Padding count is required"
-	}
+		if store.CustomerSerialNumber.PaddingCount <= 0 {
+			errs["customer_serial_number_padding_count"] = "Padding count is required"
+		}
 
-	if store.CustomerSerialNumber.StartFromCount < 0 {
-		errs["customer_serial_number_start_from_count"] = "Counting start from, is required"
-	}
+		if store.CustomerSerialNumber.StartFromCount < 0 {
+			errs["customer_serial_number_start_from_count"] = "Counting start from, is required"
+		}
 
-	//vendor serial number
-	if govalidator.IsNull(store.VendorSerialNumber.Prefix) {
-		errs["vendor_serial_number_prefix"] = "Prefix is required"
-	}
+		//vendor serial number
+		if govalidator.IsNull(store.VendorSerialNumber.Prefix) {
+			errs["vendor_serial_number_prefix"] = "Prefix is required"
+		}
 
-	if store.VendorSerialNumber.PaddingCount <= 0 {
-		errs["vendor_serial_number_padding_count"] = "Padding count is required"
-	}
+		if store.VendorSerialNumber.PaddingCount <= 0 {
+			errs["vendor_serial_number_padding_count"] = "Padding count is required"
+		}
 
-	if store.VendorSerialNumber.StartFromCount < 0 {
-		errs["vendor_serial_number_start_from_count"] = "Counting start from, is required"
-	}
+		if store.VendorSerialNumber.StartFromCount < 0 {
+			errs["vendor_serial_number_start_from_count"] = "Counting start from, is required"
+		}
+	*/
 
 	if store.Zatca.Phase == "2" {
 		if govalidator.IsNull(store.Zatca.Env) {
