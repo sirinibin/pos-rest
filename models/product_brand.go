@@ -35,31 +35,11 @@ func (productBrand *ProductBrand) AttributesValueChangeEvent(productBrandOld *Pr
 		err := store.UpdateManyByCollectionName(
 			"product",
 			bson.M{"brand_id": productBrand.ID},
-			bson.M{"$pull": bson.M{
-				"brand_name": productBrandOld.Name,
-			}},
+			bson.M{"brand_name": productBrand.Name},
 		)
 		if err != nil {
-			return nil
+			return err
 		}
-
-		err = store.UpdateManyByCollectionName(
-			"product",
-			bson.M{"brand_id": productBrand.ID},
-			bson.M{"$push": bson.M{
-				"brand_name": productBrand.Name,
-			}},
-		)
-		if err != nil {
-			return nil
-		}
-		/*
-			productBrand.SetChangeLog(
-				"attribute_value_change",
-				"name",
-				productBrandOld.Name,
-				productBrand.Name,
-			)*/
 	}
 
 	return nil
