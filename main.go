@@ -15,7 +15,6 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
-	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -136,6 +135,12 @@ func main() {
 	router.HandleFunc("/v1/product-category/{id}", controller.ViewProductCategory).Methods("GET")
 	router.HandleFunc("/v1/product-category/{id}", controller.UpdateProductCategory).Methods("PUT")
 	router.HandleFunc("/v1/product-category/{id}", controller.DeleteProductCategory).Methods("DELETE")
+
+	//ProductBrand
+	router.HandleFunc("/v1/product-brand", controller.CreateProductBrand).Methods("POST")
+	router.HandleFunc("/v1/product-brand", controller.ListProductBrand).Methods("GET")
+	router.HandleFunc("/v1/product-brand/{id}", controller.ViewProductBrand).Methods("GET")
+	router.HandleFunc("/v1/product-brand/{id}", controller.UpdateProductBrand).Methods("PUT")
 
 	//ExpenseCategory
 	router.HandleFunc("/v1/expense-category", controller.CreateExpenseCategory).Methods("POST")
@@ -392,16 +397,17 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	//ok
-	err := models.ProcessCustomers()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessCustomers()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessVendors()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessVendors()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	/*
 		err := models.ProcessProducts()
