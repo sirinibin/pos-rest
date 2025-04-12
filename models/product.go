@@ -94,11 +94,14 @@ type Product struct {
 	Ean12                string                `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
 	SearchLabel          string                `json:"search_label"`
 	Rack                 string                `bson:"rack,omitempty" json:"rack,omitempty"`
+	PrefixPartNumber     string                `bson:"prefix_part_number" json:"prefix_part_number"`
 	PartNumber           string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	CategoryID           []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
 	Category             []*ProductCategory    `json:"category,omitempty"`
 	BrandID              *primitive.ObjectID   `json:"brand_id,omitempty" bson:"brand_id,omitempty"`
 	BrandName            string                `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
+	CountryName          string                `bson:"country_name" json:"country_name"`
+	CountryCode          string                `bson:"country_code" json:"country_code"`
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
 	//Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
@@ -676,7 +679,11 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
 			criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
 		*/
-		criterias.SearchBy["part_number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$or"] = []bson.M{
+			{"prefix_part_number": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"part_number": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+		//criterias.SearchBy["part_number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	var storeID primitive.ObjectID
@@ -1534,6 +1541,19 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[country_name]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["country_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[country_code]"]
+	if ok && len(keys[0]) >= 1 {
+		countryCodes := strings.Split(keys[0], ",")
+		if len(countryCodes) > 0 {
+			criterias.SearchBy["country_code"] = bson.M{"$in": countryCodes}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[brand_id]"]
 	if ok && len(keys[0]) >= 1 {
 
@@ -1730,10 +1750,36 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		product.SearchLabel = product.Name + " ( Part #: " + product.PartNumber + " )"
+		product.SearchLabel = ""
+
+		if product.PrefixPartNumber != "" && product.PartNumber != "" {
+			product.SearchLabel = "#" + product.PrefixPartNumber + "-" + product.PartNumber + " - "
+		} else if product.PartNumber != "" {
+			product.SearchLabel = "#" + product.PartNumber + " - "
+		} else if product.PrefixPartNumber != "" {
+			product.SearchLabel = "#" + product.PrefixPartNumber + " - "
+		}
+
+		product.SearchLabel = product.SearchLabel + product.Name
 
 		if product.NameInArabic != "" {
-			product.SearchLabel += " / " + product.NameInArabic
+			product.SearchLabel += " - " + product.NameInArabic
+		}
+
+		_, ok := product.ProductStores[storeID.Hex()]
+		if ok {
+			product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].Stock) + " " + product.Unit
+			if product.ProductStores[storeID.Hex()].RetailUnitPrice != 0 {
+				product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].RetailUnitPrice)
+			}
+		}
+
+		if product.BrandName != "" {
+			product.SearchLabel += " - Brand: " + product.BrandName
+		}
+
+		if product.CountryName != "" {
+			product.SearchLabel += " - Country: " + product.CountryName
 		}
 
 		if _, ok := criterias.Select["category.id"]; ok {
@@ -2704,7 +2750,7 @@ func removeSpecialCharacter(input string) string {
 }
 
 func (product *Product) GeneratePrefixes() {
-	cleanName := CleanString(product.Name + " " + product.PartNumber)
+	cleanName := CleanString(product.PrefixPartNumber + "-" + product.PartNumber + " " + product.Name + " " + product.BrandName + " " + product.CountryName)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
