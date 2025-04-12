@@ -97,6 +97,8 @@ type Product struct {
 	PartNumber           string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	CategoryID           []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
 	Category             []*ProductCategory    `json:"category,omitempty"`
+	BrandID              *primitive.ObjectID   `json:"brand_id,omitempty" bson:"brand_id,omitempty"`
+	BrandName            string                `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
 	//Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
@@ -114,7 +116,6 @@ type Product struct {
 	UpdatedBy     *primitive.ObjectID     `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser *User                   `json:"created_by_user,omitempty"`
 	UpdatedByUser *User                   `json:"updated_by_user,omitempty"`
-	BrandName     string                  `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
 	CategoryName  []string                `json:"category_name,omitempty" bson:"category_name,omitempty"`
 	CreatedByName string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -411,6 +412,14 @@ func (product *Product) UpdateForeignLabelFields() error {
 			return errors.New("Error Finding product category id:" + categoryID.Hex() + ",error:" + err.Error())
 		}
 		product.CategoryName = append(product.CategoryName, productCategory.Name)
+	}
+
+	if product.BrandID != nil {
+		productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return errors.New("Error Finding product brand id:" + product.BrandID.Hex() + ",error:" + err.Error())
+		}
+		product.BrandName = productBrand.Name
 	}
 
 	for _, category := range product.Category {
@@ -1522,6 +1531,26 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["category_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[brand_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		brandIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range brandIds {
+			brandID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return products, criterias, err
+			}
+			objecIds = append(objecIds, brandID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["brand_id"] = bson.M{"$in": objecIds}
 		}
 	}
 
