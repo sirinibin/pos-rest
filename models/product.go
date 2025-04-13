@@ -124,7 +124,7 @@ type Product struct {
 	CreatedByName    string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName    string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName    string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	BarcodeBase64    string                  `json:"barcode_base64"`
+	BarcodeBase64    string                  `json:"barcode_base64" bson:"-"`
 	LinkedProductIDs []*primitive.ObjectID   `json:"linked_product_ids,omitempty" bson:"linked_product_ids,omitempty"`
 	LinkedProducts   []*Product              `json:"linked_products,omitempty" bson:"-"`
 }
