@@ -399,6 +399,16 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(product.LinkedProductIDs) > 0 {
+		linkedProducts, err := store.FindProductsByIDs(product.LinkedProductIDs)
+		if err != nil {
+			response.Errors["view"] = "error fetching linked products: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		product.LinkedProducts = linkedProducts
+	}
+
 	err = product.GenerateBarCodeBase64ByStoreID(store.ID)
 	if err != nil {
 		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()

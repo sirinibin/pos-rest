@@ -51,7 +51,8 @@ type ProductStore struct {
 	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
 	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
 	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
-	Stock                   float64            `bson:"stock,omitempty" json:"stock,omitempty"`
+	DamagedStock            float64            `bson:"damaged_stock" json:"damaged_stock"`
+	Stock                   float64            `bson:"stock" json:"stock"`
 	RetailUnitProfit        float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
 	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
 	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
@@ -105,25 +106,27 @@ type Product struct {
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
 	//Stock         []ProductStock        `bson:"stock,omitempty" json:"stock,omitempty"`
 	//Stores        []ProductStore          `bson:"stores,omitempty" json:"stores,omitempty"`
-	ProductStores map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
-	Unit          string                  `bson:"unit,omitempty" json:"unit,omitempty"`
-	Images        []string                `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent []string                `json:"images_content,omitempty"`
-	Deleted       bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User                   `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time              `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt     *time.Time              `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time              `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID     `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID     `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User                   `json:"created_by_user,omitempty"`
-	UpdatedByUser *User                   `json:"updated_by_user,omitempty"`
-	CategoryName  []string                `json:"category_name,omitempty" bson:"category_name,omitempty"`
-	CreatedByName string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	BarcodeBase64 string                  `json:"barcode_base64"`
+	ProductStores    map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
+	Unit             string                  `bson:"unit,omitempty" json:"unit,omitempty"`
+	Images           []string                `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent    []string                `json:"images_content,omitempty"`
+	Deleted          bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy        *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser    *User                   `json:"deleted_by_user,omitempty"`
+	DeletedAt        *time.Time              `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt        *time.Time              `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt        *time.Time              `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy        *primitive.ObjectID     `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy        *primitive.ObjectID     `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser    *User                   `json:"created_by_user,omitempty"`
+	UpdatedByUser    *User                   `json:"updated_by_user,omitempty"`
+	CategoryName     []string                `json:"category_name,omitempty" bson:"category_name,omitempty"`
+	CreatedByName    string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName    string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName    string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	BarcodeBase64    string                  `json:"barcode_base64"`
+	LinkedProductIDs []*primitive.ObjectID   `json:"linked_product_ids,omitempty" bson:"linked_product_ids,omitempty"`
+	LinkedProducts   []*Product              `json:"linked_products,omitempty" bson:"-"`
 }
 
 type ProductStats struct {
@@ -1521,6 +1524,24 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[ids]"]
+	if ok && len(keys[0]) >= 1 {
+		Ids := strings.Split(keys[0], ",")
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range Ids {
+			ID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return products, criterias, err
+			}
+			objecIds = append(objecIds, ID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[category_id]"]
 	if ok && len(keys[0]) >= 1 {
 
@@ -1753,7 +1774,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		product.SearchLabel = ""
 
 		if product.PrefixPartNumber != "" && product.PartNumber != "" {
-			product.SearchLabel = "#" + product.PrefixPartNumber + "-" + product.PartNumber + " - "
+			product.SearchLabel = "#" + product.PrefixPartNumber + " - " + product.PartNumber + " - "
 		} else if product.PartNumber != "" {
 			product.SearchLabel = "#" + product.PartNumber + " - "
 		} else if product.PrefixPartNumber != "" {
@@ -1885,6 +1906,19 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			errs["id"] = "Invalid Product:" + product.ID.Hex()
 		}
 
+	}
+
+	err = product.SetStock()
+	if err != nil {
+		errs["stock"] = "error setting stock: " + err.Error()
+		return errs
+	}
+
+	_, ok := product.ProductStores[store.ID.Hex()]
+	if ok {
+		if product.ProductStores[store.ID.Hex()].DamagedStock > product.ProductStores[store.ID.Hex()].Stock {
+			errs["damaged_stock_0"] = " damaged stock should be greater than stock value"
+		}
 	}
 
 	if govalidator.IsNull(product.Name) {
@@ -2324,6 +2358,46 @@ func (store *Store) FindProductByBarCode(
 	return product, err
 }
 
+// []*primitive.ObjectID
+func (store *Store) FindProductsByIDs(
+	IDs []*primitive.ObjectID,
+) (products []*Product, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{
+		"_id":      bson.M{"$in": IDs},
+		"store_id": store.ID,
+	}, findOptions)
+	if err != nil {
+		return products, errors.New("Error fetching products:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return products, errors.New("Cursor error:" + err.Error())
+		}
+		product := Product{}
+		err = cur.Decode(&product)
+		if err != nil {
+			return products, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		products = append(products, &product)
+	} //end for loop
+
+	return products, err
+}
+
 func (store *Store) FindProductByID(
 	ID *primitive.ObjectID,
 	selectFields map[string]interface{},
@@ -2623,7 +2697,8 @@ func ProcessProducts() error {
 				if err != nil {
 					return err
 				}*/
-			product.GeneratePrefixes()
+			//product.GeneratePrefixes()
+			product.BarcodeBase64 = ""
 			err = product.Update(&store.ID)
 			if err != nil {
 				return err
@@ -2750,7 +2825,7 @@ func removeSpecialCharacter(input string) string {
 }
 
 func (product *Product) GeneratePrefixes() {
-	cleanName := CleanString(product.PrefixPartNumber + "-" + product.PartNumber + " " + product.Name + " " + product.BrandName + " " + product.CountryName)
+	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name + " " + product.BrandName + " " + product.CountryName)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
@@ -2844,6 +2919,7 @@ func (product *Product) SetStock() error {
 	}
 	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		productStoreTemp.Stock = (productStoreTemp.PurchaseQuantity - productStoreTemp.PurchaseReturnQuantity) - (productStoreTemp.SalesQuantity - productStoreTemp.SalesReturnQuantity)
+		productStoreTemp.Stock -= productStoreTemp.DamagedStock
 		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
 	}
 
