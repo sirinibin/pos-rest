@@ -400,15 +400,28 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 	}
 
 	if govalidator.IsNull(deliverynote.DateStr) {
-		errs["date_str"] = "date_str is required"
+		errs["date_str"] = "Date is required"
 	} else {
-		const shortForm = "Jan 02 2006"
+		const shortForm = "2006-01-02T15:04:05Z07:00"
 		date, err := time.Parse(shortForm, deliverynote.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
 		}
 		deliverynote.Date = &date
 	}
+
+	/*
+		if govalidator.IsNull(deliverynote.DateStr) {
+			errs["date_str"] = "date_str is required"
+		} else {
+			const shortForm = "Jan 02 2006"
+			date, err := time.Parse(shortForm, deliverynote.DateStr)
+			if err != nil {
+				errs["date_str"] = "Invalid date format"
+			}
+			deliverynote.Date = &date
+		}
+	*/
 
 	if scenario == "update" {
 		if deliverynote.ID.IsZero() {

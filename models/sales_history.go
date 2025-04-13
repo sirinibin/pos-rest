@@ -238,6 +238,26 @@ func (store *Store) SearchSalesHistory(w http.ResponseWriter, r *http.Request) (
 		criterias.SearchBy["customer_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[customer_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		customerIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range customerIds {
+			customerID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return models, criterias, err
+			}
+			objecIds = append(objecIds, customerID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[price]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])

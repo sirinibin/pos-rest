@@ -1771,37 +1771,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		product.SearchLabel = ""
-
-		if product.PrefixPartNumber != "" && product.PartNumber != "" {
-			product.SearchLabel = "#" + product.PrefixPartNumber + " - " + product.PartNumber + " - "
-		} else if product.PartNumber != "" {
-			product.SearchLabel = "#" + product.PartNumber + " - "
-		} else if product.PrefixPartNumber != "" {
-			product.SearchLabel = "#" + product.PrefixPartNumber + " - "
-		}
-
-		product.SearchLabel = product.SearchLabel + product.Name
-
-		if product.NameInArabic != "" {
-			product.SearchLabel += " - " + product.NameInArabic
-		}
-
-		_, ok := product.ProductStores[storeID.Hex()]
-		if ok {
-			product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].Stock) + " " + product.Unit
-			if product.ProductStores[storeID.Hex()].RetailUnitPrice != 0 {
-				product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].RetailUnitPrice)
-			}
-		}
-
-		if product.BrandName != "" {
-			product.SearchLabel += " - Brand: " + product.BrandName
-		}
-
-		if product.CountryName != "" {
-			product.SearchLabel += " - Country: " + product.CountryName
-		}
+		product.SetSearchLabel(&store.ID)
 
 		if _, ok := criterias.Select["category.id"]; ok {
 			for _, categoryID := range product.CategoryID {
@@ -1831,6 +1801,39 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 	return products, criterias, nil
 
+}
+
+func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
+	product.SearchLabel = ""
+	if product.PrefixPartNumber != "" && product.PartNumber != "" {
+		product.SearchLabel = "#" + product.PrefixPartNumber + " - " + product.PartNumber + " - "
+	} else if product.PartNumber != "" {
+		product.SearchLabel = "#" + product.PartNumber + " - "
+	} else if product.PrefixPartNumber != "" {
+		product.SearchLabel = "#" + product.PrefixPartNumber + " - "
+	}
+
+	product.SearchLabel = product.SearchLabel + product.Name
+
+	if product.NameInArabic != "" {
+		product.SearchLabel += " - " + product.NameInArabic
+	}
+
+	_, ok := product.ProductStores[storeID.Hex()]
+	if ok {
+		product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].Stock) + " " + product.Unit
+		if product.ProductStores[storeID.Hex()].RetailUnitPrice != 0 {
+			product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].RetailUnitPrice)
+		}
+	}
+
+	if product.BrandName != "" {
+		product.SearchLabel += " - Brand: " + product.BrandName
+	}
+
+	if product.CountryName != "" {
+		product.SearchLabel += " - Country: " + product.CountryName
+	}
 }
 
 func GenerateSecretCode(n int) string {
@@ -2391,6 +2394,8 @@ func (store *Store) FindProductsByIDs(
 		if err != nil {
 			return products, errors.New("Cursor decode error:" + err.Error())
 		}
+
+		product.SetSearchLabel(&store.ID)
 
 		products = append(products, &product)
 	} //end for loop
