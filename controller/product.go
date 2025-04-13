@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -217,7 +218,50 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//store.FindProductByID()
+	//Link products
+	for _, linkedProductID := range product.LinkedProductIDs {
+		linkedProduct, err := store.FindProductByID(linkedProductID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["find_product"] = "error finding product: " + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		linkedProduct.LinkedProductIDs = append(linkedProduct.LinkedProductIDs, &product.ID)
+		linkedProduct.Update(nil)
+	}
+
+	log.Print("product.LinkToProductID :", product.LinkToProductID)
+	if product.LinkToProductID != nil {
+		productToLink, err := store.FindProductByID(product.LinkToProductID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["find_product"] = "error finding product: " + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		productToLink.LinkedProductIDs = append(productToLink.LinkedProductIDs, &product.ID)
+		err = productToLink.Update(nil)
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["linking"] = "error linking product: " + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		product.LinkedProductIDs = append(product.LinkedProductIDs, &productToLink.ID)
+		product.Update(nil)
+	}
 
 	response.Result = product
 
@@ -240,9 +284,17 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var product *models.Product
-	//var productOld *models.Product
+	var productOld *models.Product
 
 	params := mux.Vars(r)
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	productID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
@@ -252,21 +304,11 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/*
-		productOld, err = models.FindProductByID(&productID, bson.M{})
-		if err != nil {
-			response.Status = false
-			response.Errors["product"] = "Unable to find product:" + err.Error()
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	*/
-
-	store, err := ParseStore(r)
+	productOld, err = store.FindProductByID(&productID, bson.M{})
 	if err != nil {
 		response.Status = false
-		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		response.Errors["product"] = "Unable to find product:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -338,6 +380,38 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	*/
+
+	//UnLink products
+	for _, linkedProductID := range productOld.LinkedProductIDs {
+		linkedProduct, err := store.FindProductByID(linkedProductID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["find_product"] = "error finding product: " + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		linkedProduct.LinkedProductIDs = models.RemoveObjectID(linkedProduct.LinkedProductIDs, &product.ID)
+		linkedProduct.Update(nil)
+	}
+
+	//Link products
+	for _, linkedProductID := range product.LinkedProductIDs {
+		linkedProduct, err := store.FindProductByID(linkedProductID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["find_product"] = "error finding product: " + err.Error()
+
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		linkedProduct.LinkedProductIDs = append(linkedProduct.LinkedProductIDs, &product.ID)
+		linkedProduct.Update(nil)
+	}
 
 	product, err = store.FindProductByID(&product.ID, bson.M{})
 	if err != nil {

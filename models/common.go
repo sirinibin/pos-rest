@@ -459,3 +459,16 @@ func IsAfter(time1 *time.Time, time2 *time.Time) bool {
 
 	return timeValue1.After(timeValue2)
 }
+
+func RemoveObjectID(slice []*primitive.ObjectID, idToRemove *primitive.ObjectID) []*primitive.ObjectID {
+	result := make([]*primitive.ObjectID, 0, len(slice))
+	for _, id := range slice {
+		if id == nil || idToRemove == nil {
+			continue
+		}
+		if *id != *idToRemove {
+			result = append(result, id)
+		}
+	}
+	return result
+}

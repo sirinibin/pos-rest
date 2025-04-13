@@ -125,8 +125,9 @@ type Product struct {
 	UpdatedByName    string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName    string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	BarcodeBase64    string                  `json:"barcode_base64" bson:"-"`
-	LinkedProductIDs []*primitive.ObjectID   `json:"linked_product_ids,omitempty" bson:"linked_product_ids,omitempty"`
+	LinkedProductIDs []*primitive.ObjectID   `json:"linked_product_ids" bson:"linked_product_ids"`
 	LinkedProducts   []*Product              `json:"linked_products,omitempty" bson:"-"`
+	LinkToProductID  *primitive.ObjectID     `json:"link_to_product_id,omitempty" bson:"-"`
 }
 
 type ProductStats struct {
@@ -1524,6 +1525,21 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		}
 	}
 
+	//
+	keys, ok = r.URL.Query()["search[linked_products_of_product_id]"]
+	if ok && len(keys[0]) >= 1 {
+		productID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+		product, err := store.FindProductByID(&productID, bson.M{})
+		if err != nil {
+			return products, criterias, err
+		}
+
+		criterias.SearchBy["_id"] = bson.M{"$in": product.LinkedProductIDs}
+
+	}
 	keys, ok = r.URL.Query()["search[ids]"]
 	if ok && len(keys[0]) >= 1 {
 		Ids := strings.Split(keys[0], ",")
@@ -1917,12 +1933,13 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		return errs
 	}
 
-	_, ok := product.ProductStores[store.ID.Hex()]
-	if ok {
-		if product.ProductStores[store.ID.Hex()].DamagedStock > product.ProductStores[store.ID.Hex()].Stock {
-			errs["damaged_stock_0"] = " damaged stock should be greater than stock value"
-		}
-	}
+	/*
+		_, ok := product.ProductStores[store.ID.Hex()]
+		if ok {
+			if product.ProductStores[store.ID.Hex()].DamagedStock > product.ProductStores[store.ID.Hex()].Stock {
+				errs["damaged_stock_0"] = " damaged stock should be greater than stock value"
+			}
+		}*/
 
 	if govalidator.IsNull(product.Name) {
 		errs["name"] = "Name is required"
