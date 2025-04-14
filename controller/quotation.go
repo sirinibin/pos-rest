@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -352,9 +351,6 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	log.Print("quotation:")
-	log.Print(quotation)
 
 	response.Status = true
 	response.Result = quotation

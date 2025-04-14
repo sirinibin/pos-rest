@@ -1538,8 +1538,44 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		}
 
 		criterias.SearchBy["_id"] = bson.M{"$in": product.LinkedProductIDs}
-
 	}
+
+	keys, ok = r.URL.Query()["search[quotation_products_of_quotation_id]"]
+	if ok && len(keys[0]) >= 1 {
+		quotationID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+		quotation, err := store.FindQuotationByID(&quotationID, bson.M{})
+		if err != nil {
+			return products, criterias, err
+		}
+
+		ids := []*primitive.ObjectID{}
+		for i, _ := range quotation.Products {
+			ids = append(ids, &quotation.Products[i].ProductID)
+		}
+		criterias.SearchBy["_id"] = bson.M{"$in": ids}
+	}
+
+	keys, ok = r.URL.Query()["search[delivery_note_products_of_delivery_note_id]"]
+	if ok && len(keys[0]) >= 1 {
+		deliveryNoteID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+		deliveryNote, err := store.FindDeliveryNoteByID(&deliveryNoteID, bson.M{})
+		if err != nil {
+			return products, criterias, err
+		}
+
+		ids := []*primitive.ObjectID{}
+		for i, _ := range deliveryNote.Products {
+			ids = append(ids, &deliveryNote.Products[i].ProductID)
+		}
+		criterias.SearchBy["_id"] = bson.M{"$in": ids}
+	}
+
 	keys, ok = r.URL.Query()["search[ids]"]
 	if ok && len(keys[0]) >= 1 {
 		Ids := strings.Split(keys[0], ",")
