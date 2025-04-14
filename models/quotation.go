@@ -24,6 +24,7 @@ type QuotationProduct struct {
 	Name                string             `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic        string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode            string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber    string             `bson:"prefix_part_number" json:"prefix_part_number"`
 	PartNumber          string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	Quantity            float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	Unit                string             `bson:"unit,omitempty" json:"unit,omitempty"`
@@ -434,7 +435,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range quotation.Products {
-		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1})
 		if err != nil {
 			return err
 		}
@@ -442,6 +443,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		quotation.Products[i].NameInArabic = productObject.NameInArabic
 		quotation.Products[i].ItemCode = productObject.ItemCode
 		quotation.Products[i].PartNumber = productObject.PartNumber
+		quotation.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 	}
 
 	return nil

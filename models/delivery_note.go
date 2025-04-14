@@ -17,13 +17,14 @@ import (
 )
 
 type DeliveryNoteProduct struct {
-	ProductID    primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name         string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode     string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PartNumber   string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity     float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit         string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	ProductID        primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber string             `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber       string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity         float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
 }
 
 // DeliveryNote : DeliveryNote structure
@@ -94,7 +95,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range deliverynote.Products {
-		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1})
 		if err != nil {
 			return err
 		}
@@ -103,6 +104,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 		deliverynote.Products[i].NameInArabic = productObject.NameInArabic
 		deliverynote.Products[i].ItemCode = productObject.ItemCode
 		deliverynote.Products[i].PartNumber = productObject.PartNumber
+		deliverynote.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 	}
 
 	return nil

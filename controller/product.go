@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -234,14 +233,12 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		linkedProduct.Update(nil)
 	}
 
-	log.Print("product.LinkToProductID :", product.LinkToProductID)
 	if product.LinkToProductID != nil {
 		productToLink, err := store.FindProductByID(product.LinkToProductID, bson.M{})
 		if err != nil {
 			response.Status = false
 			response.Errors = make(map[string]string)
 			response.Errors["find_product"] = "error finding product: " + err.Error()
-
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return
