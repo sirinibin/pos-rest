@@ -390,7 +390,7 @@ func (expenseCategory *ExpenseCategory) IsNameExists() (exists bool, err error) 
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (expenseCategory *ExpenseCategory) Insert() error {
@@ -518,7 +518,7 @@ func (store *Store) IsExpenseCategoryExists(ID *primitive.ObjectID) (exists bool
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessExpenseCategories() error {

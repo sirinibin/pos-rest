@@ -682,6 +682,11 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[vat_no]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[email]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
@@ -986,10 +991,26 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 
 		if phoneExists {
-			errs["phone"] = "Phone No. Already exists."
+			errs["phone"] = "Phone No. already exists."
 		}
 
 		if phoneExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
+	}
+
+	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) {
+		vatNoExists, err := customer.IsVatNoExists()
+		if err != nil {
+			errs["vat_no"] = err.Error()
+		}
+
+		if vatNoExists {
+			errs["vat_no"] = "VAT No. already exists."
+		}
+
+		if vatNoExists {
 			w.WriteHeader(http.StatusConflict)
 			return errs
 		}
@@ -1135,7 +1156,7 @@ func (customer *Customer) IsEmailExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (customer *Customer) IsPhoneExists() (exists bool, err error) {
@@ -1155,7 +1176,27 @@ func (customer *Customer) IsPhoneExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
+}
+
+func (customer *Customer) IsVatNoExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if customer.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": customer.VATNo,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": customer.VATNo,
+			"_id":    bson.M{"$ne": customer.ID},
+		})
+	}
+
+	return (count > 0), err
 }
 
 func (store *Store) IsCustomerExists(ID *primitive.ObjectID) (exists bool, err error) {
@@ -1168,7 +1209,7 @@ func (store *Store) IsCustomerExists(ID *primitive.ObjectID) (exists bool, err e
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func ProcessCustomers() error {

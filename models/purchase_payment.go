@@ -573,7 +573,7 @@ func (store *Store) IsPurchasePaymentExists(ID *primitive.ObjectID) (exists bool
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 type PurchasePaymentStats struct {

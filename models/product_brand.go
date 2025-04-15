@@ -267,7 +267,7 @@ func (productBrand *ProductBrand) IsNameExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (productBrand *ProductBrand) Insert() error {
@@ -338,7 +338,7 @@ func (store *Store) IsProductBrandExists(ID *primitive.ObjectID) (exists bool, e
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func ProcessProductBrands() error {

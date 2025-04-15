@@ -896,7 +896,7 @@ func (store *Store) IsCapitalExists(ID *primitive.ObjectID) (exists bool, err er
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessCapitals() error {
@@ -1037,17 +1037,18 @@ func (capital *Capital) CreateLedger() (ledger *Ledger, err error) {
 		&referenceModel,
 		investor.Name+" Capital",
 		&investor.Mob,
+		nil,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	cashAccount, err := store.CreateAccountIfNotExists(capital.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(capital.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := store.CreateAccountIfNotExists(capital.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(capital.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
 		return nil, err
 	}

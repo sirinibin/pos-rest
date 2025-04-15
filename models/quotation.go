@@ -1249,7 +1249,7 @@ func (quotation *Quotation) IsCodeExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (quotation *Quotation) Update() error {
@@ -1367,7 +1367,7 @@ func (store *Store) IsQuotationExists(ID *primitive.ObjectID) (exists bool, err 
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessQuotations() error {

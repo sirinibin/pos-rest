@@ -213,6 +213,16 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[phone]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[vat_no]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[purchase_paid_amount]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -751,8 +761,56 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	*/
 
-	if govalidator.IsNull(vendor.Phone) {
+	if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) && !IsValidDigitNumber(strings.TrimSpace(vendor.VATNo), "15") {
+		errs["vat_no"] = "VAT No. should be 15 digits"
+	} else if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(vendor.VATNo), "3") {
+		errs["vat_no"] = "VAT No. should start and end with 3"
+	}
+
+	if !govalidator.IsNull(vendor.RegistrationNumber) && !IsAlphanumeric(vendor.RegistrationNumber) {
+		errs["registration_number"] = "Registration Number should be alpha numeric(a-zA-Z|0-9)"
+	}
+
+	if govalidator.IsNull(strings.TrimSpace(vendor.Phone)) {
 		errs["phone"] = "Phone is required"
+	} else if !ValidateSaudiPhone(strings.TrimSpace(vendor.Phone)) {
+		errs["phone"] = "Invalid phone no."
+	} else {
+
+		if strings.HasPrefix(vendor.Phone, "+966") {
+			vendor.Phone = strings.TrimPrefix(vendor.Phone, "+966")
+			vendor.Phone = "0" + vendor.Phone
+		}
+
+		phoneExists, err := vendor.IsPhoneExists()
+		if err != nil {
+			errs["phone"] = err.Error()
+		}
+
+		if phoneExists {
+			errs["phone"] = "Phone No. already exists."
+		}
+
+		if phoneExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
+	}
+
+	if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) {
+		vatNoExists, err := vendor.IsVatNoExists()
+		if err != nil {
+			errs["vat_no"] = err.Error()
+		}
+
+		if vatNoExists {
+			errs["vat_no"] = "VAT No. already exists."
+		}
+
+		if vatNoExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
 	}
 
 	/*
@@ -822,6 +880,46 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 	}
 
 	return errs
+}
+
+func (vendor *Vendor) IsVatNoExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if vendor.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": vendor.VATNo,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": vendor.VATNo,
+			"_id":    bson.M{"$ne": vendor.ID},
+		})
+	}
+
+	return (count > 0), err
+}
+
+func (vendor *Vendor) IsPhoneExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if vendor.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"phone": vendor.Phone,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"phone": vendor.Phone,
+			"_id":   bson.M{"$ne": vendor.ID},
+		})
+	}
+
+	return (count > 0), err
 }
 
 func (vendor *Vendor) Insert() error {
@@ -993,7 +1091,7 @@ func (vendor *Vendor) IsEmailExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) IsVendorExists(ID *primitive.ObjectID) (exists bool, err error) {
@@ -1006,7 +1104,7 @@ func (store *Store) IsVendorExists(ID *primitive.ObjectID) (exists bool, err err
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) GetVendorCount() (count int64, err error) {

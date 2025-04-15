@@ -904,7 +904,7 @@ func (store *Store) IsCustomerDepositExists(ID *primitive.ObjectID) (exists bool
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessCustomerDeposits() error {
@@ -1026,17 +1026,18 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err erro
 		&referenceModel,
 		customer.Name,
 		&customer.Phone,
+		&customer.VATNo,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	cashAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
 		return nil, err
 	}

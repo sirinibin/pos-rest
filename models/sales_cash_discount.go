@@ -543,7 +543,7 @@ func (store *Store) IsSalesCashDiscountExists(ID *primitive.ObjectID) (exists bo
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 type SalesCashDiscountStats struct {

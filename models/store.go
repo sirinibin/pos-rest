@@ -1066,7 +1066,7 @@ func (store *Store) IsEmailExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func IsStoreExists(ID *primitive.ObjectID) (exists bool, err error) {
@@ -1079,7 +1079,7 @@ func IsStoreExists(ID *primitive.ObjectID) (exists bool, err error) {
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func ProcessStores() error {

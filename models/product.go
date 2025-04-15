@@ -2596,7 +2596,7 @@ func (store *Store) IsProductExists(ID *primitive.ObjectID) (exists bool, err er
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (product *Product) ReflectValidPurchaseUnitPrice() error {

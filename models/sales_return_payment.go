@@ -632,7 +632,7 @@ func (store *Store) IsSalesReturnPaymentExists(ID *primitive.ObjectID) (exists b
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 type SalesReturnPaymentStats struct {

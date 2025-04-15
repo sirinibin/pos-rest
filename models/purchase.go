@@ -1728,7 +1728,7 @@ func (purchase *Purchase) IsCodeExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) GeneratePurchaseCode(startFrom int) (string, error) {
@@ -1874,7 +1874,7 @@ func (store *Store) IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err e
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func ProcessPurchases() error {
@@ -2510,6 +2510,7 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 			&referenceModel,
 			vendor.Name,
 			&vendor.Phone,
+			&vendor.VATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -2584,6 +2585,7 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 				&referenceModel,
 				vendor.Name,
 				&vendor.Phone,
+				&vendor.VATNo,
 			)
 			if err != nil {
 				return nil, err
@@ -2631,6 +2633,7 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 			&referenceModel,
 			vendor.Name,
 			&vendor.Phone,
+			&vendor.VATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -2680,6 +2683,7 @@ func MakeJournalsForPurchaseExtraPayments(
 		&referenceModel,
 		vendor.Name,
 		&vendor.Phone,
+		&vendor.VATNo,
 	)
 	if err != nil {
 		return nil, err
@@ -2711,6 +2715,7 @@ func MakeJournalsForPurchaseExtraPayments(
 				&referenceModel,
 				vendor.Name,
 				&vendor.Phone,
+				&vendor.VATNo,
 			)
 			if err != nil {
 				return nil, err
@@ -2767,22 +2772,22 @@ func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
-	cashAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	purchaseAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Purchase", nil)
+	purchaseAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Purchase", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	cashDiscountReceivedAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Cash discount received", nil)
+	cashDiscountReceivedAccount, err := store.CreateAccountIfNotExists(purchase.StoreID, nil, nil, "Cash discount received", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2803,6 +2808,7 @@ func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
 			&referenceModel,
 			vendor.Name,
 			&vendor.Phone,
+			&vendor.VATNo,
 		)
 		if err != nil {
 			return nil, err

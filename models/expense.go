@@ -926,7 +926,7 @@ func (store *Store) IsExpenseExists(ID *primitive.ObjectID) (exists bool, err er
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessExpenses() error {
@@ -1069,17 +1069,18 @@ func (expense *Expense) CreateLedger() (ledger *Ledger, err error) {
 		&referenceModel,
 		expenseCategory.Name+" Expense",
 		nil,
+		nil,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	cashAccount, err := store.CreateAccountIfNotExists(expense.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(expense.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := store.CreateAccountIfNotExists(expense.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(expense.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
 		return nil, err
 	}

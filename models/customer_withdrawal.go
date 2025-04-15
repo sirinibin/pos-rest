@@ -575,6 +575,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		&referenceModel,
 		customer.Name,
 		&customer.Phone,
+		&customer.VATNo,
 	)
 	if err != nil {
 		errs["account"] = "Error creating account: " + err.Error()
@@ -607,7 +608,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		spendingAccount := &Account{}
 		spendingAccountName := ""
 		if customerwithdrawal.PaymentMethod == "cash" {
-			cashAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Cash", nil)
+			cashAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Cash", nil, nil)
 			if err != nil {
 				errs["payment_method"] = "error fetching cash account"
 			}
@@ -620,7 +621,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			spendingAccountName = "cash"
 
 		} else if slices.Contains(BANK_PAYMENT_METHODS, customerwithdrawal.PaymentMethod) {
-			bankAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Bank", nil)
+			bankAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Bank", nil, nil)
 			if err != nil {
 				errs["payment_method"] = "error fetching bank account"
 			}
@@ -1000,7 +1001,7 @@ func (store *Store) IsCustomerWithdrawalExists(ID *primitive.ObjectID) (exists b
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessCustomerWithdrawals() error {
@@ -1123,17 +1124,18 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 		&referenceModel,
 		customer.Name,
 		&customer.Phone,
+		&customer.VATNo,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	cashAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
 		return nil, err
 	}

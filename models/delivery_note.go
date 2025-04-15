@@ -588,7 +588,7 @@ func (deliverynote *DeliveryNote) IsCodeExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (deliverynote *DeliveryNote) Update() error {
@@ -651,7 +651,7 @@ func (store *Store) IsDeliveryNoteExists(ID *primitive.ObjectID) (exists bool, e
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessDeliveryNotes() error {

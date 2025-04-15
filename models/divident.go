@@ -894,7 +894,7 @@ func (store *Store) IsDividentExists(ID *primitive.ObjectID) (exists bool, err e
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessDividents() error {
@@ -1019,17 +1019,18 @@ func (divident *Divident) CreateLedger() (ledger *Ledger, err error) {
 		&referenceModel,
 		drawingUser.Name+" Drawings",
 		&drawingUser.Mob,
+		nil,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	cashAccount, err := store.CreateAccountIfNotExists(divident.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(divident.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := store.CreateAccountIfNotExists(divident.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(divident.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
 		return nil, err
 	}

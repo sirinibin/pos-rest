@@ -460,7 +460,7 @@ func (store *Store) IsPurchaseCashDiscountExists(ID *primitive.ObjectID) (exists
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 type PurchaseCashDiscountStats struct {

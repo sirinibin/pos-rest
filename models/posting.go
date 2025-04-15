@@ -1104,7 +1104,7 @@ func (store *Store) IsPostingExists(ID *primitive.ObjectID) (exists bool, err er
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessPostings() error {

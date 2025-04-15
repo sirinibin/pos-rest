@@ -897,7 +897,7 @@ func (store *Store) IsCapitalWithdrawalExists(ID *primitive.ObjectID) (exists bo
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) ProcessCapitalWithdrawals() error {

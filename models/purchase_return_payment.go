@@ -602,7 +602,7 @@ func (store *Store) IsPurchaseReturnPaymentExists(ID *primitive.ObjectID) (exist
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 type PurchaseReturnPaymentStats struct {

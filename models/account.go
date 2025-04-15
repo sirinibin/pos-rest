@@ -27,6 +27,7 @@ type Account struct {
 	Number               string              `bson:"number,omitempty" json:"number,omitempty"`
 	Name                 string              `bson:"name,omitempty" json:"name,omitempty"`
 	Phone                *string             `bson:"phone,omitempty" json:"phone,omitempty"`
+	VatNo                *string             `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
 	Balance              float64             `bson:"balance" json:"balance"`
 	DebitOrCreditBalance string              `bson:"debit_or_credit_balance" json:"debit_or_credit_balance"`
 	DebitTotal           float64             `bson:"debit_total" json:"debit_total"`
@@ -269,6 +270,11 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 	keys, ok = r.URL.Query()["search[phone]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[vat_no]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[type]"]
@@ -545,8 +551,14 @@ func (store *Store) CreateAccountIfNotExists(
 	referenceModel *string,
 	name string,
 	phone *string,
+	vatNo *string,
 ) (account *Account, err error) {
-	if phone != nil {
+	if vatNo != nil {
+		account, err = store.FindAccountByVatNo(*vatNo, name, storeID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	} else if phone != nil {
 		account, err = store.FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
@@ -584,6 +596,7 @@ func (store *Store) CreateAccountIfNotExists(
 		Name:           name,
 		Number:         accountNumber,
 		Phone:          phone,
+		VatNo:          vatNo,
 		Balance:        0,
 		CreatedAt:      &now,
 		UpdatedAt:      &now,
@@ -772,6 +785,35 @@ func (store *Store) FindAccountByPhoneByName(
 	return account, err
 }
 
+func (store *Store) FindAccountByVatNo(
+	vatNo string,
+	name string,
+	storeID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (account *Account, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"vat_no": vatNo,
+			//"name":     name,
+			"store_id": storeID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&account)
+	if err != nil {
+		return nil, err
+	}
+
+	return account, err
+}
+
 func (store *Store) FindAccountByPhone(
 	phone string,
 	storeID *primitive.ObjectID,
@@ -851,7 +893,7 @@ func (account *Account) IsPhoneExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (store *Store) IsAccountExists(ID *primitive.ObjectID) (exists bool, err error) {
@@ -864,7 +906,7 @@ func (store *Store) IsAccountExists(ID *primitive.ObjectID) (exists bool, err er
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func SetAccountBalances(accounts map[string]Account) error {

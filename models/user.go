@@ -779,7 +779,7 @@ func (user *User) IsEmailExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func (user *User) IsPhoneExists() (exists bool, err error) {
@@ -799,7 +799,7 @@ func (user *User) IsPhoneExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func IsUserExists(ID *primitive.ObjectID) (exists bool, err error) {
@@ -812,7 +812,7 @@ func IsUserExists(ID *primitive.ObjectID) (exists bool, err error) {
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 func HashPassword(password string) string {

@@ -527,5 +527,5 @@ func (store *Store) IsSignatureExists(ID *primitive.ObjectID) (exists bool, err 
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }

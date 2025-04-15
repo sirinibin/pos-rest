@@ -2240,7 +2240,7 @@ func (order *Order) IsCodeExists() (exists bool, err error) {
 		})
 	}
 
-	return (count == 1), err
+	return (count > 0), err
 }
 
 /*
@@ -2409,7 +2409,7 @@ func (store *Store) IsOrderExists(ID *primitive.ObjectID) (exists bool, err erro
 		"_id": ID,
 	})
 
-	return (count == 1), err
+	return (count > 0), err
 }
 func (order *Order) HardDelete() error {
 	log.Print("Delete order")
@@ -3066,6 +3066,7 @@ func MakeJournalsForSalesPaymentsByDatetime(
 				&referenceModel,
 				customer.Name,
 				&customer.Phone,
+				&customer.VATNo,
 			)
 			if err != nil {
 				return nil, err
@@ -3113,6 +3114,7 @@ func MakeJournalsForSalesPaymentsByDatetime(
 			&referenceModel,
 			customer.Name,
 			&customer.Phone,
+			&customer.VATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -3151,6 +3153,7 @@ func MakeJournalsForSalesPaymentsByDatetime(
 			&referenceModel,
 			customer.Name,
 			&customer.Phone,
+			&customer.VATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -3211,6 +3214,7 @@ func MakeJournalsForSalesExtraPayments(
 				&referenceModel,
 				customer.Name,
 				&customer.Phone,
+				&customer.VATNo,
 			)
 			if err != nil {
 				return nil, err
@@ -3239,6 +3243,7 @@ func MakeJournalsForSalesExtraPayments(
 		&referenceModel,
 		customer.Name,
 		&customer.Phone,
+		&customer.VATNo,
 	)
 	if err != nil {
 		return nil, err
@@ -3292,22 +3297,22 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
-	cashAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", nil)
+	cashAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bankAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Bank", nil)
+	bankAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	salesAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Sales", nil)
+	salesAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Sales", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	cashDiscountAllowedAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash discount allowed", nil)
+	cashDiscountAllowedAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash discount allowed", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -3328,6 +3333,7 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 			&referenceModel,
 			customer.Name,
 			&customer.Phone,
+			&customer.VATNo,
 		)
 		if err != nil {
 			return nil, err
