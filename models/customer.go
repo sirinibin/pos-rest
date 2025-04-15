@@ -66,6 +66,9 @@ type Customer struct {
 	NationalAddress            NationalAddress          `bson:"national_address,omitempty" json:"national_address,omitempty"`
 	RegistrationNumber         string                   `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
 	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
+	ContactPerson              string                   `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
+	CreditLimit                float64                  `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
+	CreditBalance              float64                  `json:"credit_balance" bson:"-"`
 	Deleted                    bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                  *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser              *User                    `json:"deleted_by_user,omitempty"`

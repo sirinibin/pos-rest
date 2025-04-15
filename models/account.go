@@ -554,7 +554,7 @@ func (store *Store) CreateAccountIfNotExists(
 	vatNo *string,
 ) (account *Account, err error) {
 	if vatNo != nil {
-		account, err = store.FindAccountByVatNo(*vatNo, name, storeID, bson.M{})
+		account, err = store.FindAccountByVatNo(*vatNo, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
@@ -787,7 +787,6 @@ func (store *Store) FindAccountByPhoneByName(
 
 func (store *Store) FindAccountByVatNo(
 	vatNo string,
-	name string,
 	storeID *primitive.ObjectID,
 	selectFields map[string]interface{},
 ) (account *Account, err error) {

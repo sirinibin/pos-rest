@@ -65,49 +65,45 @@ type Order struct {
 	//DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
 	//SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	//SignatureDateStr         string              `json:"signature_date_str,omitempty"`
-	VatPercent             *float64       `bson:"vat_percent" json:"vat_percent"`
-	Discount               float64        `bson:"discount" json:"discount"`
-	DiscountPercent        float64        `bson:"discount_percent" json:"discount_percent"`
-	IsDiscountPercent      bool           `bson:"is_discount_percent" json:"is_discount_percent"`
-	ReturnDiscount         float64        `bson:"return_discount" json:"return_discount"`
-	Status                 string         `bson:"status,omitempty" json:"status,omitempty"`
-	ShippingOrHandlingFees float64        `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
-	TotalQuantity          float64        `bson:"total_quantity" json:"total_quantity"`
-	VatPrice               float64        `bson:"vat_price" json:"vat_price"`
-	Total                  float64        `bson:"total" json:"total"`
-	NetTotal               float64        `bson:"net_total" json:"net_total"`
-	CashDiscount           float64        `bson:"cash_discount" json:"cash_discount"`
-	ReturnCashDiscount     float64        `bson:"return_cash_discount" json:"return_cash_discount"`
-	PaymentMethods         []string       `json:"payment_methods" bson:"payment_methods"`
-	TotalPaymentReceived   float64        `bson:"total_payment_received" json:"total_payment_received"`
-	BalanceAmount          float64        `bson:"balance_amount" json:"balance_amount"`
-	Payments               []SalesPayment `bson:"payments" json:"payments"`
-	PaymentsInput          []SalesPayment `bson:"-" json:"payments_input"`
-	PaymentsCount          int64          `bson:"payments_count" json:"payments_count"`
-	PaymentStatus          string         `bson:"payment_status" json:"payment_status"`
-	Profit                 float64        `bson:"profit" json:"profit"`
-	NetProfit              float64        `bson:"net_profit" json:"net_profit"`
-	Loss                   float64        `bson:"loss" json:"loss"`
-	NetLoss                float64        `bson:"net_loss" json:"net_loss"`
-	ReturnCount            int64          `bson:"return_count" json:"return_count"`
-	//Deleted                bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	//DeletedBy              *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	//DeletedByUser          *User               `json:"deleted_by_user,omitempty"`
-	//DeletedAt              *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy       *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser   *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
-	DeliveredByName string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CustomerName    string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	StoreName       string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	//DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Zatca              ZatcaReporting `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	SkipZatcaReporting bool           `json:"skip_zatca_reporting,omitempty" bson:"-"`
+	VatPercent             *float64            `bson:"vat_percent" json:"vat_percent"`
+	Discount               float64             `bson:"discount" json:"discount"`
+	DiscountPercent        float64             `bson:"discount_percent" json:"discount_percent"`
+	IsDiscountPercent      bool                `bson:"is_discount_percent" json:"is_discount_percent"`
+	ReturnDiscount         float64             `bson:"return_discount" json:"return_discount"`
+	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
+	ShippingOrHandlingFees float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
+	TotalQuantity          float64             `bson:"total_quantity" json:"total_quantity"`
+	VatPrice               float64             `bson:"vat_price" json:"vat_price"`
+	Total                  float64             `bson:"total" json:"total"`
+	NetTotal               float64             `bson:"net_total" json:"net_total"`
+	CashDiscount           float64             `bson:"cash_discount" json:"cash_discount"`
+	ReturnCashDiscount     float64             `bson:"return_cash_discount" json:"return_cash_discount"`
+	PaymentMethods         []string            `json:"payment_methods" bson:"payment_methods"`
+	TotalPaymentReceived   float64             `bson:"total_payment_received" json:"total_payment_received"`
+	BalanceAmount          float64             `bson:"balance_amount" json:"balance_amount"`
+	Payments               []SalesPayment      `bson:"payments" json:"payments"`
+	PaymentsInput          []SalesPayment      `bson:"-" json:"payments_input"`
+	PaymentsCount          int64               `bson:"payments_count" json:"payments_count"`
+	PaymentStatus          string              `bson:"payment_status" json:"payment_status"`
+	Profit                 float64             `bson:"profit" json:"profit"`
+	NetProfit              float64             `bson:"net_profit" json:"net_profit"`
+	Loss                   float64             `bson:"loss" json:"loss"`
+	NetLoss                float64             `bson:"net_loss" json:"net_loss"`
+	ReturnCount            int64               `bson:"return_count" json:"return_count"`
+	CreatedAt              *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt              *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy              *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy              *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser          *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
+	DeliveredByName        string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CustomerName           string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	StoreName              string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	Zatca                  ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	SkipZatcaReporting     bool                `json:"skip_zatca_reporting,omitempty" bson:"-"`
+	Remarks                string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
 }
 
 type ZatcaReporting struct {

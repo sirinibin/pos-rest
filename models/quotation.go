@@ -88,6 +88,7 @@ type Quotation struct {
 	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ValidityDays             *int64              `bson:"validity_days,omitempty" json:"validity_days,omitempty"`
 	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
+	Remarks                  string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
 }
 
 func (store *Store) UpdateQuotationProfit() error {

@@ -98,6 +98,7 @@ type PurchaseReturn struct {
 	PaymentsInput          []PurchasePayment       `bson:"-" json:"payments_input"`
 	PaymentsCount          int64                   `bson:"payments_count" json:"payments_count"`
 	PaymentMethods         []string                `json:"payment_methods" bson:"payment_methods"`
+	Remarks                string                  `bson:"remarks,omitempty" json:"remarks,omitempty"`
 }
 
 func (model *PurchaseReturn) AddPayments() error {

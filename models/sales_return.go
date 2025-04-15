@@ -108,6 +108,7 @@ type SalesReturn struct {
 	PaymentsCount      int64                `bson:"payments_count" json:"payments_count"`
 	Zatca              ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
 	SkipZatcaReporting bool                 `json:"skip_zatca_reporting,omitempty" bson:"-"`
+	Remarks            string               `bson:"remarks,omitempty" json:"remarks,omitempty"`
 }
 
 func (salesReturn *SalesReturn) AddPayments() error {
