@@ -834,23 +834,7 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			return customers, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		customer.SearchLabel = "#" + customer.Code + " " + customer.Name
-
-		if customer.NameInArabic != "" {
-			customer.SearchLabel += " / " + customer.NameInArabic
-		}
-
-		if customer.Phone != "" {
-			customer.SearchLabel += " " + customer.Phone
-		}
-
-		if customer.PhoneInArabic != "" {
-			customer.SearchLabel += " / " + customer.PhoneInArabic
-		}
-
-		if customer.VATNo != "" {
-			customer.SearchLabel += " VAT #" + customer.VATNo
-		}
+		customer.SetSearchLabel()
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
 			customer.CreatedByUser, _ = FindUserByID(customer.CreatedBy, createdByUserSelectFields)
@@ -867,6 +851,26 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 
 	return customers, criterias, nil
 
+}
+
+func (customer *Customer) SetSearchLabel() {
+	customer.SearchLabel = "#" + customer.Code + " " + customer.Name
+
+	if customer.NameInArabic != "" {
+		customer.SearchLabel += " / " + customer.NameInArabic
+	}
+
+	if customer.Phone != "" {
+		customer.SearchLabel += " Phone: " + customer.Phone
+	}
+
+	if customer.PhoneInArabic != "" {
+		customer.SearchLabel += " / " + customer.PhoneInArabic
+	}
+
+	if customer.VATNo != "" {
+		customer.SearchLabel += " VAT #" + customer.VATNo
+	}
 }
 
 func (customer *Customer) TrimSpaceFromFields() {

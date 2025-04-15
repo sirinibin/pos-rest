@@ -456,6 +456,10 @@ func ViewPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
+	vendor.SetSearchLabel()
+	purchase.Vendor = vendor
+
 	response.Status = true
 	response.Result = purchase
 

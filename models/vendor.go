@@ -658,23 +658,7 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 			return vendors, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		vendor.SearchLabel = "#" + vendor.Code + " " + vendor.Name
-
-		if vendor.NameInArabic != "" {
-			vendor.SearchLabel += " / " + vendor.NameInArabic
-		}
-
-		if vendor.Phone != "" {
-			vendor.SearchLabel += " " + vendor.Phone
-		}
-
-		if vendor.PhoneInArabic != "" {
-			vendor.SearchLabel += " / " + vendor.PhoneInArabic
-		}
-
-		if vendor.VATNo != "" {
-			vendor.SearchLabel += " VAT #" + vendor.VATNo
-		}
+		vendor.SetSearchLabel()
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {
 			vendor.CreatedByUser, _ = FindUserByID(vendor.CreatedBy, createdByUserSelectFields)
@@ -691,6 +675,26 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 
 	return vendors, criterias, nil
 
+}
+
+func (vendor *Vendor) SetSearchLabel() {
+	vendor.SearchLabel = "#" + vendor.Code + " " + vendor.Name
+
+	if vendor.NameInArabic != "" {
+		vendor.SearchLabel += " / " + vendor.NameInArabic
+	}
+
+	if vendor.Phone != "" {
+		vendor.SearchLabel += " Phone: " + vendor.Phone
+	}
+
+	if vendor.PhoneInArabic != "" {
+		vendor.SearchLabel += " / " + vendor.PhoneInArabic
+	}
+
+	if vendor.VATNo != "" {
+		vendor.SearchLabel += " VAT #" + vendor.VATNo
+	}
 }
 
 func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {

@@ -582,6 +582,10 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+	customer.SetSearchLabel()
+	order.Customer = customer
+
 	response.Status = true
 	response.Result = order
 

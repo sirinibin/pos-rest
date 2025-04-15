@@ -54,7 +54,7 @@ type Purchase struct {
 	VendorID            *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorInvoiceNumber string              `bson:"vendor_invoice_no,omitempty" json:"vendor_invoice_no,omitempty"`
 	Store               *Store              `json:"store,omitempty"`
-	Vendor              *Vendor             `json:"vendor,omitempty"`
+	Vendor              *Vendor             `json:"vendor,omitempty" bson:"-"`
 	Products            []PurchaseProduct   `bson:"products,omitempty" json:"products,omitempty"`
 	OrderPlacedBy       *primitive.ObjectID `json:"order_placed_by,omitempty" bson:"order_placed,omitempty"`
 	OrderPlacedByUser   *User               `json:"order_placed_by_user,omitempty"`

@@ -56,7 +56,7 @@ type Order struct {
 	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Store             *Store              `json:"store,omitempty"`
-	Customer          *Customer           `json:"customer,omitempty"`
+	Customer          *Customer           `json:"customer,omitempty" bson:"-"`
 	Products          []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy       *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	DeliveredByUser   *User               `json:"delivered_by_user,omitempty"`
