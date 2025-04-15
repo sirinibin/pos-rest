@@ -291,6 +291,10 @@ func ViewDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer, _ := store.FindCustomerByID(deliverynote.CustomerID, bson.M{})
+	customer.SetSearchLabel()
+	deliverynote.Customer = customer
+
 	response.Status = true
 	response.Result = deliverynote
 

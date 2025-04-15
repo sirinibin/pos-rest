@@ -469,6 +469,10 @@ func ViewPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	vendor, _ := store.FindVendorByID(purchasereturn.VendorID, bson.M{})
+	vendor.SetSearchLabel()
+	purchasereturn.Vendor = vendor
+
 	response.Status = true
 	response.Result = purchasereturn
 

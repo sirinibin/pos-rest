@@ -528,6 +528,10 @@ func ViewSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer, _ := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
+	customer.SetSearchLabel()
+	salesreturn.Customer = customer
+
 	response.Status = true
 	response.Result = salesreturn
 
