@@ -2130,19 +2130,19 @@ func (product *Product) SetPartNumber() (err error) {
 func (product *Product) SetBarcode() (err error) {
 	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
-		return err
+		return errors.New("error finding store: " + err.Error())
 	}
 
 	if len(product.Ean12) == 0 {
 		lastProduct, err := store.FindLastProduct(bson.M{})
-		if err != nil {
-			return err
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("error finding last product: " + err.Error())
 		}
 		barcode := ""
 		if lastProduct != nil {
 			lastEan12, err := strconv.Atoi(lastProduct.Ean12)
 			if err != nil {
-				return err
+				return errors.New("error converting  ean12-1 string to int: " + err.Error())
 			}
 			lastEan12++
 			barcode = strconv.Itoa(lastEan12)
@@ -2154,14 +2154,14 @@ func (product *Product) SetBarcode() (err error) {
 			product.Ean12 = barcode
 			exists, err := product.IsEan12Exists()
 			if err != nil {
-				return err
+				return errors.New("error checking ean12 exists or not " + err.Error())
 			}
 			if !exists {
 				break
 			}
 			lastEan12, err := strconv.Atoi(product.Ean12)
 			if err != nil {
-				return err
+				return errors.New("error converting  ean12-2 string to int: " + err.Error())
 			}
 			lastEan12++
 			barcode = strconv.Itoa(lastEan12)

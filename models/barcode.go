@@ -3,6 +3,7 @@ package models
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -27,7 +28,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	if !storeID.IsZero() {
 		store, err = FindStoreByID(&storeID, bson.M{})
 		if err != nil {
-			return err
+			return errors.New("error finding store: " + err.Error())
 		}
 	}
 	data := ""
@@ -36,6 +37,9 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	} else {
 		data = product.BarCode
 	}
+	log.Print("product.Ean12:" + product.Ean12)
+	log.Print("product.BarCode:" + product.BarCode)
+	log.Print("data:" + data)
 
 	img1 := image.NewRGBA(image.Rect(0, 0, 144*scale, 106*scale)) // x1,y1,  x2,y2 of background rectangle
 	whiteColor := color.RGBA{255, 255, 255, 255}                  //  R, G, B, Alpha
@@ -46,7 +50,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	for {
 		width, err = addLabel(img1, 10*scale, 23*scale, product.Name, color.Black, productNameSize*float64(scale), true)
 		if err != nil {
-			return err
+			return errors.New("error add label1: " + err.Error())
 		}
 
 		if width <= 762 {
@@ -75,7 +79,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	for {
 		width, err = addLabel(img1, 10*scale, 15*scale, storeName, color.Black, storeNameSize*float64(scale), true)
 		if err != nil {
-			return err
+			return errors.New("error add label2: " + err.Error())
 		}
 
 		if width <= 781 {
@@ -90,7 +94,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 
 		_, err = addLabel(img1, 10*scale, 23*scale, product.Name, color.Black, productNameSize*float64(scale), true)
 		if err != nil {
-			return err
+			return errors.New("error add label3: " + err.Error())
 		}
 	}
 
@@ -102,14 +106,14 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	if !storeID.IsZero() {
 		retailUnitPrice, err := product.getRetailUnitPriceByStoreID(storeID)
 		if err != nil {
-			return err
+			return errors.New("error get retail unit price: " + err.Error())
 		}
 
 		retailUnitPriceWithTax = RoundFloat((retailUnitPrice + (retailUnitPrice * (store.VatPercent / 100))), 2)
 
 		purchaseUnitPriceSecret, err = product.getPurchaseUnitPriceSecretByStoreID(storeID)
 		if err != nil {
-			return err
+			return errors.New("error get purchase unit price secret: " + err.Error())
 		}
 
 		vatPercent = store.VatPercent
@@ -134,7 +138,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		if err.Error() == "checksum missmatch" || err.Error() == "invalid ean code data" {
 			return nil
 		}
-		return err
+		return errors.New("error make barcode image: " + err.Error())
 	}
 
 	//	barCodeImage.
@@ -148,7 +152,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	// encode image to buffer
 	err = png.Encode(buff, img1)
 	if err != nil {
-		return err
+		return errors.New("error encode: " + err.Error())
 	}
 
 	product.BarcodeBase64 = "data:image/png;base64,"

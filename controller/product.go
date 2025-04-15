@@ -198,10 +198,48 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product.SetPartNumber()
-	product.SetBarcode()
-	product.SaveImages()
-	product.UpdateForeignLabelFields()
+	err = product.SetPartNumber()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["setting_part_number"] = "error setting part number:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = product.SetBarcode()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["setting_bar_code"] = "error setting barcode:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	err = product.SaveImages()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["saving_image"] = "error saving image:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = product.UpdateForeignLabelFields()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["update_foreign_label_fields"] = "error updating foreign label fields:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	product.InitStoreUnitPrice()
 	product.CalculateUnitProfit()
 	product.GeneratePrefixes()
@@ -470,6 +508,13 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = product.GenerateBarCodeBase64ByStoreID(store.ID)
+	if err != nil {
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if len(product.LinkedProductIDs) > 0 {
 		linkedProducts, err := store.FindProductsByIDs(product.LinkedProductIDs)
 		if err != nil {
@@ -478,13 +523,6 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		product.LinkedProducts = linkedProducts
-	}
-
-	err = product.GenerateBarCodeBase64ByStoreID(store.ID)
-	if err != nil {
-		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
 	}
 
 	response.Status = true
