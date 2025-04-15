@@ -1019,6 +1019,22 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 	}
 
+	if !govalidator.IsNull(strings.TrimSpace(customer.Code)) {
+		codeExists, err := customer.IsCodeExists()
+		if err != nil {
+			errs["code"] = err.Error()
+		}
+
+		if codeExists {
+			errs["code"] = "ID already exists."
+		}
+
+		if codeExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
+	}
+
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -1196,6 +1212,26 @@ func (customer *Customer) IsVatNoExists() (exists bool, err error) {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"vat_no": customer.VATNo,
 			"_id":    bson.M{"$ne": customer.ID},
+		})
+	}
+
+	return (count > 0), err
+}
+
+func (customer *Customer) IsCodeExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if customer.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code": customer.Code,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code": customer.Code,
+			"_id":  bson.M{"$ne": customer.ID},
 		})
 	}
 

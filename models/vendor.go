@@ -62,6 +62,9 @@ type Vendor struct {
 	RegistrationNumber         string                 `bson:"registration_number,omitempty" json:"registration_number"`
 	RegistrationNumberInArabic string                 `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic"`
 	NationalAddresss           NationalAddress        `bson:"national_address,omitempty" json:"national_address"`
+	ContactPerson              string                 `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
+	CreditLimit                float64                `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
+	CreditBalance              float64                `json:"credit_balance" bson:"-"`
 	Logo                       string                 `bson:"logo,omitempty" json:"logo"`
 	LogoContent                string                 `json:"logo_content,omitempty"`
 	Deleted                    bool                   `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -813,6 +816,22 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	}
 
+	if !govalidator.IsNull(strings.TrimSpace(vendor.Code)) {
+		codeExists, err := vendor.IsCodeExists()
+		if err != nil {
+			errs["code"] = err.Error()
+		}
+
+		if codeExists {
+			errs["code"] = "ID already exists."
+		}
+
+		if codeExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
+	}
+
 	/*
 		if govalidator.IsNull(vendor.PhoneInArabic) {
 			errs["phone_in_arabic"] = "Phone in Arabic is required"
@@ -880,6 +899,26 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 	}
 
 	return errs
+}
+
+func (vendor *Vendor) IsCodeExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if vendor.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code": vendor.Code,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code": vendor.Code,
+			"_id":  bson.M{"$ne": vendor.ID},
+		})
+	}
+
+	return (count > 0), err
 }
 
 func (vendor *Vendor) IsVatNoExists() (exists bool, err error) {

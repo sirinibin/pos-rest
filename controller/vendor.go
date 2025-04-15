@@ -3,12 +3,15 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -108,12 +111,14 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = vendor.MakeCode()
-	if err != nil {
-		response.Status = false
-		response.Errors["code"] = "Error making code: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	if govalidator.IsNull(strings.TrimSpace(vendor.Code)) {
+		err = vendor.MakeCode()
+		if err != nil {
+			response.Status = false
+			response.Errors["code"] = "Error making code: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	err = vendor.Insert()
@@ -293,6 +298,32 @@ func ViewVendor(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if vendor.VATNo != "" {
+		account, err := store.FindAccountByVatNo(vendor.VATNo, &store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			response.Status = false
+			response.Errors["account"] = "error finding account:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		if account != nil {
+			vendor.CreditBalance = account.Balance
+		} else {
+			account, err = store.FindAccountByPhoneByName(vendor.Phone, vendor.Name, &store.ID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				response.Status = false
+				response.Errors["account"] = "error finding account:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			if account != nil {
+				vendor.CreditBalance = account.Balance
+			}
+		}
+
 	}
 
 	response.Status = true

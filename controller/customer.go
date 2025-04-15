@@ -3,8 +3,10 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
@@ -109,12 +111,14 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	customer.UpdatedAt = &now
 	customer.UpdateForeignLabelFields()
 
-	err = customer.MakeCode()
-	if err != nil {
-		response.Status = false
-		response.Errors["code"] = "Error making code: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	if govalidator.IsNull(strings.TrimSpace(customer.Code)) {
+		err = customer.MakeCode()
+		if err != nil {
+			response.Status = false
+			response.Errors["code"] = "Error making code: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	err = customer.Insert()
