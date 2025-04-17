@@ -2101,7 +2101,7 @@ func (store *Store) FindLastProduct(
 
 	err = collection.FindOne(ctx,
 		bson.M{
-			"store_id": store.ID,
+			//"store_id": store.ID,
 		}, findOneOptions).
 		Decode(&product)
 	if err != nil {
@@ -2427,8 +2427,8 @@ func (store *Store) FindProductsByIDs(
 	findOptions.SetAllowDiskUse(true)
 
 	cur, err := collection.Find(ctx, bson.M{
-		"_id":      bson.M{"$in": IDs},
-		"store_id": store.ID,
+		"_id": bson.M{"$in": IDs},
+		//"store_id": store.ID,
 	}, findOptions)
 	if err != nil {
 		return products, errors.New("Error fetching products:" + err.Error())
