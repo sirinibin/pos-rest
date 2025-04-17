@@ -69,6 +69,7 @@ type Store struct {
 	BankAccount                BankAccount           `bson:"bank_account,omitempty" json:"bank_account,omitempty"`
 	CustomerSerialNumber       SerialNumber          `bson:"customer_serial_number,omitempty" json:"customer_serial_number,omitempty"`
 	VendorSerialNumber         SerialNumber          `bson:"vendor_serial_number,omitempty" json:"vendor_serial_number,omitempty"`
+	ShowAddressInInvoiceFooter bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
 }
 
 type SerialNumber struct {

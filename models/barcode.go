@@ -37,9 +37,6 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	} else {
 		data = product.BarCode
 	}
-	log.Print("product.Ean12:" + product.Ean12)
-	log.Print("product.BarCode:" + product.BarCode)
-	log.Print("data:" + data)
 
 	img1 := image.NewRGBA(image.Rect(0, 0, 144*scale, 106*scale)) // x1,y1,  x2,y2 of background rectangle
 	whiteColor := color.RGBA{255, 255, 255, 255}                  //  R, G, B, Alpha
