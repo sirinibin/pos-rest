@@ -2471,8 +2471,8 @@ func (store *Store) FindProductByID(
 
 	err = collection.FindOne(ctx,
 		bson.M{
-			"_id":      ID,
-			"store_id": store.ID,
+			"_id": ID,
+			//"store_id": store.ID,
 		}, findOneOptions).
 		Decode(&product)
 	if err != nil {
