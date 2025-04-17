@@ -39,6 +39,8 @@ type Store struct {
 	AddressInArabic            string                `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
 	ZipCode                    string                `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
 	ZipCodeInArabic            string                `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
+	CountryName                string                `bson:"country_name" json:"country_name"`
+	CountryCode                string                `bson:"country_code" json:"country_code"`
 	VATNo                      string                `bson:"vat_no" json:"vat_no"`
 	VATNoInArabic              string                `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
 	VatPercent                 float64               `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`

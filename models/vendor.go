@@ -62,6 +62,8 @@ type Vendor struct {
 	RegistrationNumber         string                 `bson:"registration_number,omitempty" json:"registration_number"`
 	RegistrationNumberInArabic string                 `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic"`
 	NationalAddresss           NationalAddress        `bson:"national_address,omitempty" json:"national_address"`
+	CountryName                string                 `bson:"country_name" json:"country_name"`
+	CountryCode                string                 `bson:"country_code" json:"country_code"`
 	ContactPerson              string                 `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
 	CreditLimit                float64                `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
 	CreditBalance              float64                `json:"credit_balance" bson:"-"`

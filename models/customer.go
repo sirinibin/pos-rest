@@ -63,6 +63,8 @@ type Customer struct {
 	Email                      string                   `bson:"email,omitempty" json:"email,omitempty"`
 	Address                    string                   `bson:"address,omitempty" json:"address,omitempty"`
 	AddressInArabic            string                   `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
+	CountryName                string                   `bson:"country_name" json:"country_name"`
+	CountryCode                string                   `bson:"country_code" json:"country_code"`
 	NationalAddress            NationalAddress          `bson:"national_address,omitempty" json:"national_address,omitempty"`
 	RegistrationNumber         string                   `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
 	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
