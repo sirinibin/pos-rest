@@ -697,20 +697,20 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		if err != nil {
 			return products, criterias, err
 		}
-
-		store, err := FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return products, criterias, err
-		}
-
-		if len(store.UseProductsFromStoreID) > 0 {
-			criterias.SearchBy["$or"] = []bson.M{
-				{"store_id": storeID},
-				{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
+		/*
+			store, err := FindStoreByID(&storeID, bson.M{})
+			if err != nil {
+				return products, criterias, err
 			}
-		} else {
-			criterias.SearchBy["store_id"] = storeID
-		}
+
+			if len(store.UseProductsFromStoreID) > 0 {
+				criterias.SearchBy["$or"] = []bson.M{
+					{"store_id": storeID},
+					{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
+				}
+			} else {
+				criterias.SearchBy["store_id"] = storeID
+			}*/
 	}
 
 	keys, ok = r.URL.Query()["sort"]
@@ -2535,10 +2535,12 @@ func (product *Product) IsPartNumberExists() (exists bool, err error) {
 	if product.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"part_number": product.PartNumber,
+			"store_id":    product.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"part_number": product.PartNumber,
+			"store_id":    product.StoreID,
 			"_id":         bson.M{"$ne": product.ID},
 		})
 	}
@@ -2555,10 +2557,12 @@ func (product *Product) IsBarCodeExists() (exists bool, err error) {
 	if product.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"bar_code": product.BarCode,
+			"store_id": product.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"bar_code": product.BarCode,
+			"store_id": product.StoreID,
 			"_id":      bson.M{"$ne": product.ID},
 		})
 	}
@@ -2574,12 +2578,14 @@ func (product *Product) IsEan12Exists() (exists bool, err error) {
 
 	if product.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"ean_12": product.Ean12,
+			"ean_12":   product.Ean12,
+			"store_id": product.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"ean_12": product.Ean12,
-			"_id":    bson.M{"$ne": product.ID},
+			"ean_12":   product.Ean12,
+			"store_id": product.StoreID,
+			"_id":      bson.M{"$ne": product.ID},
 		})
 	}
 
