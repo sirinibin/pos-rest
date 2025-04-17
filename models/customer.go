@@ -862,6 +862,9 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 }
 
 func (customer *Customer) SetSearchLabel() {
+	if customer == nil {
+		return
+	}
 	customer.SearchLabel = "#" + customer.Code + " " + customer.Name
 
 	if customer.NameInArabic != "" {
@@ -1166,12 +1169,14 @@ func (customer *Customer) IsEmailExists() (exists bool, err error) {
 
 	if customer.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": customer.Email,
+			"email":    customer.Email,
+			"store_id": customer.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": customer.Email,
-			"_id":   bson.M{"$ne": customer.ID},
+			"email":    customer.Email,
+			"store_id": customer.StoreID,
+			"_id":      bson.M{"$ne": customer.ID},
 		})
 	}
 
@@ -1186,12 +1191,14 @@ func (customer *Customer) IsPhoneExists() (exists bool, err error) {
 
 	if customer.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"phone": customer.Phone,
+			"phone":    customer.Phone,
+			"store_id": customer.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"phone": customer.Phone,
-			"_id":   bson.M{"$ne": customer.ID},
+			"phone":    customer.Phone,
+			"store_id": customer.StoreID,
+			"_id":      bson.M{"$ne": customer.ID},
 		})
 	}
 
@@ -1206,12 +1213,14 @@ func (customer *Customer) IsVatNoExists() (exists bool, err error) {
 
 	if customer.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"vat_no": customer.VATNo,
+			"vat_no":   customer.VATNo,
+			"store_id": customer.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"vat_no": customer.VATNo,
-			"_id":    bson.M{"$ne": customer.ID},
+			"vat_no":   customer.VATNo,
+			"store_id": customer.StoreID,
+			"_id":      bson.M{"$ne": customer.ID},
 		})
 	}
 
@@ -1226,12 +1235,14 @@ func (customer *Customer) IsCodeExists() (exists bool, err error) {
 
 	if customer.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"code": customer.Code,
+			"code":     customer.Code,
+			"store_id": customer.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"code": customer.Code,
-			"_id":  bson.M{"$ne": customer.ID},
+			"code":     customer.Code,
+			"store_id": customer.StoreID,
+			"_id":      bson.M{"$ne": customer.ID},
 		})
 	}
 
@@ -1245,7 +1256,8 @@ func (store *Store) IsCustomerExists(ID *primitive.ObjectID) (exists bool, err e
 	count := int64(0)
 
 	count, err = collection.CountDocuments(ctx, bson.M{
-		"_id": ID,
+		"_id":      ID,
+		"store_id": store.ID,
 	})
 
 	return (count > 0), err
