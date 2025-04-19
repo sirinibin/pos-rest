@@ -19,6 +19,7 @@ import (
 // ProductBrand : ProductBrand structure
 type ProductBrand struct {
 	ID        primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Code      string              `bson:"code,omitempty" json:"code,omitempty"`
 	Name      string              `bson:"name,omitempty" json:"name,omitempty"`
 	CreatedAt *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -232,16 +233,29 @@ func (productBrand *ProductBrand) Validate(w http.ResponseWriter, r *http.Reques
 		errs["name"] = "Name is required"
 	}
 
+	if govalidator.IsNull(productBrand.Code) {
+		errs["code"] = "Code is required"
+	}
+
+	codeExists, err := productBrand.IsCodeExists()
+	if err != nil {
+		errs["code"] = err.Error()
+	}
+
+	if codeExists {
+		errs["code"] = "Code is already in use"
+	}
+
 	nameExists, err := productBrand.IsNameExists()
 	if err != nil {
 		errs["name"] = err.Error()
 	}
 
 	if nameExists {
-		errs["name"] = "Name is Already in use"
+		errs["name"] = "Name is already in use"
 	}
 
-	if nameExists {
+	if nameExists || codeExists {
 		w.WriteHeader(http.StatusConflict)
 	} else if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -263,6 +277,26 @@ func (productBrand *ProductBrand) IsNameExists() (exists bool, err error) {
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"name": productBrand.Name,
+			"_id":  bson.M{"$ne": productBrand.ID},
+		})
+	}
+
+	return (count > 0), err
+}
+
+func (productBrand *ProductBrand) IsCodeExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + productBrand.StoreID.Hex()).Collection("product_brand")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if productBrand.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code": productBrand.Code,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code": productBrand.Code,
 			"_id":  bson.M{"$ne": productBrand.ID},
 		})
 	}

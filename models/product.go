@@ -101,6 +101,7 @@ type Product struct {
 	Category             []*ProductCategory    `json:"category,omitempty"`
 	BrandID              *primitive.ObjectID   `json:"brand_id,omitempty" bson:"brand_id,omitempty"`
 	BrandName            string                `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
+	BrandCode            string                `json:"brand_code,omitempty" bson:"brand_code,omitempty"`
 	CountryName          string                `bson:"country_name" json:"country_name"`
 	CountryCode          string                `bson:"country_code" json:"country_code"`
 	//UnitPrices    []ProductUnitPrice    `bson:"unit_prices,omitempty" json:"unit_prices,omitempty"`
