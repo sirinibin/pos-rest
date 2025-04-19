@@ -1126,8 +1126,8 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	totalAmountFromCustomerAccount := 0.00
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
-	if err != nil {
-		errs["customer_id"] = "Customer is required"
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_id"] = "Invalid customer"
 		return errs
 	}
 
@@ -1158,7 +1158,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	if customer.VATNo != "" && store.Zatca.Phase == "2" {
+	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
 
 		if !IsValidDigitNumber(customer.VATNo, "15") {
@@ -1263,7 +1263,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 		}
 
-		if payment.Method == "customer_account" {
+		if customer != nil && payment.Method == "customer_account" {
 			totalAmountFromCustomerAccount += *payment.Amount
 			log.Print("Checking customer account Balance")
 
@@ -1316,7 +1316,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	} //end for
 
 	if totalAmountFromCustomerAccount > 0 {
-		if customerAccount != nil {
+		if customer != nil && customerAccount != nil {
 			if scenario == "update" {
 				oldTotalAmountFromCustomerAccount := 0.0
 				extraAmountRequired := 0.00
@@ -1357,25 +1357,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	/*
-		if govalidator.IsNull(order.PaymentStatus) {
-			errs["payment_status"] = "Payment status is required"
-		}
-	*/
-
-	/*
-		if !govalidator.IsNull(order.SignatureDateStr) {
-			const shortForm = "Jan 02 2006"
-			date, err := time.Parse(shortForm, order.SignatureDateStr)
-			if err != nil {
-				errs["signature_date_str"] = "Invalid date format"
-			}
-			order.SignatureDate = &date
-		}
-	*/
-
 	if scenario == "update" {
-
 		if order.ID.IsZero() {
 			w.WriteHeader(http.StatusBadRequest)
 			errs["id"] = "ID is required"
@@ -1392,14 +1374,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["id"] = "Invalid Order:" + order.ID.Hex()
 		}
 
-	} else {
-		if order.PaymentStatus != "not_paid" {
-			/*
-				if govalidator.IsNull(order.PaymentMethod) {
-					errs["payment_method"] = "Payment method is required"
-				}
-			*/
-		}
 	}
 
 	if order.StoreID == nil || order.StoreID.IsZero() {
@@ -1414,20 +1388,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		if !exists {
 			errs["store_id"] = "Invalid store:" + order.StoreID.Hex()
 			return errs
-		}
-	}
-
-	if order.CustomerID == nil || order.CustomerID.IsZero() {
-		errs["customer_id"] = "Customer is required"
-	} else {
-		exists, err := store.IsCustomerExists(order.CustomerID)
-		if err != nil {
-			errs["customer_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
 		}
 	}
 

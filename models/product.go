@@ -2128,6 +2128,58 @@ func (product *Product) SetPartNumber() (err error) {
 	return nil
 }
 
+func (product *Product) SetBarcode() error {
+	if product.Ean12 != "" {
+		return nil
+	}
+
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := product.StoreID.Hex() + "_product_barcode_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists == 0 {
+		lastProduct, err := store.FindLastProduct(bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("error finding last product: " + err.Error())
+		}
+
+		if lastProduct == nil {
+			err = db.RedisClient.Set(redisKey, 100000000000, 0).Err()
+			if err != nil {
+				return err
+			}
+		} else {
+
+			lastEan12, err := strconv.Atoi(lastProduct.Ean12)
+			if err != nil {
+				return errors.New("error converting  ean12-1 string to int: " + err.Error())
+			}
+			err = db.RedisClient.Set(redisKey, lastEan12, 0).Err()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	product.Ean12 = strconv.Itoa(int(incr))
+	return nil
+}
+
+/*
 func (product *Product) SetBarcode() (err error) {
 	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
@@ -2170,6 +2222,7 @@ func (product *Product) SetBarcode() (err error) {
 	}
 	return nil
 }
+*/
 
 func (product *Product) InitStoreUnitPrice() (err error) {
 	if len(product.ProductStores) > 0 {

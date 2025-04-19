@@ -43,6 +43,17 @@ func (productBrand *ProductBrand) AttributesValueChangeEvent(productBrandOld *Pr
 		}
 	}
 
+	if productBrand.Code != productBrandOld.Code {
+		err := store.UpdateManyByCollectionName(
+			"product",
+			bson.M{"brand_id": productBrand.ID},
+			bson.M{"brand_code": productBrand.Code},
+		)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
