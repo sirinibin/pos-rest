@@ -54,8 +54,8 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 	}
 
 	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-	if err != nil {
-		return xmlContent, err
+	if err != nil && err != mongo.ErrNoDocuments {
+		return xmlContent, errors.New("error finding customer: " + err.Error())
 	}
 
 	// Load XML file
@@ -97,7 +97,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 	invoice.IssueDate = salesReturn.Date.In(loc).Format("2006-01-02")
 	invoice.IssueTime = salesReturn.Date.In(loc).Format("15:04:05")
 
-	if strings.TrimSpace(customer.VATNo) != "" {
+	if customer != nil && strings.TrimSpace(customer.VATNo) != "" {
 		invoice.InvoiceTypeCode.Name = "0100000" //standard invoice
 	} else {
 		invoice.InvoiceTypeCode.Name = "0200000" //simplified invoice
@@ -174,6 +174,11 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 		storeName = store.Name + " | " + store.NameInArabic
 	}
 
+	storeCountryCode := store.CountryCode
+	if govalidator.IsNull(store.CountryCode) {
+		storeCountryCode = "SA"
+	}
+
 	invoice.AccountingSupplierParty = AccountingSupplierParty{
 		Party: Party{
 			PartyIdentification: PartyIdentification{
@@ -189,7 +194,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 				CitySubdivision: storeDistrictName,
 				CityName:        storeCityName,
 				PostalZone:      store.NationalAddress.ZipCode,
-				CountryCode:     "SA",
+				CountryCode:     storeCountryCode,
 			},
 			PartyTaxScheme: PartyTaxScheme{
 				CompanyID: store.VATNo,
@@ -204,24 +209,46 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 			},
 		}}
 
-	customerStreetName := customer.NationalAddress.StreetName
-	if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.StreetNameArabic)) {
-		customerStreetName = customer.NationalAddress.StreetName + " | " + customer.NationalAddress.StreetNameArabic
-	}
+	customerRegistrationNumber := ""
+	customerStreetName := ""
+	customerDistrictName := ""
+	customerCityName := ""
+	customerName := ""
+	customerNationalAddressBuildingNo := ""
+	customerNationalAddressZipCode := ""
+	customerCountryCode := "SA"
+	customerVATNo := ""
 
-	customerDistrictName := customer.NationalAddress.DistrictName
-	if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.DistrictNameArabic)) {
-		customerDistrictName = customer.NationalAddress.DistrictName + " | " + customer.NationalAddress.DistrictNameArabic
-	}
+	if customer != nil {
+		customerRegistrationNumber = customer.RegistrationNumber
+		customerNationalAddressBuildingNo = customer.NationalAddress.BuildingNo
+		customerNationalAddressZipCode = customer.NationalAddress.ZipCode
+		customerVATNo = customer.VATNo
 
-	customerCityName := customer.NationalAddress.CityName
-	if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.CityNameArabic)) {
-		customerCityName = customer.NationalAddress.CityName + " | " + customer.NationalAddress.CityNameArabic
-	}
+		if customer.CountryCode != "" {
+			customerCountryCode = customer.CountryCode
+		}
 
-	customerName := customer.Name
-	if !govalidator.IsNull(strings.TrimSpace(customer.NameInArabic)) {
-		customerName = customer.Name + " | " + customer.NameInArabic
+		customerStreetName = customer.NationalAddress.StreetName
+		if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.StreetNameArabic)) {
+			customerStreetName = customer.NationalAddress.StreetName + " | " + customer.NationalAddress.StreetNameArabic
+		}
+
+		customerDistrictName = customer.NationalAddress.DistrictName
+		if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.DistrictNameArabic)) {
+			customerDistrictName = customer.NationalAddress.DistrictName + " | " + customer.NationalAddress.DistrictNameArabic
+		}
+
+		customerCityName = customer.NationalAddress.CityName
+		if !govalidator.IsNull(strings.TrimSpace(customer.NationalAddress.CityNameArabic)) {
+			customerCityName = customer.NationalAddress.CityName + " | " + customer.NationalAddress.CityNameArabic
+		}
+
+		customerName = customer.Name
+		if !govalidator.IsNull(strings.TrimSpace(customer.NameInArabic)) {
+			customerName = customer.Name + " | " + customer.NameInArabic
+		}
+
 	}
 
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
@@ -229,19 +256,19 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 			PartyIdentification: PartyIdentification{
 				ID: IdentificationID{
 					SchemeID: "CRN",
-					Value:    customer.RegistrationNumber,
+					Value:    customerRegistrationNumber,
 				},
 			},
 			PostalAddress: Address{
 				StreetName:      customerStreetName,
-				BuildingNumber:  customer.NationalAddress.BuildingNo,
+				BuildingNumber:  customerNationalAddressBuildingNo,
 				CitySubdivision: customerDistrictName,
 				CityName:        customerCityName,
-				PostalZone:      customer.NationalAddress.ZipCode,
-				CountryCode:     "SA",
+				PostalZone:      customerNationalAddressZipCode,
+				CountryCode:     customerCountryCode,
 			},
 			PartyTaxScheme: PartyTaxScheme{
-				CompanyID: customer.VATNo,
+				CompanyID: customerVATNo,
 				TaxScheme: TaxScheme{
 					ID: IDField{
 						Value: "VAT",
@@ -636,7 +663,7 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 	}
 
 	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return errors.New("error finding customer: " + err.Error())
 	}
 
@@ -645,7 +672,7 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 		return errors.New("error making xml: " + err.Error())
 	}
 	var isSimplified bool
-	if customer.VATNo != "" {
+	if customer != nil && customer.VATNo != "" {
 		isSimplified = false
 	} else {
 		isSimplified = true

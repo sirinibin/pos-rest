@@ -255,6 +255,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
+	order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.Update()
+
 	store.NotifyUsers("sales_return_updated")
 
 	response.Status = true
@@ -470,6 +474,11 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
+	order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.Update()
+
 	store.NotifyUsers("sales_return_updated")
 
 	response.Status = true

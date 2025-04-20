@@ -56,7 +56,7 @@ type SalesReturn struct {
 	PrevHash          string               `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
 	CSID              string               `bson:"csid,omitempty" json:"csid,omitempty"`
 	StoreID           *primitive.ObjectID  `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID        *primitive.ObjectID  `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerID        *primitive.ObjectID  `json:"customer_id" bson:"customer_id"`
 	Store             *Store               `json:"store,omitempty"`
 	Customer          *Customer            `json:"customer,omitempty"`
 	Products          []SalesReturnProduct `bson:"products,omitempty" json:"products,omitempty"`
@@ -92,7 +92,7 @@ type SalesReturn struct {
 	CreatedByUser *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 	//ReceivedByName   string               `json:"received_by_name,omitempty" bson:"received_by_name,omitempty"`
-	CustomerName       string               `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	CustomerName       string               `json:"customer_name" bson:"customer_name"`
 	StoreName          string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName      string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName      string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -1071,8 +1071,13 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["store_id"] = "Store is required"
 	}
 
-	customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
+	order, err := store.FindOrderByID(salesreturn.OrderID, bson.M{})
 	if err != nil {
+		errs["order_id"] = "Order is invalid"
+	}
+
+	customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "invalid customer"
 	}
 
@@ -1113,7 +1118,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	if customer.VATNo != "" && store.Zatca.Phase == "2" {
+	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
 
 		if !IsValidDigitNumber(customer.VATNo, "15") {
@@ -1177,6 +1182,16 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
+	if scenario == "update" {
+		if totalPayment > (order.TotalPaymentReceived - (order.ReturnAmount - oldSalesReturn.TotalPaymentPaid)) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
+		}
+	} else {
+		if totalPayment > (order.TotalPaymentReceived - order.ReturnAmount) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
+		}
+	}
+
 	for index, payment := range salesreturn.PaymentsInput {
 		if govalidator.IsNull(payment.DateStr) {
 			errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
@@ -1205,6 +1220,10 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
+		if payment.Method == "customer_account" && customer == nil {
+			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
+		}
+
 		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
 			if *payment.Amount <= 0 {
 				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
@@ -1230,13 +1249,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	if salesreturn.OrderID == nil || salesreturn.OrderID.IsZero() {
 		w.WriteHeader(http.StatusBadRequest)
 		errs["order_id"] = "Order ID is required"
-		return errs
-	}
-
-	order, err := store.FindOrderByID(salesreturn.OrderID, bson.M{})
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		errs["order_id"] = err.Error()
 		return errs
 	}
 
@@ -1322,53 +1334,9 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	if salesreturn.CustomerID == nil || salesreturn.CustomerID.IsZero() {
-		errs["customer_id"] = "Customer is required"
-	} else {
-		exists, err := store.IsCustomerExists(salesreturn.CustomerID)
-		if err != nil {
-			errs["customer_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["customer_id"] = "Invalid Customer:" + salesreturn.CustomerID.Hex()
-		}
-	}
-
-	/*
-		if salesreturn.ReceivedBy == nil || salesreturn.ReceivedBy.IsZero() {
-			errs["received_by"] = "Received By is required"
-		} else {
-			exists, err := IsUserExists(salesreturn.ReceivedBy)
-			if err != nil {
-				errs["received_by"] = err.Error()
-				return errs
-			}
-
-			if !exists {
-				errs["received_by"] = "Invalid Received By:" + salesreturn.ReceivedBy.Hex()
-			}
-		}
-	*/
-
 	if len(salesreturn.Products) == 0 {
 		errs["product_id"] = "Atleast 1 product is required for salesreturn"
 	}
-
-	/*
-		if salesreturn.ReceivedBySignatureID != nil && !salesreturn.ReceivedBySignatureID.IsZero() {
-			exists, err := IsSignatureExists(salesreturn.ReceivedBySignatureID)
-			if err != nil {
-				errs["received_by_signature_id"] = err.Error()
-				return errs
-			}
-
-			if !exists {
-				errs["received_by_signature_id"] = "Invalid Received By Signature:" + salesreturn.ReceivedBySignatureID.Hex()
-			}
-		}
-	*/
 
 	for index, salesReturnProduct := range salesreturn.Products {
 		if !salesReturnProduct.Selected {
@@ -1898,6 +1866,40 @@ func (salesReturn *SalesReturn) UpdateOrderReturnCount() (count int64, err error
 	return returnCount, nil
 }
 
+/*
+func (salesReturn *SalesReturn) UpdateOrderReturnAmount() (count int64, err error) {
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return 0, err
+	}
+
+	returnCount, err := collection.CountDocuments(ctx, bson.M{
+		"order_id": salesReturn.OrderID,
+		"deleted":  bson.M{"$ne": true},
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	order, err := store.FindOrderByID(salesReturn.OrderID, bson.M{})
+	if err != nil {
+		return 0, err
+	}
+
+	order.ReturnAmount = returnCount
+	err = order.Update()
+	if err != nil {
+		return 0, err
+	}
+
+	return returnCount, nil
+}
+*/
+
 func (salesReturn *SalesReturn) UpdateOrderReturnCashDiscount(salesReturnOld *SalesReturn) error {
 	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 	if err != nil {
@@ -2115,13 +2117,14 @@ func ProcessSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "GUOJ" {
-			break
-		}
+		/*
+			if store.Code != "GUOJ" {
+				break
+			}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{
-			"store_id":                store.ID,
-			"zatca.compliance_passed": bson.M{"$eq": false},
+			"store_id": store.ID,
+			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
 		}, "salesreturn")
@@ -2136,8 +2139,8 @@ func ProcessSalesReturns() error {
 		findOptions.SetSort(GetSortByFields("created_at"))
 
 		cur, err := collection.Find(ctx, bson.M{
-			"store_id":                store.ID,
-			"zatca.compliance_passed": bson.M{"$eq": false},
+			"store_id": store.ID,
+			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
 		}, findOptions)
@@ -2160,63 +2163,73 @@ func ProcessSalesReturns() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			log.Print("Sales Return ID: " + salesReturn.Code)
-			err = salesReturn.ReportToZatca()
-			if err != nil {
-				log.Print("Failed 1st time, trying 2nd time")
+			if salesReturn.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
 
-				if GetDecimalPoints(salesReturn.ShippingOrHandlingFees) > 2 {
-					log.Print("Trimming shipping cost to 2 decimals")
-					salesReturn.ShippingOrHandlingFees = RoundTo2Decimals(salesReturn.ShippingOrHandlingFees)
-				}
+			order, _ := store.FindOrderByID(salesReturn.OrderID, bson.M{})
+			order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(*salesReturn.OrderID)
+			order.Update()
 
-				if GetDecimalPoints(salesReturn.Discount) > 2 {
-					log.Print("Trimming discount to 2 decimals")
-					salesReturn.Discount = RoundTo2Decimals(salesReturn.Discount)
-				}
-
-				salesReturn.FindNetTotal()
-				salesReturn.Update()
-
+			/*
+				log.Print("Sales Return ID: " + salesReturn.Code)
 				err = salesReturn.ReportToZatca()
 				if err != nil {
-					log.Print("Failed  2nd time. ")
-					customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-					if customer != nil {
-						log.Print("Trying 3rd time ")
-						if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
-							customer.NationalAddress.BuildingNo = "1234"
-							customer.NationalAddress.StreetName = "test"
-							customer.NationalAddress.DistrictName = "test"
-							customer.NationalAddress.CityName = "test"
-							customer.NationalAddress.ZipCode = "12345"
+					log.Print("Failed 1st time, trying 2nd time")
 
-							log.Print("Setting national address for customer")
-						}
+					if GetDecimalPoints(salesReturn.ShippingOrHandlingFees) > 2 {
+						log.Print("Trimming shipping cost to 2 decimals")
+						salesReturn.ShippingOrHandlingFees = RoundTo2Decimals(salesReturn.ShippingOrHandlingFees)
+					}
 
-						if !IsValidDigitNumber(customer.VATNo, "15") || !IsNumberStartAndEndWith(customer.VATNo, "3") {
+					if GetDecimalPoints(salesReturn.Discount) > 2 {
+						log.Print("Trimming discount to 2 decimals")
+						salesReturn.Discount = RoundTo2Decimals(salesReturn.Discount)
+					}
 
-							customer.VATNo = GenerateRandom15DigitNumber()
-							log.Print("Replaced invalid vat no.")
-						}
+					salesReturn.FindNetTotal()
+					salesReturn.Update()
 
-						customer.Update()
-						err = salesReturn.ReportToZatca()
-						if err != nil {
-							log.Print("Failed  3rd time. dropping")
+					err = salesReturn.ReportToZatca()
+					if err != nil {
+						log.Print("Failed  2nd time. ")
+						customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
+						if customer != nil {
+							log.Print("Trying 3rd time ")
+							if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+								customer.NationalAddress.BuildingNo = "1234"
+								customer.NationalAddress.StreetName = "test"
+								customer.NationalAddress.DistrictName = "test"
+								customer.NationalAddress.CityName = "test"
+								customer.NationalAddress.ZipCode = "12345"
+
+								log.Print("Setting national address for customer")
+							}
+
+							if !IsValidDigitNumber(customer.VATNo, "15") || !IsNumberStartAndEndWith(customer.VATNo, "3") {
+
+								customer.VATNo = GenerateRandom15DigitNumber()
+								log.Print("Replaced invalid vat no.")
+							}
+
+							customer.Update()
+							err = salesReturn.ReportToZatca()
+							if err != nil {
+								log.Print("Failed  3rd time. dropping")
+							} else {
+								log.Print("REPORTED 3rd time")
+							}
+
 						} else {
-							log.Print("REPORTED 3rd time")
+							log.Print("dropping (coz: no customer found)")
 						}
-
 					} else {
-						log.Print("dropping (coz: no customer found)")
+						log.Print("REPORTED 2nd time")
 					}
 				} else {
-					log.Print("REPORTED 2nd time")
+					log.Print("REPORTED")
 				}
-			} else {
-				log.Print("REPORTED")
-			}
+			*/
 			/*
 				err = salesReturn.Update()
 				if err != nil {
@@ -2838,13 +2851,26 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(salesReturn.Date, firstPaymentDate) {
 		referenceModel := "customer"
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		var customerVATNo *string
+		var customerPhone *string
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = &customer.VATNo
+			customerPhone = &customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
 		customerAccount, err := store.CreateAccountIfNotExists(
 			salesReturn.StoreID,
-			&customer.ID,
+			referenceID,
 			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-			&customer.VATNo,
+			customerName,
+			customerPhone,
+			customerVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -2911,7 +2937,7 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
-		} else if payment.Method == "customer_account" {
+		} else if payment.Method == "customer_account" && customer != nil {
 			referenceModel := "customer"
 			customerAccount, err := store.CreateAccountIfNotExists(
 				salesReturn.StoreID,
@@ -2961,13 +2987,27 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(salesReturn.Date, firstPaymentDate) {
 		referenceModel := "customer"
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		var customerVATNo *string
+		var customerPhone *string
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = &customer.VATNo
+			customerPhone = &customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
 		customerAccount, err := store.CreateAccountIfNotExists(
 			salesReturn.StoreID,
-			&customer.ID,
+			referenceID,
 			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-			&customer.VATNo,
+			customerName,
+			customerPhone,
+			customerVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -3011,13 +3051,27 @@ func MakeJournalsForSalesReturnExtraPayments(
 	}
 
 	referenceModel := "customer"
+	customerName := ""
+	var referenceID *primitive.ObjectID
+	var customerVATNo *string
+	var customerPhone *string
+	if customer != nil {
+		customerName = customer.Name
+		referenceID = &customer.ID
+		customerVATNo = &customer.VATNo
+		customerPhone = &customer.Phone
+	} else {
+		customerName = "Customer Accounts - Unknown"
+		referenceID = nil
+	}
+
 	customerAccount, err := store.CreateAccountIfNotExists(
 		salesReturn.StoreID,
-		&customer.ID,
+		referenceID,
 		&referenceModel,
-		customer.Name,
-		&customer.Phone,
-		&customer.VATNo,
+		customerName,
+		customerPhone,
+		customerVATNo,
 	)
 	if err != nil {
 		return nil, err
@@ -3041,7 +3095,7 @@ func MakeJournalsForSalesReturnExtraPayments(
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
-		} else if payment.Method == "customer_account" {
+		} else if payment.Method == "customer_account" && customer != nil {
 			referenceModel := "customer"
 			customerAccount, err := store.CreateAccountIfNotExists(
 				salesReturn.StoreID,
@@ -3104,7 +3158,7 @@ func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
 	now := time.Now()
 
 	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -3138,13 +3192,27 @@ func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
 	if len(salesReturn.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(firstPaymentDate, salesReturn.Date)) {
 		//Case: UnPaid
 		referenceModel := "customer"
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		var customerVATNo *string
+		var customerPhone *string
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = &customer.VATNo
+			customerPhone = &customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
 		customerAccount, err := store.CreateAccountIfNotExists(
 			salesReturn.StoreID,
-			&customer.ID,
+			referenceID,
 			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-			&customer.VATNo,
+			customerName,
+			customerPhone,
+			customerVATNo,
 		)
 		if err != nil {
 			return nil, err

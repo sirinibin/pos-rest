@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
@@ -54,7 +53,7 @@ type Order struct {
 	Hash              string              `bson:"hash,omitempty" json:"hash,omitempty"`
 	PrevHash          string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
 	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerID        *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
 	Store             *Store              `json:"store,omitempty"`
 	Customer          *Customer           `json:"customer,omitempty" bson:"-"`
 	Products          []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
@@ -90,6 +89,7 @@ type Order struct {
 	Loss                   float64             `bson:"loss" json:"loss"`
 	NetLoss                float64             `bson:"net_loss" json:"net_loss"`
 	ReturnCount            int64               `bson:"return_count" json:"return_count"`
+	ReturnAmount           float64             `bson:"return_amount" json:"return_amount"`
 	CreatedAt              *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt              *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy              *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
@@ -97,7 +97,7 @@ type Order struct {
 	CreatedByUser          *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
 	DeliveredByName        string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CustomerName           string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	CustomerName           string              `json:"customer_name" bson:"customer_name"`
 	StoreName              string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -128,6 +128,59 @@ type ZatcaReporting struct {
 	ReportingFailedCount               int64      `bson:"reporting_failed_count,omitempty" json:"reporting_failed_count,omitempty"`
 	ReportingErrors                    []string   `bson:"reporting_errors,omitempty" json:"reporting_errors,omitempty"`
 	ReportingLastFailedAt              *time.Time `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
+}
+
+func (store *Store) GetReturnedAmountByOrderID(orderID primitive.ObjectID) (returnedAmount float64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats SalesReturnStats
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": map[string]interface{}{
+				"order_id": orderID,
+			},
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id": nil,
+				"paid_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats.PaidSalesReturn, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats.PaidSalesReturn, err
+		}
+		stats.PaidSalesReturn = RoundFloat(stats.PaidSalesReturn, 2)
+	}
+
+	return stats.PaidSalesReturn, nil
 }
 
 func (store *Store) UpdateOrderProfit() error {
@@ -251,13 +304,13 @@ func (order *Order) UpdateSalesReturnCustomer() error {
 func (order *Order) UpdateForeignLabelFields() error {
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
-		return err
+		return errors.New("error finding store: " + err.Error())
 	}
 
 	if order.StoreID != nil {
 		store, err := FindStoreByID(order.StoreID, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("error finding store: " + err.Error())
 		}
 		order.StoreName = store.Name
 	}
@@ -265,15 +318,17 @@ func (order *Order) UpdateForeignLabelFields() error {
 	if order.CustomerID != nil {
 		customer, err := store.FindCustomerByID(order.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("error finding customer: " + err.Error())
 		}
-		order.CustomerName = customer.Name
+		if customer != nil {
+			order.CustomerName = customer.Name
+		}
 	}
 
 	if order.DeliveredBy != nil {
 		deliveredByUser, err := FindUserByID(order.DeliveredBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
-			return err
+			return errors.New("error finding delivered by user: " + err.Error())
 		}
 		order.DeliveredByName = deliveredByUser.Name
 	}
@@ -402,6 +457,8 @@ type SalesStats struct {
 	CashSales              float64             `json:"cash_sales" bson:"cash_sales"`
 	BankAccountSales       float64             `json:"bank_account_sales" bson:"bank_account_sales"`
 	CashDiscount           float64             `json:"cash_discount" bson:"cash_discount"`
+	ReturnCount            int64               `json:"return_count" bson:"return_count"`
+	ReturnAmount           float64             `json:"return_amount" bson:"return_amount"`
 }
 
 func (store *Store) GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
@@ -423,6 +480,8 @@ func (store *Store) GetSalesStats(filter map[string]interface{}) (stats SalesSta
 				"discount":               bson.M{"$sum": "$discount"},
 				"cash_discount":          bson.M{"$sum": "$cash_discount"},
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
+				"return_count":           bson.M{"$sum": "$return_count"},
+				"return_amount":          bson.M{"$sum": "$return_amount"},
 				"paid_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",
@@ -820,6 +879,23 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 			criterias.SearchBy["return_count"] = bson.M{operator: value}
 		} else {
 			criterias.SearchBy["return_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_amount"] = value
 		}
 	}
 
@@ -1261,6 +1337,10 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				}
 			*/
 
+		}
+
+		if payment.Method == "customer_account" && customer == nil {
+			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
 		}
 
 		if customer != nil && payment.Method == "customer_account" {
@@ -2428,13 +2508,14 @@ func ProcessOrders() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "GUOJ" {
-			break
-		}
+		/*
+			if store.Code != "GUOJ" {
+				break
+			}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{
-			"store_id":                store.ID,
-			"zatca.compliance_passed": bson.M{"$eq": false},
+			"store_id": store.ID,
+			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
 		}, "order")
@@ -2451,8 +2532,8 @@ func ProcessOrders() error {
 		//	criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
 		//"zatca.compliance_check_failed_count": bson.M{"$lt": 1},
 		cur, err := collection.Find(ctx, bson.M{
-			"store_id":                store.ID,
-			"zatca.compliance_passed": bson.M{"$eq": false},
+			"store_id": store.ID,
+			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
 		}, findOptions)
@@ -2476,63 +2557,74 @@ func ProcessOrders() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			log.Print("Order ID: " + order.Code)
-			err = order.ReportToZatca()
-			if err != nil {
-				log.Print("Failed 1st time, trying 2nd time")
+			if order.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
 
-				if GetDecimalPoints(order.ShippingOrHandlingFees) > 2 {
-					log.Print("Trimming shipping cost to 2 decimals")
-					order.ShippingOrHandlingFees = RoundTo2Decimals(order.ShippingOrHandlingFees)
-				}
-
-				if GetDecimalPoints(order.Discount) > 2 {
-					log.Print("Trimming discount to 2 decimals")
-					order.Discount = RoundTo2Decimals(order.Discount)
-				}
-
-				order.FindNetTotal()
+			/*
+				order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(order.ID)
 				order.Update()
+			*/
 
+			/*
+				log.Print("Order ID: " + order.Code)
 				err = order.ReportToZatca()
 				if err != nil {
-					log.Print("Failed  2nd time. ")
-					customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-					if customer != nil {
-						log.Print("Trying 3rd time ")
-						if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
-							customer.NationalAddress.BuildingNo = "1234"
-							customer.NationalAddress.StreetName = "test"
-							customer.NationalAddress.DistrictName = "test"
-							customer.NationalAddress.CityName = "test"
-							customer.NationalAddress.ZipCode = "12345"
+					log.Print("Failed 1st time, trying 2nd time")
 
-							log.Print("Setting national address for customer")
-						}
+					if GetDecimalPoints(order.ShippingOrHandlingFees) > 2 {
+						log.Print("Trimming shipping cost to 2 decimals")
+						order.ShippingOrHandlingFees = RoundTo2Decimals(order.ShippingOrHandlingFees)
+					}
 
-						if utf8.RuneCountInString(customer.VATNo) != 15 || !IsValidDigitNumber(customer.VATNo, "15") || !IsNumberStartAndEndWith(customer.VATNo, "3") {
+					if GetDecimalPoints(order.Discount) > 2 {
+						log.Print("Trimming discount to 2 decimals")
+						order.Discount = RoundTo2Decimals(order.Discount)
+					}
 
-							customer.VATNo = GenerateRandom15DigitNumber()
-							log.Print("Replaced invalid vat no.")
-						}
+					order.FindNetTotal()
+					order.Update()
 
-						customer.Update()
-						err = order.ReportToZatca()
-						if err != nil {
-							log.Print("Failed  3rd time. dropping")
+					err = order.ReportToZatca()
+					if err != nil {
+						log.Print("Failed  2nd time. ")
+						customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+						if customer != nil {
+							log.Print("Trying 3rd time ")
+							if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+								customer.NationalAddress.BuildingNo = "1234"
+								customer.NationalAddress.StreetName = "test"
+								customer.NationalAddress.DistrictName = "test"
+								customer.NationalAddress.CityName = "test"
+								customer.NationalAddress.ZipCode = "12345"
+
+								log.Print("Setting national address for customer")
+							}
+
+							if utf8.RuneCountInString(customer.VATNo) != 15 || !IsValidDigitNumber(customer.VATNo, "15") || !IsNumberStartAndEndWith(customer.VATNo, "3") {
+
+								customer.VATNo = GenerateRandom15DigitNumber()
+								log.Print("Replaced invalid vat no.")
+							}
+
+							customer.Update()
+							err = order.ReportToZatca()
+							if err != nil {
+								log.Print("Failed  3rd time. dropping")
+							} else {
+								log.Print("REPORTED 3rd time")
+							}
+
 						} else {
-							log.Print("REPORTED 3rd time")
+							log.Print("dropping (coz: no customer found)")
 						}
-
 					} else {
-						log.Print("dropping (coz: no customer found)")
+						log.Print("REPORTED 2nd time")
 					}
 				} else {
-					log.Print("REPORTED 2nd time")
+					log.Print("REPORTED")
 				}
-			} else {
-				log.Print("REPORTED")
-			}
+			*/
 			/* to get missing customers
 			customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 			if err != nil && err != mongo.ErrNilCursor && err != mongo.ErrNoDocuments {
@@ -2872,13 +2964,15 @@ func (order *Order) SetCustomerSalesStats() error {
 	}
 
 	customer, err := store.FindCustomerByID(order.CustomerID, map[string]interface{}{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
 
-	err = customer.SetCustomerSalesStatsByStoreID(*order.StoreID)
-	if err != nil {
-		return err
+	if customer != nil {
+		err = customer.SetCustomerSalesStatsByStoreID(*order.StoreID)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -3014,7 +3108,7 @@ func MakeJournalsForSalesPaymentsByDatetime(
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
-		} else if payment.Method == "customer_account" {
+		} else if payment.Method == "customer_account" && customer != nil {
 			referenceModel := "customer"
 			customerAccount, err := store.CreateAccountIfNotExists(
 				order.StoreID,
@@ -3064,13 +3158,27 @@ func MakeJournalsForSalesPaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(order.Date, firstPaymentDate) {
 		referenceModel := "customer"
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		var customerVATNo *string
+		var customerPhone *string
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = &customer.VATNo
+			customerPhone = &customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
 		customerAccount, err := store.CreateAccountIfNotExists(
 			order.StoreID,
-			&customer.ID,
+			referenceID,
 			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-			&customer.VATNo,
+			customerName,
+			customerPhone,
+			customerVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -3103,13 +3211,27 @@ func MakeJournalsForSalesPaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(order.Date, firstPaymentDate) {
 		referenceModel := "customer"
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		var customerVATNo *string
+		var customerPhone *string
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = &customer.VATNo
+			customerPhone = &customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
 		customerAccount, err := store.CreateAccountIfNotExists(
 			order.StoreID,
-			&customer.ID,
+			referenceID,
 			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-			&customer.VATNo,
+			customerName,
+			customerPhone,
+			customerVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -3162,7 +3284,7 @@ func MakeJournalsForSalesExtraPayments(
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
-		} else if payment.Method == "customer_account" {
+		} else if payment.Method == "customer_account" && customer != nil {
 			referenceModel := "customer"
 			customerAccount, err := store.CreateAccountIfNotExists(
 				order.StoreID,
@@ -3193,13 +3315,27 @@ func MakeJournalsForSalesExtraPayments(
 	} //end for
 
 	referenceModel := "customer"
+	customerName := ""
+	var referenceID *primitive.ObjectID
+	var customerVATNo *string
+	var customerPhone *string
+	if customer != nil {
+		customerName = customer.Name
+		referenceID = &customer.ID
+		customerVATNo = &customer.VATNo
+		customerPhone = &customer.Phone
+	} else {
+		customerName = "Customer Accounts - Unknown"
+		referenceID = nil
+	}
+
 	customerAccount, err := store.CreateAccountIfNotExists(
 		order.StoreID,
-		&customer.ID,
+		referenceID,
 		&referenceModel,
-		customer.Name,
-		&customer.Phone,
-		&customer.VATNo,
+		customerName,
+		customerPhone,
+		customerVATNo,
 	)
 	if err != nil {
 		return nil, err
@@ -3249,7 +3385,7 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 	now := time.Now()
 
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -3282,14 +3418,28 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 
 	if len(order.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(order.Date, firstPaymentDate)) {
 		//Case: UnPaid
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		customerVATNo := ""
+		customerPhone := ""
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = customer.VATNo
+			customerPhone = customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
 		referenceModel := "customer"
 		customerAccount, err := store.CreateAccountIfNotExists(
 			order.StoreID,
-			&customer.ID,
+			referenceID,
 			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-			&customer.VATNo,
+			customerName,
+			&customerPhone,
+			&customerVATNo,
 		)
 		if err != nil {
 			return nil, err
