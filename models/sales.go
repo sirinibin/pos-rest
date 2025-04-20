@@ -2562,10 +2562,8 @@ func ProcessOrders() error {
 				continue
 			}
 
-			/*
-				order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(order.ID)
-				order.Update()
-			*/
+			order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+			order.Update()
 
 			/*
 				log.Print("Order ID: " + order.Code)
