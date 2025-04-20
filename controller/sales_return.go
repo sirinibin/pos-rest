@@ -256,7 +256,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
-	order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
 
 	store.NotifyUsers("sales_return_updated")
@@ -476,7 +476,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
-	order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
 
 	store.NotifyUsers("sales_return_updated")

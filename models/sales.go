@@ -130,7 +130,7 @@ type ZatcaReporting struct {
 	ReportingLastFailedAt              *time.Time `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
 }
 
-func (store *Store) GetReturnedAmountByOrderID(orderID primitive.ObjectID) (returnedAmount float64, err error) {
+func (store *Store) GetReturnedAmountByOrderID(orderID primitive.ObjectID) (returnedAmount float64, returnCount int64, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -145,7 +145,8 @@ func (store *Store) GetReturnedAmountByOrderID(orderID primitive.ObjectID) (retu
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id": nil,
+				"_id":                nil,
+				"sales_return_count": bson.M{"$sum": 1},
 				"paid_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",
@@ -168,19 +169,19 @@ func (store *Store) GetReturnedAmountByOrderID(orderID primitive.ObjectID) (retu
 
 	cur, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return stats.PaidSalesReturn, err
+		return stats.PaidSalesReturn, stats.SalesReturnCount, err
 	}
 	defer cur.Close(ctx)
 
 	if cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
-			return stats.PaidSalesReturn, err
+			return stats.PaidSalesReturn, stats.SalesReturnCount, err
 		}
 		stats.PaidSalesReturn = RoundFloat(stats.PaidSalesReturn, 2)
 	}
 
-	return stats.PaidSalesReturn, nil
+	return stats.PaidSalesReturn, stats.SalesReturnCount, nil
 }
 
 func (store *Store) UpdateOrderProfit() error {

@@ -236,6 +236,7 @@ type SalesReturnStats struct {
 	CashSalesReturn        float64             `json:"cash_sales_return" bson:"cash_sales_return"`
 	BankAccountSalesReturn float64             `json:"bank_account_sales_return" bson:"bank_account_sales_return"`
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	SalesReturnCount       int64               `json:"sales_return_count" bson:"sales_return_count"`
 }
 
 func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
@@ -2168,7 +2169,7 @@ func ProcessSalesReturns() error {
 			}
 
 			order, _ := store.FindOrderByID(salesReturn.OrderID, bson.M{})
-			order.ReturnAmount, _ = store.GetReturnedAmountByOrderID(*salesReturn.OrderID)
+			order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(*salesReturn.OrderID)
 			order.Update()
 
 			/*
