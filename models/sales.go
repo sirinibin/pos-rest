@@ -44,26 +44,21 @@ type OrderProduct struct {
 
 // Order : Order structure
 type Order struct {
-	ID                primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date              *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr           string              `json:"date_str,omitempty" bson:"-"`
-	InvoiceCountValue int64               `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
-	Code              string              `bson:"code,omitempty" json:"code,omitempty"`
-	UUID              string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
-	Hash              string              `bson:"hash,omitempty" json:"hash,omitempty"`
-	PrevHash          string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
-	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID        *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
-	Store             *Store              `json:"store,omitempty"`
-	Customer          *Customer           `json:"customer,omitempty" bson:"-"`
-	Products          []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
-	DeliveredBy       *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	DeliveredByUser   *User               `json:"delivered_by_user,omitempty"`
-	//DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
-	//DeliveredBySignatureName string              `json:"delivered_by_signature_name,omitempty" bson:"delivered_by_signature_name,omitempty"`
-	//DeliveredBySignature     *Signature          `json:"delivered_by_signature,omitempty"`
-	//SignatureDate            *time.Time          `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
-	//SignatureDateStr         string              `json:"signature_date_str,omitempty"`
+	ID                     primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date                   *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                string              `json:"date_str,omitempty" bson:"-"`
+	InvoiceCountValue      int64               `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
+	Code                   string              `bson:"code,omitempty" json:"code,omitempty"`
+	UUID                   string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
+	Hash                   string              `bson:"hash,omitempty" json:"hash,omitempty"`
+	PrevHash               string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
+	StoreID                *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID             *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
+	Store                  *Store              `json:"store,omitempty"`
+	Customer               *Customer           `json:"customer,omitempty" bson:"-"`
+	Products               []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
+	DeliveredBy            *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	DeliveredByUser        *User               `json:"delivered_by_user,omitempty"`
 	VatPercent             *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount               float64             `bson:"discount" json:"discount"`
 	DiscountPercent        float64             `bson:"discount_percent" json:"discount_percent"`
@@ -316,7 +311,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 		order.StoreName = store.Name
 	}
 
-	if order.CustomerID != nil {
+	if order.CustomerID != nil && !order.CustomerID.IsZero() {
 		customer, err := store.FindCustomerByID(order.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("error finding customer: " + err.Error())
@@ -324,6 +319,8 @@ func (order *Order) UpdateForeignLabelFields() error {
 		if customer != nil {
 			order.CustomerName = customer.Name
 		}
+	} else {
+		order.CustomerName = ""
 	}
 
 	if order.DeliveredBy != nil {

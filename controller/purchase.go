@@ -82,6 +82,8 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	response.Meta["unpaid_purchase"] = purchaseStats.UnPaidPurchase
 	response.Meta["cash_purchase"] = purchaseStats.CashPurchase
 	response.Meta["bank_account_purchase"] = purchaseStats.BankAccountPurchase
+	response.Meta["return_count"] = purchaseStats.ReturnCount
+	response.Meta["return_amount"] = purchaseStats.ReturnAmount
 
 	if len(purchases) == 0 {
 		response.Result = []interface{}{}

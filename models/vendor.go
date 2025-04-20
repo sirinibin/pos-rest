@@ -693,6 +693,10 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 }
 
 func (vendor *Vendor) SetSearchLabel() {
+	if vendor == nil {
+		return
+	}
+
 	vendor.SearchLabel = "#" + vendor.Code + " " + vendor.Name
 
 	if vendor.NameInArabic != "" {

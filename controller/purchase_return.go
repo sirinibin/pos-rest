@@ -208,6 +208,10 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+	purchase.Update()
+
 	store.NotifyUsers("purchase_return_updated")
 
 	response.Status = true
@@ -410,6 +414,10 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+	purchase.Update()
 
 	store.NotifyUsers("purchase_return_updated")
 

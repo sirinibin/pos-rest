@@ -51,7 +51,7 @@ type Purchase struct {
 	DateStr             string              `json:"date_str,omitempty" bson:"-"`
 	Code                string              `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID             *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	VendorID            *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	VendorID            *primitive.ObjectID `json:"vendor_id" bson:"vendor_id"`
 	VendorInvoiceNumber string              `bson:"vendor_invoice_no,omitempty" json:"vendor_invoice_no,omitempty"`
 	Store               *Store              `json:"store,omitempty"`
 	Vendor              *Vendor             `json:"vendor,omitempty" bson:"-"`
@@ -87,6 +87,7 @@ type Purchase struct {
 	ExpectedRetailLoss         float64  `bson:"retail_loss" json:"retail_loss"`
 	ReturnedAll                bool     `json:"returned_all"`
 	ReturnCount                int64    `bson:"return_count" json:"return_count"`
+	ReturnAmount               float64  `bson:"return_amount" json:"return_amount"`
 	/*
 		Deleted                    bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 		DeletedBy                  *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -100,7 +101,7 @@ type Purchase struct {
 	CreatedByUser     *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser     *User               `json:"updated_by_user,omitempty"`
 	OrderPlacedByName string              `json:"order_placed_by_name,omitempty" bson:"order_placed_by_name,omitempty"`
-	VendorName        string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	VendorName        string              `json:"vendor_name" bson:"vendor_name"`
 	StoreName         string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName     string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName     string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -112,6 +113,60 @@ type Purchase struct {
 	PaymentsCount     int64               `bson:"payments_count" json:"payments_count"`
 	PaymentMethods    []string            `json:"payment_methods" bson:"payment_methods"`
 	Remarks           string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
+}
+
+func (store *Store) GetReturnedAmountByPurchaseID(purchaseID primitive.ObjectID) (returnedAmount float64, returnCount int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats PurchaseReturnStats
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": map[string]interface{}{
+				"purchase_id": purchaseID,
+			},
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                   nil,
+				"purchase_return_count": bson.M{"$sum": 1},
+				"paid_purchase_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats.PaidPurchaseReturn, stats.PurchaseReturnCount, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats.PaidPurchaseReturn, stats.PurchaseReturnCount, err
+		}
+		stats.PaidPurchaseReturn = RoundFloat(stats.PaidPurchaseReturn, 2)
+	}
+
+	return stats.PaidPurchaseReturn, stats.PurchaseReturnCount, nil
 }
 
 func (model *Purchase) AddPayments() error {
@@ -269,6 +324,8 @@ type PurchaseStats struct {
 	UnPaidPurchase         float64             `json:"unpaid_purchase" bson:"unpaid_purchase"`
 	CashPurchase           float64             `json:"cash_purchase" bson:"cash_purchase"`
 	BankAccountPurchase    float64             `json:"bank_account_purchase" bson:"bank_account_purchase"`
+	ReturnCount            int64               `json:"return_count" bson:"return_count"`
+	ReturnAmount           float64             `json:"return_amount" bson:"return_amount"`
 }
 
 func (store *Store) GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err error) {
@@ -290,6 +347,8 @@ func (store *Store) GetPurchaseStats(filter map[string]interface{}) (stats Purch
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
 				"net_retail_profit":      bson.M{"$sum": "$net_retail_profit"},
 				"net_wholesale_profit":   bson.M{"$sum": "$net_wholesale_profit"},
+				"return_count":           bson.M{"$sum": "$return_count"},
+				"return_amount":          bson.M{"$sum": "$return_amount"},
 				"paid_purchase": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",
@@ -473,12 +532,14 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 		purchase.StoreName = store.Name
 	}
 
-	if purchase.VendorID != nil {
+	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 		vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
 		purchase.VendorName = vendor.Name
+	} else {
+		purchase.VendorName = ""
 	}
 
 	if purchase.OrderPlacedBy != nil {
@@ -723,6 +784,23 @@ func (store *Store) SearchPurchase(w http.ResponseWriter, r *http.Request) (purc
 			criterias.SearchBy["return_count"] = bson.M{operator: value}
 		} else {
 			criterias.SearchBy["return_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return purchases, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_amount"] = value
 		}
 	}
 
@@ -1120,10 +1198,6 @@ func (purchase *Purchase) Validate(
 		purchase.Date = &date
 	}
 
-	if purchase.CashDiscount >= purchase.NetTotal {
-		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", purchase.NetTotal)
-	}
-
 	totalPayment := float64(0.00)
 	for _, payment := range purchase.PaymentsInput {
 		if payment.Amount != nil {
@@ -1133,8 +1207,8 @@ func (purchase *Purchase) Validate(
 
 	totalAmountFromVendorAccount := 0.00
 	vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
-	if err != nil {
-		errs["vendor_id"] = "Vendor is required"
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["vendor_id"] = "error finding vendor"
 	}
 
 	var vendorAccount *Account
@@ -1166,11 +1240,11 @@ func (purchase *Purchase) Validate(
 
 		if payment.Amount == nil {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
-		} else if *payment.Amount == 0 {
+		} else if *payment.Amount == 0 && purchase.NetTotal > 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
-		if payment.Method == "" {
+		if payment.Method == "" && purchase.NetTotal > 0 {
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
@@ -1195,7 +1269,11 @@ func (purchase *Purchase) Validate(
 
 		}
 
-		if payment.Method == "vendor_account" {
+		if payment.Method == "vendor_account" && vendor == nil {
+			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Vendor account"
+		}
+
+		if payment.Method == "vendor_account" && vendor != nil {
 			totalAmountFromVendorAccount += *payment.Amount
 			log.Print("Checking vendor account Balance")
 
@@ -1247,7 +1325,7 @@ func (purchase *Purchase) Validate(
 	} //end for
 
 	if totalAmountFromVendorAccount > 0 {
-		if vendorAccount != nil {
+		if vendorAccount != nil && vendor != nil {
 			if scenario == "update" {
 				oldTotalAmountFromVendorAccount := 0.0
 				extraAmountRequired := 0.00
@@ -1329,9 +1407,7 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
-	if purchase.VendorID == nil || purchase.VendorID.IsZero() {
-		errs["vendor_id"] = "Vendor is required"
-	} else {
+	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 		exists, err := store.IsVendorExists(purchase.VendorID)
 		if err != nil {
 			errs["vendor_id"] = err.Error()
@@ -1343,21 +1419,12 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
-	/*
-		if purchase.OrderPlacedBySignatureID != nil && !purchase.OrderPlacedBySignatureID.IsZero() {
-			exists, err := IsSignatureExists(purchase.OrderPlacedBySignatureID)
-			if err != nil {
-				errs["order_placed_by_signature_id"] = err.Error()
-				return errs
-			}
-
-			if !exists {
-				errs["order_placed_by_signature_id"] = "Invalid Order Placed By Signature:" + purchase.OrderPlacedBySignatureID.Hex()
-			}
-		}*/
-
 	if len(purchase.Products) == 0 {
 		errs["product_id"] = "Atleast 1 product is required for purchase"
+	}
+
+	if len(purchase.Products) > 0 && purchase.NetTotal > 0 && purchase.CashDiscount >= purchase.NetTotal {
+		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", purchase.NetTotal)
 	}
 
 	for i, product := range purchase.Products {
@@ -1393,13 +1460,14 @@ func (purchase *Purchase) Validate(
 			errs["purchase_unit_price_"+strconv.Itoa(i)] = "Purchase Unit Price is required"
 		}
 
-		if product.RetailUnitPrice == 0 {
-			errs["retail_unit_price_"+strconv.Itoa(i)] = "Retail Unit Price is required"
-		}
+		/*
+			if product.RetailUnitPrice == 0 {
+				errs["retail_unit_price_"+strconv.Itoa(i)] = "Retail Unit Price is required"
+			}
 
-		if product.WholesaleUnitPrice == 0 {
-			errs["wholesale_unit_price_"+strconv.Itoa(i)] = "Wholesale Unit Price is required"
-		}
+			if product.WholesaleUnitPrice == 0 {
+				errs["wholesale_unit_price_"+strconv.Itoa(i)] = "Wholesale Unit Price is required"
+			}*/
 
 	} //end for
 
@@ -1631,6 +1699,11 @@ func (model *Purchase) MakeRedisCode() error {
 }
 
 func (purchase *Purchase) MakeCode() error {
+	return purchase.MakeRedisCode()
+}
+
+/*
+func (purchase *Purchase) MakeCode() error {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{"code": 1})
 	if err != nil {
 		return err
@@ -1686,7 +1759,7 @@ func (purchase *Purchase) MakeCode() error {
 	}
 
 	return nil
-}
+}*/
 
 func (store *Store) FindLastPurchaseByStoreID(
 	storeID *primitive.ObjectID,
@@ -1917,16 +1990,25 @@ func ProcessPurchases() error {
 				return errors.New("Cursor decoding purchase error:" + err.Error())
 			}
 
-			vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
-			if err != nil {
-				return err
+			if purchase.StoreID.Hex() != store.ID.Hex() {
+				continue
 			}
 
-			vendor.StoreID = purchase.StoreID
-			err = vendor.Update()
-			if err != nil {
-				return err
-			}
+			purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+			purchase.Update()
+
+			/*
+				vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				vendor.StoreID = purchase.StoreID
+				err = vendor.Update()
+				if err != nil {
+					return err
+				}
+			*/
 
 			/*
 				err = model.Update()
@@ -2505,13 +2587,27 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(purchase.Date, firstPaymentDate) {
 		referenceModel := "vendor"
+		vendorName := ""
+		var referenceID *primitive.ObjectID
+		var vendorVATNo *string
+		var vendorPhone *string
+		if vendor != nil {
+			vendorName = vendor.Name
+			referenceID = &vendor.ID
+			vendorVATNo = &vendor.VATNo
+			vendorPhone = &vendor.Phone
+		} else {
+			vendorName = "Vendor Accounts - Unknown"
+			referenceID = nil
+		}
+
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchase.StoreID,
-			&vendor.ID,
+			referenceID,
 			&referenceModel,
-			vendor.Name,
-			&vendor.Phone,
-			&vendor.VATNo,
+			vendorName,
+			vendorPhone,
+			vendorVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -2578,7 +2674,7 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
-		} else if payment.Method == "vendor_account" {
+		} else if payment.Method == "vendor_account" && vendor != nil {
 			referenceModel := "vendor"
 			vendorAccount, err := store.CreateAccountIfNotExists(
 				purchase.StoreID,
@@ -2628,13 +2724,27 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(purchase.Date, firstPaymentDate) {
 		referenceModel := "vendor"
+		vendorName := ""
+		var referenceID *primitive.ObjectID
+		var vendorVATNo *string
+		var vendorPhone *string
+		if vendor != nil {
+			vendorName = vendor.Name
+			referenceID = &vendor.ID
+			vendorVATNo = &vendor.VATNo
+			vendorPhone = &vendor.Phone
+		} else {
+			vendorName = "Vendor Accounts - Unknown"
+			referenceID = nil
+		}
+
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchase.StoreID,
-			&vendor.ID,
+			referenceID,
 			&referenceModel,
-			vendor.Name,
-			&vendor.Phone,
-			&vendor.VATNo,
+			vendorName,
+			vendorPhone,
+			vendorVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -2678,13 +2788,27 @@ func MakeJournalsForPurchaseExtraPayments(
 	}
 
 	referenceModel := "vendor"
+	vendorName := ""
+	var referenceID *primitive.ObjectID
+	var vendorVATNo *string
+	var vendorPhone *string
+	if vendor != nil {
+		vendorName = vendor.Name
+		referenceID = &vendor.ID
+		vendorVATNo = &vendor.VATNo
+		vendorPhone = &vendor.Phone
+	} else {
+		vendorName = "Vendor Accounts - Unknown"
+		referenceID = nil
+	}
+
 	vendorAccount, err := store.CreateAccountIfNotExists(
 		purchase.StoreID,
-		&vendor.ID,
+		referenceID,
 		&referenceModel,
-		vendor.Name,
-		&vendor.Phone,
-		&vendor.VATNo,
+		vendorName,
+		vendorPhone,
+		vendorVATNo,
 	)
 	if err != nil {
 		return nil, err
@@ -2708,7 +2832,7 @@ func MakeJournalsForPurchaseExtraPayments(
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
-		} else if payment.Method == "vendor_account" {
+		} else if payment.Method == "vendor_account" && vendor != nil {
 			referenceModel := "vendor"
 			vendorAccount, err := store.CreateAccountIfNotExists(
 				purchase.StoreID,
@@ -2769,7 +2893,7 @@ func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
 	now := time.Now()
 
 	vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -2803,13 +2927,27 @@ func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
 	if len(purchase.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(purchase.Date, firstPaymentDate)) {
 		//Case: UnPaid
 		referenceModel := "vendor"
+		vendorName := ""
+		var referenceID *primitive.ObjectID
+		var vendorVATNo *string
+		var vendorPhone *string
+		if vendor != nil {
+			vendorName = vendor.Name
+			referenceID = &vendor.ID
+			vendorVATNo = &vendor.VATNo
+			vendorPhone = &vendor.Phone
+		} else {
+			vendorName = "Vendor Accounts - Unknown"
+			referenceID = nil
+		}
+
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchase.StoreID,
-			&vendor.ID,
+			referenceID,
 			&referenceModel,
-			vendor.Name,
-			&vendor.Phone,
-			&vendor.VATNo,
+			vendorName,
+			vendorPhone,
+			vendorVATNo,
 		)
 		if err != nil {
 			return nil, err

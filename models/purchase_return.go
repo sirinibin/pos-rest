@@ -48,10 +48,10 @@ type PurchaseReturn struct {
 	DateStr                string                  `json:"date_str,omitempty" bson:"-"`
 	Code                   string                  `bson:"code,omitempty" json:"code,omitempty"`
 	StoreID                *primitive.ObjectID     `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	VendorID               *primitive.ObjectID     `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	VendorID               *primitive.ObjectID     `json:"vendor_id" bson:"vendor_id"`
 	VendorInvoiceNumber    string                  `bson:"vendor_invoice_no,omitempty" json:"vendor_invoice_no,omitempty"`
 	Store                  *Store                  `json:"store,omitempty"`
-	Vendor                 *Vendor                 `json:"vendor,omitempty"`
+	Vendor                 *Vendor                 `json:"vendor,omitempty" bson:"-"`
 	Products               []PurchaseReturnProduct `bson:"products,omitempty" json:"products,omitempty"`
 	PurchaseReturnedBy     *primitive.ObjectID     `json:"purchase_returned_by,omitempty" bson:"purchase_returned_by,omitempty"`
 	PurchaseReturnedByUser *User                   `json:"purchase_returned_by_user,omitempty"`
@@ -87,7 +87,7 @@ type PurchaseReturn struct {
 	CreatedByUser          *User                   `json:"created_by_user,omitempty"`
 	UpdatedByUser          *User                   `json:"updated_by_user,omitempty"`
 	PurchaseReturnedByName string                  `json:"purchase_returned_by_name,omitempty" bson:"purchase_returned_by_name,omitempty"`
-	VendorName             string                  `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	VendorName             string                  `json:"vendor_name" bson:"vendor_name"`
 	StoreName              string                  `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName          string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -218,6 +218,7 @@ type PurchaseReturnStats struct {
 	Discount                  float64             `json:"discount" bson:"discount"`
 	CashDiscount              float64             `json:"cash_discount" bson:"cash_discount"`
 	PaidPurchaseReturn        float64             `json:"paid_purchase_return" bson:"paid_purchase_return"`
+	PurchaseReturnCount       int64               `json:"purchase_return_count" bson:"purchase_return_count"`
 	UnPaidPurchaseReturn      float64             `json:"unpaid_purchase_return" bson:"unpaid_purchase_return"`
 	CashPurchaseReturn        float64             `json:"cash_purchase_return" bson:"cash_purchase_return"`
 	BankAccountPurchaseReturn float64             `json:"bank_account_purchase_return" bson:"bank_account_purchase_return"`
@@ -378,12 +379,14 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 		purchasereturn.StoreName = store.Name
 	}
 
-	if purchasereturn.VendorID != nil {
+	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
 		vendor, err := store.FindVendorByID(purchasereturn.VendorID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
 		purchasereturn.VendorName = vendor.Name
+	} else {
+		purchasereturn.VendorName = ""
 	}
 
 	if purchasereturn.PurchaseReturnedBy != nil {
@@ -1038,6 +1041,16 @@ func (purchasereturn *PurchaseReturn) Validate(
 		}
 	}
 
+	if scenario == "update" {
+		if totalPayment > (purchase.TotalPaymentPaid - (purchase.ReturnAmount - oldPurchaseReturn.TotalPaymentPaid)) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (purchase.TotalPaymentPaid-(purchase.ReturnAmount-oldPurchaseReturn.TotalPaymentPaid))) + " (total payment paid)"
+		}
+	} else {
+		if totalPayment > (purchase.TotalPaymentPaid - purchase.ReturnAmount) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (purchase.TotalPaymentPaid-purchase.ReturnAmount)) + " (total payment paid)"
+		}
+	}
+
 	for index, payment := range purchasereturn.PaymentsInput {
 		if govalidator.IsNull(payment.DateStr) {
 			errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
@@ -1145,9 +1158,7 @@ func (purchasereturn *PurchaseReturn) Validate(
 		}
 	}
 
-	if purchasereturn.VendorID == nil || purchasereturn.VendorID.IsZero() {
-		errs["vendor_id"] = "Vendor is required"
-	} else {
+	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
 		exists, err := store.IsVendorExists(purchasereturn.VendorID)
 		if err != nil {
 			errs["vendor_id"] = err.Error()
@@ -1543,6 +1554,11 @@ func (model *PurchaseReturn) MakeRedisCode() error {
 }
 
 func (purchaseReturn *PurchaseReturn) MakeCode() error {
+	return purchaseReturn.MakeRedisCode()
+}
+
+/*
+func (purchaseReturn *PurchaseReturn) MakeCode() error {
 	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{"code": 1})
 	if err != nil {
 		return err
@@ -1597,7 +1613,7 @@ func (purchaseReturn *PurchaseReturn) MakeCode() error {
 	}
 
 	return nil
-}
+}*/
 
 func (store *Store) FindLastPurchaseReturnByStoreID(
 	storeID *primitive.ObjectID,
@@ -1808,164 +1824,180 @@ func (store *Store) IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool,
 	return (count > 0), err
 }
 
-func (store *Store) ProcessPurchaseReturns() error {
+func ProcessPurchaseReturns() error {
 	log.Print("Processing purchase returns")
-	totalCount, err := store.GetTotalCount(bson.M{}, "purchasereturn")
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching quotations:" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "purchasereturn")
 		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
+			return err
 		}
-		model := PurchaseReturn{}
-		err = cur.Decode(&model)
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
 		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
+			return errors.New("Error fetching quotations:" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
 		}
 
-		/*
-			for i, paymentMethod := range model.PaymentMethods {
-				if paymentMethod == "bank_account" {
-					model.PaymentMethods[i] = "bank_card"
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			model := PurchaseReturn{}
+			err = cur.Decode(&model)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if model.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
+
+			purchase, _ := store.FindPurchaseByID(model.PurchaseID, bson.M{})
+			purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+			purchase.Update()
+
+			/*
+				for i, paymentMethod := range model.PaymentMethods {
+					if paymentMethod == "bank_account" {
+						model.PaymentMethods[i] = "bank_card"
+					}
 				}
-			}
 
-			for i, payment := range model.Payments {
-				if payment.Method == "bank_account" {
-					model.Payments[i].Method = "bank_card"
+				for i, payment := range model.Payments {
+					if payment.Method == "bank_account" {
+						model.Payments[i].Method = "bank_card"
+					}
+				}*/
+
+			/*
+				for i, product := range model.Products {
+					if product.Discount > 0 {
+						model.Products[i].UnitDiscount = product.Discount / product.Quantity
+						model.Products[i].UnitDiscountPercent = product.DiscountPercent
+					}
 				}
-			}*/
 
-		for i, product := range model.Products {
-			if product.Discount > 0 {
-				model.Products[i].UnitDiscount = product.Discount / product.Quantity
-				model.Products[i].UnitDiscountPercent = product.DiscountPercent
-			}
-		}
+				err = model.Update()
+				if err != nil {
+					return errors.New("Error updating: " + err.Error())
+				}*/
 
-		err = model.Update()
-		if err != nil {
-			return errors.New("Error updating: " + err.Error())
-		}
+			/*
+				err = model.ClearProductsPurchaseReturnHistory()
+				if err != nil {
+					return errors.New("error deleting product purchase return history: " + err.Error())
+				}
 
-		/*
-			err = model.ClearProductsPurchaseReturnHistory()
-			if err != nil {
-				return errors.New("error deleting product purchase return history: " + err.Error())
-			}
+				err = model.AddProductsPurchaseReturnHistory()
+				if err != nil {
+					return errors.New("error Adding product purchase return history: " + err.Error())
+				}
+			*/
 
-			err = model.AddProductsPurchaseReturnHistory()
-			if err != nil {
-				return errors.New("error Adding product purchase return history: " + err.Error())
-			}
-		*/
-
-		/*
-			model.PaymentStatus = "paid"
-			model.PaymentMethod = "cash"
-			err = model.Update()
-			if err != nil {
-				return err
-			}
-
-			count, _ := model.GetPaymentsCount()
-			if count == 0 {
-				model.AddPayment()
-			}
-		*/
-
-		/*
-
-
-			model.GetPayments()
-
-			err = model.SetProductsPurchaseReturnStats()
-			if err != nil {
-				return errors.New("error setting products purchase return stats: " + err.Error())
-			}
-		*/
-
-		/*
-			if model.PaymentStatus == "" {
+			/*
 				model.PaymentStatus = "paid"
-			}
-
-			if model.PaymentMethod == "" {
 				model.PaymentMethod = "cash"
-			}
-
-			totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_return_id": model.ID}, "purchase_return_payment")
-			if err != nil {
-				return err
-			}
-
-			if totalPaymentsCount == 0 {
-				err = model.AddPayment()
+				err = model.Update()
 				if err != nil {
 					return err
 				}
-			}
-		*/
 
-		/*
-			d := model.Date.Add(time.Hour * time.Duration(-3))
-			model.Date = &d
-		*/
-		//model.Date = model.CreatedAt
+				count, _ := model.GetPaymentsCount()
+				if count == 0 {
+					model.AddPayment()
+				}
+			*/
 
-		/*
-			err = model.SetVendorPurchaseReturnStats()
-			if err != nil {
-				return err
-			}
-		*/
+			/*
 
-		/*
-			model.UpdatePurchaseReturnCount()
 
-			err = model.Update()
-			if err != nil {
-				return err
-			}
-		*/
-		/*
-			model.GetPayments()
+				model.GetPayments()
 
-			err = model.UndoAccounting()
-			if err != nil {
-				return errors.New("error undo accounting: " + err.Error())
-			}
+				err = model.SetProductsPurchaseReturnStats()
+				if err != nil {
+					return errors.New("error setting products purchase return stats: " + err.Error())
+				}
+			*/
 
-			err = model.DoAccounting()
-			if err != nil {
-				return errors.New("error doing accounting: " + err.Error())
-			}
-		*/
+			/*
+				if model.PaymentStatus == "" {
+					model.PaymentStatus = "paid"
+				}
 
-		/*
-			err = model.Update()
-			if err != nil {
-				return err
-			}*/
+				if model.PaymentMethod == "" {
+					model.PaymentMethod = "cash"
+				}
 
-		bar.Add(1)
+				totalPaymentsCount, err := GetTotalCount(bson.M{"purchase_return_id": model.ID}, "purchase_return_payment")
+				if err != nil {
+					return err
+				}
+
+				if totalPaymentsCount == 0 {
+					err = model.AddPayment()
+					if err != nil {
+						return err
+					}
+				}
+			*/
+
+			/*
+				d := model.Date.Add(time.Hour * time.Duration(-3))
+				model.Date = &d
+			*/
+			//model.Date = model.CreatedAt
+
+			/*
+				err = model.SetVendorPurchaseReturnStats()
+				if err != nil {
+					return err
+				}
+			*/
+
+			/*
+				model.UpdatePurchaseReturnCount()
+
+				err = model.Update()
+				if err != nil {
+					return err
+				}
+			*/
+			/*
+				model.GetPayments()
+
+				err = model.UndoAccounting()
+				if err != nil {
+					return errors.New("error undo accounting: " + err.Error())
+				}
+
+				err = model.DoAccounting()
+				if err != nil {
+					return errors.New("error doing accounting: " + err.Error())
+				}
+			*/
+
+			/*
+				err = model.Update()
+				if err != nil {
+					return err
+				}*/
+
+			bar.Add(1)
+		}
 	}
 	log.Print("Purchase returns DONE!")
 	return nil
@@ -2535,7 +2567,7 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
-		} else if payment.Method == "vendor_account" {
+		} else if payment.Method == "vendor_account" && vendor != nil {
 			referenceModel := "vendor"
 			vendorAccount, err := store.CreateAccountIfNotExists(
 				purchaseReturn.StoreID,
@@ -2585,13 +2617,27 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate) {
 		referenceModel := "vendor"
+		vendorName := ""
+		var referenceID *primitive.ObjectID
+		var vendorVATNo *string
+		var vendorPhone *string
+		if vendor != nil {
+			vendorName = vendor.Name
+			referenceID = &vendor.ID
+			vendorVATNo = &vendor.VATNo
+			vendorPhone = &vendor.Phone
+		} else {
+			vendorName = "Vendor Accounts - Unknown"
+			referenceID = nil
+		}
+
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchaseReturn.StoreID,
-			&vendor.ID,
+			referenceID,
 			&referenceModel,
-			vendor.Name,
-			&vendor.Phone,
-			&vendor.VATNo,
+			vendorName,
+			vendorPhone,
+			vendorVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -2624,13 +2670,27 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate) {
 		referenceModel := "vendor"
+		vendorName := ""
+		var referenceID *primitive.ObjectID
+		var vendorVATNo *string
+		var vendorPhone *string
+		if vendor != nil {
+			vendorName = vendor.Name
+			referenceID = &vendor.ID
+			vendorVATNo = &vendor.VATNo
+			vendorPhone = &vendor.Phone
+		} else {
+			vendorName = "Vendor Accounts - Unknown"
+			referenceID = nil
+		}
+
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchaseReturn.StoreID,
-			&vendor.ID,
+			referenceID,
 			&referenceModel,
-			vendor.Name,
-			&vendor.Phone,
-			&vendor.VATNo,
+			vendorName,
+			vendorPhone,
+			vendorVATNo,
 		)
 		if err != nil {
 			return nil, err
@@ -2683,7 +2743,7 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
-		} else if payment.Method == "vendor_account" {
+		} else if payment.Method == "vendor_account" && vendor != nil {
 			referenceModel := "vendor"
 			vendorAccount, err := store.CreateAccountIfNotExists(
 				purchaseReturn.StoreID,
@@ -2714,13 +2774,27 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 	} //end for
 
 	referenceModel := "vendor"
+	vendorName := ""
+	var referenceID *primitive.ObjectID
+	var vendorVATNo *string
+	var vendorPhone *string
+	if vendor != nil {
+		vendorName = vendor.Name
+		referenceID = &vendor.ID
+		vendorVATNo = &vendor.VATNo
+		vendorPhone = &vendor.Phone
+	} else {
+		vendorName = "Vendor Accounts - Unknown"
+		referenceID = nil
+	}
+
 	vendorAccount, err := store.CreateAccountIfNotExists(
 		purchaseReturn.StoreID,
-		&vendor.ID,
+		referenceID,
 		&referenceModel,
-		vendor.Name,
-		&vendor.Phone,
-		&vendor.VATNo,
+		vendorName,
+		vendorPhone,
+		vendorVATNo,
 	)
 	if err != nil {
 		return nil, err
@@ -2768,7 +2842,7 @@ func (purchaseReturn *PurchaseReturn) CreateLedger() (ledger *Ledger, err error)
 	now := time.Now()
 
 	vendor, err := store.FindVendorByID(purchaseReturn.VendorID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -2802,13 +2876,27 @@ func (purchaseReturn *PurchaseReturn) CreateLedger() (ledger *Ledger, err error)
 	if len(purchaseReturn.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate)) {
 		//Case: UnPaid
 		referenceModel := "vendor"
+		vendorName := ""
+		var referenceID *primitive.ObjectID
+		var vendorVATNo *string
+		var vendorPhone *string
+		if vendor != nil {
+			vendorName = vendor.Name
+			referenceID = &vendor.ID
+			vendorVATNo = &vendor.VATNo
+			vendorPhone = &vendor.Phone
+		} else {
+			vendorName = "Vendor Accounts - Unknown"
+			referenceID = nil
+		}
+
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			purchaseReturn.StoreID,
-			&vendor.ID,
+			referenceID,
 			&referenceModel,
-			vendor.Name,
-			&vendor.Phone,
-			&vendor.VATNo,
+			vendorName,
+			vendorPhone,
+			vendorVATNo,
 		)
 		if err != nil {
 			return nil, err
