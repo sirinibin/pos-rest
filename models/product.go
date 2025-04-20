@@ -97,8 +97,8 @@ type Product struct {
 	Rack                 string                `bson:"rack,omitempty" json:"rack,omitempty"`
 	PrefixPartNumber     string                `bson:"prefix_part_number" json:"prefix_part_number"`
 	PartNumber           string                `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	CategoryID           []*primitive.ObjectID `json:"category_id,omitempty" bson:"category_id,omitempty"`
-	Category             []*ProductCategory    `json:"category,omitempty"`
+	CategoryID           []*primitive.ObjectID `json:"category_id" bson:"category_id"`
+	Category             []*ProductCategory    `json:"category" bson:"-"`
 	BrandID              *primitive.ObjectID   `json:"brand_id,omitempty" bson:"brand_id,omitempty"`
 	BrandName            string                `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
 	BrandCode            string                `json:"brand_code,omitempty" bson:"brand_code,omitempty"`
@@ -121,7 +121,7 @@ type Product struct {
 	UpdatedBy        *primitive.ObjectID     `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser    *User                   `json:"created_by_user,omitempty"`
 	UpdatedByUser    *User                   `json:"updated_by_user,omitempty"`
-	CategoryName     []string                `json:"category_name,omitempty" bson:"category_name,omitempty"`
+	CategoryName     []string                `json:"category_name" bson:"category_namey"`
 	CreatedByName    string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName    string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName    string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
@@ -2029,9 +2029,10 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		storeNo++
 	}
 
-	if len(product.CategoryID) == 0 {
-		errs["category_id"] = "Atleast 1 category is required"
-	} else {
+	//if len(product.CategoryID) == 0 {
+	//errs["category_id"] = "Atleast 1 category is required"
+	//}
+	if len(product.CategoryID) > 0 {
 		for i, categoryID := range product.CategoryID {
 			exists, err := store.IsProductCategoryExists(categoryID)
 			if err != nil {
@@ -2042,7 +2043,6 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 				errs["category_id_"+strconv.Itoa(i)] = "Invalid category:" + categoryID.Hex()
 			}
 		}
-
 	}
 
 	for k, imageContent := range product.ImagesContent {
