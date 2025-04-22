@@ -22,35 +22,37 @@ import (
 
 // CustomerDeposit : CustomerDeposit structure
 type CustomerDeposit struct {
-	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Code          string              `bson:"code" json:"code"`
-	Amount        float64             `bson:"amount" json:"amount"`
-	Description   string              `bson:"description" json:"description"`
-	Date          *time.Time          `bson:"date" json:"date"`
-	DateStr       string              `json:"date_str,omitempty" bson:"-"`
-	CustomerID    *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Customer      *Customer           `json:"customer" bson:"-"`
-	CustomerName  string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	PaymentMethod string              `json:"payment_method" bson:"payment_method"`
-	StoreID       *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName     string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	StoreCode     string              `json:"store_code,omitempty" bson:"store_code,omitempty"`
-	Images        []string            `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent []string            `json:"images_content,omitempty"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
-	CategoryName  []string            `json:"category_name" bson:"category_name"`
-	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Code            string              `bson:"code" json:"code"`
+	Amount          float64             `bson:"amount" json:"amount"`
+	Description     string              `bson:"description" json:"description"`
+	Remarks         string              `bson:"remarks" json:"remarks"`
+	BankReferenceNo string              `bson:"bank_reference_no" json:"bank_reference_no"`
+	Date            *time.Time          `bson:"date" json:"date"`
+	DateStr         string              `json:"date_str,omitempty" bson:"-"`
+	CustomerID      *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Customer        *Customer           `json:"customer" bson:"-"`
+	CustomerName    string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	PaymentMethod   string              `json:"payment_method" bson:"payment_method"`
+	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName       string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	StoreCode       string              `json:"store_code,omitempty" bson:"store_code,omitempty"`
+	Images          []string            `bson:"images,omitempty" json:"images,omitempty"`
+	ImagesContent   []string            `json:"images_content,omitempty"`
+	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy       *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser   *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
+	CategoryName    []string            `json:"category_name" bson:"category_name"`
+	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Deleted         bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 }
 
 func (customerdeposit *CustomerDeposit) AttributesValueChangeEvent(customerdepositOld *CustomerDeposit) error {
@@ -555,6 +557,22 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 		customerdeposit.Date = &date
 	}
 
+	if !govalidator.IsNull(strings.TrimSpace(customerdeposit.Code)) {
+		codeExists, err := customerdeposit.IsCodeExists()
+		if err != nil {
+			errs["code"] = err.Error()
+		}
+
+		if codeExists {
+			errs["code"] = "ID already exists."
+		}
+
+		if codeExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
+	}
+
 	for k, imageContent := range customerdeposit.ImagesContent {
 		splits := strings.Split(imageContent, ",")
 
@@ -579,6 +597,28 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 	}
 
 	return errs
+}
+
+func (model *CustomerDeposit) IsCodeExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("customerdeposit")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if model.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code":     model.Code,
+			"store_id": model.StoreID,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code":     model.Code,
+			"store_id": model.StoreID,
+			"_id":      bson.M{"$ne": model.ID},
+		})
+	}
+
+	return (count > 0), err
 }
 
 func (store *Store) FindLastCustomerDeposit(
@@ -949,6 +989,7 @@ func (store *Store) FindCustomerDepositByID(
 	return customerdeposit, err
 }
 
+/*
 func (customerdeposit *CustomerDeposit) IsCodeExists() (exists bool, err error) {
 	collection := db.GetDB("store_" + customerdeposit.StoreID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -967,7 +1008,7 @@ func (customerdeposit *CustomerDeposit) IsCodeExists() (exists bool, err error) 
 	}
 
 	return (count > 0), err
-}
+}*/
 
 func (store *Store) IsCustomerDepositExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
