@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -629,6 +630,76 @@ func (store *Store) FindLastCustomerDepositByStoreID(
 	return customerdeposit, err
 }
 
+func (store *Store) GetCustomerDepositCount() (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (model *CustomerDeposit) MakeCode() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := model.StoreID.Hex() + "_customer_deposit_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists == 0 {
+		count, err := store.GetCustomerDepositCount()
+		if err != nil {
+			return err
+		}
+
+		startFrom := store.CustomerDepositSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	paddingCount := store.CustomerDepositSerialNumber.PaddingCount
+
+	if store.CustomerDepositSerialNumber.Prefix != "" {
+		model.Code = fmt.Sprintf("%s-%0*d", store.CustomerDepositSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		model.Code = fmt.Sprintf("%s%0*d", store.CustomerDepositSerialNumber.Prefix, paddingCount, incr)
+	}
+
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+		}
+	}
+
+	return nil
+}
+
+/*
 func (customerdeposit *CustomerDeposit) MakeCode() error {
 	store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
 	if err != nil {
@@ -682,7 +753,7 @@ func (customerdeposit *CustomerDeposit) MakeCode() error {
 	}
 
 	return nil
-}
+}*/
 
 func (customerdeposit *CustomerDeposit) Insert() (err error) {
 	collection := db.GetDB("store_" + customerdeposit.StoreID.Hex()).Collection("customerdeposit")

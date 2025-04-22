@@ -87,6 +87,8 @@ type Customer struct {
 	SearchLabel                string                   `json:"search_label"`
 	StoreID                    *primitive.ObjectID      `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Stores                     map[string]CustomerStore `bson:"stores" json:"stores"`
+	Remarks                    string                   `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	UseRemarksInSales          bool                     `bson:"use_remarks_in_sales" json:"use_remarks_in_sales"`
 }
 
 /*
@@ -1382,8 +1384,22 @@ func (customer *Customer) MakeCode() error {
 	}
 
 	paddingCount := store.CustomerSerialNumber.PaddingCount
+	if store.CustomerSerialNumber.Prefix != "" {
+		customer.Code = fmt.Sprintf("%s-%0*d", store.CustomerSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		customer.Code = fmt.Sprintf("%s%0*d", store.CustomerSerialNumber.Prefix, paddingCount, incr)
+	}
 
-	customerID := fmt.Sprintf("%s%0*d", store.CustomerSerialNumber.Prefix, paddingCount, incr)
-	customer.Code = customerID
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			customer.Code = strings.ReplaceAll(customer.Code, "DATE", currentDate)
+		}
+	}
 	return nil
 }

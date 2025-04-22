@@ -1548,8 +1548,23 @@ func (model *PurchaseReturn) MakeRedisCode() error {
 
 	paddingCount := store.PurchaseReturnSerialNumber.PaddingCount
 
-	invoiceID := fmt.Sprintf("%s-%0*d", store.PurchaseReturnSerialNumber.Prefix, paddingCount, incr)
-	model.Code = invoiceID
+	if store.PurchaseReturnSerialNumber.Prefix != "" {
+		model.Code = fmt.Sprintf("%s-%0*d", store.PurchaseReturnSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		model.Code = fmt.Sprintf("%s%0*d", store.PurchaseReturnSerialNumber.Prefix, paddingCount, incr)
+	}
+
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+		}
+	}
 	return nil
 }
 

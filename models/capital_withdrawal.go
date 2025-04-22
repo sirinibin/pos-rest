@@ -13,7 +13,6 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -623,71 +622,71 @@ func (store *Store) FindLastCapitalWithdrawalByStoreID(
 	return capitalwithdrawal, err
 }
 
-func (capitalwithdrawal *CapitalWithdrawal) MakeCode() error {
-	store, err := FindStoreByID(capitalwithdrawal.StoreID, bson.M{})
+func (store *Store) GetCapitalWithdrawalCount() (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+/*
+func (model *CapitalWithdrawal) MakeCode() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	lastCapitalWithdrawal, err := store.FindLastCapitalWithdrawalByStoreID(capitalwithdrawal.StoreID, bson.M{})
-	if err != nil && mongo.ErrNoDocuments != err {
+	redisKey := model.StoreID.Hex() + "_capital_withdrawal_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
 		return err
 	}
-	if lastCapitalWithdrawal == nil {
-		store, err := FindStoreByID(capitalwithdrawal.StoreID, bson.M{})
+
+	if exists == 0 {
+		count, err := store.GetCapitalWithdrawalCount()
 		if err != nil {
 			return err
 		}
-		capitalwithdrawal.Code = store.Code + "-100000"
-	} else {
-		splits := strings.Split(lastCapitalWithdrawal.Code, "-")
-		if len(splits) == 2 {
-			storeCode := splits[0]
-			codeStr := splits[1]
-			codeInt, err := strconv.Atoi(codeStr)
-			if err != nil {
-				return err
-			}
-			codeInt++
-			capitalwithdrawal.Code = storeCode + "-" + strconv.Itoa(codeInt)
+
+		startFrom := store.CapitalWithdrawalSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
 		}
 	}
 
-	for {
-		exists, err := capitalwithdrawal.IsCodeExists()
-		if err != nil {
-			return err
-		}
-		if !exists {
-			break
-		}
-
-		splits := strings.Split(lastCapitalWithdrawal.Code, "-")
-		storeCode := splits[0]
-		codeStr := splits[1]
-		codeInt, err := strconv.Atoi(codeStr)
-		if err != nil {
-			return err
-		}
-		codeInt++
-
-		capitalwithdrawal.Code = storeCode + "-" + strconv.Itoa(codeInt)
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
 	}
 
+	paddingCount := store.CapitalWithdrawalSerialNumber.PaddingCount
+
+	model.Code = fmt.Sprintf("%s-%0*d", store.CapitalWithdrawalSerialNumber.Prefix, paddingCount, incr)
 	return nil
 }
+*/
 
 func (capitalwithdrawal *CapitalWithdrawal) Insert() (err error) {
 	collection := db.GetDB("store_" + capitalwithdrawal.StoreID.Hex()).Collection("capitalwithdrawal")
 	capitalwithdrawal.ID = primitive.NewObjectID()
 
-	if len(capitalwithdrawal.Code) == 0 {
+	/*if len(capitalwithdrawal.Code) == 0 {
 		err = capitalwithdrawal.MakeCode()
 		if err != nil {
 			log.Print("Error making code")
 			return err
 		}
-	}
+	}*/
 
 	if len(capitalwithdrawal.ImagesContent) > 0 {
 		err := capitalwithdrawal.SaveImages()

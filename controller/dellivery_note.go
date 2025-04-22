@@ -107,6 +107,8 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	deliverynote.MakeCode()
+
 	err = deliverynote.Insert()
 	if err != nil {
 		response.Status = false

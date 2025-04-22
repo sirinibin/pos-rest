@@ -85,6 +85,8 @@ type Vendor struct {
 	Stores                     map[string]VendorStore `bson:"stores" json:"stores"`
 	SearchLabel                string                 `json:"search_label"`
 	StoreID                    *primitive.ObjectID    `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	Remarks                    string                 `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	UseRemarksInPurchases      bool                   `bson:"use_remarks_in_purchases" json:"use_remarks_in_purchases"`
 }
 
 //Stores2                    []VendorStore          `bson:"stores,omitempty" json:"stores,omitempty"`
@@ -1201,8 +1203,24 @@ func (vendor *Vendor) MakeCode() error {
 
 	paddingCount := store.VendorSerialNumber.PaddingCount
 
-	vendorID := fmt.Sprintf("%s%0*d", store.VendorSerialNumber.Prefix, paddingCount, incr)
-	vendor.Code = vendorID
+	if store.VendorSerialNumber.Prefix != "" {
+		vendor.Code = fmt.Sprintf("%s-%0*d", store.VendorSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		vendor.Code = fmt.Sprintf("%s%0*d", store.VendorSerialNumber.Prefix, paddingCount, incr)
+	}
+
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			vendor.Code = strings.ReplaceAll(vendor.Code, "DATE", currentDate)
+		}
+	}
+
 	return nil
 }
 

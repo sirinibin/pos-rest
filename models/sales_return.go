@@ -1194,6 +1194,10 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	}
 
 	for index, payment := range salesreturn.PaymentsInput {
+		if order.PaymentStatus == "not_paid" {
+			break
+		}
+
 		if govalidator.IsNull(payment.DateStr) {
 			errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
 		} else {
@@ -1758,9 +1762,24 @@ func (model *SalesReturn) MakeRedisCode() error {
 	}
 
 	paddingCount := store.SalesReturnSerialNumber.PaddingCount
+	if store.SalesReturnSerialNumber.Prefix != "" {
+		model.Code = fmt.Sprintf("%s-%0*d", store.SalesReturnSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		model.Code = fmt.Sprintf("%s%0*d", store.SalesReturnSerialNumber.Prefix, paddingCount, incr)
+	}
 
-	invoiceID := fmt.Sprintf("%s-%0*d", store.SalesReturnSerialNumber.Prefix, paddingCount, incr)
-	model.Code = invoiceID
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+		}
+	}
+
 	model.InvoiceCountValue = incr - (store.SalesReturnSerialNumber.StartFromCount - 1)
 	return nil
 }
@@ -3133,7 +3152,12 @@ func MakeJournalsForSalesReturnExtraPayments(
 func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]SalesReturnPayment {
 	paymentsByDatetime := map[string][]SalesReturnPayment{}
 	for _, payment := range payments {
-		paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
+		if payment.Date != nil {
+			_, ok := paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")]
+			if ok {
+				paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
+			}
+		}
 	}
 
 	paymentsByDatetime2 := [][]SalesReturnPayment{}

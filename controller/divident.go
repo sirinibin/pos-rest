@@ -120,6 +120,8 @@ func CreateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	divident.MakeCode()
+
 	err = divident.Insert()
 	if err != nil {
 		response.Status = false

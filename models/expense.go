@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -646,6 +647,63 @@ func (store *Store) FindLastExpenseByStoreID(
 	return expense, err
 }
 
+func (model *Expense) MakeCode() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := model.StoreID.Hex() + "_expense_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists == 0 {
+		count, err := store.GetExpenseCount()
+		if err != nil {
+			return err
+		}
+
+		startFrom := store.ExpenseSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	paddingCount := store.ExpenseSerialNumber.PaddingCount
+	if store.ExpenseSerialNumber.Prefix != "" {
+		model.Code = fmt.Sprintf("%s-%0*d", store.ExpenseSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		model.Code = fmt.Sprintf("%s%0*d", store.ExpenseSerialNumber.Prefix, paddingCount, incr)
+	}
+
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+		}
+	}
+	return nil
+}
+
+/*
 func (expense *Expense) MakeCode() error {
 	store, err := FindStoreByID(expense.StoreID, bson.M{})
 	if err != nil {
@@ -698,7 +756,7 @@ func (expense *Expense) MakeCode() error {
 	}
 
 	return nil
-}
+}*/
 
 func (expense *Expense) Insert() (err error) {
 	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")

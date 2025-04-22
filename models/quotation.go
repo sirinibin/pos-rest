@@ -14,7 +14,6 @@ import (
 	"github.com/jung-kurt/gofpdf"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -1147,66 +1146,28 @@ func (model *Quotation) MakeRedisCode() error {
 
 	paddingCount := store.QuotationSerialNumber.PaddingCount
 
-	invoiceID := fmt.Sprintf("%s-%0*d", store.QuotationSerialNumber.Prefix, paddingCount, incr)
-	model.Code = invoiceID
+	if store.QuotationSerialNumber.Prefix != "" {
+		model.Code = fmt.Sprintf("%s-%0*d", store.QuotationSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		model.Code = fmt.Sprintf("%s%0*d", store.QuotationSerialNumber.Prefix, paddingCount, incr)
+	}
+
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+		}
+	}
 	return nil
 }
 
 func (quotation *Quotation) MakeCode() error {
-	store, err := FindStoreByID(quotation.StoreID, bson.M{"code": 1})
-	if err != nil {
-		return err
-	}
-
-	if store.Code != "GUOCJ" && store.Code != "GUOJ" {
-		return quotation.MakeRedisCode()
-	}
-
-	lastQuotation, err := store.FindLastQuotationByStoreID(quotation.StoreID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return err
-	}
-	if lastQuotation == nil {
-		store, err := FindStoreByID(quotation.StoreID, bson.M{})
-		if err != nil {
-			return err
-		}
-		quotation.Code = store.Code + "-50000"
-	} else {
-		splits := strings.Split(lastQuotation.Code, "-")
-		if len(splits) == 2 {
-			storeCode := splits[0]
-			codeStr := splits[1]
-			codeInt, err := strconv.Atoi(codeStr)
-			if err != nil {
-				return err
-			}
-			codeInt++
-			quotation.Code = storeCode + "-" + strconv.Itoa(codeInt)
-		}
-	}
-
-	for {
-		exists, err := quotation.IsCodeExists()
-		if err != nil {
-			return err
-		}
-		if !exists {
-			break
-		}
-
-		splits := strings.Split(lastQuotation.Code, "-")
-		storeCode := splits[0]
-		codeStr := splits[1]
-		codeInt, err := strconv.Atoi(codeStr)
-		if err != nil {
-			return err
-		}
-		codeInt++
-		quotation.Code = storeCode + "-" + strconv.Itoa(codeInt)
-	}
-
-	return nil
+	return quotation.MakeRedisCode()
 }
 
 func (store *Store) FindLastQuotationByStoreID(

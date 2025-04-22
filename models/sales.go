@@ -55,7 +55,7 @@ type Order struct {
 	StoreID                *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	CustomerID             *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
 	Store                  *Store              `json:"store,omitempty"`
-	Customer               *Customer           `json:"customer,omitempty" bson:"-"`
+	Customer               *Customer           `json:"customer" bson:"-"`
 	Products               []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy            *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	DeliveredByUser        *User               `json:"delivered_by_user,omitempty"`
@@ -2150,9 +2150,24 @@ func (order *Order) MakeRedisCode() error {
 	}
 
 	paddingCount := store.SalesSerialNumber.PaddingCount
+	if store.SalesSerialNumber.Prefix != "" {
+		order.Code = fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		order.Code = fmt.Sprintf("%s%0*d", store.SalesSerialNumber.Prefix, paddingCount, incr)
+	}
 
-	invoiceID := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, paddingCount, incr)
-	order.Code = invoiceID
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			order.Code = strings.ReplaceAll(order.Code, "DATE", currentDate)
+		}
+	}
+
 	order.InvoiceCountValue = incr - (store.SalesSerialNumber.StartFromCount - 1)
 	return nil
 }

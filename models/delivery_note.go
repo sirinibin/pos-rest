@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -530,6 +531,73 @@ func (deliverynote *DeliveryNote) GenerateCode(startFrom int, storeCode string) 
 	return storeCode + "-" + strconv.Itoa(code+1), nil
 }
 
+func (store *Store) GetDeliveryNoteCount() (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (model *DeliveryNote) MakeCode() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := model.StoreID.Hex() + "_delivery_note_counter"
+
+	// Check if counter exists, if not set it to the custom startFrom - 1
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	if exists == 0 {
+		count, err := store.GetDeliveryNoteCount()
+		if err != nil {
+			return err
+		}
+
+		startFrom := store.DeliveryNoteSerialNumber.StartFromCount
+
+		startFrom += count
+		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
+		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	incr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	paddingCount := store.DeliveryNoteSerialNumber.PaddingCount
+	if store.DeliveryNoteSerialNumber.Prefix != "" {
+		model.Code = fmt.Sprintf("%s-%0*d", store.DeliveryNoteSerialNumber.Prefix, paddingCount, incr)
+	} else {
+		model.Code = fmt.Sprintf("%s%0*d", store.DeliveryNoteSerialNumber.Prefix, paddingCount, incr)
+	}
+
+	if store.CountryCode != "" {
+		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
+		if ok {
+			location, err := time.LoadLocation(timeZone)
+			if err != nil {
+				return errors.New("error loading location")
+			}
+			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
+			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+		}
+	}
+	return nil
+}
+
 func (deliverynote *DeliveryNote) Insert() error {
 	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("delivery_note")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -540,56 +608,12 @@ func (deliverynote *DeliveryNote) Insert() error {
 		return err
 	}
 
-	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
 	deliverynote.ID = primitive.NewObjectID()
-	if len(deliverynote.Code) == 0 {
-		startAt := 90000
-		for {
-			code, err := deliverynote.GenerateCode(startAt, store.Code)
-			if err != nil {
-				return err
-			}
-			deliverynote.Code = code
-			exists, err := deliverynote.IsCodeExists()
-			if err != nil {
-				return err
-			}
-			if !exists {
-				break
-			}
-			startAt++
-		}
-	}
-
 	_, err = collection.InsertOne(ctx, &deliverynote)
 	if err != nil {
 		return err
 	}
 	return nil
-}
-
-func (deliverynote *DeliveryNote) IsCodeExists() (exists bool, err error) {
-	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("delivery_note")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	count := int64(0)
-
-	if deliverynote.ID.IsZero() {
-		count, err = collection.CountDocuments(ctx, bson.M{
-			"code": deliverynote.Code,
-		})
-	} else {
-		count, err = collection.CountDocuments(ctx, bson.M{
-			"code": deliverynote.Code,
-			"_id":  bson.M{"$ne": deliverynote.ID},
-		})
-	}
-
-	return (count > 0), err
 }
 
 func (deliverynote *DeliveryNote) Update() error {
