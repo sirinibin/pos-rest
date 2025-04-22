@@ -99,6 +99,9 @@ type Order struct {
 	Zatca                  ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
 	SkipZatcaReporting     bool                `json:"skip_zatca_reporting,omitempty" bson:"-"`
 	Remarks                string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Phone                  string              `bson:"phone" json:"phone"`
+	VatNo                  string              `bson:"vat_no" json:"vat_no"`
+	Address                string              `bson:"address" json:"address"`
 }
 
 type ZatcaReporting struct {

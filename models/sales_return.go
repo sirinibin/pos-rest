@@ -109,6 +109,9 @@ type SalesReturn struct {
 	Zatca              ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
 	SkipZatcaReporting bool                 `json:"skip_zatca_reporting,omitempty" bson:"-"`
 	Remarks            string               `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Phone              string               `bson:"phone" json:"phone"`
+	VatNo              string               `bson:"vat_no" json:"vat_no"`
+	Address            string               `bson:"address" json:"address"`
 }
 
 func (salesReturn *SalesReturn) AddPayments() error {
@@ -3404,7 +3407,7 @@ func (salesReturn *SalesReturn) ValidateZatcaReporting() (errs map[string]string
 	}
 
 	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "Customer is required"
 	}
 
@@ -3436,7 +3439,7 @@ func (salesReturn *SalesReturn) ValidateZatcaReporting() (errs map[string]string
 
 	}
 
-	if customer.VATNo != "" && store.Zatca.Phase == "2" {
+	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
 
 		if !IsValidDigitNumber(customer.VATNo, "15") {

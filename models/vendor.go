@@ -179,6 +179,26 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[vendor_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		vendorIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range vendorIds {
+			vendorID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return vendors, criterias, err
+			}
+			objecIds = append(objecIds, vendorID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[purchase_count]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])

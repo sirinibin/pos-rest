@@ -244,6 +244,26 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[customer_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		customerIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range customerIds {
+			customerID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return customers, criterias, err
+			}
+			objecIds = append(objecIds, customerID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
 	//sales
 	keys, ok = r.URL.Query()["search[sales_count]"]
 	if ok && len(keys[0]) >= 1 {

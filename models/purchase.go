@@ -113,6 +113,9 @@ type Purchase struct {
 	PaymentsCount     int64               `bson:"payments_count" json:"payments_count"`
 	PaymentMethods    []string            `json:"payment_methods" bson:"payment_methods"`
 	Remarks           string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Phone             string              `bson:"phone" json:"phone"`
+	VatNo             string              `bson:"vat_no" json:"vat_no"`
+	Address           string              `bson:"address" json:"address"`
 }
 
 func (store *Store) GetReturnedAmountByPurchaseID(purchaseID primitive.ObjectID) (returnedAmount float64, returnCount int64, err error) {
