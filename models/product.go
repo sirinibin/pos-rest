@@ -1980,6 +1980,10 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 
 	if govalidator.IsNull(product.Name) {
 		errs["name"] = "Name is required"
+	} else if len(product.Name) < 3 {
+		errs["name"] = "Name length should be min. 3 chars"
+	} else if len(product.Name) > 500 {
+		errs["name"] = "Name length should be max. 500 chars"
 	}
 
 	/*
