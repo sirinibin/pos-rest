@@ -29,6 +29,7 @@ type CustomerWithdrawal struct {
 	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	CustomerID    *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Customer      *Customer           `json:"customer" bson:"-"`
 	CustomerName  string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	PaymentMethod string              `json:"payment_method" bson:"payment_method"`
 	StoreID       *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
@@ -788,8 +789,10 @@ func (model *CustomerWithdrawal) MakeCode() error {
 			if err != nil {
 				return errors.New("error loading location")
 			}
-			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
-			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+			if model.Date != nil {
+				currentDate := model.Date.In(location).Format("20060102") // YYYYMMDD
+				model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+			}
 		}
 	}
 	return nil

@@ -2166,8 +2166,10 @@ func (order *Order) MakeRedisCode() error {
 			if err != nil {
 				return errors.New("error loading location")
 			}
-			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
-			order.Code = strings.ReplaceAll(order.Code, "DATE", currentDate)
+			if order.Date != nil {
+				currentDate := order.Date.In(location).Format("20060102") // YYYYMMDD
+				order.Code = strings.ReplaceAll(order.Code, "DATE", currentDate)
+			}
 		}
 	}
 

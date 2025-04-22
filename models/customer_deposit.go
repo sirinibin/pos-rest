@@ -23,12 +23,13 @@ import (
 // CustomerDeposit : CustomerDeposit structure
 type CustomerDeposit struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Code          string              `bson:"code,omitempty" json:"code,omitempty"`
+	Code          string              `bson:"code" json:"code"`
 	Amount        float64             `bson:"amount" json:"amount"`
-	Description   string              `bson:"description,omitempty" json:"description,omitempty"`
-	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	Description   string              `bson:"description" json:"description"`
+	Date          *time.Time          `bson:"date" json:"date"`
 	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	CustomerID    *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	Customer      *Customer           `json:"customer" bson:"-"`
 	CustomerName  string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	PaymentMethod string              `json:"payment_method" bson:"payment_method"`
 	StoreID       *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
@@ -533,9 +534,10 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 		errs["amount"] = "Amount is required"
 	}
 
-	if govalidator.IsNull(customerdeposit.Description) {
-		errs["description"] = "Description is required"
-	}
+	/*
+		if govalidator.IsNull(customerdeposit.Description) {
+			errs["description"] = "Description is required"
+		}*/
 
 	if govalidator.IsNull(customerdeposit.DateStr) {
 		errs["date_str"] = "Date is required"
@@ -691,8 +693,10 @@ func (model *CustomerDeposit) MakeCode() error {
 			if err != nil {
 				return errors.New("error loading location")
 			}
-			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
-			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+			if model.Date != nil {
+				currentDate := model.Date.In(location).Format("20060102") // YYYYMMDD
+				model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+			}
 		}
 	}
 

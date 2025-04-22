@@ -688,8 +688,10 @@ func (model *Capital) MakeCode() error {
 			if err != nil {
 				return errors.New("error loading location")
 			}
-			currentDate := time.Now().In(location).Format("20060102") // YYYYMMDD
-			model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+			if model.Date != nil {
+				currentDate := model.Date.In(location).Format("20060102") // YYYYMMDD
+				model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+			}
 		}
 	}
 

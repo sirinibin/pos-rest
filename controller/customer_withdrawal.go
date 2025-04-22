@@ -320,6 +320,10 @@ func ViewCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+	customer.SetSearchLabel()
+	customerwithdrawal.Customer = customer
+
 	response.Status = true
 	response.Result = customerwithdrawal
 

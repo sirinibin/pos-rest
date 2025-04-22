@@ -320,6 +320,10 @@ func ViewCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+	customer.SetSearchLabel()
+	customerdeposit.Customer = customer
+
 	response.Status = true
 	response.Result = customerdeposit
 
