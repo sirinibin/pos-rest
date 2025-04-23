@@ -575,10 +575,6 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		errs["amount"] = "Amount is required"
 	}
 
-	if govalidator.IsNull(customerwithdrawal.Description) {
-		errs["description"] = "Description is required"
-	}
-
 	if govalidator.IsNull(customerwithdrawal.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
@@ -596,8 +592,14 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 	}
 
 	customer, err := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
-	if err != nil {
-		errs["customer_id"] = "Invalid Customer:" + customerwithdrawal.CustomerID.Hex()
+	if err != nil && err != mongo.ErrNoDocuments {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["customer_id"] = "error finding customer: " + err.Error()
+		return errs
+	}
+
+	if customer == nil {
+		errs["customer_id"] = "Customer is required"
 	}
 
 	if scenario == "update" {
@@ -609,25 +611,28 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		*/
 	}
 
-	referenceModel := "customer"
-	customerAccount, err := store.CreateAccountIfNotExists(
-		customerwithdrawal.StoreID,
-		&customer.ID,
-		&referenceModel,
-		customer.Name,
-		&customer.Phone,
-		&customer.VATNo,
-	)
-	if err != nil {
-		errs["account"] = "Error creating account: " + err.Error()
+	var customerAccount *Account
+
+	if customer != nil {
+		referenceModel := "customer"
+		customerAccount, err = store.CreateAccountIfNotExists(
+			customerwithdrawal.StoreID,
+			&customer.ID,
+			&referenceModel,
+			customer.Name,
+			&customer.Phone,
+			&customer.VATNo,
+		)
+		if err != nil {
+			errs["account"] = "Error creating account: " + err.Error()
+		}
 	}
 
-	customerBalance := customerAccount.Balance
-	accountType := customerAccount.Type
-
-	oldCustomerWithdrawl := &CustomerWithdrawal{}
-
 	if customerAccount != nil {
+		customerBalance := customerAccount.Balance
+		accountType := customerAccount.Type
+		oldCustomerWithdrawl := &CustomerWithdrawal{}
+
 		if scenario == "update" {
 			oldCustomerWithdrawl, _ = store.FindCustomerWithdrawalByID(&customerwithdrawal.ID, bson.M{})
 			if customerAccount.CreditTotal > (customerAccount.DebitTotal - oldCustomerWithdrawl.Amount) {
@@ -684,7 +689,6 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 
 	for k, imageContent := range customerwithdrawal.ImagesContent {
 		splits := strings.Split(imageContent, ",")
-
 		if len(splits) == 2 {
 			customerwithdrawal.ImagesContent[k] = splits[1]
 		} else if len(splits) == 1 {
