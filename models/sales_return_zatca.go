@@ -944,7 +944,7 @@ func (salesReturn *SalesReturn) SaveClearedInvoiceData(reportingResponse ZatcaRe
 		}*/
 
 	// Delete xml files
-	xmlFilePath := "ZatcaPython/templates/invoice_" + salesReturn.Code + ".xml"
+	xmlFilePath := "ZatcaPython/templates/return_invoice_" + salesReturn.Code + ".xml"
 	if _, err := os.Stat(xmlFilePath); err == nil {
 		err = os.Remove(xmlFilePath)
 		if err != nil {
