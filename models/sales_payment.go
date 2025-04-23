@@ -37,7 +37,7 @@ type SalesPayment struct {
 	StoreName     string              `json:"store_name" bson:"store_name"`
 	Deleted       bool                `bson:"deleted" json:"deleted"`
 	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
+	DeletedByUser *User               `json:"deleted_by_user" bson:"-"`
 	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 }
 

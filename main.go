@@ -80,6 +80,7 @@ func main() {
 	router.HandleFunc("/v1/product/barcode/{barcode}", controller.ViewProductByBarCode).Methods("GET")
 	router.HandleFunc("/v1/product/{id}", controller.UpdateProduct).Methods("PUT")
 	router.HandleFunc("/v1/product/{id}", controller.DeleteProduct).Methods("DELETE")
+	router.HandleFunc("/v1/product/restore/{id}", controller.RestoreProduct).Methods("POST")
 
 	//Expense
 	router.HandleFunc("/v1/expense", controller.CreateExpense).Methods("POST")

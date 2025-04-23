@@ -111,9 +111,9 @@ type Product struct {
 	Unit             string                  `bson:"unit,omitempty" json:"unit,omitempty"`
 	Images           []string                `bson:"images,omitempty" json:"images,omitempty"`
 	ImagesContent    []string                `json:"images_content,omitempty"`
-	Deleted          bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	Deleted          bool                    `bson:"deleted" json:"deleted"`
 	DeletedBy        *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser    *User                   `json:"deleted_by_user,omitempty"`
+	DeletedByUser    *User                   `json:"deleted_by_user" bson:"-"`
 	DeletedAt        *time.Time              `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 	CreatedAt        *time.Time              `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt        *time.Time              `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -603,6 +603,26 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			timeZoneOffset = s
 		}
 
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		} /*else if value == 2 {
+			//criterias.SearchBy["deleted"] = bson.M{"$eq": nil}
+
+			criterias.SearchBy["$or"] = []bson.M{
+				{"deleted": bson.M{"$eq": true}},
+				{"deleted": bson.M{"$eq": false}},
+				{"deleted": bson.M{"$eq": nil}},
+			}
+		}*/
 	}
 
 	textSearching := false
@@ -2398,6 +2418,35 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	product.DeletedBy = &userID
 	now := time.Now()
 	product.DeletedAt = &now
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": product.ID},
+		bson.M{"$set": product},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (product *Product) RestoreProduct(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	err = product.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	product.Deleted = false
+	product.DeletedBy = nil
+	product.DeletedAt = nil
 
 	_, err = collection.UpdateOne(
 		ctx,
