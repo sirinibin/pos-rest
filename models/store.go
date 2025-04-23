@@ -528,6 +528,10 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["name"] = "Name is required"
 	}
 
+	if govalidator.IsNull(store.CountryCode) {
+		errs["country_code"] = "Country is required"
+	}
+
 	if govalidator.IsNull(store.Code) {
 		errs["code"] = "Branch code is required"
 	}

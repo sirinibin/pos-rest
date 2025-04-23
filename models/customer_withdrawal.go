@@ -798,7 +798,7 @@ func (model *CustomerWithdrawal) MakeCode() error {
 	}
 
 	if exists == 0 {
-		count, err := store.GetExpenseCount()
+		count, err := store.GetCustomerWithdrawalCount()
 		if err != nil {
 			return err
 		}
