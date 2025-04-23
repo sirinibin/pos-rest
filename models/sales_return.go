@@ -448,7 +448,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		if err != nil {
 			return err
 		}
-		salesreturn.Products[i].Name = productObject.Name
+		//salesreturn.Products[i].Name = productObject.Name
 		salesreturn.Products[i].NameInArabic = productObject.NameInArabic
 		salesreturn.Products[i].ItemCode = productObject.ItemCode
 		salesreturn.Products[i].PartNumber = productObject.PartNumber
@@ -1361,6 +1361,12 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 		if salesReturnProduct.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		}
+
+		if govalidator.IsNull(strings.TrimSpace(salesReturnProduct.Name)) {
+			errs["name_"+strconv.Itoa(index)] = "Name is required"
+		} else if len(salesReturnProduct.Name) < 3 {
+			errs["name_"+strconv.Itoa(index)] = "Name requires min. 3 chars"
 		}
 
 		if salesReturnProduct.UnitDiscount > salesReturnProduct.UnitPrice && salesReturnProduct.UnitPrice > 0 {

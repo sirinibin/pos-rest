@@ -386,7 +386,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		quotation.StoreName = store.Name
 	}
 
-	if quotation.CustomerID != nil {
+	if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() {
 		customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
@@ -439,7 +439,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		if err != nil {
 			return err
 		}
-		quotation.Products[i].Name = productObject.Name
+		//quotation.Products[i].Name = productObject.Name
 		quotation.Products[i].NameInArabic = productObject.NameInArabic
 		quotation.Products[i].ItemCode = productObject.ItemCode
 		quotation.Products[i].PartNumber = productObject.PartNumber
@@ -1032,6 +1032,12 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 		if product.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		}
+
+		if govalidator.IsNull(strings.TrimSpace(product.Name)) {
+			errs["name_"+strconv.Itoa(index)] = "Name is required"
+		} else if len(product.Name) < 3 {
+			errs["name_"+strconv.Itoa(index)] = "Name requires min. 3 chars"
 		}
 
 		if product.UnitPrice == 0 {

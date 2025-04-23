@@ -102,7 +102,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 			return err
 		}
 
-		deliverynote.Products[i].Name = productObject.Name
+		//deliverynote.Products[i].Name = productObject.Name
 		deliverynote.Products[i].NameInArabic = productObject.NameInArabic
 		deliverynote.Products[i].ItemCode = productObject.ItemCode
 		deliverynote.Products[i].PartNumber = productObject.PartNumber
@@ -507,6 +507,12 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 
 		if product.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		}
+
+		if govalidator.IsNull(strings.TrimSpace(product.Name)) {
+			errs["name_"+strconv.Itoa(index)] = "Name is required"
+		} else if len(product.Name) < 3 {
+			errs["name_"+strconv.Itoa(index)] = "Name requires min. 3 chars"
 		}
 
 	}

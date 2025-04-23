@@ -599,7 +599,7 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 		if err != nil {
 			return err
 		}
-		purchase.Products[i].Name = productObject.Name
+		//purchase.Products[i].Name = productObject.Name
 		purchase.Products[i].NameInArabic = productObject.NameInArabic
 		purchase.Products[i].ItemCode = productObject.ItemCode
 		purchase.Products[i].PartNumber = productObject.PartNumber
@@ -1447,6 +1447,12 @@ func (purchase *Purchase) Validate(
 
 		if product.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(i)] = "Quantity is required"
+		}
+
+		if govalidator.IsNull(strings.TrimSpace(product.Name)) {
+			errs["name_"+strconv.Itoa(i)] = "Name is required"
+		} else if len(product.Name) < 3 {
+			errs["name_"+strconv.Itoa(i)] = "Name requires min. 3 chars"
 		}
 
 		if product.UnitDiscount > product.PurchaseUnitPrice && product.PurchaseUnitPrice > 0 {

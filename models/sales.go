@@ -375,7 +375,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 		if err != nil {
 			return err
 		}
-		order.Products[i].Name = productObject.Name
+		//order.Products[i].Name = productObject.Name
 		order.Products[i].NameInArabic = productObject.NameInArabic
 		order.Products[i].ItemCode = productObject.ItemCode
 		order.Products[i].PartNumber = productObject.PartNumber
@@ -1521,6 +1521,12 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 		if product.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		}
+
+		if govalidator.IsNull(strings.TrimSpace(product.Name)) {
+			errs["name_"+strconv.Itoa(index)] = "Name is required"
+		} else if len(product.Name) < 3 {
+			errs["name_"+strconv.Itoa(index)] = "Name requires min. 3 chars"
 		}
 
 		if product.UnitDiscount > product.UnitPrice && product.UnitPrice > 0 {
