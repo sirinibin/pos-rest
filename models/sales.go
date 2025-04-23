@@ -97,11 +97,11 @@ type Order struct {
 	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	Zatca                  ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	SkipZatcaReporting     bool                `json:"skip_zatca_reporting,omitempty" bson:"-"`
 	Remarks                string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	Phone                  string              `bson:"phone" json:"phone"`
 	VatNo                  string              `bson:"vat_no" json:"vat_no"`
 	Address                string              `bson:"address" json:"address"`
+	EnableReportToZatca    bool                `json:"enable_report_to_zatca" bson:"-"`
 }
 
 type ZatcaReporting struct {
@@ -1208,32 +1208,32 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return errs
 	}
 
-	if store.Zatca.Phase == "2" {
-		var lastOrder *Order
-		if order.ID.IsZero() {
-			lastOrder, err = store.FindLastOrderByStoreID(&store.ID, bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-				errs["store_id"] = "Error finding last order"
-			}
-		} else {
-			lastOrder, err = order.FindPreviousOrder(bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-				errs["store_id"] = "Error finding last order"
-			}
+	/*if store.Zatca.Phase == "2" {
+	var lastOrder *Order
+	if order.ID.IsZero() {
+		lastOrder, err = store.FindLastOrderByStoreID(&store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+			errs["store_id"] = "Error finding last order"
 		}
-
-		if lastOrder != nil {
-			/*
-				if (lastOrder.Zatca.ReportingFailedCount > 0 || lastOrder.Zatca.ComplianceCheckFailedCount > 0) && !lastOrder.Zatca.ReportingPassed {
-					errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
-				}
-			*/
-
-			if !order.SkipZatcaReporting && !lastOrder.Zatca.ReportingPassed {
-				errs["reporting_to_zatca"] = "Last sale is not reported to Zatca. please report it and try again"
-			}
+	} else {
+		lastOrder, err = order.FindPreviousOrder(bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
+			errs["store_id"] = "Error finding last order"
 		}
 	}
+
+	if lastOrder != nil {
+		/*
+			if (lastOrder.Zatca.ReportingFailedCount > 0 || lastOrder.Zatca.ComplianceCheckFailedCount > 0) && !lastOrder.Zatca.ReportingPassed {
+				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
+			}
+	*/
+	/*
+		if !lastOrder.Zatca.ReportingPassed && order.EnableReportToZatca {
+			errs["reporting_to_zatca"] = "Last sale is not reported to Zatca. please report it and try again"
+		}*/
+	/*	}
+		}*/
 
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
@@ -1582,37 +1582,12 @@ func (order *Order) ValidateZatcaReporting() (errs map[string]string) {
 	}
 
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "invalid customer"
 		return errs
 	}
 
-	var lastOrder *Order
-	if order.ID.IsZero() {
-		lastOrder, err = store.FindLastOrderByStoreID(&store.ID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-			errs["store_id"] = "Error finding last order"
-		}
-	} else {
-		lastOrder, err = order.FindPreviousOrder(bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-			errs["store_id"] = "Error finding last order"
-		}
-	}
-
-	if lastOrder != nil {
-		/*
-			if (lastOrder.Zatca.ReportingFailedCount > 0 || lastOrder.Zatca.ComplianceCheckFailedCount > 0) && !lastOrder.Zatca.ReportingPassed {
-				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
-			}
-		*/
-
-		if !lastOrder.Zatca.ReportingPassed {
-			errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
-		}
-	}
-
-	if customer.VATNo != "" {
+	if customer != nil && customer.VATNo != "" {
 		customerErrorMessages := []string{}
 
 		if !IsValidDigitNumber(customer.VATNo, "15") {
@@ -2451,6 +2426,31 @@ func (order *Order) FindPreviousOrder(selectFields map[string]interface{}) (prev
 	}
 
 	return previousOrder, err
+}
+
+func (order *Order) FindLastReportedOrder(selectFields map[string]interface{}) (lastReportedOrder *Order, err error) {
+	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	findOneOptions.SetSort(map[string]interface{}{"zatca.reporting_passed_at": -1})
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"zatca.reporting_passed": true,
+			"store_id":               order.StoreID,
+		}, findOneOptions).
+		Decode(&lastReportedOrder)
+	if err != nil {
+		return nil, err
+	}
+
+	return lastReportedOrder, err
 }
 
 func (store *Store) IsOrderExists(ID *primitive.ObjectID) (exists bool, err error) {

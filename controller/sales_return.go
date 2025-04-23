@@ -163,7 +163,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 	salesreturn.UUID = uuid.New().String()
 
-	if !salesreturn.SkipZatcaReporting && !IsConnectedToInternet() {
+	if salesreturn.EnableReportToZatca && !IsConnectedToInternet() {
 		response.Status = false
 		response.Errors["reporting_to_zatca"] = "not connected to internet"
 		w.WriteHeader(http.StatusBadRequest)
@@ -171,7 +171,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if store.Zatca.Phase == "2" && store.Zatca.Connected && !salesreturn.SkipZatcaReporting {
+	if store.Zatca.Phase == "2" && store.Zatca.Connected && salesreturn.EnableReportToZatca {
 		err = salesreturn.ReportToZatca()
 		if err != nil {
 			redisErr := salesreturn.UnMakeCode()

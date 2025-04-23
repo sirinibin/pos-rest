@@ -130,13 +130,16 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 		},
 	}
 
-	previousSalesReturn, err := salesReturn.FindPreviousSalesReturn(bson.M{})
+	lastReportedSalesReturn, err := salesReturn.FindLastReportedSalesReturn(bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return xmlContent, errors.New("error finding previous order: " + err.Error())
 	}
 
-	if previousSalesReturn != nil && previousSalesReturn.Hash != "" {
-		salesReturn.PrevHash = previousSalesReturn.Hash
+	//log.Print("lastReportedSalesReturn.Code:")
+	//log.Print(lastReportedSalesReturn.Code)
+
+	if lastReportedSalesReturn != nil && lastReportedSalesReturn.Hash != "" {
+		salesReturn.PrevHash = lastReportedSalesReturn.Hash
 	} else {
 		salesReturn.PrevHash, err = GenerateInvoiceHash("0")
 		if err != nil {

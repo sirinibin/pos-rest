@@ -183,7 +183,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.UUID = uuid.New().String()
 
-	if !order.SkipZatcaReporting && !IsConnectedToInternet() {
+	if order.EnableReportToZatca && !IsConnectedToInternet() {
 		response.Status = false
 		response.Errors["reporting_to_zatca"] = "not connected to internet"
 		w.WriteHeader(http.StatusBadRequest)
@@ -191,7 +191,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if store.Zatca.Phase == "2" && store.Zatca.Connected && !order.SkipZatcaReporting {
+	if store.Zatca.Phase == "2" && store.Zatca.Connected && order.EnableReportToZatca {
 		err = order.ReportToZatca()
 		if err != nil {
 			log.Print("reporting failed")

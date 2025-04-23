@@ -113,13 +113,16 @@ func (order *Order) MakeXMLContent() (string, error) {
 		},
 	}
 
-	previousOrder, err := order.FindPreviousOrder(bson.M{})
+	lastReportedOrder, err := order.FindLastReportedOrder(bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return xmlContent, errors.New("error finding previous order: " + err.Error())
 	}
 
-	if previousOrder != nil && previousOrder.Hash != "" {
-		order.PrevHash = previousOrder.Hash
+	//log.Print("lastReportedOrder.Code:")
+	//log.Print(lastReportedOrder.Code)
+
+	if lastReportedOrder != nil && lastReportedOrder.Hash != "" {
+		order.PrevHash = lastReportedOrder.Hash
 	} else {
 		order.PrevHash, err = GenerateInvoiceHash("0") //Make hash of 0
 		if err != nil {

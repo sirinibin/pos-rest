@@ -92,26 +92,26 @@ type SalesReturn struct {
 	CreatedByUser *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 	//ReceivedByName   string               `json:"received_by_name,omitempty" bson:"received_by_name,omitempty"`
-	CustomerName       string               `json:"customer_name" bson:"customer_name"`
-	StoreName          string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName      string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName      string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName      string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Profit             float64              `bson:"profit" json:"profit"`
-	NetProfit          float64              `bson:"net_profit" json:"net_profit"`
-	Loss               float64              `bson:"loss" json:"loss"`
-	NetLoss            float64              `bson:"net_loss" json:"net_loss"`
-	TotalPaymentPaid   float64              `bson:"total_payment_paid" json:"total_payment_paid"`
-	BalanceAmount      float64              `bson:"balance_amount" json:"balance_amount"`
-	Payments           []SalesReturnPayment `bson:"payments" json:"payments"`
-	PaymentsInput      []SalesReturnPayment `bson:"-" json:"payments_input"`
-	PaymentsCount      int64                `bson:"payments_count" json:"payments_count"`
-	Zatca              ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	SkipZatcaReporting bool                 `json:"skip_zatca_reporting,omitempty" bson:"-"`
-	Remarks            string               `bson:"remarks,omitempty" json:"remarks,omitempty"`
-	Phone              string               `bson:"phone" json:"phone"`
-	VatNo              string               `bson:"vat_no" json:"vat_no"`
-	Address            string               `bson:"address" json:"address"`
+	CustomerName        string               `json:"customer_name" bson:"customer_name"`
+	StoreName           string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName       string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName       string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName       string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Profit              float64              `bson:"profit" json:"profit"`
+	NetProfit           float64              `bson:"net_profit" json:"net_profit"`
+	Loss                float64              `bson:"loss" json:"loss"`
+	NetLoss             float64              `bson:"net_loss" json:"net_loss"`
+	TotalPaymentPaid    float64              `bson:"total_payment_paid" json:"total_payment_paid"`
+	BalanceAmount       float64              `bson:"balance_amount" json:"balance_amount"`
+	Payments            []SalesReturnPayment `bson:"payments" json:"payments"`
+	PaymentsInput       []SalesReturnPayment `bson:"-" json:"payments_input"`
+	PaymentsCount       int64                `bson:"payments_count" json:"payments_count"`
+	Zatca               ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	Remarks             string               `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Phone               string               `bson:"phone" json:"phone"`
+	VatNo               string               `bson:"vat_no" json:"vat_no"`
+	Address             string               `bson:"address" json:"address"`
+	EnableReportToZatca bool                 `json:"enable_report_to_zatca" bson:"-"`
 }
 
 func (salesReturn *SalesReturn) AddPayments() error {
@@ -388,12 +388,14 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		salesreturn.StoreName = store.Name
 	}
 
-	if salesreturn.CustomerID != nil {
+	if salesreturn.CustomerID != nil && !salesreturn.CustomerID.IsZero() {
 		customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
 		salesreturn.CustomerName = customer.Name
+	} else {
+		salesreturn.CustomerName = ""
 	}
 
 	/*
@@ -1067,6 +1069,31 @@ func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (s
 	return salesreturns, criterias, nil
 }
 
+func (model *SalesReturn) FindLastReportedSalesReturn(selectFields map[string]interface{}) (lastReportedSalesReturn *SalesReturn, err error) {
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	findOneOptions.SetSort(map[string]interface{}{"zatca.reporting_passed_at": -1})
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"zatca.reporting_passed": true,
+			"store_id":               model.StoreID,
+		}, findOneOptions).
+		Decode(&lastReportedSalesReturn)
+	if err != nil {
+		return nil, err
+	}
+
+	return lastReportedSalesReturn, err
+}
+
 func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldSalesReturn *SalesReturn) (errs map[string]string) {
 	errs = make(map[string]string)
 
@@ -1087,39 +1114,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	if salesreturn.Discount < 0 {
 		errs["discount"] = "Cash discount should not be < 0"
-	}
-
-	if store.Zatca.Phase == "2" {
-		var lastSalesReturn *SalesReturn
-		if salesreturn.ID.IsZero() {
-			lastSalesReturn, err = store.FindLastSalesReturnByStoreID(&store.ID, bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-				errs["store_id"] = "Error finding last sales return"
-			}
-		} else {
-			lastSalesReturn, err = salesreturn.FindPreviousSalesReturn(bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-				errs["store_id"] = "Error finding last sales return"
-			}
-		}
-
-		if lastSalesReturn != nil {
-			/*
-				if (lastSalesReturn.Zatca.ReportingFailedCount > 0 || lastSalesReturn.Zatca.ComplianceCheckFailedCount > 0) && !lastSalesReturn.Zatca.ReportingPassed {
-					errs["last_sales_return"] = "Last sales return is not reported to Zatca. please report it and try again"
-				}
-			*/
-
-			if !salesreturn.SkipZatcaReporting && !lastSalesReturn.Zatca.ReportingPassed {
-				errs["reporting_to_zatca"] = "Last sale is not reported to Zatca. please report it and try again"
-			}
-
-			/*
-				if !lastSalesReturn.Zatca.ReportingPassed {
-					errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
-				}*/
-
-		}
 	}
 
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
@@ -3411,34 +3405,6 @@ func (salesReturn *SalesReturn) ValidateZatcaReporting() (errs map[string]string
 	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "Customer is required"
-	}
-
-	if store.Zatca.Phase == "2" {
-		var lastSalesReturn *SalesReturn
-		if salesReturn.ID.IsZero() {
-			lastSalesReturn, err = store.FindLastSalesReturnByStoreID(&store.ID, bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-				errs["store_id"] = "Error finding last sales return"
-			}
-		} else {
-			lastSalesReturn, err = salesReturn.FindPreviousSalesReturn(bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-				errs["store_id"] = "Error finding last sales return"
-			}
-		}
-
-		if lastSalesReturn != nil {
-			/*
-				if (lastSalesReturn.Zatca.ReportingFailedCount > 0 || lastSalesReturn.Zatca.ComplianceCheckFailedCount > 0) && !lastSalesReturn.Zatca.ReportingPassed {
-					errs["last_sales_return"] = "Last sales return is not reported to Zatca. please report it and try again"
-				}
-			*/
-
-			if !lastSalesReturn.Zatca.ReportingPassed {
-				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
-			}
-		}
-
 	}
 
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
