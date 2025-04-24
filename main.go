@@ -289,11 +289,14 @@ func main() {
 	router.HandleFunc("/v1/posting", controller.ListPostings).Methods("GET")
 
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
+	router.PathPrefix("/pdfs/").Handler(http.StripPrefix("/pdfs/", http.FileServer(http.Dir("./pdfs/"))))
 	router.PathPrefix("/zatca/").Handler(http.StripPrefix("/zatca/", http.FileServer(http.Dir("./zatca/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
 	router.HandleFunc("/v1/socket", controller.WebSocketHandler).Methods("GET")
 	//router.HandleFunc("/sockjs-node", controller.WebSocketHandler).Methods("GET")
+
+	router.HandleFunc("/v1/upload-pdf", controller.SavePdf).Methods("POST")
 
 	server := socketio.NewServer(nil)
 	if err != nil {
