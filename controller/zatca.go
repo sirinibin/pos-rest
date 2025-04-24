@@ -13,7 +13,6 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/mux"
-	"github.com/sirinibin/pos-rest/env"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -102,17 +101,23 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 
 	//log.Print("serialNumber:" + serialNumber)
 
+	countryCode := "SA"
+	if store.CountryCode != "" {
+		countryCode = store.CountryCode
+	}
+
 	// Create JSON payload
 	payload := map[string]interface{}{
-		"env":               env.Getenv("ZATCA_ENV", "NonProduction"),
+		//"env":               env.Getenv("ZATCA_ENV", "NonProduction"),
+		"env":               store.Zatca.Env,
 		"otp":               zatcaConnectInput.Otp,
 		"crn":               store.RegistrationNumber,
 		"serial_number":     serialNumber,
 		"vat":               store.VATNo,
 		"name":              store.Name,
 		"branch_name":       store.BranchName,
-		"country_code":      "SA",
-		"invoice_type":      "1100",
+		"country_code":      store.CountryCode,
+		"invoice_type":      countryCode,
 		"address":           store.Address,
 		"business_category": store.BusinessCategory,
 	}

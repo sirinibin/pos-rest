@@ -10,7 +10,7 @@ import traceback
 
 def main():
     try:
-        environment_type = "NonProduction"
+        environment_type = "Simulation"
 
         api_path = 'developer-portal'  # Default value
 
@@ -25,7 +25,7 @@ def main():
         #print("\n3: Clearance & Reporting Documents\n")
 
         cert_info = api_helper.load_json_from_file("certificates/certificateInfo.json")
-        xml_template_path = "templates/invoice_S-INV-YUGU-000007.xml"
+        xml_template_path = "templates/invoice_S-INV-20250424-001.xml"
         private_key = cert_info["privateKey"]
         x509_certificate_content = base64.b64decode(cert_info["pcsid_binarySecurityToken"]).decode('utf-8')
         #print(f"x509_certificate_content: {x509_certificate_content}\n")

@@ -576,11 +576,11 @@ func (order *Order) RecordZatcaComplianceCheckFailure(errorMessage string) error
 	order.Zatca.ComplianceCheckFailedCount++
 	order.Zatca.ComplianceCheckErrors = append(order.Zatca.ComplianceCheckErrors, errorMessage)
 	order.Zatca.ComplianceCheckLastFailedAt = &now
-	/*
-		err := order.Update()
-		if err != nil {
-			return err
-		}*/
+
+	err := order.Update()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
