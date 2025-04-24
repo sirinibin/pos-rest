@@ -14,6 +14,7 @@ import (
 	"github.com/jung-kurt/gofpdf"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -44,9 +45,10 @@ type Quotation struct {
 	Date                     *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr                  string              `json:"date_str,omitempty" bson:"-"`
 	StoreID                  *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID               *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Store                    *Store              `json:"store,omitempty"`
-	Customer                 *Customer           `json:"customer,omitempty"  bson:"-" `
+	CustomerID               *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
+	Customer                 *Customer           `json:"customer"  bson:"-" `
+	CustomerName             string              `json:"customer_name" bson:"customer_name"`
 	Products                 []QuotationProduct  `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy              *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
@@ -79,7 +81,6 @@ type Quotation struct {
 	UpdatedBy                *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser            *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser            *User               `json:"updated_by_user,omitempty"`
-	CustomerName             string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	StoreName                string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	DeliveredByName          string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
 	CreatedByName            string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
@@ -392,6 +393,8 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 			return err
 		}
 		quotation.CustomerName = customer.Name
+	} else {
+		quotation.CustomerName = ""
 	}
 
 	if quotation.DeliveredBy != nil {
@@ -959,60 +962,13 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	}
 
-	if quotation.StoreID == nil || quotation.StoreID.IsZero() {
-		errs["store_id"] = "Store is required"
-	} else {
-		exists, err := IsStoreExists(quotation.StoreID)
-		if err != nil {
-			errs["store_id"] = err.Error()
-		}
-
-		if !exists {
-			errs["store_id"] = "Invalid store:" + quotation.StoreID.Hex()
-		}
-	}
-
-	if quotation.CustomerID == nil || quotation.CustomerID.IsZero() {
-		errs["customer_id"] = "Customer is required"
-	} else {
-		exists, err := store.IsCustomerExists(quotation.CustomerID)
-		if err != nil {
-			errs["customer_id"] = err.Error()
-		}
-
-		if !exists {
-			errs["customer_id"] = "Invalid Customer:" + quotation.CustomerID.Hex()
-		}
-	}
-
-	if quotation.DeliveredBy == nil || quotation.DeliveredBy.IsZero() {
-		errs["delivered_by"] = "Delivered By is required"
-	} else {
-		exists, err := IsUserExists(quotation.DeliveredBy)
-		if err != nil {
-			errs["delivered_by"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["delivered_by"] = "Invalid Delivered By:" + quotation.DeliveredBy.Hex()
-		}
+	_, err = store.FindCustomerByID(quotation.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_id"] = "Invalid customer"
 	}
 
 	if len(quotation.Products) == 0 {
 		errs["product_id"] = "Atleast 1 product is required for quotation"
-	}
-
-	if quotation.DeliveredBySignatureID != nil && !quotation.DeliveredBySignatureID.IsZero() {
-		exists, err := store.IsSignatureExists(quotation.DeliveredBySignatureID)
-		if err != nil {
-			errs["delivered_by_signature_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["delivered_by_signature_id"] = "Invalid Delivered By Signature:" + quotation.DeliveredBySignatureID.Hex()
-		}
 	}
 
 	for index, product := range quotation.Products {

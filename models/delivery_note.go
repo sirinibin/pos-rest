@@ -13,6 +13,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -35,15 +36,15 @@ type DeliveryNote struct {
 	Date            *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr         string                `json:"date_str,omitempty" bson:"-"`
 	StoreID         *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID      *primitive.ObjectID   `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	Customer        *Customer             `json:"customer,omitempty"  bson:"-" `
+	CustomerID      *primitive.ObjectID   `json:"customer_id" bson:"customer_id"`
+	Customer        *Customer             `json:"customer"  bson:"-" `
+	CustomerName    string                `json:"customer_name" bson:"customer_name"`
 	Products        []DeliveryNoteProduct `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy     *primitive.ObjectID   `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	CreatedAt       *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt       *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy       *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
 	UpdatedBy       *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CustomerName    string                `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	StoreName       string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	DeliveredByName string                `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
 	CreatedByName   string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
@@ -64,12 +65,14 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 		deliverynote.StoreName = store.Name
 	}
 
-	if deliverynote.CustomerID != nil {
+	if deliverynote.CustomerID != nil && !deliverynote.CustomerID.IsZero() {
 		customer, err := store.FindCustomerByID(deliverynote.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
 		}
 		deliverynote.CustomerName = customer.Name
+	} else {
+		deliverynote.CustomerName = ""
 	}
 
 	if deliverynote.DeliveredBy != nil {
@@ -446,44 +449,9 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 
 	}
 
-	if deliverynote.StoreID == nil || deliverynote.StoreID.IsZero() {
-		errs["store_id"] = "Store is required"
-	} else {
-		exists, err := IsStoreExists(deliverynote.StoreID)
-		if err != nil {
-			errs["store_id"] = err.Error()
-		}
-
-		if !exists {
-			errs["store_id"] = "Invalid store:" + deliverynote.StoreID.Hex()
-		}
-	}
-
-	if deliverynote.CustomerID == nil || deliverynote.CustomerID.IsZero() {
-		errs["customer_id"] = "Customer is required"
-	} else {
-		exists, err := store.IsCustomerExists(deliverynote.CustomerID)
-		if err != nil {
-			errs["customer_id"] = err.Error()
-		}
-
-		if !exists {
-			errs["customer_id"] = "Invalid Customer:" + deliverynote.CustomerID.Hex()
-		}
-	}
-
-	if deliverynote.DeliveredBy == nil || deliverynote.DeliveredBy.IsZero() {
-		errs["delivered_by"] = "Delivered By is required"
-	} else {
-		exists, err := IsUserExists(deliverynote.DeliveredBy)
-		if err != nil {
-			errs["delivered_by"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["delivered_by"] = "Invalid Delivered By:" + deliverynote.DeliveredBy.Hex()
-		}
+	_, err = store.FindCustomerByID(deliverynote.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_id"] = "Invalid customer"
 	}
 
 	if len(deliverynote.Products) == 0 {

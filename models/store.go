@@ -80,6 +80,7 @@ type Store struct {
 	ShowAddressInInvoiceFooter     bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
 	DefaultQuotationValidityDays   *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
 	DefaultQuotationDeliveryDays   *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
+	ZatcaQrOnLeftBottom            bool                  `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
 }
 
 type SerialNumber struct {

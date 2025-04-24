@@ -352,9 +352,11 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
-	customer.SetSearchLabel()
-	quotation.Customer = customer
+	if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() {
+		customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+		customer.SetSearchLabel()
+		quotation.Customer = customer
+	}
 
 	response.Status = true
 	response.Result = quotation
