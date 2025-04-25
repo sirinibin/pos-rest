@@ -1587,8 +1587,15 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 
 		if productStoreTemp, ok := product.ProductStores[purchase.StoreID.Hex()]; ok {
 			productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
-			productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
-			productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
+
+			if purchaseProduct.WholesaleUnitPrice > 0 {
+				productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+			}
+
+			if purchaseProduct.RetailUnitPrice > 0 {
+				productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
+			}
+
 			product.ProductStores[purchase.StoreID.Hex()] = productStoreTemp
 		} else {
 			product.ProductStores = map[string]ProductStore{}
