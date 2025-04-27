@@ -116,8 +116,8 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		"vat":               store.VATNo,
 		"name":              store.Name,
 		"branch_name":       store.BranchName,
-		"country_code":      store.CountryCode,
-		"invoice_type":      countryCode,
+		"country_code":      countryCode,
+		"invoice_type":      "1100",
 		"address":           store.Address,
 		"business_category": store.BusinessCategory,
 	}
