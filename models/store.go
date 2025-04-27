@@ -98,6 +98,7 @@ type Zatca struct {
 	ComplianceRequestID           int64               `bson:"compliance_request_id,omitempty" json:"compliance_request_id"`
 	BinarySecurityToken           string              `bson:"binary_security_token,omitempty" json:"binary_security_token"`
 	Secret                        string              `bson:"secret,omitempty" json:"secret"`
+	ComplianceCheck               ComplianceCheck     `bson:"compliance_check" json:"compliance_check"`
 	ProductionRequestID           int64               `bson:"production_request_id,omitempty" json:"production_request_id"`
 	ProductionBinarySecurityToken string              `bson:"production_binary_security_token,omitempty" json:"production_binary_security_token"`
 	ProductionSecret              string              `bson:"production_secret,omitempty" json:"production_secret"`
@@ -109,6 +110,15 @@ type Zatca struct {
 	ConnectionFailedCount         int64               `bson:"connection_failed_count,omitempty" json:"connection_failed_count,omitempty"`
 	ConnectionErrors              []string            `bson:"connection_errors,omitempty" json:"connection_errors,omitempty"`
 	ConnectionLastFailedAt        *time.Time          `bson:"connection_last_failed_at,omitempty" json:"connection_last_failed_at,omitempty"`
+}
+
+type ComplianceCheck struct {
+	SimplifiedInvoice    bool `json:"simplified_invoice"`
+	SimplifiedCreditNote bool `json:"simplified_credit_note"`
+	SimplifiedDebitNote  bool `json:"simplified_debit_note"`
+	StandardInvoice      bool `json:"standard_invoice"`
+	StandardCreditNote   bool `json:"standard_credit_note"`
+	StandardDebitNote    bool `json:"standard_debit_note"`
 }
 
 /*

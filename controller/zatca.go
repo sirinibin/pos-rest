@@ -22,16 +22,17 @@ import (
 
 // Define a struct to hold the JSON response
 type PythonResponse struct {
-	PrivateKey               string `json:"private_key"`
-	Csr                      string `json:"csr"`
-	CcsidRequestID           int64  `json:"ccsid_requestID"`
-	CcsidBinarySecurityToken string `json:"ccsid_binarySecurityToken"`
-	CcsidSecret              string `json:"ccsid_secret"`
-	PcsidRequestID           int64  `json:"pcsid_requestID"`
-	PcsidBinarySecurityToken string `json:"pcsid_binarySecurityToken"`
-	PcsidSecret              string `json:"pcsid_secret"`
-	Error                    string `json:"error"`
-	Traceback                string `json:"traceback,omitempty"`
+	PrivateKey               string                 `json:"private_key"`
+	Csr                      string                 `json:"csr"`
+	CcsidRequestID           int64                  `json:"ccsid_requestID"`
+	CcsidBinarySecurityToken string                 `json:"ccsid_binarySecurityToken"`
+	CcsidSecret              string                 `json:"ccsid_secret"`
+	PcsidRequestID           int64                  `json:"pcsid_requestID"`
+	PcsidBinarySecurityToken string                 `json:"pcsid_binarySecurityToken"`
+	PcsidSecret              string                 `json:"pcsid_secret"`
+	Error                    string                 `json:"error"`
+	Traceback                string                 `json:"traceback,omitempty"`
+	ComplianceCheck          models.ComplianceCheck `json:"compliance_check"`
 }
 
 // ConnectStoreToZatc : handler for POST /store/zatca/connect
@@ -164,6 +165,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 			response.Status = false
 			response.Errors["otp"] = "Error connecting to zatac: " + pythonResponse.Error
 			store.Zatca.ConnectionFailedCount++
+			store.Zatca.ComplianceCheck = pythonResponse.ComplianceCheck
 			now := time.Now()
 			store.Zatca.ConnectionLastFailedAt = &now
 			store.Zatca.ConnectionErrors = append(store.Zatca.ConnectionErrors, "Connection failure1: "+pythonResponse.Error)
@@ -195,6 +197,8 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		response.Status = false
 		response.Errors["otp"] = "Error connecting to zatac: " + pythonResponse.Error
 		store.Zatca.ConnectionFailedCount++
+		store.Zatca.ComplianceCheck = pythonResponse.ComplianceCheck
+
 		now := time.Now()
 		store.Zatca.ConnectionLastFailedAt = &now
 		store.Zatca.ConnectionErrors = append(store.Zatca.ConnectionErrors, "Connection failure2: "+pythonResponse.Error)
@@ -209,6 +213,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store.Zatca.ComplianceCheck = pythonResponse.ComplianceCheck
 	store.Zatca.Otp = zatcaConnectInput.Otp
 	store.Zatca.PrivateKey = pythonResponse.PrivateKey
 	store.Zatca.Csr = pythonResponse.Csr

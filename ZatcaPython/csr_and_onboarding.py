@@ -156,13 +156,13 @@ def main():
         except json.JSONDecodeError:
             cert_info["error"] = clean_response
             #print("\ncomplianceCSID Server Response: \n" + clean_response)
+  
+        
+         # 3: Sending Sample Documents
+        #print("\n3: Sending Sample Documents\n")
 
-        '''
-        # 3: Sending Sample Documents
-        print("\n3: Sending Sample Documents\n")
-
-        cert_info = api_helper.load_json_from_file("certificates/certificateInfo.json")
-        xml_template_path = "templates/invoice.xml"
+        cert_info = api_helper.load_json_from_file("ZatcaPython/certificates/certificateInfo.json")
+        xml_template_path = "ZatcaPython/templates/invoice.xml"
 
         private_key = cert_info["privateKey"]
         x509_certificate_content = base64.b64decode(cert_info["ccsid_binarySecurityToken"]).decode('utf-8')
@@ -171,25 +171,24 @@ def main():
         base_document = etree.parse(xml_template_path, parser)
         document_types = [
             ["STDSI", "388", "Standard Invoice", ""],
-        # ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
-        # ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
-        # ["SIMSI", "388", "Simplified Invoice", ""],
-        # ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
-        # ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
+            ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
+            ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
+            ["SIMSI", "388", "Simplified Invoice", ""],
+            ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
+            ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
         ]
 
         icv = 0
         pih = "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ=="
 
+        compliance_check = {}
         for doc_type in document_types:
             prefix, type_code, description, instruction_note = doc_type
             icv += 1
             is_simplified = prefix.startswith("SIM")
 
-            print(f"Processing {description}...\n")
+            #print(f"Processing {description}...\n")
 
-        '''
-        '''
             new_doc = invoice_helper.modify_xml(
                 base_document,
                 f"{prefix}-0001",
@@ -199,19 +198,14 @@ def main():
                 pih,
                 instruction_note
             )
-        '''
-        '''
-
+            basePath = "ZatcaPython/"
+            json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,basePath)
             
-            
-            new_doc = base_document
-        
-            json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key)
-            
-            print(f"\n\njson_payload\n")
-            print(json_payload)
+            #print(json_payload)
             
             response = api_helper.compliance_checks(cert_info, json_payload)
+            #print(f"json_payload: \n{json_payload}")
+
             request_type = "Compliance Checks"
             api_url = cert_info["complianceChecksUrl"]
 
@@ -219,30 +213,55 @@ def main():
 
             json_decoded_response = json.loads(response)
 
+            '''
             if json_decoded_response:
-                print(f"complianceChecks Server Response: \n{clean_response}")
+                #print(f"complianceChecks Server Response: \n{clean_response}")
             else:
-                print(f"Invalid JSON Response: \n{response}")
+                #print(f"Invalid JSON Response: \n{response}")
                 exit(1)
 
             if response is None:
                 print(f"Failed to process {description}: serverResult is null.\n")
                 exit(1)
-
-        
+            '''    
 
             status = json_decoded_response["reportingStatus"] if is_simplified else json_decoded_response["clearanceStatus"]
 
             if "REPORTED" in status or "CLEARED" in status:
                 json_payload = json.loads(json_payload)
                 pih = json_payload["invoiceHash"]
-                print(f"\n{description} processed successfully\n\n")
+                
+                if prefix == "STDSI":
+                    compliance_check["standard_invoice"] = True
+                if prefix == "STDCN":
+                    compliance_check["standard_credit_note"] = True
+                if prefix == "STDDN":
+                    compliance_check["standard_debit_note"] = True
+                if prefix == "SIMSI":
+                    compliance_check["simplified_invoice"] = True
+                if prefix == "SIMCN":
+                    compliance_check["simplified_credit_note"] = True
+                if prefix == "SIMDN":
+                    compliance_check["simplified_debit_note"] = True
+                  
+                #print(f"\n{description} processed successfully\n\n")
             else:
-                print(f"Failed to process {description}: status is {status}\n")
+                
+                if prefix == "STDSI":
+                    compliance_check["standard_invoice"] = False
+                if prefix == "STDCN":
+                    compliance_check["standard_credit_note"] = False
+                if prefix == "STDDN":
+                    compliance_check["standard_debit_note"] = False
+                if prefix == "SIMSI":
+                    compliance_check["simplified_invoice"] = False
+                if prefix == "SIMCN":
+                    compliance_check["simplified_credit_note"] = False
+                if prefix == "SIMDN":
+                    compliance_check["simplified_debit_note"] = False
+                
+                #print(f"Failed to process {description}: status is {status}\n")
                 exit(1)
-        '''    
-
-            #time.sleep(1)  
 
         # 4. Get Production CSID
         
@@ -269,6 +288,7 @@ def main():
             cert_info["error"] = clean_response
             #print(f"Production CSID Server Response: \n{clean_response}")
 
+  
         data = {
             "private_key": cert_info["privateKey"],
             "csr": cert_info["csr"],
@@ -279,6 +299,7 @@ def main():
             "pcsid_binarySecurityToken": cert_info["pcsid_binarySecurityToken"],
             "pcsid_secret": cert_info["pcsid_secret"],
             "error":   cert_info["error"],
+            "compliance_check":compliance_check,
         }
         print(json.dumps(data))  # Print JSON output
     except Exception as e:

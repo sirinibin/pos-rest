@@ -1,6 +1,8 @@
 import base64
 from lxml import etree 
 import uuid
+import pytz
+from datetime import datetime,timezone
 
 class invoice_helper:
 
@@ -19,9 +21,7 @@ class invoice_helper:
         new_doc = etree.ElementTree(etree.fromstring(etree.tostring(base_document.getroot(), pretty_print=True)))
 
         # Generate a new GUID for the UUID
-        #guid_string = str(uuid.uuid4()).upper()
-   
-        guid_string = '4bd41220-f619-47bc-830b-7fedd3b33032'
+        guid_string = str(uuid.uuid4()).upper()
 
         # Define namespaces
         namespaces = {
@@ -42,6 +42,41 @@ class invoice_helper:
         uuid_node = new_doc.find('.//cbc:UUID', namespaces=namespaces)
         if uuid_node is not None:
             uuid_node.text = guid_string
+
+        utc_now = datetime.now(timezone.utc)
+        # Convert to Saudi Arabia timezone (UTC+3)
+        saudi_tz = pytz.timezone("Asia/Riyadh")
+        saudi_time = utc_now.astimezone(saudi_tz)
+        # Format the timestamp
+        #signature_timestamp = saudi_time.strftime("%Y-%m-%dT%H:%M:%S")    
+        issue_date = saudi_time.strftime("%Y-%m-%d")    
+        issue_time = saudi_time.strftime("%H:%M:%S")    
+
+        issue_date_node = new_doc.find('.//cbc:IssueDate', namespaces=namespaces)
+        if  issue_date_node  is not None:
+            issue_date_node.text = issue_date
+        
+        issue_time_node = new_doc.find('.//cbc:IssueTime', namespaces=namespaces)
+        if  issue_time_node  is not None:
+            issue_time_node.text = issue_time
+
+        id_node = new_doc.find('.//cac:InvoiceDocumentReference/cbc:ID', namespaces=namespaces)
+        if  id_node  is not None:
+            id_node.text = "Invoice Number: 354; Invoice Issue Date: "+issue_date   
+
+        actual_delivery_date_node = new_doc.find('.//cbc:ActualDeliveryDate', namespaces=namespaces)
+        if  actual_delivery_date_node  is not None:
+            actual_delivery_date_node.text = issue_date     
+        
+        
+       
+        '''
+        <cac:BillingReference>
+		<cac:InvoiceDocumentReference>
+			<cbc:ID>Invoice Number: 354; Invoice Issue Date: 2021-02-10</cbc:ID>
+		</cac:InvoiceDocumentReference>
+	    </cac:BillingReference>
+        '''    
         
         # Modify InvoiceTypeCode node and set 'name' attribute
         invoice_type_code_node = new_doc.find('.//cbc:InvoiceTypeCode', namespaces=namespaces)
@@ -75,7 +110,7 @@ class invoice_helper:
             for billing_reference_node in billing_reference_nodes:
                 parent_node = new_doc.find('.//cac:BillingReference/..', namespaces=namespaces)
                 if parent_node is not None:
-                    parent_node.remove(billing_reference_node)    
+                    parent_node.remove(billing_reference_node)
 
         return new_doc
     
