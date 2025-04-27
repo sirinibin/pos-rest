@@ -100,6 +100,11 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 
 	serialNumber += strconv.Itoa((len(parts) + 1)) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
 
+	now := time.Now()
+	currentDate := now.Format("20060102") // YYYYMMDD
+	serialNumber = strings.ReplaceAll(serialNumber, "DATE", currentDate)
+	//log.Print("serialNumber:" + serialNumber)
+
 	//log.Print("serialNumber:" + serialNumber)
 
 	countryCode := "SA"
