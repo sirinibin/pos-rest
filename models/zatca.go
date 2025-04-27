@@ -7,6 +7,15 @@ import (
 	"encoding/xml"
 )
 
+type ComplianceCheck struct {
+	SimplifiedInvoice    bool `json:"simplified_invoice" bson:"simplified_invoice"`
+	SimplifiedCreditNote bool `json:"simplified_credit_note" bson:"simplified_credit_note"`
+	SimplifiedDebitNote  bool `json:"simplified_debit_note" bson:"simplified_debit_note`
+	StandardInvoice      bool `json:"standard_invoice" bson:"standard_invoice"`
+	StandardCreditNote   bool `json:"standard_credit_note" bson:"standard_credit_note"`
+	StandardDebitNote    bool `json:"standard_debit_note" bson:"standard_debit_note"`
+}
+
 // Invoice struct to hold XML data
 type Invoice struct {
 	XMLName xml.Name `xml:"Invoice"`

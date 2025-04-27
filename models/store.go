@@ -112,15 +112,6 @@ type Zatca struct {
 	ConnectionLastFailedAt        *time.Time          `bson:"connection_last_failed_at,omitempty" json:"connection_last_failed_at,omitempty"`
 }
 
-type ComplianceCheck struct {
-	SimplifiedInvoice    bool `json:"simplified_invoice"`
-	SimplifiedCreditNote bool `json:"simplified_credit_note"`
-	SimplifiedDebitNote  bool `json:"simplified_debit_note"`
-	StandardInvoice      bool `json:"standard_invoice"`
-	StandardCreditNote   bool `json:"standard_credit_note"`
-	StandardDebitNote    bool `json:"standard_debit_note"`
-}
-
 /*
 func (store *Store) SetChangeLog(
 	event string,
