@@ -1027,7 +1027,7 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) {
+	if scenario != "update" && !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) {
 		vatNoExists, err := customer.IsVatNoExists()
 		if err != nil {
 			errs["vat_no"] = err.Error()
