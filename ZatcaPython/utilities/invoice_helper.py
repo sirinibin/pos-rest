@@ -16,7 +16,7 @@ class invoice_helper:
         return False
 
     @staticmethod
-    def modify_xml(base_document, id, invoice_type_codename, invoice_type_code_value, icv, pih, instruction_note,vat,crn):
+    def modify_xml(base_document, id, invoice_type_codename, invoice_type_code_value, icv, pih, instruction_note,vat,crn,invoice_code):
         # Clone the document to keep the original intact
         new_doc = etree.ElementTree(etree.fromstring(etree.tostring(base_document.getroot(), pretty_print=True)))
 
@@ -69,6 +69,9 @@ class invoice_helper:
         vat_node = new_doc.find('.//cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID', namespaces=namespaces)
         if  vat_node  is not None:
             vat_node.text = vat
+        invoice_id_node = new_doc.find('.//cbc:ID', namespaces=namespaces)
+        if  invoice_id_node  is not None:
+            invoice_id_node.text = invoice_code
 
         '''
         	<cac:AccountingSupplierParty>

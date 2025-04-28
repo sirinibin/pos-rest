@@ -120,6 +120,9 @@ def main():
 
     icv = 0
     pih = "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ=="
+    vat = "399999999900003"
+    crn = "886431145"
+    invoice_code = "TST-TST"
 
     for doc_type in document_types:
         prefix, type_code, description, instruction_note = doc_type
@@ -135,12 +138,15 @@ def main():
             type_code,
             icv,
             pih,
-            instruction_note
+            instruction_note,
+            vat,
+            crn,
+            invoice_code
         )
         basPath = ""
         json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,basPath)
         
-        #print(json_payload)
+        print(json_payload)
         
         response = api_helper.compliance_checks(cert_info, json_payload)
         #print(f"json_payload: \n{json_payload}")

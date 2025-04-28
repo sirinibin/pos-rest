@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os/exec"
@@ -89,6 +90,12 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	now := time.Now()
+	currentDate := now.Format("20060102") // YYYYMMDD
+
+	invoiceCode := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, 1)
+	invoiceCode = strings.ReplaceAll(invoiceCode, "DATE", currentDate)
+	log.Print("invoiceCode:" + invoiceCode)
 
 	serialNumberTemplate := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, 1)
 
@@ -100,8 +107,6 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 
 	serialNumber += strconv.Itoa((len(parts) + 1)) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
 
-	now := time.Now()
-	currentDate := now.Format("20060102") // YYYYMMDD
 	serialNumber = strings.ReplaceAll(serialNumber, "DATE", currentDate)
 	//log.Print("serialNumber:" + serialNumber)
 
@@ -132,6 +137,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		"invoice_type":      "1100",
 		"address":           storeAddress,
 		"business_category": store.BusinessCategory,
+		"invoice_code":      invoiceCode,
 	}
 
 	// Convert payload to JSON
