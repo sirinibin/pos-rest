@@ -1426,6 +1426,18 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
+	if customer != nil {
+		if totalPayment > 0 {
+			_, ok := customer.Stores[store.ID.Hex()]
+			if ok {
+				if (customer.Stores[store.ID.Hex()].SalesBalanceAmount + totalPayment) > customer.CreditLimit {
+					errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customer.Stores[store.ID.Hex()].SalesBalanceAmount))
+					return errs
+				}
+			}
+		}
+	}
+
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}

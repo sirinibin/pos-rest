@@ -1218,6 +1218,16 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return errs
 	}
 
+	/*
+		if totalPayment == 0 {
+
+			_, ok := customer.Stores[store.ID.Hex()]
+			if ok {
+				//customer.Stores[store.ID.Hex()].SalesBalanceAmount
+
+			}
+		}*/
+
 	/*if store.Zatca.Phase == "2" {
 	var lastOrder *Order
 	if order.ID.IsZero() {
@@ -1298,6 +1308,16 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		customerAccount, err = store.FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			errs["customer_account"] = "Error finding customer account: " + err.Error()
+		}
+
+		if order.BalanceAmount > 0 {
+			_, ok := customer.Stores[store.ID.Hex()]
+			if ok {
+				if (customer.Stores[store.ID.Hex()].SalesBalanceAmount + order.BalanceAmount) > customer.CreditLimit {
+					errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customer.Stores[store.ID.Hex()].SalesBalanceAmount))
+					return errs
+				}
+			}
 		}
 	}
 
