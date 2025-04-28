@@ -1,6 +1,7 @@
 package models
 
 type NationalAddress struct {
+	ShortCode          string `bson:"short_code" json:"short_code"`
 	BuildingNo         string `bson:"building_no,omitempty" json:"building_no"`
 	BuildingNoArabic   string `bson:"building_no_arabic,omitempty" json:"building_no_arabic"`
 	StreetName         string `bson:"street_name,omitempty" json:"street_name"`

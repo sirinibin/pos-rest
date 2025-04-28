@@ -112,6 +112,12 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		countryCode = store.CountryCode
 	}
 
+	storeAddress := ""
+	if store.NationalAddress.ShortCode != "" {
+		storeAddress = store.NationalAddress.ShortCode
+	} else {
+		storeAddress = store.Address
+	}
 	// Create JSON payload
 	payload := map[string]interface{}{
 		//"env":               env.Getenv("ZATCA_ENV", "NonProduction"),
@@ -124,7 +130,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		"branch_name":       store.BranchName,
 		"country_code":      countryCode,
 		"invoice_type":      "1100",
-		"address":           store.Address,
+		"address":           storeAddress,
 		"business_category": store.BusinessCategory,
 	}
 
