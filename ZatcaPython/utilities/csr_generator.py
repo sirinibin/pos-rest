@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 import base64
 import os
 import re
+from asn1crypto.core import UTF8String
 
 class CsrGenerator:
     def __init__(self, config, environment_type):
@@ -40,6 +41,7 @@ class CsrGenerator:
         ]))
         
         # Add ASN.1 extension
+        '''
         csr_builder = csr_builder.add_extension(
             x509.UnrecognizedExtension(
                 ObjectIdentifier("1.3.6.1.4.1.311.20.2"), 
@@ -47,6 +49,16 @@ class CsrGenerator:
             ),
             critical=False
         )
+        '''
+        csr_builder = csr_builder.add_extension(
+            x509.UnrecognizedExtension(
+                ObjectIdentifier("1.3.6.1.4.1.311.20.2"), 
+                #self.asn_template.encode()
+                UTF8String(self.asn_template).dump()
+            ),
+            critical=False
+        )
+        
         
         # Add SAN extension
         csr_builder = csr_builder.add_extension(
