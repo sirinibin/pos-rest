@@ -121,7 +121,7 @@ type Product struct {
 	UpdatedBy        *primitive.ObjectID     `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
 	CreatedByUser    *User                   `json:"created_by_user,omitempty"`
 	UpdatedByUser    *User                   `json:"updated_by_user,omitempty"`
-	CategoryName     []string                `json:"category_name" bson:"category_namey"`
+	CategoryName     []string                `json:"category_name" bson:"category_name"`
 	CreatedByName    string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName    string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName    string                  `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
