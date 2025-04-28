@@ -16,7 +16,7 @@ class invoice_helper:
         return False
 
     @staticmethod
-    def modify_xml(base_document, id, invoice_type_codename, invoice_type_code_value, icv, pih, instruction_note):
+    def modify_xml(base_document, id, invoice_type_codename, invoice_type_code_value, icv, pih, instruction_note,vat,crn):
         # Clone the document to keep the original intact
         new_doc = etree.ElementTree(etree.fromstring(etree.tostring(base_document.getroot(), pretty_print=True)))
 
@@ -63,6 +63,38 @@ class invoice_helper:
         id_node = new_doc.find('.//cac:InvoiceDocumentReference/cbc:ID', namespaces=namespaces)
         if  id_node  is not None:
             id_node.text = "Invoice Number: 354; Invoice Issue Date: "+issue_date   
+        crn_node = new_doc.find('.//cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
+        if  crn_node  is not None:
+            crn_node.text = crn 
+        vat_node = new_doc.find('.//cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID', namespaces=namespaces)
+        if  vat_node  is not None:
+            vat_node.text = vat
+
+        '''
+        	<cac:AccountingSupplierParty>
+		<cac:Party>
+			<cac:PartyIdentification>
+				<cbc:ID schemeID="CRN">1010010000</cbc:ID>
+			</cac:PartyIdentification>
+			<cac:PostalAddress>
+				<cbc:StreetName>الامير سلطان | Prince Sultan</cbc:StreetName>
+				<cbc:BuildingNumber>2322</cbc:BuildingNumber>
+				<cbc:CitySubdivisionName>المربع | Al-Murabba</cbc:CitySubdivisionName>
+				<cbc:CityName>الرياض | Riyadh</cbc:CityName>
+				<cbc:PostalZone>23333</cbc:PostalZone>
+				<cac:Country>
+					<cbc:IdentificationCode>SA</cbc:IdentificationCode>
+				</cac:Country>
+			</cac:PostalAddress>
+			<cac:PartyTaxScheme>
+				<cbc:CompanyID>399999999900003</cbc:CompanyID>
+
+                
+        	<cac:AccountingSupplierParty>
+		<cac:Party>
+			<cac:PartyIdentification>
+				<cbc:ID schemeID="CRN">1010010000</cbc:ID>
+        '''    
 
         actual_delivery_date_node = new_doc.find('.//cbc:ActualDeliveryDate', namespaces=namespaces)
         if  actual_delivery_date_node  is not None:

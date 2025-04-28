@@ -180,7 +180,8 @@ def main():
 
         icv = 0
         pih = "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ=="
-
+        vat = payloadFromGo["vat"]
+        crn = payloadFromGo["crn"]
         compliance_check = {}
         for doc_type in document_types:
             prefix, type_code, description, instruction_note = doc_type
@@ -196,7 +197,9 @@ def main():
                 type_code,
                 icv,
                 pih,
-                instruction_note
+                instruction_note,
+                vat,
+                crn
             )
             basePath = "ZatcaPython/"
             json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,basePath)

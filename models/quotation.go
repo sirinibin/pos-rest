@@ -89,6 +89,8 @@ type Quotation struct {
 	ValidityDays             *int64              `bson:"validity_days,omitempty" json:"validity_days,omitempty"`
 	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
 	Remarks                  string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Type                     string              `json:"type" bson:"type"`
+	PaymentStatus            string              `json:"payment_status" bson:"payment_status"`
 }
 
 func (store *Store) UpdateQuotationProfit() error {
@@ -762,6 +764,20 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[type]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["type"] = keys[0]
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_status]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["payment_status"] = keys[0]
 		}
 	}
 
