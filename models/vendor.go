@@ -802,11 +802,9 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		errs["registration_number"] = "Registration Number should be alpha numeric(a-zA-Z|0-9)"
 	}
 
-	if govalidator.IsNull(strings.TrimSpace(vendor.Phone)) {
-		errs["phone"] = "Phone is required"
-	} else if !ValidateSaudiPhone(strings.TrimSpace(vendor.Phone)) {
+	if !govalidator.IsNull(strings.TrimSpace(vendor.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(vendor.Phone)) {
 		errs["phone"] = "Invalid phone no."
-	} else {
+	} else if !govalidator.IsNull(strings.TrimSpace(vendor.Phone)) {
 
 		if strings.HasPrefix(vendor.Phone, "+966") {
 			vendor.Phone = strings.TrimPrefix(vendor.Phone, "+966")

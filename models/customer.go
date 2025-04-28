@@ -1004,12 +1004,9 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		errs["name"] = "Name is required"
 	}
 
-	if govalidator.IsNull(strings.TrimSpace(customer.Phone)) {
-		errs["phone"] = "Phone is required"
-	} else if !ValidateSaudiPhone(strings.TrimSpace(customer.Phone)) {
+	if !govalidator.IsNull(strings.TrimSpace(customer.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(customer.Phone)) {
 		errs["phone"] = "Invalid phone no."
-	} else {
-
+	} else if !govalidator.IsNull(strings.TrimSpace(customer.Phone)) {
 		if strings.HasPrefix(customer.Phone, "+966") {
 			customer.Phone = strings.TrimPrefix(customer.Phone, "+966")
 			customer.Phone = "0" + customer.Phone
