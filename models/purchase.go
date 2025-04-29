@@ -1214,6 +1214,29 @@ func (purchase *Purchase) Validate(
 		errs["vendor_id"] = "error finding vendor"
 	}
 
+	if vendor == nil && !govalidator.IsNull(purchase.VendorName) {
+		now := time.Now()
+		newVendor := Vendor{
+			Name:      purchase.VendorName,
+			CreatedBy: purchase.CreatedBy,
+			UpdatedBy: purchase.CreatedBy,
+			CreatedAt: &now,
+			UpdatedAt: &now,
+			StoreID:   purchase.StoreID,
+		}
+
+		err = newVendor.MakeCode()
+		if err != nil {
+			errs["vendor_id"] = "error creating new code"
+		}
+		err = newVendor.Insert()
+		if err != nil {
+			errs["vendor_id"] = "error creating new vendor"
+		}
+		newVendor.UpdateForeignLabelFields()
+		purchase.VendorID = &newVendor.ID
+	}
+
 	var vendorAccount *Account
 
 	if vendor != nil {
@@ -1366,16 +1389,6 @@ func (purchase *Purchase) Validate(
 			errs["vendor_id"] = "vendor account balance is zero"
 		}
 	}
-
-	/*
-		if !govalidator.IsNull(purchase.SignatureDateStr) {
-			const shortForm = "Jan 02 2006"
-			date, err := time.Parse(shortForm, purchase.SignatureDateStr)
-			if err != nil {
-				errs["signature_date_str"] = "Invalid date format"
-			}
-			purchase.SignatureDate = &date
-		}*/
 
 	if scenario == "update" {
 		if purchase.ID.IsZero() {

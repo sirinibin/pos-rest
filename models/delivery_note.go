@@ -450,9 +450,32 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 
 	}
 
-	_, err = store.FindCustomerByID(deliverynote.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(deliverynote.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "Invalid customer"
+	}
+
+	if customer == nil && !govalidator.IsNull(deliverynote.CustomerName) {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:      deliverynote.CustomerName,
+			CreatedBy: deliverynote.CreatedBy,
+			UpdatedBy: deliverynote.CreatedBy,
+			CreatedAt: &now,
+			UpdatedAt: &now,
+			StoreID:   deliverynote.StoreID,
+		}
+
+		err = newCustomer.MakeCode()
+		if err != nil {
+			errs["customer_id"] = "error creating new code"
+		}
+		err = newCustomer.Insert()
+		if err != nil {
+			errs["customer_id"] = "error creating new customer"
+		}
+		newCustomer.UpdateForeignLabelFields()
+		deliverynote.CustomerID = &newCustomer.ID
 	}
 
 	if len(deliverynote.Products) == 0 {

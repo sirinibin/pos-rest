@@ -979,9 +979,32 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 
 	}
 
-	_, err = store.FindCustomerByID(quotation.CustomerID, bson.M{})
+	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "Invalid customer"
+	}
+
+	if customer == nil && !govalidator.IsNull(quotation.CustomerName) {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:      quotation.CustomerName,
+			CreatedBy: quotation.CreatedBy,
+			UpdatedBy: quotation.CreatedBy,
+			CreatedAt: &now,
+			UpdatedAt: &now,
+			StoreID:   quotation.StoreID,
+		}
+
+		err = newCustomer.MakeCode()
+		if err != nil {
+			errs["customer_id"] = "error creating new code"
+		}
+		err = newCustomer.Insert()
+		if err != nil {
+			errs["customer_id"] = "error creating new customer"
+		}
+		newCustomer.UpdateForeignLabelFields()
+		quotation.CustomerID = &newCustomer.ID
 	}
 
 	if len(quotation.Products) == 0 {

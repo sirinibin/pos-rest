@@ -1218,6 +1218,29 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return errs
 	}
 
+	if customer == nil && !govalidator.IsNull(order.CustomerName) {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:      order.CustomerName,
+			CreatedBy: order.CreatedBy,
+			UpdatedBy: order.CreatedBy,
+			CreatedAt: &now,
+			UpdatedAt: &now,
+			StoreID:   order.StoreID,
+		}
+
+		err = newCustomer.MakeCode()
+		if err != nil {
+			errs["customer_id"] = "error creating new code"
+		}
+		err = newCustomer.Insert()
+		if err != nil {
+			errs["customer_id"] = "error creating new customer"
+		}
+		newCustomer.UpdateForeignLabelFields()
+		order.CustomerID = &newCustomer.ID
+	}
+
 	/*
 		if totalPayment == 0 {
 
