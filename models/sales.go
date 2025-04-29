@@ -3450,10 +3450,13 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 	}
 
 	now := time.Now()
+	var customer *Customer
 
-	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return nil, err
+	if order.CustomerID != nil && !order.CustomerID.IsZero() {
+		customer, err = store.FindCustomerByID(order.CustomerID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
 	}
 
 	cashAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Cash", nil, nil)

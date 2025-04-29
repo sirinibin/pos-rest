@@ -139,10 +139,14 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if customerdeposit.CustomerID != nil {
+	if customerdeposit.CustomerID != nil && !customerdeposit.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
-		customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if store != nil {
+			customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+			if customer != nil {
+				customer.SetCreditBalance()
+			}
+		}
 	}
 
 	response.Status = true
@@ -274,16 +278,24 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if customerdeposit.CustomerID != nil {
+	if customerdeposit.CustomerID != nil && !customerdeposit.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
-		customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if store != nil {
+			customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+			if customer != nil {
+				customer.SetCreditBalance()
+			}
+		}
 	}
 
-	if customerdepositOld.CustomerID != nil {
+	if customerdepositOld.CustomerID != nil && !customerdepositOld.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerdepositOld.StoreID, bson.M{})
-		customer, _ := store.FindCustomerByID(customerdepositOld.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if store != nil {
+			customer, _ := store.FindCustomerByID(customerdepositOld.CustomerID, bson.M{})
+			if customer != nil {
+				customer.SetCreditBalance()
+			}
+		}
 	}
 
 	response.Status = true

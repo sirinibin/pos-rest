@@ -259,9 +259,11 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
 
-	if salesreturn.CustomerID != nil {
+	if salesreturn.CustomerID != nil && !salesreturn.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
 	}
 
 	store.NotifyUsers("sales_return_updated")
@@ -484,9 +486,11 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
 
-	if salesreturn.CustomerID != nil {
+	if salesreturn.CustomerID != nil && !salesreturn.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
 	}
 
 	store.NotifyUsers("sales_return_updated")

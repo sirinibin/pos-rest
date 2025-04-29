@@ -294,9 +294,11 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.CustomerID != nil {
+	if order.CustomerID != nil && !order.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
 	}
 
 	store.NotifyUsers("sales_updated")
@@ -521,14 +523,18 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if order.CustomerID != nil {
+	if order.CustomerID != nil && !order.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
 	}
 
-	if orderOld.CustomerID != nil {
+	if orderOld.CustomerID != nil && !orderOld.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(orderOld.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
 	}
 
 	/*

@@ -139,10 +139,14 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if customerwithdrawal.CustomerID != nil {
+	if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
-		customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if store != nil {
+			customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+			if customer != nil {
+				customer.SetCreditBalance()
+			}
+		}
 	}
 
 	response.Status = true
@@ -274,16 +278,22 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if customerwithdrawal.CustomerID != nil {
+	if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
 		customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
 	}
 
-	if customerwithdrawalOld.CustomerID != nil {
+	if customerwithdrawalOld.CustomerID != nil && !customerwithdrawalOld.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerwithdrawalOld.StoreID, bson.M{})
-		customer, _ := store.FindCustomerByID(customerwithdrawalOld.CustomerID, bson.M{})
-		customer.SetCreditBalance()
+		if store != nil {
+			customer, _ := store.FindCustomerByID(customerwithdrawalOld.CustomerID, bson.M{})
+			if customer != nil {
+				customer.SetCreditBalance()
+			}
+		}
 	}
 
 	response.Status = true

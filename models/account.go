@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -553,23 +554,26 @@ func (store *Store) CreateAccountIfNotExists(
 	phone *string,
 	vatNo *string,
 ) (account *Account, err error) {
-	if vatNo != nil {
+	if vatNo != nil && !govalidator.IsNull(strings.TrimSpace(*vatNo)) {
+		log.Print("Getting account by vat:" + *vatNo)
 		account, err = store.FindAccountByVatNo(*vatNo, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
-	} else if phone != nil {
+	} else if phone != nil && !govalidator.IsNull(strings.TrimSpace(*phone)) {
+		log.Print("Getting account by phone:" + *phone)
 		account, err = store.FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
-	} else if referenceID != nil {
+	} else if referenceID != nil && !referenceID.IsZero() {
+		log.Print("Getting account ref id:" + referenceID.Hex())
 		account, err = store.FindAccountByReferenceIDByName(*referenceID, name, *storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
 
-	} else if referenceID == nil {
+	} else if referenceID == nil && !govalidator.IsNull(strings.TrimSpace(name)) {
 		//Only for accounts like Cash,Bank,Sales
 		account, err = store.FindAccountByName(name, storeID, nil, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {

@@ -130,6 +130,10 @@ func (customer *Customer) SetChangeLog(
 */
 
 func (customer *Customer) SetCreditBalance() error {
+	if customer == nil {
+		return nil
+	}
+
 	store, err := FindStoreByID(customer.StoreID, bson.M{})
 	if err != nil {
 		return err
