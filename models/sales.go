@@ -1328,14 +1328,9 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	var customerAccount *Account
 
 	if customer != nil {
-		customerAccount, err = store.FindAccountByReferenceID(customer.ID, *order.StoreID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			errs["customer_account"] = "Error finding customer account: " + err.Error()
-		}
-
-		if order.BalanceAmount > 0 && customerAccount != nil {
-			if customerAccount.Type == "asset" && customer.CreditLimit > 0 && ((customerAccount.Balance + order.BalanceAmount) > customer.CreditLimit) {
-				errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customerAccount.Balance))
+		if order.BalanceAmount > 0 {
+			if customer.CreditLimit > 0 && ((customer.CreditBalance + order.BalanceAmount) > customer.CreditLimit) {
+				errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is " + fmt.Sprintf("%.02f", (customer.CreditBalance))
 				return errs
 			}
 		}
