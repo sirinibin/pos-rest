@@ -107,7 +107,7 @@ type SalesReturn struct {
 	PaymentsInput       []SalesReturnPayment `bson:"-" json:"payments_input"`
 	PaymentsCount       int64                `bson:"payments_count" json:"payments_count"`
 	Zatca               ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	Remarks             string               `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Remarks             string               `bson:"remarks" json:"remarks"`
 	Phone               string               `bson:"phone" json:"phone"`
 	VatNo               string               `bson:"vat_no" json:"vat_no"`
 	Address             string               `bson:"address" json:"address"`

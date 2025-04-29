@@ -81,6 +81,7 @@ type Store struct {
 	DefaultQuotationValidityDays   *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
 	DefaultQuotationDeliveryDays   *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
 	ZatcaQrOnLeftBottom            bool                  `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
+	ShowReceivedByFooterInInvoice  bool                  `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
 }
 
 type SerialNumber struct {

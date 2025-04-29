@@ -112,7 +112,7 @@ type Purchase struct {
 	PaymentsInput     []PurchasePayment   `bson:"-" json:"payments_input"`
 	PaymentsCount     int64               `bson:"payments_count" json:"payments_count"`
 	PaymentMethods    []string            `json:"payment_methods" bson:"payment_methods"`
-	Remarks           string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Remarks           string              `bson:"remarks" json:"remarks"`
 	Phone             string              `bson:"phone" json:"phone"`
 	VatNo             string              `bson:"vat_no" json:"vat_no"`
 	Address           string              `bson:"address" json:"address"`

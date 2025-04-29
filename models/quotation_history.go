@@ -41,6 +41,8 @@ type ProductQuotationHistory struct {
 	Customer        *Customer           `json:"customer,omitempty"`
 	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	Type            string              `bson:"type" json:"type"`
+	PaymentStatus   string              `bson:"payment_status" json:"payment_status"`
 }
 
 type QuotationHistoryStats struct {
@@ -110,6 +112,20 @@ func (store *Store) SearchQuotationHistory(w http.ResponseWriter, r *http.Reques
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[type]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["type"] = keys[0]
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_status]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["payment_status"] = keys[0]
 		}
 	}
 
@@ -525,6 +541,8 @@ func (quotation *Quotation) AddProductsQuotationHistory() error {
 			DiscountPercent: quotationProduct.DiscountPercent,
 			CreatedAt:       quotation.CreatedAt,
 			UpdatedAt:       quotation.UpdatedAt,
+			Type:            quotation.Type,
+			PaymentStatus:   quotation.PaymentStatus,
 		}
 
 		history.UnitPrice = RoundFloat(quotationProduct.UnitPrice, 2)

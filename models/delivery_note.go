@@ -40,6 +40,7 @@ type DeliveryNote struct {
 	Customer        *Customer             `json:"customer"  bson:"-" `
 	CustomerName    string                `json:"customer_name" bson:"customer_name"`
 	Products        []DeliveryNoteProduct `bson:"products,omitempty" json:"products,omitempty"`
+	Remarks         string                `bson:"remarks" json:"remarks"`
 	DeliveredBy     *primitive.ObjectID   `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	CreatedAt       *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt       *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`

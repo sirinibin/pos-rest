@@ -328,6 +328,8 @@ func ViewCustomer(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+	customer.SetSearchLabel()
+
 	response.Status = true
 	response.Result = customer
 

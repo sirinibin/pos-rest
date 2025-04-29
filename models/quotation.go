@@ -12,6 +12,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/jung-kurt/gofpdf"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -88,7 +89,7 @@ type Quotation struct {
 	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ValidityDays             *int64              `bson:"validity_days,omitempty" json:"validity_days,omitempty"`
 	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
-	Remarks                  string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Remarks                  string              `bson:"remarks" json:"remarks"`
 	Type                     string              `json:"type" bson:"type"`
 	PaymentStatus            string              `json:"payment_status" bson:"payment_status"`
 }
@@ -1312,71 +1313,100 @@ func (store *Store) IsQuotationExists(ID *primitive.ObjectID) (exists bool, err 
 	return (count > 0), err
 }
 
-func (store *Store) ProcessQuotations() error {
+func ProcessQuotations() error {
 	log.Print("Processing quotations")
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	stores, err := GetAllStores()
 	if err != nil {
-		return errors.New("Error fetching quotations:" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
+		return err
 	}
 
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		quotation := Quotation{}
-		err = cur.Decode(&quotation)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
-		}
-
-		/*
-			quotation.ClearProductsQuotationHistory()
-			err = quotation.AddProductsQuotationHistory()
-			if err != nil {
-				return err
-			}*/
-
-		for i, product := range quotation.Products {
-			if product.Discount > 0 {
-				quotation.Products[i].UnitDiscount = product.Discount / product.Quantity
-				quotation.Products[i].UnitDiscountPercent = product.DiscountPercent
-			}
-		}
-
-		err = quotation.Update()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "quotation")
 		if err != nil {
 			return err
 		}
 
-		/*
-			err = quotation.SetProductsQuotationStats()
-			if err != nil {
-				return err
-			}*/
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
 
-		/*
-			err = quotation.SetCustomerQuotationStats()
-			if err != nil {
-				return err
-			}*/
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching quotations:" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
 
-		//quotation.Date = quotation.CreatedAt
-		/*
-			err = quotation.Update()
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
 			if err != nil {
-				return err
+				return errors.New("Cursor error:" + err.Error())
 			}
-		*/
+			quotation := Quotation{}
+			err = cur.Decode(&quotation)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if quotation.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
+
+			if quotation.Type != "invoice" {
+				quotation.Type = "quotation"
+				err = quotation.Update()
+				if err != nil {
+					return err
+				}
+			}
+
+			quotation.ClearProductsQuotationHistory()
+			quotation.AddProductsQuotationHistory()
+			quotation.SetCustomerQuotationStats()
+
+			/*
+				quotation.ClearProductsQuotationHistory()
+				err = quotation.AddProductsQuotationHistory()
+				if err != nil {
+					return err
+				}*/
+
+			/*
+				for i, product := range quotation.Products {
+					if product.Discount > 0 {
+						quotation.Products[i].UnitDiscount = product.Discount / product.Quantity
+						quotation.Products[i].UnitDiscountPercent = product.DiscountPercent
+					}
+				}
+
+
+			*/
+
+			/*
+				err = quotation.SetProductsQuotationStats()
+				if err != nil {
+					return err
+				}*/
+
+			/*
+				err = quotation.SetCustomerQuotationStats()
+				if err != nil {
+					return err
+				}*/
+
+			//quotation.Date = quotation.CreatedAt
+			/*
+				err = quotation.Update()
+				if err != nil {
+					return err
+				}
+			*/
+			bar.Add(1)
+		}
 	}
 	log.Print("DONE!")
 	return nil
@@ -1498,6 +1528,7 @@ func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.O
 	filter := map[string]interface{}{
 		"store_id":    storeID,
 		"customer_id": customer.ID,
+		"type":        "quotation",
 	}
 
 	pipeline := []bson.M{
@@ -1570,6 +1601,98 @@ func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.O
 	return nil
 }
 
+func (customer *Customer) SetCustomerQuotationInvoiceStatsByStoreID(storeID primitive.ObjectID, paymentStatus string) error {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats CustomerQuotationStats
+
+	filter := map[string]interface{}{
+		"store_id":       storeID,
+		"customer_id":    customer.ID,
+		"type":           "invoice",
+		"payment_status": paymentStatus,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":              nil,
+				"quotation_count":  bson.M{"$sum": 1},
+				"quotation_amount": bson.M{"$sum": "$net_total"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+		stats.QuotationAmount = RoundFloat(stats.QuotationAmount, 2)
+	}
+
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
+	}
+
+	if len(customer.Stores) == 0 {
+		customer.Stores = map[string]CustomerStore{}
+	}
+
+	if customerStore, ok := customer.Stores[storeID.Hex()]; ok {
+		customerStore.StoreID = storeID
+		customerStore.StoreName = store.Name
+		customerStore.StoreNameInArabic = store.NameInArabic
+		if paymentStatus == "credit" {
+			customerStore.QuotationInvoiceCreditCount = stats.QuotationCount
+			customerStore.QuotationInvoiceCreditAmount = stats.QuotationAmount
+		} else if paymentStatus == "paid" {
+			customerStore.QuotationInvoicePaidCount = stats.QuotationCount
+			customerStore.QuotationInvoicePaidAmount = stats.QuotationAmount
+		}
+		customer.Stores[storeID.Hex()] = customerStore
+	} else {
+		if paymentStatus == "credit" {
+			customer.Stores[storeID.Hex()] = CustomerStore{
+				StoreID:                      storeID,
+				StoreName:                    store.Name,
+				StoreNameInArabic:            store.NameInArabic,
+				QuotationInvoiceCreditCount:  stats.QuotationCount,
+				QuotationInvoiceCreditAmount: stats.QuotationAmount,
+			}
+		} else if paymentStatus == "paid" {
+			customer.Stores[storeID.Hex()] = CustomerStore{
+				StoreID:                    storeID,
+				StoreName:                  store.Name,
+				StoreNameInArabic:          store.NameInArabic,
+				QuotationInvoicePaidCount:  stats.QuotationCount,
+				QuotationInvoicePaidAmount: stats.QuotationAmount,
+			}
+		}
+
+	}
+
+	err = customer.Update()
+	if err != nil {
+		return errors.New("Error updating customer: " + err.Error())
+	}
+
+	return nil
+}
+
 func (quotation *Quotation) SetCustomerQuotationStats() error {
 	store, err := FindStoreByID(quotation.StoreID, bson.M{})
 	if err != nil {
@@ -1582,6 +1705,16 @@ func (quotation *Quotation) SetCustomerQuotationStats() error {
 	}
 
 	err = customer.SetCustomerQuotationStatsByStoreID(*quotation.StoreID)
+	if err != nil {
+		return err
+	}
+
+	err = customer.SetCustomerQuotationInvoiceStatsByStoreID(*quotation.StoreID, "credit")
+	if err != nil {
+		return err
+	}
+
+	err = customer.SetCustomerQuotationInvoiceStatsByStoreID(*quotation.StoreID, "paid")
 	if err != nil {
 		return err
 	}

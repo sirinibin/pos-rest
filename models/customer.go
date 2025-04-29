@@ -45,6 +45,10 @@ type CustomerStore struct {
 	QuotationAmount               float64            `bson:"quotation_amount" json:"quotation_amount"`
 	QuotationProfit               float64            `bson:"quotation_profit" json:"quotation_profit"`
 	QuotationLoss                 float64            `bson:"quotation_loss" json:"quotation_loss"`
+	QuotationInvoiceCreditCount   int64              `bson:"quotation_invoice_credit_count" json:"quotation_invoice_credit_count"`
+	QuotationInvoiceCreditAmount  float64            `bson:"quotation_invoice_credit_amount" json:"quotation_invoice_credit_amount"`
+	QuotationInvoicePaidCount     int64              `bson:"quotation_invoice_paid_count" json:"quotation_invoice_paid_count"`
+	QuotationInvoicePaidAmount    float64            `bson:"quotation_invoice_paid_amount" json:"quotation_invoice_paid_amount"`
 	DeliveryNoteCount             int64              `bson:"delivery_note_count" json:"delivery_note_count"`
 }
 
@@ -588,6 +592,78 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_partially_count"] = value
 		}
 		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_partially_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_credit_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_credit_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_credit_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_credit_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_credit_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_credit_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_credit_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_credit_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_credit_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
 	}
 
 	keys, ok = r.URL.Query()["search[quotation_count]"]

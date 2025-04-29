@@ -97,7 +97,7 @@ type Order struct {
 	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	Zatca                  ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	Remarks                string              `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Remarks                string              `bson:"remarks" json:"remarks"`
 	Phone                  string              `bson:"phone" json:"phone"`
 	VatNo                  string              `bson:"vat_no" json:"vat_no"`
 	Address                string              `bson:"address" json:"address"`
