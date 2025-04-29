@@ -1310,13 +1310,10 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["customer_account"] = "Error finding customer account: " + err.Error()
 		}
 
-		if order.BalanceAmount > 0 {
-			_, ok := customer.Stores[store.ID.Hex()]
-			if ok {
-				if (customer.Stores[store.ID.Hex()].SalesBalanceAmount + order.BalanceAmount) > customer.CreditLimit {
-					errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customer.Stores[store.ID.Hex()].SalesBalanceAmount))
-					return errs
-				}
+		if order.BalanceAmount > 0 && customerAccount != nil {
+			if customerAccount.Type == "asset" && customer.CreditLimit > 0 && ((customerAccount.Balance + order.BalanceAmount) > customer.CreditLimit) {
+				errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customerAccount.Balance))
+				return errs
 			}
 		}
 	}
