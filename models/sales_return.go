@@ -1428,10 +1428,15 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	if customer != nil {
 		if totalPayment > 0 {
-			_, ok := customer.Stores[store.ID.Hex()]
-			if ok {
-				if (customer.Stores[store.ID.Hex()].SalesBalanceAmount + totalPayment) > customer.CreditLimit {
-					errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customer.Stores[store.ID.Hex()].SalesBalanceAmount))
+
+			customerAccount, err := store.FindAccountByReferenceID(customer.ID, *salesreturn.StoreID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				errs["customer_account"] = "Error finding customer account: " + err.Error()
+			}
+
+			if customerAccount != nil {
+				if customerAccount.Type == "asset" && customer.CreditLimit > 0 && ((customerAccount.Balance + totalPayment) > customer.CreditLimit) {
+					errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customerAccount.Balance))
 					return errs
 				}
 			}
