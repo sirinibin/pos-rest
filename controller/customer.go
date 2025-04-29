@@ -11,8 +11,6 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // ListCustomer : handler for GET /customer
@@ -301,32 +299,32 @@ func ViewCustomer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	if customer.VATNo != "" {
-		account, err := store.FindAccountByVatNo(customer.VATNo, &store.ID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			response.Status = false
-			response.Errors["account"] = "error finding account:" + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		if account != nil {
-			customer.CreditBalance = account.Balance
-		} else {
-			account, err = store.FindAccountByPhoneByName(customer.Phone, customer.Name, &store.ID, bson.M{})
+	/*
+		if customer.VATNo != "" {
+			account, err := store.FindAccountByVatNo(customer.VATNo, &store.ID, bson.M{})
 			if err != nil && err != mongo.ErrNoDocuments {
 				response.Status = false
 				response.Errors["account"] = "error finding account:" + err.Error()
 				json.NewEncoder(w).Encode(response)
 				return
 			}
+
 			if account != nil {
 				customer.CreditBalance = account.Balance
+			} else {
+				account, err = store.FindAccountByPhoneByName(customer.Phone, customer.Name, &store.ID, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					response.Status = false
+					response.Errors["account"] = "error finding account:" + err.Error()
+					json.NewEncoder(w).Encode(response)
+					return
+				}
+				if account != nil {
+					customer.CreditBalance = account.Balance
+				}
 			}
-		}
 
-	}
+		}*/
 
 	customer.SetSearchLabel()
 

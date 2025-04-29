@@ -139,6 +139,12 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if customerdeposit.CustomerID != nil {
+		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+		customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+		customer.SetCreditBalance()
+	}
+
 	response.Status = true
 	response.Result = customerdeposit
 
@@ -266,6 +272,18 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if customerdeposit.CustomerID != nil {
+		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+		customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+		customer.SetCreditBalance()
+	}
+
+	if customerdepositOld.CustomerID != nil {
+		store, _ := models.FindStoreByID(customerdepositOld.StoreID, bson.M{})
+		customer, _ := store.FindCustomerByID(customerdepositOld.CustomerID, bson.M{})
+		customer.SetCreditBalance()
 	}
 
 	response.Status = true

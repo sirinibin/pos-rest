@@ -294,6 +294,11 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if order.CustomerID != nil {
+		customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+		customer.SetCreditBalance()
+	}
+
 	store.NotifyUsers("sales_updated")
 
 	json.NewEncoder(w).Encode(response)
@@ -514,6 +519,16 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if order.CustomerID != nil {
+		customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+		customer.SetCreditBalance()
+	}
+
+	if orderOld.CustomerID != nil {
+		customer, _ := store.FindCustomerByID(orderOld.CustomerID, bson.M{})
+		customer.SetCreditBalance()
 	}
 
 	/*

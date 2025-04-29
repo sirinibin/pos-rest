@@ -139,6 +139,12 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if customerwithdrawal.CustomerID != nil {
+		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+		customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+		customer.SetCreditBalance()
+	}
+
 	response.Status = true
 	response.Result = customerwithdrawal
 
@@ -266,6 +272,18 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		response.Errors["do_accounting"] = "Error doing accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if customerwithdrawal.CustomerID != nil {
+		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+		customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+		customer.SetCreditBalance()
+	}
+
+	if customerwithdrawalOld.CustomerID != nil {
+		store, _ := models.FindStoreByID(customerwithdrawalOld.StoreID, bson.M{})
+		customer, _ := store.FindCustomerByID(customerwithdrawalOld.CustomerID, bson.M{})
+		customer.SetCreditBalance()
 	}
 
 	response.Status = true

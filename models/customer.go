@@ -15,6 +15,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -74,7 +75,8 @@ type Customer struct {
 	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
 	ContactPerson              string                   `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
 	CreditLimit                float64                  `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
-	CreditBalance              float64                  `json:"credit_balance" bson:"-"`
+	CreditBalance              float64                  `json:"credit_balance" bson:"credit_balance"`
+	Account                    *Account                 `json:"account" bson:"account"`
 	Deleted                    bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                  *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser              *User                    `json:"deleted_by_user,omitempty"`
@@ -126,6 +128,49 @@ func (customer *Customer) SetChangeLog(
 	)
 }
 */
+
+func (customer *Customer) SetCreditBalance() error {
+	store, err := FindStoreByID(customer.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+	var account *Account
+
+	account, err = store.FindAccountByReferenceID(customer.ID, store.ID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("error finding customer account:" + err.Error())
+	}
+
+	if account == nil && customer.VATNo != "" {
+		account, err = store.FindAccountByVatNo(customer.VATNo, &store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("error finding customer account:" + err.Error())
+		}
+	}
+
+	if account == nil && customer.Phone != "" {
+		account, err = store.FindAccountByPhone(customer.Phone, &store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("error finding customer account:" + err.Error())
+		}
+	}
+
+	if account != nil {
+		customer.Account = account
+		if account.Type == "asset" {
+			customer.CreditBalance = account.Balance
+		} else if account.Type == "liability" {
+			customer.CreditBalance = account.Balance * -1
+		}
+
+		err = customer.Update()
+		if err != nil {
+			return errors.New("error updating customer credit balance:" + err.Error())
+		}
+	}
+
+	return nil
+}
 
 func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) error {
 
@@ -283,6 +328,23 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			criterias.SearchBy["stores."+storeID.Hex()+".sales_count"] = bson.M{operator: value}
 		} else {
 			criterias.SearchBy["stores."+storeID.Hex()+".sales_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[credit_balance]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["credit_balance"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["credit_balance"] = value
 		}
 	}
 
@@ -1405,6 +1467,7 @@ func ProcessCustomers() error {
 				continue
 			}
 
+			customer.SetCreditBalance()
 			/*
 				if customer.VATNo != "" && govalidator.IsNull(customer.NationalAddress.BuildingNo) {
 					customer.NationalAddress.BuildingNo = "1234"
@@ -1415,12 +1478,13 @@ func ProcessCustomers() error {
 				}
 			*/
 			//customer.MakeCode()
-			customer.Code = fmt.Sprintf("%s%0*d", store.CustomerSerialNumber.Prefix, store.CustomerSerialNumber.PaddingCount, i+1)
+			/*
+				customer.Code = fmt.Sprintf("%s%0*d", store.CustomerSerialNumber.Prefix, store.CustomerSerialNumber.PaddingCount, i+1)
 
-			err = customer.Update()
-			if err != nil {
-				return err
-			}
+				err = customer.Update()
+				if err != nil {
+					return err
+				}*/
 
 			bar.Add(1)
 		}
