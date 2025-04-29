@@ -1435,7 +1435,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			}
 
 			if customerAccount != nil {
-				if customerAccount.Type == "asset" && customer.CreditLimit > 0 && ((customerAccount.Balance + totalPayment) > customer.CreditLimit) {
+				if customerAccount.Type == "asset" && customer.CreditLimit > 0 && ((customerAccount.Balance - totalPayment) > customer.CreditLimit) {
 					errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is already " + fmt.Sprintf("%.02f", (customerAccount.Balance))
 					return errs
 				}
