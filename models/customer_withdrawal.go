@@ -90,7 +90,7 @@ func (customerwithdrawal *CustomerWithdrawal) UpdateForeignLabelFields() error {
 
 	customerwithdrawal.CategoryName = []string{}
 
-	if customerwithdrawal.CustomerID != nil {
+	if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
 		customer, err := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err

@@ -68,7 +68,7 @@ func (customerdeposit *CustomerDeposit) UpdateForeignLabelFields() error {
 
 	customerdeposit.CategoryName = []string{}
 
-	if customerdeposit.CustomerID != nil {
+	if customerdeposit.CustomerID != nil && !customerdeposit.CustomerID.IsZero() {
 		customer, err := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{"id": 1, "name": 1})
 		if err != nil {
 			return err
