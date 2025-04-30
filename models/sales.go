@@ -1329,7 +1329,10 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if customer != nil {
 		if order.BalanceAmount > 0 {
-			if customer.CreditLimit > 0 && ((customer.CreditBalance + order.BalanceAmount) > customer.CreditLimit) {
+			if scenario != "update" && customer.CreditLimit > 0 && ((customer.CreditBalance + order.BalanceAmount) > customer.CreditLimit) {
+				errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+				return errs
+			} else if scenario == "update" && customer.CreditLimit > 0 && (((customer.CreditBalance - oldOrder.BalanceAmount) + order.BalanceAmount) > customer.CreditLimit) {
 				errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is " + fmt.Sprintf("%.02f", (customer.CreditBalance))
 				return errs
 			}
