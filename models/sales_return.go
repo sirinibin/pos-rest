@@ -3166,7 +3166,7 @@ func MakeJournalsForSalesReturnExtraPayments(
 }
 
 // Regroup sales payments by datetime
-func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]SalesReturnPayment {
+/*func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]SalesReturnPayment {
 	paymentsByDatetime := map[string][]SalesReturnPayment{}
 	for _, payment := range payments {
 		if payment.Date != nil {
@@ -3175,6 +3175,24 @@ func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]Sal
 				paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
 			}
 		}
+	}
+
+	paymentsByDatetime2 := [][]SalesReturnPayment{}
+	for _, v := range paymentsByDatetime {
+		paymentsByDatetime2 = append(paymentsByDatetime2, v)
+	}
+
+	sort.Slice(paymentsByDatetime2, func(i, j int) bool {
+		return paymentsByDatetime2[i][0].Date.Before(*paymentsByDatetime2[j][0].Date)
+	})
+
+	return paymentsByDatetime2
+}*/
+
+func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]SalesReturnPayment {
+	paymentsByDatetime := map[string][]SalesReturnPayment{}
+	for _, payment := range payments {
+		paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
 	}
 
 	paymentsByDatetime2 := [][]SalesReturnPayment{}
@@ -3198,10 +3216,13 @@ func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
 	}
 
 	now := time.Now()
+	var customer *Customer
 
-	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return nil, err
+	if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
+		customer, err = store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
 	}
 
 	cashAccount, err := store.CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Cash", nil, nil)
