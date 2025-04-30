@@ -2204,9 +2204,14 @@ func ProcessSalesReturns() error {
 				continue
 			}
 
-			order, _ := store.FindOrderByID(salesReturn.OrderID, bson.M{})
-			order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(*salesReturn.OrderID)
-			order.Update()
+			salesReturn.UndoAccounting()
+			salesReturn.DoAccounting()
+
+			/*
+				order, _ := store.FindOrderByID(salesReturn.OrderID, bson.M{})
+				order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(*salesReturn.OrderID)
+				order.Update()
+			*/
 
 			/*
 				log.Print("Sales Return ID: " + salesReturn.Code)
