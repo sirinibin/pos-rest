@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"github.com/xuri/excelize/v2"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -1144,10 +1146,15 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		_, err = store.CreateDB()
-		if err != nil {
-			return err
+		if store.Name == "Ghali Jabr Musleh Noemi Al-Mabadi Trading Est.-Test" {
+			store.ImportProductsFromExcel("Book1.xlsx")
 		}
+
+		/*
+			_, err = store.CreateDB()
+			if err != nil {
+				return err
+			}*/
 		/*
 			err = store.Update()
 			if err != nil {
@@ -1158,6 +1165,127 @@ func ProcessStores() error {
 
 	log.Print("DONE!")
 	return nil
+}
+
+func (store *Store) ImportProductsFromExcel(filename string) {
+	// Open the Excel file
+	f, err := excelize.OpenFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Get the first sheet name
+	sheetName := f.GetSheetName(0)
+
+	// Read all rows from the sheet
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print each row
+	bar := progressbar.Default(int64(len(rows) - 1))
+	for i, row := range rows {
+		//fmt.Printf("Row %d: ", i+1)
+		//fmt.Println()
+		if i > 0 {
+			now := time.Now()
+			product := Product{StoreID: &store.ID}
+			product.CreatedAt = &now
+			product.UpdatedAt = &now
+			for j, cell := range row {
+				//fmt.Printf("%s\t", cell)
+				if j == 0 {
+					product.PartNumber = cell
+				} else if j == 1 {
+					product.Name = cell
+				} else if j == 2 {
+					retailUnitPrice, err := strconv.ParseFloat(cell, 64)
+					if err != nil {
+						log.Print("Skipping product,error retail unit price parsing:" + product.Name + ",err:" + err.Error())
+						continue
+					}
+					// ProductStore
+					productStore, ok := product.ProductStores[store.ID.Hex()]
+					if ok {
+						productStore.RetailUnitPrice = RoundTo2Decimals(retailUnitPrice)
+						product.ProductStores[store.ID.Hex()] = productStore
+					} else {
+						product.ProductStores = map[string]ProductStore{}
+						product.ProductStores[store.ID.Hex()] = ProductStore{
+							StoreID:            *product.StoreID,
+							StoreName:          store.Name,
+							WholesaleUnitPrice: 0,
+							PurchaseUnitPrice:  0,
+							RetailUnitPrice:    RoundTo2Decimals(retailUnitPrice),
+						}
+					}
+
+				} else if j == 4 {
+					purchaseUnitPrice, err := strconv.ParseFloat(cell, 64)
+					if err != nil {
+						log.Print("Skipping product,error purchase unit price parsing:" + product.Name + ",err:" + err.Error())
+						continue
+					}
+					// ProductStore
+					productStore, ok := product.ProductStores[store.ID.Hex()]
+					if ok {
+						productStore.PurchaseUnitPrice = purchaseUnitPrice
+						product.ProductStores[store.ID.Hex()] = productStore
+					} else {
+						product.ProductStores = map[string]ProductStore{}
+						product.ProductStores[store.ID.Hex()] = ProductStore{
+							StoreID:            *product.StoreID,
+							StoreName:          store.Name,
+							WholesaleUnitPrice: 0,
+							RetailUnitPrice:    0,
+							PurchaseUnitPrice:  RoundTo2Decimals(purchaseUnitPrice),
+						}
+					}
+				}
+			}
+			err = product.SetPartNumber()
+			if err != nil {
+				log.Print("Skipping product,error set part no." + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			err = product.SetBarcode()
+			if err != nil {
+				log.Print("Skipping product,error barcode:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			err = product.UpdateForeignLabelFields()
+			if err != nil {
+				log.Print("Skipping product,error update foreign:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+			err = product.CalculateUnitProfit()
+			if err != nil {
+				log.Print("Skipping product,error calculate unit profit:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			product.GeneratePrefixes()
+			exists, err := product.IsPartNumberExists()
+			if err != nil {
+				log.Print("Skipping product,error part no check:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			if exists {
+				continue
+			}
+			err = product.Insert()
+			if err != nil {
+				log.Print("Skipping product,error insert:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+			bar.Add(1) // 1 product added
+		}
+	}
 }
 
 func GetAllStores() (stores []Store, err error) {
