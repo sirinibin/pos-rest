@@ -1426,6 +1426,17 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
+	if customer != nil {
+		if totalPayment > 0 {
+			if scenario != "update" && customer.CreditBalance > 0 && totalPayment > customer.CreditBalance {
+				errs["customer_id"] = "Total payment amount should not be greater than customer credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance))
+				return errs
+			} else if scenario == "update" && customer.CreditBalance > 0 && totalPayment > (customer.CreditBalance+oldSalesReturn.TotalPaymentPaid) {
+				errs["customer_id"] = "Total payment amount should not be greater than customer credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance+oldSalesReturn.TotalPaymentPaid))
+				return errs
+			}
+		}
+	}
 	/*
 		if customer != nil {
 			if totalPayment > 0 && customer.CreditLimit > 0 {
