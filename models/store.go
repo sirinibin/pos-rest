@@ -1146,7 +1146,7 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		if store.Name == "Ghali Jabr Musleh Noemi Al-Mabadi Trading Est.-Test" {
+		if store.Name == "Ghali Jabr Musleh Noemi Al-Mabadi Trading Est.-Test" || store.Name == "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
 			store.ImportProductsFromExcel("Book1.xlsx")
 		} else {
 			continue
