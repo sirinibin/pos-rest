@@ -1148,6 +1148,8 @@ func ProcessStores() error {
 
 		if store.Name == "Ghali Jabr Musleh Noemi Al-Mabadi Trading Est.-Test" {
 			store.ImportProductsFromExcel("Book1.xlsx")
+		} else {
+			continue
 		}
 
 		/*
