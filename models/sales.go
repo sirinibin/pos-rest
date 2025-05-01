@@ -1331,6 +1331,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	var customerAccount *Account
 
+	//validation
 	if customer != nil {
 		if order.BalanceAmount > 0 && customer.CreditLimit > 0 {
 			if scenario != "update" && ((customer.CreditBalance + order.BalanceAmount) > customer.CreditLimit) {
