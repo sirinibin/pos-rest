@@ -1325,15 +1325,25 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	}
 
+	if totalPayment > order.NetTotal {
+		errs["customer_credit_limit"] = "Total payment amount exceeds Net total: " + fmt.Sprintf("%.02f", (order.NetTotal))
+	}
+
 	var customerAccount *Account
 
 	if customer != nil {
 		if order.BalanceAmount > 0 && customer.CreditLimit > 0 {
 			if scenario != "update" && ((customer.CreditBalance + order.BalanceAmount) > customer.CreditLimit) {
-				errs["customer_id"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+				errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
+				if customer.CreditBalance > 0 {
+					errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+				}
 				return errs
 			} else if scenario == "update" && (((customer.CreditBalance - oldOrder.BalanceAmount) + order.BalanceAmount) > customer.CreditLimit) {
-				errs["customer_id"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+				errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
+				if customer.CreditBalance > 0 {
+					errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+				}
 				return errs
 			}
 		}
