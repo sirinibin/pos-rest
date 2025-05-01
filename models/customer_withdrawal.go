@@ -602,7 +602,7 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		errs["customer_id"] = "Customer is required"
 	}
 
-	if customer != nil {
+	if customer != nil && customer.CreditLimit > 0 {
 		if scenario != "update" && (customer.CreditBalance+customerwithdrawal.Amount) > customer.CreditLimit {
 			errs["amount"] = "Exceeding customer Credit limit " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current Credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance))
 		} else if scenario != "update" && ((customer.CreditBalance-oldCustomerwithdrawal.Amount)+customerwithdrawal.Amount) > customer.CreditLimit {

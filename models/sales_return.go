@@ -1426,17 +1426,18 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if customer != nil {
-		if totalPayment > 0 {
-			if scenario != "update" && customer.CreditLimit > 0 && ((customer.CreditBalance - totalPayment) > customer.CreditLimit) {
-				errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is" + fmt.Sprintf("%.02f", (customer.CreditBalance))
-				return errs
-			} else if scenario == "update" && customer.CreditLimit > 0 && (((customer.CreditBalance + oldSalesReturn.TotalPaymentPaid) - totalPayment) > customer.CreditLimit) {
-				errs["customer_id"] = "Customer is exceeding credit limit amount: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + " as his credit balance is" + fmt.Sprintf("%.02f", (customer.CreditBalance))
-				return errs
+	/*
+		if customer != nil {
+			if totalPayment > 0 && customer.CreditLimit > 0 {
+				if scenario != "update" && ((customer.CreditBalance - totalPayment) < customer.CreditLimit) {
+					errs["customer_id"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+					return errs
+				} else if scenario == "update" && (((customer.CreditBalance + oldSalesReturn.TotalPaymentPaid) - totalPayment) < customer.CreditLimit) {
+					errs["customer_id"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+					return errs
+				}
 			}
-		}
-	}
+		}*/
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
