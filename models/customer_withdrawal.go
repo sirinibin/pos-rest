@@ -493,7 +493,7 @@ func (store *Store) SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Requ
 
 }
 
-func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldCustomerwithdrawal *CustomerWithdrawal) (errs map[string]string) {
 	errs = make(map[string]string)
 
 	store, err := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
@@ -602,88 +602,11 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		errs["customer_id"] = "Customer is required"
 	}
 
-	if scenario == "update" {
-		/*
-			err = customerwithdrawal.UndoAccounting()
-			if err != nil {
-				errs["removing_accounting"] = "Error removing accounting: " + err.Error()
-			}
-		*/
-	}
-
-	var customerAccount *Account
-
 	if customer != nil {
-		referenceModel := "customer"
-		customerAccount, err = store.CreateAccountIfNotExists(
-			customerwithdrawal.StoreID,
-			&customer.ID,
-			&referenceModel,
-			customer.Name,
-			&customer.Phone,
-			&customer.VATNo,
-		)
-		if err != nil {
-			errs["account"] = "Error creating account: " + err.Error()
-		}
-	}
-
-	if customerAccount != nil {
-		customerBalance := customerAccount.Balance
-		accountType := customerAccount.Type
-		oldCustomerWithdrawl := &CustomerWithdrawal{}
-
-		if scenario == "update" {
-			oldCustomerWithdrawl, _ = store.FindCustomerWithdrawalByID(&customerwithdrawal.ID, bson.M{})
-			if customerAccount.CreditTotal > (customerAccount.DebitTotal - oldCustomerWithdrawl.Amount) {
-				accountType = "liability"
-				customerBalance += oldCustomerWithdrawl.Amount
-			} else {
-				accountType = "asset"
-			}
-		}
-
-		if customerBalance == 0 {
-			errs["amount"] = "customer account balance is zero"
-		} else if accountType == "asset" {
-			errs["amount"] = "customer owe us: " + fmt.Sprintf("%.02f", customerBalance)
-		} else if accountType == "liability" && customerBalance < customerwithdrawal.Amount {
-			errs["amount"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerBalance)
-		}
-
-		spendingAccount := &Account{}
-		spendingAccountName := ""
-		if customerwithdrawal.PaymentMethod == "cash" {
-			cashAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Cash", nil, nil)
-			if err != nil {
-				errs["payment_method"] = "error fetching cash account"
-			}
-
-			if scenario == "update" && oldCustomerWithdrawl.PaymentMethod == "cash" {
-				cashAccount.Balance += oldCustomerWithdrawl.Amount
-			}
-
-			spendingAccount = cashAccount
-			spendingAccountName = "cash"
-
-		} else if slices.Contains(BANK_PAYMENT_METHODS, customerwithdrawal.PaymentMethod) {
-			bankAccount, err := store.CreateAccountIfNotExists(customerwithdrawal.StoreID, nil, nil, "Bank", nil, nil)
-			if err != nil {
-				errs["payment_method"] = "error fetching bank account"
-			}
-
-			if scenario == "update" && slices.Contains(BANK_PAYMENT_METHODS, oldCustomerWithdrawl.PaymentMethod) {
-				bankAccount.Balance += oldCustomerWithdrawl.Amount
-			}
-
-			spendingAccount = bankAccount
-			spendingAccountName = "bank"
-		}
-
-		if spendingAccount.Balance == 0 {
-			errs["payment_method"] = spendingAccountName + " account balance is zero"
-		} else if spendingAccount.Balance < customerwithdrawal.Amount {
-			errs["payment_method"] = spendingAccountName + " account balance is only: " + fmt.Sprintf("%.02f", spendingAccount.Balance)
+		if scenario != "update" && (customer.CreditBalance+customerwithdrawal.Amount) > customer.CreditLimit {
+			errs["amount"] = "Exceeding customer Credit limit " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current Credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance))
+		} else if scenario != "update" && ((customer.CreditBalance-oldCustomerwithdrawal.Amount)+customerwithdrawal.Amount) > customer.CreditLimit {
+			errs["amount"] = "Exceeding customer Credit limit " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current Credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance))
 		}
 	}
 

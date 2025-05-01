@@ -113,7 +113,7 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	customerwithdrawal.UpdatedAt = &now
 
 	// Validate data
-	if errs := customerwithdrawal.Validate(w, r, "create"); len(errs) > 0 {
+	if errs := customerwithdrawal.Validate(w, r, "create", nil); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -225,7 +225,7 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	customerwithdrawal.UpdatedAt = &now
 
 	// Validate data
-	if errs := customerwithdrawal.Validate(w, r, "update"); len(errs) > 0 {
+	if errs := customerwithdrawal.Validate(w, r, "update", customerwithdrawalOld); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
