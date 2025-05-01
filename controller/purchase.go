@@ -211,6 +211,13 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+		vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
+		if vendor != nil {
+			vendor.SetCreditBalance()
+		}
+	}
+
 	store.NotifyUsers("purchase_updated")
 	response.Status = true
 	response.Result = purchase
@@ -399,6 +406,13 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to find purchase:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+		vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
+		if vendor != nil {
+			vendor.SetCreditBalance()
+		}
 	}
 
 	store.NotifyUsers("purchase_updated")

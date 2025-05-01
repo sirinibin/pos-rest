@@ -15,6 +15,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -66,7 +67,8 @@ type Vendor struct {
 	CountryCode                string                 `bson:"country_code" json:"country_code"`
 	ContactPerson              string                 `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
 	CreditLimit                float64                `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
-	CreditBalance              float64                `json:"credit_balance" bson:"-"`
+	CreditBalance              float64                `json:"credit_balance" bson:"credit_balance"`
+	Account                    *Account               `json:"account" bson:"account"`
 	Logo                       string                 `bson:"logo,omitempty" json:"logo"`
 	LogoContent                string                 `json:"logo_content,omitempty"`
 	Deleted                    bool                   `bson:"deleted,omitempty" json:"deleted,omitempty"`
@@ -87,6 +89,53 @@ type Vendor struct {
 	StoreID                    *primitive.ObjectID    `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Remarks                    string                 `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	UseRemarksInPurchases      bool                   `bson:"use_remarks_in_purchases" json:"use_remarks_in_purchases"`
+}
+
+func (vendor *Vendor) SetCreditBalance() error {
+	if vendor == nil {
+		return nil
+	}
+
+	store, err := FindStoreByID(vendor.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+	var account *Account
+
+	account, err = store.FindAccountByReferenceID(vendor.ID, store.ID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("error finding vendor account:" + err.Error())
+	}
+
+	if account == nil && vendor.VATNo != "" {
+		account, err = store.FindAccountByVatNo(vendor.VATNo, &store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("error finding vendor account:" + err.Error())
+		}
+	}
+
+	if account == nil && vendor.Phone != "" {
+		account, err = store.FindAccountByPhone(vendor.Phone, &store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("error finding vendor account:" + err.Error())
+		}
+	}
+
+	if account != nil {
+		vendor.Account = account
+		if account.Type == "asset" {
+			vendor.CreditBalance = account.Balance
+		} else if account.Type == "liability" {
+			vendor.CreditBalance = account.Balance * -1
+		}
+
+		err = vendor.Update()
+		if err != nil {
+			return errors.New("error updating vendor credit balance:" + err.Error())
+		}
+	}
+
+	return nil
 }
 
 //Stores2                    []VendorStore          `bson:"stores,omitempty" json:"stores,omitempty"`
@@ -176,6 +225,23 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[credit_balance]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["credit_balance"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["credit_balance"] = value
 		}
 	}
 
@@ -1287,14 +1353,15 @@ func ProcessVendors() error {
 				continue
 			}
 
+			vendor.SetCreditBalance()
 			//vendor.MakeCode()
 
-			vendor.Code = fmt.Sprintf("%s%0*d", store.VendorSerialNumber.Prefix, store.VendorSerialNumber.PaddingCount, i+1)
+			/*vendor.Code = fmt.Sprintf("%s%0*d", store.VendorSerialNumber.Prefix, store.VendorSerialNumber.PaddingCount, i+1)
 
 			err = vendor.Update()
 			if err != nil {
 				return err
-			}
+			}*/
 
 			bar.Add(1)
 		}
