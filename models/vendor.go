@@ -67,7 +67,7 @@ type Vendor struct {
 	CountryCode                string                 `bson:"country_code" json:"country_code"`
 	ContactPerson              string                 `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
 	CreditLimit                float64                `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
-	CreditBalance              float64                `json:"credit_balance" bson:"credit_balance"`
+	CreditBalance              float64                `json:"credit_balance,omitempty" bson:"credit_balance,omitempty"`
 	Account                    *Account               `json:"account" bson:"account"`
 	Logo                       string                 `bson:"logo,omitempty" json:"logo"`
 	LogoContent                string                 `json:"logo_content,omitempty"`
@@ -123,12 +123,7 @@ func (vendor *Vendor) SetCreditBalance() error {
 
 	if account != nil {
 		vendor.Account = account
-		if account.Type == "asset" {
-			vendor.CreditBalance = account.Balance
-		} else if account.Type == "liability" {
-			vendor.CreditBalance = account.Balance * -1
-		}
-
+		vendor.CreditBalance = account.Balance
 		err = vendor.Update()
 		if err != nil {
 			return errors.New("error updating vendor credit balance:" + err.Error())

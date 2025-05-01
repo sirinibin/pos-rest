@@ -991,6 +991,14 @@ func (purchasereturn *PurchaseReturn) Validate(
 		errs["store_id"] = "invalid store id"
 		return errs
 	}
+	/*
+		var vendor *Vendor
+		if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
+			vendor, err = store.FindVendorByID(purchasereturn.VendorID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				errs["vendor_id"] = "error finding vendor"
+			}
+		}*/
 
 	purchase, err := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
 	if err != nil {
@@ -1041,16 +1049,6 @@ func (purchasereturn *PurchaseReturn) Validate(
 	for _, payment := range purchasereturn.PaymentsInput {
 		if payment.Amount != nil {
 			totalPayment += *payment.Amount
-		}
-	}
-
-	if scenario == "update" {
-		if totalPayment > (purchase.TotalPaymentPaid - (purchase.ReturnAmount - oldPurchaseReturn.TotalPaymentPaid)) {
-			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (purchase.TotalPaymentPaid-(purchase.ReturnAmount-oldPurchaseReturn.TotalPaymentPaid))) + " (total payment paid)"
-		}
-	} else {
-		if totalPayment > (purchase.TotalPaymentPaid - purchase.ReturnAmount) {
-			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (purchase.TotalPaymentPaid-purchase.ReturnAmount)) + " (total payment paid)"
 		}
 	}
 
@@ -1281,6 +1279,55 @@ func (purchasereturn *PurchaseReturn) Validate(
 	if purchasereturn.VatPercent == nil {
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
+
+	if totalPayment > purchasereturn.NetTotal {
+		errs["total_payment"] = "Total payment amount should not exceed Net total: " + fmt.Sprintf("%.02f", (purchase.NetTotal))
+		return errs
+	}
+
+	if totalPayment > purchase.NetTotal {
+		errs["total_payment"] = "Total payment amount should not exceed Original Purchase Net total: " + fmt.Sprintf("%.02f", (purchase.NetTotal))
+		return errs
+	}
+
+	if purchasereturn.NetTotal > purchase.NetTotal {
+		errs["net_total"] = "Net Total should not exceed Original Purchase Net Total: " + fmt.Sprintf("%.02f", (purchase.NetTotal))
+		return
+	}
+
+	if scenario == "update" {
+		if totalPayment > (purchase.TotalPaymentPaid - (purchase.ReturnAmount - oldPurchaseReturn.TotalPaymentPaid)) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (purchase.TotalPaymentPaid-(purchase.ReturnAmount-oldPurchaseReturn.TotalPaymentPaid))) + " (total payment paid)"
+			return errs
+		}
+	} else {
+		if totalPayment > (purchase.TotalPaymentPaid - purchase.ReturnAmount) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (purchase.TotalPaymentPaid-purchase.ReturnAmount)) + " (total payment paid)"
+			return errs
+		}
+	}
+
+	/*if vendor != nil && vendor.CreditLimit > 0 {
+
+			if vendor.Account == nil {
+				vendor.Account = &Account{}
+				if purchasereturn.BalanceAmount > 0 {
+					vendor.Account.Type = "asset"
+				} else {
+					vendor.Account.Type = "liability"
+				}
+			}
+
+
+				if scenario != "update" && vendor.IsCreditLimitExceeded(purchasereturn.BalanceAmount, true) {
+					errs["vendor_credit_limit"] = "Exceeding vendor credit limit: " + fmt.Sprintf("%.02f", (vendor.CreditLimit-vendor.CreditBalance))
+
+					return errs
+				} else if scenario == "update" && vendor.WillEditExceedCreditLimit(oldPurchaseReturn.BalanceAmount, purchasereturn.BalanceAmount, true) {
+					errs["vendor_credit_limit"] = "Exceeding vendor credit limit: " + fmt.Sprintf("%.02f", ((vendor.CreditLimit+oldPurchaseReturn.BalanceAmount)-vendor.CreditBalance))
+					return errs
+				}
+	}*/
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)

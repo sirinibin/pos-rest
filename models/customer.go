@@ -75,7 +75,7 @@ type Customer struct {
 	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
 	ContactPerson              string                   `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
 	CreditLimit                float64                  `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
-	CreditBalance              float64                  `json:"credit_balance" bson:"credit_balance"`
+	CreditBalance              float64                  `json:"credit_balance,omitempty" bson:"credit_balance,omitempty"`
 	Account                    *Account                 `json:"account" bson:"account"`
 	Deleted                    bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                  *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -161,12 +161,7 @@ func (customer *Customer) SetCreditBalance() error {
 
 	if account != nil {
 		customer.Account = account
-		if account.Type == "asset" {
-			customer.CreditBalance = account.Balance
-		} else if account.Type == "liability" {
-			customer.CreditBalance = account.Balance * -1
-		}
-
+		customer.CreditBalance = account.Balance
 		err = customer.Update()
 		if err != nil {
 			return errors.New("error updating customer credit balance:" + err.Error())
@@ -1428,7 +1423,6 @@ func (store *Store) IsCustomerExists(ID *primitive.ObjectID) (exists bool, err e
 
 func ProcessCustomers() error {
 	log.Printf("Processing customers")
-
 	stores, err := GetAllStores()
 	if err != nil {
 		return err
@@ -1439,7 +1433,6 @@ func ProcessCustomers() error {
 		if err != nil {
 			return err
 		}
-
 		collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
 		ctx := context.Background()
 		findOptions := options.Find()

@@ -1180,16 +1180,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 	}
 
-	if scenario == "update" {
-		if totalPayment > (order.TotalPaymentReceived - (order.ReturnAmount - oldSalesReturn.TotalPaymentPaid)) {
-			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
-		}
-	} else {
-		if totalPayment > (order.TotalPaymentReceived - order.ReturnAmount) {
-			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
-		}
-	}
-
 	for index, payment := range salesreturn.PaymentsInput {
 		if order.PaymentStatus == "not_paid" {
 			break
@@ -1426,18 +1416,48 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if customer != nil && customer.CreditLimit > 0 {
-		if scenario != "update" && customer.IsCreditLimitExceeded(totalPayment, true) {
-			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
-			if customer.CreditBalance > 0 {
-				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
-			}
+	if totalPayment > salesreturn.NetTotal {
+		errs["total_payment"] = "Total payment amount should not exceeds Net total: " + fmt.Sprintf("%.02f", (salesreturn.NetTotal))
+		return
+	}
+
+	if totalPayment > order.NetTotal {
+		errs["total_payment"] = "Total payment amount should not exceed Original Sales Net Total: " + fmt.Sprintf("%.02f", (order.NetTotal))
+		return
+	}
+
+	if salesreturn.NetTotal > order.NetTotal {
+		errs["net_total"] = "Net Total  should not exceed Original Sales Net Total: " + fmt.Sprintf("%.02f", (order.NetTotal))
+		return
+	}
+
+	if scenario == "update" {
+		if totalPayment > (order.TotalPaymentReceived - (order.ReturnAmount - oldSalesReturn.TotalPaymentPaid)) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
 			return errs
-		} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldSalesReturn.TotalPaymentPaid, totalPayment, true) {
-			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
-			if customer.CreditBalance > 0 {
-				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+		}
+	} else {
+		if totalPayment > (order.TotalPaymentReceived - order.ReturnAmount) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
+			return errs
+		}
+	}
+
+	if customer != nil && customer.CreditLimit > 0 {
+		if customer.Account == nil {
+			customer.Account = &Account{}
+			if salesreturn.BalanceAmount > 0 {
+				customer.Account.Type = "liability"
+			} else {
+				customer.Account.Type = "asset"
 			}
+		}
+
+		if scenario != "update" && customer.IsCreditLimitExceeded(salesreturn.BalanceAmount, true) {
+			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit-customer.CreditBalance))
+			return errs
+		} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldSalesReturn.BalanceAmount, salesreturn.BalanceAmount, true) {
+			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", ((customer.CreditLimit+oldSalesReturn.BalanceAmount)-customer.CreditBalance))
 			return errs
 		}
 	}
@@ -2881,7 +2901,6 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	totalSalesReturnPaidAmount = totalSalesReturnPaidAmountTemp
 	extraSalesReturnAmountPaid = extraSalesReturnAmountPaidTemp
 	//Don't touch
-
 	//Debits
 	if paymentsByDatetimeNumber == 1 && IsDateTimesEqual(salesReturn.Date, firstPaymentDate) {
 		journals = append(journals, Journal{
@@ -3175,33 +3194,12 @@ func MakeJournalsForSalesReturnExtraPayments(
 }
 
 // Regroup sales payments by datetime
-/*func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]SalesReturnPayment {
-	paymentsByDatetime := map[string][]SalesReturnPayment{}
-	for _, payment := range payments {
-		if payment.Date != nil {
-			_, ok := paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")]
-			if ok {
-				paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
-			}
-		}
-	}
-
-	paymentsByDatetime2 := [][]SalesReturnPayment{}
-	for _, v := range paymentsByDatetime {
-		paymentsByDatetime2 = append(paymentsByDatetime2, v)
-	}
-
-	sort.Slice(paymentsByDatetime2, func(i, j int) bool {
-		return paymentsByDatetime2[i][0].Date.Before(*paymentsByDatetime2[j][0].Date)
-	})
-
-	return paymentsByDatetime2
-}*/
 
 func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]SalesReturnPayment {
 	paymentsByDatetime := map[string][]SalesReturnPayment{}
 	for _, payment := range payments {
 		paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
+		//log.Print(*payment.Amount)
 	}
 
 	paymentsByDatetime2 := [][]SalesReturnPayment{}

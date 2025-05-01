@@ -137,6 +137,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := purchasereturn.Validate(w, r, "create", nil); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -293,6 +294,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := purchasereturn.Validate(w, r, "update", purchasereturnOld); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)

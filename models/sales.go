@@ -1326,24 +1326,51 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	if totalPayment > order.NetTotal {
-		errs["customer_credit_limit"] = "Total payment amount exceeds Net total: " + fmt.Sprintf("%.02f", (order.NetTotal))
+		errs["total_payment"] = "Total payment amount exceeds Net total: " + fmt.Sprintf("%.02f", (order.NetTotal))
+		return
 	}
+
+	if totalPayment < order.ReturnAmount {
+		errs["total_payment"] = "Total payment amount should not be less than, Total Returned Amount: " + fmt.Sprintf("%.02f", (order.ReturnAmount))
+		return
+	}
+
+	/*
+		if scenario == "update" {
+			if totalPayment > (order.TotalPaymentReceived - (order.ReturnAmount - oldSalesReturn.TotalPaymentPaid)) {
+				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
+				return errs
+			}
+		} else {
+			if totalPayment > (order.TotalPaymentReceived - order.ReturnAmount) {
+				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
+				return errs
+			}
+		}*/
 
 	var customerAccount *Account
 
 	//validation
 	if customer != nil && customer.CreditLimit > 0 {
-		if scenario != "update" && customer.IsCreditLimitExceeded(totalPayment, false) {
-			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
-			if customer.CreditBalance > 0 {
-				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+		if customer.Account == nil {
+			customer.Account = &Account{}
+			if order.BalanceAmount > 0 {
+				customer.Account.Type = "asset"
+			} else {
+				customer.Account.Type = "liability"
 			}
+		}
+		if scenario != "update" && customer.IsCreditLimitExceeded(order.BalanceAmount, false) {
+			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit-customer.CreditBalance))
+			/*if customer.CreditBalance > 0 {
+				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+			}*/
 			return errs
-		} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldOrder.TotalPaymentReceived, totalPayment, false) {
-			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
-			if customer.CreditBalance > 0 {
+		} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldOrder.BalanceAmount, order.BalanceAmount, false) {
+			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", ((customer.CreditLimit+oldOrder.BalanceAmount)-customer.CreditBalance))
+			/*if customer.CreditBalance > 0 {
 				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
-			}
+			}*/
 			return errs
 		}
 	}
@@ -1635,33 +1662,62 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	return errs
 }
 
-func (customer Customer) IsCreditLimitExceeded(transactionAmount float64, isReturn bool) bool {
+func (customer *Customer) IsCreditLimitExceeded(amount float64,
+	isReturn bool,
+) bool {
 	var newBalance float64
-	if isReturn {
-		// Sales return: reduce the balance
-		newBalance = customer.CreditBalance - transactionAmount
-	} else {
-		// Sale: increase the balance
-		newBalance = customer.CreditBalance + transactionAmount
-	}
 
-	// Check if new balance exceeds the credit limit
-	return newBalance > customer.CreditLimit
+	switch customer.Account.Type {
+	case "asset":
+		if isReturn {
+			newBalance = customer.CreditBalance - amount
+		} else {
+			newBalance = customer.CreditBalance + amount
+		}
+		return newBalance > customer.CreditLimit
+
+	case "liability":
+		if isReturn {
+			newBalance = customer.CreditBalance + amount
+		} else {
+			newBalance = customer.CreditBalance - amount
+		}
+		return -newBalance > customer.CreditLimit
+
+	default:
+		// Unknown account type
+		return false
+	}
 }
 
-func (customer Customer) WillEditExceedCreditLimit(oldAmount, newAmount float64, isReturn bool) bool {
+func (customer *Customer) WillEditExceedCreditLimit(oldAmount, newAmount float64,
+	isReturn bool,
+) bool {
 	var delta float64
+	var newBalance float64
 
-	if isReturn {
-		// Return: positive delta means increasing refund (less owed)
-		delta = oldAmount - newAmount
-	} else {
-		// Sale: positive delta means more purchase (more owed)
-		delta = newAmount - oldAmount
+	switch customer.Account.Type {
+	case "asset":
+		if isReturn {
+			delta = oldAmount - newAmount
+		} else {
+			delta = newAmount - oldAmount
+		}
+		newBalance = customer.CreditBalance + delta
+		return newBalance > customer.CreditLimit
+
+	case "liability":
+		if isReturn {
+			delta = newAmount - oldAmount
+		} else {
+			delta = oldAmount - newAmount
+		}
+		newBalance = customer.CreditBalance + delta
+		return -newBalance > customer.CreditLimit
+
+	default:
+		return false
 	}
-
-	newBalance := customer.CreditBalance + delta
-	return newBalance > customer.CreditLimit
 }
 
 func (order *Order) ValidateZatcaReporting() (errs map[string]string) {

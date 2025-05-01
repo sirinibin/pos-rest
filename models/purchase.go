@@ -1209,9 +1209,12 @@ func (purchase *Purchase) Validate(
 	}
 
 	totalAmountFromVendorAccount := 0.00
-	vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		errs["vendor_id"] = "error finding vendor"
+	var vendor *Vendor
+	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+		vendor, err = store.FindVendorByID(purchase.VendorID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			errs["vendor_id"] = "error finding vendor"
+		}
 	}
 
 	if vendor == nil && !govalidator.IsNull(purchase.VendorName) {
@@ -1235,6 +1238,7 @@ func (purchase *Purchase) Validate(
 		}
 		newVendor.UpdateForeignLabelFields()
 		purchase.VendorID = &newVendor.ID
+		vendor = &newVendor
 	}
 
 	var vendorAccount *Account
@@ -1390,51 +1394,6 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
-	if scenario == "update" {
-		if purchase.ID.IsZero() {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = "ID is required"
-			return errs
-		}
-		exists, err := store.IsPurchaseExists(&purchase.ID)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["id"] = "Invalid Purchase:" + purchase.ID.Hex()
-		}
-	}
-
-	if purchase.StoreID == nil || purchase.StoreID.IsZero() {
-		errs["store_id"] = "Store is required"
-	} else {
-		exists, err := IsStoreExists(purchase.StoreID)
-		if err != nil {
-			errs["store_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["store_id"] = "Invalid store:" + purchase.StoreID.Hex()
-			return errs
-		}
-	}
-
-	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
-		exists, err := store.IsVendorExists(purchase.VendorID)
-		if err != nil {
-			errs["vendor_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["vendor_id"] = "Invalid Vendor:" + purchase.VendorID.Hex()
-		}
-	}
-
 	if len(purchase.Products) == 0 {
 		errs["product_id"] = "Atleast 1 product is required for purchase"
 	}
@@ -1493,6 +1452,40 @@ func (purchase *Purchase) Validate(
 
 	} //end for
 
+	if totalPayment > purchase.NetTotal {
+		errs["total_payment"] = "Total payment amount exceeds Net total: " + fmt.Sprintf("%.02f", (purchase.NetTotal))
+		return errs
+	}
+
+	if totalPayment < purchase.ReturnAmount {
+		errs["total_payment"] = "Total payment amount should not be less than Total Returned Amount: " + fmt.Sprintf("%.02f", (purchase.ReturnAmount))
+		return
+	}
+
+	if vendor != nil && vendor.CreditLimit > 0 {
+		if vendor.Account == nil {
+			vendor.Account = &Account{}
+			if purchase.BalanceAmount > 0 {
+				vendor.Account.Type = "liability"
+			} else {
+				vendor.Account.Type = "asset"
+			}
+		}
+		if scenario != "update" && vendor.IsCreditLimitExceeded(purchase.BalanceAmount, false) {
+			errs["vendor_credit_limit"] = "Exceeding vendor credit limit: " + fmt.Sprintf("%.02f", (vendor.CreditLimit-vendor.CreditBalance))
+			/*if vendor.CreditBalance > 0 {
+				errs["vendor_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (vendor.CreditBalance))
+			}*/
+			return errs
+		} else if scenario == "update" && vendor.WillEditExceedCreditLimit(oldPurchase.BalanceAmount, purchase.BalanceAmount, false) {
+			errs["vendor_credit_limit"] = "Exceeding vendor credit limit: " + fmt.Sprintf("%.02f", ((vendor.CreditLimit+oldPurchase.BalanceAmount)-vendor.CreditBalance))
+			/*if vendor.CreditBalance > 0 {
+				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (vendor.CreditBalance))
+			}*/
+			return errs
+		}
+	}
+
 	if purchase.VatPercent == nil {
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
@@ -1502,6 +1495,122 @@ func (purchase *Purchase) Validate(
 	}
 	return errs
 }
+
+func (vendor *Vendor) IsCreditLimitExceeded(amount float64,
+	isReturn bool,
+) bool {
+	var newBalance float64
+
+	switch vendor.Account.Type {
+	case "asset":
+		if isReturn {
+			newBalance = vendor.CreditBalance + amount
+		} else {
+			newBalance = vendor.CreditBalance - amount
+		}
+		return -newBalance > vendor.CreditLimit
+
+	case "liability":
+		if isReturn {
+			newBalance = vendor.CreditBalance - amount
+		} else {
+			newBalance = vendor.CreditBalance + amount
+		}
+		return newBalance > vendor.CreditLimit
+
+	default:
+		// Unknown account type
+		return false
+	}
+}
+
+/*
+func (vendor *Vendor) IsCreditLimitExceeded(
+	amount float64,
+	isReturn bool,
+) bool {
+	var newBalance float64
+
+	switch vendor.Account.Type {
+	case "liability":
+		if isReturn {
+			newBalance = vendor.CreditBalance + amount
+		} else {
+			newBalance = vendor.CreditBalance - amount
+		}
+		return -newBalance > vendor.CreditLimit
+
+	case "asset":
+		// In case some vendors are asset accounts
+		if isReturn {
+			newBalance = vendor.CreditBalance - amount
+		} else {
+			newBalance = vendor.CreditBalance + amount
+		}
+		return newBalance > vendor.CreditLimit
+
+	default:
+		return false
+	}
+}*/
+
+func (vendor *Vendor) WillEditExceedCreditLimit(oldAmount, newAmount float64,
+	isReturn bool,
+) bool {
+	var delta float64
+	var newBalance float64
+
+	switch vendor.Account.Type {
+	case "asset":
+		if isReturn {
+			delta = newAmount - oldAmount
+		} else {
+			delta = oldAmount - newAmount
+		}
+		newBalance = vendor.CreditBalance + delta
+		return -newBalance > vendor.CreditLimit
+
+	case "liability":
+		if isReturn {
+			delta = oldAmount - newAmount
+		} else {
+			delta = newAmount - oldAmount
+		}
+		newBalance = vendor.CreditBalance + delta
+		return newBalance > vendor.CreditLimit
+
+	default:
+		return false
+	}
+}
+
+/*
+func (vendor *Vendor) WillEditExceedCreditLimit(oldAmount, newAmount float64, isReturn bool) bool {
+	var newBalance float64
+
+	switch vendor.Account.Type {
+	case "liability":
+		// Purchase decreases balance (more debt), return increases it (less debt)
+		if isReturn {
+			newBalance = vendor.CreditBalance + newAmount
+		} else {
+			newBalance = vendor.CreditBalance - newAmount
+		}
+		return -newBalance > vendor.CreditLimit
+
+	case "asset":
+		// Asset logic: reverse of liability
+		if isReturn {
+			newBalance = vendor.CreditBalance - newAmount
+		} else {
+			newBalance = vendor.CreditBalance + newAmount
+		}
+		return newBalance > vendor.CreditLimit
+
+	default:
+		return false
+	}
+}*/
 
 func (purchase *Purchase) AddStock() (err error) {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
