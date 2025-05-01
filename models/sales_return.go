@@ -1426,29 +1426,21 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if customer != nil {
-		if totalPayment > 0 {
-			if scenario != "update" && customer.CreditBalance > 0 && totalPayment > customer.CreditBalance {
-				errs["customer_credit_limit"] = "Total payment amount exceeds customer Credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance))
-				return errs
-			} else if scenario == "update" && customer.CreditBalance > 0 && totalPayment > (customer.CreditBalance+oldSalesReturn.TotalPaymentPaid) {
-				errs["customer_credit_limit"] = "Total payment amount exceeds customer Credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance+oldSalesReturn.TotalPaymentPaid))
-				return errs
+	if customer != nil && customer.CreditLimit > 0 {
+		if scenario != "update" && customer.IsCreditLimitExceeded(totalPayment, true) {
+			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
+			if customer.CreditBalance > 0 {
+				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
 			}
+			return errs
+		} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldSalesReturn.TotalPaymentPaid, totalPayment, true) {
+			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit))
+			if customer.CreditBalance > 0 {
+				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
+			}
+			return errs
 		}
 	}
-	/*
-		if customer != nil {
-			if totalPayment > 0 && customer.CreditLimit > 0 {
-				if scenario != "update" && ((customer.CreditBalance - totalPayment) < customer.CreditLimit) {
-					errs["customer_id"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
-					return errs
-				} else if scenario == "update" && (((customer.CreditBalance + oldSalesReturn.TotalPaymentPaid) - totalPayment) < customer.CreditLimit) {
-					errs["customer_id"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
-					return errs
-				}
-			}
-		}*/
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
