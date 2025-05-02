@@ -124,6 +124,9 @@ func (vendor *Vendor) SetCreditBalance() error {
 	if account != nil {
 		vendor.Account = account
 		vendor.CreditBalance = account.Balance
+		if account.Type == "liability" {
+			vendor.CreditBalance = account.Balance * -1
+		}
 		err = vendor.Update()
 		if err != nil {
 			return errors.New("error updating vendor credit balance:" + err.Error())

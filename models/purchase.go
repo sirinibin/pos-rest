@@ -1500,21 +1500,25 @@ func (vendor *Vendor) IsCreditLimitExceeded(amount float64,
 	isReturn bool,
 ) bool {
 	var newBalance float64
+	creditBalance := vendor.CreditBalance
+	if creditBalance < 0 {
+		creditBalance = -creditBalance
+	}
 
 	switch vendor.Account.Type {
 	case "asset":
 		if isReturn {
-			newBalance = vendor.CreditBalance + amount
+			newBalance = creditBalance + amount
 		} else {
-			newBalance = vendor.CreditBalance - amount
+			newBalance = creditBalance - amount
 		}
 		return -newBalance > vendor.CreditLimit
 
 	case "liability":
 		if isReturn {
-			newBalance = vendor.CreditBalance - amount
+			newBalance = creditBalance - amount
 		} else {
-			newBalance = vendor.CreditBalance + amount
+			newBalance = creditBalance + amount
 		}
 		return newBalance > vendor.CreditLimit
 
@@ -1560,6 +1564,11 @@ func (vendor *Vendor) WillEditExceedCreditLimit(oldAmount, newAmount float64,
 	var delta float64
 	var newBalance float64
 
+	creditBalance := vendor.CreditBalance
+	if creditBalance < 0 {
+		creditBalance = -creditBalance
+	}
+
 	switch vendor.Account.Type {
 	case "asset":
 		if isReturn {
@@ -1567,7 +1576,7 @@ func (vendor *Vendor) WillEditExceedCreditLimit(oldAmount, newAmount float64,
 		} else {
 			delta = oldAmount - newAmount
 		}
-		newBalance = vendor.CreditBalance + delta
+		newBalance = creditBalance + delta
 		return -newBalance > vendor.CreditLimit
 
 	case "liability":
@@ -1576,7 +1585,7 @@ func (vendor *Vendor) WillEditExceedCreditLimit(oldAmount, newAmount float64,
 		} else {
 			delta = newAmount - oldAmount
 		}
-		newBalance = vendor.CreditBalance + delta
+		newBalance = creditBalance + delta
 		return newBalance > vendor.CreditLimit
 
 	default:

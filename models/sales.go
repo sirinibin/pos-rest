@@ -1666,21 +1666,25 @@ func (customer *Customer) IsCreditLimitExceeded(amount float64,
 	isReturn bool,
 ) bool {
 	var newBalance float64
+	creditBalance := customer.CreditBalance
+	if creditBalance < 0 {
+		creditBalance = -creditBalance
+	}
 
 	switch customer.Account.Type {
 	case "asset":
 		if isReturn {
-			newBalance = customer.CreditBalance - amount
+			newBalance = creditBalance - amount
 		} else {
-			newBalance = customer.CreditBalance + amount
+			newBalance = creditBalance + amount
 		}
 		return newBalance > customer.CreditLimit
 
 	case "liability":
 		if isReturn {
-			newBalance = customer.CreditBalance + amount
+			newBalance = creditBalance + amount
 		} else {
-			newBalance = customer.CreditBalance - amount
+			newBalance = creditBalance - amount
 		}
 		return -newBalance > customer.CreditLimit
 
@@ -1696,6 +1700,11 @@ func (customer *Customer) WillEditExceedCreditLimit(oldAmount, newAmount float64
 	var delta float64
 	var newBalance float64
 
+	creditBalance := customer.CreditBalance
+	if creditBalance < 0 {
+		creditBalance = -creditBalance
+	}
+
 	switch customer.Account.Type {
 	case "asset":
 		if isReturn {
@@ -1703,7 +1712,7 @@ func (customer *Customer) WillEditExceedCreditLimit(oldAmount, newAmount float64
 		} else {
 			delta = newAmount - oldAmount
 		}
-		newBalance = customer.CreditBalance + delta
+		newBalance = creditBalance + delta
 		return newBalance > customer.CreditLimit
 
 	case "liability":
@@ -1712,7 +1721,7 @@ func (customer *Customer) WillEditExceedCreditLimit(oldAmount, newAmount float64
 		} else {
 			delta = oldAmount - newAmount
 		}
-		newBalance = customer.CreditBalance + delta
+		newBalance = creditBalance + delta
 		return -newBalance > customer.CreditLimit
 
 	default:

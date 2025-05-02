@@ -162,6 +162,9 @@ func (customer *Customer) SetCreditBalance() error {
 	if account != nil {
 		customer.Account = account
 		customer.CreditBalance = account.Balance
+		if account.Type == "liability" {
+			customer.CreditBalance = account.Balance * -1
+		}
 		err = customer.Update()
 		if err != nil {
 			return errors.New("error updating customer credit balance:" + err.Error())
