@@ -110,7 +110,7 @@ type Product struct {
 	ProductStores    map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
 	Unit             string                  `bson:"unit,omitempty" json:"unit,omitempty"`
 	Images           []string                `bson:"images,omitempty" json:"images,omitempty"`
-	ImagesContent    []string                `json:"images_content,omitempty"`
+	ImagesContent    []string                `json:"images_content,omitempty" bson:"-"`
 	Deleted          bool                    `bson:"deleted" json:"deleted"`
 	DeletedBy        *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser    *User                   `json:"deleted_by_user" bson:"-"`
@@ -137,6 +137,28 @@ type ProductStats struct {
 	RetailStockValue    float64             `json:"retail_stock_value" bson:"retail_stock_value"`
 	WholesaleStockValue float64             `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
 	PurchaseStockValue  float64             `json:"purchase_stock_value" bson:"purchase_stock_value"`
+}
+
+func (store *Store) SaveProductImage(productID *primitive.ObjectID, filename string) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+
+	filter := bson.M{
+		"_id":      productID,
+		"store_id": store.ID,
+	}
+
+	update := bson.M{
+		"$push": bson.M{
+			"images": filename,
+		},
+	}
+
+	_, err := collection.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (store *Store) GetProductStats(
