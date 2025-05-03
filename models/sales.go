@@ -1222,7 +1222,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		order.CustomerID = nil
 	}
 
-	if scenario == "update" && customer == nil && govalidator.IsNull(order.CustomerName) {
+	if scenario == "update" && customer == nil && govalidator.IsNull(order.CustomerName) && oldOrder.CustomerID != nil && !oldOrder.CustomerID.IsZero() {
 		if order.ReturnCount > 0 {
 			errs["customer_id"] = "You can't remove this customer as this sales have a sales return created"
 			return
