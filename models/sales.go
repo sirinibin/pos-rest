@@ -1218,6 +1218,17 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return errs
 	}
 
+	if customer == nil && govalidator.IsNull(order.CustomerName) {
+		order.CustomerID = nil
+	}
+
+	if scenario == "update" && customer == nil && govalidator.IsNull(order.CustomerName) {
+		if order.ReturnCount > 0 {
+			errs["customer_id"] = "You can't remove this customer as this sales have a sales return created"
+			return
+		}
+	}
+
 	if customer == nil && !govalidator.IsNull(order.CustomerName) {
 		now := time.Now()
 		newCustomer := Customer{
