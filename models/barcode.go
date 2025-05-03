@@ -101,12 +101,16 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	price := "N/A"
 
 	if !storeID.IsZero() {
-		retailUnitPrice, err := product.getRetailUnitPriceByStoreID(storeID)
+		retailUnitPrice, withVAT, err := product.getRetailUnitPriceByStoreID(storeID)
 		if err != nil {
 			return errors.New("error get retail unit price: " + err.Error())
 		}
 
-		retailUnitPriceWithTax = RoundFloat((retailUnitPrice + (retailUnitPrice * (store.VatPercent / 100))), 2)
+		if withVAT {
+			retailUnitPriceWithTax = RoundFloat(retailUnitPrice, 2)
+		} else {
+			retailUnitPriceWithTax = RoundFloat((retailUnitPrice + (retailUnitPrice * (store.VatPercent / 100))), 2)
+		}
 
 		purchaseUnitPriceSecret, err = product.getPurchaseUnitPriceSecretByStoreID(storeID)
 		if err != nil {

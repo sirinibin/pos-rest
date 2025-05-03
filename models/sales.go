@@ -419,6 +419,7 @@ func (order *Order) CalculateDiscountPercentage() {
 func (order *Order) FindTotal() {
 	total := float64(0.0)
 	for i, product := range order.Products {
+		//if product.
 		order.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPrice)
 		order.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscount)
 

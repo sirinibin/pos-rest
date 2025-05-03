@@ -47,10 +47,11 @@ type ProductStore struct {
 	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
 	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	PurchaseUnitPrice       float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPrice       float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
 	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
-	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	RetailUnitPrice         float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
+	RetailUnitPrice         float64            `bson:"retail_unit_price" json:"retail_unit_price"`
+	IsUnitPriceWithVAT      bool               `bson:"with_vat" json:"with_vat"`
 	DamagedStock            float64            `bson:"damaged_stock" json:"damaged_stock"`
 	Stock                   float64            `bson:"stock" json:"stock"`
 	RetailUnitProfit        float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
@@ -370,19 +371,12 @@ func (store *Store) GetProductStats(
 	return stats, nil
 }
 
-func (product *Product) getRetailUnitPriceByStoreID(storeID primitive.ObjectID) (retailUnitPrice float64, err error) {
+func (product *Product) getRetailUnitPriceByStoreID(storeID primitive.ObjectID) (retailUnitPrice float64, withTax bool, err error) {
 	if productStore, ok := product.ProductStores[storeID.Hex()]; ok {
-		return productStore.RetailUnitPrice, nil
+		return productStore.RetailUnitPrice, productStore.IsUnitPriceWithVAT, nil
 	}
 
-	return retailUnitPrice, nil
-	/*for _, store := range product.Stores {
-		if store.StoreID == storeID {
-			return store.RetailUnitPrice, nil
-		}
-	}
-	return retailUnitPrice, err
-	*/
+	return retailUnitPrice, false, nil
 }
 
 func (product *Product) getPurchaseUnitPriceSecretByStoreID(storeID primitive.ObjectID) (secret string, err error) {
@@ -1919,6 +1913,11 @@ func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 		product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].Stock) + " " + product.Unit
 		if product.ProductStores[storeID.Hex()].RetailUnitPrice != 0 {
 			product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].RetailUnitPrice)
+			if product.ProductStores[storeID.Hex()].IsUnitPriceWithVAT {
+				product.SearchLabel += " [with VAT]"
+			} else {
+				product.SearchLabel += " [without VAT]"
+			}
 		}
 	}
 
@@ -2052,27 +2051,11 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
-	storeNo := 0
-	for i, productStore := range product.ProductStores {
-		if productStore.StoreID.IsZero() {
-			errs["store_id_"+strconv.Itoa(storeNo)] = "store_id is required for unit price"
-			return errs
+	for storeID, _ := range product.ProductStores {
+		if productStoreTemp, ok := product.ProductStores[storeID]; ok {
+			productStoreTemp.PurchaseUnitPriceSecret = GenerateSecretCode(int(product.ProductStores[storeID].PurchaseUnitPrice))
+			product.ProductStores[storeID] = productStoreTemp
 		}
-		exists, err := IsStoreExists(&productStore.StoreID)
-		if err != nil {
-			errs["store_id_"+strconv.Itoa(storeNo)] = err.Error()
-		}
-
-		if !exists {
-			errs["store_id"+strconv.Itoa(storeNo)] = "Invalid store_id:" + productStore.StoreID.Hex() + " in stores"
-		}
-
-		if productStoreTemp, ok := product.ProductStores[i]; ok {
-			productStoreTemp.PurchaseUnitPriceSecret = GenerateSecretCode(int(product.ProductStores[i].PurchaseUnitPrice))
-			product.ProductStores[i] = productStoreTemp
-		}
-		//product.Stores[i].PurchaseUnitPriceSecret = GenerateSecretCode(int(product.Stores[i].PurchaseUnitPrice))
-		storeNo++
 	}
 
 	//if len(product.CategoryID) == 0 {
