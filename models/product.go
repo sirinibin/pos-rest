@@ -2748,6 +2748,9 @@ func ProcessProducts() error {
 
 	for _, store := range stores {
 		log.Print("Branch name:" + store.BranchName)
+		if store.Name != "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
+			continue
+		}
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
@@ -2852,11 +2855,21 @@ func ProcessProducts() error {
 					return err
 				}*/
 			//product.GeneratePrefixes()
-			product.BarcodeBase64 = ""
-			err = product.Update(&store.ID)
-			if err != nil {
-				return err
+
+			if store.Name == "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
+				for i, productStore := range product.ProductStores {
+					productStore.IsUnitPriceWithVAT = true
+					product.ProductStores[i] = productStore
+					product.Update(&store.ID)
+				}
 			}
+
+			//product.BarcodeBase64 = ""
+			/*
+				err = product.Update(&store.ID)
+				if err != nil {
+					return err
+				}*/
 
 			bar.Add(1)
 		}
