@@ -23,23 +23,26 @@ import (
 )
 
 type OrderProduct struct {
-	ProductID           primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name                string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic        string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode            string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PrefixPartNumber    string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber          string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity            float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	QuantityReturned    float64            `json:"quantity_returned" bson:"quantity_returned"`
-	UnitPrice           float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	PurchaseUnitPrice   float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	Unit                string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	Discount            float64            `bson:"discount" json:"discount"`
-	DiscountPercent     float64            `bson:"discount_percent" json:"discount_percent"`
-	UnitDiscount        float64            `bson:"unit_discount" json:"unit_discount"`
-	UnitDiscountPercent float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
-	Profit              float64            `bson:"profit" json:"profit"`
-	Loss                float64            `bson:"loss" json:"loss"`
+	ProductID                primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name                     string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic             string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode                 string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber         string             `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber               string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity                 float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned         float64            `json:"quantity_returned" bson:"quantity_returned"`
+	UnitPrice                float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitPriceWithVAT         float64            `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
+	PurchaseUnitPrice        float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseBasePrice        float64            `bson:"purchase_base_price,omitempty" json:"purchase_base_price,omitempty"`
+	PurchaseUnitPriceWithVAT float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
+	Unit                     string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	Discount                 float64            `bson:"discount" json:"discount"`
+	DiscountPercent          float64            `bson:"discount_percent" json:"discount_percent"`
+	UnitDiscount             float64            `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountPercent      float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	Profit                   float64            `bson:"profit" json:"profit"`
+	Loss                     float64            `bson:"loss" json:"loss"`
 }
 
 // Order : Order structure
@@ -69,6 +72,7 @@ type Order struct {
 	TotalQuantity          float64             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice               float64             `bson:"vat_price" json:"vat_price"`
 	Total                  float64             `bson:"total" json:"total"`
+	TotalWithVAT           float64             `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal               float64             `bson:"net_total" json:"net_total"`
 	CashDiscount           float64             `bson:"cash_discount" json:"cash_discount"`
 	ReturnCashDiscount     float64             `bson:"return_cash_discount" json:"return_cash_discount"`
@@ -386,22 +390,58 @@ func (order *Order) UpdateForeignLabelFields() error {
 }
 
 func (order *Order) FindNetTotal() {
-	netTotal := float64(0.0)
-	order.FindTotal()
-	netTotal = order.Total
-
 	order.ShippingOrHandlingFees = RoundTo2Decimals(order.ShippingOrHandlingFees)
 	order.Discount = RoundTo2Decimals(order.Discount)
 
-	netTotal += order.ShippingOrHandlingFees
-	netTotal -= order.Discount
+	order.FindTotal()
 
-	order.FindVatPrice()
-	netTotal += order.VatPrice
+	// Base amount before VAT
+	baseTotal := order.Total + order.ShippingOrHandlingFees - order.Discount
 
-	order.NetTotal = RoundTo2Decimals(netTotal)
+	// Compute VAT on base amount
+	order.VatPrice = RoundTo2Decimals(baseTotal * (*order.VatPercent / 100))
+
+	// Final Net Total = base + VAT
+	order.NetTotal = RoundTo2Decimals(baseTotal + order.VatPrice)
+
 	order.CalculateDiscountPercentage()
 }
+
+func (order *Order) FindTotal() {
+	total := float64(0.0)
+	//totalWithVAT := float64(0.0)
+	for i, product := range order.Products {
+		//if product.
+
+		order.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPriceWithVAT)
+		order.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPrice)
+		order.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscount)
+
+		if order.Products[i].UnitDiscount > 0 {
+			order.Products[i].UnitDiscountPercent = RoundTo2Decimals((order.Products[i].UnitDiscount / order.Products[i].UnitPrice) * 100)
+		}
+
+		total += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+		//totalWithVAT += (total + (total * *order.VatPercent / 100))
+		//totalWithVAT += RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscount))
+	}
+
+	order.Total = RoundTo2Decimals(total)
+	order.TotalWithVAT = RoundTo2Decimals(total * (1 + (*order.VatPercent / 100)))
+}
+
+func (order *Order) FindVatPrice() {
+	totalWithVat := order.TotalWithVAT + order.ShippingOrHandlingFees - order.Discount
+	_, vat := SplitVATInclusivePrice(totalWithVat, *order.VatPercent)
+	order.VatPrice = vat
+}
+
+func SplitVATInclusivePrice(priceWithVAT, vatPercent float64) (base, vat float64) {
+	base = priceWithVAT / (1 + vatPercent/100)
+	vat = priceWithVAT - base
+	return RoundTo2Decimals(base), RoundTo2Decimals(vat)
+}
+
 func (order *Order) CalculateDiscountPercentage() {
 	if order.NetTotal == 0 {
 		order.DiscountPercent = 0
@@ -414,28 +454,6 @@ func (order *Order) CalculateDiscountPercentage() {
 
 	percentage := (order.Discount / order.NetTotal) * 100
 	order.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
-}
-
-func (order *Order) FindTotal() {
-	total := float64(0.0)
-	for i, product := range order.Products {
-		//if product.
-		order.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPrice)
-		order.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscount)
-
-		if order.Products[i].UnitDiscount > 0 {
-			order.Products[i].UnitDiscountPercent = RoundTo2Decimals((order.Products[i].UnitDiscount / order.Products[i].UnitPrice) * 100)
-		}
-
-		total += RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
-	}
-
-	order.Total = RoundTo2Decimals(total)
-}
-
-func (order *Order) FindVatPrice() {
-	vatPrice := ((*order.VatPercent / float64(100.00)) * ((order.Total + order.ShippingOrHandlingFees) - order.Discount))
-	order.VatPrice = RoundTo2Decimals(vatPrice)
 }
 
 func (order *Order) FindTotalQuantity() {

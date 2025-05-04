@@ -2058,9 +2058,6 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
-	//if len(product.CategoryID) == 0 {
-	//errs["category_id"] = "Atleast 1 category is required"
-	//}
 	if len(product.CategoryID) > 0 {
 		for i, categoryID := range product.CategoryID {
 			exists, err := store.IsProductCategoryExists(categoryID)
@@ -2071,25 +2068,6 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			if !exists {
 				errs["category_id_"+strconv.Itoa(i)] = "Invalid category:" + categoryID.Hex()
 			}
-		}
-	}
-
-	for k, imageContent := range product.ImagesContent {
-		splits := strings.Split(imageContent, ",")
-
-		if len(splits) == 2 {
-			product.ImagesContent[k] = splits[1]
-		} else if len(splits) == 1 {
-			product.ImagesContent[k] = splits[0]
-		}
-
-		valid, err := IsStringBase64(product.ImagesContent[k])
-		if err != nil {
-			errs["images_content"] = err.Error()
-		}
-
-		if !valid {
-			errs["images_"+strconv.Itoa(k)] = "Invalid base64 string"
 		}
 	}
 

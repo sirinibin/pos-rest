@@ -153,9 +153,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.FindNetTotal()
-	order.FindTotal()
 	order.FindTotalQuantity()
-	order.FindVatPrice()
 
 	err = order.UpdateForeignLabelFields()
 	if err != nil {
@@ -328,8 +326,6 @@ func CalculateSalesNetTotal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.FindNetTotal()
-	order.FindTotal()
-	order.FindVatPrice()
 
 	response.Status = true
 	response.Result = order
