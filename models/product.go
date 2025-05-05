@@ -1913,11 +1913,11 @@ func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 		product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].Stock) + " " + product.Unit
 		if product.ProductStores[storeID.Hex()].RetailUnitPrice != 0 {
 			product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].RetailUnitPrice)
-			if product.ProductStores[storeID.Hex()].IsUnitPriceWithVAT {
+			/*if product.ProductStores[storeID.Hex()].IsUnitPriceWithVAT {
 				product.SearchLabel += " [with VAT]"
 			} else {
 				product.SearchLabel += " [without VAT]"
-			}
+			}*/
 		}
 	}
 
@@ -1927,6 +1927,11 @@ func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 
 	if product.CountryName != "" {
 		product.SearchLabel += " - Country: " + product.CountryName
+	}
+
+	additionalSearchTerms := product.GetAdditionalSearchTerms()
+	if additionalSearchTerms != "" {
+		product.SearchLabel += " " + additionalSearchTerms
 	}
 }
 
@@ -2747,10 +2752,11 @@ func ProcessProducts() error {
 	}
 
 	for _, store := range stores {
-		log.Print("Branch name:" + store.BranchName)
-		if store.Name != "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
-			continue
-		}
+		/*
+			log.Print("Branch name:" + store.BranchName)
+			if store.Name != "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
+				continue
+			}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
@@ -2783,8 +2789,15 @@ func ProcessProducts() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			//if product.PartNumber == `GI RED BUSH 1X1/2"` {
-			//product.GeneratePrefixes()
+			if product.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
+
+			product.GeneratePrefixes()
+			err = product.Update(&store.ID)
+			if err != nil {
+				return err
+			}
 
 			/*
 				if !isValidUTF8(product.Name) {
@@ -2845,10 +2858,6 @@ func ProcessProducts() error {
 
 			//product.BarcodeBase64 = ""
 
-			if product.StoreID.Hex() != store.ID.Hex() {
-				continue
-			}
-
 			/*
 				err = product.SetStock()
 				if err != nil {
@@ -2856,20 +2865,16 @@ func ProcessProducts() error {
 				}*/
 			//product.GeneratePrefixes()
 
-			if store.Name == "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
-				for i, productStore := range product.ProductStores {
-					productStore.IsUnitPriceWithVAT = true
-					product.ProductStores[i] = productStore
-					product.Update(&store.ID)
-				}
-			}
+			/*
+				if store.Name == "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
+					for i, productStore := range product.ProductStores {
+						productStore.IsUnitPriceWithVAT = true
+						product.ProductStores[i] = productStore
+						product.Update(&store.ID)
+					}
+				}*/
 
 			//product.BarcodeBase64 = ""
-			/*
-				err = product.Update(&store.ID)
-				if err != nil {
-					return err
-				}*/
 
 			bar.Add(1)
 		}
@@ -2991,8 +2996,28 @@ func removeSpecialCharacter(input string) string {
 	return strings.ReplaceAll(input, "�", "")
 }
 
+func containsSpecialChars(s string) bool {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]`)
+	return re.MatchString(s)
+}
+
+func (product *Product) GetAdditionalSearchTerms() string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	searchTerm := ""
+	if containsSpecialChars(product.Name) {
+		searchTerm = re.ReplaceAllString(product.Name, "")
+	}
+	if containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
+		searchTerm += " " + re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, "")
+	}
+
+	return searchTerm
+}
+
 func (product *Product) GeneratePrefixes() {
-	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name + " " + product.BrandName + " " + product.CountryName)
+	additionalSearchTerms := product.GetAdditionalSearchTerms()
+
+	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name + " " + additionalSearchTerms + " " + product.BrandName + " " + product.CountryName)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
