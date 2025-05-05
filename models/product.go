@@ -1929,10 +1929,11 @@ func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 		product.SearchLabel += " - Country: " + product.CountryName
 	}
 
-	additionalSearchTerms := product.GetAdditionalSearchTerms()
-	if additionalSearchTerms != "" {
-		product.SearchLabel += " " + additionalSearchTerms
-	}
+	/*
+		additionalSearchTerms := product.GetAdditionalSearchTerms()
+		if additionalSearchTerms != "" {
+			product.SearchLabel += " " + additionalSearchTerms
+		}*/
 }
 
 func GenerateSecretCode(n int) string {
@@ -2796,6 +2797,9 @@ func ProcessProducts() error {
 			product.GeneratePrefixes()
 			err = product.Update(&store.ID)
 			if err != nil {
+				log.Print("Store ID:" + store.ID.Hex())
+				log.Print("Part No.:" + product.PartNumber)
+				log.Print("Product ID:" + product.ID.Hex())
 				return err
 			}
 
