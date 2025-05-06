@@ -65,6 +65,8 @@ type Order struct {
 	DeliveredByUser        *User               `json:"delivered_by_user,omitempty"`
 	VatPercent             *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount               float64             `bson:"discount" json:"discount"`
+	DiscountWithVAT        float64             `bson:"discount_with_vat" json:"discount_with_vat"`
+	DiscountPercentWithVAT float64             `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
 	DiscountPercent        float64             `bson:"discount_percent" json:"discount_percent"`
 	IsDiscountPercent      bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	ReturnDiscount         float64             `bson:"return_discount" json:"return_discount"`
@@ -396,9 +398,20 @@ func (order *Order) FindNetTotal() {
 
 	order.FindTotal()
 
-	order.FindVatPrice()
-	// Base amount before VAT
+	if order.DiscountWithVAT > 0 {
+		order.Discount = RoundTo2Decimals(order.DiscountWithVAT / (1 + (*order.VatPercent / 100)))
+	} else if order.Discount > 0 {
+		order.DiscountWithVAT = RoundTo2Decimals(order.Discount * (1 + (*order.VatPercent / 100)))
+	} else {
+		order.Discount = 0
+		order.DiscountWithVAT = 0
+	}
+	// Apply discount to the base amount first
 	baseTotal := order.Total + order.ShippingOrHandlingFees - order.Discount
+	baseTotal = RoundTo2Decimals(baseTotal)
+
+	// Now calculate VAT on the discounted base
+	order.VatPrice = RoundTo2Decimals(baseTotal * (*order.VatPercent / 100))
 
 	order.NetTotal = RoundTo2Decimals(baseTotal + order.VatPrice)
 
@@ -409,30 +422,19 @@ func (order *Order) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
 	for i, product := range order.Products {
-		if product.UnitPriceWithVAT > 0 {
+
+		if order.Products[i].UnitPriceWithVAT > 0 {
 			order.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPriceWithVAT)
 			order.Products[i].UnitPrice = RoundTo2Decimals((order.Products[i].UnitPriceWithVAT / (1 + (*order.VatPercent / 100))))
+		} else if order.Products[i].UnitPrice > 0 {
+			order.Products[i].UnitPrice = RoundTo2Decimals(order.Products[i].UnitPrice)
+			order.Products[i].UnitPriceWithVAT = RoundTo2Decimals((order.Products[i].UnitPrice * (1 + (*order.VatPercent / 100))))
 		} else {
-			order.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPrice)
-			order.Products[i].UnitPriceWithVAT = RoundTo2Decimals(order.Products[i].UnitPrice * (1 + (*order.VatPercent / 100)))
+			continue
 		}
 
 		order.Products[i].UnitDiscount = RoundTo2Decimals(order.Products[i].UnitDiscountWithVAT / (1 + (*order.VatPercent / 100)))
 		order.Products[i].UnitDiscountPercent = RoundTo2Decimals((order.Products[i].UnitDiscount / order.Products[i].UnitPrice) * 100)
-
-		/*
-			if order.Products[i].UnitDiscountWithVAT > 0 {
-				order.Products[i].UnitDiscount = RoundTo2Decimals(order.Products[i].UnitDiscountWithVAT / (1 + (*order.VatPercent / 100)))
-			} else {
-				order.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(order.Products[i].UnitDiscount * (1 + (*order.VatPercent / 100)))
-			}*/
-
-		/*
-			if order.Products[i].UnitDiscountPercent > 0 {
-				order.Products[i].UnitDiscount = RoundTo2Decimals((order.Products[i].UnitPrice / (1 + order.Products[i].UnitDiscountPercent)))
-			} else if order.Products[i].UnitPrice > 0 && order.Products[i].UnitDiscount > 0 {
-				order.Products[i].UnitDiscountPercent = RoundTo2Decimals((order.Products[i].UnitDiscount / order.Products[i].UnitPrice) * 100)
-			}*/
 
 		total += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
@@ -446,24 +448,29 @@ func (order *Order) FindVatPrice() {
 	order.VatPrice = RoundTo2Decimals(order.TotalWithVAT - order.Total)
 }
 
-func SplitVATInclusivePrice(priceWithVAT, vatPercent float64) (base, vat float64) {
-	base = priceWithVAT / (1 + vatPercent/100)
-	vat = priceWithVAT - base
-	return RoundTo2Decimals(base), RoundTo2Decimals(vat)
-}
-
 func (order *Order) CalculateDiscountPercentage() {
-	if order.NetTotal == 0 {
-		order.DiscountPercent = 0
-	}
-
 	if order.Discount <= 0 {
 		order.DiscountPercent = 0.00
 		return
 	}
 
-	percentage := (order.Discount / order.NetTotal) * 100
-	order.DiscountPercent = RoundTo2Decimals(percentage) // Use rounding here
+	baseBeforeDiscount := order.NetTotal + order.Discount
+	if baseBeforeDiscount == 0 {
+		order.DiscountPercent = 0.00
+		return
+	}
+
+	percentage := (order.Discount / baseBeforeDiscount) * 100
+	order.DiscountPercent = RoundTo2Decimals(percentage)
+
+	baseBeforeDiscountWithVAT := order.NetTotal + order.DiscountWithVAT
+	if baseBeforeDiscountWithVAT == 0 {
+		order.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	percentage = (order.DiscountWithVAT / baseBeforeDiscountWithVAT) * 100
+	order.DiscountPercentWithVAT = RoundTo2Decimals(percentage)
 }
 
 func (order *Order) FindTotalQuantity() {
