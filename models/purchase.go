@@ -1717,25 +1717,50 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 		}
 
 		if productStoreTemp, ok := product.ProductStores[purchase.StoreID.Hex()]; ok {
-			productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
+
+			if productStoreTemp.IsUnitPriceWithVAT {
+				productStoreTemp.PurchaseUnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (1 + (store.VatPercent / 100)))
+			} else {
+				productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
+			}
 
 			if purchaseProduct.WholesaleUnitPrice > 0 {
-				productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+				if productStoreTemp.IsUnitPriceWithVAT {
+					productStoreTemp.WholesaleUnitPrice = RoundTo2Decimals(purchaseProduct.WholesaleUnitPrice * (1 + (store.VatPercent / 100)))
+				} else {
+					productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+				}
 			}
 
 			if purchaseProduct.RetailUnitPrice > 0 {
-				productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
+				if productStoreTemp.IsUnitPriceWithVAT {
+					productStoreTemp.RetailUnitPrice = RoundTo2Decimals(purchaseProduct.RetailUnitPrice * (1 + (store.VatPercent / 100)))
+				} else {
+					productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
+				}
 			}
 
 			product.ProductStores[purchase.StoreID.Hex()] = productStoreTemp
 		} else {
 			product.ProductStores = map[string]ProductStore{}
-			product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
-				StoreID:            *purchase.StoreID,
-				PurchaseUnitPrice:  purchaseProduct.PurchaseUnitPrice,
-				WholesaleUnitPrice: purchaseProduct.WholesaleUnitPrice,
-				RetailUnitPrice:    purchaseProduct.RetailUnitPrice,
+			if store.DefaultUnitPriceIsWithVAT {
+				product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
+					IsUnitPriceWithVAT: true,
+					StoreID:            *purchase.StoreID,
+					PurchaseUnitPrice:  RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (1 + (store.VatPercent / 100))),
+					WholesaleUnitPrice: RoundTo2Decimals(purchaseProduct.WholesaleUnitPrice * (1 + (store.VatPercent / 100))),
+					RetailUnitPrice:    RoundTo2Decimals(purchaseProduct.RetailUnitPrice * (1 + (store.VatPercent / 100))),
+				}
+			} else {
+				product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
+					IsUnitPriceWithVAT: false,
+					StoreID:            *purchase.StoreID,
+					PurchaseUnitPrice:  purchaseProduct.PurchaseUnitPrice,
+					WholesaleUnitPrice: purchaseProduct.WholesaleUnitPrice,
+					RetailUnitPrice:    purchaseProduct.RetailUnitPrice,
+				}
 			}
+
 		}
 
 		/*
