@@ -181,13 +181,13 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.UUID = uuid.New().String()
 
-	if order.EnableReportToZatca && !IsConnectedToInternet() {
+	/*if order.EnableReportToZatca && !IsConnectedToInternet() {
 		response.Status = false
 		response.Errors["reporting_to_zatca"] = "not connected to internet"
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
-	}
+	}*/
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && order.EnableReportToZatca {
 		err = order.ReportToZatca()

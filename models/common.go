@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"gopkg.in/mgo.v2/bson"
@@ -46,8 +47,19 @@ func ToFixed(num float64, precision int) float64 {
 	*/
 }
 
+func RoundDecimal(val float64) float64 {
+	d := decimal.NewFromFloat(val)
+	result, _ := d.Round(2).Float64()
+	return result
+}
+
 func RoundTo2Decimals(num float64) float64 {
+	//return RoundDecimal(num)
 	return math.Round(num*100) / 100
+	//return math.Trunc((num+1e-9)*100) / 100
+	/*strValue := fmt.Sprintf("%.2f", num)
+	trimmedValue, _ := strconv.ParseFloat(strValue, 64)
+	return trimmedValue*/
 }
 
 // Just trim to 2 decimal places

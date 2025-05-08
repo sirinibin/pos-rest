@@ -361,13 +361,14 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !IsConnectedToInternet() {
-		response.Status = false
-		response.Errors["internet"] = "not connected to internet"
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	/*
+		if !IsConnectedToInternet() {
+			response.Status = false
+			response.Errors["internet"] = "not connected to internet"
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
 		var lastOrder *models.Order
