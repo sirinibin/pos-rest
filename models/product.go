@@ -18,10 +18,10 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"gopkg.in/mgo.v2/bson"
 )
 
 /*
@@ -455,7 +455,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	if product.CreatedBy != nil {
-		createdByUser, err := FindUserByID(product.CreatedBy, bson.M{"id": 1, "name": 1})
+		createdByUser, err := FindUserByID(product.CreatedBy, map[string]interface{}{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error findind created_by user:" + err.Error())
 		}
@@ -463,7 +463,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	if product.UpdatedBy != nil {
-		updatedByUser, err := FindUserByID(product.UpdatedBy, bson.M{"id": 1, "name": 1})
+		updatedByUser, err := FindUserByID(product.UpdatedBy, map[string]interface{}{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error findind updated_by user:" + err.Error())
 		}
@@ -471,7 +471,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	if product.DeletedBy != nil && !product.DeletedBy.IsZero() {
-		deletedByUser, err := FindUserByID(product.DeletedBy, bson.M{"id": 1, "name": 1})
+		deletedByUser, err := FindUserByID(product.DeletedBy, map[string]interface{}{"id": 1, "name": 1})
 		if err != nil {
 			return errors.New("Error findind deleted_by user:" + err.Error())
 		}
@@ -479,7 +479,7 @@ func (product *Product) UpdateForeignLabelFields() error {
 	}
 
 	if product.StoreID != nil {
-		store, err := FindStoreByID(product.StoreID, bson.M{"id": 1, "name": 1, "code": 1})
+		store, err := FindStoreByID(product.StoreID, map[string]interface{}{"id": 1, "name": 1, "code": 1})
 		if err != nil {
 			return err
 		}
@@ -683,8 +683,9 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-
-		criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
+		//criterias.Select = map[string]interface{}{}
+		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
 
 		/*
 			criterias.SearchBy["$or"] = []bson.M{
@@ -694,18 +695,21 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			}
 			criterias.SortBy = bson.M{"name": 1}*/
 	}
-
+	sortFieldName := ""
+	ascending := true
 	keys, ok = r.URL.Query()["sort"]
 	if ok && len(keys[0]) >= 1 {
 		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
-		if !textSearching {
-			criterias.SortBy = GetSortByFields(keys[0])
-		}
-
-		//criterias.SortBy = MergeMaps(GetSortByFields(keys[0]), criterias.SortBy)
+		sortFieldName = keys[0]
+		criterias.SortBy = GetSortByFields(keys[0])
 	}
-	//log.Print("criterias.SortBy:")
-	//log.Print(criterias.SortBy)
+
+	if sortFieldName != "" {
+		if strings.HasPrefix(sortFieldName, "-") {
+			ascending = false
+			sortFieldName = strings.TrimPrefix(sortFieldName, "-")
+		}
+	}
 
 	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
@@ -1799,7 +1803,6 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(offset))
 	findOptions.SetLimit(int64(criterias.Size))
-	findOptions.SetSort(criterias.SortBy)
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
@@ -1810,6 +1813,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {
+		//	criterias.Select = MergeMaps(criterias.Select, ParseSelectString(keys[0]))
 		criterias.Select = ParseSelectString(keys[0])
 		//Relational Select Fields
 
@@ -1830,9 +1834,34 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		}
 
 	}
+	//log.Print("criterias.Select:", criterias.Select)
 
 	if criterias.Select != nil {
 		findOptions.SetProjection(criterias.Select)
+	}
+
+	/*sr := bson.D{
+		{"score", bson.M{"$meta": "textScore"}},
+		{"country_name", -1},
+	}*/
+	/*sr := bson.D{
+		{Key: "score", Value: bson.M{"$meta": "textScore"}},
+		{Key: "country", Value: 1}, // ascending sort by country
+	}*/
+	//sr := bson.M{"score": bson.M{"$meta": "textScore"}}
+	if textSearching {
+		sortValue := 1
+		if !ascending {
+			sortValue = -1
+		}
+
+		sortBy := bson.D{
+			bson.E{Key: "score", Value: bson.M{"$meta": "textScore"}},
+			bson.E{Key: sortFieldName, Value: sortValue},
+		}
+		findOptions.SetSort(sortBy)
+	} else {
+		findOptions.SetSort(criterias.SortBy)
 	}
 
 	if !loadData {
