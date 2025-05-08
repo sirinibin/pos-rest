@@ -187,6 +187,22 @@ func ParseSelectString(selectStr string) (fields map[string]interface{}) {
 	return fields
 }
 
+func MergeMaps(map1, map2 map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{})
+
+	// Copy all from map1
+	for k, v := range map1 {
+		merged[k] = v
+	}
+
+	// Copy all from map2 (overwrites if key already exists)
+	for k, v := range map2 {
+		merged[k] = v
+	}
+
+	return merged
+}
+
 func GetSortByFields(sortString string) (sortBy map[string]interface{}) {
 	sortFieldWithOrder := strings.Fields(sortString)
 	sortBy = map[string]interface{}{}

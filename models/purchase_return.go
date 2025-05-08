@@ -1013,6 +1013,10 @@ func (purchasereturn *PurchaseReturn) Validate(
 		return errs
 	}
 
+	if len(purchasereturn.Products) == 0 {
+		errs["product_id"] = "Atleast 1 product is required for purchase return"
+	}
+
 	/*
 		if purchasereturn.NetTotal <= 0 {
 			errs["net_total"] = "Net total should be greater than 0.00 "

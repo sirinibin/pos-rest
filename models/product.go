@@ -641,8 +641,30 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		}*/
 	}
 
-	//textSearching := false
+	var storeID primitive.ObjectID
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return products, criterias, err
+		}
+		/*
+			store, err := FindStoreByID(&storeID, bson.M{})
+			if err != nil {
+				return products, criterias, err
+			}
 
+			if len(store.UseProductsFromStoreID) > 0 {
+				criterias.SearchBy["$or"] = []bson.M{
+					{"store_id": storeID},
+					{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
+				}
+			} else {
+				criterias.SearchBy["store_id"] = storeID
+			}*/
+	}
+
+	//textSearching := false
 	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
 		//textSearching = true
@@ -672,6 +694,15 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			}
 			criterias.SortBy = bson.M{"name": 1}*/
 	}
+
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
+		criterias.SortBy = GetSortByFields(keys[0])
+		//criterias.SortBy = MergeMaps(GetSortByFields(keys[0]), criterias.SortBy)
+	}
+	//log.Print("criterias.SortBy:")
+	//log.Print(criterias.SortBy)
 
 	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
@@ -726,39 +757,6 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			{"part_number": bson.M{"$regex": keys[0], "$options": "i"}},
 		}
 		//criterias.SearchBy["part_number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
-
-	var storeID primitive.ObjectID
-	keys, ok = r.URL.Query()["search[store_id]"]
-	if ok && len(keys[0]) >= 1 {
-		storeID, err = primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			return products, criterias, err
-		}
-		/*
-			store, err := FindStoreByID(&storeID, bson.M{})
-			if err != nil {
-				return products, criterias, err
-			}
-
-			if len(store.UseProductsFromStoreID) > 0 {
-				criterias.SearchBy["$or"] = []bson.M{
-					{"store_id": storeID},
-					{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
-				}
-			} else {
-				criterias.SearchBy["store_id"] = storeID
-			}*/
-	}
-
-	keys, ok = r.URL.Query()["sort"]
-	if ok && len(keys[0]) >= 1 {
-		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
-		criterias.SortBy = GetSortByFields(keys[0])
-		/*
-			if !textSearching {
-				criterias.SortBy = GetSortByFields(keys[0])
-			}*/
 	}
 
 	keys, ok = r.URL.Query()["search[retail_unit_profit]"]
