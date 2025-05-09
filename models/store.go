@@ -717,32 +717,31 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	//customer serial number
-	/*
-		if govalidator.IsNull(store.CustomerSerialNumber.Prefix) {
-			errs["customer_serial_number_prefix"] = "Prefix is required"
-		}
 
-		if store.CustomerSerialNumber.PaddingCount <= 0 {
-			errs["customer_serial_number_padding_count"] = "Padding count is required"
-		}
+	if govalidator.IsNull(store.CustomerSerialNumber.Prefix) {
+		errs["customer_serial_number_prefix"] = "Prefix is required"
+	}
 
-		if store.CustomerSerialNumber.StartFromCount < 0 {
-			errs["customer_serial_number_start_from_count"] = "Counting start from, is required"
-		}
+	if store.CustomerSerialNumber.PaddingCount <= 0 {
+		errs["customer_serial_number_padding_count"] = "Padding count is required"
+	}
 
-		//vendor serial number
-		if govalidator.IsNull(store.VendorSerialNumber.Prefix) {
-			errs["vendor_serial_number_prefix"] = "Prefix is required"
-		}
+	if store.CustomerSerialNumber.StartFromCount < 0 {
+		errs["customer_serial_number_start_from_count"] = "Counting start from, is required"
+	}
 
-		if store.VendorSerialNumber.PaddingCount <= 0 {
-			errs["vendor_serial_number_padding_count"] = "Padding count is required"
-		}
+	//vendor serial number
+	if govalidator.IsNull(store.VendorSerialNumber.Prefix) {
+		errs["vendor_serial_number_prefix"] = "Prefix is required"
+	}
 
-		if store.VendorSerialNumber.StartFromCount < 0 {
-			errs["vendor_serial_number_start_from_count"] = "Counting start from, is required"
-		}
-	*/
+	if store.VendorSerialNumber.PaddingCount <= 0 {
+		errs["vendor_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.VendorSerialNumber.StartFromCount < 0 {
+		errs["vendor_serial_number_start_from_count"] = "Counting start from, is required"
+	}
 
 	if store.Zatca.Phase == "2" {
 		if govalidator.IsNull(store.Zatca.Env) {
@@ -750,7 +749,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	/*if !store.ID.IsZero() && oldStore != nil && !govalidator.IsNull(oldStore.Zatca.Env) {
+	if !store.ID.IsZero() && oldStore != nil && !govalidator.IsNull(oldStore.Zatca.Env) {
 		if store.Zatca.Env != oldStore.Zatca.Env {
 			salesCount, err := oldStore.GetSalesCount()
 			if err != nil {
@@ -761,7 +760,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["zatca_env"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
 			}
 		}
-	}*/
+	}
 
 	if !store.ID.IsZero() && oldStore != nil {
 		if store.SalesSerialNumber.StartFromCount != oldStore.SalesSerialNumber.StartFromCount {
@@ -818,40 +817,39 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["quotation_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(quotationCount, 10) + " quotations"
 			}
 		}
-		/*
-			if store.ExpenseSerialNumber.StartFromCount != oldStore.ExpenseSerialNumber.StartFromCount {
-				expenseCount, err := oldStore.GetExpenseCount()
-				if err != nil {
-					errs["expense_serial_number_start_from_count"] = "Error finding expense count"
-				}
 
-				if expenseCount > 0 {
-					errs["expense_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(expenseCount, 10) + " expenses"
-				}
-			}*/
-
-		/*
-			if store.CustomerSerialNumber.StartFromCount != oldStore.CustomerSerialNumber.StartFromCount {
-				customerCount, err := oldStore.GetCustomerCount()
-				if err != nil {
-					errs["customer_serial_number_start_from_count"] = "Error finding customer count"
-				}
-
-				if customerCount > 0 {
-					errs["customer_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(customerCount, 10) + " customers"
-				}
+		if store.ExpenseSerialNumber.StartFromCount != oldStore.ExpenseSerialNumber.StartFromCount {
+			expenseCount, err := oldStore.GetExpenseCount()
+			if err != nil {
+				errs["expense_serial_number_start_from_count"] = "Error finding expense count"
 			}
 
-			if store.VendorSerialNumber.StartFromCount != oldStore.VendorSerialNumber.StartFromCount {
-				vendorCount, err := oldStore.GetVendorCount()
-				if err != nil {
-					errs["vendor_serial_number_start_from_count"] = "Error finding vendor count"
-				}
+			if expenseCount > 0 {
+				errs["expense_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(expenseCount, 10) + " expenses"
+			}
+		}
 
-				if vendorCount > 0 {
-					errs["vendor_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(vendorCount, 10) + " vendors"
-				}
-			}*/
+		if store.CustomerSerialNumber.StartFromCount != oldStore.CustomerSerialNumber.StartFromCount {
+			customerCount, err := oldStore.GetCustomerCount()
+			if err != nil {
+				errs["customer_serial_number_start_from_count"] = "Error finding customer count"
+			}
+
+			if customerCount > 0 {
+				errs["customer_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(customerCount, 10) + " customers"
+			}
+		}
+
+		if store.VendorSerialNumber.StartFromCount != oldStore.VendorSerialNumber.StartFromCount {
+			vendorCount, err := oldStore.GetVendorCount()
+			if err != nil {
+				errs["vendor_serial_number_start_from_count"] = "Error finding vendor count"
+			}
+
+			if vendorCount > 0 {
+				errs["vendor_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(vendorCount, 10) + " vendors"
+			}
+		}
 	}
 
 	/*
