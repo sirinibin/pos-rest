@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,8 @@ type Vendor struct {
 	Code                       string                 `bson:"code,omitempty" json:"code,omitempty"`
 	Name                       string                 `bson:"name" json:"name"`
 	NameInArabic               string                 `bson:"name_in_arabic" json:"name_in_arabic"`
+	SearchWords                []string               `bson:"search_words,omitempty" json:"search_words,omitempty"`
+	SearchWordsInArabic        []string               `bson:"search_words_in_arabic,omitempty" json:"search_words_in_arabic,omitempty"`
 	Title                      string                 `bson:"title" json:"title"`
 	TitleInArabic              string                 `bson:"title_in_arabic" json:"title_in_arabic"`
 	Email                      string                 `bson:"email,omitempty" json:"email"`
@@ -89,6 +92,34 @@ type Vendor struct {
 	StoreID                    *primitive.ObjectID    `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Remarks                    string                 `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	UseRemarksInPurchases      bool                   `bson:"use_remarks_in_purchases" json:"use_remarks_in_purchases"`
+}
+
+func (vendor *Vendor) GenerateSearchWords() {
+	additionalSearchTerms := vendor.GetAdditionalSearchTerms()
+	cleanedWords := CleanString(vendor.Code + "  " + vendor.Name + "  " + vendor.VATNo + "  " + vendor.Phone + " " + additionalSearchTerms)
+	cleanedWordsArabic := CleanString(vendor.NameInArabic + "  " + vendor.VATNoInArabic + "  " + vendor.PhoneInArabic)
+
+	vendor.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
+	if cleanedWordsArabic != "" {
+		vendor.SearchWordsInArabic = generatePrefixesSuffixesSubstrings(cleanedWordsArabic)
+	}
+}
+
+func (vendor *Vendor) GetAdditionalSearchTerms() string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	searchTerm := ""
+	if containsSpecialChars(vendor.Name) {
+		searchTerm = re.ReplaceAllString(vendor.Name, "")
+	}
+	if containsSpecialChars(vendor.Code) {
+		searchTerm += " " + re.ReplaceAllString(vendor.Code, "")
+	}
+
+	if vendor.CountryName != "" {
+		searchTerm += " " + vendor.CountryName
+	}
+
+	return searchTerm
 }
 
 func (vendor *Vendor) SetCreditBalance() error {
@@ -301,17 +332,20 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 
 	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[phone]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[vat_no]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[purchase_paid_amount]"]
@@ -658,30 +692,33 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		criterias.SearchBy["$or"] = []bson.M{
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		/*criterias.SearchBy["$or"] = []bson.M{
 			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 			//{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
 			//	{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-		}
+		}*/
 	}
 
 	keys, ok = r.URL.Query()["search[query]"]
 	if ok && len(keys[0]) >= 1 {
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		criterias.SearchBy["$or"] = []bson.M{
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		/*criterias.SearchBy["$or"] = []bson.M{
 			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"code": bson.M{"$regex": keys[0], "$options": "i"}},
-		}
+		}*/
 	}
 
 	keys, ok = r.URL.Query()["search[email]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["limit"]
@@ -1351,7 +1388,17 @@ func ProcessVendors() error {
 				continue
 			}
 
-			vendor.SetCreditBalance()
+			vendor.GenerateSearchWords()
+			err = vendor.Update()
+			if err != nil {
+				log.Print("Store ID:" + store.ID.Hex())
+				log.Print("Code:" + vendor.Code)
+				log.Print("Name:" + vendor.Name)
+				continue
+				//return err
+			}
+
+			//	vendor.SetCreditBalance()
 			//vendor.MakeCode()
 
 			/*vendor.Code = fmt.Sprintf("%s%0*d", store.VendorSerialNumber.Prefix, store.VendorSerialNumber.PaddingCount, i+1)

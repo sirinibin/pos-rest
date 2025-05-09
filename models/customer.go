@@ -59,6 +59,8 @@ type Customer struct {
 	Code                       string                   `bson:"code,omitempty" json:"code,omitempty"`
 	Name                       string                   `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic               string                   `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	SearchWords                []string                 `bson:"search_words,omitempty" json:"search_words,omitempty"`
+	SearchWordsInArabic        []string                 `bson:"search_words_in_arabic,omitempty" json:"search_words_in_arabic,omitempty"`
 	VATNo                      string                   `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
 	VATNoInArabic              string                   `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
 	Phone                      string                   `bson:"phone,omitempty" json:"phone,omitempty"`
@@ -95,6 +97,34 @@ type Customer struct {
 	Stores                     map[string]CustomerStore `bson:"stores" json:"stores"`
 	Remarks                    string                   `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	UseRemarksInSales          bool                     `bson:"use_remarks_in_sales" json:"use_remarks_in_sales"`
+}
+
+func (customer *Customer) GenerateSearchWords() {
+	additionalSearchTerms := customer.GetAdditionalSearchTerms()
+	cleanedWords := CleanString(customer.Code + "  " + customer.Name + "  " + customer.VATNo + "  " + customer.Phone + " " + additionalSearchTerms)
+	cleanedWordsArabic := CleanString(customer.NameInArabic + "  " + customer.VATNoInArabic + "  " + customer.PhoneInArabic)
+
+	customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
+	if cleanedWordsArabic != "" {
+		customer.SearchWordsInArabic = generatePrefixesSuffixesSubstrings(cleanedWordsArabic)
+	}
+}
+
+func (customer *Customer) GetAdditionalSearchTerms() string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	searchTerm := ""
+	if containsSpecialChars(customer.Name) {
+		searchTerm = re.ReplaceAllString(customer.Name, "")
+	}
+	if containsSpecialChars(customer.Code) {
+		searchTerm += " " + re.ReplaceAllString(customer.Code, "")
+	}
+
+	if customer.CountryName != "" {
+		searchTerm += " " + customer.CountryName
+	}
+
+	return searchTerm
 }
 
 /*
@@ -292,7 +322,8 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 
 	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
@@ -823,40 +854,47 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		criterias.SearchBy["$or"] = []bson.M{
-			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-			//{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
-			//{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-		}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		/*
+			criterias.SearchBy["$or"] = []bson.M{
+				{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+				{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+				//{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+				//{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+			}*/
 	}
 
 	keys, ok = r.URL.Query()["search[query]"]
 	if ok && len(keys[0]) >= 1 {
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		criterias.SearchBy["$or"] = []bson.M{
-			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"code": bson.M{"$regex": keys[0], "$options": "i"}},
-		}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		/*
+			criterias.SearchBy["$or"] = []bson.M{
+				{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+				{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+				{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
+				{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+				{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
+				{"code": bson.M{"$regex": keys[0], "$options": "i"}},
+			}*/
 	}
 
 	keys, ok = r.URL.Query()["search[phone]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[vat_no]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[email]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[created_by]"]
@@ -1467,7 +1505,17 @@ func ProcessCustomers() error {
 				continue
 			}
 
-			customer.SetCreditBalance()
+			customer.GenerateSearchWords()
+			err = customer.Update()
+			if err != nil {
+				log.Print("Store ID:" + store.ID.Hex())
+				log.Print("Code:" + customer.Code)
+				log.Print("Name:" + customer.Name)
+				continue
+				//return err
+			}
+
+			//customer.SetCreditBalance()
 			/*
 				if customer.VATNo != "" && govalidator.IsNull(customer.NationalAddress.BuildingNo) {
 					customer.NationalAddress.BuildingNo = "1234"

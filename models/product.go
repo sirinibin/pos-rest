@@ -2832,7 +2832,8 @@ func ProcessProducts() error {
 				log.Print("Store ID:" + store.ID.Hex())
 				log.Print("Part No.:" + product.PartNumber)
 				log.Print("Product ID:" + product.ID.Hex())
-				return err
+				continue
+				//return err
 			}
 
 			/*
@@ -3034,7 +3035,7 @@ func (product *Product) GetAdditionalSearchTerms() string {
 func (product *Product) GeneratePrefixes() {
 	additionalSearchTerms := product.GetAdditionalSearchTerms()
 
-	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name + " " + additionalSearchTerms + " " + product.BrandName + " " + product.CountryName)
+	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name + " " + additionalSearchTerms)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
