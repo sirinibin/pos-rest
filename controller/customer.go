@@ -118,6 +118,7 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	customer.GenerateSearchWords()
 
 	err = customer.Insert()
 	if err != nil {
@@ -214,6 +215,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	customer.UpdatedAt = &now
 	customer.UpdateForeignLabelFields()
+	customer.GenerateSearchWords()
 
 	err = customer.Update()
 	if err != nil {

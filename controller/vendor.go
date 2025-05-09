@@ -121,6 +121,8 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	vendor.GenerateSearchWords()
+
 	err = vendor.Insert()
 	if err != nil {
 		response.Status = false
@@ -214,6 +216,8 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	vendor.GenerateSearchWords()
 
 	err = vendor.Update()
 	if err != nil {
