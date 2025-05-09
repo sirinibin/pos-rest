@@ -2954,33 +2954,6 @@ func removeInvalidChars(input string) string {
 	return removeSpecialCharacter(string(cleaned))
 }
 
-// Function to generate prefixes for a string with both English and Arabic words
-func generatePrefixes(input string) []string {
-	var prefixes []string
-	words := strings.Fields(input) // split into words (no need to lowercase, as both languages are case-insensitive)
-
-	for _, word := range words {
-		word = removeSpecialCharacter(word)
-		if word == "" {
-			continue
-		}
-		// Generate prefixes for each word
-		for i := 1; i <= len(word); i++ {
-			newWord := word[:i]
-			//log.Print("Before removing:" + newWord + "|")
-			newWord = CleanString(newWord)
-			newWord = removeSpecialCharacter(newWord)
-			//log.Print("After removing:" + newWord + "|")
-			if newWord == "" {
-				continue
-			}
-			prefixes = append(prefixes, newWord)
-		}
-	}
-
-	return prefixes
-}
-
 func generatePrefixesSuffixesSubstrings(input string) []string {
 	uniqueSet := make(map[string]struct{})
 	words := strings.Fields(input)
@@ -3045,6 +3018,14 @@ func (product *Product) GetAdditionalSearchTerms() string {
 	}
 	if containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
 		searchTerm += " " + re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, "")
+	}
+
+	if product.BrandName != "" {
+		searchTerm += " " + product.BrandName
+	}
+
+	if product.CountryName != "" {
+		searchTerm += " " + product.CountryName
 	}
 
 	return searchTerm
