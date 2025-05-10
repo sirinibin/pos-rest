@@ -3035,7 +3035,7 @@ func (product *Product) GetAdditionalSearchTerms() string {
 func (product *Product) GeneratePrefixes() {
 	//additionalSearchTerms := product.GetAdditionalSearchTerms()
 
-	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name + " " + additionalSearchTerms)
+	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
