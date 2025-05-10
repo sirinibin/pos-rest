@@ -537,8 +537,8 @@ func (quotation *Quotation) AddProductsQuotationHistory() error {
 			Quantity:        quotationProduct.Quantity,
 			UnitPrice:       quotationProduct.UnitPrice,
 			Unit:            quotationProduct.Unit,
-			Discount:        quotationProduct.Discount,
-			DiscountPercent: quotationProduct.DiscountPercent,
+			Discount:        quotationProduct.UnitDiscount,
+			DiscountPercent: quotationProduct.UnitDiscountPercent,
 			CreatedAt:       quotation.CreatedAt,
 			UpdatedAt:       quotation.UpdatedAt,
 			Type:            quotation.Type,
@@ -546,7 +546,7 @@ func (quotation *Quotation) AddProductsQuotationHistory() error {
 		}
 
 		history.UnitPrice = RoundFloat(quotationProduct.UnitPrice, 2)
-		history.Price = RoundFloat(((quotationProduct.UnitPrice * quotationProduct.Quantity) - quotationProduct.Discount), 2)
+		history.Price = RoundFloat(((quotationProduct.UnitPrice - quotationProduct.UnitDiscount) * quotationProduct.Quantity), 2)
 		history.Profit = RoundFloat(quotationProduct.Profit, 2)
 		history.Loss = RoundFloat(quotationProduct.Loss, 2)
 

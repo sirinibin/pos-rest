@@ -21,22 +21,26 @@ import (
 )
 
 type QuotationProduct struct {
-	ProductID           primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name                string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic        string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode            string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PrefixPartNumber    string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber          string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity            float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit                string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitPrice           float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	PurchaseUnitPrice   float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	Discount            float64            `bson:"discount" json:"discount"`
-	DiscountPercent     float64            `bson:"discount_percent" json:"discount_percent"`
-	UnitDiscount        float64            `bson:"unit_discount" json:"unit_discount"`
-	UnitDiscountPercent float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
-	Profit              float64            `bson:"profit" json:"profit"`
-	Loss                float64            `bson:"loss" json:"loss"`
+	ProductID                primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name                     string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic             string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode                 string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber         string             `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber               string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity                 float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit                     string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitPrice                float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitPriceWithVAT         float64            `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
+	PurchaseUnitPrice        float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPriceWithVAT float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
+	//Discount                 float64            `bson:"discount" json:"discount"`
+	//DiscountPercent          float64            `bson:"discount_percent" json:"discount_percent"`
+	UnitDiscount               float64 `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountWithVAT        float64 `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
+	UnitDiscountPercent        float64 `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	UnitDiscountPercentWithVAT float64 `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
+	Profit                     float64 `bson:"profit" json:"profit"`
+	Loss                       float64 `bson:"loss" json:"loss"`
 }
 
 // Quotation : Quotation structure
@@ -61,11 +65,13 @@ type Quotation struct {
 	VatPercent               *float64            `bson:"vat_percent" json:"vat_percent"`
 	Discount                 float64             `bson:"discount" json:"discount"`
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
-	IsDiscountPercent        bool                `bson:"is_discount_percent" json:"is_discount_percent"`
+	DiscountWithVAT          float64             `bson:"discount_with_vat" json:"discount_with_vat"`
+	DiscountPercentWithVAT   float64             `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	TotalQuantity            float64             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                 float64             `bson:"vat_price" json:"vat_price"`
 	Total                    float64             `bson:"total" json:"total"`
+	TotalWithVAT             float64             `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal                 float64             `bson:"net_total" json:"net_total"`
 	ShippingOrHandlingFees   float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	Profit                   float64             `bson:"profit" json:"profit"`
@@ -456,6 +462,90 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 }
 
 func (quotation *Quotation) FindNetTotal() {
+	quotation.ShippingOrHandlingFees = RoundTo2Decimals(quotation.ShippingOrHandlingFees)
+	quotation.Discount = RoundTo2Decimals(quotation.Discount)
+
+	quotation.FindTotal()
+
+	if quotation.DiscountWithVAT > 0 {
+		quotation.Discount = RoundTo2Decimals(quotation.DiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
+	} else if quotation.Discount > 0 {
+		quotation.DiscountWithVAT = RoundTo2Decimals(quotation.Discount * (1 + (*quotation.VatPercent / 100)))
+	} else {
+		quotation.Discount = 0
+		quotation.DiscountWithVAT = 0
+	}
+	// Apply discount to the base amount first
+	baseTotal := quotation.Total + quotation.ShippingOrHandlingFees - quotation.Discount
+	baseTotal = RoundTo2Decimals(baseTotal)
+
+	// Now calculate VAT on the discounted base
+	quotation.VatPrice = RoundTo2Decimals(baseTotal * (*quotation.VatPercent / 100))
+
+	quotation.NetTotal = RoundTo2Decimals(baseTotal + quotation.VatPrice)
+
+	quotation.CalculateDiscountPercentage()
+}
+
+func (quotation *Quotation) FindTotal() {
+	total := float64(0.0)
+	totalWithVAT := float64(0.0)
+	for i, product := range quotation.Products {
+
+		if product.UnitPriceWithVAT > 0 {
+			quotation.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*quotation.VatPercent / 100)))
+		} else if product.UnitPrice > 0 {
+			quotation.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*quotation.VatPercent / 100)))
+		}
+
+		if product.UnitDiscountWithVAT > 0 {
+			quotation.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
+		} else if product.UnitDiscount > 0 {
+			quotation.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*quotation.VatPercent / 100)))
+		}
+
+		if product.UnitDiscountPercentWithVAT > 0 {
+			quotation.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+		} else if product.UnitDiscountPercent > 0 {
+			quotation.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+		}
+
+		total += (product.Quantity * (quotation.Products[i].UnitPrice - quotation.Products[i].UnitDiscount))
+		totalWithVAT += (product.Quantity * (quotation.Products[i].UnitPriceWithVAT - quotation.Products[i].UnitDiscountWithVAT))
+	}
+
+	quotation.Total = RoundTo2Decimals(total)
+	quotation.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+}
+
+func (quotation *Quotation) CalculateDiscountPercentage() {
+	if quotation.Discount <= 0 {
+		quotation.DiscountPercent = 0.00
+		quotation.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	baseBeforeDiscount := quotation.NetTotal + quotation.Discount
+	if baseBeforeDiscount == 0 {
+		quotation.DiscountPercent = 0.00
+		return
+	}
+
+	percentage := (quotation.Discount / baseBeforeDiscount) * 100
+	quotation.DiscountPercent = RoundTo2Decimals(percentage)
+
+	baseBeforeDiscountWithVAT := quotation.NetTotal + quotation.DiscountWithVAT
+	if baseBeforeDiscountWithVAT == 0 {
+		quotation.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	percentage = (quotation.DiscountWithVAT / baseBeforeDiscountWithVAT) * 100
+	quotation.DiscountPercentWithVAT = RoundTo2Decimals(percentage)
+}
+
+/*
+func (quotation *Quotation) FindNetTotal() {
 	netTotal := float64(0.0)
 	quotation.FindTotal()
 	netTotal = quotation.Total
@@ -506,6 +596,7 @@ func (quotation *Quotation) FindVatPrice() {
 	vatPrice := ((*quotation.VatPercent / float64(100.00)) * ((quotation.Total + quotation.ShippingOrHandlingFees) - quotation.Discount))
 	quotation.VatPrice = RoundTo2Decimals(vatPrice)
 }
+*/
 
 func (quotation *Quotation) FindTotalQuantity() {
 	totalQuantity := float64(0.0)
@@ -1542,6 +1633,10 @@ type CustomerQuotationStats struct {
 }
 
 func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.ObjectID) error {
+	if customer == nil || customer.ID.IsZero() {
+		return nil
+	}
+
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1717,6 +1812,10 @@ func (customer *Customer) SetCustomerQuotationInvoiceStatsByStoreID(storeID prim
 }
 
 func (quotation *Quotation) SetCustomerQuotationStats() error {
+	if quotation.CustomerID == nil || quotation.CustomerID.IsZero() {
+		return nil
+	}
+
 	store, err := FindStoreByID(quotation.StoreID, bson.M{})
 	if err != nil {
 		return err

@@ -116,6 +116,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -130,6 +131,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	if errs := quotation.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -154,12 +156,50 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.AddProductsQuotationHistory()
+	err = quotation.AddProductsQuotationHistory()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["insert"] = "error adding product history" + err.Error()
 
-	quotation.SetProductsQuotationStats()
-	quotation.SetCustomerQuotationStats()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
-	store.NotifyUsers("quotation_updated")
+	err = quotation.SetProductsQuotationStats()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["insert"] = "error adding product quotation stats" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.SetCustomerQuotationStats()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["insert"] = "error adding customer quotation stats" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = store.NotifyUsers("quotation_updated")
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["insert"] = "error notifying users" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = quotation
 
@@ -248,9 +288,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.FindNetTotal()
-	quotation.FindTotal()
 	quotation.FindTotalQuantity()
-	quotation.FindVatPrice()
 	quotation.CalculateQuotationProfit()
 
 	quotation.UpdateForeignLabelFields()
@@ -442,8 +480,6 @@ func CalculateQuotationNetTotal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.FindNetTotal()
-	quotation.FindTotal()
-	quotation.FindVatPrice()
 
 	response.Status = true
 	response.Result = quotation
