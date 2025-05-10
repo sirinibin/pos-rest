@@ -23,20 +23,21 @@ import (
 )
 
 type PurchaseReturnProduct struct {
-	ProductID               primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name                    string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic            string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode                string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PrefixPartNumber        string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber              string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity                float64            `json:"quantity" bson:"quantity"`
-	Unit                    string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	PurchaseReturnUnitPrice float64            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
-	Discount                float64            `bson:"discount" json:"discount"`
-	DiscountPercent         float64            `bson:"discount_percent" json:"discount_percent"`
-	UnitDiscount            float64            `bson:"unit_discount" json:"unit_discount"`
-	UnitDiscountPercent     float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
-	Selected                bool               `bson:"selected" json:"selected"`
+	ProductID                      primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Name                           string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic                   string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode                       string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber               string             `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber                     string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity                       float64            `json:"quantity" bson:"quantity"`
+	Unit                           string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	PurchaseReturnUnitPrice        float64            `bson:"purchasereturn_unit_price,omitempty" json:"purchasereturn_unit_price,omitempty"`
+	PurchaseReturnUnitPriceWithVAT float64            `bson:"purchasereturn_unit_price_with_vat,omitempty" json:"purchasereturn_unit_price_with_vat,omitempty"`
+	UnitDiscount                   float64            `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountPercent            float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	UnitDiscountWithVAT            float64            `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
+	UnitDiscountPercentWithVAT     float64            `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
+	Selected                       bool               `bson:"selected" json:"selected"`
 }
 
 // PurchaseReturn : PurchaseReturn structure
@@ -65,12 +66,14 @@ type PurchaseReturn struct {
 	VatPercent             *float64 `bson:"vat_percent" json:"vat_percent"`
 	ShippingOrHandlingFees float64  `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	Discount               float64  `bson:"discount" json:"discount"`
+	DiscountWithVAT        float64  `bson:"discount_with_vat" json:"discount_with_vat"`
 	DiscountPercent        float64  `bson:"discount_percent" json:"discount_percent"`
-	IsDiscountPercent      bool     `bson:"is_discount_percent" json:"is_discount_percent"`
+	DiscountPercentWithVAT float64  `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
 	Status                 string   `bson:"status,omitempty" json:"status,omitempty"`
 	TotalQuantity          float64  `bson:"total_quantity" json:"total_quantity"`
 	VatPrice               float64  `bson:"vat_price" json:"vat_price"`
 	Total                  float64  `bson:"total" json:"total"`
+	TotalWithVAT           float64  `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal               float64  `bson:"net_total" json:"net_total"`
 	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
 	PaymentStatus          string   `bson:"payment_status" json:"payment_status"`
@@ -450,6 +453,93 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 }
 
 func (purchaseReturn *PurchaseReturn) FindNetTotal() {
+	purchaseReturn.ShippingOrHandlingFees = RoundTo2Decimals(purchaseReturn.ShippingOrHandlingFees)
+	purchaseReturn.Discount = RoundTo2Decimals(purchaseReturn.Discount)
+
+	purchaseReturn.FindTotal()
+
+	if purchaseReturn.DiscountWithVAT > 0 {
+		purchaseReturn.Discount = RoundTo2Decimals(purchaseReturn.DiscountWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
+	} else if purchaseReturn.Discount > 0 {
+		purchaseReturn.DiscountWithVAT = RoundTo2Decimals(purchaseReturn.Discount * (1 + (*purchaseReturn.VatPercent / 100)))
+	} else {
+		purchaseReturn.Discount = 0
+		purchaseReturn.DiscountWithVAT = 0
+	}
+	// Apply discount to the base amount first
+	baseTotal := purchaseReturn.Total + purchaseReturn.ShippingOrHandlingFees - purchaseReturn.Discount
+	baseTotal = RoundTo2Decimals(baseTotal)
+
+	// Now calculate VAT on the discounted base
+	purchaseReturn.VatPrice = RoundTo2Decimals(baseTotal * (*purchaseReturn.VatPercent / 100))
+
+	purchaseReturn.NetTotal = RoundTo2Decimals(baseTotal + purchaseReturn.VatPrice)
+
+	purchaseReturn.CalculateDiscountPercentage()
+}
+
+func (purchaseReturn *PurchaseReturn) FindTotal() {
+	total := float64(0.0)
+	totalWithVAT := float64(0.0)
+	for i, product := range purchaseReturn.Products {
+		if !product.Selected {
+			continue
+		}
+
+		if product.PurchaseReturnUnitPriceWithVAT > 0 {
+			purchaseReturn.Products[i].PurchaseReturnUnitPrice = RoundTo2Decimals(product.PurchaseReturnUnitPriceWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
+		} else if product.PurchaseReturnUnitPrice > 0 {
+			purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT = RoundTo2Decimals(product.PurchaseReturnUnitPrice * (1 + (*purchaseReturn.VatPercent / 100)))
+		}
+
+		if product.UnitDiscountWithVAT > 0 {
+			purchaseReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
+		} else if product.UnitDiscount > 0 {
+			purchaseReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*purchaseReturn.VatPercent / 100)))
+		}
+
+		if product.UnitDiscountPercentWithVAT > 0 {
+			purchaseReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.PurchaseReturnUnitPrice) * 100)
+		} else if product.UnitDiscountPercent > 0 {
+			purchaseReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.PurchaseReturnUnitPriceWithVAT) * 100)
+		}
+
+		total += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPrice - purchaseReturn.Products[i].UnitDiscount))
+		totalWithVAT += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT - purchaseReturn.Products[i].UnitDiscountWithVAT))
+	}
+
+	purchaseReturn.Total = RoundTo2Decimals(total)
+	purchaseReturn.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+}
+
+func (purchaseReturn *PurchaseReturn) CalculateDiscountPercentage() {
+	if purchaseReturn.Discount <= 0 {
+		purchaseReturn.DiscountPercent = 0.00
+		purchaseReturn.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	baseBeforeDiscount := purchaseReturn.NetTotal + purchaseReturn.Discount
+	if baseBeforeDiscount == 0 {
+		purchaseReturn.DiscountPercent = 0.00
+		return
+	}
+
+	percentage := (purchaseReturn.Discount / baseBeforeDiscount) * 100
+	purchaseReturn.DiscountPercent = RoundTo2Decimals(percentage)
+
+	baseBeforeDiscountWithVAT := purchaseReturn.NetTotal + purchaseReturn.DiscountWithVAT
+	if baseBeforeDiscountWithVAT == 0 {
+		purchaseReturn.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	percentage = (purchaseReturn.DiscountWithVAT / baseBeforeDiscountWithVAT) * 100
+	purchaseReturn.DiscountPercentWithVAT = RoundTo2Decimals(percentage)
+}
+
+/*
+func (purchaseReturn *PurchaseReturn) FindNetTotal() {
 	netTotal := float64(0.0)
 	purchaseReturn.FindTotal()
 	netTotal = purchaseReturn.Total
@@ -502,6 +592,7 @@ func (purchaseReturn *PurchaseReturn) FindVatPrice() {
 	vatPrice := ((*purchaseReturn.VatPercent / float64(100.00)) * ((purchaseReturn.Total + purchaseReturn.ShippingOrHandlingFees) - purchaseReturn.Discount))
 	purchaseReturn.VatPrice = RoundTo2Decimals(vatPrice)
 }
+*/
 
 func (purchasereturn *PurchaseReturn) FindTotalQuantity() {
 	totalQuantity := float64(0.00)
@@ -1029,13 +1120,13 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 	maxDiscountAllowed := 0.00
 	if scenario == "update" {
-		maxDiscountAllowed = purchasereturn.Discount - (purchase.ReturnDiscount - oldPurchaseReturn.Discount)
+		maxDiscountAllowed = purchasereturn.DiscountWithVAT - (purchase.ReturnDiscountWithVAT - oldPurchaseReturn.DiscountWithVAT)
 	} else {
-		maxDiscountAllowed = purchasereturn.Discount - purchase.ReturnDiscount
+		maxDiscountAllowed = purchasereturn.DiscountWithVAT - purchase.ReturnDiscountWithVAT
 	}
 
 	if purchasereturn.Discount > maxDiscountAllowed {
-		errs["discount"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
+		errs["discount_with_vat"] = "Discount shouldn't greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
 	}
 
 	maxCashDiscountAllowed := 0.00
@@ -1749,8 +1840,10 @@ func (purchasereturn *PurchaseReturn) UpdatePurchaseReturnDiscount(replace bool)
 	}
 	if replace {
 		purchase.ReturnDiscount = purchasereturn.Discount
+		purchase.ReturnDiscountWithVAT = purchasereturn.DiscountWithVAT
 	} else {
 		purchase.ReturnDiscount += purchasereturn.Discount
+		purchase.ReturnDiscountWithVAT += purchasereturn.DiscountWithVAT
 	}
 
 	return purchase.Update()

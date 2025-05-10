@@ -76,7 +76,7 @@ type Customer struct {
 	RegistrationNumber         string                   `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
 	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
 	ContactPerson              string                   `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
-	CreditLimit                float64                  `bson:"credit_limit,omitempty" json:"credit_limit,omitempty"`
+	CreditLimit                float64                  `bson:"credit_limit" json:"credit_limit"`
 	CreditBalance              float64                  `json:"credit_balance,omitempty" bson:"credit_balance,omitempty"`
 	Account                    *Account                 `json:"account" bson:"account"`
 	Deleted                    bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`

@@ -347,7 +347,6 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

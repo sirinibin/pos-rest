@@ -518,14 +518,14 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 			Quantity:           purchaseReturnProduct.Quantity,
 			UnitPrice:          purchaseReturnProduct.PurchaseReturnUnitPrice,
 			Unit:               purchaseReturnProduct.Unit,
-			Discount:           purchaseReturnProduct.Discount,
-			DiscountPercent:    purchaseReturnProduct.DiscountPercent,
+			Discount:           purchaseReturnProduct.UnitDiscount,
+			DiscountPercent:    purchaseReturnProduct.UnitDiscountPercent,
 			CreatedAt:          purchaseReturn.CreatedAt,
 			UpdatedAt:          purchaseReturn.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(purchaseReturnProduct.PurchaseReturnUnitPrice, 2)
-		history.Price = RoundFloat(((purchaseReturnProduct.PurchaseReturnUnitPrice * purchaseReturnProduct.Quantity) - purchaseReturnProduct.Discount), 2)
+		history.Price = RoundFloat(((purchaseReturnProduct.PurchaseReturnUnitPrice - purchaseReturnProduct.UnitDiscount) * purchaseReturnProduct.Quantity), 2)
 		history.VatPercent = RoundFloat(*purchaseReturn.VatPercent, 2)
 		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
 		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)

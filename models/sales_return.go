@@ -35,8 +35,6 @@ type SalesReturnProduct struct {
 	UnitPriceWithVAT           float64            `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
 	PurchaseUnitPrice          float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
-	Discount                   float64            `bson:"discount" json:"discount"`
-	DiscountPercent            float64            `bson:"discount_percent" json:"discount_percent"`
 	UnitDiscount               float64            `bson:"unit_discount" json:"unit_discount"`
 	UnitDiscountPercent        float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
 	UnitDiscountWithVAT        float64            `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
@@ -498,6 +496,24 @@ func (salesReturn *SalesReturn) FindTotal() {
 			continue
 		}
 
+		if product.UnitPriceWithVAT > 0 {
+			salesReturn.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+		} else if product.UnitPrice > 0 {
+			salesReturn.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*salesReturn.VatPercent / 100)))
+		}
+
+		if product.UnitDiscountWithVAT > 0 {
+			salesReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+		} else if product.UnitDiscount > 0 {
+			salesReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*salesReturn.VatPercent / 100)))
+		}
+
+		if product.UnitDiscountPercentWithVAT > 0 {
+			salesReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+		} else if product.UnitDiscountPercent > 0 {
+			salesReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+		}
+
 		total += (product.Quantity * (salesReturn.Products[i].UnitPrice - salesReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (salesReturn.Products[i].UnitPriceWithVAT - salesReturn.Products[i].UnitDiscountWithVAT))
 	}
@@ -509,6 +525,7 @@ func (salesReturn *SalesReturn) FindTotal() {
 func (salesReturn *SalesReturn) CalculateDiscountPercentage() {
 	if salesReturn.Discount <= 0 {
 		salesReturn.DiscountPercent = 0.00
+		salesReturn.DiscountPercentWithVAT = 0.00
 		return
 	}
 

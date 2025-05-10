@@ -528,14 +528,14 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 			Quantity:        salesReturnProduct.Quantity,
 			UnitPrice:       salesReturnProduct.UnitPrice,
 			Unit:            salesReturnProduct.Unit,
-			Discount:        salesReturnProduct.Discount,
-			DiscountPercent: salesReturnProduct.DiscountPercent,
+			Discount:        salesReturnProduct.UnitDiscount,
+			DiscountPercent: salesReturnProduct.UnitDiscountPercent,
 			CreatedAt:       salesReturn.CreatedAt,
 			UpdatedAt:       salesReturn.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(salesReturnProduct.UnitPrice, 2)
-		history.Price = RoundFloat(((salesReturnProduct.UnitPrice * salesReturnProduct.Quantity) - salesReturnProduct.Discount), 2)
+		history.Price = RoundFloat(((salesReturnProduct.UnitPrice - salesReturnProduct.UnitDiscount) * salesReturnProduct.Quantity), 2)
 		history.VatPercent = RoundFloat(*salesReturn.VatPercent, 2)
 		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
 		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)

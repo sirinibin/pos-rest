@@ -550,14 +550,14 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 			Quantity:        purchaseProduct.Quantity,
 			UnitPrice:       purchaseProduct.PurchaseUnitPrice,
 			Unit:            purchaseProduct.Unit,
-			Discount:        purchaseProduct.Discount,
-			DiscountPercent: purchaseProduct.DiscountPercent,
+			Discount:        purchaseProduct.UnitDiscount,
+			DiscountPercent: purchaseProduct.UnitDiscountPercent,
 			CreatedAt:       purchase.CreatedAt,
 			UpdatedAt:       purchase.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(purchaseProduct.PurchaseUnitPrice, 2)
-		history.Price = RoundFloat(((purchaseProduct.PurchaseUnitPrice * purchaseProduct.Quantity) - purchaseProduct.Discount), 2)
+		history.Price = RoundFloat(((purchaseProduct.PurchaseUnitPrice - purchaseProduct.UnitDiscount) * purchaseProduct.Quantity), 2)
 
 		history.RetailProfit = RoundFloat(purchase.ExpectedRetailProfit, 2)
 		history.WholesaleProfit = RoundFloat(purchase.ExpectedWholesaleProfit, 2)

@@ -145,9 +145,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchasereturn.FindNetTotal()
-	purchasereturn.FindTotal()
 	purchasereturn.FindTotalQuantity()
-	purchasereturn.FindVatPrice()
 	purchasereturn.UpdateForeignLabelFields()
 	purchasereturn.MakeCode()
 
@@ -302,9 +300,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchasereturn.FindNetTotal()
-	purchasereturn.FindTotal()
 	purchasereturn.FindTotalQuantity()
-	purchasereturn.FindVatPrice()
 	purchasereturn.UpdateForeignLabelFields()
 
 	err = purchasereturn.Update()
@@ -582,8 +578,6 @@ func CalculatePurchaseReturnNetTotal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchaseReturn.FindNetTotal()
-	purchaseReturn.FindTotal()
-	purchaseReturn.FindVatPrice()
 
 	response.Status = true
 	response.Result = purchaseReturn

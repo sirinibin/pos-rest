@@ -9,6 +9,7 @@ import (
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -148,9 +149,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.FindNetTotal()
-	purchase.FindTotal()
 	purchase.FindTotalQuantity()
-	purchase.FindVatPrice()
 	purchase.UpdateForeignLabelFields()
 	purchase.MakeCode()
 	purchase.CalculatePurchaseExpectedProfit()
@@ -308,9 +307,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.FindNetTotal()
-	purchase.FindTotal()
 	purchase.FindTotalQuantity()
-	purchase.FindVatPrice()
 	purchase.UpdateForeignLabelFields()
 	purchase.CalculatePurchaseExpectedProfit()
 
@@ -459,6 +456,7 @@ func ViewPurchase(w http.ResponseWriter, r *http.Request) {
 
 	store, err := ParseStore(r)
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -467,16 +465,25 @@ func ViewPurchase(w http.ResponseWriter, r *http.Request) {
 
 	purchase, err = store.FindPurchaseByID(&purchaseID, selectFields)
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
-	vendor.SetSearchLabel()
-	purchase.Vendor = vendor
+	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+		vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			w.WriteHeader(http.StatusBadRequest)
+			response.Status = false
+			response.Errors["view"] = "error fetching vendor:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		vendor.SetSearchLabel()
+		purchase.Vendor = vendor
+	}
 
 	response.Status = true
 	response.Result = purchase
@@ -577,8 +584,6 @@ func CalculatePurchaseNetTotal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.FindNetTotal()
-	purchase.FindTotal()
-	purchase.FindVatPrice()
 
 	response.Status = true
 	response.Result = purchase
