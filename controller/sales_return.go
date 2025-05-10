@@ -654,8 +654,6 @@ func CalculateSalesReturnNetTotal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salesReturn.FindNetTotal()
-	salesReturn.FindTotal()
-	salesReturn.FindVatPrice()
 
 	response.Status = true
 	response.Result = salesReturn

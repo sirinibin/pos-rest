@@ -552,14 +552,14 @@ func (order *Order) CreateProductsSalesHistory() error {
 			Quantity:          orderProduct.Quantity,
 			PurchaseUnitPrice: orderProduct.PurchaseUnitPrice,
 			Unit:              orderProduct.Unit,
-			Discount:          orderProduct.Discount,
-			DiscountPercent:   orderProduct.DiscountPercent,
+			Discount:          orderProduct.UnitDiscount,
+			DiscountPercent:   orderProduct.UnitDiscountPercent,
 			CreatedAt:         order.CreatedAt,
 			UpdatedAt:         order.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundFloat(orderProduct.UnitPrice, 2)
-		history.Price = RoundFloat(((orderProduct.UnitPrice * orderProduct.Quantity) - orderProduct.Discount), 2)
+		history.Price = RoundFloat(((orderProduct.UnitPrice - orderProduct.UnitDiscount) * orderProduct.Quantity), 2)
 		history.Profit = RoundFloat(orderProduct.Profit, 2)
 		history.Loss = RoundFloat(orderProduct.Loss, 2)
 
