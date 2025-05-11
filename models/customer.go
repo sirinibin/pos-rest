@@ -97,6 +97,29 @@ type Customer struct {
 	Stores                     map[string]CustomerStore `bson:"stores" json:"stores"`
 	Remarks                    string                   `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	UseRemarksInSales          bool                     `bson:"use_remarks_in_sales" json:"use_remarks_in_sales"`
+	Images                     []string                 `bson:"images,omitempty" json:"images,omitempty"`
+}
+
+func (store *Store) SaveCustomerImage(customerID *primitive.ObjectID, filename string) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+
+	filter := bson.M{
+		"_id":      customerID,
+		"store_id": store.ID,
+	}
+
+	update := bson.M{
+		"$push": bson.M{
+			"images": filename,
+		},
+	}
+
+	_, err := collection.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (customer *Customer) GenerateSearchWords() {

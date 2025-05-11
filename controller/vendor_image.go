@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +13,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
-func UploadProductImage(w http.ResponseWriter, r *http.Request) {
+func UploadVendorImage(w http.ResponseWriter, r *http.Request) {
 	// Parse the multipart form
 	err := r.ParseMultipartForm(10 << 20) // 10MB limit
 	if err != nil {
@@ -22,9 +21,9 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productID := r.FormValue("id")
-	if productID == "" {
-		http.Error(w, "Product ID required", http.StatusBadRequest)
+	vendorID := r.FormValue("id")
+	if vendorID == "" {
+		http.Error(w, "Vendor ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -43,7 +42,7 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Ensure upload directory exists
-	uploadDir := fmt.Sprintf("./images/products/%s", productID)
+	uploadDir := fmt.Sprintf("./images/vendors/%s", vendorID)
 	err = os.MkdirAll(uploadDir, os.ModePerm)
 	if err != nil {
 		http.Error(w, "Unable to create upload directory:"+err.Error(), http.StatusInternalServerError)
@@ -79,15 +78,15 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	productObjectID, err := primitive.ObjectIDFromHex(productID)
+	vendorObjectID, err := primitive.ObjectIDFromHex(vendorID)
 	if err != nil {
 		http.Error(w, "invalid store id", http.StatusInternalServerError)
 		return
 	}
 
-	imageUrl := fmt.Sprintf("/images/products/%s/%s", productID, filename)
+	imageUrl := fmt.Sprintf("/images/vendors/%s/%s", vendorID, filename)
 	if fileExists(savePath) {
-		err = store.SaveProductImage(&productObjectID, imageUrl)
+		err = store.SaveVendorImage(&vendorObjectID, imageUrl)
 		if err != nil {
 			http.Error(w, "error saving image to db", http.StatusInternalServerError)
 			return
@@ -102,20 +101,12 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-
-func DeleteProductImage(w http.ResponseWriter, r *http.Request) {
+func DeleteVendorImage(w http.ResponseWriter, r *http.Request) {
 	imageUrl := r.URL.Query().Get("url")
-	productID := r.URL.Query().Get("id")
+	vendorID := r.URL.Query().Get("id")
 	storeID := r.URL.Query().Get("storeID")
 
-	if imageUrl == "" || productID == "" || storeID == "" {
+	if imageUrl == "" || vendorID == "" || storeID == "" {
 		http.Error(w, "Missing parameters", http.StatusBadRequest)
 		return
 	}
@@ -142,7 +133,7 @@ func DeleteProductImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	productObjectID, err := primitive.ObjectIDFromHex(productID)
+	vendorObjectID, err := primitive.ObjectIDFromHex(vendorID)
 	if err != nil {
 		if err != nil {
 			http.Error(w, "invalid store id", http.StatusInternalServerError)
@@ -150,41 +141,9 @@ func DeleteProductImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	product, _ := store.FindProductByID(&productObjectID, bson.M{})
-	product.Images = removeItem(product.Images, imageUrl)
-	product.Update(&store.ID)
+	vendor, _ := store.FindVendorByID(&vendorObjectID, bson.M{})
+	vendor.Images = removeItem(vendor.Images, imageUrl)
+	vendor.Update()
 
 	w.WriteHeader(http.StatusOK)
-}
-
-func removeItem(slice []string, item string) []string {
-	for i, v := range slice {
-		if v == item {
-			return append(slice[:i], slice[i+1:]...)
-		}
-	}
-	return slice
-}
-
-// Helper to get extension
-func getFileExtension(handler *multipart.FileHeader) string {
-	ext := filepath.Ext(handler.Filename)
-	if ext != "" {
-		return ext
-	}
-
-	// Fallback: detect from MIME
-	mimeType := handler.Header.Get("Content-Type")
-	switch mimeType {
-	case "image/jpeg":
-		return ".jpg"
-	case "image/png":
-		return ".png"
-	case "image/gif":
-		return ".gif"
-	case "image/webp":
-		return ".webp"
-	default:
-		return ".bin" // fallback to avoid missing extension
-	}
 }

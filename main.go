@@ -15,7 +15,6 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
-	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -71,6 +70,8 @@ func main() {
 	router.HandleFunc("/v1/customer/{id}", controller.ViewCustomer).Methods("GET")
 	router.HandleFunc("/v1/customer/{id}", controller.UpdateCustomer).Methods("PUT")
 	router.HandleFunc("/v1/customer/{id}", controller.DeleteCustomer).Methods("DELETE")
+	router.HandleFunc("/v1/customer/upload-image", controller.UploadCustomerImage).Methods("POST")
+	router.HandleFunc("/v1/customer/delete-image", controller.DeleteCustomerImage).Methods("POST")
 
 	//Product
 	router.HandleFunc("/v1/product", controller.CreateProduct).Methods("POST")
@@ -220,6 +221,8 @@ func main() {
 	router.HandleFunc("/v1/vendor/{id}", controller.ViewVendor).Methods("GET")
 	router.HandleFunc("/v1/vendor/{id}", controller.UpdateVendor).Methods("PUT")
 	router.HandleFunc("/v1/vendor/{id}", controller.DeleteVendor).Methods("DELETE")
+	router.HandleFunc("/v1/vendor/upload-image", controller.UploadVendorImage).Methods("POST")
+	router.HandleFunc("/v1/vendor/delete-image", controller.DeleteVendorImage).Methods("POST")
 
 	//Purchase
 	router.HandleFunc("/v1/purchase", controller.CreatePurchase).Methods("POST")
@@ -404,20 +407,21 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	err := models.ProcessCustomers()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessCustomers()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessVendors()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessVendors()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessProducts()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessProducts()
+		if err != nil {
+			log.Print(err)
+		}*/
 
 	/*
 

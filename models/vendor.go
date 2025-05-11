@@ -92,6 +92,29 @@ type Vendor struct {
 	StoreID                    *primitive.ObjectID    `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Remarks                    string                 `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	UseRemarksInPurchases      bool                   `bson:"use_remarks_in_purchases" json:"use_remarks_in_purchases"`
+	Images                     []string               `bson:"images,omitempty" json:"images,omitempty"`
+}
+
+func (store *Store) SaveVendorImage(vendorID *primitive.ObjectID, filename string) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+
+	filter := bson.M{
+		"_id":      vendorID,
+		"store_id": store.ID,
+	}
+
+	update := bson.M{
+		"$push": bson.M{
+			"images": filename,
+		},
+	}
+
+	_, err := collection.UpdateOne(context.TODO(), filter, update)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (vendor *Vendor) GenerateSearchWords() {
