@@ -238,7 +238,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = order.GetPayments()
+	_, err = order.SetPaymentStatus()
 	if err != nil {
 		response.Status = false
 		response.Errors["order"] = "Error getting payments: " + err.Error()
@@ -467,7 +467,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.GetPayments()
+	order.SetPaymentStatus()
 	order.Update()
 
 	err = orderOld.AddStock()

@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 	"gopkg.in/mgo.v2/bson"
 )
 
@@ -73,6 +74,14 @@ type Quotation struct {
 	Total                    float64             `bson:"total" json:"total"`
 	TotalWithVAT             float64             `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal                 float64             `bson:"net_total" json:"net_total"`
+	Payments                 []QuotationPayment  `bson:"payments" json:"payments"`
+	PaymentsInput            []QuotationPayment  `bson:"-" json:"payments_input"`
+	PaymentsCount            int64               `bson:"payments_count" json:"payments_count"`
+	PaymentStatus            string              `bson:"payment_status" json:"payment_status"`
+	PaymentMethods           []string            `json:"payment_methods" bson:"payment_methods"`
+	CashDiscount             float64             `bson:"cash_discount" json:"cash_discount"`
+	TotalPaymentReceived     float64             `bson:"total_payment_received" json:"total_payment_received"`
+	BalanceAmount            float64             `bson:"balance_amount" json:"balance_amount"`
 	ShippingOrHandlingFees   float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	Profit                   float64             `bson:"profit" json:"profit"`
 	NetProfit                float64             `bson:"net_profit" json:"net_profit"`
@@ -97,7 +106,191 @@ type Quotation struct {
 	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
 	Remarks                  string              `bson:"remarks" json:"remarks"`
 	Type                     string              `json:"type" bson:"type"`
-	PaymentStatus            string              `json:"payment_status" bson:"payment_status"`
+}
+
+func (quotation *Quotation) GetPaymentsCount() (count int64, err error) {
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"quotation_id": quotation.ID,
+		"deleted":      bson.M{"$ne": true},
+	})
+}
+
+func (quotation *Quotation) AddPayments() error {
+	for _, payment := range quotation.PaymentsInput {
+		quotationPayment := QuotationPayment{
+			QuotationID:   &quotation.ID,
+			QuotationCode: quotation.Code,
+			Amount:        payment.Amount,
+			Method:        payment.Method,
+			Date:          payment.Date,
+			CreatedAt:     quotation.CreatedAt,
+			UpdatedAt:     quotation.UpdatedAt,
+			CreatedBy:     quotation.CreatedBy,
+			CreatedByName: quotation.CreatedByName,
+			UpdatedBy:     quotation.UpdatedBy,
+			UpdatedByName: quotation.UpdatedByName,
+			StoreID:       quotation.StoreID,
+			StoreName:     quotation.StoreName,
+		}
+		err := quotationPayment.Insert()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (quotation *Quotation) UpdatePayments() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store:" + err.Error())
+	}
+
+	_, err = quotation.SetPaymentStatus()
+	if err != nil {
+		return errors.New("error setting payment status: " + err.Error())
+	}
+
+	now := time.Now()
+	for _, payment := range quotation.PaymentsInput {
+		if payment.ID.IsZero() {
+			//Create new
+			quotationPayment := QuotationPayment{
+				QuotationID:   &quotation.ID,
+				QuotationCode: quotation.Code,
+				Amount:        payment.Amount,
+				Method:        payment.Method,
+				Date:          payment.Date,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+				CreatedBy:     quotation.CreatedBy,
+				CreatedByName: quotation.CreatedByName,
+				UpdatedBy:     quotation.UpdatedBy,
+				UpdatedByName: quotation.UpdatedByName,
+				StoreID:       quotation.StoreID,
+				StoreName:     quotation.StoreName,
+			}
+			err := quotationPayment.Insert()
+			if err != nil {
+				return errors.New("error creating payment:" + err.Error())
+			}
+
+		} else {
+			//Update
+			salesPayment, err := store.FindQuotationPaymentByID(&payment.ID, bson.M{})
+			if err != nil {
+				return errors.New("error finding payment by id:" + err.Error())
+			}
+
+			salesPayment.Date = payment.Date
+			salesPayment.Amount = payment.Amount
+			salesPayment.Method = payment.Method
+			salesPayment.UpdatedAt = &now
+			salesPayment.UpdatedBy = quotation.UpdatedBy
+			salesPayment.UpdatedByName = quotation.UpdatedByName
+			err = salesPayment.Update()
+			if err != nil {
+				return errors.New("error updating invoice payment: " + err.Error())
+			}
+		}
+
+	}
+
+	//Deleting payments
+
+	paymentsToDelete := []QuotationPayment{}
+
+	for _, payment := range quotation.Payments {
+		found := false
+		for _, paymentInput := range quotation.PaymentsInput {
+			if paymentInput.ID.Hex() == payment.ID.Hex() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			paymentsToDelete = append(paymentsToDelete, payment)
+		}
+	}
+
+	for _, payment := range paymentsToDelete {
+		payment.Deleted = true
+		payment.DeletedAt = &now
+		payment.DeletedBy = quotation.UpdatedBy
+		err := payment.Update()
+		if err != nil {
+			return errors.New("error updating payment2: " + err.Error())
+		}
+	}
+
+	return nil
+}
+
+func (quotation *Quotation) SetPaymentStatus() (models []QuotationPayment, err error) {
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"quotation_id": quotation.ID, "deleted": bson.M{"$ne": true}}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching quotation invoice payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	totalPaymentReceived := float64(0.0)
+	paymentMethods := []string{}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := QuotationPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		//log.Print("Pushing")
+
+		models = append(models, model)
+
+		totalPaymentReceived += *model.Amount
+
+		if !slices.Contains(paymentMethods, model.Method) {
+			paymentMethods = append(paymentMethods, model.Method)
+		}
+	} //end for loop
+
+	quotation.TotalPaymentReceived = ToFixed(totalPaymentReceived, 2)
+	quotation.BalanceAmount = ToFixed((quotation.NetTotal-quotation.CashDiscount)-totalPaymentReceived, 2)
+	quotation.PaymentMethods = paymentMethods
+	quotation.Payments = models
+	quotation.PaymentsCount = int64(len(models))
+
+	if ToFixed((quotation.NetTotal-quotation.CashDiscount), 2) <= ToFixed(totalPaymentReceived, 2) {
+		quotation.PaymentStatus = "paid"
+	} else if ToFixed(totalPaymentReceived, 2) > 0 {
+		quotation.PaymentStatus = "paid_partially"
+	} else if ToFixed(totalPaymentReceived, 2) <= 0 {
+		quotation.PaymentStatus = "not_paid"
+	}
+
+	return models, err
 }
 
 func (store *Store) UpdateQuotationProfit() error {
@@ -193,39 +386,14 @@ func (model *Quotation) CalculateQuotationProfit() error {
 	totalProfit := float64(0.0)
 	totalLoss := float64(0.0)
 	for i, quotationProduct := range model.Products {
-		/*
-			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-			if err != nil {
-				return err
-			}
-		*/
 		quantity := quotationProduct.Quantity
 
-		salesPrice := (quantity * (quotationProduct.UnitPrice - quotationProduct.UnitDiscount))
+		quotationPrice := (quantity * (quotationProduct.UnitPrice - quotationProduct.UnitDiscount))
 		purchaseUnitPrice := quotationProduct.PurchaseUnitPrice
-
-		/*
-			product, err := FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-			if err != nil {
-				return err
-			}
-
-
-				if purchaseUnitPrice == 0 ||
-					order.Products[i].Loss > 0 ||
-					order.Products[i].Profit <= 0 {
-					for _, store := range product.ProductStores {
-						if store.StoreID == *order.StoreID {
-							purchaseUnitPrice = store.PurchaseUnitPrice
-							order.Products[i].PurchaseUnitPrice = purchaseUnitPrice
-							break
-						}
-					}
-				}*/
 
 		profit := 0.0
 		if purchaseUnitPrice > 0 {
-			profit = salesPrice - (quantity * purchaseUnitPrice)
+			profit = quotationPrice - (quantity * purchaseUnitPrice)
 		}
 
 		loss := 0.0
@@ -606,53 +774,6 @@ func (quotation *Quotation) FindTotalQuantity() {
 	quotation.TotalQuantity = totalQuantity
 }
 
-/*
-func (model *Quotation) FindNetTotal() {
-	netTotal := float64(0.0)
-	total := float64(0.0)
-	for _, product := range model.Products {
-		total += (product.Quantity * (product.UnitPrice - product.UnitDiscount))
-	}
-
-	netTotal = total
-	netTotal += model.ShippingOrHandlingFees
-	netTotal -= model.Discount
-
-	vatPrice := float64(0.00)
-	if model.VatPercent != nil {
-		vatPrice += (netTotal * (*model.VatPercent / float64(100.00)))
-		netTotal += vatPrice
-	}
-
-	//order.NetTotal = netTotal
-	model.NetTotal = RoundFloat(netTotal, 2)
-}
-
-
-func (quotation *Quotation) FindTotal() {
-	total := float64(0.0)
-	for _, product := range quotation.Products {
-		total += (product.Quantity * (product.UnitPrice - product.UnitDiscount))
-	}
-
-	quotation.Total = RoundFloat(total, 2)
-}
-
-func (quotation *Quotation) FindTotalQuantity() {
-	totalQuantity := float64(0)
-	for _, product := range quotation.Products {
-		totalQuantity += product.Quantity
-	}
-	quotation.TotalQuantity = totalQuantity
-}
-
-func (quotation *Quotation) FindVatPrice() {
-	vatPrice := ((*quotation.VatPercent / 100) * (quotation.Total - quotation.Discount + quotation.ShippingOrHandlingFees))
-	vatPrice = RoundFloat(vatPrice, 2)
-	quotation.VatPrice = vatPrice
-}
-*/
-
 func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quotations []Quotation, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
@@ -866,10 +987,35 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 		}
 	}
 
+	/*
+		keys, ok = r.URL.Query()["search[payment_status]"]
+		if ok && len(keys[0]) >= 1 {
+			if keys[0] != "" {
+				criterias.SearchBy["payment_status"] = keys[0]
+			}
+		}*/
+
 	keys, ok = r.URL.Query()["search[payment_status]"]
 	if ok && len(keys[0]) >= 1 {
-		if keys[0] != "" {
-			criterias.SearchBy["payment_status"] = keys[0]
+		paymentStatusList := strings.Split(keys[0], ",")
+		if len(paymentStatusList) > 0 {
+			criterias.SearchBy["payment_status"] = bson.M{"$in": paymentStatusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethodList := strings.Split(keys[0], ",")
+		if len(paymentMethodList) > 0 {
+			criterias.SearchBy["payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
 		}
 	}
 
@@ -1004,9 +1150,11 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		errs["store_id"] = "invalid store id"
 	}
 
-	if govalidator.IsNull(quotation.Status) {
-		errs["status"] = "Status is required"
-	}
+	/*
+		if govalidator.IsNull(quotation.Status) {
+			errs["status"] = "Status is required"
+		}
+	*/
 
 	/*
 		if govalidator.IsNull(quotation.DateStr) {
@@ -1024,15 +1172,6 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 	if govalidator.IsNull(quotation.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
-		/*
-			const shortForm = "Jan 02 2006"
-			date, err := time.Parse(shortForm, order.DateStr)
-			if err != nil {
-				errs["date_str"] = "Invalid date format"
-			}
-			order.Date = &date
-		*/
-
 		const shortForm = "2006-01-02T15:04:05Z07:00"
 		date, err := time.Parse(shortForm, quotation.DateStr)
 		if err != nil {
@@ -1068,6 +1207,56 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["id"] = "Invalid Quotation:" + quotation.ID.Hex()
 		}
 
+	}
+
+	if quotation.Type == "invoice" {
+		totalPayment := float64(0.00)
+		for _, payment := range quotation.PaymentsInput {
+			if payment.Amount != nil {
+				totalPayment += *payment.Amount
+			}
+		}
+
+		if totalPayment > quotation.NetTotal {
+			errs["total_payment"] = "Total payment amount exceeds Net total: " + fmt.Sprintf("%.02f", (quotation.NetTotal))
+			return
+		}
+
+		for index, payment := range quotation.PaymentsInput {
+			if govalidator.IsNull(payment.DateStr) {
+				errs["payment_date_"+strconv.Itoa(index)] = "Payment date is required"
+			} else {
+				const shortForm = "2006-01-02T15:04:05Z07:00"
+				date, err := time.Parse(shortForm, payment.DateStr)
+				if err != nil {
+					errs["payment_date_"+strconv.Itoa(index)] = "Invalid date format"
+				}
+
+				quotation.PaymentsInput[index].Date = &date
+				payment.Date = &date
+
+				if quotation.Date != nil && IsAfter(quotation.Date, quotation.PaymentsInput[index].Date) {
+					errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to invoice date time"
+				}
+			}
+
+			if payment.Amount == nil {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
+			} else if *payment.Amount == 0 {
+				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+			}
+
+			if payment.Method == "" {
+				errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
+			}
+
+			if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
+				if *payment.Amount <= 0 {
+					errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
+				}
+			}
+
+		} //end for
 	}
 
 	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})

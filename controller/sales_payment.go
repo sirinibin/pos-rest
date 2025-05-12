@@ -137,7 +137,7 @@ func CreateSalesPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating order.payments
 	order, _ := store.FindOrderByID(salespayment.OrderID, map[string]interface{}{})
-	order.GetPayments()
+	order.SetPaymentStatus()
 	order.SetCustomerSalesStats()
 	order.Update()
 
@@ -246,7 +246,7 @@ func UpdateSalesPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating order.payments
 	order, _ := store.FindOrderByID(salespayment.OrderID, map[string]interface{}{})
-	order.GetPayments()
+	order.SetPaymentStatus()
 	order.SetCustomerSalesStats()
 	order.Update()
 
@@ -400,7 +400,7 @@ func DeleteSalesPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating order.payments
 	order, _ := store.FindOrderByID(salesPayment.OrderID, map[string]interface{}{})
-	order.GetPayments()
+	order.SetPaymentStatus()
 	order.SetCustomerSalesStats()
 	order.Update()
 

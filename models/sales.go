@@ -66,7 +66,6 @@ type Order struct {
 	DiscountWithVAT        float64             `bson:"discount_with_vat" json:"discount_with_vat"`
 	DiscountPercentWithVAT float64             `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
 	DiscountPercent        float64             `bson:"discount_percent" json:"discount_percent"`
-	IsDiscountPercent      bool                `bson:"is_discount_percent" json:"is_discount_percent"`
 	ReturnDiscount         float64             `bson:"return_discount" json:"return_discount"`
 	ReturnDiscountWithVAT  float64             `bson:"return_discount_with_vat" json:"return_discount_vat"`
 	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
@@ -78,13 +77,13 @@ type Order struct {
 	NetTotal               float64             `bson:"net_total" json:"net_total"`
 	CashDiscount           float64             `bson:"cash_discount" json:"cash_discount"`
 	ReturnCashDiscount     float64             `bson:"return_cash_discount" json:"return_cash_discount"`
-	PaymentMethods         []string            `json:"payment_methods" bson:"payment_methods"`
 	TotalPaymentReceived   float64             `bson:"total_payment_received" json:"total_payment_received"`
 	BalanceAmount          float64             `bson:"balance_amount" json:"balance_amount"`
 	Payments               []SalesPayment      `bson:"payments" json:"payments"`
 	PaymentsInput          []SalesPayment      `bson:"-" json:"payments_input"`
 	PaymentsCount          int64               `bson:"payments_count" json:"payments_count"`
 	PaymentStatus          string              `bson:"payment_status" json:"payment_status"`
+	PaymentMethods         []string            `json:"payment_methods" bson:"payment_methods"`
 	Profit                 float64             `bson:"profit" json:"profit"`
 	NetProfit              float64             `bson:"net_profit" json:"net_profit"`
 	Loss                   float64             `bson:"loss" json:"loss"`
@@ -1055,21 +1054,7 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 
 	keys, ok = r.URL.Query()["search[payment_methods]"]
 	if ok && len(keys[0]) >= 1 {
-
 		paymentMethods := strings.Split(keys[0], ",")
-
-		/*
-			objecIds := []primitive.ObjectID{}
-
-			for _, id := range categoryIds {
-				categoryID, err := primitive.ObjectIDFromHex(id)
-				if err != nil {
-					return products, criterias, err
-				}
-				objecIds = append(objecIds, categoryID)
-			}
-		*/
-
 		if len(paymentMethods) > 0 {
 			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
 		}
@@ -1484,7 +1469,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				if scenario == "update" {
 					extraAmount := 0.00
 					var oldSalesPayment *SalesPayment
-					oldOrder.GetPayments()
+					oldOrder.SetPaymentStatus()
 					for _, oldPayment := range oldOrder.Payments {
 						if oldPayment.ID.Hex() == payment.ID.Hex() {
 							oldSalesPayment = &oldPayment
@@ -1533,7 +1518,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			if scenario == "update" {
 				oldTotalAmountFromCustomerAccount := 0.0
 				extraAmountRequired := 0.00
-				oldOrder.GetPayments()
+				oldOrder.SetPaymentStatus()
 				for _, oldPayment := range oldOrder.Payments {
 					if oldPayment.Method == "customer_account" {
 						oldTotalAmountFromCustomerAccount += *oldPayment.Amount
@@ -2158,7 +2143,7 @@ func (order *Order) UpdatePayments() error {
 		return err
 	}
 
-	order.GetPayments()
+	order.SetPaymentStatus()
 	now := time.Now()
 	for _, payment := range order.PaymentsInput {
 		if payment.ID.IsZero() {
@@ -2234,7 +2219,7 @@ func (order *Order) UpdatePayments() error {
 	return nil
 }
 
-func (order *Order) GetPayments() (models []SalesPayment, err error) {
+func (order *Order) SetPaymentStatus() (models []SalesPayment, err error) {
 	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("sales_payment")
 	ctx := context.Background()
 	findOptions := options.Find()

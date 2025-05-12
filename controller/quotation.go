@@ -129,6 +129,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "create"); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		w.WriteHeader(http.StatusBadRequest)
@@ -163,6 +164,30 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		response.Errors["insert"] = "error adding product history" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.AddPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["creating_payments"] = "Error creating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	_, err = quotation.SetPaymentStatus()
+	if err != nil {
+		response.Status = false
+		response.Errors["order"] = "Error getting payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.Update()
+	if err != nil {
+		response.Status = false
+		response.Errors["order"] = "Error updating order: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -281,6 +306,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "update"); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -292,8 +318,20 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.CalculateQuotationProfit()
 
 	quotation.UpdateForeignLabelFields()
+
+	err = quotation.UpdatePayments()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["updated_payments"] = "Error updating payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	quotation.SetPaymentStatus()
+
 	err = quotation.Update()
 	if err != nil {
+
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
