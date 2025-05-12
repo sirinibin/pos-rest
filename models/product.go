@@ -52,8 +52,9 @@ type ProductStore struct {
 	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
 	RetailUnitPrice         float64            `bson:"retail_unit_price" json:"retail_unit_price"`
 	IsUnitPriceWithVAT      bool               `bson:"with_vat" json:"with_vat"`
-	DamagedStock            float64            `bson:"damaged_stock" json:"damaged_stock"`
 	Stock                   float64            `bson:"stock" json:"stock"`
+	StocksAdded             float64            `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
+	StocksRemoved           float64            `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
 	RetailUnitProfit        float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
 	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
 	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
@@ -79,6 +80,16 @@ type ProductStore struct {
 	Quotation               float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
 	DeliveryNoteCount       int64              `bson:"delivery_note_count" json:"delivery_note_count"`
 	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
+}
+
+type AdditionalStock struct {
+	Stock     float64    `bson:"stock" json:"stock"`
+	CreatedAt *time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
+}
+
+type DamagedStock struct {
+	Stock     float64    `bson:"stock" json:"stock"`
+	CreatedAt *time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
 }
 
 // Product : Product structure
@@ -3129,7 +3140,8 @@ func (product *Product) SetStock() error {
 	}
 	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		productStoreTemp.Stock = (productStoreTemp.PurchaseQuantity - productStoreTemp.PurchaseReturnQuantity) - (productStoreTemp.SalesQuantity - productStoreTemp.SalesReturnQuantity)
-		productStoreTemp.Stock -= productStoreTemp.DamagedStock
+		productStoreTemp.Stock += productStoreTemp.StocksAdded
+		productStoreTemp.Stock -= productStoreTemp.StocksRemoved
 		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
 	}
 

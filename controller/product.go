@@ -243,6 +243,15 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 	product.InitStoreUnitPrice()
 	product.CalculateUnitProfit()
 	product.GeneratePrefixes()
+	/*
+		_, ok := product.ProductStores[store.ID.Hex()]
+		if ok {
+			for i, _ := range product.ProductStores[store.ID.Hex()].DamagedStock {
+				product.ProductStores[store.ID.Hex()].DamagedStock[i].CreatedAt = &now
+			}
+		}*/
+
+	product.SetStock()
 
 	err = product.Insert()
 	if err != nil {
