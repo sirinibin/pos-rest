@@ -335,6 +335,192 @@ type QuotationStats struct {
 	Loss      float64             `json:"loss" bson:"loss"`
 }
 
+type QuotationInvoiceStats struct {
+	ID                            *primitive.ObjectID `json:"id" bson:"_id"`
+	InvoiceNetTotal               float64             `json:"invoice_net_total" bson:"invoice_net_total"`
+	InvoiceNetProfit              float64             `json:"invoice_net_profit" bson:"invoice_net_profit"`
+	InvoiceNetLoss                float64             `json:"invoice_net_loss" bson:"invoice_net_loss"`
+	InvoiceVatPrice               float64             `json:"invoice_vat_price" bson:"vinvoice_at_price"`
+	InvoiceDiscount               float64             `json:"invoice_discount" bson:"invoice_discount"`
+	InvoiceShippingOrHandlingFees float64             `json:"invoice_hipping_handling_fees" bson:"invoice_shipping_handling_fees"`
+	InvoicePaidSales              float64             `json:"invoice_paid_sales" bson:"invoice_paid_sales"`
+	InvoiceUnPaidSales            float64             `json:"invoice_unpaid_sales" bson:"invoice_unpaid_sales"`
+	InvoiceCashSales              float64             `json:"invoice_cash_sales" bson:"invoice_cash_sales"`
+	InvoiceBankAccountSales       float64             `json:"invoice_bank_account_sales" bson:"invoice_bank_account_sales"`
+	InvoiceCashDiscount           float64             `json:"invoice_cash_discount" bson:"invoice_cash_discount"`
+}
+
+func (store *Store) GetQuotationInvoiceStats(filter map[string]interface{}) (stats QuotationInvoiceStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Make a copy of the map
+	newFilter := make(map[string]interface{})
+	for k, v := range filter {
+		newFilter[k] = v
+	}
+
+	typeStr, ok := newFilter["type"]
+	if ok && typeStr == "quotation" {
+		return stats, nil
+	}
+
+	newFilter["type"] = "invoice"
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": newFilter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                            nil,
+				"invoice_net_total":              bson.M{"$sum": "$net_total"},
+				"invoice_net_profit":             bson.M{"$sum": "$net_profit"},
+				"invoice_net_loss":               bson.M{"$sum": "$net_loss"},
+				"invoice_vat_price":              bson.M{"$sum": "$vat_price"},
+				"invoice_discount":               bson.M{"$sum": "$discount"},
+				"invoice_cash_discount":          bson.M{"$sum": "$cash_discount"},
+				"invoice_shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
+				"invoice_paid_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"invoice_unpaid_sales": bson.M{"$sum": "$balance_amount"},
+				"invoice_cash_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "cash"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"invoice_bank_account_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$or": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "debit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "credit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_transfer"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+	}
+	return stats, nil
+}
+
+func (store *Store) GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Make a copy of the map
+	newFilter := make(map[string]interface{})
+	for k, v := range filter {
+		newFilter[k] = v
+	}
+
+	typeStr, ok := newFilter["type"]
+	if ok && typeStr == "invoice" {
+		return stats, nil
+	}
+
+	newFilter["type"] = "quotation"
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": newFilter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":        nil,
+				"net_total":  bson.M{"$sum": "$net_total"},
+				"net_profit": bson.M{"$sum": "$net_profit"},
+				"loss":       bson.M{"$sum": "$loss"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+		stats.NetTotal = RoundFloat(stats.NetTotal, 2)
+		stats.NetProfit = RoundFloat(stats.NetProfit, 2)
+		stats.Loss = RoundFloat(stats.Loss, 2)
+
+		return stats, nil
+	}
+	return stats, nil
+}
+
 /*
 func (quotation *Quotation) CalculateQuotationProfit() error {
 	totalProfit := float64(0.0)
@@ -424,45 +610,6 @@ func (model *Quotation) CalculateQuotationProfit() error {
 	}
 
 	return nil
-}
-
-func (store *Store) GetQuotationStats(filter map[string]interface{}) (stats QuotationStats, err error) {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	pipeline := []bson.M{
-		bson.M{
-			"$match": filter,
-		},
-		bson.M{
-			"$group": bson.M{
-				"_id":        nil,
-				"net_total":  bson.M{"$sum": "$net_total"},
-				"net_profit": bson.M{"$sum": "$net_profit"},
-				"loss":       bson.M{"$sum": "$loss"},
-			},
-		},
-	}
-
-	cur, err := collection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return stats, err
-	}
-	defer cur.Close(ctx)
-
-	if cur.Next(ctx) {
-		err := cur.Decode(&stats)
-		if err != nil {
-			return stats, err
-		}
-		stats.NetTotal = RoundFloat(stats.NetTotal, 2)
-		stats.NetProfit = RoundFloat(stats.NetProfit, 2)
-		stats.Loss = RoundFloat(stats.Loss, 2)
-
-		return stats, nil
-	}
-	return stats, nil
 }
 
 func (quotation *Quotation) GeneratePDF() error {

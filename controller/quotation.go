@@ -28,7 +28,7 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotations := []models.Quotation{}
+	//quotations := []models.Quotation{}
 	store, err := ParseStore(r)
 	if err != nil {
 		response.Status = false
@@ -55,11 +55,20 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var quotationStats models.QuotationStats
+	var quotationInvoiceStats models.QuotationInvoiceStats
 
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
 			quotationStats, err = store.GetQuotationStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["total_sales"] = "Unable to find total amount of quotation:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			quotationInvoiceStats, err = store.GetQuotationInvoiceStats(criterias.SearchBy)
 			if err != nil {
 				response.Status = false
 				response.Errors["total_sales"] = "Unable to find total amount of quotation:" + err.Error()
@@ -72,6 +81,19 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total_quotation"] = quotationStats.NetTotal
 	response.Meta["profit"] = quotationStats.NetProfit
 	response.Meta["loss"] = quotationStats.Loss
+	//invoice
+
+	response.Meta["invoice_total_sales"] = quotationInvoiceStats.InvoiceNetTotal
+	response.Meta["invoice_net_profit"] = quotationInvoiceStats.InvoiceNetProfit
+	response.Meta["invoice_net_loss"] = quotationInvoiceStats.InvoiceNetLoss
+	response.Meta["invoice_vat_price"] = quotationInvoiceStats.InvoiceVatPrice
+	response.Meta["invoice_discount"] = quotationInvoiceStats.InvoiceDiscount
+	response.Meta["invoice_cash_discount"] = quotationInvoiceStats.InvoiceCashDiscount
+	response.Meta["invoice_shipping_handling_fees"] = quotationInvoiceStats.InvoiceShippingOrHandlingFees
+	response.Meta["invoice_paid_sales"] = quotationInvoiceStats.InvoicePaidSales
+	response.Meta["invoice_unpaid_sales"] = quotationInvoiceStats.InvoiceUnPaidSales
+	response.Meta["invoice_cash_sales"] = quotationInvoiceStats.InvoiceCashSales
+	response.Meta["invoice_bank_account_sales"] = quotationInvoiceStats.InvoiceBankAccountSales
 
 	if len(quotations) == 0 {
 		response.Result = []interface{}{}

@@ -124,7 +124,6 @@ func (store *Store) GetTotalCount(filter map[string]interface{}, collectionName 
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	return collection.CountDocuments(ctx, filter)
 }
 
