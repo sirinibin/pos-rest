@@ -389,7 +389,11 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if quotationOld.CustomerID.Hex() != quotation.CustomerID.Hex() {
+	if quotationOld.CustomerID != nil &&
+		!quotationOld.CustomerID.IsZero() &&
+		quotation.CustomerID != nil &&
+		!quotation.CustomerID.IsZero() &&
+		quotationOld.CustomerID.Hex() != quotation.CustomerID.Hex() {
 		err = quotationOld.SetCustomerQuotationStats()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
