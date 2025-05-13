@@ -74,9 +74,9 @@ type Vendor struct {
 	Account                    *Account               `json:"account" bson:"account"`
 	Logo                       string                 `bson:"logo,omitempty" json:"logo"`
 	LogoContent                string                 `json:"logo_content,omitempty"`
-	Deleted                    bool                   `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	Deleted                    bool                   `bson:"deleted" json:"deleted"`
 	DeletedBy                  *primitive.ObjectID    `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser              *User                  `json:"deleted_by_user,omitempty"`
+	DeletedByUser              *User                  `json:"deleted_by_user,omitempty" bson:"-"`
 	DeletedAt                  *time.Time             `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 	CreatedAt                  *time.Time             `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt                  *time.Time             `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -277,6 +277,18 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return vendors, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
 		}
 	}
 
@@ -1436,5 +1448,34 @@ func ProcessVendors() error {
 	}
 
 	log.Print("DONE!")
+	return nil
+}
+
+func (vendor *Vendor) RestoreVendor(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	err = vendor.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	vendor.Deleted = false
+	vendor.DeletedBy = nil
+	vendor.DeletedAt = nil
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": vendor.ID},
+		bson.M{"$set": vendor},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

@@ -84,9 +84,9 @@ type Customer struct {
 	CreditLimit                float64                  `bson:"credit_limit" json:"credit_limit"`
 	CreditBalance              float64                  `json:"credit_balance,omitempty" bson:"credit_balance,omitempty"`
 	Account                    *Account                 `json:"account" bson:"account"`
-	Deleted                    bool                     `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	Deleted                    bool                     `bson:"deleted" json:"deleted"`
 	DeletedBy                  *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser              *User                    `json:"deleted_by_user,omitempty"`
+	DeletedByUser              *User                    `json:"deleted_by_user,omitempty" bson:"-"`
 	DeletedAt                  *time.Time               `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 	CreatedAt                  *time.Time               `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt                  *time.Time               `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -345,6 +345,18 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
 		}
 	}
 
@@ -1813,5 +1825,34 @@ func (customer *Customer) MakeCode() error {
 			customer.Code = strings.ReplaceAll(customer.Code, "DATE", currentDate)
 		}
 	}
+	return nil
+}
+
+func (customer *Customer) RestoreCustomer(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	err = customer.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	customer.Deleted = false
+	customer.DeletedBy = nil
+	customer.DeletedAt = nil
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": customer.ID},
+		bson.M{"$set": customer},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

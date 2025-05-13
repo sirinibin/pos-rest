@@ -70,6 +70,7 @@ func main() {
 	router.HandleFunc("/v1/customer/{id}", controller.ViewCustomer).Methods("GET")
 	router.HandleFunc("/v1/customer/{id}", controller.UpdateCustomer).Methods("PUT")
 	router.HandleFunc("/v1/customer/{id}", controller.DeleteCustomer).Methods("DELETE")
+	router.HandleFunc("/v1/customer/restore/{id}", controller.RestoreCustomer).Methods("POST")
 	router.HandleFunc("/v1/customer/upload-image", controller.UploadCustomerImage).Methods("POST")
 	router.HandleFunc("/v1/customer/delete-image", controller.DeleteCustomerImage).Methods("POST")
 
@@ -221,6 +222,7 @@ func main() {
 	router.HandleFunc("/v1/vendor/{id}", controller.ViewVendor).Methods("GET")
 	router.HandleFunc("/v1/vendor/{id}", controller.UpdateVendor).Methods("PUT")
 	router.HandleFunc("/v1/vendor/{id}", controller.DeleteVendor).Methods("DELETE")
+	router.HandleFunc("/v1/vendor/restore/{id}", controller.RestoreVendor).Methods("POST")
 	router.HandleFunc("/v1/vendor/upload-image", controller.UploadVendorImage).Methods("POST")
 	router.HandleFunc("/v1/vendor/delete-image", controller.DeleteVendorImage).Methods("POST")
 
