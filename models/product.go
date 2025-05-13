@@ -92,9 +92,9 @@ type Product struct {
 	PartNumber           string                  `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	CategoryID           []*primitive.ObjectID   `json:"category_id" bson:"category_id"`
 	Category             []*ProductCategory      `json:"category" bson:"-"`
-	BrandID              *primitive.ObjectID     `json:"brand_id,omitempty" bson:"brand_id,omitempty"`
-	BrandName            string                  `json:"brand_name,omitempty" bson:"brand_name,omitempty"`
-	BrandCode            string                  `json:"brand_code,omitempty" bson:"brand_code,omitempty"`
+	BrandID              *primitive.ObjectID     `json:"brand_id" bson:"brand_id"`
+	BrandName            string                  `json:"brand_name" bson:"brand_name"`
+	BrandCode            string                  `json:"brand_code" bson:"brand_code"`
 	CountryName          string                  `bson:"country_name" json:"country_name"`
 	CountryCode          string                  `bson:"country_code" json:"country_code"`
 	ProductStores        map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
