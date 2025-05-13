@@ -21,36 +21,41 @@ import (
 )
 
 type CustomerStore struct {
-	StoreID                       primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName                     string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
-	StoreNameInArabic             string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	SalesCount                    int64              `bson:"sales_count" json:"sales_count"`
-	SalesAmount                   float64            `bson:"sales_amount" json:"sales_amount"`
-	SalesPaidAmount               float64            `bson:"sales_paid_amount" json:"sales_paid_amount"`
-	SalesBalanceAmount            float64            `bson:"sales_balance_amount" json:"sales_balance_amount"`
-	SalesProfit                   float64            `bson:"sales_profit" json:"sales_profit"`
-	SalesLoss                     float64            `bson:"sales_loss" json:"sales_loss"`
-	SalesPaidCount                int64              `bson:"sales_paid_count" json:"sales_paid_count"`
-	SalesNotPaidCount             int64              `bson:"sales_not_paid_count" json:"sales_not_paid_count"`
-	SalesPaidPartiallyCount       int64              `bson:"sales_paid_partially_count" json:"sales_paid_partially_count"`
-	SalesReturnCount              int64              `bson:"sales_return_count" json:"sales_return_count"`
-	SalesReturnAmount             float64            `bson:"sales_return_amount" json:"sales_return_amount"`
-	SalesReturnPaidAmount         float64            `bson:"sales_return_paid_amount" json:"sales_return_paid_amount"`
-	SalesReturnBalanceAmount      float64            `bson:"sales_return_balance_amount" json:"sales_return_balance_amount"`
-	SalesReturnProfit             float64            `bson:"sales_return_profit" json:"sales_return_profit"`
-	SalesReturnLoss               float64            `bson:"sales_return_loss" json:"sales_return_loss"`
-	SalesReturnPaidCount          int64              `bson:"sales_return_paid_count" json:"sales_return_paid_count"`
-	SalesReturnNotPaidCount       int64              `bson:"sales_return_not_paid_count" json:"sales_return_not_paid_count"`
-	SalesReturnPaidPartiallyCount int64              `bson:"sales_return_paid_partially_count" json:"sales_return_paid_partially_count"`
-	QuotationCount                int64              `bson:"quotation_count" json:"quotation_count"`
-	QuotationAmount               float64            `bson:"quotation_amount" json:"quotation_amount"`
-	QuotationProfit               float64            `bson:"quotation_profit" json:"quotation_profit"`
-	QuotationLoss                 float64            `bson:"quotation_loss" json:"quotation_loss"`
-	QuotationInvoiceCreditCount   int64              `bson:"quotation_invoice_credit_count" json:"quotation_invoice_credit_count"`
-	QuotationInvoiceCreditAmount  float64            `bson:"quotation_invoice_credit_amount" json:"quotation_invoice_credit_amount"`
-	QuotationInvoicePaidCount     int64              `bson:"quotation_invoice_paid_count" json:"quotation_invoice_paid_count"`
-	QuotationInvoicePaidAmount    float64            `bson:"quotation_invoice_paid_amount" json:"quotation_invoice_paid_amount"`
-	DeliveryNoteCount             int64              `bson:"delivery_note_count" json:"delivery_note_count"`
+	StoreID                            primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName                          string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic                  string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	SalesCount                         int64              `bson:"sales_count" json:"sales_count"`
+	SalesAmount                        float64            `bson:"sales_amount" json:"sales_amount"`
+	SalesPaidAmount                    float64            `bson:"sales_paid_amount" json:"sales_paid_amount"`
+	SalesBalanceAmount                 float64            `bson:"sales_balance_amount" json:"sales_balance_amount"`
+	SalesProfit                        float64            `bson:"sales_profit" json:"sales_profit"`
+	SalesLoss                          float64            `bson:"sales_loss" json:"sales_loss"`
+	SalesPaidCount                     int64              `bson:"sales_paid_count" json:"sales_paid_count"`
+	SalesNotPaidCount                  int64              `bson:"sales_not_paid_count" json:"sales_not_paid_count"`
+	SalesPaidPartiallyCount            int64              `bson:"sales_paid_partially_count" json:"sales_paid_partially_count"`
+	SalesReturnCount                   int64              `bson:"sales_return_count" json:"sales_return_count"`
+	SalesReturnAmount                  float64            `bson:"sales_return_amount" json:"sales_return_amount"`
+	SalesReturnPaidAmount              float64            `bson:"sales_return_paid_amount" json:"sales_return_paid_amount"`
+	SalesReturnBalanceAmount           float64            `bson:"sales_return_balance_amount" json:"sales_return_balance_amount"`
+	SalesReturnProfit                  float64            `bson:"sales_return_profit" json:"sales_return_profit"`
+	SalesReturnLoss                    float64            `bson:"sales_return_loss" json:"sales_return_loss"`
+	SalesReturnPaidCount               int64              `bson:"sales_return_paid_count" json:"sales_return_paid_count"`
+	SalesReturnNotPaidCount            int64              `bson:"sales_return_not_paid_count" json:"sales_return_not_paid_count"`
+	SalesReturnPaidPartiallyCount      int64              `bson:"sales_return_paid_partially_count" json:"sales_return_paid_partially_count"`
+	QuotationCount                     int64              `bson:"quotation_count" json:"quotation_count"`
+	QuotationAmount                    float64            `bson:"quotation_amount" json:"quotation_amount"`
+	QuotationProfit                    float64            `bson:"quotation_profit" json:"quotation_profit"`
+	QuotationLoss                      float64            `bson:"quotation_loss" json:"quotation_loss"`
+	QuotationInvoiceCount              int64              `bson:"quotation_invoice_count" json:"quotation_invoice_count"`
+	QuotationInvoiceAmount             float64            `bson:"quotation_invoice_amount" json:"quotation_invoice_amount"`
+	QuotationInvoiceProfit             float64            `bson:"quotation_invoice_profit" json:"quotation_invoice_profit"`
+	QuotationInvoiceLoss               float64            `bson:"quotation_invoice_loss" json:"quotation_invoice_loss"`
+	QuotationInvoiceNotPaidCount       int64              `bson:"quotation_invoice_not_paid_count" json:"quotation_invoice_not_paid_count"`
+	QuotationInvoicePaidPartiallyCount int64              `bson:"quotation_invoice_paid_partially_count" json:"quotation_invoice_paid_partially_count"`
+	QuotationInvoiceBalanceAmount      float64            `bson:"quotation_invoice_balance_amount" json:"quotation_invoice_balance_amount"`
+	QuotationInvoicePaidCount          int64              `bson:"quotation_invoice_paid_count" json:"quotation_invoice_paid_count"`
+	QuotationInvoicePaidAmount         float64            `bson:"quotation_invoice_paid_amount" json:"quotation_invoice_paid_amount"`
+	DeliveryNoteCount                  int64              `bson:"delivery_note_count" json:"delivery_note_count"`
 }
 
 // Customer : Customer structure
@@ -367,6 +372,185 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		if len(objecIds) > 0 {
 			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
 		}
+	}
+
+	//quotation invoice
+	keys, ok = r.URL.Query()["search[quotation_invoice_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[credit_balance]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["credit_balance"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["credit_balance"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_count"] = value
+		}
+
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_not_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_not_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_not_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_not_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_paid_partially_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_partially_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_partially_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_paid_partially_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_paid_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_paid_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_paid_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_balance_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_balance_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_invoice_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
 	}
 
 	//sales

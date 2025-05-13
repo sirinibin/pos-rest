@@ -260,17 +260,6 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/*
-		quotationOld, err = models.FindQuotationByID(&quotationID, bson.M{})
-		if err != nil {
-			response.Status = false
-			response.Errors["view"] = "Unable to view:" + err.Error()
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	*/
-
 	store, err := ParseStore(r)
 	if err != nil {
 		response.Status = false
@@ -278,6 +267,16 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	quotationOld, err := store.FindQuotationByID(&quotationID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	quotation, err = store.FindQuotationByID(&quotationID, bson.M{})
 	if err != nil {
 		response.Status = false
@@ -358,7 +357,26 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	quotation.SetProductsQuotationStats()
-	quotation.SetCustomerQuotationStats()
+
+	err = quotation.SetCustomerQuotationStats()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["view"] = "error setting customer quotation stats:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if quotationOld.CustomerID.Hex() != quotation.CustomerID.Hex() {
+		err = quotationOld.SetCustomerQuotationStats()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			response.Status = false
+			response.Errors["view"] = "error setting customer quotation stats:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
 
 	quotation, err = store.FindQuotationByID(&quotation.ID, bson.M{})
 	if err != nil {

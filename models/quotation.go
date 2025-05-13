@@ -1659,16 +1659,18 @@ func ProcessQuotations() error {
 				continue
 			}
 
-			if quotation.Type != "invoice" {
-				quotation.Type = "quotation"
-				err = quotation.Update()
-				if err != nil {
-					return err
+			/*
+				if quotation.Type != "invoice" {
+					quotation.Type = "quotation"
+					err = quotation.Update()
+					if err != nil {
+						return err
+					}
 				}
-			}
 
-			quotation.ClearProductsQuotationHistory()
-			quotation.AddProductsQuotationHistory()
+				quotation.ClearProductsQuotationHistory()
+				quotation.AddProductsQuotationHistory()
+			*/
 			quotation.SetCustomerQuotationStats()
 
 			/*
@@ -1814,6 +1816,27 @@ func (quotation *Quotation) SetProductsQuotationStats() error {
 }
 
 // Customer
+/*
+type CustomerQuotationStats struct {
+	QuotationCount  int64   `json:"quotation_count" bson:"quotation_count"`
+	QuotationAmount float64 `json:"quotation_amount" bson:"quotation_amount"`
+	QuotationProfit float64 `json:"quotation_profit" bson:"quotation_profit"`
+	QuotationLoss   float64 `json:"quotation_loss" bson:"quotation_loss"`
+}
+*/
+
+type CustomerQuotationInvoiceStats struct {
+	InvoiceCount              int64   `json:"invoice_count" bson:"invoice_count"`
+	InvoiceAmount             float64 `json:"invoice_amount" bson:"invoice_amount"`
+	InvoicePaidAmount         float64 `json:"invoice_paid_amount" bson:"invoice_paid_amount"`
+	InvoiceBalanceAmount      float64 `json:"invoice_balance_amount" bson:"invoice_balance_amount"`
+	InvoiceProfit             float64 `json:"invoice_profit" bson:"invoice_profit"`
+	InvoiceLoss               float64 `json:"invoice_loss" bson:"invoice_loss"`
+	InvoicePaidCount          int64   `json:"invoice_paid_count" bson:"invoice_paid_count"`
+	InvoiceNotPaidCount       int64   `json:"invoice_not_paid_count" bson:"invoice_not_paid_count"`
+	InvoicePaidPartiallyCount int64   `json:"invoice_paid_partially_count" bson:"invoice_paid_partially_count"`
+}
+
 type CustomerQuotationStats struct {
 	QuotationCount  int64   `json:"quotation_count" bson:"quotation_count"`
 	QuotationAmount float64 `json:"quotation_amount" bson:"quotation_amount"`
@@ -1821,11 +1844,140 @@ type CustomerQuotationStats struct {
 	QuotationLoss   float64 `json:"quotation_loss" bson:"quotation_loss"`
 }
 
-func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.ObjectID) error {
-	if customer == nil || customer.ID.IsZero() {
-		return nil
+func (customer *Customer) SetCustomerQuotationInvoiceStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats CustomerQuotationInvoiceStats
+
+	filter := map[string]interface{}{
+		"store_id":    storeID,
+		"customer_id": customer.ID,
+		"type":        "invoice",
 	}
 
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                    nil,
+				"invoice_count":          bson.M{"$sum": 1},
+				"invoice_amount":         bson.M{"$sum": "$net_total"},
+				"invoice_paid_amount":    bson.M{"$sum": "$total_payment_received"},
+				"invoice_balance_amount": bson.M{"$sum": "$balance_amount"},
+				"invoice_profit":         bson.M{"$sum": "$net_profit"},
+				"invoice_loss":           bson.M{"$sum": "$loss"},
+				"invoice_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"invoice_not_paid_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"not_paid",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"invoice_paid_partially_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{
+							"$eq": []string{
+								"$payment_status",
+								"paid_partially",
+							},
+						},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+		stats.InvoiceAmount = RoundFloat(stats.InvoiceAmount, 2)
+		stats.InvoicePaidAmount = RoundFloat(stats.InvoicePaidAmount, 2)
+		stats.InvoiceBalanceAmount = RoundFloat(stats.InvoiceBalanceAmount, 2)
+		stats.InvoiceProfit = RoundFloat(stats.InvoiceProfit, 2)
+		stats.InvoiceLoss = RoundFloat(stats.InvoiceLoss, 2)
+	}
+
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
+	}
+
+	if len(customer.Stores) == 0 {
+		customer.Stores = map[string]CustomerStore{}
+	}
+
+	if customerStore, ok := customer.Stores[storeID.Hex()]; ok {
+		customerStore.StoreID = storeID
+		customerStore.StoreName = store.Name
+		customerStore.StoreNameInArabic = store.NameInArabic
+		customerStore.QuotationInvoiceCount = stats.InvoiceCount
+		customerStore.QuotationInvoicePaidCount = stats.InvoicePaidCount
+		customerStore.QuotationInvoiceNotPaidCount = stats.InvoiceNotPaidCount
+		customerStore.QuotationInvoicePaidPartiallyCount = stats.InvoicePaidPartiallyCount
+		customerStore.QuotationInvoiceAmount = stats.InvoiceAmount
+		customerStore.QuotationInvoicePaidAmount = stats.InvoicePaidAmount
+		customerStore.QuotationInvoiceBalanceAmount = stats.InvoiceBalanceAmount
+		customerStore.QuotationInvoiceProfit = stats.InvoiceProfit
+		customerStore.QuotationInvoiceLoss = stats.InvoiceLoss
+		customer.Stores[storeID.Hex()] = customerStore
+	} else {
+		customer.Stores[storeID.Hex()] = CustomerStore{
+			StoreID:                            storeID,
+			StoreName:                          store.Name,
+			StoreNameInArabic:                  store.NameInArabic,
+			QuotationInvoiceCount:              stats.InvoiceCount,
+			QuotationInvoicePaidCount:          stats.InvoicePaidCount,
+			QuotationInvoiceNotPaidCount:       stats.InvoiceNotPaidCount,
+			QuotationInvoicePaidPartiallyCount: stats.InvoicePaidPartiallyCount,
+			QuotationInvoiceAmount:             stats.InvoiceAmount,
+			QuotationInvoicePaidAmount:         stats.InvoicePaidAmount,
+			QuotationInvoiceBalanceAmount:      stats.InvoiceBalanceAmount,
+			QuotationInvoiceProfit:             stats.InvoiceProfit,
+			QuotationInvoiceLoss:               stats.InvoiceLoss,
+		}
+	}
+
+	err = customer.Update()
+	if err != nil {
+		return errors.New("Error updating customer: " + err.Error())
+	}
+
+	return nil
+}
+
+func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.ObjectID) error {
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1908,98 +2060,6 @@ func (customer *Customer) SetCustomerQuotationStatsByStoreID(storeID primitive.O
 	return nil
 }
 
-func (customer *Customer) SetCustomerQuotationInvoiceStatsByStoreID(storeID primitive.ObjectID, paymentStatus string) error {
-	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("quotation")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var stats CustomerQuotationStats
-
-	filter := map[string]interface{}{
-		"store_id":       storeID,
-		"customer_id":    customer.ID,
-		"type":           "invoice",
-		"payment_status": paymentStatus,
-	}
-
-	pipeline := []bson.M{
-		bson.M{
-			"$match": filter,
-		},
-		bson.M{
-			"$group": bson.M{
-				"_id":              nil,
-				"quotation_count":  bson.M{"$sum": 1},
-				"quotation_amount": bson.M{"$sum": "$net_total"},
-			},
-		},
-	}
-
-	cur, err := collection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return err
-	}
-
-	defer cur.Close(ctx)
-
-	if cur.Next(ctx) {
-		err := cur.Decode(&stats)
-		if err != nil {
-			return err
-		}
-		stats.QuotationAmount = RoundFloat(stats.QuotationAmount, 2)
-	}
-
-	store, err := FindStoreByID(&storeID, bson.M{})
-	if err != nil {
-		return errors.New("error finding store: " + err.Error())
-	}
-
-	if len(customer.Stores) == 0 {
-		customer.Stores = map[string]CustomerStore{}
-	}
-
-	if customerStore, ok := customer.Stores[storeID.Hex()]; ok {
-		customerStore.StoreID = storeID
-		customerStore.StoreName = store.Name
-		customerStore.StoreNameInArabic = store.NameInArabic
-		if paymentStatus == "credit" {
-			customerStore.QuotationInvoiceCreditCount = stats.QuotationCount
-			customerStore.QuotationInvoiceCreditAmount = stats.QuotationAmount
-		} else if paymentStatus == "paid" {
-			customerStore.QuotationInvoicePaidCount = stats.QuotationCount
-			customerStore.QuotationInvoicePaidAmount = stats.QuotationAmount
-		}
-		customer.Stores[storeID.Hex()] = customerStore
-	} else {
-		if paymentStatus == "credit" {
-			customer.Stores[storeID.Hex()] = CustomerStore{
-				StoreID:                      storeID,
-				StoreName:                    store.Name,
-				StoreNameInArabic:            store.NameInArabic,
-				QuotationInvoiceCreditCount:  stats.QuotationCount,
-				QuotationInvoiceCreditAmount: stats.QuotationAmount,
-			}
-		} else if paymentStatus == "paid" {
-			customer.Stores[storeID.Hex()] = CustomerStore{
-				StoreID:                    storeID,
-				StoreName:                  store.Name,
-				StoreNameInArabic:          store.NameInArabic,
-				QuotationInvoicePaidCount:  stats.QuotationCount,
-				QuotationInvoicePaidAmount: stats.QuotationAmount,
-			}
-		}
-
-	}
-
-	err = customer.Update()
-	if err != nil {
-		return errors.New("Error updating customer: " + err.Error())
-	}
-
-	return nil
-}
-
 func (quotation *Quotation) SetCustomerQuotationStats() error {
 	if quotation.CustomerID == nil || quotation.CustomerID.IsZero() {
 		return nil
@@ -2015,19 +2075,16 @@ func (quotation *Quotation) SetCustomerQuotationStats() error {
 		return err
 	}
 
-	err = customer.SetCustomerQuotationStatsByStoreID(*quotation.StoreID)
-	if err != nil {
-		return err
-	}
-
-	err = customer.SetCustomerQuotationInvoiceStatsByStoreID(*quotation.StoreID, "credit")
-	if err != nil {
-		return err
-	}
-
-	err = customer.SetCustomerQuotationInvoiceStatsByStoreID(*quotation.StoreID, "paid")
-	if err != nil {
-		return err
+	if quotation.Type == "quotation" {
+		err = customer.SetCustomerQuotationStatsByStoreID(*quotation.StoreID)
+		if err != nil {
+			return err
+		}
+	} else if quotation.Type == "invoice" {
+		err = customer.SetCustomerQuotationInvoiceStatsByStoreID(*quotation.StoreID)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
