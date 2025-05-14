@@ -1543,9 +1543,9 @@ func (purchase *Purchase) Validate(
 
 	} //end for
 
-	if totalPayment > purchase.NetTotal {
-		errs["total_payment"] = "Total payment amount exceeds Net total: " + fmt.Sprintf("%.02f", (purchase.NetTotal))
-		return errs
+	if totalPayment > (purchase.NetTotal - purchase.CashDiscount) {
+		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
+		return
 	}
 
 	if totalPayment < purchase.ReturnAmount {

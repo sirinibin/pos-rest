@@ -1358,8 +1358,8 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	}
 
-	if totalPayment > order.NetTotal {
-		errs["total_payment"] = "Total payment amount exceeds Net total: " + fmt.Sprintf("%.02f", (order.NetTotal))
+	if totalPayment > (order.NetTotal - order.CashDiscount) {
+		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 

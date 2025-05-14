@@ -1375,13 +1375,13 @@ func (purchasereturn *PurchaseReturn) Validate(
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if totalPayment > purchasereturn.NetTotal {
-		errs["total_payment"] = "Total payment amount should not exceed Net total: " + fmt.Sprintf("%.02f", (purchase.NetTotal))
-		return errs
+	if totalPayment > (purchasereturn.NetTotal - purchasereturn.CashDiscount) {
+		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchasereturn.NetTotal-purchasereturn.CashDiscount)) + " (Net Total - Cash Discount)"
+		return
 	}
 
-	if totalPayment > purchase.NetTotal {
-		errs["total_payment"] = "Total payment amount should not exceed Original Purchase Net total: " + fmt.Sprintf("%.02f", (purchase.NetTotal))
+	if totalPayment > (purchase.NetTotal - purchase.CashDiscount) {
+		errs["total_payment"] = "Total payment amount should not exceed Original Purchase Amount: " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
 		return errs
 	}
 
