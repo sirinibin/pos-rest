@@ -962,21 +962,22 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) {
-		vatNoExists, err := vendor.IsVatNoExists()
-		if err != nil {
-			errs["vat_no"] = err.Error()
-		}
+	/*
+		if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) {
+			vatNoExists, err := vendor.IsVatNoExists()
+			if err != nil {
+				errs["vat_no"] = err.Error()
+			}
 
-		if vatNoExists {
-			errs["vat_no"] = "VAT No. already exists."
-		}
+			if vatNoExists {
+				errs["vat_no"] = "VAT No. already exists."
+			}
 
-		if vatNoExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
-		}
-	}
+			if vatNoExists {
+				w.WriteHeader(http.StatusConflict)
+				return errs
+			}
+		}*/
 
 	if !govalidator.IsNull(strings.TrimSpace(vendor.Code)) {
 		codeExists, err := vendor.IsCodeExists()
