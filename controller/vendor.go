@@ -96,7 +96,7 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
+	vendor.Name = strings.ToUpper(vendor.Name)
 	vendor.CreatedBy = &userID
 	vendor.UpdatedBy = &userID
 	now := time.Now()
@@ -205,6 +205,7 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	vendor.Name = strings.ToUpper(vendor.Name)
 	vendor.UpdatedBy = &userID
 	now := time.Now()
 	vendor.UpdatedAt = &now

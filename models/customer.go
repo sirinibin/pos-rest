@@ -1424,6 +1424,22 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 	}
 
+	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !govalidator.IsNull(strings.TrimSpace(customer.Name)) {
+		customerExists, err := customer.IsCustomerExistsByVatNoByName()
+		if err != nil {
+			errs["vat_no"] = err.Error()
+		}
+
+		if customerExists {
+			errs["vat_no"] = "VAT No. already exists with customer name: " + customer.Name
+		}
+
+		if customerExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
+	}
+
 	/*
 		if scenario != "update" && !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) {
 			vatNoExists, err := customer.IsVatNoExists()
@@ -1462,6 +1478,28 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 	}
 
 	return errs
+}
+
+func (customer *Customer) IsCustomerExistsByVatNoByName() (exists bool, err error) {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if customer.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": customer.VATNo,
+			"name":   customer.Name,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": customer.VATNo,
+			"name":   customer.Name,
+			"_id":    bson.M{"$ne": customer.ID},
+		})
+	}
+
+	return (count > 0), err
 }
 
 func (customer *Customer) Insert() error {
@@ -1725,15 +1763,24 @@ func ProcessCustomers() error {
 				continue
 			}
 
-			customer.GenerateSearchWords()
-			err = customer.Update()
-			if err != nil {
-				log.Print("Store ID:" + store.ID.Hex())
-				log.Print("Code:" + customer.Code)
-				log.Print("Name:" + customer.Name)
-				continue
-				//return err
+			customer.Name = strings.ToUpper(customer.Name)
+			customer.Update()
+			account, _ := store.FindAccountByID(customer.ID, bson.M{})
+			if account != nil {
+				account.Name = customer.Name
+				account.Update()
 			}
+
+			/*
+				customer.GenerateSearchWords()
+				err = customer.Update()
+				if err != nil {
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Code:" + customer.Code)
+					log.Print("Name:" + customer.Name)
+					continue
+					//return err
+				}*/
 
 			//customer.SetCreditBalance()
 			/*

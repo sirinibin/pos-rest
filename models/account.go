@@ -555,7 +555,7 @@ func (store *Store) CreateAccountIfNotExists(
 	vatNo *string,
 ) (account *Account, err error) {
 	if vatNo != nil && !govalidator.IsNull(strings.TrimSpace(*vatNo)) {
-		account, err = store.FindAccountByVatNo(*vatNo, storeID, bson.M{})
+		account, err = store.FindAccountByVatNoByName(*vatNo, name, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
@@ -775,6 +775,35 @@ func (store *Store) FindAccountByPhoneByName(
 	err = collection.FindOne(ctx,
 		bson.M{
 			"phone":    phone,
+			"name":     name,
+			"store_id": storeID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&account)
+	if err != nil {
+		return nil, err
+	}
+
+	return account, err
+}
+
+func (store *Store) FindAccountByVatNoByName(
+	vatNo string,
+	name string,
+	storeID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (account *Account, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"vat_no":   vatNo,
 			"name":     name,
 			"store_id": storeID,
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}

@@ -962,22 +962,21 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	}
 
-	/*
-		if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) {
-			vatNoExists, err := vendor.IsVatNoExists()
-			if err != nil {
-				errs["vat_no"] = err.Error()
-			}
+	if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) && !govalidator.IsNull(strings.TrimSpace(vendor.Name)) {
+		vendorExists, err := vendor.IsVendorExistsByVatNoByName()
+		if err != nil {
+			errs["vat_no"] = err.Error()
+		}
 
-			if vatNoExists {
-				errs["vat_no"] = "VAT No. already exists."
-			}
+		if vendorExists {
+			errs["vat_no"] = "VAT No. already exists with vendor name: " + vendor.Name
+		}
 
-			if vatNoExists {
-				w.WriteHeader(http.StatusConflict)
-				return errs
-			}
-		}*/
+		if vendorExists {
+			w.WriteHeader(http.StatusConflict)
+			return errs
+		}
+	}
 
 	if !govalidator.IsNull(strings.TrimSpace(vendor.Code)) {
 		codeExists, err := vendor.IsCodeExists()
@@ -1097,6 +1096,28 @@ func (vendor *Vendor) IsVatNoExists() (exists bool, err error) {
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"vat_no": vendor.VATNo,
+			"_id":    bson.M{"$ne": vendor.ID},
+		})
+	}
+
+	return (count > 0), err
+}
+
+func (vendor *Vendor) IsVendorExistsByVatNoByName() (exists bool, err error) {
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if vendor.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": vendor.VATNo,
+			"name":   vendor.Name,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"vat_no": vendor.VATNo,
+			"name":   vendor.Name,
 			"_id":    bson.M{"$ne": vendor.ID},
 		})
 	}
@@ -1424,15 +1445,24 @@ func ProcessVendors() error {
 				continue
 			}
 
-			vendor.GenerateSearchWords()
-			err = vendor.Update()
-			if err != nil {
-				log.Print("Store ID:" + store.ID.Hex())
-				log.Print("Code:" + vendor.Code)
-				log.Print("Name:" + vendor.Name)
-				continue
-				//return err
+			vendor.Name = strings.ToUpper(vendor.Name)
+			vendor.Update()
+			account, _ := store.FindAccountByID(vendor.ID, bson.M{})
+			if account != nil {
+				account.Name = vendor.Name
+				account.Update()
 			}
+
+			/*
+				vendor.GenerateSearchWords()
+				err = vendor.Update()
+				if err != nil {
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Code:" + vendor.Code)
+					log.Print("Name:" + vendor.Name)
+					continue
+					//return err
+				}*/
 
 			//	vendor.SetCreditBalance()
 			//vendor.MakeCode()

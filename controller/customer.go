@@ -103,6 +103,7 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer.Name = strings.ToUpper(customer.Name)
 	customer.CreatedBy = &userID
 	customer.UpdatedBy = &userID
 	now := time.Now()
@@ -212,6 +213,7 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer.Name = strings.ToUpper(customer.Name)
 	customer.UpdatedBy = &userID
 	now := time.Now()
 	customer.UpdatedAt = &now
