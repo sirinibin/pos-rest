@@ -1424,21 +1424,22 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 	}
 
-	if scenario != "update" && !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) {
-		vatNoExists, err := customer.IsVatNoExists()
-		if err != nil {
-			errs["vat_no"] = err.Error()
-		}
+	/*
+		if scenario != "update" && !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) {
+			vatNoExists, err := customer.IsVatNoExists()
+			if err != nil {
+				errs["vat_no"] = err.Error()
+			}
 
-		if vatNoExists {
-			errs["vat_no"] = "VAT No. already exists."
-		}
+			if vatNoExists {
+				errs["vat_no"] = "VAT No. already exists."
+			}
 
-		if vatNoExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
-		}
-	}
+			if vatNoExists {
+				w.WriteHeader(http.StatusConflict)
+				return errs
+			}
+		}*/
 
 	if !govalidator.IsNull(strings.TrimSpace(customer.Code)) {
 		codeExists, err := customer.IsCodeExists()
