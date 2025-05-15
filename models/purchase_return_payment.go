@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -438,7 +439,7 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 		return errs
 	}
 
-	//var oldPurchaseReturnPayment *PurchaseReturnPayment
+	var oldPurchaseReturnPayment *PurchaseReturnPayment
 
 	if govalidator.IsNull(purchasereturnPayment.Method) {
 		errs["method"] = "Payment method is required"
@@ -472,19 +473,58 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 			errs["id"] = "Invalid purchase return payment :" + purchasereturnPayment.ID.Hex()
 		}
 
-		/*
-			oldPurchaseReturnPayment, err = FindPurchaseReturnPaymentByID(&purchasereturnPayment.ID, bson.M{})
-			if err != nil {
-				errs["purchase_return_payment"] = err.Error()
-				return errs
-			}
-		*/
+		oldPurchaseReturnPayment, err = store.FindPurchaseReturnPaymentByID(&purchasereturnPayment.ID, bson.M{})
+		if err != nil {
+			errs["purchase_return_payment"] = err.Error()
+			return errs
+		}
+
 	}
 
 	if purchasereturnPayment.Amount == nil {
 		errs["amount"] = "Amount is required"
 	} else if ToFixed(*purchasereturnPayment.Amount, 2) <= 0 {
 		errs["amount"] = "Amount should be > 0"
+	}
+
+	purchaseReturn, err := store.FindPurchaseReturnByID(purchasereturnPayment.PurchaseReturnID, bson.M{})
+	if err != nil {
+		errs["sales_return"] = "error finding sales return" + err.Error()
+	}
+
+	if *purchasereturnPayment.Amount > (purchaseReturn.NetTotal - purchaseReturn.CashDiscount) {
+		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+		return
+	}
+
+	if scenario == "update" {
+		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - *oldPurchaseReturnPayment.Amount)) > (purchaseReturn.NetTotal - purchaseReturn.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+			return
+		}
+	} else {
+		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > (purchaseReturn.NetTotal - purchaseReturn.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+			return
+		}
+	}
+
+	//validating with payment paid payment in purchase
+	purchase, err := store.FindOrderByID(purchasereturnPayment.PurchaseID, bson.M{})
+	if err != nil {
+		errs["sales"] = "error finding sale" + err.Error()
+	}
+
+	if scenario == "update" {
+		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - *oldPurchaseReturnPayment.Amount)) > purchase.TotalPaymentReceived {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentReceived)) + " (Total Paid payment)"
+			return
+		}
+	} else {
+		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > purchase.TotalPaymentReceived {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentReceived)) + " (Total Paid payment)"
+			return
+		}
 	}
 
 	/*

@@ -1274,43 +1274,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		order.CustomerID = &newCustomer.ID
 	}
 
-	/*
-		if totalPayment == 0 {
-
-			_, ok := customer.Stores[store.ID.Hex()]
-			if ok {
-				//customer.Stores[store.ID.Hex()].SalesBalanceAmount
-
-			}
-		}*/
-
-	/*if store.Zatca.Phase == "2" {
-	var lastOrder *Order
-	if order.ID.IsZero() {
-		lastOrder, err = store.FindLastOrderByStoreID(&store.ID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-			errs["store_id"] = "Error finding last order"
-		}
-	} else {
-		lastOrder, err = order.FindPreviousOrder(bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-			errs["store_id"] = "Error finding last order"
-		}
-	}
-
-	if lastOrder != nil {
-		/*
-			if (lastOrder.Zatca.ReportingFailedCount > 0 || lastOrder.Zatca.ComplianceCheckFailedCount > 0) && !lastOrder.Zatca.ReportingPassed {
-				errs["last_order"] = "Last sale is not reported to Zatca. please report it and try again"
-			}
-	*/
-	/*
-		if !lastOrder.Zatca.ReportingPassed && order.EnableReportToZatca {
-			errs["reporting_to_zatca"] = "Last sale is not reported to Zatca. please report it and try again"
-		}*/
-	/*	}
-		}*/
-
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
 

@@ -113,6 +113,7 @@ func CreateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	if errs := salesreturnpayment.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -214,6 +215,7 @@ func UpdateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	if errs := salesreturnpayment.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -408,7 +409,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 		return errs
 	}
 
-	//var oldPurchasePayment *PurchasePayment
+	var oldPurchasePayment *PurchasePayment
 
 	if govalidator.IsNull(purchasePayment.Method) {
 		errs["method"] = "Payment method is required"
@@ -442,19 +443,40 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 			errs["id"] = "Invalid purchase payment :" + purchasePayment.ID.Hex()
 		}
 
-		/*
-			oldPurchasePayment, err = FindPurchasePaymentByID(&purchasePayment.ID, bson.M{})
-			if err != nil {
-				errs["purchase_payment"] = err.Error()
-				return errs
-			}
-		*/
+		oldPurchasePayment, err = store.FindPurchasePaymentByID(&purchasePayment.ID, bson.M{})
+		if err != nil {
+			errs["purchase_payment"] = err.Error()
+			return errs
+		}
+
 	}
 
 	if purchasePayment.Amount == nil {
 		errs["amount"] = "Amount is required"
 	} else if ToFixed(*purchasePayment.Amount, 2) <= 0 {
 		errs["amount"] = "Amount should be > 0"
+	}
+
+	purchase, err := store.FindPurchaseByID(purchasePayment.PurchaseID, bson.M{})
+	if err != nil {
+		errs["sales_return"] = "error finding sales return" + err.Error()
+	}
+
+	if *purchasePayment.Amount > (purchase.NetTotal - purchase.CashDiscount) {
+		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
+		return
+	}
+
+	if scenario == "update" {
+		if (*purchasePayment.Amount + (purchase.TotalPaymentPaid - *oldPurchasePayment.Amount)) > (purchase.NetTotal - purchase.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
+			return
+		}
+	} else {
+		if (*purchasePayment.Amount + (purchase.TotalPaymentPaid)) > (purchase.NetTotal - purchase.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
+			return
+		}
 	}
 
 	/*
