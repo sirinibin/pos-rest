@@ -143,6 +143,26 @@ func CreateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
 
+	order, _ := store.FindOrderByID(salesreturnpayment.OrderID, bson.M{})
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.Update()
+
+	err = salesReturn.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = salesReturn.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = salesreturnpayment
 
@@ -236,6 +256,26 @@ func UpdateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	salesReturn.GetPayments()
 	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
+
+	order, _ := store.FindOrderByID(salesreturnpayment.OrderID, bson.M{})
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.Update()
+
+	err = salesReturn.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = salesReturn.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	salesreturnpayment, err = store.FindSalesReturnPaymentByID(&salesreturnpayment.ID, bson.M{})
 	if err != nil {

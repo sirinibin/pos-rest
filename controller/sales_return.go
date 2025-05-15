@@ -466,6 +466,10 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.Update()
+
 	err = salesreturn.DoAccounting()
 	if err != nil {
 		response.Status = false
@@ -481,10 +485,6 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
-	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
-	order.Update()
 
 	if salesreturn.CustomerID != nil && !salesreturn.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})

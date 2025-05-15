@@ -143,6 +143,22 @@ func CreatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()
 
+	err = purchase.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchase.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = purchasepayment
 
@@ -236,6 +252,22 @@ func UpdatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 	purchase.GetPayments()
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()
+
+	err = purchase.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchase.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	purchasepayment, err = store.FindPurchasePaymentByID(&purchasepayment.ID, bson.M{})
 	if err != nil {

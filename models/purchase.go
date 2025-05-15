@@ -1308,6 +1308,17 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
+	if vendor == nil && govalidator.IsNull(purchase.VendorName) {
+		purchase.VendorID = nil
+	}
+
+	if scenario == "update" && vendor == nil && govalidator.IsNull(purchase.VendorName) && oldPurchase.VendorID != nil && !oldPurchase.VendorID.IsZero() {
+		if purchase.ReturnCount > 0 {
+			errs["vendor_id"] = "You can't remove this vendor as this purchase have a purchase return created"
+			return
+		}
+	}
+
 	if vendor == nil && !govalidator.IsNull(purchase.VendorName) {
 		now := time.Now()
 		newVendor := Vendor{
