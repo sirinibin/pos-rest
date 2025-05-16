@@ -1244,12 +1244,34 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		order.CustomerID = nil
 	}
 
-	if scenario == "update" && customer == nil && govalidator.IsNull(order.CustomerName) && oldOrder.CustomerID != nil && !oldOrder.CustomerID.IsZero() {
-		if order.ReturnCount > 0 {
-			errs["customer_id"] = "You can't remove this customer as this sales have a sales return created"
-			return
+	if scenario == "update" {
+		salesReturns, err := order.GetSalesReturns()
+		if err != nil {
+			errs["sales_returns"] = "erro fetching sales returns: " + err.Error()
+			return errs
+		}
+
+		for _, salesReturn := range salesReturns {
+			if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() && order.CustomerID != nil && !order.CustomerID.IsZero() && salesReturn.CustomerID.Hex() != order.CustomerID.Hex() {
+				errs["customer_id"] = "Customer " + salesReturn.CustomerName + " is used in Sales Return(ID: " + salesReturn.Code + ")"
+				return
+			} else if (salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero()) && (order.CustomerID == nil || order.CustomerID.IsZero()) {
+				errs["customer_id"] = "Customer " + salesReturn.CustomerName + " is used in Sales Return(ID: " + salesReturn.Code + ")"
+				return
+			} else if (salesReturn.CustomerID == nil || salesReturn.CustomerID.IsZero()) && (order.CustomerID != nil && !order.CustomerID.IsZero()) {
+				errs["customer_id"] = "No Customer is used in Sales Return(ID: " + salesReturn.Code + ")"
+				return
+			}
 		}
 	}
+
+	/*
+		if scenario == "update" && customer == nil && govalidator.IsNull(order.CustomerName) && oldOrder.CustomerID != nil && !oldOrder.CustomerID.IsZero() {
+			if order.ReturnCount > 0 {
+				errs["customer_id"] = "You can't remove this customer as this sales have a sales return created"
+				return
+			}
+		}*/
 
 	if customer == nil && !govalidator.IsNull(order.CustomerName) {
 		now := time.Now()
