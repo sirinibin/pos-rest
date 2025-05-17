@@ -170,7 +170,7 @@ func (store *Store) GetCustomerWithdrawalStats(filter map[string]interface{}) (s
 		bson.M{
 			"$group": bson.M{
 				"_id":   nil,
-				"total": bson.M{"$sum": "$amount"},
+				"total": bson.M{"$sum": "$net_total"},
 			},
 		},
 	}

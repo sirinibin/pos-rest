@@ -148,7 +148,7 @@ func (store *Store) GetCustomerDepositStats(filter map[string]interface{}) (stat
 		bson.M{
 			"$group": bson.M{
 				"_id":   nil,
-				"total": bson.M{"$sum": "$amount"},
+				"total": bson.M{"$sum": "$net_total"},
 			},
 		},
 	}
