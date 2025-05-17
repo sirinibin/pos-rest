@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -53,6 +54,24 @@ type CustomerDeposit struct {
 	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	Payments        []SalesPayment      `bson:"payments" json:"payments"`
+	NetTotal        float64             `bson:"net_total" json:"net_total"`
+	PaymentMethods  []string            `json:"payment_methods" bson:"payment_methods"`
+}
+
+func (customerdeposit *CustomerDeposit) FindNetTotal() {
+	netTotal := float64(0.00)
+	paymentMethods := []string{}
+
+	for _, payment := range customerdeposit.Payments {
+		netTotal += *payment.Amount
+
+		if !slices.Contains(paymentMethods, payment.Method) {
+			paymentMethods = append(paymentMethods, payment.Method)
+		}
+	}
+	customerdeposit.NetTotal = netTotal
+	customerdeposit.PaymentMethods = paymentMethods
 }
 
 func (customerdeposit *CustomerDeposit) AttributesValueChangeEvent(customerdepositOld *CustomerDeposit) error {
@@ -185,7 +204,31 @@ func (store *Store) SearchCustomerDeposit(w http.ResponseWriter, r *http.Request
 		} else {
 			criterias.SearchBy["amount"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[net_total]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customerdeposits, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_total"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_total"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[payment_method]"]
@@ -470,78 +513,22 @@ func (store *Store) SearchCustomerDeposit(w http.ResponseWriter, r *http.Request
 
 }
 
-func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 	errs = make(map[string]string)
 
-	store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		errs["store_id"] = "invalid store id"
-		return errs
-	}
-
-	if scenario == "update" {
-		if customerdeposit.ID.IsZero() {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = "ID is required"
-			return errs
-		}
-		exists, err := store.IsCustomerDepositExists(&customerdeposit.ID)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["id"] = "Invalid CustomerDeposit:" + customerdeposit.ID.Hex()
-		}
-
-	}
-
-	if customerdeposit.StoreID == nil || customerdeposit.StoreID.IsZero() {
-		errs["store_id"] = "Store is required"
-	} else {
-		exists, err := IsStoreExists(customerdeposit.StoreID)
-		if err != nil {
-			errs["store_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["store_id"] = "Invalid store:" + customerdeposit.StoreID.Hex()
-			return errs
-		}
-	}
-
-	if customerdeposit.CustomerID == nil || customerdeposit.CustomerID.IsZero() {
-		errs["customer_id"] = "Customer is required"
-	} else {
-		exists, err := store.IsCustomerExists(customerdeposit.CustomerID)
-		if err != nil {
-			errs["customer_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["customer_id"] = "Invalid Customer:" + customerdeposit.CustomerID.Hex()
-		}
-	}
-
-	if govalidator.IsNull(customerdeposit.PaymentMethod) {
-		errs["payment_method"] = "Payment method is required"
-	}
-
-	if customerdeposit.Amount == 0 {
-		errs["amount"] = "Amount is required"
-	}
-
 	/*
-		if govalidator.IsNull(customerdeposit.Description) {
-			errs["description"] = "Description is required"
+		store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			errs["store_id"] = "invalid store id"
+			return errs
 		}*/
 
-	if govalidator.IsNull(customerdeposit.DateStr) {
+	if customerDeposit.CustomerID == nil || customerDeposit.CustomerID.IsZero() {
+		errs["customer_id"] = "Customer is required"
+	}
+
+	if govalidator.IsNull(customerDeposit.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
 		//const shortForm = "Jan 02 2006"
@@ -550,47 +537,42 @@ func (customerdeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 		//	const shortForm = "Monday Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		//const shortForm = "Mon Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		const shortForm = "2006-01-02T15:04:05Z07:00"
-		date, err := time.Parse(shortForm, customerdeposit.DateStr)
+		date, err := time.Parse(shortForm, customerDeposit.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
 		}
-		customerdeposit.Date = &date
+		customerDeposit.Date = &date
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(customerdeposit.Code)) {
-		codeExists, err := customerdeposit.IsCodeExists()
-		if err != nil {
-			errs["code"] = err.Error()
+	for index, payment := range customerDeposit.Payments {
+		if govalidator.IsNull(payment.DateStr) {
+			errs["customer_receivable_payment_date_"+strconv.Itoa(index)] = "Payment date is required"
+		} else {
+			const shortForm = "2006-01-02T15:04:05Z07:00"
+			date, err := time.Parse(shortForm, payment.DateStr)
+			if err != nil {
+				errs["customer_receivable_payment_date_"+strconv.Itoa(index)] = "Invalid date format"
+			}
+
+			customerDeposit.Payments[index].Date = &date
+			payment.Date = &date
+
+			if customerDeposit.Date != nil && IsAfter(customerDeposit.Date, customerDeposit.Payments[index].Date) {
+				errs["customer_receivable_payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to Receivable date time"
+			}
 		}
 
-		if codeExists {
-			errs["code"] = "ID already exists."
+		if payment.Amount == nil {
+			errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
+		} else if *payment.Amount <= 0 {
+			errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
-		if codeExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
-		}
-	}
-
-	for k, imageContent := range customerdeposit.ImagesContent {
-		splits := strings.Split(imageContent, ",")
-
-		if len(splits) == 2 {
-			customerdeposit.ImagesContent[k] = splits[1]
-		} else if len(splits) == 1 {
-			customerdeposit.ImagesContent[k] = splits[0]
+		if payment.Method == "" {
+			errs["customer_receivable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		valid, err := IsStringBase64(customerdeposit.ImagesContent[k])
-		if err != nil {
-			errs["images_content"] = err.Error()
-		}
-
-		if !valid {
-			errs["images_"+strconv.Itoa(k)] = "Invalid base64 string"
-		}
-	}
+	} //end for
 
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -1023,64 +1005,84 @@ func (store *Store) IsCustomerDepositExists(ID *primitive.ObjectID) (exists bool
 	return (count > 0), err
 }
 
-func (store *Store) ProcessCustomerDeposits() error {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+func ProcessCustomerDeposits() error {
+	log.Printf("Processing customer deposits")
+	stores, err := GetAllStores()
 	if err != nil {
-		return errors.New("Error fetching customerdeposits" + err.Error())
+		return err
 	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		model := CustomerDeposit{}
-		err = cur.Decode(&model)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
-		}
-
-		/*
-			store, err := FindStoreByCode("GUO", bson.M{})
-			if err != nil {
-				return errors.New("Error finding store:" + err.Error())
-			}
-			model.StoreID = &store.ID
-		*/
-
-		if model.PaymentMethod == "bank_account" {
-			model.PaymentMethod = "bank_card"
-		}
-
-		err = model.Update()
+	for _, store := range stores {
+		log.Print("Store: " + store.Name)
+		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customerdeposit")
 		if err != nil {
 			return err
 		}
 
-	}
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
 
+		bar := progressbar.Default(totalCount)
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching customerdeposits" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			model := CustomerDeposit{}
+			err = cur.Decode(&model)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if len(model.Payments) == 0 {
+				model.Payments = []SalesPayment{
+					SalesPayment{
+						Amount:        &model.Amount,
+						Date:          model.Date,
+						Method:        model.PaymentMethod,
+						BankReference: &model.BankReferenceNo,
+						Description:   &model.Description,
+					},
+				}
+			}
+
+			model.FindNetTotal()
+
+			err = model.Update()
+			if err != nil {
+				log.Print("Error updating: " + model.Code + ", err: " + err.Error())
+				//return err
+			}
+			bar.Add(1)
+		}
+	}
+	log.Print("DONE!")
 	return nil
 }
 
 func (customerDeposit *CustomerDeposit) DoAccounting() error {
-	ledger, err := customerDeposit.CreateLedger()
+	ledgers, err := customerDeposit.CreateLedger()
 	if err != nil {
 		return err
 	}
 
-	_, err = ledger.CreatePostings()
-	if err != nil {
-		return err
+	for _, ledger := range ledgers {
+		_, err = ledger.CreatePostings()
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -1090,18 +1092,18 @@ func (customerDeposit *CustomerDeposit) UndoAccounting() error {
 		return err
 	}
 
-	ledger, err := store.FindLedgerByReferenceID(customerDeposit.ID, *customerDeposit.StoreID, bson.M{})
+	ledgers, err := store.FindLedgersByReferenceID(customerDeposit.ID, *customerDeposit.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
 
-	ledgerAccounts := map[string]Account{}
-
-	if ledger != nil {
-		ledgerAccounts, err = ledger.GetRelatedAccounts()
+	var relatedLedgerAccounts map[string]Account
+	for _, ledger := range ledgers {
+		ledgerAccounts, err := ledger.GetRelatedAccounts()
 		if err != nil {
 			return err
 		}
+		relatedLedgerAccounts = MergeAccountMaps(relatedLedgerAccounts, ledgerAccounts)
 	}
 
 	err = store.RemoveLedgerByReferenceID(customerDeposit.ID)
@@ -1114,7 +1116,7 @@ func (customerDeposit *CustomerDeposit) UndoAccounting() error {
 		return err
 	}
 
-	err = SetAccountBalances(ledgerAccounts)
+	err = SetAccountBalances(relatedLedgerAccounts)
 	if err != nil {
 		return err
 	}
@@ -1122,7 +1124,7 @@ func (customerDeposit *CustomerDeposit) UndoAccounting() error {
 	return nil
 }
 
-func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err error) {
+func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err error) {
 	store, err := FindStoreByID(customerDeposit.StoreID, bson.M{})
 	if err != nil {
 		return nil, err
@@ -1158,55 +1160,59 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledger *Ledger, err erro
 		return nil, err
 	}
 
-	journals := []Journal{}
+	for _, payment := range customerDeposit.Payments {
+		journals := []Journal{}
 
-	receivingAccount := Account{}
-	if customerDeposit.PaymentMethod == "cash" {
-		receivingAccount = *cashAccount
-	} else if slices.Contains(BANK_PAYMENT_METHODS, customerDeposit.PaymentMethod) {
-		receivingAccount = *bankAccount
+		receivingAccount := Account{}
+		if payment.Method == "cash" {
+			receivingAccount = *cashAccount
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
+			receivingAccount = *bankAccount
+		}
+
+		groupID := primitive.NewObjectID()
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     receivingAccount.ID,
+			AccountNumber: receivingAccount.Number,
+			AccountName:   receivingAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		ledger := &Ledger{
+			StoreID:        customerDeposit.StoreID,
+			ReferenceID:    customerDeposit.ID,
+			ReferenceModel: "customer_deposit",
+			ReferenceCode:  customerDeposit.Code,
+			Journals:       journals,
+			CreatedAt:      &now,
+			UpdatedAt:      &now,
+		}
+
+		err = ledger.Insert()
+		if err != nil {
+			return nil, err
+		}
+
+		ledgers = append(ledgers, *ledger)
 	}
 
-	groupID := primitive.NewObjectID()
-
-	journals = append(journals, Journal{
-		Date:          customerDeposit.Date,
-		AccountID:     receivingAccount.ID,
-		AccountNumber: receivingAccount.Number,
-		AccountName:   receivingAccount.Name,
-		DebitOrCredit: "debit",
-		Debit:         customerDeposit.Amount,
-		GroupID:       groupID,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
-
-	journals = append(journals, Journal{
-		Date:          customerDeposit.Date,
-		AccountID:     customerAccount.ID,
-		AccountNumber: customerAccount.Number,
-		AccountName:   customerAccount.Name,
-		DebitOrCredit: "credit",
-		Credit:        customerDeposit.Amount,
-		GroupID:       groupID,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
-
-	ledger = &Ledger{
-		StoreID:        customerDeposit.StoreID,
-		ReferenceID:    customerDeposit.ID,
-		ReferenceModel: "customer_deposit",
-		ReferenceCode:  customerDeposit.Code,
-		Journals:       journals,
-		CreatedAt:      &now,
-		UpdatedAt:      &now,
-	}
-
-	err = ledger.Insert()
-	if err != nil {
-		return nil, err
-	}
-
-	return ledger, nil
+	return ledgers, nil
 }

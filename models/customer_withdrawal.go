@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -53,6 +54,23 @@ type CustomerWithdrawal struct {
 	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	Payments        []SalesPayment      `bson:"payments" json:"payments"`
+	NetTotal        float64             `bson:"net_total" json:"net_total"`
+	PaymentMethods  []string            `json:"payment_methods" bson:"payment_methods"`
+}
+
+func (customerWithdrawal *CustomerWithdrawal) FindNetTotal() {
+	netTotal := float64(0.00)
+	paymentMethods := []string{}
+
+	for _, payment := range customerWithdrawal.Payments {
+		netTotal += *payment.Amount
+		if !slices.Contains(paymentMethods, payment.Method) {
+			paymentMethods = append(paymentMethods, payment.Method)
+		}
+	}
+	customerWithdrawal.NetTotal = netTotal
+	customerWithdrawal.PaymentMethods = paymentMethods
 }
 
 func (customerwithdrawal *CustomerWithdrawal) AttributesValueChangeEvent(customerwithdrawalOld *CustomerWithdrawal) error {
@@ -208,7 +226,31 @@ func (store *Store) SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Requ
 		} else {
 			criterias.SearchBy["amount"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[net_total]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customerwithdrawals, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_total"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_total"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[payment_method]"]
@@ -493,89 +535,22 @@ func (store *Store) SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Requ
 
 }
 
-func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldCustomerwithdrawal *CustomerWithdrawal) (errs map[string]string) {
+func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 	errs = make(map[string]string)
 
-	store, err := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		errs["store_id"] = "invalid store id"
-		return errs
-	}
-
-	if scenario == "update" {
-		if customerwithdrawal.ID.IsZero() {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = "ID is required"
-			return errs
-		}
-		exists, err := store.IsCustomerWithdrawalExists(&customerwithdrawal.ID)
+	/*
+		store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			errs["id"] = err.Error()
+			errs["store_id"] = "invalid store id"
 			return errs
-		}
+		}*/
 
-		if !exists {
-			errs["id"] = "Invalid CustomerWithdrawal:" + customerwithdrawal.ID.Hex()
-		}
-
-	}
-
-	if !govalidator.IsNull(strings.TrimSpace(customerwithdrawal.Code)) {
-		codeExists, err := customerwithdrawal.IsCodeExists()
-		if err != nil {
-			errs["code"] = err.Error()
-		}
-
-		if codeExists {
-			errs["code"] = "ID already exists."
-		}
-
-		if codeExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
-		}
-	}
-
-	if customerwithdrawal.StoreID == nil || customerwithdrawal.StoreID.IsZero() {
-		errs["store_id"] = "Store is required"
-	} else {
-		exists, err := IsStoreExists(customerwithdrawal.StoreID)
-		if err != nil {
-			errs["store_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["store_id"] = "Invalid store:" + customerwithdrawal.StoreID.Hex()
-			return errs
-		}
-	}
-
-	if customerwithdrawal.CustomerID == nil || customerwithdrawal.CustomerID.IsZero() {
+	if customerWithdrawal.CustomerID == nil || customerWithdrawal.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
-	} else {
-		exists, err := store.IsCustomerExists(customerwithdrawal.CustomerID)
-		if err != nil {
-			errs["customer_id"] = err.Error()
-			return errs
-		}
-
-		if !exists {
-			errs["customer_id"] = "Invalid Customer:" + customerwithdrawal.CustomerID.Hex()
-		}
 	}
 
-	if govalidator.IsNull(customerwithdrawal.PaymentMethod) {
-		errs["payment_method"] = "Payment method is required"
-	}
-
-	if customerwithdrawal.Amount == 0 {
-		errs["amount"] = "Amount is required"
-	}
-
-	if govalidator.IsNull(customerwithdrawal.DateStr) {
+	if govalidator.IsNull(customerWithdrawal.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
 		//const shortForm = "Jan 02 2006"
@@ -584,58 +559,44 @@ func (customerwithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		//	const shortForm = "Monday Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		//const shortForm = "Mon Jan 02 2006 15:04:05 GMT-0700 (MST)"
 		const shortForm = "2006-01-02T15:04:05Z07:00"
-		date, err := time.Parse(shortForm, customerwithdrawal.DateStr)
+		date, err := time.Parse(shortForm, customerWithdrawal.DateStr)
 		if err != nil {
 			errs["date_str"] = "Invalid date format"
 		}
-		customerwithdrawal.Date = &date
+		customerWithdrawal.Date = &date
 	}
 
-	customer, err := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		w.WriteHeader(http.StatusBadRequest)
-		errs["customer_id"] = "error finding customer: " + err.Error()
-		return errs
-	}
+	for index, payment := range customerWithdrawal.Payments {
+		if govalidator.IsNull(payment.DateStr) {
+			errs["customer_payable_payment_date_"+strconv.Itoa(index)] = "Payment date is required"
+		} else {
+			const shortForm = "2006-01-02T15:04:05Z07:00"
+			date, err := time.Parse(shortForm, payment.DateStr)
+			if err != nil {
+				errs["customer_payable_payment_date_"+strconv.Itoa(index)] = "Invalid date format"
+			}
 
-	if customer == nil {
-		errs["customer_id"] = "Customer is required"
-	}
+			customerWithdrawal.Payments[index].Date = &date
+			payment.Date = &date
 
-	if customer != nil && customer.CreditLimit > 0 {
-		if scenario != "update" && (customer.CreditBalance+customerwithdrawal.Amount) > customer.CreditLimit {
-			errs["amount"] = "Exceeding customer Credit limit " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current Credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance))
-		} else if scenario != "update" && ((customer.CreditBalance-oldCustomerwithdrawal.Amount)+customerwithdrawal.Amount) > customer.CreditLimit {
-			errs["amount"] = "Exceeding customer Credit limit " + fmt.Sprintf("%.02f", (customer.CreditLimit)) + ", Current Credit balance:" + fmt.Sprintf("%.02f", (customer.CreditBalance))
-		}
-	}
-
-	for k, imageContent := range customerwithdrawal.ImagesContent {
-		splits := strings.Split(imageContent, ",")
-		if len(splits) == 2 {
-			customerwithdrawal.ImagesContent[k] = splits[1]
-		} else if len(splits) == 1 {
-			customerwithdrawal.ImagesContent[k] = splits[0]
+			if customerWithdrawal.Date != nil && IsAfter(customerWithdrawal.Date, customerWithdrawal.Payments[index].Date) {
+				errs["customer_payable_payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to Receivable date time"
+			}
 		}
 
-		valid, err := IsStringBase64(customerwithdrawal.ImagesContent[k])
-		if err != nil {
-			errs["images_content"] = err.Error()
+		if payment.Amount == nil {
+			errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
+		} else if *payment.Amount <= 0 {
+			errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
-		if !valid {
-			errs["images_"+strconv.Itoa(k)] = "Invalid base64 string"
+		if payment.Method == "" {
+			errs["customer_payable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
-	}
+
+	} //end for
 
 	if len(errs) > 0 {
-		/*
-			err = customerwithdrawal.DoAccounting()
-			if err != nil {
-				errs["create_accounting"] = "Error creating accounting: " + err.Error()
-			}
-		*/
-
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
@@ -1045,63 +1006,80 @@ func (store *Store) IsCustomerWithdrawalExists(ID *primitive.ObjectID) (exists b
 	return (count > 0), err
 }
 
-func (store *Store) ProcessCustomerWithdrawals() error {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+func ProcessCustomerWithdrawals() error {
+	log.Printf("Processing customer withdrawals")
+	stores, err := GetAllStores()
 	if err != nil {
-		return errors.New("Error fetching customerwithdrawals" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
+		return err
 	}
 
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		model := CustomerWithdrawal{}
-		err = cur.Decode(&model)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
-		}
-
-		/*
-			store, err := FindStoreByCode("GUO", bson.M{})
-			if err != nil {
-				return errors.New("Error finding store:" + err.Error())
-			}
-			model.StoreID = &store.ID
-		*/
-
-		if model.PaymentMethod == "bank_account" {
-			model.PaymentMethod = "bank_card"
-		}
-
-		err = model.Update()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customerwithdrawal")
 		if err != nil {
 			return err
 		}
 
-	}
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
 
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching customerwithdrawals" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			model := CustomerWithdrawal{}
+			err = cur.Decode(&model)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if len(model.Payments) == 0 {
+				model.Payments = []SalesPayment{
+					SalesPayment{
+						Amount:        &model.Amount,
+						Date:          model.Date,
+						Method:        model.PaymentMethod,
+						BankReference: &model.BankReferenceNo,
+						Description:   &model.Description,
+					},
+				}
+			}
+			model.FindNetTotal()
+
+			err = model.Update()
+			if err != nil {
+				log.Print("Error updating: " + model.Code + ", err: " + err.Error())
+			}
+			bar.Add(1)
+		}
+	}
+	log.Print("DONE!")
 	return nil
 }
 
 func (customerWithdrawal *CustomerWithdrawal) DoAccounting() error {
-	ledger, err := customerWithdrawal.CreateLedger()
+	ledgers, err := customerWithdrawal.CreateLedger()
 	if err != nil {
 		return err
 	}
 
-	_, err = ledger.CreatePostings()
-	if err != nil {
-		return err
+	for _, ledger := range ledgers {
+		_, err = ledger.CreatePostings()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1113,18 +1091,18 @@ func (customerWithdrawal *CustomerWithdrawal) UndoAccounting() error {
 		return err
 	}
 
-	ledger, err := store.FindLedgerByReferenceID(customerWithdrawal.ID, *customerWithdrawal.StoreID, bson.M{})
+	ledgers, err := store.FindLedgersByReferenceID(customerWithdrawal.ID, *customerWithdrawal.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
 
-	ledgerAccounts := map[string]Account{}
-
-	if ledger != nil {
-		ledgerAccounts, err = ledger.GetRelatedAccounts()
+	var relatedLedgerAccounts map[string]Account
+	for _, ledger := range ledgers {
+		ledgerAccounts, err := ledger.GetRelatedAccounts()
 		if err != nil {
 			return err
 		}
+		relatedLedgerAccounts = MergeAccountMaps(relatedLedgerAccounts, ledgerAccounts)
 	}
 
 	err = store.RemoveLedgerByReferenceID(customerWithdrawal.ID)
@@ -1137,7 +1115,7 @@ func (customerWithdrawal *CustomerWithdrawal) UndoAccounting() error {
 		return err
 	}
 
-	err = SetAccountBalances(ledgerAccounts)
+	err = SetAccountBalances(relatedLedgerAccounts)
 	if err != nil {
 		return err
 	}
@@ -1145,7 +1123,7 @@ func (customerWithdrawal *CustomerWithdrawal) UndoAccounting() error {
 	return nil
 }
 
-func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, err error) {
+func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, err error) {
 	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
 	if err != nil {
 		return nil, err
@@ -1181,55 +1159,59 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledger *Ledger, er
 		return nil, err
 	}
 
-	journals := []Journal{}
+	for _, payment := range customerWithdrawal.Payments {
+		journals := []Journal{}
 
-	spendingAccount := Account{}
-	if customerWithdrawal.PaymentMethod == "cash" {
-		spendingAccount = *cashAccount
-	} else if slices.Contains(BANK_PAYMENT_METHODS, customerWithdrawal.PaymentMethod) {
-		spendingAccount = *bankAccount
+		spendingAccount := Account{}
+		if payment.Method == "cash" {
+			spendingAccount = *cashAccount
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
+			spendingAccount = *bankAccount
+		}
+
+		groupID := primitive.NewObjectID()
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     spendingAccount.ID,
+			AccountNumber: spendingAccount.Number,
+			AccountName:   spendingAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		ledger := &Ledger{
+			StoreID:        customerWithdrawal.StoreID,
+			ReferenceID:    customerWithdrawal.ID,
+			ReferenceModel: "customer_withdrawal",
+			ReferenceCode:  customerWithdrawal.Code,
+			Journals:       journals,
+			CreatedAt:      &now,
+			UpdatedAt:      &now,
+		}
+
+		err = ledger.Insert()
+		if err != nil {
+			return nil, err
+		}
+
+		ledgers = append(ledgers, *ledger)
 	}
 
-	groupID := primitive.NewObjectID()
-
-	journals = append(journals, Journal{
-		Date:          customerWithdrawal.Date,
-		AccountID:     customerAccount.ID,
-		AccountNumber: customerAccount.Number,
-		AccountName:   customerAccount.Name,
-		DebitOrCredit: "debit",
-		Debit:         customerWithdrawal.Amount,
-		GroupID:       groupID,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
-
-	journals = append(journals, Journal{
-		Date:          customerWithdrawal.Date,
-		AccountID:     spendingAccount.ID,
-		AccountNumber: spendingAccount.Number,
-		AccountName:   spendingAccount.Name,
-		DebitOrCredit: "credit",
-		Credit:        customerWithdrawal.Amount,
-		GroupID:       groupID,
-		CreatedAt:     &now,
-		UpdatedAt:     &now,
-	})
-
-	ledger = &Ledger{
-		StoreID:        customerWithdrawal.StoreID,
-		ReferenceID:    customerWithdrawal.ID,
-		ReferenceModel: "customer_withdrawal",
-		ReferenceCode:  customerWithdrawal.Code,
-		Journals:       journals,
-		CreatedAt:      &now,
-		UpdatedAt:      &now,
-	}
-
-	err = ledger.Insert()
-	if err != nil {
-		return nil, err
-	}
-
-	return ledger, nil
+	return ledgers, nil
 }

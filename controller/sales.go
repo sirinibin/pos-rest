@@ -144,6 +144,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	//log.Print("order.SkipZatcaReporting:")
 	//log.Print(order.SkipZatcaReporting)
 	// Validate data
+	order.FindNetTotal()
+
 	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -152,7 +154,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.FindNetTotal()
 	order.FindTotalQuantity()
 
 	err = order.UpdateForeignLabelFields()
@@ -403,6 +404,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.UpdatedBy = &userID
 	now := time.Now()
 	order.UpdatedAt = &now
+	order.FindNetTotal()
 
 	// Validate data
 	if errs := order.Validate(w, r, "update", orderOld); len(errs) > 0 {
@@ -413,7 +415,6 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order.FindNetTotal()
 	order.FindTotalQuantity()
 	order.UpdateForeignLabelFields()
 	order.CalculateOrderProfit()

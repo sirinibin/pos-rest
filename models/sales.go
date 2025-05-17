@@ -420,7 +420,6 @@ func (order *Order) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
 	for i, product := range order.Products {
-
 		if product.UnitPriceWithVAT > 0 {
 			order.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*order.VatPercent / 100)))
 		} else if product.UnitPrice > 0 {
@@ -440,6 +439,7 @@ func (order *Order) FindTotal() {
 		}
 
 		total += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+		//totalWithVAT = RoundTo2Decimals(total * (1 + (*order.VatPercent / 100)))
 		totalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
 	}
 

@@ -136,6 +136,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	salesreturn.CreatedAt = &now
 	salesreturn.UpdatedAt = &now
+	salesreturn.FindNetTotal()
 
 	// Validate data
 	if errs := salesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
@@ -146,7 +147,6 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.FindNetTotal()
 	salesreturn.FindTotalQuantity()
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()
@@ -344,6 +344,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.UpdatedBy = &userID
 	now := time.Now()
 	salesreturn.UpdatedAt = &now
+	salesreturn.FindNetTotal()
 
 	// Validate data
 	if errs := salesreturn.Validate(w, r, "update", salesreturnOld); len(errs) > 0 {
@@ -354,7 +355,6 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.FindNetTotal()
 	salesreturn.FindTotalQuantity()
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()

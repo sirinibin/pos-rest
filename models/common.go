@@ -54,13 +54,27 @@ func RoundDecimal(val float64) float64 {
 }
 
 func RoundTo2Decimals(num float64) float64 {
-	//return RoundDecimal(num)
 	return math.Round(num*100) / 100
-	//return math.Trunc((num+1e-9)*100) / 100
-	/*strValue := fmt.Sprintf("%.2f", num)
-	trimmedValue, _ := strconv.ParseFloat(strValue, 64)
-	return trimmedValue*/
 }
+
+/*
+func RoundTo2Decimals(num float64) float64 {
+	d := decimal.NewFromFloat(num).Round(2)
+	result, _ := d.Float64()
+	return result
+}*/
+
+func RoundTo3Decimals(num float64) float64 {
+	d := decimal.NewFromFloat(num).Round(3)
+	result, _ := d.Float64()
+	return result
+}
+
+//return RoundDecimal(num)
+//return math.Trunc((num+1e-9)*100) / 100
+/*strValue := fmt.Sprintf("%.2f", num)
+trimmedValue, _ := strconv.ParseFloat(strValue, 64)
+return trimmedValue*/
 
 // Just trim to 2 decimal places
 func ToFixed2(num float64, precision int) float64 {
@@ -188,6 +202,22 @@ func ParseSelectString(selectStr string) (fields map[string]interface{}) {
 
 func MergeMaps(map1, map2 map[string]interface{}) map[string]interface{} {
 	merged := make(map[string]interface{})
+
+	// Copy all from map1
+	for k, v := range map1 {
+		merged[k] = v
+	}
+
+	// Copy all from map2 (overwrites if key already exists)
+	for k, v := range map2 {
+		merged[k] = v
+	}
+
+	return merged
+}
+
+func MergeAccountMaps(map1, map2 map[string]Account) map[string]Account {
+	merged := make(map[string]Account)
 
 	// Copy all from map1
 	for k, v := range map1 {

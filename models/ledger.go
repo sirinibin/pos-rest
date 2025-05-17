@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -360,10 +361,34 @@ func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models
 
 }
 
+func (ledger *Ledger) GetRelatedAccounts() (map[string]Account, error) {
+	store, err := FindStoreByID(ledger.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := map[string]Account{}
+	for _, journal := range ledger.Journals {
+		if journal.AccountID.IsZero() {
+			continue
+		}
+
+		account, err := store.FindAccountByID(journal.AccountID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+
+		if account != nil && !account.ID.IsZero() {
+			accounts[account.ID.Hex()] = *account
+		}
+	}
+	return accounts, nil
+}
+
 func (store *Store) RemoveLedgerByReferenceID(referenceID primitive.ObjectID) error {
 	ctx := context.Background()
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("ledger")
-	_, err := collection.DeleteOne(ctx, bson.M{
+	_, err := collection.DeleteMany(ctx, bson.M{
 		"reference_id": referenceID,
 	})
 	if err != nil {
@@ -412,6 +437,45 @@ func (ledger *Ledger) Update() error {
 	}
 
 	return nil
+}
+
+func (store *Store) FindLedgersByReferenceID(
+	referenceID primitive.ObjectID,
+	storeID primitive.ObjectID,
+	selectFields map[string]interface{},
+) (ledgers []Ledger, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("ledger")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{
+		"reference_id": referenceID,
+		"store_id":     store.ID,
+	}, findOptions)
+	if err != nil {
+		return ledgers, errors.New("Error fetching ledgers:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return ledgers, errors.New("Cursor error:" + err.Error())
+		}
+		ledger := Ledger{}
+		err = cur.Decode(&ledger)
+		if err != nil {
+			return ledgers, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		ledgers = append(ledgers, ledger)
+	}
+
+	return ledgers, nil
 }
 
 func (store *Store) FindLedgerByReferenceID(

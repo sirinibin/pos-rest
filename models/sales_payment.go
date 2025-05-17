@@ -27,6 +27,8 @@ type SalesPayment struct {
 	OrderCode     string              `json:"order_code" bson:"order_code"`
 	Amount        *float64            `json:"amount" bson:"amount"`
 	Method        string              `json:"method" bson:"method"`
+	BankReference *string             `json:"bank_reference" bson:"bank_reference"`
+	Description   *string             `json:"description" bson:"description"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`

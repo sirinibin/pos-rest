@@ -148,6 +148,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	quotation.CreatedAt = &now
 	quotation.UpdatedAt = &now
+	quotation.FindNetTotal()
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "create"); len(errs) > 0 {
@@ -159,7 +160,6 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.FindNetTotal()
 	//quotation.FindTotal()
 	quotation.FindTotalQuantity()
 	//	quotation.FindVatPrice()
@@ -324,6 +324,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.UpdatedBy = &userID
 	now := time.Now()
 	quotation.UpdatedAt = &now
+	quotation.FindNetTotal()
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "update"); len(errs) > 0 {
@@ -334,7 +335,6 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.FindNetTotal()
 	quotation.FindTotalQuantity()
 	quotation.CalculateQuotationProfit()
 

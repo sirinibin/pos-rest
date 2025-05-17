@@ -111,6 +111,7 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	customerdeposit.CreatedAt = &now
 	customerdeposit.UpdatedAt = &now
+	customerdeposit.FindNetTotal()
 
 	// Validate data
 	if errs := customerdeposit.Validate(w, r, "create"); len(errs) > 0 {
@@ -223,6 +224,7 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	customerdeposit.UpdatedBy = &userID
 	now := time.Now()
 	customerdeposit.UpdatedAt = &now
+	customerdeposit.FindNetTotal()
 
 	// Validate data
 	if errs := customerdeposit.Validate(w, r, "update"); len(errs) > 0 {

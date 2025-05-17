@@ -138,6 +138,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	purchase.CreatedAt = &now
 	purchase.UpdatedAt = &now
+	purchase.FindNetTotal()
 
 	// Validate data
 	if errs := purchase.Validate(w, r, "create", nil); len(errs) > 0 {
@@ -148,7 +149,6 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase.FindNetTotal()
 	purchase.FindTotalQuantity()
 	purchase.UpdateForeignLabelFields()
 	purchase.MakeCode()
@@ -296,6 +296,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.UpdatedBy = &userID
 	now := time.Now()
 	purchase.UpdatedAt = &now
+	purchase.FindNetTotal()
 
 	// Validate data
 	if errs := purchase.Validate(w, r, "update", purchaseOld); len(errs) > 0 {
@@ -306,7 +307,6 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase.FindNetTotal()
 	purchase.FindTotalQuantity()
 	purchase.UpdateForeignLabelFields()
 	purchase.CalculatePurchaseExpectedProfit()

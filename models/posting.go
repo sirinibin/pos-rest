@@ -11,7 +11,6 @@ import (
 
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -751,30 +750,6 @@ func (store *Store) RemovePostingsByReferenceID(referenceID primitive.ObjectID) 
 	}
 
 	return nil
-}
-
-func (ledger *Ledger) GetRelatedAccounts() (map[string]Account, error) {
-	store, err := FindStoreByID(ledger.StoreID, bson.M{})
-	if err != nil {
-		return nil, err
-	}
-
-	accounts := map[string]Account{}
-	for _, journal := range ledger.Journals {
-		if journal.AccountID.IsZero() {
-			continue
-		}
-
-		account, err := store.FindAccountByID(journal.AccountID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			return nil, err
-		}
-
-		if account != nil && !account.ID.IsZero() {
-			accounts[account.ID.Hex()] = *account
-		}
-	}
-	return accounts, nil
 }
 
 func IsAccountExistsInPosts(accountID primitive.ObjectID, posts []Post) bool {
