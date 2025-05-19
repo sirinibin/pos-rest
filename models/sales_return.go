@@ -118,6 +118,75 @@ type SalesReturn struct {
 	EnableReportToZatca bool                 `json:"enable_report_to_zatca" bson:"-"`
 }
 
+func (salesReturn *SalesReturn) DeletePaymentsByPayablePaymentID(payablePaymentID primitive.ObjectID) error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"payable_payment_id": payablePaymentID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (salesReturn *SalesReturn) UpdatePaymentFromPayablePayment(
+	payablePayment PayablePayment,
+	customerWithdrawal *CustomerWithdrawal,
+) error {
+	store, _ := FindStoreByID(salesReturn.StoreID, bson.M{})
+
+	paymentExists := false
+	for _, salesReturnPayment := range salesReturn.Payments {
+		if salesReturnPayment.PayablePaymentID.Hex() == payablePayment.ID.Hex() {
+			paymentExists = true
+			salesReturnPaymentObj, err := store.FindSalesReturnPaymentByID(&salesReturnPayment.ID, bson.M{})
+			if err != nil {
+				return errors.New("error finding sales payment: " + err.Error())
+			}
+
+			salesReturnPaymentObj.Amount = payablePayment.Amount
+			salesReturnPaymentObj.Date = payablePayment.Date
+			salesReturnPaymentObj.Method = "customer_account"
+			salesReturnPaymentObj.UpdatedAt = payablePayment.UpdatedAt
+			salesReturnPaymentObj.CreatedAt = payablePayment.CreatedAt
+			salesReturnPaymentObj.UpdatedBy = payablePayment.UpdatedBy
+			salesReturnPaymentObj.CreatedBy = payablePayment.CreatedBy
+			salesReturnPaymentObj.PayableID = &customerWithdrawal.ID
+
+			err = salesReturnPaymentObj.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	if !paymentExists {
+		newSalesReturnPayment := SalesReturnPayment{
+			SalesReturnID:    &salesReturn.ID,
+			SalesReturnCode:  salesReturn.Code,
+			OrderID:          salesReturn.OrderID,
+			OrderCode:        salesReturn.OrderCode,
+			Amount:           payablePayment.Amount,
+			Date:             payablePayment.Date,
+			Method:           "customer_account",
+			PayablePaymentID: &payablePayment.ID,
+			PayableID:        &customerWithdrawal.ID,
+			CreatedBy:        payablePayment.CreatedBy,
+			UpdatedBy:        payablePayment.UpdatedBy,
+			CreatedAt:        payablePayment.CreatedAt,
+			UpdatedAt:        payablePayment.UpdatedAt,
+			StoreID:          salesReturn.StoreID,
+		}
+		err := newSalesReturnPayment.Insert()
+		if err != nil {
+			return errors.New("error inserting sales payment: " + err.Error())
+		}
+	}
+
+	return nil
+}
+
 func (salesReturn *SalesReturn) AddPayments() error {
 	for _, payment := range salesReturn.PaymentsInput {
 		salesReturnPayment := SalesReturnPayment{
@@ -151,7 +220,7 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 		return err
 	}
 
-	salesReturn.GetPayments()
+	salesReturn.SetPaymentStatus()
 	now := time.Now()
 	for _, payment := range salesReturn.PaymentsInput {
 		if payment.ID.IsZero() {
@@ -2403,7 +2472,7 @@ func ProcessSalesReturns() error {
 	return nil
 }
 
-func (salesReturn *SalesReturn) GetPayments() (payments []SalesReturnPayment, err error) {
+func (salesReturn *SalesReturn) SetPaymentStatus() (payments []SalesReturnPayment, err error) {
 	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
 	ctx := context.Background()
 	findOptions := options.Find()

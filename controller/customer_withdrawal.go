@@ -28,6 +28,7 @@ func ListCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	customerwithdrawals := []models.CustomerWithdrawal{}
+
 	store, err := ParseStore(r)
 	if err != nil {
 		response.Status = false
@@ -46,7 +47,6 @@ func ListCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Criterias = criterias
-
 	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "customerwithdrawal")
 	if err != nil {
 		response.Status = false
@@ -112,9 +112,15 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	customerwithdrawal.CreatedAt = &now
 	customerwithdrawal.UpdatedAt = &now
 	customerwithdrawal.FindNetTotal()
+	for i, _ := range customerwithdrawal.Payments {
+		customerwithdrawal.Payments[i].CreatedAt = &now
+		customerwithdrawal.Payments[i].CreatedBy = &userID
+		customerwithdrawal.Payments[i].UpdatedAt = &now
+		customerwithdrawal.Payments[i].UpdatedBy = &userID
+	}
 
 	// Validate data
-	if errs := customerwithdrawal.Validate(w, r, "create"); len(errs) > 0 {
+	if errs := customerwithdrawal.Validate(w, r, "create", nil); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -135,7 +141,7 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	err = customerwithdrawal.DoAccounting()
 	if err != nil {
 		response.Status = false
-		response.Errors["do_accounting"] = "Error doing accounting: " + err.Error()
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -148,6 +154,14 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 				customer.SetCreditBalance()
 			}
 		}
+	}
+
+	err = customerwithdrawal.CloseSalesPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	response.Status = true
@@ -225,9 +239,15 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	customerwithdrawal.UpdatedAt = &now
 	customerwithdrawal.FindNetTotal()
+	for i, _ := range customerwithdrawal.Payments {
+		customerwithdrawal.Payments[i].CreatedAt = &now
+		customerwithdrawal.Payments[i].CreatedBy = &userID
+		customerwithdrawal.Payments[i].UpdatedAt = &now
+		customerwithdrawal.Payments[i].UpdatedBy = &userID
+	}
 
 	// Validate data
-	if errs := customerwithdrawal.Validate(w, r, "update"); len(errs) > 0 {
+	if errs := customerwithdrawal.Validate(w, r, "update", customerwithdrawalOld); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -275,16 +295,18 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	err = customerwithdrawal.DoAccounting()
 	if err != nil {
 		response.Status = false
-		response.Errors["do_accounting"] = "Error doing accounting: " + err.Error()
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
-		customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
-		if customer != nil {
-			customer.SetCreditBalance()
+		if store != nil {
+			customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+			if customer != nil {
+				customer.SetCreditBalance()
+			}
 		}
 	}
 
@@ -296,6 +318,22 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 				customer.SetCreditBalance()
 			}
 		}
+	}
+
+	err = customerwithdrawal.HandleDeletedPayments(customerwithdrawalOld)
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_sales"] = "error deleting sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerwithdrawal.CloseSalesPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	response.Status = true

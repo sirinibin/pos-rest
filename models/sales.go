@@ -1288,7 +1288,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	totalAmountFromCustomerAccount := 0.00
+	//totalAmountFromCustomerAccount := 0.00
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "Invalid customer"
@@ -1421,7 +1421,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			}
 		}*/
 
-	var customerAccount *Account
+	//var customerAccount *Account
 
 	//validation
 	if customer != nil && customer.CreditLimit > 0 {
@@ -1481,20 +1481,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 			}
 
-			/*
-				maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
-
-				if maxAllowedAmount < 0 {
-					maxAllowedAmount = 0
-				}
-
-				if maxAllowedAmount == 0 {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
-				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-				}
-			*/
-
 		}
 
 		if payment.Method == "customer_account" && customer == nil {
@@ -1553,7 +1539,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	} //end for
 
-	if totalAmountFromCustomerAccount > 0 {
+	/*if totalAmountFromCustomerAccount > 0 {
 		if customer != nil && customerAccount != nil {
 			if scenario == "update" {
 				oldTotalAmountFromCustomerAccount := 0.0
@@ -1593,7 +1579,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		} else {
 			errs["customer_id"] = "customer account balance is zero"
 		}
-	}
+	}*/
 
 	if scenario == "update" {
 		if order.ID.IsZero() {

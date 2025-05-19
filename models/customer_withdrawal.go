@@ -24,12 +24,12 @@ import (
 // CustomerWithdrawal : CustomerWithdrawal structure
 type CustomerWithdrawal struct {
 	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Code            string              `bson:"code,omitempty" json:"code,omitempty"`
+	Code            string              `bson:"code" json:"code"`
 	Amount          float64             `bson:"amount" json:"amount"`
 	Description     string              `bson:"description" json:"description"`
 	Remarks         string              `bson:"remarks" json:"remarks"`
 	BankReferenceNo string              `bson:"bank_reference_no" json:"bank_reference_no"`
-	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	Date            *time.Time          `bson:"date" json:"date"`
 	DateStr         string              `json:"date_str,omitempty" bson:"-"`
 	CustomerID      *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	Customer        *Customer           `json:"customer" bson:"-"`
@@ -54,50 +54,148 @@ type CustomerWithdrawal struct {
 	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	Payments        []SalesPayment      `bson:"payments" json:"payments"`
+	Payments        []PayablePayment    `bson:"payments" json:"payments"`
 	NetTotal        float64             `bson:"net_total" json:"net_total"`
 	PaymentMethods  []string            `json:"payment_methods" bson:"payment_methods"`
 }
 
-func (customerWithdrawal *CustomerWithdrawal) FindNetTotal() {
+type PayablePayment struct {
+	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr       string              `json:"date_str,omitempty" bson:"-"`
+	Amount        *float64            `json:"amount" bson:"amount"`
+	Method        string              `json:"method" bson:"method"`
+	BankReference *string             `json:"bank_reference" bson:"bank_reference"`
+	Description   *string             `json:"description" bson:"description"`
+	InvoiceID     *primitive.ObjectID `json:"invoice_id" bson:"invoice_id"`
+	InvoiceCode   *string             `json:"invoice_code" bson:"invoice_code"`
+	InvoiceType   *string             `json:"invoice_type" bson:"invoice_type"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	StoreID       *primitive.ObjectID `json:"store_id" bson:"store_id"`
+	StoreName     string              `json:"store_name" bson:"store_name"`
+}
+
+func (customerwithdrawal *CustomerWithdrawal) HandleDeletedPayments(customerwithdrawalOld *CustomerWithdrawal) error {
+	store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+
+	for _, oldPayment := range customerwithdrawalOld.Payments {
+		found := false
+		deleteSalesPayment := false
+		for _, payment := range customerwithdrawal.Payments {
+			if payment.ID.Hex() == oldPayment.ID.Hex() {
+				found = true
+				if (payment.InvoiceID == nil || payment.InvoiceID.IsZero()) && (oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero()) {
+					deleteSalesPayment = true
+				}
+				break
+			}
+		} //end for2
+
+		if !found || deleteSalesPayment {
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() {
+				salesreturn, err := store.FindSalesReturnByID(oldPayment.InvoiceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = salesreturn.DeletePaymentsByPayablePaymentID(oldPayment.ID)
+				if err != nil {
+					return err
+				}
+
+				_, err = salesreturn.SetPaymentStatus()
+				if err != nil {
+					return err
+				}
+
+				err = salesreturn.Update()
+				if err != nil {
+					return err
+				}
+
+				err = salesreturn.UndoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = salesreturn.DoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = salesreturn.SetCustomerSalesReturnStats()
+				if err != nil {
+					return err
+				}
+
+			}
+		}
+	} //end for1
+	return nil
+}
+
+func (customerwithdrawal *CustomerWithdrawal) CloseSalesPayments() error {
+	store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+
+	for _, payablePayment := range customerwithdrawal.Payments {
+		if payablePayment.InvoiceID != nil && !payablePayment.InvoiceID.IsZero() {
+			salesreturn, _ := store.FindSalesReturnByID(payablePayment.InvoiceID, bson.M{})
+			err := salesreturn.UpdatePaymentFromPayablePayment(payablePayment, customerwithdrawal)
+			if err != nil {
+				return errors.New("error updating sales payment from payable payment: " + err.Error())
+			}
+
+			_, err = salesreturn.SetPaymentStatus()
+			if err != nil {
+				return errors.New("error setting payment status: " + err.Error())
+			}
+
+			err = salesreturn.Update()
+			if err != nil {
+				return errors.New("error updating salesreturn inside payment status: " + err.Error())
+			}
+
+			err = salesreturn.SetCustomerSalesReturnStats()
+			if err != nil {
+				return err
+			}
+
+			err = salesreturn.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = salesreturn.DoAccounting()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (customerwithdrawal *CustomerWithdrawal) FindNetTotal() {
 	netTotal := float64(0.00)
 	paymentMethods := []string{}
 
-	for _, payment := range customerWithdrawal.Payments {
+	for _, payment := range customerwithdrawal.Payments {
 		netTotal += *payment.Amount
+
 		if !slices.Contains(paymentMethods, payment.Method) {
 			paymentMethods = append(paymentMethods, payment.Method)
 		}
 	}
-	customerWithdrawal.NetTotal = netTotal
-	customerWithdrawal.PaymentMethods = paymentMethods
+	customerwithdrawal.NetTotal = netTotal
+	customerwithdrawal.PaymentMethods = paymentMethods
 }
 
 func (customerwithdrawal *CustomerWithdrawal) AttributesValueChangeEvent(customerwithdrawalOld *CustomerWithdrawal) error {
 
 	return nil
-}
-
-func (model *CustomerWithdrawal) IsCodeExists() (exists bool, err error) {
-	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("customerwithdrawal")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	count := int64(0)
-
-	if model.ID.IsZero() {
-		count, err = collection.CountDocuments(ctx, bson.M{
-			"code":     model.Code,
-			"store_id": model.StoreID,
-		})
-	} else {
-		count, err = collection.CountDocuments(ctx, bson.M{
-			"code":     model.Code,
-			"store_id": model.StoreID,
-			"_id":      bson.M{"$ne": model.ID},
-		})
-	}
-
-	return (count > 0), err
 }
 
 func (customerwithdrawal *CustomerWithdrawal) UpdateForeignLabelFields() error {
@@ -159,7 +257,6 @@ type CustomerWithdrawalStats struct {
 
 func (store *Store) GetCustomerWithdrawalStats(filter map[string]interface{}) (stats CustomerWithdrawalStats, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -535,16 +632,15 @@ func (store *Store) SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Requ
 
 }
 
-func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r *http.Request, scenario string, customerWithdrawalOld *CustomerWithdrawal) (errs map[string]string) {
 	errs = make(map[string]string)
 
-	/*
-		store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["store_id"] = "invalid store id"
-			return errs
-		}*/
+	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if customerWithdrawal.CustomerID == nil || customerWithdrawal.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
@@ -567,6 +663,10 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 	}
 
 	for index, payment := range customerWithdrawal.Payments {
+		if payment.ID.IsZero() {
+			customerWithdrawal.Payments[index].ID = primitive.NewObjectID()
+		}
+
 		if govalidator.IsNull(payment.DateStr) {
 			errs["customer_payable_payment_date_"+strconv.Itoa(index)] = "Payment date is required"
 		} else {
@@ -580,7 +680,7 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			payment.Date = &date
 
 			if customerWithdrawal.Date != nil && IsAfter(customerWithdrawal.Date, customerWithdrawal.Payments[index].Date) {
-				errs["customer_payable_payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to Receivable date time"
+				errs["customer_payable_payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to Payable date time"
 			}
 		}
 
@@ -594,6 +694,44 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			errs["customer_payable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() {
+			salesreturn, err := store.FindSalesReturnByID(payment.InvoiceID, bson.M{})
+			if err != nil {
+				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+			}
+
+			salesreturnBalanceAmount := salesreturn.BalanceAmount
+
+			if scenario == "update" {
+				oldTotalInvoicePaidAmount := float64(0.00)
+				for _, oldPayment := range customerWithdrawalOld.Payments {
+					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == salesreturn.ID.Hex() {
+						oldTotalInvoicePaidAmount += *oldPayment.Amount
+					}
+				}
+				salesreturnBalanceAmount += oldTotalInvoicePaidAmount
+			}
+
+			if *payment.Amount > salesreturnBalanceAmount {
+				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", salesreturn.BalanceAmount) + " (Invoice Balance)"
+			}
+
+			totalInvoicePaidAmount := float64(0.00)
+			for index2, payment2 := range customerWithdrawal.Payments {
+				if payment2.InvoiceID != nil && !payment2.InvoiceID.IsZero() && payment2.InvoiceID.Hex() == salesreturn.ID.Hex() {
+					if (salesreturnBalanceAmount - totalInvoicePaidAmount) == 0 {
+						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
+						break
+					} else if (totalInvoicePaidAmount + *payment2.Amount) > salesreturnBalanceAmount {
+						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (salesreturnBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
+						break
+					}
+					totalInvoicePaidAmount += *payment2.Amount
+				}
+			}
+
+		}
+
 	} //end for
 
 	if len(errs) > 0 {
@@ -601,6 +739,28 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 	}
 
 	return errs
+}
+
+func (model *CustomerWithdrawal) IsCodeExists() (exists bool, err error) {
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("customerwithdrawal")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	count := int64(0)
+
+	if model.ID.IsZero() {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code":     model.Code,
+			"store_id": model.StoreID,
+		})
+	} else {
+		count, err = collection.CountDocuments(ctx, bson.M{
+			"code":     model.Code,
+			"store_id": model.StoreID,
+			"_id":      bson.M{"$ne": model.ID},
+		})
+	}
+
+	return (count > 0), err
 }
 
 func (store *Store) FindLastCustomerWithdrawal(
@@ -645,9 +805,7 @@ func (store *Store) FindLastCustomerWithdrawalByStoreID(
 	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
 
 	err = collection.FindOne(ctx,
-		bson.M{
-			"store_id": store.ID,
-		}, findOneOptions).
+		bson.M{"store_id": storeID}, findOneOptions).
 		Decode(&customerwithdrawal)
 	if err != nil {
 		return nil, err
@@ -657,7 +815,7 @@ func (store *Store) FindLastCustomerWithdrawalByStoreID(
 }
 
 func (store *Store) GetCustomerWithdrawalCount() (count int64, err error) {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerdeposit")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -723,6 +881,7 @@ func (model *CustomerWithdrawal) MakeCode() error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -737,6 +896,7 @@ func (customerwithdrawal *CustomerWithdrawal) MakeCode() error {
 	if err != nil && mongo.ErrNoDocuments != err {
 		return err
 	}
+
 	if lastCustomerWithdrawal == nil {
 		store, err := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
 		if err != nil {
@@ -779,8 +939,7 @@ func (customerwithdrawal *CustomerWithdrawal) MakeCode() error {
 	}
 
 	return nil
-}
-*/
+}*/
 
 func (customerwithdrawal *CustomerWithdrawal) Insert() (err error) {
 	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
@@ -1012,8 +1171,8 @@ func ProcessCustomerWithdrawals() error {
 	if err != nil {
 		return err
 	}
-
 	for _, store := range stores {
+		log.Print("Store: " + store.Name)
 		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customerwithdrawal")
 		if err != nil {
 			return err
@@ -1025,6 +1184,7 @@ func ProcessCustomerWithdrawals() error {
 		findOptions.SetNoCursorTimeout(true)
 		findOptions.SetAllowDiskUse(true)
 
+		bar := progressbar.Default(totalCount)
 		cur, err := collection.Find(ctx, bson.M{}, findOptions)
 		if err != nil {
 			return errors.New("Error fetching customerwithdrawals" + err.Error())
@@ -1033,7 +1193,6 @@ func ProcessCustomerWithdrawals() error {
 			defer cur.Close(ctx)
 		}
 
-		bar := progressbar.Default(totalCount)
 		for i := 0; cur != nil && cur.Next(ctx); i++ {
 			err := cur.Err()
 			if err != nil {
@@ -1046,8 +1205,8 @@ func ProcessCustomerWithdrawals() error {
 			}
 
 			if len(model.Payments) == 0 {
-				model.Payments = []SalesPayment{
-					SalesPayment{
+				model.Payments = []PayablePayment{
+					PayablePayment{
 						Amount:        &model.Amount,
 						Date:          model.Date,
 						Method:        model.PaymentMethod,
@@ -1056,11 +1215,13 @@ func ProcessCustomerWithdrawals() error {
 					},
 				}
 			}
+
 			model.FindNetTotal()
 
 			err = model.Update()
 			if err != nil {
 				log.Print("Error updating: " + model.Code + ", err: " + err.Error())
+				//return err
 			}
 			bar.Add(1)
 		}
@@ -1215,3 +1376,97 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 
 	return ledgers, nil
 }
+
+/*
+func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, err error) {
+	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+
+	customer, err := store.FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "customer"
+	customerAccount, err := store.CreateAccountIfNotExists(
+		customerWithdrawal.StoreID,
+		&customer.ID,
+		&referenceModel,
+		customer.Name,
+		&customer.Phone,
+		&customer.VATNo,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Bank", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, payment := range customerWithdrawal.Payments {
+		journals := []Journal{}
+
+		receivingAccount := Account{}
+		if payment.Method == "cash" {
+			receivingAccount = *cashAccount
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
+			receivingAccount = *bankAccount
+		}
+
+		groupID := primitive.NewObjectID()
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     receivingAccount.ID,
+			AccountNumber: receivingAccount.Number,
+			AccountName:   receivingAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		ledger := &Ledger{
+			StoreID:        customerWithdrawal.StoreID,
+			ReferenceID:    customerWithdrawal.ID,
+			ReferenceModel: "customer_withdrawal",
+			ReferenceCode:  customerWithdrawal.Code,
+			Journals:       journals,
+			CreatedAt:      &now,
+			UpdatedAt:      &now,
+		}
+
+		err = ledger.Insert()
+		if err != nil {
+			return nil, err
+		}
+
+		ledgers = append(ledgers, *ledger)
+	}
+
+	return ledgers, nil
+}*/

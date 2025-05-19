@@ -709,7 +709,6 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 						oldTotalInvoicePaidAmount += *oldPayment.Amount
 					}
 				}
-
 				orderBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
@@ -719,7 +718,7 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 
 			totalInvoicePaidAmount := float64(0.00)
 			for index2, payment2 := range customerDeposit.Payments {
-				if payment2.InvoiceID.Hex() == order.ID.Hex() {
+				if payment2.InvoiceID != nil && !payment2.InvoiceID.IsZero() && payment2.InvoiceID.Hex() == order.ID.Hex() {
 					if (orderBalanceAmount - totalInvoicePaidAmount) == 0 {
 						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
 						break

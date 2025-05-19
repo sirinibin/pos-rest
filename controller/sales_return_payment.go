@@ -139,7 +139,7 @@ func CreateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating salesReturn.payments
 	salesReturn, _ := store.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
-	salesReturn.GetPayments()
+	salesReturn.SetPaymentStatus()
 	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
 
@@ -253,7 +253,7 @@ func UpdateSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating salesReturn.payments
 	salesReturn, _ := store.FindSalesReturnByID(salesreturnpayment.SalesReturnID, map[string]interface{}{})
-	salesReturn.GetPayments()
+	salesReturn.SetPaymentStatus()
 	salesReturn.SetCustomerSalesReturnStats()
 	salesReturn.Update()
 
@@ -412,7 +412,7 @@ func DeleteSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	//Updating salesReturn.payments
 	if salesReturnPayment.SalesReturnID != nil {
 		salesReturn, _ := store.FindSalesReturnByID(salesReturnPayment.SalesReturnID, map[string]interface{}{})
-		salesReturn.GetPayments()
+		salesReturn.SetPaymentStatus()
 		salesReturn.SetCustomerSalesReturnStats()
 		salesReturn.Update()
 	}

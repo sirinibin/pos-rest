@@ -219,7 +219,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.GetPayments()
+	salesreturn.SetPaymentStatus()
 	salesreturn.Update()
 
 	err = salesreturn.AddStock()
@@ -406,7 +406,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.GetPayments()
+	salesreturn.SetPaymentStatus()
 	salesreturn.Update()
 
 	err = salesreturnOld.RemoveStock()
