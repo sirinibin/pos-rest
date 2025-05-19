@@ -133,6 +133,61 @@ type ZatcaReporting struct {
 	ReportingLastFailedAt              *time.Time `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
 }
 
+func (order *Order) UpdatePaymentFromReceivablePayment(
+	receivablePayment ReceivablePayment,
+	customerDeposit *CustomerDeposit,
+) error {
+	store, _ := FindStoreByID(order.StoreID, bson.M{})
+
+	paymentExists := false
+	for _, orderPayment := range order.Payments {
+		if orderPayment.ReceivablePaymentID.Hex() == receivablePayment.ID.Hex() {
+			paymentExists = true
+			salesPayment, err := store.FindSalesPaymentByID(&orderPayment.ID, bson.M{})
+			if err != nil {
+				return errors.New("error finding sales payment: " + err.Error())
+			}
+
+			salesPayment.Amount = receivablePayment.Amount
+			salesPayment.Date = receivablePayment.Date
+			salesPayment.UpdatedAt = receivablePayment.UpdatedAt
+			salesPayment.CreatedAt = receivablePayment.CreatedAt
+			salesPayment.UpdatedBy = receivablePayment.UpdatedBy
+			salesPayment.CreatedBy = receivablePayment.CreatedBy
+			salesPayment.ReceivableID = &customerDeposit.ID
+
+			err = salesPayment.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	if !paymentExists {
+		newSalesPayment := SalesPayment{
+			OrderID:             &order.ID,
+			OrderCode:           order.Code,
+			Amount:              receivablePayment.Amount,
+			Date:                receivablePayment.Date,
+			Method:              "customer_account",
+			ReceivablePaymentID: &receivablePayment.ID,
+			ReceivableID:        &customerDeposit.ID,
+			CreatedBy:           receivablePayment.CreatedBy,
+			UpdatedBy:           receivablePayment.UpdatedBy,
+			CreatedAt:           receivablePayment.CreatedAt,
+			UpdatedAt:           receivablePayment.UpdatedAt,
+			StoreID:             order.StoreID,
+		}
+		err := newSalesPayment.Insert()
+		if err != nil {
+			return errors.New("error inserting sales payment: " + err.Error())
+		}
+	}
+
+	return nil
+}
+
 func (store *Store) GetReturnedAmountByOrderID(orderID primitive.ObjectID) (returnedAmount float64, returnCount int64, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1446,7 +1501,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
 		}
 
-		if customer != nil && payment.Method == "customer_account" {
+		/*if customer != nil && payment.Method == "customer_account" {
 			totalAmountFromCustomerAccount += *payment.Amount
 			log.Print("Checking customer account Balance")
 
@@ -1494,7 +1549,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			} else {
 				errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
 			}
-		}
+		}*/
 
 	} //end for
 
@@ -2045,6 +2100,17 @@ func (order *Order) ClearPayments() error {
 	return nil
 }
 
+func (order *Order) DeletePaymentsByReceivablePaymentID(receivablePaymentID primitive.ObjectID) error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("sales_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"receivable_payment_id": receivablePaymentID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (order *Order) GetPaymentsCount() (count int64, err error) {
 	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("sales_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -2170,6 +2236,7 @@ func (order *Order) UpdatePayments() error {
 			if err != nil {
 				return err
 			}
+
 		}
 
 	}
@@ -2198,6 +2265,47 @@ func (order *Order) UpdatePayments() error {
 		err := payment.Update()
 		if err != nil {
 			return err
+		}
+		log.Print("Removing1")
+
+		//Remove Invoice from Customer receivable payment
+		if payment.ReceivablePaymentID != nil && !payment.ReceivablePaymentID.IsZero() {
+			log.Print("Removing2")
+			customerDeposit, err := store.FindCustomerDepositByID(payment.ReceivableID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, receivablePayment := range customerDeposit.Payments {
+				if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() {
+					log.Print("Removing3")
+					if receivablePayment.ID.Hex() == payment.ReceivablePaymentID.Hex() &&
+						customerDeposit.ID.Hex() == payment.ReceivableID.Hex() &&
+						receivablePayment.InvoiceID.Hex() == order.ID.Hex() {
+
+						log.Print("Removing4")
+						blankString := ""
+						customerDeposit.Payments[i].InvoiceCode = &blankString
+						customerDeposit.Payments[i].InvoiceID = nil
+						customerDeposit.Payments[i].InvoiceType = &blankString
+						err = customerDeposit.Update()
+						if err != nil {
+							return err
+						}
+
+						err = customerDeposit.UndoAccounting()
+						if err != nil {
+							return err
+						}
+
+						err = customerDeposit.DoAccounting()
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
+
 		}
 	}
 
@@ -2253,7 +2361,7 @@ func (order *Order) SetPaymentStatus() (models []SalesPayment, err error) {
 	order.TotalPaymentReceived = ToFixed(totalPaymentReceived, 2)
 	order.BalanceAmount = ToFixed((order.NetTotal-order.CashDiscount)-totalPaymentReceived, 2)
 	order.PaymentMethods = paymentMethods
-	order.Payments = models
+	order.Payments = models //updating payments
 	order.PaymentsCount = int64(len(models))
 
 	if ToFixed((order.NetTotal-order.CashDiscount), 2) <= ToFixed(totalPaymentReceived, 2) {

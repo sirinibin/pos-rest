@@ -54,9 +54,128 @@ type CustomerDeposit struct {
 	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	Payments        []SalesPayment      `bson:"payments" json:"payments"`
+	Payments        []ReceivablePayment `bson:"payments" json:"payments"`
 	NetTotal        float64             `bson:"net_total" json:"net_total"`
 	PaymentMethods  []string            `json:"payment_methods" bson:"payment_methods"`
+}
+
+type ReceivablePayment struct {
+	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr       string              `json:"date_str,omitempty" bson:"-"`
+	Amount        *float64            `json:"amount" bson:"amount"`
+	Method        string              `json:"method" bson:"method"`
+	BankReference *string             `json:"bank_reference" bson:"bank_reference"`
+	Description   *string             `json:"description" bson:"description"`
+	InvoiceID     *primitive.ObjectID `json:"invoice_id" bson:"invoice_id"`
+	InvoiceCode   *string             `json:"invoice_code" bson:"invoice_code"`
+	InvoiceType   *string             `json:"invoice_type" bson:"invoice_type"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	StoreID       *primitive.ObjectID `json:"store_id" bson:"store_id"`
+	StoreName     string              `json:"store_name" bson:"store_name"`
+}
+
+func (customerdeposit *CustomerDeposit) HandleDeletedPayments(customerdepositOld *CustomerDeposit) error {
+	store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+
+	for _, oldPayment := range customerdepositOld.Payments {
+		found := false
+		deleteSalesPayment := false
+		for _, payment := range customerdeposit.Payments {
+			if payment.ID.Hex() == oldPayment.ID.Hex() {
+				found = true
+				if (payment.InvoiceID == nil || payment.InvoiceID.IsZero()) && (oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero()) {
+					deleteSalesPayment = true
+				}
+				break
+			}
+		} //end for2
+
+		if !found || deleteSalesPayment {
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() {
+				order, err := store.FindOrderByID(oldPayment.InvoiceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = order.DeletePaymentsByReceivablePaymentID(oldPayment.ID)
+				if err != nil {
+					return err
+				}
+
+				_, err = order.SetPaymentStatus()
+				if err != nil {
+					return err
+				}
+
+				err = order.Update()
+				if err != nil {
+					return err
+				}
+
+				err = order.UndoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = order.DoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = order.SetCustomerSalesStats()
+				if err != nil {
+					return err
+				}
+
+			}
+		}
+	} //end for1
+	return nil
+}
+
+func (customerdeposit *CustomerDeposit) CloseSalesPayments() error {
+	store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+
+	for _, receivablePayment := range customerdeposit.Payments {
+		if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() {
+			order, _ := store.FindOrderByID(receivablePayment.InvoiceID, bson.M{})
+			err := order.UpdatePaymentFromReceivablePayment(receivablePayment, customerdeposit)
+			if err != nil {
+				return errors.New("error updating sales payment from receivable payment: " + err.Error())
+			}
+
+			_, err = order.SetPaymentStatus()
+			if err != nil {
+				return errors.New("error setting payment status: " + err.Error())
+			}
+
+			err = order.Update()
+			if err != nil {
+				return errors.New("error updating order inside payment status: " + err.Error())
+			}
+
+			err = order.SetCustomerSalesStats()
+			if err != nil {
+				return err
+			}
+
+			err = order.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = order.DoAccounting()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (customerdeposit *CustomerDeposit) FindNetTotal() {
@@ -513,16 +632,15 @@ func (store *Store) SearchCustomerDeposit(w http.ResponseWriter, r *http.Request
 
 }
 
-func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.Request, scenario string, customerDepositOld *CustomerDeposit) (errs map[string]string) {
 	errs = make(map[string]string)
 
-	/*
-		store, err := FindStoreByID(customerdeposit.StoreID, bson.M{})
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			errs["store_id"] = "invalid store id"
-			return errs
-		}*/
+	store, err := FindStoreByID(customerDeposit.StoreID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		errs["store_id"] = "invalid store id"
+		return errs
+	}
 
 	if customerDeposit.CustomerID == nil || customerDeposit.CustomerID.IsZero() {
 		errs["customer_id"] = "Customer is required"
@@ -545,6 +663,10 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 	}
 
 	for index, payment := range customerDeposit.Payments {
+		if payment.ID.IsZero() {
+			customerDeposit.Payments[index].ID = primitive.NewObjectID()
+		}
+
 		if govalidator.IsNull(payment.DateStr) {
 			errs["customer_receivable_payment_date_"+strconv.Itoa(index)] = "Payment date is required"
 		} else {
@@ -570,6 +692,45 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 
 		if payment.Method == "" {
 			errs["customer_receivable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
+		}
+
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() {
+			order, err := store.FindOrderByID(payment.InvoiceID, bson.M{})
+			if err != nil {
+				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+			}
+
+			orderBalanceAmount := order.BalanceAmount
+
+			if scenario == "update" {
+				oldTotalInvoicePaidAmount := float64(0.00)
+				for _, oldPayment := range customerDepositOld.Payments {
+					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == order.ID.Hex() {
+						oldTotalInvoicePaidAmount += *oldPayment.Amount
+					}
+				}
+
+				orderBalanceAmount += oldTotalInvoicePaidAmount
+			}
+
+			if *payment.Amount > orderBalanceAmount {
+				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", order.BalanceAmount) + " (Invoice Balance)"
+			}
+
+			totalInvoicePaidAmount := float64(0.00)
+			for index2, payment2 := range customerDeposit.Payments {
+				if payment2.InvoiceID.Hex() == order.ID.Hex() {
+					if (orderBalanceAmount - totalInvoicePaidAmount) == 0 {
+						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
+						break
+					} else if (totalInvoicePaidAmount + *payment2.Amount) > orderBalanceAmount {
+						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (orderBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
+						break
+					}
+					totalInvoicePaidAmount += *payment2.Amount
+				}
+			}
+
 		}
 
 	} //end for
@@ -1045,8 +1206,8 @@ func ProcessCustomerDeposits() error {
 			}
 
 			if len(model.Payments) == 0 {
-				model.Payments = []SalesPayment{
-					SalesPayment{
+				model.Payments = []ReceivablePayment{
+					ReceivablePayment{
 						Amount:        &model.Amount,
 						Date:          model.Date,
 						Method:        model.PaymentMethod,

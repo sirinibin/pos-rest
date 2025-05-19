@@ -20,27 +20,29 @@ import (
 
 // SalesPayment : SalesPayment structure
 type SalesPayment struct {
-	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr       string              `json:"date_str,omitempty" bson:"-"`
-	OrderID       *primitive.ObjectID `json:"order_id" bson:"order_id"`
-	OrderCode     string              `json:"order_code" bson:"order_code"`
-	Amount        *float64            `json:"amount" bson:"amount"`
-	Method        string              `json:"method" bson:"method"`
-	BankReference *string             `json:"bank_reference" bson:"bank_reference"`
-	Description   *string             `json:"description" bson:"description"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	StoreID       *primitive.ObjectID `json:"store_id" bson:"store_id"`
-	StoreName     string              `json:"store_name" bson:"store_name"`
-	Deleted       bool                `bson:"deleted" json:"deleted"`
-	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user" bson:"-"`
-	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	ID                  primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date                *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr             string              `json:"date_str,omitempty" bson:"-"`
+	OrderID             *primitive.ObjectID `json:"order_id" bson:"order_id"`
+	OrderCode           string              `json:"order_code" bson:"order_code"`
+	Amount              *float64            `json:"amount" bson:"amount"`
+	Method              string              `json:"method" bson:"method"`
+	BankReference       *string             `json:"bank_reference" bson:"bank_reference"`
+	Description         *string             `json:"description" bson:"description"`
+	CreatedAt           *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt           *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy           *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy           *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByName       string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName       string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	StoreID             *primitive.ObjectID `json:"store_id" bson:"store_id"`
+	StoreName           string              `json:"store_name" bson:"store_name"`
+	Deleted             bool                `bson:"deleted" json:"deleted"`
+	DeletedBy           *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser       *User               `json:"deleted_by_user" bson:"-"`
+	DeletedAt           *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	ReceivableID        *primitive.ObjectID `json:"receivable_id" bson:"receivable_id"`
+	ReceivablePaymentID *primitive.ObjectID `json:"receivable_payment_id" bson:"receivable_payment_id"`
 }
 
 /*

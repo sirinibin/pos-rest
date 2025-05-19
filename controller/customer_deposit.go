@@ -112,9 +112,15 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	customerdeposit.CreatedAt = &now
 	customerdeposit.UpdatedAt = &now
 	customerdeposit.FindNetTotal()
+	for i, _ := range customerdeposit.Payments {
+		customerdeposit.Payments[i].CreatedAt = &now
+		customerdeposit.Payments[i].CreatedBy = &userID
+		customerdeposit.Payments[i].UpdatedAt = &now
+		customerdeposit.Payments[i].UpdatedBy = &userID
+	}
 
 	// Validate data
-	if errs := customerdeposit.Validate(w, r, "create"); len(errs) > 0 {
+	if errs := customerdeposit.Validate(w, r, "create", nil); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -148,6 +154,14 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 				customer.SetCreditBalance()
 			}
 		}
+	}
+
+	err = customerdeposit.CloseSalesPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	response.Status = true
@@ -225,9 +239,15 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	customerdeposit.UpdatedAt = &now
 	customerdeposit.FindNetTotal()
+	for i, _ := range customerdeposit.Payments {
+		customerdeposit.Payments[i].CreatedAt = &now
+		customerdeposit.Payments[i].CreatedBy = &userID
+		customerdeposit.Payments[i].UpdatedAt = &now
+		customerdeposit.Payments[i].UpdatedBy = &userID
+	}
 
 	// Validate data
-	if errs := customerdeposit.Validate(w, r, "update"); len(errs) > 0 {
+	if errs := customerdeposit.Validate(w, r, "update", customerdepositOld); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -298,6 +318,22 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 				customer.SetCreditBalance()
 			}
 		}
+	}
+
+	err = customerdeposit.HandleDeletedPayments(customerdepositOld)
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_sales"] = "error deleting sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerdeposit.CloseSalesPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	response.Status = true
