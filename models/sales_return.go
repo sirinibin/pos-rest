@@ -610,23 +610,24 @@ func (salesReturn *SalesReturn) FindTotal() {
 			continue
 		}
 
-		if product.UnitPriceWithVAT > 0 {
-			salesReturn.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*salesReturn.VatPercent / 100)))
-		} else if product.UnitPrice > 0 {
-			salesReturn.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*salesReturn.VatPercent / 100)))
-		}
+		/*
+			if product.UnitPriceWithVAT > 0 {
+				salesReturn.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+			} else if product.UnitPrice > 0 {
+				salesReturn.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*salesReturn.VatPercent / 100)))
+			}
 
-		if product.UnitDiscountWithVAT > 0 {
-			salesReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
-		} else if product.UnitDiscount > 0 {
-			salesReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*salesReturn.VatPercent / 100)))
-		}
+			if product.UnitDiscountWithVAT > 0 {
+				salesReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+			} else if product.UnitDiscount > 0 {
+				salesReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*salesReturn.VatPercent / 100)))
+			}
 
-		if product.UnitDiscountPercentWithVAT > 0 {
-			salesReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
-		} else if product.UnitDiscountPercent > 0 {
-			salesReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
-		}
+			if product.UnitDiscountPercentWithVAT > 0 {
+				salesReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+			} else if product.UnitDiscountPercent > 0 {
+				salesReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+			}*/
 
 		total += (product.Quantity * (salesReturn.Products[i].UnitPrice - salesReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (salesReturn.Products[i].UnitPriceWithVAT - salesReturn.Products[i].UnitDiscountWithVAT))

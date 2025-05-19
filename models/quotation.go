@@ -807,23 +807,24 @@ func (quotation *Quotation) FindTotal() {
 	totalWithVAT := float64(0.0)
 	for i, product := range quotation.Products {
 
-		if product.UnitPriceWithVAT > 0 {
-			quotation.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*quotation.VatPercent / 100)))
-		} else if product.UnitPrice > 0 {
-			quotation.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*quotation.VatPercent / 100)))
-		}
+		/*
+			if product.UnitPriceWithVAT > 0 {
+				quotation.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*quotation.VatPercent / 100)))
+			} else if product.UnitPrice > 0 {
+				quotation.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*quotation.VatPercent / 100)))
+			}
 
-		if product.UnitDiscountWithVAT > 0 {
-			quotation.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
-		} else if product.UnitDiscount > 0 {
-			quotation.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*quotation.VatPercent / 100)))
-		}
+			if product.UnitDiscountWithVAT > 0 {
+				quotation.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
+			} else if product.UnitDiscount > 0 {
+				quotation.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*quotation.VatPercent / 100)))
+			}
 
-		if product.UnitDiscountPercentWithVAT > 0 {
-			quotation.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
-		} else if product.UnitDiscountPercent > 0 {
-			quotation.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
-		}
+			if product.UnitDiscountPercentWithVAT > 0 {
+				quotation.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+			} else if product.UnitDiscountPercent > 0 {
+				quotation.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+			}*/
 
 		total += (product.Quantity * (quotation.Products[i].UnitPrice - quotation.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (quotation.Products[i].UnitPriceWithVAT - quotation.Products[i].UnitDiscountWithVAT))

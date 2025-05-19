@@ -486,23 +486,24 @@ func (purchaseReturn *PurchaseReturn) FindTotal() {
 			continue
 		}
 
-		if product.PurchaseReturnUnitPriceWithVAT > 0 {
-			purchaseReturn.Products[i].PurchaseReturnUnitPrice = RoundTo2Decimals(product.PurchaseReturnUnitPriceWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
-		} else if product.PurchaseReturnUnitPrice > 0 {
-			purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT = RoundTo2Decimals(product.PurchaseReturnUnitPrice * (1 + (*purchaseReturn.VatPercent / 100)))
-		}
+		/*
+			if product.PurchaseReturnUnitPriceWithVAT > 0 {
+				purchaseReturn.Products[i].PurchaseReturnUnitPrice = RoundTo2Decimals(product.PurchaseReturnUnitPriceWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
+			} else if product.PurchaseReturnUnitPrice > 0 {
+				purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT = RoundTo2Decimals(product.PurchaseReturnUnitPrice * (1 + (*purchaseReturn.VatPercent / 100)))
+			}
 
-		if product.UnitDiscountWithVAT > 0 {
-			purchaseReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
-		} else if product.UnitDiscount > 0 {
-			purchaseReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*purchaseReturn.VatPercent / 100)))
-		}
+			if product.UnitDiscountWithVAT > 0 {
+				purchaseReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
+			} else if product.UnitDiscount > 0 {
+				purchaseReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*purchaseReturn.VatPercent / 100)))
+			}
 
-		if product.UnitDiscountPercentWithVAT > 0 {
-			purchaseReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.PurchaseReturnUnitPrice) * 100)
-		} else if product.UnitDiscountPercent > 0 {
-			purchaseReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.PurchaseReturnUnitPriceWithVAT) * 100)
-		}
+			if product.UnitDiscountPercentWithVAT > 0 {
+				purchaseReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.PurchaseReturnUnitPrice) * 100)
+			} else if product.UnitDiscountPercent > 0 {
+				purchaseReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.PurchaseReturnUnitPriceWithVAT) * 100)
+			}*/
 
 		total += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPrice - purchaseReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT - purchaseReturn.Products[i].UnitDiscountWithVAT))
