@@ -2252,49 +2252,54 @@ func (order *Order) UpdatePayments() error {
 		if err != nil {
 			return err
 		}
-		log.Print("Removing1")
 
-		//Remove Invoice from Customer receivable payment
-		if payment.ReceivablePaymentID != nil && !payment.ReceivablePaymentID.IsZero() {
-			log.Print("Removing2")
-			customerDeposit, err := store.FindCustomerDepositByID(payment.ReceivableID, bson.M{})
-			if err != nil {
-				return err
-			}
+		err = order.RemoveInvoiceFromCustomerReceivablePayment(&payment)
+		if err != nil {
+			return err
+		}
 
-			for i, receivablePayment := range customerDeposit.Payments {
-				if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() {
-					log.Print("Removing3")
-					if receivablePayment.ID.Hex() == payment.ReceivablePaymentID.Hex() &&
-						customerDeposit.ID.Hex() == payment.ReceivableID.Hex() &&
-						receivablePayment.InvoiceID.Hex() == order.ID.Hex() {
+	}
 
-						log.Print("Removing4")
-						blankString := ""
-						customerDeposit.Payments[i].InvoiceCode = &blankString
-						customerDeposit.Payments[i].InvoiceID = nil
-						customerDeposit.Payments[i].InvoiceType = &blankString
-						err = customerDeposit.Update()
-						if err != nil {
-							return err
-						}
+	return nil
+}
 
-						err = customerDeposit.UndoAccounting()
-						if err != nil {
-							return err
-						}
+func (order *Order) RemoveInvoiceFromCustomerReceivablePayment(salesPayment *SalesPayment) error {
+	store, _ := FindStoreByID(order.StoreID, bson.M{})
+	//Remove Invoice from Customer receivable payment
+	if salesPayment.ReceivablePaymentID != nil && !salesPayment.ReceivablePaymentID.IsZero() {
+		customerDeposit, err := store.FindCustomerDepositByID(salesPayment.ReceivableID, bson.M{})
+		if err != nil {
+			return err
+		}
 
-						err = customerDeposit.DoAccounting()
-						if err != nil {
-							return err
-						}
+		for i, receivablePayment := range customerDeposit.Payments {
+			if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() {
+				if receivablePayment.ID.Hex() == salesPayment.ReceivablePaymentID.Hex() &&
+					customerDeposit.ID.Hex() == salesPayment.ReceivableID.Hex() &&
+					receivablePayment.InvoiceID.Hex() == order.ID.Hex() {
+					blankString := ""
+					customerDeposit.Payments[i].InvoiceCode = &blankString
+					customerDeposit.Payments[i].InvoiceID = nil
+					customerDeposit.Payments[i].InvoiceType = &blankString
+					err = customerDeposit.Update()
+					if err != nil {
+						return err
+					}
+
+					err = customerDeposit.UndoAccounting()
+					if err != nil {
+						return err
+					}
+
+					err = customerDeposit.DoAccounting()
+					if err != nil {
+						return err
 					}
 				}
 			}
-
 		}
-	}
 
+	}
 	return nil
 }
 

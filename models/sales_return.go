@@ -293,8 +293,53 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 		if err != nil {
 			return err
 		}
+
+		err = salesReturn.RemoveInvoiceFromCustomerPayablePayment(&payment)
+		if err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+func (salesReturn *SalesReturn) RemoveInvoiceFromCustomerPayablePayment(salesReturnPayment *SalesReturnPayment) error {
+	store, _ := FindStoreByID(salesReturn.StoreID, bson.M{})
+	//Remove Invoice from Customer receivable payment
+	if salesReturnPayment.PayablePaymentID != nil && !salesReturnPayment.PayablePaymentID.IsZero() {
+		customerWithdrawal, err := store.FindCustomerWithdrawalByID(salesReturnPayment.PayableID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		for i, payablePayment := range customerWithdrawal.Payments {
+			if payablePayment.InvoiceID != nil && !payablePayment.InvoiceID.IsZero() {
+				if payablePayment.ID.Hex() == salesReturnPayment.PayablePaymentID.Hex() &&
+					customerWithdrawal.ID.Hex() == salesReturnPayment.PayableID.Hex() &&
+					payablePayment.InvoiceID.Hex() == salesReturn.ID.Hex() {
+					blankString := ""
+					customerWithdrawal.Payments[i].InvoiceCode = &blankString
+					customerWithdrawal.Payments[i].InvoiceID = nil
+					customerWithdrawal.Payments[i].InvoiceType = &blankString
+					err = customerWithdrawal.Update()
+					if err != nil {
+						return err
+					}
+
+					err = customerWithdrawal.UndoAccounting()
+					if err != nil {
+						return err
+					}
+
+					err = customerWithdrawal.DoAccounting()
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+	}
 	return nil
 }
 
