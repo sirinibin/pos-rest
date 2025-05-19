@@ -700,6 +700,14 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
 			}
 
+			if order.CustomerID != nil &&
+				!order.CustomerID.IsZero() &&
+				customerDeposit.CustomerID != nil &&
+				!customerDeposit.CustomerID.IsZero() &&
+				order.CustomerID.Hex() != customerDeposit.CustomerID.Hex() {
+				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "Invoice is not belongs to the selected customer"
+			}
+
 			orderBalanceAmount := order.BalanceAmount
 
 			if scenario == "update" {

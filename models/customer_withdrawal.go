@@ -700,6 +700,14 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
 			}
 
+			if salesreturn.CustomerID != nil &&
+				!salesreturn.CustomerID.IsZero() &&
+				customerWithdrawal.CustomerID != nil &&
+				!customerWithdrawal.CustomerID.IsZero() &&
+				salesreturn.CustomerID.Hex() != customerWithdrawal.CustomerID.Hex() {
+				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "Invoice is not belongs to the selected customer"
+			}
+
 			salesreturnBalanceAmount := salesreturn.BalanceAmount
 
 			if scenario == "update" {
