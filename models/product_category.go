@@ -23,10 +23,10 @@ type ProductCategory struct {
 	ParentID      *primitive.ObjectID `json:"parent_id" bson:"parent_id"`
 	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
 	ParentName    string              `bson:"parent_name" json:"parent_name"`
-	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	Deleted       bool                `bson:"deleted" json:"deleted"`
+	DeletedBy     *primitive.ObjectID `json:"deleted_by" bson:"deleted_by"`
+	DeletedByUser *User               `json:"deleted_by_user"`
+	DeletedAt     *time.Time          `bson:"deleted_at" json:"deleted_at"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
@@ -150,6 +150,18 @@ func (store *Store) SearchProductCategory(w http.ResponseWriter, r *http.Request
 			return productCategories, criterias, err
 		}
 		criterias.SearchBy["store_id"] = storeID
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return productCategories, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]
@@ -586,5 +598,34 @@ func (store *Store) ProcessProductCategories() error {
 	}
 
 	log.Print("DONE!")
+	return nil
+}
+
+func (productCategory *ProductCategory) RestoreProductCategory(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	err = productCategory.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	productCategory.Deleted = false
+	productCategory.DeletedBy = nil
+	productCategory.DeletedAt = nil
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": productCategory.ID},
+		bson.M{"$set": productCategory},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

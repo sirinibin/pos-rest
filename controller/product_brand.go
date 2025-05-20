@@ -283,3 +283,116 @@ func ViewProductBrand(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// DeleteProductCategory : handler function for DELETE /v1/product-category/<id> call
+func DeleteProductBrand(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	productBrandID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_category_id"] = "Invalid Product Category ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productBrand, err := store.FindProductBrandByID(&productBrandID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = productBrand.DeleteProductBrand(tokenClaims)
+	if err != nil {
+		response.Status = false
+		response.Errors["delete"] = "Unable to delete:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Deleted successfully"
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// DeleteProduct : handler function for DELETE /v1/product/<id> call
+func RestoreProductBrand(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	productBrandID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid Product ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	productBrand, err := store.FindProductBrandByID(&productBrandID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = productBrand.RestoreProductBrand(tokenClaims)
+	if err != nil {
+		response.Status = false
+		response.Errors["delete"] = "Unable to delete:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Restored successfully"
+
+	json.NewEncoder(w).Encode(response)
+}

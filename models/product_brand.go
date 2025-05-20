@@ -18,12 +18,18 @@ import (
 
 // ProductBrand : ProductBrand structure
 type ProductBrand struct {
-	ID        primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Code      string              `bson:"code,omitempty" json:"code,omitempty"`
-	Name      string              `bson:"name,omitempty" json:"name,omitempty"`
-	CreatedAt *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	StoreID   *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Code          string              `bson:"code,omitempty" json:"code,omitempty"`
+	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	Deleted       bool                `bson:"deleted" json:"deleted"`
+	DeletedBy     *primitive.ObjectID `json:"deleted_by" bson:"deleted_by"`
+	DeletedByUser *User               `json:"deleted_by_user"`
+	DeletedAt     *time.Time          `bson:"deleted_at" json:"deleted_at"`
+	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	StoreID       *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 }
 
 func (productBrand *ProductBrand) AttributesValueChangeEvent(productBrandOld *ProductBrand) error {
@@ -85,6 +91,18 @@ func (store *Store) SearchProductBrand(w http.ResponseWriter, r *http.Request) (
 			return productBrands, criterias, err
 		}
 		criterias.SearchBy["store_id"] = storeID
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return productBrands, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]
@@ -437,5 +455,61 @@ func ProcessProductBrands() error {
 	}
 
 	log.Print("DONE!")
+	return nil
+}
+
+func (productBrand *ProductBrand) DeleteProductBrand(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + productBrand.StoreID.Hex()).Collection("product_brand")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		return err
+	}
+
+	productBrand.Deleted = true
+	productBrand.DeletedBy = &userID
+	now := time.Now()
+	productBrand.DeletedAt = &now
+
+	//productCategory.SetChangeLog("delete", nil, nil, nil)
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": productBrand.ID},
+		bson.M{"$set": productBrand},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (productBrand *ProductBrand) RestoreProductBrand(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + productBrand.StoreID.Hex()).Collection("product_brand")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(true)
+	defer cancel()
+
+	productBrand.Deleted = false
+	productBrand.DeletedBy = nil
+	productBrand.DeletedAt = nil
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": productBrand.ID},
+		bson.M{"$set": productBrand},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

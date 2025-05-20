@@ -141,12 +141,15 @@ func main() {
 	router.HandleFunc("/v1/product-category/{id}", controller.ViewProductCategory).Methods("GET")
 	router.HandleFunc("/v1/product-category/{id}", controller.UpdateProductCategory).Methods("PUT")
 	router.HandleFunc("/v1/product-category/{id}", controller.DeleteProductCategory).Methods("DELETE")
+	router.HandleFunc("/v1/product-category/restore/{id}", controller.RestoreProductCategory).Methods("POST")
 
 	//ProductBrand
 	router.HandleFunc("/v1/product-brand", controller.CreateProductBrand).Methods("POST")
 	router.HandleFunc("/v1/product-brand", controller.ListProductBrand).Methods("GET")
 	router.HandleFunc("/v1/product-brand/{id}", controller.ViewProductBrand).Methods("GET")
 	router.HandleFunc("/v1/product-brand/{id}", controller.UpdateProductBrand).Methods("PUT")
+	router.HandleFunc("/v1/product-brand/{id}", controller.DeleteProductBrand).Methods("DELETE")
+	router.HandleFunc("/v1/product-brand/restore/{id}", controller.RestoreProductBrand).Methods("POST")
 
 	//ExpenseCategory
 	router.HandleFunc("/v1/expense-category", controller.CreateExpenseCategory).Methods("POST")
