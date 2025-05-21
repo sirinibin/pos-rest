@@ -1214,6 +1214,12 @@ func ProcessCustomerWithdrawals() error {
 
 			model.UndoAccounting()
 			model.DoAccounting()
+			if model.CustomerID != nil && !model.CustomerID.IsZero() {
+				customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
+				if customer != nil {
+					customer.SetCreditBalance()
+				}
+			}
 
 			/*
 

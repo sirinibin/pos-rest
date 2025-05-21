@@ -2864,6 +2864,12 @@ func ProcessOrders() error {
 
 			order.UndoAccounting()
 			order.DoAccounting()
+			if order.CustomerID != nil && !order.CustomerID.IsZero() {
+				customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+				if customer != nil {
+					customer.SetCreditBalance()
+				}
+			}
 			//order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 			//order.Update()
 
