@@ -1264,12 +1264,15 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if !govalidator.IsNull(strings.TrimSpace(order.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(order.Phone)) {
 		errs["phone"] = "Invalid phone no."
+		return
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(order.VatNo), "15") {
 		errs["vat_no"] = "VAT No. should be 15 digits"
+		return
 	} else if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(order.VatNo), "3") {
 		errs["vat_no"] = "VAT No. should start and end with 3"
+		return
 	}
 
 	if order.Discount < 0 {
@@ -1332,12 +1335,17 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	if customer == nil && !govalidator.IsNull(order.CustomerName) {
 		now := time.Now()
 		newCustomer := Customer{
-			Name:      order.CustomerName,
-			CreatedBy: order.CreatedBy,
-			UpdatedBy: order.CreatedBy,
-			CreatedAt: &now,
-			UpdatedAt: &now,
-			StoreID:   order.StoreID,
+			Name:          order.CustomerName,
+			Phone:         order.Phone,
+			PhoneInArabic: ConvertToArabicNumerals(order.Phone),
+			VATNo:         order.VatNo,
+			VATNoInArabic: ConvertToArabicNumerals(order.VatNo),
+			Remarks:       order.Remarks,
+			CreatedBy:     order.CreatedBy,
+			UpdatedBy:     order.CreatedBy,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       order.StoreID,
 		}
 
 		err = newCustomer.MakeCode()

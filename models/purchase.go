@@ -1293,6 +1293,19 @@ func (purchase *Purchase) Validate(
 		purchase.Date = &date
 	}
 
+	if !govalidator.IsNull(strings.TrimSpace(purchase.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(purchase.Phone)) {
+		errs["phone"] = "Invalid phone no."
+		return
+	}
+
+	if !govalidator.IsNull(strings.TrimSpace(purchase.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(purchase.VatNo), "15") {
+		errs["vat_no"] = "VAT No. should be 15 digits"
+		return
+	} else if !govalidator.IsNull(strings.TrimSpace(purchase.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(purchase.VatNo), "3") {
+		errs["vat_no"] = "VAT No. should start and end with 3"
+		return
+	}
+
 	totalPayment := float64(0.00)
 	for _, payment := range purchase.PaymentsInput {
 		if payment.Amount != nil {
@@ -1323,12 +1336,16 @@ func (purchase *Purchase) Validate(
 	if vendor == nil && !govalidator.IsNull(purchase.VendorName) {
 		now := time.Now()
 		newVendor := Vendor{
-			Name:      purchase.VendorName,
-			CreatedBy: purchase.CreatedBy,
-			UpdatedBy: purchase.CreatedBy,
-			CreatedAt: &now,
-			UpdatedAt: &now,
-			StoreID:   purchase.StoreID,
+			Name:          purchase.VendorName,
+			Phone:         purchase.Phone,
+			PhoneInArabic: ConvertToArabicNumerals(purchase.Phone),
+			VATNo:         purchase.VatNo,
+			VATNoInArabic: ConvertToArabicNumerals(purchase.VatNo),
+			CreatedBy:     purchase.CreatedBy,
+			UpdatedBy:     purchase.CreatedBy,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       purchase.StoreID,
 		}
 
 		err = newVendor.MakeCode()

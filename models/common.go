@@ -57,6 +57,19 @@ func RoundTo2Decimals(num float64) float64 {
 	return math.Round(num*100) / 100
 }
 
+func ConvertToArabicNumerals(input string) string {
+	var result strings.Builder
+	for _, r := range input {
+		if r >= '0' && r <= '9' {
+			arabicDigit := '٠' + (r - '0') // Unicode offset
+			result.WriteRune(arabicDigit)
+		} else {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
+}
+
 /*
 func RoundTo2Decimals(num float64) float64 {
 	d := decimal.NewFromFloat(num).Round(2)

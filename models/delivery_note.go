@@ -459,6 +459,7 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 		now := time.Now()
 		newCustomer := Customer{
 			Name:      deliverynote.CustomerName,
+			Remarks:   deliverynote.Remarks,
 			CreatedBy: deliverynote.CreatedBy,
 			UpdatedBy: deliverynote.CreatedBy,
 			CreatedAt: &now,

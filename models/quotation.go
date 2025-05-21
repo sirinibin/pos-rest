@@ -106,6 +106,9 @@ type Quotation struct {
 	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
 	Remarks                  string              `bson:"remarks" json:"remarks"`
 	Type                     string              `json:"type" bson:"type"`
+	Phone                    string              `bson:"phone" json:"phone"`
+	VatNo                    string              `bson:"vat_no" json:"vat_no"`
+	Address                  string              `bson:"address" json:"address"`
 }
 
 func (quotation *Quotation) GetPaymentsCount() (count int64, err error) {
@@ -1329,13 +1332,17 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		//quotation.CreatedAt = &date
 	}
 
-	if !govalidator.IsNull(quotation.SignatureDateStr) {
-		const shortForm = "Jan 02 2006"
-		date, err := time.Parse(shortForm, quotation.SignatureDateStr)
-		if err != nil {
-			errs["signature_date_str"] = "Invalid date format"
-		}
-		quotation.SignatureDate = &date
+	if !govalidator.IsNull(strings.TrimSpace(quotation.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(quotation.Phone)) {
+		errs["phone"] = "Invalid phone no."
+		return
+	}
+
+	if !govalidator.IsNull(strings.TrimSpace(quotation.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(quotation.VatNo), "15") {
+		errs["vat_no"] = "VAT No. should be 15 digits"
+		return
+	} else if !govalidator.IsNull(strings.TrimSpace(quotation.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(quotation.VatNo), "3") {
+		errs["vat_no"] = "VAT No. should start and end with 3"
+		return
 	}
 
 	if scenario == "update" {
@@ -1415,12 +1422,16 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 	if customer == nil && !govalidator.IsNull(quotation.CustomerName) {
 		now := time.Now()
 		newCustomer := Customer{
-			Name:      quotation.CustomerName,
-			CreatedBy: quotation.CreatedBy,
-			UpdatedBy: quotation.CreatedBy,
-			CreatedAt: &now,
-			UpdatedAt: &now,
-			StoreID:   quotation.StoreID,
+			Name:          quotation.CustomerName,
+			Phone:         quotation.Phone,
+			PhoneInArabic: ConvertToArabicNumerals(quotation.Phone),
+			VATNo:         quotation.VatNo,
+			VATNoInArabic: ConvertToArabicNumerals(quotation.VatNo),
+			CreatedBy:     quotation.CreatedBy,
+			UpdatedBy:     quotation.CreatedBy,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       quotation.StoreID,
 		}
 
 		err = newCustomer.MakeCode()
