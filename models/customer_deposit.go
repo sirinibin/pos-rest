@@ -1212,25 +1212,30 @@ func ProcessCustomerDeposits() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if len(model.Payments) == 0 {
-				model.Payments = []ReceivablePayment{
-					ReceivablePayment{
-						Amount:        &model.Amount,
-						Date:          model.Date,
-						Method:        model.PaymentMethod,
-						BankReference: &model.BankReferenceNo,
-						Description:   &model.Description,
-					},
+			model.UndoAccounting()
+			model.DoAccounting()
+
+			/*
+				if len(model.Payments) == 0 {
+					model.Payments = []ReceivablePayment{
+						ReceivablePayment{
+							Amount:        &model.Amount,
+							Date:          model.Date,
+							Method:        model.PaymentMethod,
+							BankReference: &model.BankReferenceNo,
+							Description:   &model.Description,
+						},
+					}
 				}
-			}
 
-			model.FindNetTotal()
+				model.FindNetTotal()
 
-			err = model.Update()
-			if err != nil {
-				log.Print("Error updating: " + model.Code + ", err: " + err.Error())
-				//return err
-			}
+				err = model.Update()
+				if err != nil {
+					log.Print("Error updating: " + model.Code + ", err: " + err.Error())
+					//return err
+				}
+			*/
 			bar.Add(1)
 		}
 	}

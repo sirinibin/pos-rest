@@ -2303,8 +2303,11 @@ func ProcessPurchases() error {
 				continue
 			}
 
-			purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
-			purchase.Update()
+			purchase.UndoAccounting()
+			purchase.DoAccounting()
+
+			//purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+			//purchase.Update()
 
 			/*
 				vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})

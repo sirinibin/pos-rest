@@ -2051,9 +2051,12 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
-			purchase, _ := store.FindPurchaseByID(model.PurchaseID, bson.M{})
-			purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
-			purchase.Update()
+			model.UndoAccounting()
+			model.DoAccounting()
+
+			//purchase, _ := store.FindPurchaseByID(model.PurchaseID, bson.M{})
+			//purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+			//purchase.Update()
 
 			/*
 				for i, paymentMethod := range model.PaymentMethods {
