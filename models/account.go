@@ -604,19 +604,19 @@ func (store *Store) CreateAccountIfNotExists(
 		UpdatedAt:      &now,
 	}
 
-	if referenceModel == nil && (name == "Cash" || name == "Bank") {
+	if referenceModel == nil && (name == "CASH" || name == "BANK") {
 		account.Type = "asset"
-	} else if referenceModel == nil && (name == "Sales") {
+	} else if referenceModel == nil && (name == "SALES") {
 		account.Type = "revenue"
-	} else if referenceModel == nil && (name == "Sales Return") {
+	} else if referenceModel == nil && (name == "SALES RETURN") {
 		account.Type = "expense"
-	} else if referenceModel == nil && (name == "Purchase") {
+	} else if referenceModel == nil && (name == "PURCHASE") {
 		account.Type = "expense"
-	} else if referenceModel == nil && (name == "Purchase Return") {
+	} else if referenceModel == nil && (name == "PURCHASE RETURN") {
 		account.Type = "revenue"
-	} else if referenceModel == nil && (name == "Cash discount allowed") {
+	} else if referenceModel == nil && (name == "CASH DISCOUNT ALLOWED") {
 		account.Type = "expense"
-	} else if referenceModel == nil && (name == "Cash discount received") {
+	} else if referenceModel == nil && (name == "CASH DISCOUNT RECEIVED") {
 		account.Type = "revenue"
 	} else if referenceModel != nil && *referenceModel == "investor" {
 		account.Type = "capital"
