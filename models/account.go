@@ -618,11 +618,11 @@ func (store *Store) CreateAccountIfNotExists(
 		account.Type = "expense"
 	} else if referenceModel == nil && (name == "Cash discount received") {
 		account.Type = "revenue"
-	} else if *referenceModel == "investor" {
+	} else if referenceModel != nil && *referenceModel == "investor" {
 		account.Type = "capital"
-	} else if *referenceModel == "withdrawer" {
+	} else if referenceModel != nil && *referenceModel == "withdrawer" {
 		account.Type = "drawing"
-	} else if *referenceModel == "expense_category" {
+	} else if referenceModel != nil && *referenceModel == "expense_category" {
 		account.Type = "expense"
 	}
 
