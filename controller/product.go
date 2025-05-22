@@ -490,6 +490,7 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 	productID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		response.Errors["product_id"] = "Invalid Product ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -506,6 +507,7 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -513,6 +515,15 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 	product, err = store.FindProductByID(&productID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	product.SetSearchLabel(&store.ID)
+	if err != nil {
+		response.Errors["view"] = "error setting search label:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -520,6 +531,7 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 	err = product.GenerateBarCodeBase64ByStoreID(store.ID)
 	if err != nil {
 		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -528,6 +540,7 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		linkedProducts, err := store.FindProductsByIDs(product.LinkedProductIDs)
 		if err != nil {
 			response.Errors["view"] = "error fetching linked products: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(response)
 			return
 		}

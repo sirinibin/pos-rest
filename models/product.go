@@ -119,6 +119,21 @@ type Product struct {
 	LinkedProductIDs     []*primitive.ObjectID   `json:"linked_product_ids" bson:"linked_product_ids"`
 	LinkedProducts       []*Product              `json:"linked_products,omitempty" bson:"-"`
 	LinkToProductID      *primitive.ObjectID     `json:"link_to_product_id,omitempty" bson:"-"`
+	Set                  ProductSet              `json:"set" bson:"set"`
+}
+
+type ProductSet struct {
+	Name         string       `json:"name" bson:"name"`
+	Products     []SetProduct `json:"products" bson:"products"`
+	Total        float64      `json:"total" bson:"total"`
+	TotalWithVAT float64      `json:"total_with_vat" bson:"total_with_vat"`
+}
+
+type SetProduct struct {
+	ProductID              *primitive.ObjectID `json:"product_id" bson:"produc_id"`
+	Name                   string              `bson:"name" json:"name"`
+	RetailUnitPrice        *float64            `bson:"retail_unit_price" json:"retail_unit_price"`
+	RetailUnitPriceWithVAT *float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
 }
 
 type ProductStats struct {
@@ -1934,6 +1949,10 @@ func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 		}
 	}
 
+	if product.Set.Name != "" {
+		product.SearchLabel += " - Set: " + product.Set.Name
+	}
+
 	if product.BrandName != "" {
 		product.SearchLabel += " - Brand: " + product.BrandName
 	}
@@ -2994,12 +3013,16 @@ func containsSpecialChars(s string) bool {
 
 func (product *Product) GetAdditionalSearchTerms() string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	searchTerm := ""
+	searchTerm := " "
 	if containsSpecialChars(product.Name) {
 		searchTerm = re.ReplaceAllString(product.Name, "")
 	}
 	if containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
 		searchTerm += " " + re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, "")
+	}
+
+	if product.Set.Name != "" {
+		searchTerm += " " + product.Set.Name
 	}
 
 	if product.BrandName != "" {
