@@ -189,6 +189,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 	product.CreatedAt = &now
 	product.UpdatedAt = &now
 	product.StoreID = &store.ID
+	product.FindSetTotal()
 
 	// Validate data
 	if errs := product.Validate(w, r, "create"); len(errs) > 0 {
@@ -380,6 +381,7 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	product.UpdatedBy = &userID
 	now := time.Now()
 	product.UpdatedAt = &now
+	product.FindSetTotal()
 
 	// Validate data
 	if errs := product.Validate(w, r, "update"); len(errs) > 0 {

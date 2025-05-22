@@ -123,15 +123,17 @@ type Product struct {
 }
 
 type ProductSet struct {
-	Name         string       `json:"name" bson:"name"`
-	Products     []SetProduct `json:"products" bson:"products"`
-	Total        float64      `json:"total" bson:"total"`
-	TotalWithVAT float64      `json:"total_with_vat" bson:"total_with_vat"`
+	Name          string       `json:"name" bson:"name"`
+	Products      []SetProduct `json:"products" bson:"products"`
+	Total         float64      `json:"total" bson:"total"`
+	TotalWithVAT  float64      `json:"total_with_vat" bson:"total_with_vat"`
+	TotalQuantity float64      `json:"total_quantity" bson:"total_quantity"`
 }
 
 type SetProduct struct {
 	ProductID              *primitive.ObjectID `json:"product_id" bson:"produc_id"`
 	Name                   string              `bson:"name" json:"name"`
+	Quantity               *float64            `bson:"quantity" json:"quantity"`
 	RetailUnitPrice        *float64            `bson:"retail_unit_price" json:"retail_unit_price"`
 	RetailUnitPriceWithVAT *float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
 }
@@ -142,6 +144,21 @@ type ProductStats struct {
 	RetailStockValue    float64             `json:"retail_stock_value" bson:"retail_stock_value"`
 	WholesaleStockValue float64             `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
 	PurchaseStockValue  float64             `json:"purchase_stock_value" bson:"purchase_stock_value"`
+}
+
+func (product *Product) FindSetTotal() {
+	total := float64(0.00)
+	totalWithVAT := float64(0.00)
+	totalQuantity := float64(0.00)
+	for _, setProduct := range product.Set.Products {
+		total += *setProduct.RetailUnitPrice * *setProduct.Quantity
+		totalWithVAT += *setProduct.RetailUnitPriceWithVAT * *setProduct.Quantity
+		totalQuantity += *setProduct.Quantity
+	}
+
+	product.Set.Total = RoundTo2Decimals(total)
+	product.Set.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	product.Set.TotalQuantity = RoundTo2Decimals(totalQuantity)
 }
 
 func (store *Store) SaveProductImage(productID *primitive.ObjectID, filename string) error {
