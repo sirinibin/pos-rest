@@ -3006,6 +3006,16 @@ func generatePrefixesSuffixesSubstrings(input string) []string {
 		}
 	}
 
+	// Convert map keys to slice, only include cleaned strings with at least 2 letters
+	/*
+		var result []string
+		for str := range uniqueSet {
+			cleaned := CleanString(removeSpecialCharacter(str))
+			if len([]rune(cleaned)) >= 2 {
+				result = append(result, cleaned)
+			}
+		}*/
+
 	// Convert map keys to slice
 	var result []string
 	for str := range uniqueSet {
@@ -3028,41 +3038,87 @@ func containsSpecialChars(s string) bool {
 	return re.MatchString(s)
 }
 
-func (product *Product) GetAdditionalSearchTerms() string {
+func (product *Product) GetAdditionalSearchTerms() []string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	searchTerm := " "
-	if containsSpecialChars(product.Name) {
-		searchTerm = re.ReplaceAllString(product.Name, "")
-	}
-	if containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
-		searchTerm += " " + re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, "")
+	searchTerm := []string{}
+
+	searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
+	if product.PrefixPartNumber != "" {
+		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
 	}
 
+	searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
+
+	/*if containsSpecialChars(product.Name) {
+		searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
+	}*/
+
+	/*
+		if containsSpecialChars(product.NameInArabic) {
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.NameInArabic, ""))
+		}*/
+
+	/*if containsSpecialChars(product.PrefixPartNumber) {
+		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
+	}
+
+	if containsSpecialChars(product.PartNumber) {
+		searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
+	}*/
+
+	/*if containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
+		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, ""))
+	}*/
+
 	if product.Set.Name != "" {
-		searchTerm += " " + product.Set.Name
+		searchTerm = append(searchTerm, product.Set.Name)
 	}
 
 	if product.BrandName != "" {
-		searchTerm += " " + product.BrandName
+		searchTerm = append(searchTerm, product.BrandName)
 	}
 
 	if product.CountryName != "" {
-		searchTerm += " " + product.CountryName
+		searchTerm = append(searchTerm, product.CountryName)
 	}
 
 	return searchTerm
 }
 
 func (product *Product) GeneratePrefixes() {
-	additionalSearchTerms := product.GetAdditionalSearchTerms()
-
-	cleanName := CleanString(product.PrefixPartNumber + " - " + product.PartNumber + " " + product.Name + " " + additionalSearchTerms)
+	cleanPrefixPartNumber := CleanString(product.PrefixPartNumber)
+	cleanPartNumber := CleanString(product.PartNumber)
+	cleanName := CleanString(product.Name)
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
+	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPartNumber)...)
+	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber)...)
+
+	additionalSearchTerms := product.GetAdditionalSearchTerms()
+	for _, term := range additionalSearchTerms {
+		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(term)...)
+	}
+
+	//product.NamePrefixes = RemoveDuplicateStrings(product.NamePrefixes)
+
 	if cleanNameArabic != "" {
 		product.NameInArabicPrefixes = generatePrefixesSuffixesSubstrings(cleanNameArabic)
 	}
+}
+
+func RemoveDuplicateStrings(input []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+
+	for _, str := range input {
+		if !seen[str] {
+			seen[str] = true
+			result = append(result, str)
+		}
+	}
+
+	return result
 }
 
 /*
@@ -3079,16 +3135,6 @@ func (product *Product) GeneratePrefixes() {
 	}
 }
 */
-
-func containsArabic(input string) bool {
-	for _, r := range input {
-		// Check if the rune is within the Arabic Unicode range
-		if (r >= '\u0600' && r <= '\u06FF') || (r >= '\u0750' && r <= '\u077F') || (r >= '\u08A0' && r <= '\u08FF') {
-			return true // Arabic character found
-		}
-	}
-	return false // No Arabic characters found
-}
 
 var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
 
@@ -3113,22 +3159,6 @@ func sanitizeUTF8(input string) string {
 		input = regexp.MustCompile(`[^a-zA-Z0-9\u0600-\u06FF]+`).ReplaceAllString(input, " ")
 	}
 	return input
-}
-
-func sanitizeString(input string) string {
-	// Ensure the string is valid UTF-8
-	if !utf8.ValidString(input) {
-		input = regexp.MustCompile(`[^a-zA-Z0-9\u0600-\u06FF]+`).ReplaceAllString(input, " ")
-	}
-	return input
-}
-
-func replaceSpecialCharsWithSpace(input string) string {
-	// This matches anything not a letter or number
-	re := regexp.MustCompile(`[^\\p{L}\\p{N}]+`)
-	// Replace all special characters with a space
-	cleaned := re.ReplaceAllString(input, " ")
-	return strings.TrimSpace(cleaned)
 }
 
 func (product *Product) SetStock() error {
