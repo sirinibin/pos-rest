@@ -85,6 +85,7 @@ type Store struct {
 	ZatcaQrOnLeftBottom            bool                  `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
 	DefaultUnitPriceIsWithVAT      bool                  `bson:"default_unit_price_is_with_vat" json:"default_unit_price_is_with_vat"`
 	ShowReceivedByFooterInInvoice  bool                  `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
+	ClientFilter                   bool                  `bson:"client_filter" json:"client_filter"`
 }
 
 type SerialNumber struct {
