@@ -120,8 +120,22 @@ func CreateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = capitalwithdrawal.MakeRedisCode()
+	if err != nil {
+		response.Status = false
+		response.Errors["code"] = "Error making code: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = capitalwithdrawal.Insert()
 	if err != nil {
+		redisErr := capitalwithdrawal.UnMakeRedisCode()
+		if redisErr != nil {
+			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+		}
+
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["insert"] = "Unable to insert to db:" + err.Error()

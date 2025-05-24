@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -633,6 +634,149 @@ func (store *Store) GetCapitalWithdrawalCount() (count int64, err error) {
 	})
 }
 
+func (capitalWithdrawal *CapitalWithdrawal) MakeRedisCode() error {
+	store, err := FindStoreByID(capitalWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := capitalWithdrawal.StoreID.Hex() + "_capital_withdrawal_counter" // Global counter key
+
+	// === 1. Get location from store.CountryCode ===
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// === 2. Get date from order.CreatedAt or fallback to order.Date or now ===
+	baseTime := capitalWithdrawal.CreatedAt.In(location)
+
+	// === 3. Always ensure global counter exists ===
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+	if exists == 0 {
+		count, err := store.GetCountByCollection("capital")
+		if err != nil {
+			return err
+		}
+		startFrom := store.CapitalDepositSerialNumber.StartFromCount
+		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	// === 4. Increment global counter ===
+	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	// === 5. Determine which counter to use for order.Code ===
+	useMonthly := strings.Contains(store.CapitalDepositSerialNumber.Prefix, "DATE")
+	var serialNumber int64 = globalIncr
+
+	if useMonthly {
+		// Generate monthly redis key
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := capitalWithdrawal.StoreID.Hex() + "_capital_withdrawal_counter_" + monthKey
+
+		// Ensure monthly counter exists
+		monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+		if monthlyExists == 0 {
+			startFrom := store.CapitalDepositSerialNumber.StartFromCount
+			fromDate := time.Date(baseTime.Year(), baseTime.Month(), 1, 0, 0, 0, 0, location)
+			toDate := fromDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+			monthlyCount, err := store.GetCountByCollectionInRange(fromDate, toDate, "capitalwithdrawal")
+			if err != nil {
+				return err
+			}
+
+			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			if err != nil {
+				return err
+			}
+		}
+
+		// Increment monthly counter and use it
+		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+		if store.EnableMonthlySerialNumber {
+			serialNumber = monthlyIncr
+		}
+	}
+
+	// === 6. Build the code ===
+	paddingCount := store.CapitalDepositSerialNumber.PaddingCount
+	if store.CapitalDepositSerialNumber.Prefix != "" {
+		capitalWithdrawal.Code = fmt.Sprintf("%s-%0*d", store.CapitalDepositSerialNumber.Prefix, paddingCount, serialNumber)
+	} else {
+		capitalWithdrawal.Code = fmt.Sprintf("%0*d", paddingCount, serialNumber)
+	}
+
+	// === 7. Replace DATE token if used ===
+	if strings.Contains(capitalWithdrawal.Code, "DATE") {
+		orderDate := baseTime.Format("20060102") // YYYYMMDD
+		capitalWithdrawal.Code = strings.ReplaceAll(capitalWithdrawal.Code, "DATE", orderDate)
+	}
+
+	return nil
+}
+
+func (capitalWithdrawal *CapitalWithdrawal) UnMakeRedisCode() error {
+	store, err := FindStoreByID(capitalWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	// Global counter key
+	redisKey := capitalWithdrawal.StoreID.Hex() + "_capital_withdrawal_counter"
+
+	// Get location from store.CountryCode
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// Use CreatedAt, or fallback to now
+	baseTime := capitalWithdrawal.CreatedAt.In(location)
+
+	// Always try to decrement global counter
+	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
+		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
+			return err
+		}
+	}
+
+	// Decrement monthly counter only if Prefix contains "DATE"
+	if strings.Contains(store.CapitalDepositSerialNumber.Prefix, "DATE") {
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := capitalWithdrawal.StoreID.Hex() + "_capital_withdrawal_counter_" + monthKey
+
+		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
+			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 /*
 func (model *CapitalWithdrawal) MakeCode() error {
 	store, err := FindStoreByID(model.StoreID, bson.M{})
@@ -679,21 +823,6 @@ func (model *CapitalWithdrawal) MakeCode() error {
 func (capitalwithdrawal *CapitalWithdrawal) Insert() (err error) {
 	collection := db.GetDB("store_" + capitalwithdrawal.StoreID.Hex()).Collection("capitalwithdrawal")
 	capitalwithdrawal.ID = primitive.NewObjectID()
-
-	/*if len(capitalwithdrawal.Code) == 0 {
-		err = capitalwithdrawal.MakeCode()
-		if err != nil {
-			log.Print("Error making code")
-			return err
-		}
-	}*/
-
-	if len(capitalwithdrawal.ImagesContent) > 0 {
-		err := capitalwithdrawal.SaveImages()
-		if err != nil {
-			return err
-		}
-	}
 
 	err = capitalwithdrawal.UpdateForeignLabelFields()
 	if err != nil {

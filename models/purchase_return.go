@@ -1677,62 +1677,147 @@ func (purchasereturn *PurchaseReturn) Insert() error {
 	return nil
 }
 
-func (model *PurchaseReturn) MakeRedisCode() error {
-	store, err := FindStoreByID(model.StoreID, bson.M{})
+func (purchaseReturn *PurchaseReturn) MakeRedisCode() error {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	redisKey := model.StoreID.Hex() + "_purchase_return_invoice_counter"
+	redisKey := purchaseReturn.StoreID.Hex() + "_purchase_return_invoice_counter" // Global counter key
 
-	// Check if counter exists, if not set it to the custom startFrom - 1
+	// === 1. Get location from store.CountryCode ===
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// === 2. Get date from order.CreatedAt or fallback to order.Date or now ===
+	baseTime := purchaseReturn.CreatedAt.In(location)
+
+	// === 3. Always ensure global counter exists ===
 	exists, err := db.RedisClient.Exists(redisKey).Result()
 	if err != nil {
 		return err
 	}
-
 	if exists == 0 {
-		count, err := store.GetPurchaseReturnCount()
+		count, err := store.GetCountByCollection("purchasereturn")
 		if err != nil {
 			return err
 		}
-
 		startFrom := store.PurchaseReturnSerialNumber.StartFromCount
-
-		startFrom += count
-		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
-	incr, err := db.RedisClient.Incr(redisKey).Result()
+	// === 4. Increment global counter ===
+	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
 	if err != nil {
 		return err
 	}
 
-	paddingCount := store.PurchaseReturnSerialNumber.PaddingCount
+	// === 5. Determine which counter to use for order.Code ===
+	useMonthly := strings.Contains(store.PurchaseReturnSerialNumber.Prefix, "DATE")
+	var serialNumber int64 = globalIncr
 
-	if store.PurchaseReturnSerialNumber.Prefix != "" {
-		model.Code = fmt.Sprintf("%s-%0*d", store.PurchaseReturnSerialNumber.Prefix, paddingCount, incr)
-	} else {
-		model.Code = fmt.Sprintf("%s%0*d", store.PurchaseReturnSerialNumber.Prefix, paddingCount, incr)
+	if useMonthly {
+		// Generate monthly redis key
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := purchaseReturn.StoreID.Hex() + "_purchase_return_invoice_counter_" + monthKey
+
+		// Ensure monthly counter exists
+		monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+		if monthlyExists == 0 {
+			startFrom := store.PurchaseReturnSerialNumber.StartFromCount
+			fromDate := time.Date(baseTime.Year(), baseTime.Month(), 1, 0, 0, 0, 0, location)
+			toDate := fromDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+			monthlyCount, err := store.GetCountByCollectionInRange(fromDate, toDate, "purchasereturn")
+			if err != nil {
+				return err
+			}
+
+			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			if err != nil {
+				return err
+			}
+		}
+
+		// Increment monthly counter and use it
+		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+
+		if store.EnableMonthlySerialNumber {
+			serialNumber = monthlyIncr
+		}
 	}
 
-	if store.CountryCode != "" {
-		timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]
-		if ok {
-			location, err := time.LoadLocation(timeZone)
-			if err != nil {
-				return errors.New("error loading location")
-			}
-			if model.Date != nil {
-				currentDate := model.Date.In(location).Format("20060102") // YYYYMMDD
-				model.Code = strings.ReplaceAll(model.Code, "DATE", currentDate)
+	// === 6. Build the code ===
+	paddingCount := store.PurchaseReturnSerialNumber.PaddingCount
+	if store.PurchaseReturnSerialNumber.Prefix != "" {
+		purchaseReturn.Code = fmt.Sprintf("%s-%0*d", store.PurchaseReturnSerialNumber.Prefix, paddingCount, serialNumber)
+	} else {
+		purchaseReturn.Code = fmt.Sprintf("%0*d", paddingCount, serialNumber)
+	}
+
+	// === 7. Replace DATE token if used ===
+	if strings.Contains(purchaseReturn.Code, "DATE") {
+		orderDate := baseTime.Format("20060102") // YYYYMMDD
+		purchaseReturn.Code = strings.ReplaceAll(purchaseReturn.Code, "DATE", orderDate)
+	}
+
+	return nil
+}
+
+func (purchaseReturn *PurchaseReturn) UnMakeRedisCode() error {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	// Global counter key
+	redisKey := purchaseReturn.StoreID.Hex() + "_purchase_return_invoice_counter"
+
+	// Get location from store.CountryCode
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// Use CreatedAt, or fallback to now
+	baseTime := purchaseReturn.CreatedAt.In(location)
+
+	// Always try to decrement global counter
+	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
+		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
+			return err
+		}
+	}
+
+	// Decrement monthly counter only if Prefix contains "DATE"
+	if strings.Contains(store.PurchaseReturnSerialNumber.Prefix, "DATE") {
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := purchaseReturn.StoreID.Hex() + "_purchase_return_invoice_counter_" + monthKey
+
+		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
+			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
+				return err
 			}
 		}
 	}
+
 	return nil
 }
 

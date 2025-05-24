@@ -541,6 +541,150 @@ func (store *Store) GetDeliveryNoteCount() (count int64, err error) {
 	})
 }
 
+func (deliveryNote *DeliveryNote) MakeRedisCode() error {
+	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := deliveryNote.StoreID.Hex() + "_delivery_note_counter" // Global counter key
+
+	// === 1. Get location from store.CountryCode ===
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// === 2. Get date from order.CreatedAt or fallback to order.Date or now ===
+	baseTime := deliveryNote.CreatedAt.In(location)
+
+	// === 3. Always ensure global counter exists ===
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+	if exists == 0 {
+		count, err := store.GetCountByCollection("delivery_note")
+		if err != nil {
+			return err
+		}
+		startFrom := store.DeliveryNoteSerialNumber.StartFromCount
+		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	// === 4. Increment global counter ===
+	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	// === 5. Determine which counter to use for order.Code ===
+	useMonthly := strings.Contains(store.DeliveryNoteSerialNumber.Prefix, "DATE")
+	var serialNumber int64 = globalIncr
+
+	if useMonthly {
+		// Generate monthly redis key
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := deliveryNote.StoreID.Hex() + "_delivery_note_counter_" + monthKey
+
+		// Ensure monthly counter exists
+		monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+		if monthlyExists == 0 {
+			startFrom := store.DeliveryNoteSerialNumber.StartFromCount
+			fromDate := time.Date(baseTime.Year(), baseTime.Month(), 1, 0, 0, 0, 0, location)
+			toDate := fromDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+			monthlyCount, err := store.GetCountByCollectionInRange(fromDate, toDate, "delivery_note")
+			if err != nil {
+				return err
+			}
+
+			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			if err != nil {
+				return err
+			}
+		}
+
+		// Increment monthly counter and use it
+		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+		if store.EnableMonthlySerialNumber {
+			serialNumber = monthlyIncr
+		}
+	}
+
+	// === 6. Build the code ===
+	paddingCount := store.DeliveryNoteSerialNumber.PaddingCount
+	if store.DeliveryNoteSerialNumber.Prefix != "" {
+		deliveryNote.Code = fmt.Sprintf("%s-%0*d", store.DeliveryNoteSerialNumber.Prefix, paddingCount, serialNumber)
+	} else {
+		deliveryNote.Code = fmt.Sprintf("%0*d", paddingCount, serialNumber)
+	}
+
+	// === 7. Replace DATE token if used ===
+	if strings.Contains(deliveryNote.Code, "DATE") {
+		orderDate := baseTime.Format("20060102") // YYYYMMDD
+		deliveryNote.Code = strings.ReplaceAll(deliveryNote.Code, "DATE", orderDate)
+	}
+
+	return nil
+}
+
+func (deliveryNote *DeliveryNote) UnMakeRedisCode() error {
+	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	// Global counter key
+	redisKey := deliveryNote.StoreID.Hex() + "_delivery_note_counter"
+
+	// Get location from store.CountryCode
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// Use CreatedAt, or fallback to now
+	baseTime := deliveryNote.CreatedAt.In(location)
+
+	// Always try to decrement global counter
+	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
+		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
+			return err
+		}
+	}
+
+	// Decrement monthly counter only if Prefix contains "DATE"
+	if strings.Contains(store.DeliveryNoteSerialNumber.Prefix, "DATE") {
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := deliveryNote.StoreID.Hex() + "_delivery_note_counter_" + monthKey
+
+		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
+			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+/*
 func (model *DeliveryNote) MakeCode() error {
 	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {
@@ -598,6 +742,7 @@ func (model *DeliveryNote) MakeCode() error {
 	}
 	return nil
 }
+*/
 
 func (deliverynote *DeliveryNote) Insert() error {
 	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("delivery_note")

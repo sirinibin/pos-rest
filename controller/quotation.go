@@ -170,6 +170,10 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.Insert()
 	if err != nil {
+		redisErr := quotation.UnMakeRedisCode()
+		if redisErr != nil {
+			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+		}
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["insert"] = "Unable to insert to db:" + err.Error()

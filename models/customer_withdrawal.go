@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -838,6 +837,150 @@ func (store *Store) GetCustomerWithdrawalCount() (count int64, err error) {
 	})
 }
 
+func (customerWithdrawal *CustomerWithdrawal) MakeRedisCode() error {
+	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	redisKey := customerWithdrawal.StoreID.Hex() + "_customer_withdrawal_counter" // Global counter key
+
+	// === 1. Get location from store.CountryCode ===
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// === 2. Get date from order.CreatedAt or fallback to order.Date or now ===
+	baseTime := customerWithdrawal.CreatedAt.In(location)
+
+	// === 3. Always ensure global counter exists ===
+	exists, err := db.RedisClient.Exists(redisKey).Result()
+	if err != nil {
+		return err
+	}
+	if exists == 0 {
+		count, err := store.GetCountByCollection("customerwithdrawal")
+		if err != nil {
+			return err
+		}
+		startFrom := store.CustomerWithdrawalSerialNumber.StartFromCount
+		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	// === 4. Increment global counter ===
+	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return err
+	}
+
+	// === 5. Determine which counter to use for order.Code ===
+	useMonthly := strings.Contains(store.CustomerWithdrawalSerialNumber.Prefix, "DATE")
+	var serialNumber int64 = globalIncr
+
+	if useMonthly {
+		// Generate monthly redis key
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := customerWithdrawal.StoreID.Hex() + "_customer_withdrawal_counter_" + monthKey
+
+		// Ensure monthly counter exists
+		monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+		if monthlyExists == 0 {
+			startFrom := store.CustomerWithdrawalSerialNumber.StartFromCount
+			fromDate := time.Date(baseTime.Year(), baseTime.Month(), 1, 0, 0, 0, 0, location)
+			toDate := fromDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+			monthlyCount, err := store.GetCountByCollectionInRange(fromDate, toDate, "customerwithdrawal")
+			if err != nil {
+				return err
+			}
+
+			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			if err != nil {
+				return err
+			}
+		}
+
+		// Increment monthly counter and use it
+		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		if err != nil {
+			return err
+		}
+		if store.EnableMonthlySerialNumber {
+			serialNumber = monthlyIncr
+		}
+	}
+
+	// === 6. Build the code ===
+	paddingCount := store.CustomerWithdrawalSerialNumber.PaddingCount
+	if store.CustomerWithdrawalSerialNumber.Prefix != "" {
+		customerWithdrawal.Code = fmt.Sprintf("%s-%0*d", store.CustomerWithdrawalSerialNumber.Prefix, paddingCount, serialNumber)
+	} else {
+		customerWithdrawal.Code = fmt.Sprintf("%0*d", paddingCount, serialNumber)
+	}
+
+	// === 7. Replace DATE token if used ===
+	if strings.Contains(customerWithdrawal.Code, "DATE") {
+		orderDate := baseTime.Format("20060102") // YYYYMMDD
+		customerWithdrawal.Code = strings.ReplaceAll(customerWithdrawal.Code, "DATE", orderDate)
+	}
+
+	return nil
+}
+
+func (customerWithdrawal *CustomerWithdrawal) UnMakeRedisCode() error {
+	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	// Global counter key
+	redisKey := customerWithdrawal.StoreID.Hex() + "_customer_withdrawal_counter"
+
+	// Get location from store.CountryCode
+	location := time.UTC
+	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
+		loc, err := time.LoadLocation(timeZone)
+		if err == nil {
+			location = loc
+		}
+	}
+
+	// Use CreatedAt, or fallback to now
+	baseTime := customerWithdrawal.CreatedAt.In(location)
+
+	// Always try to decrement global counter
+	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
+		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
+			return err
+		}
+	}
+
+	// Decrement monthly counter only if Prefix contains "DATE"
+	if strings.Contains(store.CustomerWithdrawalSerialNumber.Prefix, "DATE") {
+		monthKey := baseTime.Format("200601") // e.g., 202505
+		monthlyRedisKey := customerWithdrawal.StoreID.Hex() + "_customer_withdrawal_counter_" + monthKey
+
+		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
+			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+/*
 func (model *CustomerWithdrawal) MakeCode() error {
 	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {
@@ -897,6 +1040,7 @@ func (model *CustomerWithdrawal) MakeCode() error {
 
 	return nil
 }
+*/
 
 /*
 func (customerwithdrawal *CustomerWithdrawal) MakeCode() error {
@@ -958,21 +1102,6 @@ func (customerwithdrawal *CustomerWithdrawal) Insert() (err error) {
 	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
 	customerwithdrawal.ID = primitive.NewObjectID()
 
-	if len(customerwithdrawal.Code) == 0 {
-		err = customerwithdrawal.MakeCode()
-		if err != nil {
-			log.Print("Error making code")
-			return err
-		}
-	}
-
-	if len(customerwithdrawal.ImagesContent) > 0 {
-		err := customerwithdrawal.SaveImages()
-		if err != nil {
-			return err
-		}
-	}
-
 	err = customerwithdrawal.UpdateForeignLabelFields()
 	if err != nil {
 		return err
@@ -988,45 +1117,12 @@ func (customerwithdrawal *CustomerWithdrawal) Insert() (err error) {
 	return nil
 }
 
-func (customerwithdrawal *CustomerWithdrawal) SaveImages() error {
-
-	for _, imageContent := range customerwithdrawal.ImagesContent {
-		content, err := base64.StdEncoding.DecodeString(imageContent)
-		if err != nil {
-			return err
-		}
-
-		extension, err := GetFileExtensionFromBase64(content)
-		if err != nil {
-			return err
-		}
-
-		filename := "images/customer_withdrawals/" + GenerateFileName("customerwithdrawal_", extension)
-		err = SaveBase64File(filename, content)
-		if err != nil {
-			return err
-		}
-		customerwithdrawal.Images = append(customerwithdrawal.Images, "/"+filename)
-	}
-
-	customerwithdrawal.ImagesContent = []string{}
-
-	return nil
-}
-
 func (customerwithdrawal *CustomerWithdrawal) Update() error {
 	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
 	defer cancel()
-
-	if len(customerwithdrawal.ImagesContent) > 0 {
-		err := customerwithdrawal.SaveImages()
-		if err != nil {
-			return err
-		}
-	}
 
 	err := customerwithdrawal.UpdateForeignLabelFields()
 	if err != nil {

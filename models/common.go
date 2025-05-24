@@ -697,3 +697,29 @@ var TimezoneMap = map[string]string{
 	"ZM": "Africa/Lusaka",
 	"ZW": "Africa/Harare",
 }
+
+func (store *Store) GetCountByCollection(collectionName string) (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	})
+}
+
+func (store *Store) GetCountByCollectionInRange(from, to time.Time, collectionName string) (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return collection.CountDocuments(ctx, bson.M{
+		"store_id": store.ID,
+		"created_at": bson.M{
+			"$gte": from,
+			"$lte": to,
+		},
+		"deleted": bson.M{"$ne": true},
+	})
+}

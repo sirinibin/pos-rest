@@ -116,12 +116,26 @@ func CreateCapital(w http.ResponseWriter, r *http.Request) {
 	if errs := capital.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = capital.MakeRedisCode()
+	if err != nil {
+		response.Status = false
+		response.Errors["code"] = "Error making code: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	err = capital.Insert()
 	if err != nil {
+		redisErr := capital.UnMakeRedisCode()
+		if redisErr != nil {
+			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+		}
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["insert"] = "Unable to insert to db:" + err.Error()

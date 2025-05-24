@@ -87,6 +87,7 @@ type Store struct {
 	ShowReceivedByFooterInInvoice      bool                  `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
 	ClientFilter                       bool                  `bson:"client_filter" json:"client_filter"`
 	BlockSaleWhenPurchasePriceIsHigher bool                  `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
+	EnableMonthlySerialNumber          bool                  `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
 }
 
 type SerialNumber struct {
@@ -753,7 +754,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if !store.ID.IsZero() && oldStore != nil && !govalidator.IsNull(oldStore.Zatca.Env) {
 		if store.Zatca.Env != oldStore.Zatca.Env {
-			salesCount, err := oldStore.GetSalesCount()
+			salesCount, err := oldStore.GetCountByCollection("order")
 			if err != nil {
 				errs["sales_count"] = "Error finding sales count"
 			}
@@ -765,93 +766,94 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	if !store.ID.IsZero() && oldStore != nil {
-		if store.SalesSerialNumber.StartFromCount != oldStore.SalesSerialNumber.StartFromCount {
-			salesCount, err := oldStore.GetSalesCount()
-			if err != nil {
-				errs["sales_serial_number_start_from_count"] = "Error finding sales count"
+		/*
+			if store.SalesSerialNumber.StartFromCount != oldStore.SalesSerialNumber.StartFromCount {
+				salesCount, err := oldStore.GetCountByCollection("order")
+				if err != nil {
+					errs["sales_serial_number_start_from_count"] = "Error finding sales count"
+				}
+
+				if salesCount > 0 {
+					errs["sales_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
+				}
 			}
 
-			if salesCount > 0 {
-				errs["sales_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
-			}
-		}
+			if store.SalesReturnSerialNumber.StartFromCount != oldStore.SalesReturnSerialNumber.StartFromCount {
+				salesReturnCount, err := oldStore.GetSalesReturnCount()
+				if err != nil {
+					errs["sales_return_serial_number_start_from_count"] = "Error finding sales return count"
+				}
 
-		if store.SalesReturnSerialNumber.StartFromCount != oldStore.SalesReturnSerialNumber.StartFromCount {
-			salesReturnCount, err := oldStore.GetSalesReturnCount()
-			if err != nil {
-				errs["sales_return_serial_number_start_from_count"] = "Error finding sales return count"
-			}
-
-			if salesReturnCount > 0 {
-				errs["sales_return_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(salesReturnCount, 10) + " sales returns"
-			}
-		}
-
-		if store.PurchaseSerialNumber.StartFromCount != oldStore.PurchaseSerialNumber.StartFromCount {
-			purchaseCount, err := oldStore.GetPurchaseCount()
-			if err != nil {
-				errs["purchase_serial_number_start_from_count"] = "Error finding purchase count"
+				if salesReturnCount > 0 {
+					errs["sales_return_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(salesReturnCount, 10) + " sales returns"
+				}
 			}
 
-			if purchaseCount > 0 {
-				errs["purchase_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(purchaseCount, 10) + " purchase"
-			}
-		}
+			if store.PurchaseSerialNumber.StartFromCount != oldStore.PurchaseSerialNumber.StartFromCount {
+				purchaseCount, err := oldStore.GetPurchaseCount()
+				if err != nil {
+					errs["purchase_serial_number_start_from_count"] = "Error finding purchase count"
+				}
 
-		if store.PurchaseReturnSerialNumber.StartFromCount != oldStore.PurchaseReturnSerialNumber.StartFromCount {
-			purchaseReturnCount, err := oldStore.GetPurchaseReturnCount()
-			if err != nil {
-				errs["purchase_return_serial_number_start_from_count"] = "Error finding purchase return count"
-			}
-
-			if purchaseReturnCount > 0 {
-				errs["purchase_return_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(purchaseReturnCount, 10) + " purchase return"
-			}
-		}
-
-		if store.QuotationSerialNumber.StartFromCount != oldStore.QuotationSerialNumber.StartFromCount {
-			quotationCount, err := oldStore.GetQuotationCount()
-			if err != nil {
-				errs["quotation_serial_number_start_from_count"] = "Error finding quotation count"
+				if purchaseCount > 0 {
+					errs["purchase_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(purchaseCount, 10) + " purchase"
+				}
 			}
 
-			if quotationCount > 0 {
-				errs["quotation_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(quotationCount, 10) + " quotations"
-			}
-		}
+			if store.PurchaseReturnSerialNumber.StartFromCount != oldStore.PurchaseReturnSerialNumber.StartFromCount {
+				purchaseReturnCount, err := oldStore.GetPurchaseReturnCount()
+				if err != nil {
+					errs["purchase_return_serial_number_start_from_count"] = "Error finding purchase return count"
+				}
 
-		if store.ExpenseSerialNumber.StartFromCount != oldStore.ExpenseSerialNumber.StartFromCount {
-			expenseCount, err := oldStore.GetExpenseCount()
-			if err != nil {
-				errs["expense_serial_number_start_from_count"] = "Error finding expense count"
-			}
-
-			if expenseCount > 0 {
-				errs["expense_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(expenseCount, 10) + " expenses"
-			}
-		}
-
-		if store.CustomerSerialNumber.StartFromCount != oldStore.CustomerSerialNumber.StartFromCount {
-			customerCount, err := oldStore.GetCustomerCount()
-			if err != nil {
-				errs["customer_serial_number_start_from_count"] = "Error finding customer count"
+				if purchaseReturnCount > 0 {
+					errs["purchase_return_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(purchaseReturnCount, 10) + " purchase return"
+				}
 			}
 
-			if customerCount > 0 {
-				errs["customer_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(customerCount, 10) + " customers"
-			}
-		}
+			if store.QuotationSerialNumber.StartFromCount != oldStore.QuotationSerialNumber.StartFromCount {
+				quotationCount, err := oldStore.GetQuotationCount()
+				if err != nil {
+					errs["quotation_serial_number_start_from_count"] = "Error finding quotation count"
+				}
 
-		if store.VendorSerialNumber.StartFromCount != oldStore.VendorSerialNumber.StartFromCount {
-			vendorCount, err := oldStore.GetVendorCount()
-			if err != nil {
-				errs["vendor_serial_number_start_from_count"] = "Error finding vendor count"
+				if quotationCount > 0 {
+					errs["quotation_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(quotationCount, 10) + " quotations"
+				}
 			}
 
-			if vendorCount > 0 {
-				errs["vendor_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(vendorCount, 10) + " vendors"
+			if store.ExpenseSerialNumber.StartFromCount != oldStore.ExpenseSerialNumber.StartFromCount {
+				expenseCount, err := oldStore.GetExpenseCount()
+				if err != nil {
+					errs["expense_serial_number_start_from_count"] = "Error finding expense count"
+				}
+
+				if expenseCount > 0 {
+					errs["expense_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(expenseCount, 10) + " expenses"
+				}
 			}
-		}
+
+			if store.CustomerSerialNumber.StartFromCount != oldStore.CustomerSerialNumber.StartFromCount {
+				customerCount, err := oldStore.GetCustomerCount()
+				if err != nil {
+					errs["customer_serial_number_start_from_count"] = "Error finding customer count"
+				}
+
+				if customerCount > 0 {
+					errs["customer_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(customerCount, 10) + " customers"
+				}
+			}
+
+			if store.VendorSerialNumber.StartFromCount != oldStore.VendorSerialNumber.StartFromCount {
+				vendorCount, err := oldStore.GetVendorCount()
+				if err != nil {
+					errs["vendor_serial_number_start_from_count"] = "Error finding vendor count"
+				}
+
+				if vendorCount > 0 {
+					errs["vendor_serial_number_start_from_count"] = "You cannot change this as you have already created " + strconv.FormatInt(vendorCount, 10) + " vendors"
+				}
+			}*/
 	}
 
 	/*
