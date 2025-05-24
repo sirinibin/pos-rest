@@ -2015,9 +2015,16 @@ func (purchase *Purchase) MakeRedisCode() error {
 				return err
 			}
 
-			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
-			if err != nil {
-				return err
+			if monthlyCount == 0 {
+				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				if err != nil {
+					return err
+				}
+			} else {
+				err = db.RedisClient.Set(monthlyRedisKey, (globalIncr - 1), 0).Err()
+				if err != nil {
+					return err
+				}
 			}
 		}
 
