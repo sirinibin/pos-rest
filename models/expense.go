@@ -215,6 +215,11 @@ func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expen
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[category_id]"]
 	if ok && len(keys[0]) >= 1 {
 
