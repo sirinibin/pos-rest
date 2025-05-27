@@ -123,7 +123,7 @@ func (quotation *Quotation) LinkOrUnLinkSales(quotationOld *Quotation) (err erro
 		if err != nil {
 			return err
 		}
-	} else if !govalidator.IsNull(*quotation.OrderCode) {
+	} else if quotation.OrderCode != nil && !govalidator.IsNull(*quotation.OrderCode) {
 		order, err = store.FindOrderByCode(*quotation.OrderCode, bson.M{})
 		if err != nil {
 			return errors.New("error_finding_order:" + err.Error())
