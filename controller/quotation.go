@@ -160,6 +160,14 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = quotation.CreateNewCustomerFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	//quotation.FindTotal()
 	quotation.FindTotalQuantity()
 	//	quotation.FindVatPrice()
@@ -339,6 +347,14 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = quotation.CreateNewCustomerFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	quotation.FindTotalQuantity()
 	quotation.CalculateQuotationProfit()
 
@@ -398,6 +414,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		quotation.CustomerID != nil &&
 		!quotation.CustomerID.IsZero() &&
 		quotationOld.CustomerID.Hex() != quotation.CustomerID.Hex() {
+
 		err = quotationOld.SetCustomerQuotationStats()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -407,6 +424,8 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	quotationOld.SetProductsQuotationStats()
 
 	quotation, err = store.FindQuotationByID(&quotation.ID, bson.M{})
 	if err != nil {

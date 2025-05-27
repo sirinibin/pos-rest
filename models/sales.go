@@ -1311,7 +1311,11 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 
 		for _, salesReturn := range salesReturns {
-			if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() && order.CustomerID != nil && !order.CustomerID.IsZero() && salesReturn.CustomerID.Hex() != order.CustomerID.Hex() {
+			if salesReturn.CustomerID != nil &&
+				!salesReturn.CustomerID.IsZero() &&
+				order.CustomerID != nil &&
+				!order.CustomerID.IsZero() &&
+				salesReturn.CustomerID.Hex() != order.CustomerID.Hex() {
 				errs["customer_id"] = "Customer " + salesReturn.CustomerName + " is used in Sales Return(ID: " + salesReturn.Code + ")"
 				return
 			} else if (salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero()) && (order.CustomerID == nil || order.CustomerID.IsZero()) {
@@ -1331,34 +1335,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				return
 			}
 		}*/
-
-	if customer == nil && !govalidator.IsNull(order.CustomerName) {
-		now := time.Now()
-		newCustomer := Customer{
-			Name:          order.CustomerName,
-			Phone:         order.Phone,
-			PhoneInArabic: ConvertToArabicNumerals(order.Phone),
-			VATNo:         order.VatNo,
-			VATNoInArabic: ConvertToArabicNumerals(order.VatNo),
-			Remarks:       order.Remarks,
-			CreatedBy:     order.CreatedBy,
-			UpdatedBy:     order.CreatedBy,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
-			StoreID:       order.StoreID,
-		}
-
-		err = newCustomer.MakeCode()
-		if err != nil {
-			errs["customer_id"] = "error creating new code"
-		}
-		err = newCustomer.Insert()
-		if err != nil {
-			errs["customer_id"] = "error creating new customer"
-		}
-		newCustomer.UpdateForeignLabelFields()
-		order.CustomerID = &newCustomer.ID
-	}
 
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
@@ -1728,6 +1704,52 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		w.WriteHeader(http.StatusBadRequest)
 	}
 	return errs
+}
+
+func (order *Order) CreateNewCustomerFromName() error {
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer != nil || govalidator.IsNull(order.CustomerName) {
+		return nil
+	}
+
+	now := time.Now()
+	newCustomer := Customer{
+		Name:          order.CustomerName,
+		Phone:         order.Phone,
+		PhoneInArabic: ConvertToArabicNumerals(order.Phone),
+		VATNo:         order.VatNo,
+		VATNoInArabic: ConvertToArabicNumerals(order.VatNo),
+		Remarks:       order.Remarks,
+		CreatedBy:     order.CreatedBy,
+		UpdatedBy:     order.CreatedBy,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+		StoreID:       order.StoreID,
+	}
+
+	err = newCustomer.MakeCode()
+	if err != nil {
+		return err
+	}
+	err = newCustomer.Insert()
+	if err != nil {
+		return err
+	}
+	err = newCustomer.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+	order.CustomerID = &newCustomer.ID
+	return nil
 }
 
 func (customer *Customer) IsCreditLimitExceeded(amount float64,

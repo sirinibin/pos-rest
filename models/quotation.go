@@ -111,6 +111,52 @@ type Quotation struct {
 	Address                  string              `bson:"address" json:"address"`
 }
 
+func (quotation *Quotation) CreateNewCustomerFromName() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer != nil || govalidator.IsNull(quotation.CustomerName) {
+		return nil
+	}
+
+	now := time.Now()
+	newCustomer := Customer{
+		Name:          quotation.CustomerName,
+		Phone:         quotation.Phone,
+		PhoneInArabic: ConvertToArabicNumerals(quotation.Phone),
+		VATNo:         quotation.VatNo,
+		VATNoInArabic: ConvertToArabicNumerals(quotation.VatNo),
+		Remarks:       quotation.Remarks,
+		CreatedBy:     quotation.CreatedBy,
+		UpdatedBy:     quotation.CreatedBy,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+		StoreID:       quotation.StoreID,
+	}
+
+	err = newCustomer.MakeCode()
+	if err != nil {
+		return err
+	}
+	err = newCustomer.Insert()
+	if err != nil {
+		return err
+	}
+	err = newCustomer.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+	quotation.CustomerID = &newCustomer.ID
+	return nil
+}
+
 func (quotation *Quotation) GetPaymentsCount() (count int64, err error) {
 	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1412,38 +1458,6 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			}
 
 		} //end for
-	}
-
-	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		errs["customer_id"] = "Invalid customer"
-	}
-
-	if customer == nil && !govalidator.IsNull(quotation.CustomerName) {
-		now := time.Now()
-		newCustomer := Customer{
-			Name:          quotation.CustomerName,
-			Phone:         quotation.Phone,
-			PhoneInArabic: ConvertToArabicNumerals(quotation.Phone),
-			VATNo:         quotation.VatNo,
-			VATNoInArabic: ConvertToArabicNumerals(quotation.VatNo),
-			CreatedBy:     quotation.CreatedBy,
-			UpdatedBy:     quotation.CreatedBy,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
-			StoreID:       quotation.StoreID,
-		}
-
-		err = newCustomer.MakeCode()
-		if err != nil {
-			errs["customer_id"] = "error creating new code"
-		}
-		err = newCustomer.Insert()
-		if err != nil {
-			errs["customer_id"] = "error creating new customer"
-		}
-		newCustomer.UpdateForeignLabelFields()
-		quotation.CustomerID = &newCustomer.ID
 	}
 
 	if len(quotation.Products) == 0 {

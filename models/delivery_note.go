@@ -52,6 +52,48 @@ type DeliveryNote struct {
 	UpdatedByName   string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 }
 
+func (deliveryNote *DeliveryNote) CreateNewCustomerFromName() error {
+	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	customer, err := store.FindCustomerByID(deliveryNote.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer != nil || govalidator.IsNull(deliveryNote.CustomerName) {
+		return nil
+	}
+
+	now := time.Now()
+	newCustomer := Customer{
+		Name:      deliveryNote.CustomerName,
+		Remarks:   deliveryNote.Remarks,
+		CreatedBy: deliveryNote.CreatedBy,
+		UpdatedBy: deliveryNote.CreatedBy,
+		CreatedAt: &now,
+		UpdatedAt: &now,
+		StoreID:   deliveryNote.StoreID,
+	}
+
+	err = newCustomer.MakeCode()
+	if err != nil {
+		return err
+	}
+	err = newCustomer.Insert()
+	if err != nil {
+		return err
+	}
+	err = newCustomer.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+	deliveryNote.CustomerID = &newCustomer.ID
+	return nil
+}
+
 func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
 	if err != nil {
@@ -448,35 +490,6 @@ func (deliverynote *DeliveryNote) Validate(w http.ResponseWriter, r *http.Reques
 			errs["id"] = "Invalid DeliveryNote:" + deliverynote.ID.Hex()
 		}
 
-	}
-
-	customer, err := store.FindCustomerByID(deliverynote.CustomerID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		errs["customer_id"] = "Invalid customer"
-	}
-
-	if customer == nil && !govalidator.IsNull(deliverynote.CustomerName) {
-		now := time.Now()
-		newCustomer := Customer{
-			Name:      deliverynote.CustomerName,
-			Remarks:   deliverynote.Remarks,
-			CreatedBy: deliverynote.CreatedBy,
-			UpdatedBy: deliverynote.CreatedBy,
-			CreatedAt: &now,
-			UpdatedAt: &now,
-			StoreID:   deliverynote.StoreID,
-		}
-
-		err = newCustomer.MakeCode()
-		if err != nil {
-			errs["customer_id"] = "error creating new code"
-		}
-		err = newCustomer.Insert()
-		if err != nil {
-			errs["customer_id"] = "error creating new customer"
-		}
-		newCustomer.UpdateForeignLabelFields()
-		deliverynote.CustomerID = &newCustomer.ID
 	}
 
 	if len(deliverynote.Products) == 0 {

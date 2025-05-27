@@ -70,7 +70,7 @@ type Vendor struct {
 	CountryCode                string                 `bson:"country_code" json:"country_code"`
 	ContactPerson              string                 `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
 	CreditLimit                float64                `bson:"credit_limit" json:"credit_limit"`
-	CreditBalance              float64                `json:"credit_balance,omitempty" bson:"credit_balance,omitempty"`
+	CreditBalance              float64                `json:"credit_balance" bson:"credit_balance"`
 	Account                    *Account               `json:"account" bson:"account"`
 	Logo                       string                 `bson:"logo,omitempty" json:"logo"`
 	LogoContent                string                 `json:"logo_content,omitempty"`

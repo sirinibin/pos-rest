@@ -82,7 +82,7 @@ type Customer struct {
 	RegistrationNumberInArabic string                   `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
 	ContactPerson              string                   `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
 	CreditLimit                float64                  `bson:"credit_limit" json:"credit_limit"`
-	CreditBalance              float64                  `json:"credit_balance,omitempty" bson:"credit_balance,omitempty"`
+	CreditBalance              float64                  `json:"credit_balance" bson:"credit_balance"`
 	Account                    *Account                 `json:"account" bson:"account"`
 	Deleted                    bool                     `bson:"deleted" json:"deleted"`
 	DeletedBy                  *primitive.ObjectID      `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`

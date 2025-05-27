@@ -154,6 +154,14 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = order.CreateNewCustomerFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	order.FindTotalQuantity()
 
 	err = order.UpdateForeignLabelFields()
@@ -415,6 +423,14 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = order.CreateNewCustomerFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	order.FindTotalQuantity()
 	order.UpdateForeignLabelFields()
 	order.CalculateOrderProfit()
@@ -530,8 +546,11 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if orderOld.CustomerID != nil && !orderOld.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(orderOld.CustomerID, bson.M{})
 		if customer != nil {
+			log.Print("Setting old customer credit balance")
 			customer.SetCreditBalance()
+			orderOld.SetCustomerSalesStats()
 		}
+		orderOld.SetProductsSalesStats()
 	}
 
 	/*

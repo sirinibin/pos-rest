@@ -122,6 +122,52 @@ type Purchase struct {
 	Address           string              `bson:"address" json:"address"`
 }
 
+func (purchase *Purchase) CreateNewVendorFromName() error {
+	store, err := FindStoreByID(purchase.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendor != nil || govalidator.IsNull(purchase.VendorName) {
+		return nil
+	}
+
+	now := time.Now()
+	newVendor := Vendor{
+		Name:          purchase.VendorName,
+		Phone:         purchase.Phone,
+		PhoneInArabic: ConvertToArabicNumerals(purchase.Phone),
+		VATNo:         purchase.VatNo,
+		VATNoInArabic: ConvertToArabicNumerals(purchase.VatNo),
+		Remarks:       purchase.Remarks,
+		CreatedBy:     purchase.CreatedBy,
+		UpdatedBy:     purchase.CreatedBy,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+		StoreID:       purchase.StoreID,
+	}
+
+	err = newVendor.MakeCode()
+	if err != nil {
+		return err
+	}
+	err = newVendor.Insert()
+	if err != nil {
+		return err
+	}
+	err = newVendor.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+	purchase.VendorID = &newVendor.ID
+	return nil
+}
+
 func (store *Store) GetReturnedAmountByPurchaseID(purchaseID primitive.ObjectID) (returnedAmount float64, returnCount int64, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1331,34 +1377,6 @@ func (purchase *Purchase) Validate(
 			errs["vendor_id"] = "You can't remove this vendor as this purchase have a purchase return created"
 			return
 		}
-	}
-
-	if vendor == nil && !govalidator.IsNull(purchase.VendorName) {
-		now := time.Now()
-		newVendor := Vendor{
-			Name:          purchase.VendorName,
-			Phone:         purchase.Phone,
-			PhoneInArabic: ConvertToArabicNumerals(purchase.Phone),
-			VATNo:         purchase.VatNo,
-			VATNoInArabic: ConvertToArabicNumerals(purchase.VatNo),
-			CreatedBy:     purchase.CreatedBy,
-			UpdatedBy:     purchase.CreatedBy,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
-			StoreID:       purchase.StoreID,
-		}
-
-		err = newVendor.MakeCode()
-		if err != nil {
-			errs["vendor_id"] = "error creating new code"
-		}
-		err = newVendor.Insert()
-		if err != nil {
-			errs["vendor_id"] = "error creating new vendor"
-		}
-		newVendor.UpdateForeignLabelFields()
-		purchase.VendorID = &newVendor.ID
-		vendor = &newVendor
 	}
 
 	var vendorAccount *Account

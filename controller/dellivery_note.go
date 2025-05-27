@@ -107,6 +107,14 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = deliverynote.CreateNewCustomerFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = deliverynote.MakeRedisCode()
 	if err != nil {
 		response.Status = false
@@ -219,6 +227,14 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	if errs := deliverynote.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = deliverynote.CreateNewCustomerFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

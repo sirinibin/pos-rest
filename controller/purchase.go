@@ -28,7 +28,6 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchases := []models.Purchase{}
 	store, err := ParseStore(r)
 	if err != nil {
 		response.Status = false
@@ -145,6 +144,14 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchase.CreateNewVendorFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_vendor_from_name"] = "error creating new vendor from name: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -311,6 +318,14 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = purchase.CreateNewVendorFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_vendor_from_name"] = "error creating new vendor from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	purchase.FindTotalQuantity()
 	purchase.UpdateForeignLabelFields()
 	purchase.CalculatePurchaseExpectedProfit()
@@ -416,6 +431,15 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		if vendor != nil {
 			vendor.SetCreditBalance()
 		}
+	}
+
+	if purchaseOld.VendorID != nil && !purchaseOld.VendorID.IsZero() {
+		vendor, _ := store.FindVendorByID(purchaseOld.VendorID, bson.M{})
+		if vendor != nil {
+			vendor.SetCreditBalance()
+			purchaseOld.SetVendorPurchaseStats()
+		}
+		purchaseOld.SetProductsPurchaseStats()
 	}
 
 	store.NotifyUsers("purchase_updated")
