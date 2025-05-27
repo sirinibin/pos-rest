@@ -162,8 +162,18 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.CreateNewCustomerFromName()
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.LinkOrUnLinkSales(nil)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["order_code"] = "Not able to link Sale ID"
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -378,6 +388,15 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		response.Errors["update"] = "Unable to update:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.LinkOrUnLinkSales(quotationOld)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["order_code"] = "Not able to link Sale ID"
 		json.NewEncoder(w).Encode(response)
 		return
 	}

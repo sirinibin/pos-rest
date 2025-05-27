@@ -231,6 +231,16 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = order.LinkQuotation()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["link_quotation"] = "error linking quotation:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = order.CreateProductsSalesHistory()
 	if err != nil {
 		response.Status = false
@@ -453,6 +463,16 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		response.Errors = make(map[string]string)
 		response.Errors["update"] = "Unable to update:" + err.Error()
 
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = order.LinkQuotation()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["link_quotation"] = "error linking quotation:" + err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return

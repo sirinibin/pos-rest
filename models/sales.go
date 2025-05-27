@@ -107,6 +107,8 @@ type Order struct {
 	VatNo                  string              `bson:"vat_no" json:"vat_no"`
 	Address                string              `bson:"address" json:"address"`
 	EnableReportToZatca    bool                `json:"enable_report_to_zatca" bson:"-"`
+	QuotationID            *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
+	QuotationCode          *string             `json:"quotation_code" bson:"quotation_code"`
 }
 
 type ZatcaReporting struct {
@@ -131,6 +133,34 @@ type ZatcaReporting struct {
 	ReportingFailedCount               int64      `bson:"reporting_failed_count,omitempty" json:"reporting_failed_count,omitempty"`
 	ReportingErrors                    []string   `bson:"reporting_errors,omitempty" json:"reporting_errors,omitempty"`
 	ReportingLastFailedAt              *time.Time `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
+}
+
+func (order *Order) LinkQuotation() error {
+	store, _ := FindStoreByID(order.StoreID, bson.M{})
+
+	if order.QuotationID != nil && !order.QuotationID.IsZero() {
+		quotation, err := store.FindQuotationByID(order.QuotationID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		quotation.OrderID = &order.ID
+		quotation.OrderCode = &order.Code
+
+		if order.Zatca.ReportingPassed {
+			quotation.ReportedToZatca = true
+			quotation.ReportedToZatcaAt = order.Zatca.ReportedAt
+
+		} else {
+			quotation.ReportedToZatca = false
+		}
+		err = quotation.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (order *Order) UpdatePaymentFromReceivablePayment(
@@ -2739,6 +2769,58 @@ func (store *Store) FindOrderByID(
 	err = collection.FindOne(ctx,
 		bson.M{
 			"_id":      ID,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&order)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := selectFields["store.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "store")
+		order.Store, _ = FindStoreByID(order.StoreID, fields)
+	}
+
+	if _, ok := selectFields["customer.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "customer")
+		order.Customer, _ = store.FindCustomerByID(order.CustomerID, fields)
+	}
+
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		order.CreatedByUser, _ = FindUserByID(order.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		order.UpdatedByUser, _ = FindUserByID(order.UpdatedBy, fields)
+	}
+
+	/*
+		if _, ok := selectFields["deleted_by_user.id"]; ok {
+			fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+			order.DeletedByUser, _ = FindUserByID(order.DeletedBy, fields)
+		}*/
+
+	return order, err
+}
+
+func (store *Store) FindOrderByCode(
+	Code string,
+	selectFields map[string]interface{},
+) (order *Order, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"code":     Code,
 			"store_id": store.ID,
 		}, findOneOptions).
 		Decode(&order)

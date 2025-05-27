@@ -371,27 +371,6 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		}*/
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
-		var lastOrder *models.Order
-
-		lastOrder, err = order.FindPreviousOrder(bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
-			response.Status = false
-			response.Errors["previous_order"] = "Error finding previous order"
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-
-		if lastOrder != nil {
-			if lastOrder.Zatca.ReportingFailedCount > 0 && !lastOrder.Zatca.ReportingPassed {
-				response.Status = false
-				response.Errors["previous_order"] = "Previous sale is not reported to Zatca. please report it and try again"
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(response)
-				return
-			}
-		}
-
 		err = order.ReportToZatca()
 		if err != nil {
 			response.Status = false
@@ -407,6 +386,16 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 			response.Errors = make(map[string]string)
 			response.Errors["update"] = "Unable to update:" + err.Error()
 
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		err = order.LinkQuotation()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["link_quotation"] = "error linking quotation:" + err.Error()
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return

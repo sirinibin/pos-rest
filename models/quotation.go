@@ -109,6 +109,84 @@ type Quotation struct {
 	Phone                    string              `bson:"phone" json:"phone"`
 	VatNo                    string              `bson:"vat_no" json:"vat_no"`
 	Address                  string              `bson:"address" json:"address"`
+	OrderID                  *primitive.ObjectID `json:"order_id" bson:"order_id"`
+	OrderCode                *string             `json:"order_code" bson:"order_code"`
+	ReportedToZatca          bool                `bson:"reported_to_zatca" json:"reported_to_zatca"`
+	ReportedToZatcaAt        *time.Time          `bson:"reported_to_zatca_at" json:"reported_to_zatca_at"`
+}
+
+func (quotation *Quotation) LinkOrUnLinkSales(quotationOld *Quotation) (err error) {
+	var order *Order
+	store, _ := FindStoreByID(quotation.StoreID, bson.M{})
+	if quotation.OrderID != nil && !quotation.OrderID.IsZero() {
+		order, err = store.FindOrderByID(quotation.OrderID, bson.M{})
+		if err != nil {
+			return err
+		}
+	} else if !govalidator.IsNull(*quotation.OrderCode) {
+		order, err = store.FindOrderByCode(*quotation.OrderCode, bson.M{})
+		if err != nil {
+			return errors.New("error_finding_order:" + err.Error())
+		}
+	} else {
+		err := quotationOld.UnLinkSales()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	order.QuotationID = &quotation.ID
+	order.QuotationCode = &quotation.Code
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	if order.Zatca.ReportingPassed {
+		quotation.ReportedToZatca = true
+		quotation.ReportedToZatcaAt = order.Zatca.ReportedAt
+	} else {
+		quotation.ReportedToZatca = false
+	}
+	err = quotation.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (quotation *Quotation) UnLinkSales() error {
+	if quotation == nil {
+		return nil
+	}
+
+	store, _ := FindStoreByID(quotation.StoreID, bson.M{})
+
+	if quotation.OrderID != nil && quotation.OrderID.IsZero() {
+		order, err := store.FindOrderByID(quotation.OrderID, bson.M{})
+		if err != nil {
+			return err
+		}
+		order.QuotationID = nil
+		order.QuotationCode = nil
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+	}
+
+	quotation.OrderCode = nil
+	quotation.OrderID = nil
+	quotation.ReportedToZatca = false
+	quotation.ReportedToZatcaAt = nil
+
+	err := quotation.Update()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (quotation *Quotation) CreateNewCustomerFromName() error {
@@ -1117,6 +1195,23 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[order_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["order_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[reported_to_zatca]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return quotations, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["reported_to_zatca"] = bson.M{"$eq": true}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[net_total]"]
