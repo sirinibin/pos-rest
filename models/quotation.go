@@ -1211,6 +1211,8 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 
 		if value == 1 {
 			criterias.SearchBy["reported_to_zatca"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["reported_to_zatca"] = bson.M{"$ne": true}
 		}
 	}
 
