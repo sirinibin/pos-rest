@@ -11,7 +11,7 @@ import (
 const uploadDir = "./pdfs"
 
 func SavePdf(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseMultipartForm(10 << 20) // Max 10MB
+	err := r.ParseMultipartForm(100 << 20) // Max 10MB
 	if err != nil {
 		http.Error(w, "Error parsing form", http.StatusBadRequest)
 		return
