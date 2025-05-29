@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"gopkg.in/mgo.v2/bson"
 )
 
 func SetIndexes() error {
@@ -30,55 +30,77 @@ func SetIndexes() error {
 }
 
 func (store *Store) CreateAllIndexes() error {
-	/*
-		textFields := bson.D{
-			{"name", "text"},
-			{"part_number", "text"},
-			{"name_in_arabic", "text"},
-		}
-		err := store.CreateTextIndex("product", textFields, "name_text_part_number_text_name_in_arabic_text")
-		if err != nil {
-			return err
-		}*/
+	//product
+	textFields := bson.D{
+		bson.E{Key: "name", Value: "text"},
+		bson.E{Key: "name_prefixes", Value: "text"},
+		bson.E{Key: "name_in_arabic", Value: "text"},
+		bson.E{Key: "name_in_arabic_prefixes", Value: "text"},
+		bson.E{Key: "part_number", Value: "text"},
+	}
+	err := store.CreateTextIndex("product", textFields, "product_text_index")
+	if err != nil {
+		return err
+	}
 
 	fields := bson.M{"ean_12": 1}
-	err := store.CreateIndex("product", fields, true, false, "")
+	err = store.CreateIndex("product", fields, true, false, "")
+	if err != nil {
+		return err
+	}
+
+	//customer
+	textFields = bson.D{
+		bson.E{Key: "name", Value: "text"},
+		bson.E{Key: "name_in_arabic", Value: "text"},
+		bson.E{Key: "code", Value: "text"},
+		bson.E{Key: "phone", Value: "text"},
+		bson.E{Key: "phone_in_arabic", Value: "text"},
+		bson.E{Key: "vat_no", Value: "text"},
+		bson.E{Key: "vat_no_in_arabic", Value: "text"},
+		bson.E{Key: "email", Value: "text"},
+		bson.E{Key: "search_words_in_arabic", Value: "text"},
+		bson.E{Key: "search_words", Value: "text"},
+		bson.E{Key: "country_name", Value: "text"},
+	}
+	err = store.CreateTextIndex("customer", textFields, "customer_text_index")
 	if err != nil {
 		return err
 	}
 
 	/*
-		fields = bson.M{"part_number": 1}
-		err = store.CreateIndex("product", fields, true, false, "")
+		fields = bson.M{"code": 1}
+		err = store.CreateIndex("customer", fields, true, false, "")
 		if err != nil {
 			return err
 		}*/
 
-	/*
-		fields = bson.M{"name": "text"}
-		err = store.CreateIndex("product", fields, false, true, "")
-		if err != nil {
-			return err
-		}
-	*/
-
-	fields = bson.M{"category_id": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
+	//vendor
+	textFields = bson.D{
+		bson.E{Key: "name", Value: "text"},
+		bson.E{Key: "name_in_arabic", Value: "text"},
+		bson.E{Key: "code", Value: "text"},
+		bson.E{Key: "phone", Value: "text"},
+		bson.E{Key: "phone_in_arabic", Value: "text"},
+		bson.E{Key: "vat_no", Value: "text"},
+		bson.E{Key: "vat_no_in_arabic", Value: "text"},
+		bson.E{Key: "email", Value: "text"},
+		bson.E{Key: "search_words_in_arabic", Value: "text"},
+		bson.E{Key: "search_words", Value: "text"},
+		bson.E{Key: "country_name", Value: "text"},
 	}
-	fields = bson.M{"created_by": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_by": 1}
-	err = store.CreateIndex("order", fields, false, false, "")
+	err = store.CreateTextIndex("vendor", textFields, "vendor_text_index")
 	if err != nil {
 		return err
 	}
 
+	fields = bson.M{"code": 1}
+	err = store.CreateIndex("vendor", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	//order
 	fields = bson.M{"customer_id": 1}
 	err = store.CreateIndex("order", fields, false, false, "")
 	if err != nil {
@@ -91,36 +113,63 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("order", fields, true, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"payment_status": 1}
+	fields = bson.M{"created_at": -1}
 	err = store.CreateIndex("order", fields, false, false, "")
 	if err != nil {
 		return err
 	}
 
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("expense", fields, false, false, "")
+	fields = bson.M{"code": 1}
+	err = store.CreateIndex("order", fields, false, false, "")
 	if err != nil {
 		return err
 	}
 
-	fields = bson.M{"vendor_invoice_no": "text"}
-	err = store.CreateIndex("purchase", fields, false, true, "")
+	fields = bson.M{"invoice_count_value": 1}
+	err = store.CreateIndex("order", fields, false, false, "")
 	if err != nil {
 		return err
 	}
+
+	//salesreturn
+	fields = bson.M{"customer_id": 1}
+	err = store.CreateIndex("salesreturn", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("salesreturn", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("salesreturn", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"code": 1}
+	err = store.CreateIndex("salesreturn", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"invoice_count_value": 1}
+	err = store.CreateIndex("salesreturn", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	//purchase
 	fields = bson.M{"vendor_id": 1}
 	err = store.CreateIndex("purchase", fields, false, false, "")
 	if err != nil {
 		return err
 	}
 
-	fields = bson.M{"created_by": 1}
+	fields = bson.M{"date": -1}
 	err = store.CreateIndex("purchase", fields, false, false, "")
 	if err != nil {
 		return err
@@ -132,39 +181,15 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	fields = bson.M{"date": -1}
+	fields = bson.M{"code": 1}
 	err = store.CreateIndex("purchase", fields, false, false, "")
 	if err != nil {
 		return err
 	}
 
-	//Sales Return indexes
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("salesreturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("salesreturn", fields, true, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"order_code": 1}
-	err = store.CreateIndex("salesreturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("purchase", fields, true, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("purchasereturn", fields, true, false, "")
+	//purchase return
+	fields = bson.M{"vendor_id": 1}
+	err = store.CreateIndex("purchasereturn", fields, false, false, "")
 	if err != nil {
 		return err
 	}
@@ -175,14 +200,64 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	fields = bson.M{"purchase_code": 1}
+	fields = bson.M{"created_at": -1}
 	err = store.CreateIndex("purchasereturn", fields, false, false, "")
 	if err != nil {
 		return err
 	}
 
 	fields = bson.M{"code": 1}
-	err = store.CreateIndex("quotation", fields, true, false, "")
+	err = store.CreateIndex("purchasereturn", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	//quotation
+	fields = bson.M{"customer_id": 1}
+	err = store.CreateIndex("quotation", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("quotation", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("quotation", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"code": 1}
+	err = store.CreateIndex("quotation", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	//delivery_note
+	fields = bson.M{"customer_id": 1}
+	err = store.CreateIndex("delivery_note", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("delivery_note", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("delivery_note", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"code": 1}
+	err = store.CreateIndex("delivery_note", fields, false, false, "")
 	if err != nil {
 		return err
 	}
@@ -190,17 +265,7 @@ func (store *Store) CreateAllIndexes() error {
 	return nil
 }
 
-/*
-name_text_part_number_text_name_in_arabic_text
-
-	bson.D{
-	            {"name", "text"},
-	            {"part_number", "text"},
-	            {"name_in_arabic", "text"},
-	        }
-*/
 func (store *Store) CreateTextIndex(collectionName string, fields bson.D, indexName string) error {
-	log.Print("inside CreateTextIndex")
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -254,7 +319,7 @@ func (store *Store) CreateIndex(collectionName string, fields bson.M, unique boo
 	indexName, err := collection.Indexes().CreateOne(ctx, mod)
 	if err != nil {
 		// 5. Something went wrong, we log it and return false
-		log.Printf("Failed to create Index for field:%v", fields)
+		log.Printf("Failed to create Index for field:%v, collection: %s", fields, collectionName)
 		fmt.Println(err.Error())
 		return err
 	}
@@ -270,6 +335,12 @@ func (store *Store) RemoveAllIndexes() {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	collection.Indexes().DropAll(context.Background())
 
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	collection.Indexes().DropAll(context.Background())
+
 	collection = db.GetDB("store_" + store.ID.Hex()).Collection("order")
 	collection.Indexes().DropAll(context.Background())
 
@@ -280,5 +351,11 @@ func (store *Store) RemoveAllIndexes() {
 	collection.Indexes().DropAll(context.Background())
 
 	collection = db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	collection.Indexes().DropAll(context.Background())
 }

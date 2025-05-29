@@ -136,6 +136,16 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = store.CreateAllIndexes()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["index"] = "error creating indexes: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = store
 
