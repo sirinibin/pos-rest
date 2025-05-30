@@ -1940,6 +1940,14 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PartNumber, ""))
 		}
 
+		if containsSpecialChars(product.Name) {
+			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.Name, ""))
+		}
+
+		if containsSpecialChars(product.NameInArabic) {
+			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.NameInArabic, ""))
+		}
+
 		/*
 					re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
 					containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
@@ -3063,32 +3071,31 @@ func containsSpecialChars(s string) bool {
 
 func (product *Product) GetAdditionalSearchTerms() []string {
 	searchTerm := []string{}
-	/*
-		re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-			searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
-			if product.PrefixPartNumber != "" {
-				searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
-			}
 
-			searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	/*	searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
+		if product.PrefixPartNumber != "" {
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
+		}
+
+		searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
 	*/
 
-	/*if containsSpecialChars(product.Name) {
+	if containsSpecialChars(product.Name) {
 		searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
-	}*/
+	}
 
-	/*
-		if containsSpecialChars(product.NameInArabic) {
-			searchTerm = append(searchTerm, re.ReplaceAllString(product.NameInArabic, ""))
-		}*/
+	if containsSpecialChars(product.NameInArabic) {
+		searchTerm = append(searchTerm, re.ReplaceAllString(product.NameInArabic, ""))
+	}
 
-	/*if containsSpecialChars(product.PrefixPartNumber) {
+	if containsSpecialChars(product.PrefixPartNumber) {
 		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
 	}
 
 	if containsSpecialChars(product.PartNumber) {
 		searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
-	}*/
+	}
 
 	/*if containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
 		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, ""))
