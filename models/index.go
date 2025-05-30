@@ -44,7 +44,7 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	fields := bson.M{"ean_12": 1}
-	err = store.CreateIndex("product", fields, true, false, "")
+	err = store.CreateIndex("product", fields, false, false, "")
 	if err != nil {
 		return err
 	}
@@ -68,12 +68,11 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	/*
-		fields = bson.M{"code": 1}
-		err = store.CreateIndex("customer", fields, true, false, "")
-		if err != nil {
-			return err
-		}*/
+	fields = bson.M{"code": 1}
+	err = store.CreateIndex("customer", fields, false, false, "")
+	if err != nil {
+		return err
+	}
 
 	//vendor
 	textFields = bson.D{

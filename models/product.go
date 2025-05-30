@@ -80,6 +80,7 @@ type Product struct {
 	NameInArabic         string                  `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	NamePrefixes         []string                `bson:"name_prefixes,omitempty" json:"name_prefixes,omitempty"`
 	NameInArabicPrefixes []string                `bson:"name_in_arabic_prefixes,omitempty" json:"name_in_arabic_prefixes,omitempty"`
+	AdditionalKeywords   []string                `bson:"-" json:"additional_keywords"`
 	ItemCode             string                  `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	StoreID              *primitive.ObjectID     `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName            string                  `json:"store_name,omitempty" bson:"store_name,omitempty"`
@@ -1929,6 +1930,26 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		if product.BarCode != "" {
 			product.Ean12 = product.Ean12 + "(Old:" + product.BarCode + ")"
 		}
+		re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+
+		if containsSpecialChars(product.PrefixPartNumber) {
+			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PrefixPartNumber, ""))
+		}
+
+		if containsSpecialChars(product.PartNumber) {
+			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PartNumber, ""))
+		}
+
+		/*
+					re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+					containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
+				searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, ""))
+			}
+
+					searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
+					if product.PrefixPartNumber != "" {
+						searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
+					}*/
 
 		products = append(products, product)
 	} //end for loop
@@ -3007,23 +3028,25 @@ func generatePrefixesSuffixesSubstrings(input string) []string {
 	}
 
 	// Convert map keys to slice, only include cleaned strings with at least 2 letters
-	/*
-		var result []string
-		for str := range uniqueSet {
-			cleaned := CleanString(removeSpecialCharacter(str))
-			if len([]rune(cleaned)) >= 2 {
-				result = append(result, cleaned)
-			}
-		}*/
 
-	// Convert map keys to slice
 	var result []string
 	for str := range uniqueSet {
 		cleaned := CleanString(removeSpecialCharacter(str))
-		if cleaned != "" {
+		if len([]rune(cleaned)) >= 2 {
 			result = append(result, cleaned)
 		}
 	}
+
+	/*
+
+		// Convert map keys to slice
+		var result []string
+		for str := range uniqueSet {
+			cleaned := CleanString(removeSpecialCharacter(str))
+			if cleaned != "" {
+				result = append(result, cleaned)
+			}
+		}*/
 
 	return result
 }
@@ -3039,15 +3062,16 @@ func containsSpecialChars(s string) bool {
 }
 
 func (product *Product) GetAdditionalSearchTerms() []string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	searchTerm := []string{}
+	/*
+		re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
+			if product.PrefixPartNumber != "" {
+				searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
+			}
 
-	searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
-	if product.PrefixPartNumber != "" {
-		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
-	}
-
-	searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
+	*/
 
 	/*if containsSpecialChars(product.Name) {
 		searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
