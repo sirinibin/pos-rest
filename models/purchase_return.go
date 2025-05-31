@@ -2854,19 +2854,22 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" && vendor != nil {
-			referenceModel := "vendor"
-			vendorAccount, err := store.CreateAccountIfNotExists(
-				purchaseReturn.StoreID,
-				&vendor.ID,
-				&referenceModel,
-				vendor.Name,
-				&vendor.Phone,
-				&vendor.VATNo,
-			)
-			if err != nil {
-				return nil, err
-			}
-			cashReceivingAccount = *vendorAccount
+			continue
+			/*
+				referenceModel := "vendor"
+				vendorAccount, err := store.CreateAccountIfNotExists(
+					purchaseReturn.StoreID,
+					&vendor.ID,
+					&referenceModel,
+					vendor.Name,
+					&vendor.Phone,
+					&vendor.VATNo,
+				)
+				if err != nil {
+					return nil, err
+				}
+				cashReceivingAccount = *vendorAccount
+			*/
 		}
 
 		journals = append(journals, Journal{
@@ -3030,19 +3033,22 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
 		} else if payment.Method == "vendor_account" && vendor != nil {
-			referenceModel := "vendor"
-			vendorAccount, err := store.CreateAccountIfNotExists(
-				purchaseReturn.StoreID,
-				&vendor.ID,
-				&referenceModel,
-				vendor.Name,
-				&vendor.Phone,
-				&vendor.VATNo,
-			)
-			if err != nil {
-				return nil, err
-			}
-			cashReceivingAccount = *vendorAccount
+			continue
+			/*
+				referenceModel := "vendor"
+				vendorAccount, err := store.CreateAccountIfNotExists(
+					purchaseReturn.StoreID,
+					&vendor.ID,
+					&referenceModel,
+					vendor.Name,
+					&vendor.Phone,
+					&vendor.VATNo,
+				)
+				if err != nil {
+					return nil, err
+				}
+				cashReceivingAccount = *vendorAccount
+			*/
 		}
 
 		journals = append(journals, Journal{
