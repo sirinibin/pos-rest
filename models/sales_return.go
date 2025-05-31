@@ -3385,19 +3385,22 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "customer_account" && customer != nil {
-			referenceModel := "customer"
-			customerAccount, err := store.CreateAccountIfNotExists(
-				salesReturn.StoreID,
-				&customer.ID,
-				&referenceModel,
-				customer.Name,
-				&customer.Phone,
-				&customer.VATNo,
-			)
-			if err != nil {
-				return nil, err
-			}
-			cashPayingAccount = *customerAccount
+			continue
+			/*
+				referenceModel := "customer"
+				customerAccount, err := store.CreateAccountIfNotExists(
+					salesReturn.StoreID,
+					&customer.ID,
+					&referenceModel,
+					customer.Name,
+					&customer.Phone,
+					&customer.VATNo,
+				)
+				if err != nil {
+					return nil, err
+				}
+				cashPayingAccount = *customerAccount
+			*/
 		}
 
 		journals = append(journals, Journal{
@@ -3543,19 +3546,22 @@ func MakeJournalsForSalesReturnExtraPayments(
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
 		} else if payment.Method == "customer_account" && customer != nil {
-			referenceModel := "customer"
-			customerAccount, err := store.CreateAccountIfNotExists(
-				salesReturn.StoreID,
-				&customer.ID,
-				&referenceModel,
-				customer.Name,
-				&customer.Phone,
-				&customer.VATNo,
-			)
-			if err != nil {
-				return nil, err
-			}
-			cashPayingAccount = *customerAccount
+			continue
+			/*
+				referenceModel := "customer"
+				customerAccount, err := store.CreateAccountIfNotExists(
+					salesReturn.StoreID,
+					&customer.ID,
+					&referenceModel,
+					customer.Name,
+					&customer.Phone,
+					&customer.VATNo,
+				)
+				if err != nil {
+					return nil, err
+				}
+				cashPayingAccount = *customerAccount
+			*/
 		}
 
 		journals = append(journals, Journal{
