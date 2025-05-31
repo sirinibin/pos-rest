@@ -156,6 +156,11 @@ func (purchase *Purchase) CreateNewVendorFromName() error {
 	if err != nil {
 		return err
 	}
+
+	newVendor.GenerateSearchWords()
+	newVendor.SetSearchLabel()
+	newVendor.SetAdditionalkeywords()
+
 	err = newVendor.Insert()
 	if err != nil {
 		return err
@@ -164,6 +169,7 @@ func (purchase *Purchase) CreateNewVendorFromName() error {
 	if err != nil {
 		return err
 	}
+
 	purchase.VendorID = &newVendor.ID
 	return nil
 }
