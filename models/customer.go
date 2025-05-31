@@ -143,15 +143,15 @@ func (customer *Customer) GenerateSearchWords() {
 		customer.SearchWords = append(customer.SearchWords, string(customer.Code[0]))
 	}
 
-	if customer.Name != "" {
+	if !govalidator.IsNull(customer.Name) {
 		customer.SearchWords = append(customer.SearchWords, string(customer.Name[0]))
 	}
 
-	if customer.VATNo != "" {
+	if !govalidator.IsNull(customer.VATNo) {
 		customer.SearchWords = append(customer.SearchWords, string(customer.VATNo[0]))
 	}
 
-	if customer.Phone != "" {
+	if !govalidator.IsNull(customer.Phone) {
 		customer.SearchWords = append(customer.SearchWords, string(customer.Phone[0]))
 	}
 

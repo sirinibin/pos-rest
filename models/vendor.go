@@ -129,19 +129,19 @@ func (vendor *Vendor) GenerateSearchWords() {
 		vendor.SearchWords = append(vendor.SearchWords, generatePrefixesSuffixesSubstrings(term)...)
 	}
 
-	if vendor.Code != "" {
+	if !govalidator.IsNull(vendor.Code) {
 		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Code[0]))
 	}
 
-	if vendor.Name != "" {
+	if !govalidator.IsNull(vendor.Name) {
 		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Name[0]))
 	}
 
-	if vendor.VATNo != "" {
+	if !govalidator.IsNull(vendor.VATNo) {
 		vendor.SearchWords = append(vendor.SearchWords, string(vendor.VATNo[0]))
 	}
 
-	if vendor.Phone != "" {
+	if !govalidator.IsNull(vendor.Phone) {
 		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Phone[0]))
 	}
 
