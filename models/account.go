@@ -546,6 +546,14 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 
 }
 
+/*
+	 else if phone != nil && !govalidator.IsNull(strings.TrimSpace(*phone)) {
+			account, err = store.FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				return nil, err
+			}
+		}
+*/
 func (store *Store) CreateAccountIfNotExists(
 	storeID *primitive.ObjectID,
 	referenceID *primitive.ObjectID,
@@ -557,11 +565,6 @@ func (store *Store) CreateAccountIfNotExists(
 	name = strings.ToUpper(name)
 	if vatNo != nil && !govalidator.IsNull(strings.TrimSpace(*vatNo)) {
 		account, err = store.FindAccountByVatNoByName(*vatNo, name, storeID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			return nil, err
-		}
-	} else if phone != nil && !govalidator.IsNull(strings.TrimSpace(*phone)) {
-		account, err = store.FindAccountByPhoneByName(*phone, name, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			return nil, err
 		}
