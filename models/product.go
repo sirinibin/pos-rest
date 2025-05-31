@@ -80,14 +80,14 @@ type Product struct {
 	NameInArabic         string                  `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	NamePrefixes         []string                `bson:"name_prefixes,omitempty" json:"name_prefixes,omitempty"`
 	NameInArabicPrefixes []string                `bson:"name_in_arabic_prefixes,omitempty" json:"name_in_arabic_prefixes,omitempty"`
-	AdditionalKeywords   []string                `bson:"-" json:"additional_keywords"`
+	AdditionalKeywords   []string                `bson:"additional_keywords" json:"additional_keywords"`
 	ItemCode             string                  `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	StoreID              *primitive.ObjectID     `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName            string                  `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	StoreCode            string                  `json:"store_code,omitempty" bson:"store_code,omitempty"`
 	BarCode              string                  `bson:"bar_code,omitempty" json:"bar_code,omitempty"`
 	Ean12                string                  `bson:"ean_12,omitempty" json:"ean_12,omitempty"`
-	SearchLabel          string                  `json:"search_label"`
+	SearchLabel          string                  `bson:"search_label" json:"search_label"`
 	Rack                 string                  `bson:"rack,omitempty" json:"rack,omitempty"`
 	PrefixPartNumber     string                  `bson:"prefix_part_number" json:"prefix_part_number"`
 	PartNumber           string                  `bson:"part_number,omitempty" json:"part_number,omitempty"`
@@ -1820,10 +1820,11 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	categorySelectFields := map[string]interface{}{}
+	/*categorySelectFields := map[string]interface{}{}
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}
 	deletedByUserSelectFields := map[string]interface{}{}
+	*/
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {
@@ -1831,21 +1832,23 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		criterias.Select = ParseSelectString(keys[0])
 		//Relational Select Fields
 
-		if _, ok := criterias.Select["category.id"]; ok {
-			categorySelectFields = ParseRelationalSelectString(keys[0], "category")
-		}
+		/*
+			if _, ok := criterias.Select["category.id"]; ok {
+				categorySelectFields = ParseRelationalSelectString(keys[0], "category")
+			}
 
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
-		}
 
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
-		}
+				if _, ok := criterias.Select["created_by_user.id"]; ok {
+					createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+				}
 
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
-		}
+				if _, ok := criterias.Select["created_by_user.id"]; ok {
+					updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+				}
+
+				if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+					deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+				}*/
 
 	}
 	//log.Print("criterias.Select:", criterias.Select)
@@ -1906,46 +1909,29 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		product.SetSearchLabel(&store.ID)
-
-		if _, ok := criterias.Select["category.id"]; ok {
-			for _, categoryID := range product.CategoryID {
-				category, _ := store.FindProductCategoryByID(categoryID, categorySelectFields)
-				product.Category = append(product.Category, category)
+		/*
+			if _, ok := criterias.Select["category.id"]; ok {
+				for _, categoryID := range product.CategoryID {
+					category, _ := store.FindProductCategoryByID(categoryID, categorySelectFields)
+					product.Category = append(product.Category, category)
+				}
 			}
-		}
 
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			product.CreatedByUser, _ = FindUserByID(product.CreatedBy, createdByUserSelectFields)
-		}
 
-		if _, ok := criterias.Select["updated_by_user.id"]; ok {
-			product.UpdatedByUser, _ = FindUserByID(product.UpdatedBy, updatedByUserSelectFields)
-		}
+				if _, ok := criterias.Select["created_by_user.id"]; ok {
+					product.CreatedByUser, _ = FindUserByID(product.CreatedBy, createdByUserSelectFields)
+				}
 
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			product.DeletedByUser, _ = FindUserByID(product.DeletedBy, deletedByUserSelectFields)
-		}
+				if _, ok := criterias.Select["updated_by_user.id"]; ok {
+					product.UpdatedByUser, _ = FindUserByID(product.UpdatedBy, updatedByUserSelectFields)
+				}
+
+				if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+					product.DeletedByUser, _ = FindUserByID(product.DeletedBy, deletedByUserSelectFields)
+				}*/
 
 		if product.BarCode != "" {
 			product.Ean12 = product.Ean12 + "(Old:" + product.BarCode + ")"
-		}
-		re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-
-		if containsSpecialChars(product.PrefixPartNumber) {
-			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PrefixPartNumber, ""))
-		}
-
-		if containsSpecialChars(product.PartNumber) {
-			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PartNumber, ""))
-		}
-
-		if containsSpecialChars(product.Name) {
-			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.Name, ""))
-		}
-
-		if containsSpecialChars(product.NameInArabic) {
-			product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.NameInArabic, ""))
 		}
 
 		/*
@@ -1966,6 +1952,24 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 }
 
+func (product *Product) SetAdditionalkeywords() {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	if containsSpecialChars(product.PrefixPartNumber) {
+		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PrefixPartNumber, ""))
+	}
+
+	if containsSpecialChars(product.PartNumber) {
+		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PartNumber, ""))
+	}
+
+	if containsSpecialChars(product.Name) {
+		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.Name, ""))
+	}
+
+	if containsSpecialChars(product.NameInArabic) {
+		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.NameInArabic, ""))
+	}
+}
 func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 	product.SearchLabel = ""
 	if product.PrefixPartNumber != "" && product.PartNumber != "" {
@@ -2622,8 +2626,6 @@ func (store *Store) FindProductsByIDs(
 			return products, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		product.SetSearchLabel(&store.ID)
-
 		products = append(products, &product)
 	} //end for loop
 
@@ -2872,7 +2874,9 @@ func ProcessProducts() error {
 				continue
 			}
 
-			product.GeneratePrefixes()
+			//product.GeneratePrefixes()
+			product.SetSearchLabel(&store.ID)
+			product.SetAdditionalkeywords()
 			err = product.Update(&store.ID)
 			if err != nil {
 				log.Print("Store ID:" + store.ID.Hex())

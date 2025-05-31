@@ -253,6 +253,8 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		}*/
 
 	product.SetStock()
+	product.SetAdditionalkeywords()
+	product.SetSearchLabel(&store.ID)
 
 	err = product.Insert()
 	if err != nil {
@@ -402,6 +404,8 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	product.SetProductQuotationStatsByStoreID(*product.StoreID)
 	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
 	product.SetStock()
+	product.SetAdditionalkeywords()
+	product.SetSearchLabel(&store.ID)
 
 	err = product.Update(nil)
 	if err != nil {
@@ -517,14 +521,6 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 	product, err = store.FindProductByID(&productID, selectFields)
 	if err != nil {
 		response.Errors["view"] = "Unable to view:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	product.SetSearchLabel(&store.ID)
-	if err != nil {
-		response.Errors["view"] = "error setting search label:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
