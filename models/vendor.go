@@ -986,19 +986,20 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 			vendor.Phone = "0" + vendor.Phone
 		}
 
-		phoneExists, err := vendor.IsPhoneExists()
-		if err != nil {
-			errs["phone"] = err.Error()
-		}
+		/*
+			phoneExists, err := vendor.IsPhoneExists()
+			if err != nil {
+				errs["phone"] = err.Error()
+			}
 
-		if phoneExists {
-			errs["phone"] = "Phone No. already exists."
-		}
+			if phoneExists {
+				errs["phone"] = "Phone No. already exists."
+			}
 
-		if phoneExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
-		}
+			if phoneExists {
+				w.WriteHeader(http.StatusConflict)
+				return errs
+			}*/
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) && !govalidator.IsNull(strings.TrimSpace(vendor.Name)) {

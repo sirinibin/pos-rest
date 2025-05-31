@@ -1448,19 +1448,20 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 			customer.Phone = "0" + customer.Phone
 		}
 
-		phoneExists, err := customer.IsPhoneExists()
-		if err != nil {
-			errs["phone"] = err.Error()
-		}
+		/*
+			phoneExists, err := customer.IsPhoneExists()
+			if err != nil {
+				errs["phone"] = err.Error()
+			}
 
-		if phoneExists {
-			errs["phone"] = "Phone No. already exists."
-		}
+			if phoneExists {
+				errs["phone"] = "Phone No. already exists."
+			}
 
-		if phoneExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
-		}
+			if phoneExists {
+				w.WriteHeader(http.StatusConflict)
+				return errs
+			}*/
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !govalidator.IsNull(strings.TrimSpace(customer.Name)) {
