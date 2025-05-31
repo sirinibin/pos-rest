@@ -121,6 +121,8 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	customer.GenerateSearchWords()
+	customer.SetAdditionalkeywords()
+	customer.SetSearchLabel()
 
 	err = customer.Insert()
 	if err != nil {
@@ -219,6 +221,8 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	customer.UpdatedAt = &now
 	customer.UpdateForeignLabelFields()
 	customer.GenerateSearchWords()
+	customer.SetAdditionalkeywords()
+	customer.SetSearchLabel()
 
 	err = customer.Update()
 	if err != nil {
@@ -330,8 +334,6 @@ func ViewCustomer(w http.ResponseWriter, r *http.Request) {
 			}
 
 		}*/
-
-	customer.SetSearchLabel()
 
 	response.Status = true
 	response.Result = customer

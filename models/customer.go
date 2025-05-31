@@ -66,6 +66,7 @@ type Customer struct {
 	NameInArabic               string                   `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	SearchWords                []string                 `bson:"search_words,omitempty" json:"search_words,omitempty"`
 	SearchWordsInArabic        []string                 `bson:"search_words_in_arabic,omitempty" json:"search_words_in_arabic,omitempty"`
+	AdditionalKeywords         []string                 `bson:"additional_keywords" json:"additional_keywords"`
 	VATNo                      string                   `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
 	VATNoInArabic              string                   `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
 	Phone                      string                   `bson:"phone,omitempty" json:"phone,omitempty"`
@@ -97,7 +98,7 @@ type Customer struct {
 	CreatedByName              string                   `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName              string                   `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName              string                   `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	SearchLabel                string                   `json:"search_label"`
+	SearchLabel                string                   `json:"search_label" bson:"search_label"`
 	StoreID                    *primitive.ObjectID      `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Stores                     map[string]CustomerStore `bson:"stores" json:"stores"`
 	Remarks                    string                   `bson:"remarks,omitempty" json:"remarks,omitempty"`
@@ -128,31 +129,66 @@ func (store *Store) SaveCustomerImage(customerID *primitive.ObjectID, filename s
 }
 
 func (customer *Customer) GenerateSearchWords() {
-	additionalSearchTerms := customer.GetAdditionalSearchTerms()
-	cleanedWords := CleanString(customer.Code + "  " + customer.Name + "  " + customer.VATNo + "  " + customer.Phone + " " + additionalSearchTerms)
+	cleanedWords := CleanString(customer.Code + "  " + customer.Name + "  " + customer.VATNo + "  " + customer.Phone)
 	cleanedWordsArabic := CleanString(customer.NameInArabic + "  " + customer.VATNoInArabic + "  " + customer.PhoneInArabic)
 
 	customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
+
+	additionalSearchTerms := customer.GetAdditionalSearchTerms()
+	for _, term := range additionalSearchTerms {
+		customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(term)...)
+	}
+
+	if customer.Code != "" {
+		customer.SearchWords = append(customer.SearchWords, string(customer.Code[0]))
+	}
+
+	if customer.Name != "" {
+		customer.SearchWords = append(customer.SearchWords, string(CleanString(customer.Name)[0]))
+	}
+
+	if customer.VATNo != "" {
+		customer.SearchWords = append(customer.SearchWords, string(CleanString(customer.VATNo)[0]))
+	}
+
+	if customer.Phone != "" {
+		customer.SearchWords = append(customer.SearchWords, string(CleanString(customer.Phone)[0]))
+	}
+
 	if cleanedWordsArabic != "" {
 		customer.SearchWordsInArabic = generatePrefixesSuffixesSubstrings(cleanedWordsArabic)
 	}
 }
 
-func (customer *Customer) GetAdditionalSearchTerms() string {
+func (customer *Customer) GetAdditionalSearchTerms() []string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	searchTerm := ""
+	searchTerm := []string{}
+
 	if containsSpecialChars(customer.Name) {
-		searchTerm = re.ReplaceAllString(customer.Name, "")
+		searchTerm = append(searchTerm, re.ReplaceAllString(customer.Name, ""))
+
 	}
 	if containsSpecialChars(customer.Code) {
-		searchTerm += " " + re.ReplaceAllString(customer.Code, "")
+		searchTerm = append(searchTerm, re.ReplaceAllString(customer.Code, ""))
+
 	}
 
 	if customer.CountryName != "" {
-		searchTerm += " " + customer.CountryName
+		searchTerm = append(searchTerm, re.ReplaceAllString(customer.CountryName, ""))
 	}
 
 	return searchTerm
+}
+
+func (customer *Customer) SetAdditionalkeywords() {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	if containsSpecialChars(customer.Code) {
+		customer.AdditionalKeywords = append(customer.AdditionalKeywords, re.ReplaceAllString(customer.Code, ""))
+	}
+
+	if containsSpecialChars(customer.Name) {
+		customer.AdditionalKeywords = append(customer.AdditionalKeywords, re.ReplaceAllString(customer.Name, ""))
+	}
 }
 
 /*
@@ -1212,26 +1248,30 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
-	createdByUserSelectFields := map[string]interface{}{}
-	updatedByUserSelectFields := map[string]interface{}{}
-	deletedByUserSelectFields := map[string]interface{}{}
+	/*
+		createdByUserSelectFields := map[string]interface{}{}
+		updatedByUserSelectFields := map[string]interface{}{}
+		deletedByUserSelectFields := map[string]interface{}{}
+	*/
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.Select = ParseSelectString(keys[0])
 		//Relational Select Fields
 
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
-		}
+		/*
+			if _, ok := criterias.Select["created_by_user.id"]; ok {
+				createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+			}
 
-		if _, ok := criterias.Select["updated_by_user.id"]; ok {
-			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
-		}
+			if _, ok := criterias.Select["updated_by_user.id"]; ok {
+				updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+			}
 
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
-		}
+			if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+				deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+			}
+		*/
 
 	}
 
@@ -1263,17 +1303,16 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			return customers, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		customer.SetSearchLabel()
-
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			customer.CreatedByUser, _ = FindUserByID(customer.CreatedBy, createdByUserSelectFields)
-		}
-		if _, ok := criterias.Select["updated_by_user.id"]; ok {
-			customer.UpdatedByUser, _ = FindUserByID(customer.UpdatedBy, updatedByUserSelectFields)
-		}
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			customer.DeletedByUser, _ = FindUserByID(customer.DeletedBy, deletedByUserSelectFields)
-		}
+		/*
+			if _, ok := criterias.Select["created_by_user.id"]; ok {
+				customer.CreatedByUser, _ = FindUserByID(customer.CreatedBy, createdByUserSelectFields)
+			}
+			if _, ok := criterias.Select["updated_by_user.id"]; ok {
+				customer.UpdatedByUser, _ = FindUserByID(customer.UpdatedBy, updatedByUserSelectFields)
+			}
+			if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+				customer.DeletedByUser, _ = FindUserByID(customer.DeletedBy, deletedByUserSelectFields)
+			}*/
 
 		customers = append(customers, customer)
 	} //end for loop
@@ -1289,7 +1328,7 @@ func (customer *Customer) SetSearchLabel() {
 	customer.SearchLabel = "#" + customer.Code + " " + customer.Name
 
 	if customer.NameInArabic != "" {
-		customer.SearchLabel += " / " + customer.NameInArabic
+		customer.SearchLabel += " | " + customer.NameInArabic
 	}
 
 	if customer.Phone != "" {
@@ -1297,7 +1336,7 @@ func (customer *Customer) SetSearchLabel() {
 	}
 
 	if customer.PhoneInArabic != "" {
-		customer.SearchLabel += " / " + customer.PhoneInArabic
+		customer.SearchLabel += " | " + customer.PhoneInArabic
 	}
 
 	if customer.VATNo != "" {
@@ -1763,13 +1802,25 @@ func ProcessCustomers() error {
 				continue
 			}
 
-			customer.Name = strings.ToUpper(customer.Name)
+			customer.GenerateSearchWords()
+			customer.SetSearchLabel()
+			customer.SetAdditionalkeywords()
+			err = customer.Update()
+			if err != nil {
+				log.Print("Store ID:" + store.ID.Hex())
+				log.Print("Customer Code.:" + customer.Code)
+				log.Print("Customer ID:" + customer.ID.Hex())
+				continue
+				//return err
+			}
+
+			/*customer.Name = strings.ToUpper(customer.Name)
 			customer.Update()
 			account, _ := store.FindAccountByID(customer.ID, bson.M{})
 			if account != nil {
 				account.Name = customer.Name
 				account.Update()
-			}
+			}*/
 
 			/*
 				customer.GenerateSearchWords()

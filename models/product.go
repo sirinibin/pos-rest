@@ -1970,6 +1970,7 @@ func (product *Product) SetAdditionalkeywords() {
 		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.NameInArabic, ""))
 	}
 }
+
 func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 	product.SearchLabel = ""
 	if product.PrefixPartNumber != "" && product.PartNumber != "" {
@@ -2874,7 +2875,7 @@ func ProcessProducts() error {
 				continue
 			}
 
-			//product.GeneratePrefixes()
+			product.GeneratePrefixes()
 			product.SetSearchLabel(&store.ID)
 			product.SetAdditionalkeywords()
 			err = product.Update(&store.ID)

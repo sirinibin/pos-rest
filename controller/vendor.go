@@ -122,6 +122,8 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vendor.GenerateSearchWords()
+	vendor.SetSearchLabel()
+	vendor.SetAdditionalkeywords()
 
 	err = vendor.Insert()
 	if err != nil {
@@ -219,6 +221,8 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vendor.GenerateSearchWords()
+	vendor.SetSearchLabel()
+	vendor.SetAdditionalkeywords()
 
 	err = vendor.Update()
 	if err != nil {

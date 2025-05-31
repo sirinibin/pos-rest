@@ -53,6 +53,7 @@ type Vendor struct {
 	NameInArabic               string                 `bson:"name_in_arabic" json:"name_in_arabic"`
 	SearchWords                []string               `bson:"search_words,omitempty" json:"search_words,omitempty"`
 	SearchWordsInArabic        []string               `bson:"search_words_in_arabic,omitempty" json:"search_words_in_arabic,omitempty"`
+	AdditionalKeywords         []string               `bson:"additional_keywords" json:"additional_keywords"`
 	Title                      string                 `bson:"title" json:"title"`
 	TitleInArabic              string                 `bson:"title_in_arabic" json:"title_in_arabic"`
 	Email                      string                 `bson:"email,omitempty" json:"email"`
@@ -88,7 +89,7 @@ type Vendor struct {
 	UpdatedByName              string                 `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName              string                 `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	Stores                     map[string]VendorStore `bson:"stores" json:"stores"`
-	SearchLabel                string                 `json:"search_label"`
+	SearchLabel                string                 `json:"search_label" bson:"search_label"`
 	StoreID                    *primitive.ObjectID    `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Remarks                    string                 `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	UseRemarksInPurchases      bool                   `bson:"use_remarks_in_purchases" json:"use_remarks_in_purchases"`
@@ -118,31 +119,66 @@ func (store *Store) SaveVendorImage(vendorID *primitive.ObjectID, filename strin
 }
 
 func (vendor *Vendor) GenerateSearchWords() {
-	additionalSearchTerms := vendor.GetAdditionalSearchTerms()
-	cleanedWords := CleanString(vendor.Code + "  " + vendor.Name + "  " + vendor.VATNo + "  " + vendor.Phone + " " + additionalSearchTerms)
+	cleanedWords := CleanString(vendor.Code + "  " + vendor.Name + "  " + vendor.VATNo + "  " + vendor.Phone)
 	cleanedWordsArabic := CleanString(vendor.NameInArabic + "  " + vendor.VATNoInArabic + "  " + vendor.PhoneInArabic)
 
 	vendor.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
+
+	additionalSearchTerms := vendor.GetAdditionalSearchTerms()
+	for _, term := range additionalSearchTerms {
+		vendor.SearchWords = append(vendor.SearchWords, generatePrefixesSuffixesSubstrings(term)...)
+	}
+
+	if vendor.Code != "" {
+		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Code[0]))
+	}
+
+	if vendor.Name != "" {
+		vendor.SearchWords = append(vendor.SearchWords, string(CleanString(vendor.Name)[0]))
+	}
+
+	if vendor.VATNo != "" {
+		vendor.SearchWords = append(vendor.SearchWords, string(CleanString(vendor.VATNo)[0]))
+	}
+
+	if vendor.Phone != "" {
+		vendor.SearchWords = append(vendor.SearchWords, string(CleanString(vendor.Phone)[0]))
+	}
+
 	if cleanedWordsArabic != "" {
 		vendor.SearchWordsInArabic = generatePrefixesSuffixesSubstrings(cleanedWordsArabic)
 	}
 }
 
-func (vendor *Vendor) GetAdditionalSearchTerms() string {
+func (vendor *Vendor) GetAdditionalSearchTerms() []string {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	searchTerm := ""
+	searchTerm := []string{}
+
 	if containsSpecialChars(vendor.Name) {
-		searchTerm = re.ReplaceAllString(vendor.Name, "")
+		searchTerm = append(searchTerm, re.ReplaceAllString(vendor.Name, ""))
+
 	}
 	if containsSpecialChars(vendor.Code) {
-		searchTerm += " " + re.ReplaceAllString(vendor.Code, "")
+		searchTerm = append(searchTerm, re.ReplaceAllString(vendor.Code, ""))
+
 	}
 
 	if vendor.CountryName != "" {
-		searchTerm += " " + vendor.CountryName
+		searchTerm = append(searchTerm, re.ReplaceAllString(vendor.CountryName, ""))
 	}
 
 	return searchTerm
+}
+
+func (vendor *Vendor) SetAdditionalkeywords() {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	if containsSpecialChars(vendor.Code) {
+		vendor.AdditionalKeywords = append(vendor.AdditionalKeywords, re.ReplaceAllString(vendor.Code, ""))
+	}
+
+	if containsSpecialChars(vendor.Name) {
+		vendor.AdditionalKeywords = append(vendor.AdditionalKeywords, re.ReplaceAllString(vendor.Name, ""))
+	}
 }
 
 func (vendor *Vendor) SetCreditBalance() error {
@@ -778,26 +814,29 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 	findOptions.SetAllowDiskUse(true)
 	//findOptions.SetOplogReplay()
 
-	createdByUserSelectFields := map[string]interface{}{}
-	updatedByUserSelectFields := map[string]interface{}{}
-	deletedByUserSelectFields := map[string]interface{}{}
+	/*
+		createdByUserSelectFields := map[string]interface{}{}
+		updatedByUserSelectFields := map[string]interface{}{}
+		deletedByUserSelectFields := map[string]interface{}{}
+	*/
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.Select = ParseSelectString(keys[0])
 		//Relational Select Fields
 
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
-		}
+		/*
+			if _, ok := criterias.Select["created_by_user.id"]; ok {
+				createdByUserSelectFields = ParseRelationalSelectString(keys[0], "created_by_user")
+			}
 
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
-		}
+			if _, ok := criterias.Select["created_by_user.id"]; ok {
+				updatedByUserSelectFields = ParseRelationalSelectString(keys[0], "updated_by_user")
+			}
 
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
-		}
+			if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+				deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+			}*/
 
 	}
 
@@ -831,17 +870,17 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 			return vendors, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 
-		vendor.SetSearchLabel()
+		/*
 
-		if _, ok := criterias.Select["created_by_user.id"]; ok {
-			vendor.CreatedByUser, _ = FindUserByID(vendor.CreatedBy, createdByUserSelectFields)
-		}
-		if _, ok := criterias.Select["updated_by_user.id"]; ok {
-			vendor.UpdatedByUser, _ = FindUserByID(vendor.UpdatedBy, updatedByUserSelectFields)
-		}
-		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
-			vendor.DeletedByUser, _ = FindUserByID(vendor.DeletedBy, deletedByUserSelectFields)
-		}
+			if _, ok := criterias.Select["created_by_user.id"]; ok {
+				vendor.CreatedByUser, _ = FindUserByID(vendor.CreatedBy, createdByUserSelectFields)
+			}
+			if _, ok := criterias.Select["updated_by_user.id"]; ok {
+				vendor.UpdatedByUser, _ = FindUserByID(vendor.UpdatedBy, updatedByUserSelectFields)
+			}
+			if _, ok := criterias.Select["deleted_by_user.id"]; ok {
+				vendor.DeletedByUser, _ = FindUserByID(vendor.DeletedBy, deletedByUserSelectFields)
+			}*/
 
 		vendors = append(vendors, vendor)
 	} //end for loop
@@ -1445,13 +1484,27 @@ func ProcessVendors() error {
 				continue
 			}
 
-			vendor.Name = strings.ToUpper(vendor.Name)
-			vendor.Update()
-			account, _ := store.FindAccountByID(vendor.ID, bson.M{})
-			if account != nil {
-				account.Name = vendor.Name
-				account.Update()
+			vendor.GenerateSearchWords()
+			vendor.SetSearchLabel()
+			vendor.SetAdditionalkeywords()
+			err = vendor.Update()
+			if err != nil {
+				log.Print("Store ID:" + store.ID.Hex())
+				log.Print("Vendor Code.:" + vendor.Code)
+				log.Print("Vendor ID:" + vendor.ID.Hex())
+				continue
+				//return err
 			}
+
+			/*
+				vendor.Name = strings.ToUpper(vendor.Name)
+				vendor.Update()
+				account, _ := store.FindAccountByID(vendor.ID, bson.M{})
+				if account != nil {
+					account.Name = vendor.Name
+					account.Update()
+				}
+			*/
 
 			/*
 				vendor.GenerateSearchWords()
