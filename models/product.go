@@ -3131,6 +3131,18 @@ func (product *Product) GeneratePrefixes() {
 		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(term)...)
 	}
 
+	if cleanName != "" {
+		product.NamePrefixes = append(product.NamePrefixes, string(cleanName[0]))
+	}
+
+	if cleanPrefixPartNumber != "" {
+		product.NamePrefixes = append(product.NamePrefixes, string(cleanPrefixPartNumber[0]))
+	}
+
+	if cleanPartNumber != "" {
+		product.NamePrefixes = append(product.NamePrefixes, string(cleanPartNumber[0]))
+	}
+
 	//product.NamePrefixes = RemoveDuplicateStrings(product.NamePrefixes)
 
 	if cleanNameArabic != "" {

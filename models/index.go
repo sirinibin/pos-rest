@@ -271,7 +271,7 @@ func (store *Store) CreateTextIndex(collectionName string, fields bson.D, indexN
 
 	indexModel := mongo.IndexModel{
 		Keys:    fields,
-		Options: options.Index().SetName(indexName).SetUnique(false),
+		Options: options.Index().SetName(indexName).SetUnique(false).SetDefaultLanguage("none"),
 	}
 
 	createdIndexName, err := collection.Indexes().CreateOne(ctx, indexModel)
