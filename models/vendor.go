@@ -134,15 +134,15 @@ func (vendor *Vendor) GenerateSearchWords() {
 	}
 
 	if vendor.Name != "" {
-		vendor.SearchWords = append(vendor.SearchWords, string(CleanString(vendor.Name)[0]))
+		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Name[0]))
 	}
 
 	if vendor.VATNo != "" {
-		vendor.SearchWords = append(vendor.SearchWords, string(CleanString(vendor.VATNo)[0]))
+		vendor.SearchWords = append(vendor.SearchWords, string(vendor.VATNo[0]))
 	}
 
 	if vendor.Phone != "" {
-		vendor.SearchWords = append(vendor.SearchWords, string(CleanString(vendor.Phone)[0]))
+		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Phone[0]))
 	}
 
 	if cleanedWordsArabic != "" {

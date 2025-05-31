@@ -144,15 +144,15 @@ func (customer *Customer) GenerateSearchWords() {
 	}
 
 	if customer.Name != "" {
-		customer.SearchWords = append(customer.SearchWords, string(CleanString(customer.Name)[0]))
+		customer.SearchWords = append(customer.SearchWords, string(customer.Name[0]))
 	}
 
 	if customer.VATNo != "" {
-		customer.SearchWords = append(customer.SearchWords, string(CleanString(customer.VATNo)[0]))
+		customer.SearchWords = append(customer.SearchWords, string(customer.VATNo[0]))
 	}
 
 	if customer.Phone != "" {
-		customer.SearchWords = append(customer.SearchWords, string(CleanString(customer.Phone)[0]))
+		customer.SearchWords = append(customer.SearchWords, string(customer.Phone[0]))
 	}
 
 	if cleanedWordsArabic != "" {
