@@ -671,16 +671,18 @@ func (purchase *Purchase) FindNetTotal() {
 
 	purchase.FindTotal()
 
-	if purchase.DiscountWithVAT > 0 {
-		purchase.Discount = RoundTo2Decimals(purchase.DiscountWithVAT / (1 + (*purchase.VatPercent / 100)))
-	} else if purchase.Discount > 0 {
-		purchase.DiscountWithVAT = RoundTo2Decimals(purchase.Discount * (1 + (*purchase.VatPercent / 100)))
-	} else {
-		purchase.Discount = 0
-		purchase.DiscountWithVAT = 0
-		purchase.DiscountPercent = 0
-		purchase.DiscountPercentWithVAT = 0
-	}
+	/*
+		if purchase.DiscountWithVAT > 0 {
+			purchase.Discount = RoundTo2Decimals(purchase.DiscountWithVAT / (1 + (*purchase.VatPercent / 100)))
+		} else if purchase.Discount > 0 {
+			purchase.DiscountWithVAT = RoundTo2Decimals(purchase.Discount * (1 + (*purchase.VatPercent / 100)))
+		} else {
+			purchase.Discount = 0
+			purchase.DiscountWithVAT = 0
+			purchase.DiscountPercent = 0
+			purchase.DiscountPercentWithVAT = 0
+		}*/
+
 	// Apply discount to the base amount first
 	baseTotal := purchase.Total + purchase.ShippingOrHandlingFees - purchase.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
@@ -734,6 +736,7 @@ func (purchase *Purchase) CalculateDiscountPercentage() {
 	baseBeforeDiscount := purchase.NetTotal + purchase.Discount
 	if baseBeforeDiscount == 0 {
 		purchase.DiscountPercent = 0.00
+		purchase.DiscountPercentWithVAT = 0.00
 		return
 	}
 
@@ -742,6 +745,7 @@ func (purchase *Purchase) CalculateDiscountPercentage() {
 
 	baseBeforeDiscountWithVAT := purchase.NetTotal + purchase.DiscountWithVAT
 	if baseBeforeDiscountWithVAT == 0 {
+		purchase.DiscountPercent = 0.00
 		purchase.DiscountPercentWithVAT = 0.00
 		return
 	}

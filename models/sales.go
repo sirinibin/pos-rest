@@ -481,14 +481,17 @@ func (order *Order) FindNetTotal() {
 
 	order.FindTotal()
 
-	if order.DiscountWithVAT > 0 {
-		order.Discount = RoundTo2Decimals(order.DiscountWithVAT / (1 + (*order.VatPercent / 100)))
-	} else if order.Discount > 0 {
-		order.DiscountWithVAT = RoundTo2Decimals(order.Discount * (1 + (*order.VatPercent / 100)))
-	} else {
-		order.Discount = 0
-		order.DiscountWithVAT = 0
-	}
+	/*
+		if order.DiscountWithVAT > 0 {
+			order.Discount = RoundTo2Decimals(order.DiscountWithVAT / (1 + (*order.VatPercent / 100)))
+		} else if order.Discount > 0 {
+			order.DiscountWithVAT = RoundTo2Decimals(order.Discount * (1 + (*order.VatPercent / 100)))
+		} else {
+			order.Discount = 0
+			order.DiscountWithVAT = 0
+		}
+	*/
+
 	// Apply discount to the base amount first
 	baseTotal := order.Total + order.ShippingOrHandlingFees - order.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
@@ -496,6 +499,7 @@ func (order *Order) FindNetTotal() {
 	// Now calculate VAT on the discounted base
 	order.VatPrice = RoundTo2Decimals(baseTotal * (*order.VatPercent / 100))
 
+	//log.Print(baseTotal + order.VatPrice)
 	order.NetTotal = RoundTo2Decimals(baseTotal + order.VatPrice)
 
 	order.CalculateDiscountPercentage()
@@ -543,6 +547,7 @@ func (order *Order) CalculateDiscountPercentage() {
 	baseBeforeDiscount := order.NetTotal + order.Discount
 	if baseBeforeDiscount == 0 {
 		order.DiscountPercent = 0.00
+		order.DiscountPercentWithVAT = 0.00
 		return
 	}
 

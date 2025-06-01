@@ -582,14 +582,16 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 
 	salesReturn.FindTotal()
 
-	if salesReturn.DiscountWithVAT > 0 {
-		salesReturn.Discount = RoundTo2Decimals(salesReturn.DiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
-	} else if salesReturn.Discount > 0 {
-		salesReturn.DiscountWithVAT = RoundTo2Decimals(salesReturn.Discount * (1 + (*salesReturn.VatPercent / 100)))
-	} else {
-		salesReturn.Discount = 0
-		salesReturn.DiscountWithVAT = 0
-	}
+	/*
+		if salesReturn.DiscountWithVAT > 0 {
+			salesReturn.Discount = RoundTo2Decimals(salesReturn.DiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+		} else if salesReturn.Discount > 0 {
+			salesReturn.DiscountWithVAT = RoundTo2Decimals(salesReturn.Discount * (1 + (*salesReturn.VatPercent / 100)))
+		} else {
+			salesReturn.Discount = 0
+			salesReturn.DiscountWithVAT = 0
+		}*/
+
 	// Apply discount to the base amount first
 	baseTotal := salesReturn.Total + salesReturn.ShippingOrHandlingFees - salesReturn.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
@@ -647,6 +649,7 @@ func (salesReturn *SalesReturn) CalculateDiscountPercentage() {
 	baseBeforeDiscount := salesReturn.NetTotal + salesReturn.Discount
 	if baseBeforeDiscount == 0 {
 		salesReturn.DiscountPercent = 0.00
+		salesReturn.DiscountPercentWithVAT = 0.00
 		return
 	}
 
@@ -656,6 +659,7 @@ func (salesReturn *SalesReturn) CalculateDiscountPercentage() {
 	baseBeforeDiscountWithVAT := salesReturn.NetTotal + salesReturn.DiscountWithVAT
 	if baseBeforeDiscountWithVAT == 0 {
 		salesReturn.DiscountPercentWithVAT = 0.00
+		salesReturn.DiscountPercent = 0.00
 		return
 	}
 

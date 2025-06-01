@@ -909,14 +909,15 @@ func (quotation *Quotation) FindNetTotal() {
 
 	quotation.FindTotal()
 
-	if quotation.DiscountWithVAT > 0 {
-		quotation.Discount = RoundTo2Decimals(quotation.DiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
-	} else if quotation.Discount > 0 {
-		quotation.DiscountWithVAT = RoundTo2Decimals(quotation.Discount * (1 + (*quotation.VatPercent / 100)))
-	} else {
-		quotation.Discount = 0
-		quotation.DiscountWithVAT = 0
-	}
+	/*
+		if quotation.DiscountWithVAT > 0 {
+			quotation.Discount = RoundTo2Decimals(quotation.DiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
+		} else if quotation.Discount > 0 {
+			quotation.DiscountWithVAT = RoundTo2Decimals(quotation.Discount * (1 + (*quotation.VatPercent / 100)))
+		} else {
+			quotation.Discount = 0
+			quotation.DiscountWithVAT = 0
+		}*/
 	// Apply discount to the base amount first
 	baseTotal := quotation.Total + quotation.ShippingOrHandlingFees - quotation.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
@@ -971,6 +972,7 @@ func (quotation *Quotation) CalculateDiscountPercentage() {
 	baseBeforeDiscount := quotation.NetTotal + quotation.Discount
 	if baseBeforeDiscount == 0 {
 		quotation.DiscountPercent = 0.00
+		quotation.DiscountPercentWithVAT = 0.00
 		return
 	}
 
@@ -979,6 +981,7 @@ func (quotation *Quotation) CalculateDiscountPercentage() {
 
 	baseBeforeDiscountWithVAT := quotation.NetTotal + quotation.DiscountWithVAT
 	if baseBeforeDiscountWithVAT == 0 {
+		quotation.DiscountPercent = 0.00
 		quotation.DiscountPercentWithVAT = 0.00
 		return
 	}
