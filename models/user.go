@@ -424,7 +424,6 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 }
 
 func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias SearchCriterias, err error) {
-
 	criterias = SearchCriterias{
 		Page:   1,
 		Size:   10,
@@ -433,6 +432,14 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+
+	tokenClaims, _ := AuthenticateByAccessToken(r)
+	accessingUserID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	accessingUser, _ := FindUserByID(&accessingUserID, bson.M{})
+
+	if accessingUser.Role != "Admin" {
+		criterias.SearchBy["store_ids"] = bson.M{"$in": accessingUser.StoreIDs}
+	}
 
 	timeZoneOffset := 0.0
 	keys, ok := r.URL.Query()["search[timezone_offset]"]
