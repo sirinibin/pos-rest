@@ -366,9 +366,24 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotation.FindTotalQuantity()
-	quotation.CalculateQuotationProfit()
 
-	quotation.UpdateForeignLabelFields()
+	err = quotation.CalculateQuotationProfit()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["profit_calulation"] = "Error calulating quotation profit: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.UpdateForeignLabelFields()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["updated_foreign_labels"] = "Error updating foreing labels: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = quotation.UpdatePayments()
 	if err != nil {
@@ -378,7 +393,15 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	quotation.SetPaymentStatus()
+
+	_, err = quotation.SetPaymentStatus()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["payment_status"] = "Error setting payment status " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = quotation.Update()
 	if err != nil {
@@ -401,8 +424,23 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.ClearProductsQuotationHistory()
-	quotation.AddProductsQuotationHistory()
+	err = quotation.ClearProductsQuotationHistory()
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["clearing_history"] = "error clearing products quotation histor " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.AddProductsQuotationHistory()
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["add_history"] = "error adding products quotation histor " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	/*
 		err = quotation.AttributesValueChangeEvent(quotationOld)

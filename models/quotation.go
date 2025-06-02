@@ -175,17 +175,18 @@ func (quotation *Quotation) UnLinkSales() error {
 		if err != nil {
 			return err
 		}
+
+		quotation.OrderCode = nil
+		quotation.OrderID = nil
+		quotation.ReportedToZatca = false
+		quotation.ReportedToZatcaAt = nil
+
+		err = quotation.Update()
+		if err != nil {
+			return err
+		}
 	}
 
-	quotation.OrderCode = nil
-	quotation.OrderID = nil
-	quotation.ReportedToZatca = false
-	quotation.ReportedToZatcaAt = nil
-
-	err := quotation.Update()
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
