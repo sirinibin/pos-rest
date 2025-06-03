@@ -95,7 +95,6 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		}
 	}
 
-	retailUnitPriceWithTax := 0.00
 	purchaseUnitPriceSecret := ""
 	vatPercent := 15.00
 	price := "N/A"
@@ -113,7 +112,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 
 		vatPercent = store.VatPercent
 		if retailUnitPriceWithVAT > 0 {
-			price = fmt.Sprintf("%.02f", retailUnitPriceWithTax)
+			price = fmt.Sprintf("%.02f", retailUnitPriceWithVAT)
 		}
 	}
 
