@@ -34,7 +34,9 @@ type PurchaseProduct struct {
 	PurchaseUnitPrice          float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
 	RetailUnitPrice            float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	RetailUnitPriceWithVAT     float64            `bson:"retail_unit_price_with_vat,omitempty" json:"retail_unit_price_with_vat,omitempty"`
 	WholesaleUnitPrice         float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	WholesaleUnitPriceWithVAT  float64            `bson:"wholesale_unit_price_with_vat,omitempty" json:"wholesale_unit_price_with_vat,omitempty"`
 	UnitDiscount               float64            `bson:"unit_discount" json:"unit_discount"`
 	UnitDiscountWithVAT        float64            `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
 	UnitDiscountPercent        float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
@@ -1866,83 +1868,43 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 
 		if productStoreTemp, ok := product.ProductStores[purchase.StoreID.Hex()]; ok {
 
-			if productStoreTemp.IsUnitPriceWithVAT {
-				productStoreTemp.PurchaseUnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (1 + (store.VatPercent / 100)))
-			} else {
-				productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
-			}
+			productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
+			productStoreTemp.PurchaseUnitPriceWithVAT = purchaseProduct.PurchaseUnitPriceWithVAT
 
 			if purchaseProduct.WholesaleUnitPrice > 0 {
-				if productStoreTemp.IsUnitPriceWithVAT {
-					productStoreTemp.WholesaleUnitPrice = RoundTo2Decimals(purchaseProduct.WholesaleUnitPrice * (1 + (store.VatPercent / 100)))
-				} else {
-					productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
-				}
+				productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+				productStoreTemp.WholesaleUnitPriceWithVAT = purchaseProduct.WholesaleUnitPriceWithVAT
 			}
 
 			if purchaseProduct.RetailUnitPrice > 0 {
-				if productStoreTemp.IsUnitPriceWithVAT {
-					productStoreTemp.RetailUnitPrice = RoundTo2Decimals(purchaseProduct.RetailUnitPrice * (1 + (store.VatPercent / 100)))
-				} else {
-					productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
-				}
+				productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
+				productStoreTemp.RetailUnitPriceWithVAT = purchaseProduct.RetailUnitPriceWithVAT
 			}
 
 			product.ProductStores[purchase.StoreID.Hex()] = productStoreTemp
 		} else {
 			product.ProductStores = map[string]ProductStore{}
-			if store.DefaultUnitPriceIsWithVAT {
-				product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
-					IsUnitPriceWithVAT: true,
-					StoreID:            *purchase.StoreID,
-					PurchaseUnitPrice:  RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (1 + (store.VatPercent / 100))),
-					WholesaleUnitPrice: RoundTo2Decimals(purchaseProduct.WholesaleUnitPrice * (1 + (store.VatPercent / 100))),
-					RetailUnitPrice:    RoundTo2Decimals(purchaseProduct.RetailUnitPrice * (1 + (store.VatPercent / 100))),
-				}
-			} else {
-				product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
-					IsUnitPriceWithVAT: false,
-					StoreID:            *purchase.StoreID,
-					PurchaseUnitPrice:  purchaseProduct.PurchaseUnitPrice,
-					WholesaleUnitPrice: purchaseProduct.WholesaleUnitPrice,
-					RetailUnitPrice:    purchaseProduct.RetailUnitPrice,
-				}
+			product.ProductStores[purchase.StoreID.Hex()] = ProductStore{
+				StoreID:                   *purchase.StoreID,
+				PurchaseUnitPrice:         purchaseProduct.PurchaseUnitPrice,
+				WholesaleUnitPrice:        purchaseProduct.WholesaleUnitPrice,
+				RetailUnitPrice:           purchaseProduct.RetailUnitPrice,
+				PurchaseUnitPriceWithVAT:  purchaseProduct.PurchaseUnitPriceWithVAT,
+				WholesaleUnitPriceWithVAT: purchaseProduct.WholesaleUnitPriceWithVAT,
+				RetailUnitPriceWithVAT:    purchaseProduct.RetailUnitPriceWithVAT,
 			}
-
 		}
-
-		/*
-			storeExistInProductUnitPrice := false
-			for k, productStore := range product.Stores {
-				if productStore.StoreID.Hex() == purchase.StoreID.Hex() {
-					product.Stores[k].PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
-					product.Stores[k].WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
-					product.Stores[k].RetailUnitPrice = purchaseProduct.RetailUnitPrice
-					storeExistInProductUnitPrice = true
-					break
-				}
-			}
-
-			if !storeExistInProductUnitPrice {
-				productStore := ProductStore{
-					StoreID:            *purchase.StoreID,
-					PurchaseUnitPrice:  purchaseProduct.PurchaseUnitPrice,
-					WholesaleUnitPrice: purchaseProduct.WholesaleUnitPrice,
-					RetailUnitPrice:    purchaseProduct.RetailUnitPrice,
-				}
-				product.Stores = append(product.Stores, productStore)
-			}
-		*/
 
 		err = product.CalculateUnitProfit()
 		if err != nil {
 			return err
 		}
+
 		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
-	}
+	} //end for
 
 	return nil
 }

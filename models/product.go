@@ -25,42 +25,45 @@ import (
 )
 
 type ProductStore struct {
-	StoreID                 primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName               string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
-	StoreNameInArabic       string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	PurchaseUnitPrice       float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
-	PurchaseUnitPriceSecret string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
-	WholesaleUnitPrice      float64            `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
-	RetailUnitPrice         float64            `bson:"retail_unit_price" json:"retail_unit_price"`
-	IsUnitPriceWithVAT      bool               `bson:"with_vat" json:"with_vat"`
-	Stock                   float64            `bson:"stock" json:"stock"`
-	StocksAdded             float64            `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
-	StocksRemoved           float64            `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
-	RetailUnitProfit        float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
-	RetailUnitProfitPerc    float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
-	WholesaleUnitProfit     float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
-	WholesaleUnitProfitPerc float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
-	SalesCount              int64              `bson:"sales_count" json:"sales_count"`
-	SalesQuantity           float64            `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
-	Sales                   float64            `bson:"sales,omitempty" json:"sales,omitempty"`
-	SalesReturnCount        int64              `bson:"sales_return_count" json:"sales_return_count"`
-	SalesReturnQuantity     float64            `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
-	SalesReturn             float64            `bson:"sales_return,omitempty" json:"sales_return,omitempty"`
-	SalesProfit             float64            `bson:"sales_profit,omitempty" json:"sales_profit,omitempty"`
-	SalesLoss               float64            `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
-	PurchaseCount           int64              `bson:"purchase_count" json:"purchase_count"`
-	PurchaseQuantity        float64            `bson:"purchase_quantity,omitempty" json:"purchase_quantity,omitempty"`
-	Purchase                float64            `bson:"purchase,omitempty" json:"purchase,omitempty"`
-	PurchaseReturnCount     int64              `bson:"purchase_return_count" json:"purchase_return_count"`
-	PurchaseReturnQuantity  float64            `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity,omitempty"`
-	PurchaseReturn          float64            `bson:"purchase_return,omitempty" json:"purchase_return,omitempty"`
-	SalesReturnProfit       float64            `bson:"sales_return_profit,omitempty" json:"sales_return_profit,omitempty"`
-	SalesReturnLoss         float64            `bson:"sales_return_loss,omitempty" json:"sales_return_loss,omitempty"`
-	QuotationCount          int64              `bson:"quotation_count" json:"quotation_count"`
-	QuotationQuantity       float64            `bson:"quotation_quantity,omitempty" json:"quotation_quantity,omitempty"`
-	Quotation               float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
-	DeliveryNoteCount       int64              `bson:"delivery_note_count" json:"delivery_note_count"`
-	DeliveryNoteQuantity    float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
+	StoreID                   primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName                 string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic         string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	PurchaseUnitPrice         float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
+	PurchaseUnitPriceWithVAT  float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
+	PurchaseUnitPriceSecret   string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
+	WholesaleUnitPrice        float64            `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
+	WholesaleUnitPriceWithVAT float64            `bson:"wholesale_unit_price_with_vat" json:"wholesale_unit_price_with_vat"`
+	RetailUnitPrice           float64            `bson:"retail_unit_price" json:"retail_unit_price"`
+	RetailUnitPriceWithVAT    float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
+	IsUnitPriceWithVAT        bool               `bson:"with_vat" json:"with_vat"`
+	Stock                     float64            `bson:"stock" json:"stock"`
+	StocksAdded               float64            `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
+	StocksRemoved             float64            `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
+	RetailUnitProfit          float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
+	RetailUnitProfitPerc      float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
+	WholesaleUnitProfit       float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
+	WholesaleUnitProfitPerc   float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
+	SalesCount                int64              `bson:"sales_count" json:"sales_count"`
+	SalesQuantity             float64            `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
+	Sales                     float64            `bson:"sales,omitempty" json:"sales,omitempty"`
+	SalesReturnCount          int64              `bson:"sales_return_count" json:"sales_return_count"`
+	SalesReturnQuantity       float64            `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
+	SalesReturn               float64            `bson:"sales_return,omitempty" json:"sales_return,omitempty"`
+	SalesProfit               float64            `bson:"sales_profit,omitempty" json:"sales_profit,omitempty"`
+	SalesLoss                 float64            `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
+	PurchaseCount             int64              `bson:"purchase_count" json:"purchase_count"`
+	PurchaseQuantity          float64            `bson:"purchase_quantity,omitempty" json:"purchase_quantity,omitempty"`
+	Purchase                  float64            `bson:"purchase,omitempty" json:"purchase,omitempty"`
+	PurchaseReturnCount       int64              `bson:"purchase_return_count" json:"purchase_return_count"`
+	PurchaseReturnQuantity    float64            `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity,omitempty"`
+	PurchaseReturn            float64            `bson:"purchase_return,omitempty" json:"purchase_return,omitempty"`
+	SalesReturnProfit         float64            `bson:"sales_return_profit,omitempty" json:"sales_return_profit,omitempty"`
+	SalesReturnLoss           float64            `bson:"sales_return_loss,omitempty" json:"sales_return_loss,omitempty"`
+	QuotationCount            int64              `bson:"quotation_count" json:"quotation_count"`
+	QuotationQuantity         float64            `bson:"quotation_quantity,omitempty" json:"quotation_quantity,omitempty"`
+	Quotation                 float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
+	DeliveryNoteCount         int64              `bson:"delivery_note_count" json:"delivery_note_count"`
+	DeliveryNoteQuantity      float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
 }
 
 type AdditionalStock struct {
@@ -393,12 +396,12 @@ func (store *Store) GetProductStats(
 	return stats, nil
 }
 
-func (product *Product) getRetailUnitPriceByStoreID(storeID primitive.ObjectID) (retailUnitPrice float64, withTax bool, err error) {
+func (product *Product) getRetailUnitPriceWithVATByStoreID(storeID primitive.ObjectID) (retailUnitPriceWithVAT float64, err error) {
 	if productStore, ok := product.ProductStores[storeID.Hex()]; ok {
-		return productStore.RetailUnitPrice, productStore.IsUnitPriceWithVAT, nil
+		return productStore.RetailUnitPriceWithVAT, nil
 	}
 
-	return retailUnitPrice, false, nil
+	return retailUnitPriceWithVAT, nil
 }
 
 func (product *Product) getPurchaseUnitPriceSecretByStoreID(storeID primitive.ObjectID) (secret string, err error) {
@@ -1992,11 +1995,6 @@ func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 		product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].Stock) + " " + product.Unit
 		if product.ProductStores[storeID.Hex()].RetailUnitPrice != 0 {
 			product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].RetailUnitPrice)
-			/*if product.ProductStores[storeID.Hex()].IsUnitPriceWithVAT {
-				product.SearchLabel += " [with VAT]"
-			} else {
-				product.SearchLabel += " [without VAT]"
-			}*/
 		}
 	}
 
@@ -2875,17 +2873,47 @@ func ProcessProducts() error {
 				continue
 			}
 
-			product.GeneratePrefixes()
-			product.SetSearchLabel(&store.ID)
-			product.SetAdditionalkeywords()
-			err = product.Update(&store.ID)
-			if err != nil {
-				log.Print("Store ID:" + store.ID.Hex())
-				log.Print("Part No.:" + product.PartNumber)
-				log.Print("Product ID:" + product.ID.Hex())
-				continue
-				//return err
+			for i, productStore := range product.ProductStores {
+				productStoreTemp := productStore
+				if productStore.IsUnitPriceWithVAT {
+					productStoreTemp.PurchaseUnitPriceWithVAT = product.ProductStores[i].PurchaseUnitPrice
+					productStoreTemp.RetailUnitPriceWithVAT = product.ProductStores[i].RetailUnitPrice
+					productStoreTemp.WholesaleUnitPriceWithVAT = product.ProductStores[i].WholesaleUnitPrice
+
+					productStoreTemp.PurchaseUnitPrice = RoundTo2Decimals(product.ProductStores[i].PurchaseUnitPrice / (1 + (store.VatPercent / 100)))
+					productStoreTemp.RetailUnitPrice = RoundTo2Decimals(product.ProductStores[i].RetailUnitPrice / (1 + (store.VatPercent / 100)))
+					productStoreTemp.WholesaleUnitPrice = RoundTo2Decimals(product.ProductStores[i].WholesaleUnitPrice / (1 + (store.VatPercent / 100)))
+				} else {
+					productStoreTemp.PurchaseUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].PurchaseUnitPrice * (1 + (store.VatPercent / 100)))
+					productStoreTemp.RetailUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].RetailUnitPrice * (1 + (store.VatPercent / 100)))
+					productStoreTemp.WholesaleUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].WholesaleUnitPrice * (1 + (store.VatPercent / 100)))
+				}
+				//productStore.IsUnitPriceWithVAT = true
+				product.ProductStores[i] = productStoreTemp
+				err = product.Update(&store.ID)
+				if err != nil {
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Part No.:" + product.PartNumber)
+					log.Print("Product ID:" + product.ID.Hex())
+					log.Print("err:" + err.Error())
+					continue
+					//return err
+				}
 			}
+
+			/*
+				product.GeneratePrefixes()
+				product.SetSearchLabel(&store.ID)
+				product.SetAdditionalkeywords()
+				err = product.Update(&store.ID)
+				if err != nil {
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Part No.:" + product.PartNumber)
+					log.Print("Product ID:" + product.ID.Hex())
+					continue
+					//return err
+				}
+			*/
 
 			/*
 				if !isValidUTF8(product.Name) {
