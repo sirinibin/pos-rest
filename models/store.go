@@ -1151,7 +1151,7 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		if store.Code == "LGK-SIMULATION" || store.Code == "LGK" {
+		if store.Code == "LGK-TEST" {
 			store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
 			store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
 			store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
