@@ -80,7 +80,7 @@ type DamagedStock struct {
 type Product struct {
 	ID                   primitive.ObjectID      `json:"id,omitempty" bson:"_id,omitempty"`
 	Name                 string                  `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic         string                  `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	NameInArabic         string                  `bson:"name_in_arabic" json:"name_in_arabic"`
 	NamePrefixes         []string                `bson:"name_prefixes,omitempty" json:"name_prefixes,omitempty"`
 	NameInArabicPrefixes []string                `bson:"name_in_arabic_prefixes,omitempty" json:"name_in_arabic_prefixes,omitempty"`
 	AdditionalKeywords   []string                `bson:"additional_keywords" json:"additional_keywords"`
@@ -2554,7 +2554,31 @@ func (store *Store) FindProductByItemCode(
 		return nil, err
 	}
 
-	product.SearchLabel = product.Name + " (Part #" + product.PartNumber + ", Arabic: " + product.NameInArabic + ")"
+	return product, err
+}
+
+func (store *Store) FindProductByPartNumber(
+	partNumber string,
+	selectFields map[string]interface{},
+) (product *Product, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"part_number": partNumber,
+			"store_id":    store.ID,
+		}, findOneOptions).
+		Decode(&product)
+	if err != nil {
+		return nil, err
+	}
 
 	return product, err
 }

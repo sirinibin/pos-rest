@@ -71,6 +71,8 @@ type Customer struct {
 	VATNoInArabic              string                   `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
 	Phone                      string                   `bson:"phone,omitempty" json:"phone,omitempty"`
 	PhoneInArabic              string                   `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	Phone2                     string                   `bson:"phone2" json:"phone2"`
+	Phone2InArabic             string                   `bson:"phone2_in_arabic" json:"phone2_in_arabic"`
 	Title                      string                   `bson:"title,omitempty" json:"title,omitempty"`
 	TitleInArabic              string                   `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
 	Email                      string                   `bson:"email,omitempty" json:"email,omitempty"`
@@ -101,7 +103,8 @@ type Customer struct {
 	SearchLabel                string                   `json:"search_label" bson:"search_label"`
 	StoreID                    *primitive.ObjectID      `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	Stores                     map[string]CustomerStore `bson:"stores" json:"stores"`
-	Remarks                    string                   `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	Remarks                    string                   `bson:"remarks" json:"remarks"`
+	Sponsor                    string                   `bson:"sponsor" json:"sponsor"`
 	UseRemarksInSales          bool                     `bson:"use_remarks_in_sales" json:"use_remarks_in_sales"`
 	Images                     []string                 `bson:"images,omitempty" json:"images,omitempty"`
 }
@@ -1615,6 +1618,88 @@ func IsValidDigitNumber(s string, digitsCount string) bool {
 	// Regular expression to match exactly 4 digits
 	re := regexp.MustCompile(`^\d{` + digitsCount + `}$`)
 	return re.MatchString(s)
+}
+
+func (store *Store) FindCustomerByNameByPhone(
+	Name string,
+	Phone string,
+	selectFields map[string]interface{},
+) (customer *Customer, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"phone":    Phone,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&customer)
+	if err != nil {
+		return nil, err
+	}
+
+	return customer, err
+}
+
+func (store *Store) FindCustomerByNameByVatNo(
+	Name string,
+	VatNo string,
+	selectFields map[string]interface{},
+) (customer *Customer, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"vat_no":   VatNo,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&customer)
+	if err != nil {
+		return nil, err
+	}
+
+	return customer, err
+}
+
+func (store *Store) FindCustomerByName(
+	Name string,
+	selectFields map[string]interface{},
+) (customer *Customer, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&customer)
+	if err != nil {
+		return nil, err
+	}
+
+	return customer, err
 }
 
 func (store *Store) FindCustomerByID(

@@ -535,6 +535,32 @@ func (store *Store) FindProductCategoryByID(
 	return productCategory, err
 }
 
+func (store *Store) FindProductCategoryByName(
+	Name string,
+	selectFields map[string]interface{},
+) (productCategory *ProductCategory, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&productCategory)
+	if err != nil {
+		return nil, err
+	}
+
+	return productCategory, err
+}
+
 func (store *Store) IsProductCategoryExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

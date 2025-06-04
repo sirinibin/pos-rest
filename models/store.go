@@ -1151,8 +1151,12 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		if store.Name == "Ghali Jabr Musleh Noemi Al-Mabadi Trading Est.-Test" || store.Name == "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
-			store.ImportProductsFromExcel("Book1.xlsx")
+		if store.Code == "LGK-SIMULATION" || store.Code == "LGK" {
+			store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
+			store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
+			store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
+			store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
+
 		} else {
 			continue
 		}
@@ -1174,6 +1178,566 @@ func ProcessStores() error {
 	return nil
 }
 
+func (store *Store) ImportVendorsFromExcel(filename string) {
+	// Open the Excel file
+	f, err := excelize.OpenFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Get the first sheet name
+	sheetName := f.GetSheetName(0)
+
+	// Read all rows from the sheet
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print each row
+	bar := progressbar.Default(int64(len(rows) - 1))
+	for i, row := range rows {
+		//fmt.Printf("Row %d: ", i+1)
+		//fmt.Println()
+		if i > 0 {
+			now := time.Now()
+			name := strings.ToUpper(row[1])
+			vatNo := row[16]
+			phones := ExtractSaudiPhoneNumbers(row[5] + " " + row[6] + " " + row[9])
+
+			var vendor *Vendor
+			if len(phones) > 0 {
+				vendor, err = store.FindVendorByNameByPhone(name, phones[0], bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					log.Print("Skipping vendor,error fetching,err:" + err.Error())
+					continue
+				}
+			}
+
+			if vendor == nil {
+				vendor, err = store.FindVendorByNameByVatNo(name, vatNo, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					log.Print("Skipping vendor,error fetching,err:" + err.Error())
+					continue
+				}
+			}
+
+			if vendor == nil {
+				vendor, err = store.FindVendorByName(name, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					log.Print("Skipping vendor,error fetching,err:" + err.Error())
+					continue
+				}
+			}
+
+			if vendor == nil {
+				vendor = &Vendor{StoreID: &store.ID}
+			}
+
+			vendor.CreatedAt = &now
+			vendor.UpdatedAt = &now
+			vendor.Name = name
+
+			vendor.NationalAddress.CityName = row[8]
+			vendor.NationalAddress.ZipCode = row[19]
+			vendor.NationalAddress.ZipCodeArabic = ConvertToArabicNumerals(row[19])
+			vendor.NationalAddress.StreetName = row[20]
+			vendor.NationalAddress.AdditionalNo = row[21]
+			vendor.NationalAddress.AdditionalNoArabic = ConvertToArabicNumerals(row[21])
+			vendor.NationalAddress.BuildingNo = row[22]
+			vendor.NationalAddress.BuildingNoArabic = ConvertToArabicNumerals(row[22])
+			vendor.NationalAddress.DistrictName = row[23]
+
+			vendor.Remarks = row[9]
+			vendor.Sponsor = row[10]
+			vendor.VATNo = vatNo
+			vendor.VATNoInArabic = ConvertToArabicNumerals(row[16])
+			vendor.RegistrationNumber = row[17]
+			vendor.RegistrationNumberInArabic = ConvertToArabicNumerals(row[17])
+
+			if len(phones) > 0 {
+				vendor.Phone = phones[0]
+			}
+
+			if len(phones) > 1 {
+				vendor.Phone2 = phones[1]
+			}
+
+			vendor.UpdateForeignLabelFields()
+
+			if govalidator.IsNull(strings.TrimSpace(vendor.Code)) {
+				err = vendor.MakeCode()
+				if err != nil {
+					log.Print("Skipping vendor,error making code,err:" + err.Error())
+					continue
+				}
+			}
+			vendor.GenerateSearchWords()
+			vendor.SetAdditionalkeywords()
+			vendor.SetSearchLabel()
+
+			if vendor.ID.IsZero() {
+				//log.Print("Inserting product category:" + row[1])
+				err = vendor.Insert()
+				if err != nil {
+					log.Print("Skipping vendor,error insert:" + vendor.Name + ",err:" + err.Error())
+					continue
+				}
+			} else {
+				//log.Print("Updating product category:" + row[1])
+				err = vendor.Update()
+				if err != nil {
+					log.Print("Skipping vendor,error update:" + vendor.Name + ",err:" + err.Error())
+					continue
+				}
+			}
+
+			bar.Add(1) // 1 product added
+		}
+	}
+}
+
+func (store *Store) ImportCustomersFromExcel(filename string) {
+	// Open the Excel file
+	f, err := excelize.OpenFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Get the first sheet name
+	sheetName := f.GetSheetName(0)
+
+	// Read all rows from the sheet
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print each row
+	bar := progressbar.Default(int64(len(rows) - 1))
+	for i, row := range rows {
+		//fmt.Printf("Row %d: ", i+1)
+		//fmt.Println()
+		if i > 0 {
+			now := time.Now()
+			name := strings.ToUpper(row[1])
+			vatNo := row[16]
+			phones := ExtractSaudiPhoneNumbers(row[5] + " " + row[6])
+
+			var customer *Customer
+			if len(phones) > 0 {
+				customer, err = store.FindCustomerByNameByPhone(name, phones[0], bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					log.Print("Skipping customer,error fetching,err:" + err.Error())
+					continue
+				}
+			}
+
+			if customer == nil {
+				customer, err = store.FindCustomerByNameByVatNo(name, vatNo, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					log.Print("Skipping customer,error fetching,err:" + err.Error())
+					continue
+				}
+			}
+
+			if customer == nil {
+				customer, err = store.FindCustomerByName(name, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					log.Print("Skipping customer,error fetching,err:" + err.Error())
+					continue
+				}
+			}
+
+			if customer == nil {
+				customer = &Customer{StoreID: &store.ID}
+			}
+
+			customer.CreatedAt = &now
+			customer.UpdatedAt = &now
+			customer.Name = name
+
+			customer.NationalAddress.CityName = row[8]
+			customer.NationalAddress.ZipCode = row[19]
+			customer.NationalAddress.ZipCodeArabic = ConvertToArabicNumerals(row[19])
+			customer.NationalAddress.StreetName = row[20]
+			customer.NationalAddress.AdditionalNo = row[21]
+			customer.NationalAddress.AdditionalNoArabic = ConvertToArabicNumerals(row[21])
+			customer.NationalAddress.BuildingNo = row[22]
+			customer.NationalAddress.BuildingNoArabic = ConvertToArabicNumerals(row[22])
+			customer.NationalAddress.DistrictName = row[23]
+
+			customer.Remarks = row[9]
+			customer.Sponsor = row[10]
+			customer.VATNo = vatNo
+			customer.VATNoInArabic = ConvertToArabicNumerals(row[16])
+			customer.RegistrationNumber = row[17]
+			customer.RegistrationNumberInArabic = ConvertToArabicNumerals(row[17])
+
+			if len(phones) > 0 {
+				customer.Phone = phones[0]
+			}
+
+			if len(phones) > 1 {
+				customer.Phone2 = phones[1]
+			}
+
+			customer.UpdateForeignLabelFields()
+
+			if govalidator.IsNull(strings.TrimSpace(customer.Code)) {
+				err = customer.MakeCode()
+				if err != nil {
+					log.Print("Skipping customer,error making code,err:" + err.Error())
+					continue
+				}
+			}
+			customer.GenerateSearchWords()
+			customer.SetAdditionalkeywords()
+			customer.SetSearchLabel()
+
+			if customer.ID.IsZero() {
+				//log.Print("Inserting product category:" + row[1])
+				err = customer.Insert()
+				if err != nil {
+					log.Print("Skipping product,error insert:" + customer.Name + ",err:" + err.Error())
+					continue
+				}
+			} else {
+				//log.Print("Updating product category:" + row[1])
+				err = customer.Update()
+				if err != nil {
+					log.Print("Skipping product,error update:" + customer.Name + ",err:" + err.Error())
+					continue
+				}
+			}
+
+			bar.Add(1) // 1 product added
+		}
+	}
+}
+
+func ExtractSaudiPhoneNumbers(input string) []string {
+	// Match all numeric sequences with 9 to 10 digits
+	re := regexp.MustCompile(`\b\d{9,15}\b`)
+	candidates := re.FindAllString(input, -1)
+
+	var validPhones []string
+	for _, number := range candidates {
+		// Skip VAT numbers (typically 15 digits)
+		if len(number) == 15 {
+			continue
+		}
+
+		// Check if it's a valid mobile number starting with 5 or 05
+		if len(number) == 9 && number[0] == '5' {
+			validPhones = append(validPhones, "0"+number)
+		} else if len(number) == 10 && number[0:2] == "05" {
+			validPhones = append(validPhones, number)
+		}
+	}
+
+	return validPhones
+}
+
+func (store *Store) ImportProductCategoriesFromExcel(filename string) {
+	// Open the Excel file
+	f, err := excelize.OpenFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Get the first sheet name
+	sheetName := f.GetSheetName(0)
+
+	// Read all rows from the sheet
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print each row
+	bar := progressbar.Default(int64(len(rows) - 1))
+	for i, row := range rows {
+		//fmt.Printf("Row %d: ", i+1)
+		//fmt.Println()
+		if i > 0 {
+			now := time.Now()
+			//store.FindProductCategoryByID()
+			if govalidator.IsNull(row[2]) {
+				//log.Print("No Product code. so skipping")
+				bar.Add(1)
+				continue
+			}
+			productCategory, err := store.FindProductCategoryByName(row[1], bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				log.Print("Skipping product category,error fetching,err:" + err.Error())
+				continue
+			}
+
+			if productCategory == nil {
+				productCategory = &ProductCategory{StoreID: &store.ID}
+			}
+
+			productCategory.CreatedAt = &now
+			productCategory.UpdatedAt = &now
+			productCategory.Name = row[1]
+
+			if productCategory.ID.IsZero() {
+				//log.Print("Inserting product category:" + row[1])
+				err = productCategory.Insert()
+				if err != nil {
+					log.Print("Skipping product,error insert:" + productCategory.Name + ",err:" + err.Error())
+					continue
+				}
+			} else {
+				//log.Print("Updating product category:" + row[1])
+				err = productCategory.Update()
+				if err != nil {
+					log.Print("Skipping product,error update:" + productCategory.Name + ",err:" + err.Error())
+					continue
+				}
+			}
+
+			//log.Print("Trying to find product item code:" + row[2])
+			product, err := store.FindProductByItemCode(row[2], bson.M{})
+			if err != nil {
+				if err == mongo.ErrNoDocuments {
+					/*
+						product = &Product{
+							StoreID:  &store.ID,
+							ItemCode: row[2],
+							Name:     row[3],
+						}
+						product.InitStoreUnitPrice()
+
+						product.CreatedAt = &now
+						product.UpdatedAt = &now
+						product.PartNumber = row[2]
+						product.ItemCode = row[1]
+
+						if row[8] == "Meter" {
+							product.Unit = "Meter(s)"
+						}
+
+						unitPrice, err := strconv.ParseFloat(row[6], 64)
+						if err != nil {
+							log.Print("Skipping product,error unit price parsing:" + product.Name + ",err:" + err.Error())
+							continue
+						}
+
+						unitPrice = RoundTo2Decimals(unitPrice)
+						unitPriceWithVAT := RoundTo2Decimals(unitPrice * (1 + (store.VatPercent / 100)))
+
+						productStore, ok := product.ProductStores[store.ID.Hex()]
+						if !ok {
+							product.ProductStores = map[string]ProductStore{}
+							product.ProductStores[store.ID.Hex()] = ProductStore{
+								StoreID:   *product.StoreID,
+								StoreName: store.Name,
+							}
+							productStore = product.ProductStores[store.ID.Hex()]
+						}
+
+						productStore.RetailUnitPrice = unitPrice
+						productStore.RetailUnitPriceWithVAT = unitPriceWithVAT
+
+						product.ProductStores[store.ID.Hex()] = productStore
+
+						err = product.SetBarcode()
+						if err != nil {
+							log.Print("Skipping product,error barcode:" + product.Name + ",err:" + err.Error())
+							continue
+						}
+
+						err = product.UpdateForeignLabelFields()
+						if err != nil {
+							log.Print("Skipping product,error update foreign:" + product.Name + ",err:" + err.Error())
+							continue
+						}
+						err = product.CalculateUnitProfit()
+						if err != nil {
+							log.Print("Skipping product,error calculate unit profit:" + product.Name + ",err:" + err.Error())
+							continue
+						}
+
+						product.GeneratePrefixes()
+						product.SetAdditionalkeywords()
+						product.SetSearchLabel(&store.ID)
+
+						err = product.SetStock()
+						if err != nil {
+							log.Print("Skipping product,error setting stock:" + product.Name + ",err:" + err.Error())
+							continue
+						}
+
+						if product.ID.IsZero() {
+							err = product.Insert()
+							if err != nil {
+								log.Print("Skipping product,error insert:" + product.Name + ",err:" + err.Error())
+								continue
+							}
+						}
+					*/
+					log.Print("Skipping1 product,error fetching product by item code:" + err.Error())
+					log.Print("item code:" + row[2])
+					continue
+				} else {
+					log.Print("Skipping2 product,error fetching product by item code:" + err.Error())
+					log.Print("item code:" + row[2])
+
+					continue
+				}
+			}
+
+			product.CategoryID = []*primitive.ObjectID{
+				&productCategory.ID,
+			}
+
+			product.CategoryName = []string{
+				productCategory.Name,
+			}
+
+			err = product.Update(&store.ID)
+			if err != nil {
+				log.Print("Skipping product,error update prduct:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			bar.Add(1) // 1 product added
+		}
+	}
+}
+
+func (store *Store) ImportProductsFromExcel(filename string) {
+	// Open the Excel file
+	f, err := excelize.OpenFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Get the first sheet name
+	sheetName := f.GetSheetName(0)
+
+	// Read all rows from the sheet
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print each row
+	bar := progressbar.Default(int64(len(rows) - 1))
+	for i, row := range rows {
+		//fmt.Printf("Row %d: ", i+1)
+		//fmt.Println()
+		if i > 0 {
+			now := time.Now()
+
+			product, err := store.FindProductByPartNumber(row[0]+" | "+row[1], bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				log.Print("Skipping product,error fetching product,err:" + err.Error())
+				continue
+			}
+
+			if product == nil {
+				product = &Product{StoreID: &store.ID}
+			}
+
+			product.CreatedAt = &now
+			product.UpdatedAt = &now
+			product.PartNumber = row[0] + " | " + row[1]
+			product.ItemCode = row[1]
+			product.Name = row[2]
+			if row[7] == "Meter" {
+				product.Unit = "Meter(s)"
+			}
+
+			stock, err := strconv.ParseFloat(row[4], 64)
+			if err != nil {
+				log.Print("Skipping product,error stock parsing:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			unitPrice, err := strconv.ParseFloat(row[8], 64)
+			if err != nil {
+				log.Print("Skipping product,error unit price parsing:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			unitPrice = RoundTo2Decimals(unitPrice)
+			unitPriceWithVAT := RoundTo2Decimals(unitPrice * (1 + (store.VatPercent / 100)))
+
+			productStore, ok := product.ProductStores[store.ID.Hex()]
+			if !ok {
+				product.ProductStores = map[string]ProductStore{}
+				product.ProductStores[store.ID.Hex()] = ProductStore{
+					StoreID:   *product.StoreID,
+					StoreName: store.Name,
+				}
+				productStore = product.ProductStores[store.ID.Hex()]
+			}
+
+			if stock > 0 {
+				productStore.StocksAdded = stock
+			} else if stock < 0 {
+				productStore.StocksRemoved = stock * (-1)
+			}
+
+			productStore.RetailUnitPrice = unitPrice
+			productStore.RetailUnitPriceWithVAT = unitPriceWithVAT
+
+			product.ProductStores[store.ID.Hex()] = productStore
+
+			err = product.SetBarcode()
+			if err != nil {
+				log.Print("Skipping product,error barcode:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			err = product.UpdateForeignLabelFields()
+			if err != nil {
+				log.Print("Skipping product,error update foreign:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+			err = product.CalculateUnitProfit()
+			if err != nil {
+				log.Print("Skipping product,error calculate unit profit:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			product.GeneratePrefixes()
+			product.SetAdditionalkeywords()
+			product.SetSearchLabel(&store.ID)
+
+			err = product.SetStock()
+			if err != nil {
+				log.Print("Skipping product,error setting stock:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			if product.ID.IsZero() {
+				err = product.Insert()
+				if err != nil {
+					log.Print("Skipping product,error insert:" + product.Name + ",err:" + err.Error())
+					continue
+				}
+			} else {
+				err = product.Update(&store.ID)
+				if err != nil {
+					log.Print("Skipping product,error update:" + product.Name + ",err:" + err.Error())
+					continue
+				}
+			}
+
+			bar.Add(1) // 1 product added
+		}
+	}
+}
+
+/*
 func (store *Store) ImportProductsFromExcel(filename string) {
 	// Open the Excel file
 	f, err := excelize.OpenFile(filename)
@@ -1294,6 +1858,7 @@ func (store *Store) ImportProductsFromExcel(filename string) {
 		}
 	}
 }
+*/
 
 func GetAllStores() (stores []Store, err error) {
 	collection := db.Client("").Database(db.GetPosDB()).Collection("store")

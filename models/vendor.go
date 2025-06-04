@@ -59,6 +59,8 @@ type Vendor struct {
 	Email                      string                 `bson:"email,omitempty" json:"email"`
 	Phone                      string                 `bson:"phone,omitempty" json:"phone"`
 	PhoneInArabic              string                 `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic"`
+	Phone2                     string                 `bson:"phone2" json:"phone2"`
+	Phone2InArabic             string                 `bson:"phone2_in_arabic" json:"phone2_in_arabic"`
 	Address                    string                 `bson:"address,omitempty" json:"address"`
 	AddressInArabic            string                 `bson:"address_in_arabic,omitempty" json:"address_in_arabic"`
 	VATNo                      string                 `bson:"vat_no,omitempty" json:"vat_no"`
@@ -66,7 +68,7 @@ type Vendor struct {
 	VatPercent                 *float32               `bson:"vat_percent" json:"vat_percent"`
 	RegistrationNumber         string                 `bson:"registration_number,omitempty" json:"registration_number"`
 	RegistrationNumberInArabic string                 `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic"`
-	NationalAddresss           NationalAddress        `bson:"national_address,omitempty" json:"national_address"`
+	NationalAddress            NationalAddress        `bson:"national_address,omitempty" json:"national_address"`
 	CountryName                string                 `bson:"country_name" json:"country_name"`
 	CountryCode                string                 `bson:"country_code" json:"country_code"`
 	ContactPerson              string                 `bson:"contact_person,omitempty" json:"contact_person,omitempty"`
@@ -94,6 +96,7 @@ type Vendor struct {
 	Remarks                    string                 `bson:"remarks,omitempty" json:"remarks,omitempty"`
 	UseRemarksInPurchases      bool                   `bson:"use_remarks_in_purchases" json:"use_remarks_in_purchases"`
 	Images                     []string               `bson:"images,omitempty" json:"images,omitempty"`
+	Sponsor                    string                 `bson:"sponsor" json:"sponsor"`
 }
 
 func (store *Store) SaveVendorImage(vendorID *primitive.ObjectID, filename string) error {
@@ -1332,6 +1335,88 @@ func (store *Store) FindVendorByID(
 	if _, ok := selectFields["deleted_by_user.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
 		vendor.DeletedByUser, _ = FindUserByID(vendor.DeletedBy, fields)
+	}
+
+	return vendor, err
+}
+
+func (store *Store) FindVendorByName(
+	Name string,
+	selectFields bson.M,
+) (vendor *Vendor, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if selectFields != nil {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&vendor)
+	if err != nil {
+		return nil, err
+	}
+
+	return vendor, err
+}
+
+func (store *Store) FindVendorByNameByPhone(
+	Name string,
+	Phone string,
+	selectFields bson.M,
+) (vendor *Vendor, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if selectFields != nil {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"phone":    Phone,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&vendor)
+	if err != nil {
+		return nil, err
+	}
+
+	return vendor, err
+}
+
+func (store *Store) FindVendorByNameByVatNo(
+	Name string,
+	VatNo string,
+	selectFields bson.M,
+) (vendor *Vendor, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if selectFields != nil {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"vat_no":   VatNo,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&vendor)
+	if err != nil {
+		return nil, err
 	}
 
 	return vendor, err
