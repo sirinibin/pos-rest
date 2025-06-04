@@ -882,20 +882,22 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	emailExists, err := store.IsEmailExists()
-	if err != nil {
-		errs["email"] = err.Error()
-	}
+	/*
+		emailExists, err := store.IsEmailExists()
+		if err != nil {
+			errs["email"] = err.Error()
+		}
 
-	if emailExists {
-		errs["email"] = "E-mail is Already in use"
-	}
+		if emailExists {
+			errs["email"] = "E-mail is Already in use"
+		}
 
-	if emailExists {
-		w.WriteHeader(http.StatusConflict)
-	} else if len(errs) > 0 {
-		w.WriteHeader(http.StatusBadRequest)
-	}
+		if emailExists {
+			w.WriteHeader(http.StatusConflict)
+		} else if len(errs) > 0 {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	*/
 
 	return errs
 }
