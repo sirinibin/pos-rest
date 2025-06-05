@@ -1956,29 +1956,50 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 }
 
 func (product *Product) SetAdditionalkeywords() {
-	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	re := regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
 	keywords := []string{}
 	if containsSpecialChars(product.PrefixPartNumber) {
-		keywords = append(keywords, re.ReplaceAllString(product.PrefixPartNumber, ""))
+		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(product.PrefixPartNumber, "")))
 	}
 
 	if containsSpecialChars(product.PartNumber) {
-		keywords = append(keywords, re.ReplaceAllString(product.PartNumber, ""))
+		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(product.PartNumber, "")))
 	}
 
 	if containsSpecialChars(product.Name) {
-		keywords = append(keywords, re.ReplaceAllString(product.Name, ""))
+		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(product.Name, "")))
 	}
 
 	if containsSpecialChars(product.NameInArabic) {
 		word := re.ReplaceAllString(product.NameInArabic, "")
-		if !govalidator.IsNull(word) {
-			keywords = append(keywords, word)
+		if !govalidator.IsNull(CleanStringPreserveSpace(word)) {
+			keywords = append(keywords, CleanStringPreserveSpace(word))
 		}
 
 	}
 
 	product.AdditionalKeywords = keywords
+}
+
+func CleanStringPreserveSpace(s string) string {
+	var b strings.Builder
+	prevSpace := false
+
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+			prevSpace = false
+		} else if unicode.IsSpace(r) {
+			if !prevSpace {
+				b.WriteRune(' ')
+				prevSpace = true
+			}
+			// else skip multiple spaces
+		}
+		// skip all other characters (punctuation, symbols, etc.)
+	}
+
+	return strings.TrimSpace(b.String())
 }
 
 func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {

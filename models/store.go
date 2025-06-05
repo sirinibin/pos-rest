@@ -1151,15 +1151,16 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		if store.Code == "LGK-TEST" {
-			store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
-			store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
-			store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
-			store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
+		/*
+			if store.Code == "LGK-TEST" || store.Code == "PH2" {
+				store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
+				store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
+				store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
+				store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
 
-		} else {
-			continue
-		}
+			} else {
+				continue
+			}*/
 
 		/*
 			_, err = store.CreateDB()
@@ -1322,6 +1323,7 @@ func (store *Store) ImportCustomersFromExcel(filename string) {
 		//fmt.Println()
 		if i > 0 {
 			now := time.Now()
+
 			name := strings.ToUpper(row[1])
 			vatNo := row[16]
 			phones := ExtractSaudiPhoneNumbers(row[5] + " " + row[6])
