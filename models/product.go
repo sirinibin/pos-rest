@@ -1957,21 +1957,28 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 func (product *Product) SetAdditionalkeywords() {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	keywords := []string{}
 	if containsSpecialChars(product.PrefixPartNumber) {
-		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PrefixPartNumber, ""))
+		keywords = append(keywords, re.ReplaceAllString(product.PrefixPartNumber, ""))
 	}
 
 	if containsSpecialChars(product.PartNumber) {
-		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.PartNumber, ""))
+		keywords = append(keywords, re.ReplaceAllString(product.PartNumber, ""))
 	}
 
 	if containsSpecialChars(product.Name) {
-		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.Name, ""))
+		keywords = append(keywords, re.ReplaceAllString(product.Name, ""))
 	}
 
 	if containsSpecialChars(product.NameInArabic) {
-		product.AdditionalKeywords = append(product.AdditionalKeywords, re.ReplaceAllString(product.NameInArabic, ""))
+		word := re.ReplaceAllString(product.NameInArabic, "")
+		if !govalidator.IsNull(word) {
+			keywords = append(keywords, word)
+		}
+
 	}
+
+	product.AdditionalKeywords = keywords
 }
 
 func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
@@ -2897,47 +2904,47 @@ func ProcessProducts() error {
 				continue
 			}
 
-			for i, productStore := range product.ProductStores {
-				productStoreTemp := productStore
-				if productStore.IsUnitPriceWithVAT {
-					productStoreTemp.PurchaseUnitPriceWithVAT = product.ProductStores[i].PurchaseUnitPrice
-					productStoreTemp.RetailUnitPriceWithVAT = product.ProductStores[i].RetailUnitPrice
-					productStoreTemp.WholesaleUnitPriceWithVAT = product.ProductStores[i].WholesaleUnitPrice
-
-					productStoreTemp.PurchaseUnitPrice = RoundTo2Decimals(product.ProductStores[i].PurchaseUnitPrice / (1 + (store.VatPercent / 100)))
-					productStoreTemp.RetailUnitPrice = RoundTo2Decimals(product.ProductStores[i].RetailUnitPrice / (1 + (store.VatPercent / 100)))
-					productStoreTemp.WholesaleUnitPrice = RoundTo2Decimals(product.ProductStores[i].WholesaleUnitPrice / (1 + (store.VatPercent / 100)))
-				} else {
-					productStoreTemp.PurchaseUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].PurchaseUnitPrice * (1 + (store.VatPercent / 100)))
-					productStoreTemp.RetailUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].RetailUnitPrice * (1 + (store.VatPercent / 100)))
-					productStoreTemp.WholesaleUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].WholesaleUnitPrice * (1 + (store.VatPercent / 100)))
-				}
-				//productStore.IsUnitPriceWithVAT = true
-				product.ProductStores[i] = productStoreTemp
-				err = product.Update(&store.ID)
-				if err != nil {
-					log.Print("Store ID:" + store.ID.Hex())
-					log.Print("Part No.:" + product.PartNumber)
-					log.Print("Product ID:" + product.ID.Hex())
-					log.Print("err:" + err.Error())
-					continue
-					//return err
-				}
-			}
-
 			/*
-				product.GeneratePrefixes()
-				product.SetSearchLabel(&store.ID)
-				product.SetAdditionalkeywords()
-				err = product.Update(&store.ID)
-				if err != nil {
-					log.Print("Store ID:" + store.ID.Hex())
-					log.Print("Part No.:" + product.PartNumber)
-					log.Print("Product ID:" + product.ID.Hex())
-					continue
-					//return err
+				for i, productStore := range product.ProductStores {
+					productStoreTemp := productStore
+					if productStore.IsUnitPriceWithVAT {
+						productStoreTemp.PurchaseUnitPriceWithVAT = product.ProductStores[i].PurchaseUnitPrice
+						productStoreTemp.RetailUnitPriceWithVAT = product.ProductStores[i].RetailUnitPrice
+						productStoreTemp.WholesaleUnitPriceWithVAT = product.ProductStores[i].WholesaleUnitPrice
+
+						productStoreTemp.PurchaseUnitPrice = RoundTo2Decimals(product.ProductStores[i].PurchaseUnitPrice / (1 + (store.VatPercent / 100)))
+						productStoreTemp.RetailUnitPrice = RoundTo2Decimals(product.ProductStores[i].RetailUnitPrice / (1 + (store.VatPercent / 100)))
+						productStoreTemp.WholesaleUnitPrice = RoundTo2Decimals(product.ProductStores[i].WholesaleUnitPrice / (1 + (store.VatPercent / 100)))
+					} else {
+						productStoreTemp.PurchaseUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].PurchaseUnitPrice * (1 + (store.VatPercent / 100)))
+						productStoreTemp.RetailUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].RetailUnitPrice * (1 + (store.VatPercent / 100)))
+						productStoreTemp.WholesaleUnitPriceWithVAT = RoundTo2Decimals(product.ProductStores[i].WholesaleUnitPrice * (1 + (store.VatPercent / 100)))
+					}
+					//productStore.IsUnitPriceWithVAT = true
+					product.ProductStores[i] = productStoreTemp
+					err = product.Update(&store.ID)
+					if err != nil {
+						log.Print("Store ID:" + store.ID.Hex())
+						log.Print("Part No.:" + product.PartNumber)
+						log.Print("Product ID:" + product.ID.Hex())
+						log.Print("err:" + err.Error())
+						continue
+						//return err
+					}
 				}
 			*/
+
+			product.GeneratePrefixes()
+			product.SetSearchLabel(&store.ID)
+			product.SetAdditionalkeywords()
+			err = product.Update(&store.ID)
+			if err != nil {
+				log.Print("Store ID:" + store.ID.Hex())
+				log.Print("Part No.:" + product.PartNumber)
+				log.Print("Product ID:" + product.ID.Hex())
+				continue
+				//return err
+			}
 
 			/*
 				if !isValidUTF8(product.Name) {
