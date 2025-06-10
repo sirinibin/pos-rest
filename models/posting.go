@@ -941,6 +941,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				}
 
 				posts = append(posts, Post{
+					ID:            primitive.NewObjectID(),
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
 					AccountName:   journal2.AccountName,
@@ -974,6 +975,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				postBalance = (accountBalance - amount)
 
 				posts = append(posts, Post{
+					ID:            primitive.NewObjectID(),
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
 					AccountName:   journal2.AccountName,
@@ -1006,6 +1008,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				postBalance = (accountBalance + amount)
 
 				posts = append(posts, Post{
+					ID:            primitive.NewObjectID(),
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
 					AccountName:   journal2.AccountName,
