@@ -105,9 +105,15 @@ func (account *Account) CalculateBalance(beforeDate *time.Time) error {
 	}
 
 	if beforeDate != nil {
-		filter["date"] = bson.M{"$lt": beforeDate}
+		filter["date"] = bson.M{"$lte": beforeDate}
 	}
 
+	/*
+
+		if beforeID != nil {
+			filter["reference_id"] = bson.M{"$lt": beforeID}
+		}
+	*/
 	stats := AccountStats{}
 
 	pipeline := []bson.M{

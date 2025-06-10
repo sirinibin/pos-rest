@@ -17,6 +17,7 @@ import (
 
 // Post : Post structure
 type Post struct {
+	ID            primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Date          *time.Time         `bson:"date,omitempty" json:"date,omitempty"`
 	AccountID     primitive.ObjectID `json:"account_id,omitempty" bson:"account_id,omitempty"`
 	AccountName   string             `json:"account_name,omitempty" bson:"account_name,omitempty"`
@@ -896,6 +897,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				postBalance = (accountBalance + amount)
 
 				posts = append(posts, Post{
+					ID:            primitive.NewObjectID(),
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
 					AccountName:   journal2.AccountName,
