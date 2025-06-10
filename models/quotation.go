@@ -359,6 +359,13 @@ func (quotation *Quotation) UpdatePayments() error {
 }
 
 func (quotation *Quotation) SetPaymentStatus() (models []QuotationPayment, err error) {
+	if quotation.Type == "quotation" {
+		quotation.BalanceAmount = 0
+		quotation.TotalPaymentReceived = 0
+		quotation.PaymentStatus = ""
+		return models, nil
+	}
+
 	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -2085,6 +2092,14 @@ func ProcessQuotations() error {
 				continue
 			}
 
+			if quotation.Type == "quotation" {
+				quotation.SetPaymentStatus()
+				err = quotation.Update()
+				if err != nil {
+					return err
+				}
+			}
+
 			/*
 				if quotation.Type != "invoice" {
 					quotation.Type = "quotation"
@@ -2097,7 +2112,7 @@ func ProcessQuotations() error {
 				quotation.ClearProductsQuotationHistory()
 				quotation.AddProductsQuotationHistory()
 			*/
-			quotation.SetCustomerQuotationStats()
+			//quotation.SetCustomerQuotationStats()
 
 			/*
 				quotation.ClearProductsQuotationHistory()
