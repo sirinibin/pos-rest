@@ -932,7 +932,11 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					}
 				*/
 
-				postBalance = (accountBalance - amount)
+				if account.Type == "revenue" || account.Type == "capital" {
+					postBalance = (accountBalance + amount)
+				} else {
+					postBalance = (accountBalance - amount)
+				}
 
 				posts = append(posts, Post{
 					Date:          journal2.Date,
