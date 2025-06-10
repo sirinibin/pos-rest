@@ -2610,6 +2610,7 @@ func ProcessSalesReturns() error {
 
 			salesReturn.UndoAccounting()
 			salesReturn.DoAccounting()
+
 			if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
 				customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
 				if customer != nil {

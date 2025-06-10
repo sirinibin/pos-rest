@@ -937,6 +937,9 @@ func (store *Store) ProcessDividents() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
+		model.UndoAccounting()
+		model.DoAccounting()
+
 		/*
 			store, err := FindStoreByCode("GUO", bson.M{})
 			if err != nil {

@@ -1069,11 +1069,6 @@ func (store *Store) ProcessCapitalWithdrawals() error {
 			model.StoreID = &store.ID
 		*/
 
-		err = model.Update()
-		if err != nil {
-			return err
-		}
-
 	}
 
 	return nil

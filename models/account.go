@@ -95,13 +95,17 @@ func (store *Store) GetAccountListStats(filter map[string]interface{}) (stats Ac
 	return stats, nil
 }
 
-func (account *Account) CalculateBalance() error {
+func (account *Account) CalculateBalance(beforeDate *time.Time) error {
 	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	filter := map[string]interface{}{
 		"account_id": account.ID,
+	}
+
+	if beforeDate != nil {
+		filter["date"] = bson.M{"$lt": beforeDate}
 	}
 
 	stats := AccountStats{}
@@ -170,13 +174,6 @@ func (account *Account) CalculateBalance() error {
 		//account.DebitOrCreditBalance = "na"
 	} else {
 		account.Open = true
-	}
-
-	now := time.Now()
-	account.UpdatedAt = &now
-	err = account.Update()
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -661,6 +658,9 @@ func (account *Account) Update() error {
 	updateOptions.SetUpsert(false)
 	defer cancel()
 
+	now := time.Now()
+	account.UpdatedAt = &now
+
 	updateResult, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": account.ID},
@@ -944,7 +944,12 @@ func (store *Store) IsAccountExists(ID *primitive.ObjectID) (exists bool, err er
 
 func SetAccountBalances(accounts map[string]Account) error {
 	for _, account := range accounts {
-		err := account.CalculateBalance()
+		err := account.CalculateBalance(nil)
+		if err != nil {
+			return err
+		}
+
+		err = account.Update()
 		if err != nil {
 			return err
 		}

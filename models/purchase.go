@@ -2390,6 +2390,7 @@ func ProcessPurchases() error {
 
 			purchase.UndoAccounting()
 			purchase.DoAccounting()
+
 			if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 				vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
 				if vendor != nil {

@@ -1115,68 +1115,71 @@ func (store *Store) IsCapitalExists(ID *primitive.ObjectID) (exists bool, err er
 	return (count > 0), err
 }
 
-func (store *Store) ProcessCapitals() error {
-	totalCount, err := store.GetTotalCount(bson.M{}, "capital")
+func ProcessCapitals() error {
+	log.Print("Processing capitals")
+
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
 
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching capitals" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		model := Capital{}
-		err = cur.Decode(&model)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
-		}
-
-		/*
-			store, err := FindStoreByCode("GUO", bson.M{})
-			if err != nil {
-				return errors.New("Error finding store:" + err.Error())
-			}
-			model.StoreID = &store.ID
-		*/
-
-		/*
-			err = model.UndoAccounting()
-			if err != nil {
-				return errors.New("error undo accounting: " + err.Error())
-			}
-
-			err = model.DoAccounting()
-			if err != nil {
-				return errors.New("error doing accounting: " + err.Error())
-			}
-		*/
-
-		if model.PaymentMethod == "bank_account" {
-			model.PaymentMethod = "bank_card"
-		}
-
-		err = model.Update()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "capital")
 		if err != nil {
 			return err
 		}
 
-		bar.Add(1)
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("capital")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching capitals" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			model := Capital{}
+			err = cur.Decode(&model)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			model.UndoAccounting()
+			model.DoAccounting()
+
+			/*
+				store, err := FindStoreByCode("GUO", bson.M{})
+				if err != nil {
+					return errors.New("Error finding store:" + err.Error())
+				}
+				model.StoreID = &store.ID
+			*/
+
+			/*
+				err = model.UndoAccounting()
+				if err != nil {
+					return errors.New("error undo accounting: " + err.Error())
+				}
+
+				err = model.DoAccounting()
+				if err != nil {
+					return errors.New("error doing accounting: " + err.Error())
+				}
+			*/
+
+			bar.Add(1)
+		}
 	}
 
 	return nil

@@ -22,8 +22,9 @@ type Post struct {
 	AccountName   string             `json:"account_name,omitempty" bson:"account_name,omitempty"`
 	AccountNumber string             `bson:"account_number,omitempty" json:"account_number,omitempty"`
 	DebitOrCredit string             `json:"debit_or_credit,omitempty" bson:"debit_or_credit,omitempty"`
-	Debit         float64            `bson:"debit,omitempty" json:"debit,omitempty"`
-	Credit        float64            `bson:"credit,omitempty" json:"credit,omitempty"`
+	Debit         float64            `bson:"debit" json:"debit"`
+	Credit        float64            `bson:"credit" json:"credit"`
+	Balance       float64            `bson:"balance" json:"balance"`
 	CreatedAt     *time.Time         `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time         `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
@@ -650,6 +651,23 @@ func (store *Store) SearchPosting(w http.ResponseWriter, r *http.Request) (
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
+	keys, ok = r.URL.Query()["search[balance]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err, startDate, endDate
+		}
+
+		if operator != "" {
+			criterias.SearchBy["posts.balance"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["posts.balance"] = value
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[debit]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -843,6 +861,19 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				}
 			*/
 
+			postBalance := float64(0.00)
+			accountBalance := float64(0.00)
+
+			err = account.CalculateBalance(journal2.Date)
+			if err != nil {
+				return nil, errors.New("error calculating account balance: " + err.Error())
+			}
+			accountBalance = account.Balance
+
+			if account.DebitOrCreditBalance == "credit_balance" {
+				accountBalance = account.Balance * (-1)
+			}
+
 			if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "credit" {
 
 				//amount := journal2.Credit
@@ -862,6 +893,8 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					}
 				*/
 
+				postBalance = (accountBalance + amount)
+
 				posts = append(posts, Post{
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
@@ -869,6 +902,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "debit",
 					Debit:         amount,
+					Balance:       postBalance,
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
@@ -898,6 +932,8 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					}
 				*/
 
+				postBalance = (accountBalance - amount)
+
 				posts = append(posts, Post{
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
@@ -905,6 +941,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "credit",
 					Credit:        amount,
+					Balance:       postBalance,
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
@@ -928,6 +965,8 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					}
 				*/
 
+				postBalance = (accountBalance - amount)
+
 				posts = append(posts, Post{
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
@@ -935,6 +974,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "credit",
 					Credit:        amount,
+					Balance:       postBalance,
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
@@ -957,6 +997,8 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					}
 				*/
 
+				postBalance = (accountBalance + amount)
+
 				posts = append(posts, Post{
 					Date:          journal2.Date,
 					AccountID:     journal2.AccountID,
@@ -964,6 +1006,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "debit",
 					Debit:         amount,
+					Balance:       postBalance,
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
@@ -994,9 +1037,13 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 
 		postings = append(postings, *posting)
 
-		err = account.CalculateBalance()
+		err = account.CalculateBalance(nil)
 		if err != nil {
 			return nil, errors.New("error calculating account balance: " + err.Error())
+		}
+		err = account.Update()
+		if err != nil {
+			return nil, err
 		}
 
 	} // end for
