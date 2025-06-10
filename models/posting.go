@@ -870,7 +870,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			}
 			accountBalance = account.Balance
 
-			if account.DebitOrCreditBalance == "credit_balance" {
+			if account.Type == "liability" {
 				accountBalance = account.Balance * (-1)
 			}
 
