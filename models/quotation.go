@@ -2575,10 +2575,6 @@ func (quotation *Quotation) UndoAccounting() error {
 		return err
 	}
 
-	if !store.QuotationInvoiceAccounting {
-		return nil
-	}
-
 	ledger, err := store.FindLedgerByReferenceID(quotation.ID, *quotation.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return errors.New("Error finding ledger by reference id: " + err.Error())
