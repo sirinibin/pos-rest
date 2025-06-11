@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -258,6 +259,21 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = quotation.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() && quotation.Type == "invoice" {
+		customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
+	}
+
 	err = store.NotifyUsers("quotation_updated")
 	if err != nil {
 		response.Status = false
@@ -483,6 +499,39 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotationOld.SetProductsQuotationStats()
+
+	err = quotation.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() && quotation.Type == "invoice" {
+		customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+		if customer != nil {
+			customer.SetCreditBalance()
+		}
+	}
+
+	if quotationOld.CustomerID != nil && !quotationOld.CustomerID.IsZero() {
+		customer, _ := store.FindCustomerByID(quotationOld.CustomerID, bson.M{})
+		if customer != nil {
+			log.Print("Setting old customer credit balance")
+			customer.SetCreditBalance()
+			quotationOld.SetCustomerQuotationStats()
+		}
+		quotationOld.SetProductsQuotationStats()
+	}
 
 	quotation, err = store.FindQuotationByID(&quotation.ID, bson.M{})
 	if err != nil {

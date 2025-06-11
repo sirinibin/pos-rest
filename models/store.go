@@ -88,6 +88,7 @@ type Store struct {
 	ClientFilter                       bool                  `bson:"client_filter" json:"client_filter"`
 	BlockSaleWhenPurchasePriceIsHigher bool                  `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
 	EnableMonthlySerialNumber          bool                  `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
+	QuotationInvoiceAccounting         bool                  `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
 }
 
 type SerialNumber struct {

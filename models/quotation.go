@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2092,11 +2093,21 @@ func ProcessQuotations() error {
 				continue
 			}
 
-			if quotation.Type == "quotation" {
-				quotation.SetPaymentStatus()
-				err = quotation.Update()
-				if err != nil {
-					return err
+			/*
+				if quotation.Type == "quotation" {
+					quotation.SetPaymentStatus()
+					err = quotation.Update()
+					if err != nil {
+						return err
+					}
+				}*/
+
+			quotation.UndoAccounting()
+			quotation.DoAccounting()
+			if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() && quotation.Type == "invoice" {
+				customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+				if customer != nil {
+					customer.SetCreditBalance()
 				}
 			}
 
@@ -2529,4 +2540,620 @@ func (quotation *Quotation) SetCustomerQuotationStats() error {
 	}
 
 	return nil
+}
+
+func (quotation *Quotation) DoAccounting() error {
+	if quotation.Type == "quotation" {
+		return nil
+	}
+
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.QuotationInvoiceAccounting {
+		return nil
+	}
+
+	ledger, err := quotation.CreateLedger()
+	if err != nil {
+		return errors.New("error creating ledger: " + err.Error())
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return errors.New("error creating postings: " + err.Error())
+	}
+
+	return nil
+}
+
+func (quotation *Quotation) UndoAccounting() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.QuotationInvoiceAccounting {
+		return nil
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(quotation.ID, *quotation.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("Error getting related accounts: " + err.Error())
+		}
+	}
+
+	err = store.RemoveLedgerByReferenceID(quotation.ID)
+	if err != nil {
+		return errors.New("Error removing ledger by reference id: " + err.Error())
+	}
+
+	err = store.RemovePostingsByReferenceID(quotation.ID)
+	if err != nil {
+		return errors.New("Error removing postings by reference id: " + err.Error())
+	}
+
+	err = SetAccountBalances(ledgerAccounts)
+	if err != nil {
+		return errors.New("Error setting account balances: " + err.Error())
+	}
+
+	return nil
+}
+
+var extraQuotationSalesPayments []QuotationPayment
+
+func (quotation *Quotation) CreateLedger() (ledger *Ledger, err error) {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	var customer *Customer
+
+	if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() {
+		customer, err = store.FindCustomerByID(quotation.CustomerID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
+
+	cashAccount, err := store.CreateAccountIfNotExists(quotation.StoreID, nil, nil, "Cash", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := store.CreateAccountIfNotExists(quotation.StoreID, nil, nil, "Bank", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	salesAccount, err := store.CreateAccountIfNotExists(quotation.StoreID, nil, nil, "Sales", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	cashDiscountAllowedAccount, err := store.CreateAccountIfNotExists(quotation.StoreID, nil, nil, "Cash discount allowed", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	journals := []Journal{}
+
+	var firstPaymentDate *time.Time
+	if len(quotation.Payments) > 0 {
+		firstPaymentDate = quotation.Payments[0].Date
+	}
+
+	if len(quotation.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(quotation.Date, firstPaymentDate)) {
+		//Case: UnPaid
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		customerVATNo := ""
+		customerPhone := ""
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = customer.VATNo
+			customerPhone = customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
+		referenceModel := "customer"
+		customerAccount, err := store.CreateAccountIfNotExists(
+			quotation.StoreID,
+			referenceID,
+			&referenceModel,
+			customerName,
+			&customerPhone,
+			&customerVATNo,
+		)
+		if err != nil {
+			return nil, err
+		}
+		journals = append(journals, MakeJournalsForUnpaidQuotationSale(
+			quotation,
+			customerAccount,
+			salesAccount,
+			cashDiscountAllowedAccount,
+		)...)
+	}
+
+	if len(quotation.Payments) > 0 {
+		totalSalesPaidAmount = float64(0.00)
+		extraSalesAmountPaid = float64(0.00)
+		extraQuotationSalesPayments = []QuotationPayment{}
+
+		paymentsByDatetimeNumber := 1
+		paymentsByDatetime := RegroupQuotationSalesPaymentsByDatetime(quotation.Payments)
+		//fmt.Printf("%+v", paymentsByDatetime)
+
+		for _, paymentByDatetime := range paymentsByDatetime {
+			newJournals, err := MakeJournalsForQuotationSalesPaymentsByDatetime(
+				quotation,
+				customer,
+				cashAccount,
+				bankAccount,
+				salesAccount,
+				paymentByDatetime,
+				cashDiscountAllowedAccount,
+				paymentsByDatetimeNumber,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			journals = append(journals, newJournals...)
+			paymentsByDatetimeNumber++
+		}
+
+		if quotation.BalanceAmount < 0 && len(extraSalesPayments) > 0 {
+			newJournals, err := MakeJournalsForQuotationSalesExtraPayments(
+				quotation,
+				customer,
+				cashAccount,
+				bankAccount,
+				extraQuotationSalesPayments,
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			journals = append(journals, newJournals...)
+		}
+
+		totalSalesPaidAmount = float64(0.00)
+		extraSalesAmountPaid = float64(0.00)
+
+	}
+
+	ledger = &Ledger{
+		StoreID:        quotation.StoreID,
+		ReferenceID:    quotation.ID,
+		ReferenceModel: "quotation_sales",
+		ReferenceCode:  quotation.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
+}
+
+func MakeJournalsForUnpaidQuotationSale(
+	quotation *Quotation,
+	customerAccount *Account,
+	salesAccount *Account,
+	cashDiscountAllowedAccount *Account,
+) []Journal {
+	now := time.Now()
+
+	groupID := primitive.NewObjectID()
+
+	journals := []Journal{}
+
+	balanceAmount := RoundFloat((quotation.NetTotal - quotation.CashDiscount), 2)
+
+	journals = append(journals, Journal{
+		Date:          quotation.Date,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "debit",
+		Debit:         balanceAmount,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	if quotation.CashDiscount > 0 {
+		journals = append(journals, Journal{
+			Date:          quotation.Date,
+			AccountID:     cashDiscountAllowedAccount.ID,
+			AccountNumber: cashDiscountAllowedAccount.Number,
+			AccountName:   cashDiscountAllowedAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         quotation.CashDiscount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+	}
+
+	journals = append(journals, Journal{
+		Date:          quotation.Date,
+		AccountID:     salesAccount.ID,
+		AccountNumber: salesAccount.Number,
+		AccountName:   salesAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        quotation.NetTotal,
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	return journals
+}
+
+// Regroup sales payments by datetime
+func RegroupQuotationSalesPaymentsByDatetime(payments []QuotationPayment) [][]QuotationPayment {
+	paymentsByDatetime := map[string][]QuotationPayment{}
+	for _, payment := range payments {
+		paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")] = append(paymentsByDatetime[payment.Date.Format("2006-01-02T15:04")], payment)
+	}
+
+	paymentsByDatetime2 := [][]QuotationPayment{}
+	for _, v := range paymentsByDatetime {
+		paymentsByDatetime2 = append(paymentsByDatetime2, v)
+	}
+
+	sort.Slice(paymentsByDatetime2, func(i, j int) bool {
+		return paymentsByDatetime2[i][0].Date.Before(*paymentsByDatetime2[j][0].Date)
+	})
+
+	return paymentsByDatetime2
+}
+
+func MakeJournalsForQuotationSalesPaymentsByDatetime(
+	quotation *Quotation,
+	customer *Customer,
+	cashAccount *Account,
+	bankAccount *Account,
+	salesAccount *Account,
+	payments []QuotationPayment,
+	cashDiscountAllowedAccount *Account,
+	paymentsByDatetimeNumber int,
+) ([]Journal, error) {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	groupID := primitive.NewObjectID()
+
+	journals := []Journal{}
+	totalPayment := float64(0.00)
+
+	var firstPaymentDate *time.Time
+	if len(payments) > 0 {
+		firstPaymentDate = payments[0].Date
+	}
+
+	for _, payment := range payments {
+		totalSalesPaidAmount += *payment.Amount
+		if totalSalesPaidAmount > (quotation.NetTotal - quotation.CashDiscount) {
+			extraSalesAmountPaid = RoundFloat((totalSalesPaidAmount - (quotation.NetTotal - quotation.CashDiscount)), 2)
+		}
+		amount := *payment.Amount
+
+		if extraSalesAmountPaid > 0 {
+			skip := false
+			if extraSalesAmountPaid < *payment.Amount {
+				extraAmount := extraSalesAmountPaid
+				extraSalesPayments = append(extraSalesPayments, SalesPayment{
+					Date:   payment.Date,
+					Amount: &extraAmount,
+					Method: payment.Method,
+				})
+				amount = RoundFloat((*payment.Amount - extraSalesAmountPaid), 2)
+				//totalPaidAmount -= *payment.Amount
+				//totalPaidAmount += amount
+				extraSalesAmountPaid = 0
+			} else if extraSalesAmountPaid >= *payment.Amount {
+				extraSalesPayments = append(extraSalesPayments, SalesPayment{
+					Date:   payment.Date,
+					Amount: payment.Amount,
+					Method: payment.Method,
+				})
+
+				skip = true
+				extraSalesAmountPaid = RoundFloat((extraSalesAmountPaid - *payment.Amount), 2)
+			}
+
+			if skip {
+				continue
+			}
+
+		}
+
+		cashReceivingAccount := Account{}
+		if payment.Method == "cash" {
+			cashReceivingAccount = *cashAccount
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
+			cashReceivingAccount = *bankAccount
+		} else if payment.Method == "customer_account" && customer != nil {
+			continue
+			/*
+				referenceModel := "customer"
+				customerAccount, err := store.CreateAccountIfNotExists(
+					order.StoreID,
+					&customer.ID,
+					&referenceModel,
+					customer.Name,
+					&customer.Phone,
+					&customer.VATNo,
+				)
+				if err != nil {
+					return nil, err
+				}
+				cashReceivingAccount = *customerAccount
+			*/
+		}
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     cashReceivingAccount.ID,
+			AccountNumber: cashReceivingAccount.Number,
+			AccountName:   cashReceivingAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+		totalPayment += amount
+	}
+
+	if quotation.CashDiscount > 0 && paymentsByDatetimeNumber == 1 && IsDateTimesEqual(quotation.Date, firstPaymentDate) {
+		journals = append(journals, Journal{
+			Date:          quotation.Date,
+			AccountID:     cashDiscountAllowedAccount.ID,
+			AccountNumber: cashDiscountAllowedAccount.Number,
+			AccountName:   cashDiscountAllowedAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         quotation.CashDiscount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+	}
+
+	balanceAmount := RoundFloat(((quotation.NetTotal - quotation.CashDiscount) - totalPayment), 2)
+
+	//Asset or debt increased
+	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(quotation.Date, firstPaymentDate) {
+		referenceModel := "customer"
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		var customerVATNo *string
+		var customerPhone *string
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = &customer.VATNo
+			customerPhone = &customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
+		customerAccount, err := store.CreateAccountIfNotExists(
+			quotation.StoreID,
+			referenceID,
+			&referenceModel,
+			customerName,
+			customerPhone,
+			customerVATNo,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		journals = append(journals, Journal{
+			Date:          quotation.Date,
+			AccountID:     customerAccount.ID,
+			AccountNumber: customerAccount.Number,
+			AccountName:   customerAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         balanceAmount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	}
+
+	if paymentsByDatetimeNumber == 1 && IsDateTimesEqual(quotation.Date, firstPaymentDate) {
+		journals = append(journals, Journal{
+			Date:          quotation.Date,
+			AccountID:     salesAccount.ID,
+			AccountNumber: salesAccount.Number,
+			AccountName:   salesAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        quotation.NetTotal,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(quotation.Date, firstPaymentDate) {
+		referenceModel := "customer"
+		customerName := ""
+		var referenceID *primitive.ObjectID
+		var customerVATNo *string
+		var customerPhone *string
+		if customer != nil {
+			customerName = customer.Name
+			referenceID = &customer.ID
+			customerVATNo = &customer.VATNo
+			customerPhone = &customer.Phone
+		} else {
+			customerName = "Customer Accounts - Unknown"
+			referenceID = nil
+		}
+
+		customerAccount, err := store.CreateAccountIfNotExists(
+			quotation.StoreID,
+			referenceID,
+			&referenceModel,
+			customerName,
+			customerPhone,
+			customerVATNo,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		totalPayment = RoundFloat(totalPayment, 2)
+
+		if totalPayment > 0 {
+			journals = append(journals, Journal{
+				Date:          firstPaymentDate,
+				AccountID:     customerAccount.ID,
+				AccountNumber: customerAccount.Number,
+				AccountName:   customerAccount.Name,
+				DebitOrCredit: "credit",
+				Credit:        totalPayment,
+				GroupID:       groupID,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+		}
+	}
+
+	return journals, nil
+}
+
+func MakeJournalsForQuotationSalesExtraPayments(
+	quotation *Quotation,
+	customer *Customer,
+	cashAccount *Account,
+	bankAccount *Account,
+	extraPayments []QuotationPayment,
+) ([]Journal, error) {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	journals := []Journal{}
+	groupID := primitive.NewObjectID()
+
+	var lastPaymentDate *time.Time
+	if len(extraPayments) > 0 {
+		lastPaymentDate = extraPayments[len(extraPayments)-1].Date
+	}
+
+	for _, payment := range extraPayments {
+		cashReceivingAccount := Account{}
+		if payment.Method == "cash" {
+			cashReceivingAccount = *cashAccount
+		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
+			cashReceivingAccount = *bankAccount
+		} else if payment.Method == "customer_account" && customer != nil {
+			continue
+			/*
+				referenceModel := "customer"
+				customerAccount, err := store.CreateAccountIfNotExists(
+					order.StoreID,
+					&customer.ID,
+					&referenceModel,
+					customer.Name,
+					&customer.Phone,
+					&customer.VATNo,
+				)
+				if err != nil {
+					return nil, err
+				}
+				cashReceivingAccount = *customerAccount
+			*/
+		}
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     cashReceivingAccount.ID,
+			AccountNumber: cashReceivingAccount.Number,
+			AccountName:   cashReceivingAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         *payment.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+	} //end for
+
+	referenceModel := "customer"
+	customerName := ""
+	var referenceID *primitive.ObjectID
+	var customerVATNo *string
+	var customerPhone *string
+	if customer != nil {
+		customerName = customer.Name
+		referenceID = &customer.ID
+		customerVATNo = &customer.VATNo
+		customerPhone = &customer.Phone
+	} else {
+		customerName = "Customer Accounts - Unknown"
+		referenceID = nil
+	}
+
+	customerAccount, err := store.CreateAccountIfNotExists(
+		quotation.StoreID,
+		referenceID,
+		&referenceModel,
+		customerName,
+		customerPhone,
+		customerVATNo,
+	)
+	if err != nil {
+		return nil, err
+	}
+	journals = append(journals, Journal{
+		Date:          lastPaymentDate,
+		AccountID:     customerAccount.ID,
+		AccountNumber: customerAccount.Number,
+		AccountName:   customerAccount.Name,
+		DebitOrCredit: "credit",
+		Credit:        quotation.BalanceAmount * (-1),
+		GroupID:       groupID,
+		CreatedAt:     &now,
+		UpdatedAt:     &now,
+	})
+
+	return journals, nil
 }
