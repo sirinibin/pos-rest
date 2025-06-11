@@ -124,6 +124,7 @@ type Product struct {
 	LinkedProducts       []*Product              `json:"linked_products,omitempty" bson:"-"`
 	LinkToProductID      *primitive.ObjectID     `json:"link_to_product_id,omitempty" bson:"-"`
 	Set                  ProductSet              `json:"set" bson:"set"`
+	AllowDuplicates      bool                    `bson:"allow_duplicates" json:"allow_duplicates"`
 }
 
 type ProductSet struct {
