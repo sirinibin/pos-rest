@@ -3069,9 +3069,10 @@ func ProcessOrders() error {
 				continue
 			}
 
-			if store.Code != "new1" {
-				continue
-			}
+			/*
+				if store.Code != "new1" {
+					continue
+				}*/
 
 			order.UndoAccounting()
 			order.DoAccounting()

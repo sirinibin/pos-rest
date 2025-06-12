@@ -418,51 +418,45 @@ func cronJobsEveryHour() error {
 		log.Print(err)
 	}
 
-	/*
-		err := models.ProcessQuotations()
-		if err != nil {
-			log.Print(err)
-		}*/
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessQuotations()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessPurchases()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessPurchases()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessPurchaseReturns()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessPurchaseReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessExpenses()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessExpenses()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessCapitals()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessCapitals()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessCustomerDeposits()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessCustomerDeposits()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessCustomerWithdrawals()
-		if err != nil {
-			log.Print(err)
-		}*/
+	err = models.ProcessCustomerWithdrawals()
+	if err != nil {
+		log.Print(err)
+	}
 
 	/*
 
