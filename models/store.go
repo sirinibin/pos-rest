@@ -89,6 +89,7 @@ type Store struct {
 	BlockSaleWhenPurchasePriceIsHigher bool                  `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
 	EnableMonthlySerialNumber          bool                  `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
 	QuotationInvoiceAccounting         bool                  `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
+	OneLineProductNameInInvoice        bool                  `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
 }
 
 type SerialNumber struct {
