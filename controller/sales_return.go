@@ -147,6 +147,14 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if salesreturn.EnableReportToZatca && !IsConnectedToInternet() {
+		response.Status = false
+		response.Errors["reporting_to_zatca"] = "not connected to internet"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	salesreturn.FindTotalQuantity()
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()
@@ -162,14 +170,6 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	salesreturn.UUID = uuid.New().String()
-
-	if salesreturn.EnableReportToZatca && !IsConnectedToInternet() {
-		response.Status = false
-		response.Errors["reporting_to_zatca"] = "not connected to internet"
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && salesreturn.EnableReportToZatca {
 		err = salesreturn.ReportToZatca()
