@@ -507,7 +507,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 
 		price := Price{
 			PriceAmount: PriceAmount{
-				Value:      RoundTo2Decimals((product.UnitPrice - product.UnitDiscount)),
+				Value:      RoundTo4Decimals((product.UnitPrice - product.UnitDiscount)),
 				CurrencyID: "SAR",
 			},
 			BaseQuantity: BaseQuantity{
@@ -526,7 +526,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 				},
 				BaseAmount: &BaseAmount{
 					CurrencyID: "SAR",
-					Value:      ToFixed(product.UnitPrice, 2),
+					Value:      RoundTo4Decimals(product.UnitPrice),
 				},
 			}
 		}
