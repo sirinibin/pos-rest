@@ -102,6 +102,7 @@ func (account *Account) CalculateBalance(beforeDate *time.Time) error {
 
 	filter := map[string]interface{}{
 		"account_id": account.ID,
+		"store_id":   account.StoreID,
 	}
 
 	if beforeDate != nil {

@@ -574,6 +574,15 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/*
+		err = order.RectifyBalances()
+		if err != nil {
+			response.Status = false
+			response.Errors["rectifying_balances"] = "Error rectifying balances: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
+
+	/*
 		if store.Zatca.Phase == "2" && store.Zatca.Connected {
 			err = order.ReportToZatca()
 			if err != nil {

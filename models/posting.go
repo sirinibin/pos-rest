@@ -834,6 +834,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 		posts := []Post{} // Reset posts
 		debitTotal := float64(0.00)
 		creditTotal := float64(0.00)
+		postBalance := float64(0.00)
 		for k2, journal2 := range ledger.Journals {
 			//if k2 == k1 || account.Number == journal2.AccountNumber {
 			if k2 == k1 {
@@ -861,15 +862,18 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					continue
 				}
 			*/
-
-			postBalance := float64(0.00)
 			accountBalance := float64(0.00)
 
-			err = account.CalculateBalance(journal2.Date)
-			if err != nil {
-				return nil, errors.New("error calculating account balance: " + err.Error())
+			//postBalance = float64(0.00)
+			if postBalance > 0 {
+				accountBalance = postBalance
+			} else {
+				err = account.CalculateBalance(journal2.Date)
+				if err != nil {
+					return nil, errors.New("error calculating account balance: " + err.Error())
+				}
+				accountBalance = account.Balance
 			}
-			accountBalance = account.Balance
 
 			if account.Type == "liability" {
 				accountBalance = account.Balance * (-1)
@@ -1097,6 +1101,81 @@ func (posting *Posting) Update() error {
 	}
 
 	return nil
+}
+
+func (store *Store) FindLastPostingByAccountID(
+	accountID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (posting *Posting, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.M{"date": -1})
+
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"account_id": accountID,
+			"store_id":   store.ID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&posting)
+	if err != nil {
+		return nil, err
+	}
+
+	return posting, err
+}
+
+func (store *Store) FindPostsByAccountID(
+	accountID *primitive.ObjectID,
+	afterDate *time.Time,
+) (postings []*Posting, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOptions := options.Find()
+	findOptions.SetSort(bson.M{"date": 1})
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	filter := bson.M{
+		"account_id": accountID,
+		"store_id":   store.ID,
+	}
+
+	if afterDate != nil {
+		filter["date"] = bson.M{"$gte": afterDate}
+	}
+
+	cur, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return postings, errors.New("Error fetching posts:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return postings, errors.New("Cursor error:" + err.Error())
+		}
+		posting := Posting{}
+		err = cur.Decode(&posting)
+		if err != nil {
+			return postings, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		postings = append(postings, &posting)
+	} //end for loop
+
+	return postings, err
 }
 
 func (store *Store) FindPostingByID(
