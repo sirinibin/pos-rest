@@ -177,6 +177,14 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = customerdeposit.CloseQuotationSalesPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_quotation_sales"] = "error closing quotation sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = customerdeposit
 
@@ -345,6 +353,14 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerdeposit.CloseQuotationSalesPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_quotation_sales"] = "error closing quotation sales payments: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

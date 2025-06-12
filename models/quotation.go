@@ -3153,3 +3153,69 @@ func MakeJournalsForQuotationSalesExtraPayments(
 
 	return journals, nil
 }
+
+func (quotation *Quotation) UpdatePaymentFromReceivablePayment(
+	receivablePayment ReceivablePayment,
+	customerDeposit *CustomerDeposit,
+) error {
+	store, _ := FindStoreByID(quotation.StoreID, bson.M{})
+
+	paymentExists := false
+	for _, quotationPayment := range quotation.Payments {
+		if quotationPayment.ReceivablePaymentID.Hex() == receivablePayment.ID.Hex() {
+			paymentExists = true
+			quotationPayment, err := store.FindQuotationPaymentByID(&quotationPayment.ID, bson.M{})
+			if err != nil {
+				return errors.New("error finding sales payment: " + err.Error())
+			}
+
+			quotationPayment.Amount = receivablePayment.Amount
+			quotationPayment.Date = receivablePayment.Date
+			quotationPayment.UpdatedAt = receivablePayment.UpdatedAt
+			quotationPayment.CreatedAt = receivablePayment.CreatedAt
+			quotationPayment.UpdatedBy = receivablePayment.UpdatedBy
+			quotationPayment.CreatedBy = receivablePayment.CreatedBy
+			quotationPayment.ReceivableID = &customerDeposit.ID
+
+			err = quotationPayment.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	if !paymentExists {
+		newQuotationPayment := QuotationPayment{
+			QuotationID:         &quotation.ID,
+			QuotationCode:       quotation.Code,
+			Amount:              receivablePayment.Amount,
+			Date:                receivablePayment.Date,
+			Method:              "customer_account",
+			ReceivablePaymentID: &receivablePayment.ID,
+			ReceivableID:        &customerDeposit.ID,
+			CreatedBy:           receivablePayment.CreatedBy,
+			UpdatedBy:           receivablePayment.UpdatedBy,
+			CreatedAt:           receivablePayment.CreatedAt,
+			UpdatedAt:           receivablePayment.UpdatedAt,
+			StoreID:             quotation.StoreID,
+		}
+		err := newQuotationPayment.Insert()
+		if err != nil {
+			return errors.New("error inserting quotation payment: " + err.Error())
+		}
+	}
+
+	return nil
+}
+
+func (quotation *Quotation) DeletePaymentsByReceivablePaymentID(receivablePaymentID primitive.ObjectID) error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"receivable_payment_id": receivablePaymentID})
+	if err != nil {
+		return err
+	}
+	return nil
+}

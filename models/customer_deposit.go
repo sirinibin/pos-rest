@@ -97,7 +97,7 @@ func (customerdeposit *CustomerDeposit) HandleDeletedPayments(customerdepositOld
 		} //end for2
 
 		if !found || deleteSalesPayment {
-			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() {
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && *oldPayment.InvoiceType == "sales" {
 				order, err := store.FindOrderByID(oldPayment.InvoiceID, bson.M{})
 				if err != nil {
 					return err
@@ -131,7 +131,42 @@ func (customerdeposit *CustomerDeposit) HandleDeletedPayments(customerdepositOld
 				if err != nil {
 					return err
 				}
+			}
 
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && *oldPayment.InvoiceType == "quotation_sales" {
+				quotation, err := store.FindQuotationByID(oldPayment.InvoiceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = quotation.DeletePaymentsByReceivablePaymentID(oldPayment.ID)
+				if err != nil {
+					return err
+				}
+
+				_, err = quotation.SetPaymentStatus()
+				if err != nil {
+					return err
+				}
+
+				err = quotation.Update()
+				if err != nil {
+					return err
+				}
+
+				err = quotation.UndoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = quotation.DoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = quotation.SetCustomerQuotationStats()
+				if err != nil {
+					return err
+				}
 			}
 		}
 	} //end for1
@@ -142,7 +177,7 @@ func (customerdeposit *CustomerDeposit) CloseSalesPayments() error {
 	store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
 
 	for _, receivablePayment := range customerdeposit.Payments {
-		if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() {
+		if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() && *receivablePayment.InvoiceType == "sales" {
 			order, _ := store.FindOrderByID(receivablePayment.InvoiceID, bson.M{})
 			err := order.UpdatePaymentFromReceivablePayment(receivablePayment, customerdeposit)
 			if err != nil {
@@ -170,6 +205,46 @@ func (customerdeposit *CustomerDeposit) CloseSalesPayments() error {
 			}
 
 			err = order.DoAccounting()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (customerdeposit *CustomerDeposit) CloseQuotationSalesPayments() error {
+	store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+
+	for _, receivablePayment := range customerdeposit.Payments {
+		if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() && *receivablePayment.InvoiceType == "quotation_sales" {
+			quotation, _ := store.FindQuotationByID(receivablePayment.InvoiceID, bson.M{})
+			err := quotation.UpdatePaymentFromReceivablePayment(receivablePayment, customerdeposit)
+			if err != nil {
+				return errors.New("error updating sales payment from receivable payment: " + err.Error())
+			}
+
+			_, err = quotation.SetPaymentStatus()
+			if err != nil {
+				return errors.New("error setting payment status: " + err.Error())
+			}
+
+			err = quotation.Update()
+			if err != nil {
+				return errors.New("error updating order inside payment status: " + err.Error())
+			}
+
+			err = quotation.SetCustomerQuotationStats()
+			if err != nil {
+				return err
+			}
+
+			err = quotation.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = quotation.DoAccounting()
 			if err != nil {
 				return err
 			}
@@ -699,7 +774,7 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 			errs["customer_receivable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() {
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() && *payment.InvoiceType == "sales" {
 			order, err := store.FindOrderByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
@@ -737,6 +812,52 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 						break
 					} else if (totalInvoicePaidAmount + *payment2.Amount) > orderBalanceAmount {
 						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (orderBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
+						break
+					}
+					totalInvoicePaidAmount += *payment2.Amount
+				}
+			}
+
+		}
+
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() && *payment.InvoiceType == "quotation_sales" {
+			quotation, err := store.FindQuotationByID(payment.InvoiceID, bson.M{})
+			if err != nil {
+				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+			}
+
+			if quotation.CustomerID != nil &&
+				!quotation.CustomerID.IsZero() &&
+				customerDeposit.CustomerID != nil &&
+				!customerDeposit.CustomerID.IsZero() &&
+				quotation.CustomerID.Hex() != customerDeposit.CustomerID.Hex() {
+				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "Invoice is not belongs to the selected customer"
+			}
+
+			quotationBalanceAmount := quotation.BalanceAmount
+
+			if scenario == "update" {
+				oldTotalInvoicePaidAmount := float64(0.00)
+				for _, oldPayment := range customerDepositOld.Payments {
+					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == quotation.ID.Hex() {
+						oldTotalInvoicePaidAmount += *oldPayment.Amount
+					}
+				}
+				quotationBalanceAmount += oldTotalInvoicePaidAmount
+			}
+
+			if *payment.Amount > quotationBalanceAmount {
+				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", quotation.BalanceAmount) + " (Invoice Balance)"
+			}
+
+			totalInvoicePaidAmount := float64(0.00)
+			for index2, payment2 := range customerDeposit.Payments {
+				if payment2.InvoiceID != nil && !payment2.InvoiceID.IsZero() && payment2.InvoiceID.Hex() == quotation.ID.Hex() {
+					if (quotationBalanceAmount - totalInvoicePaidAmount) == 0 {
+						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
+						break
+					} else if (totalInvoicePaidAmount + *payment2.Amount) > quotationBalanceAmount {
+						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (quotationBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
 						break
 					}
 					totalInvoicePaidAmount += *payment2.Amount
