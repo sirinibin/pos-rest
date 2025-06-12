@@ -1153,16 +1153,15 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		/*
-			if store.Code == "LGK-TEST" || store.Code == "PH2" {
-				store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
-				store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
-				store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
-				store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
+		if store.Code == "LGK-SIMULATION" || store.Code == "LGK" || store.Code == "LGK-TEST" || store.Code == "PH2" {
+			store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
+			//store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
+			//store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
+			//store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
 
-			} else {
-				continue
-			}*/
+		} else {
+			continue
+		}
 
 		/*
 			_, err = store.CreateDB()
@@ -1671,8 +1670,8 @@ func (store *Store) ImportProductsFromExcel(filename string) {
 				continue
 			}
 
-			unitPrice = RoundTo2Decimals(unitPrice)
-			unitPriceWithVAT := RoundTo2Decimals(unitPrice * (1 + (store.VatPercent / 100)))
+			unitPrice = RoundTo4Decimals(unitPrice)
+			unitPriceWithVAT := RoundTo4Decimals(unitPrice * (1 + (store.VatPercent / 100)))
 
 			productStore, ok := product.ProductStores[store.ID.Hex()]
 			if !ok {
