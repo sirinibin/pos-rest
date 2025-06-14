@@ -3074,19 +3074,27 @@ func ProcessOrders() error {
 				continue
 			}
 
+			if store.Code != "MBDI" {
+				if order.Code == "S-INV-20250614-109" {
+					order.ID = primitive.NewObjectID()
+					order.Update()
+				}
+			}
+
 			/*
 				if store.Code != "new1" {
 					continue
 				}*/
 
-			order.UndoAccounting()
-			order.DoAccounting()
-			if order.CustomerID != nil && !order.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+			/*
+				order.UndoAccounting()
+				order.DoAccounting()
+				if order.CustomerID != nil && !order.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 			//order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 			//order.Update()
 
