@@ -3075,7 +3075,7 @@ func ProcessOrders() error {
 			}
 
 			if store.Code == "MBDI" {
-				if order.Code == "S-INV-20250614-109" && order.ID.IsZero() {
+				if order.Code == "S-INV-20250614-109" {
 					if order.CustomerName == "SULTAN MOHAMMED AL-QAHTANI AND SONS TRANSPORT COMPANY" {
 						order.Code = "S-INV-20250614-110"
 						order.Update()
