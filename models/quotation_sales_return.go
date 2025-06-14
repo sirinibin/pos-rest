@@ -3631,6 +3631,15 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateLedger() (ledger *Ledger
 }
 
 func (quotationsalesReturn *QuotationSalesReturn) DoAccounting() error {
+	store, err := FindStoreByID(quotationsalesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.QuotationInvoiceAccounting {
+		return nil
+	}
+
 	ledger, err := quotationsalesReturn.CreateLedger()
 	if err != nil {
 		return errors.New("error creating ledger: " + err.Error())
