@@ -1998,7 +1998,7 @@ func (quotation *Quotation) Update() error {
 	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err := collection.UpdateOne(
@@ -2017,7 +2017,7 @@ func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error)
 	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = quotation.UpdateForeignLabelFields()

@@ -1923,7 +1923,7 @@ func (purchasereturn *PurchaseReturn) Update() error {
 	collection := db.GetDB("store_" + purchasereturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err := collection.UpdateOne(
@@ -1995,7 +1995,7 @@ func (purchasereturn *PurchaseReturn) DeletePurchaseReturn(tokenClaims TokenClai
 	collection := db.GetDB("store_" + purchasereturn.StoreID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = purchasereturn.UpdateForeignLabelFields()
@@ -2679,7 +2679,7 @@ func (purchaseReturnPayment *PurchaseReturnPayment) DeletePurchaseReturnPayment(
 	collection := db.GetDB("store_" + purchaseReturnPayment.StoreID.Hex()).Collection("purchase_return_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err = collection.UpdateOne(

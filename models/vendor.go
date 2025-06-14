@@ -1238,7 +1238,7 @@ func (vendor *Vendor) Update() error {
 	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err := vendor.UpdateForeignLabelFields()
@@ -1271,7 +1271,7 @@ func (vendor *Vendor) DeleteVendor(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = vendor.UpdateForeignLabelFields()
@@ -1625,7 +1625,7 @@ func (vendor *Vendor) RestoreVendor(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = vendor.UpdateForeignLabelFields()

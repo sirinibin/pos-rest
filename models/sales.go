@@ -2190,7 +2190,7 @@ func (order *Order) Update() error {
 	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	updateResult, err := collection.UpdateOne(
@@ -2713,7 +2713,7 @@ func (order *Order) UpdateOrderStatus(status string) (*Order, error) {
 	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 	updateResult, err := collection.UpdateOne(
 		ctx,
@@ -2735,7 +2735,7 @@ func (order *Order) DeleteOrder(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = order.UpdateForeignLabelFields()

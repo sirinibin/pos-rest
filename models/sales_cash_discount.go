@@ -490,7 +490,7 @@ func (salesCashDiscount *SalesCashDiscount) Update() error {
 	collection := db.GetDB("store_" + salesCashDiscount.StoreID.Hex()).Collection("sales_cash_discount")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err := salesCashDiscount.UpdateForeignLabelFields()

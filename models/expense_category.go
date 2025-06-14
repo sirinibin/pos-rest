@@ -415,7 +415,7 @@ func (expenseCategory *ExpenseCategory) Update() error {
 	collection := db.GetDB("store_" + expenseCategory.StoreID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err := expenseCategory.UpdateForeignLabelFields()
@@ -436,7 +436,7 @@ func (expenseCategory *ExpenseCategory) DeleteExpenseCategory(tokenClaims TokenC
 	collection := db.GetDB("store_" + expenseCategory.StoreID.Hex()).Collection("expense_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = expenseCategory.UpdateForeignLabelFields()

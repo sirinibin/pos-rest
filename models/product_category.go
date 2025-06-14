@@ -440,7 +440,7 @@ func (productCategory *ProductCategory) Update() error {
 	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err := productCategory.UpdateForeignLabelFields()
@@ -461,7 +461,7 @@ func (productCategory *ProductCategory) DeleteProductCategory(tokenClaims TokenC
 	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = productCategory.UpdateForeignLabelFields()
@@ -636,7 +636,7 @@ func (productCategory *ProductCategory) RestoreProductCategory(tokenClaims Token
 	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = productCategory.UpdateForeignLabelFields()

@@ -994,7 +994,7 @@ func (expense *Expense) DeleteExpense(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = expense.UpdateForeignLabelFields()

@@ -1573,7 +1573,7 @@ func (customer *Customer) Update() error {
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err := collection.UpdateOne(
@@ -1592,7 +1592,7 @@ func (customer *Customer) DeleteCustomer(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = customer.UpdateForeignLabelFields()
@@ -2026,7 +2026,7 @@ func (customer *Customer) RestoreCustomer(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = customer.UpdateForeignLabelFields()

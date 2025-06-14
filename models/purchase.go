@@ -2214,7 +2214,7 @@ func (purchase *Purchase) Update() error {
 	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err := collection.UpdateOne(
@@ -2235,7 +2235,7 @@ func (purchase *Purchase) DeletePurchase(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("purchase")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = purchase.UpdateForeignLabelFields()
@@ -2839,7 +2839,7 @@ func (purchasePayment *PurchasePayment) DeletePurchasePayment() (err error) {
 	collection := db.GetDB("store_" + purchasePayment.StoreID.Hex()).Collection("purchase_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err = collection.UpdateOne(

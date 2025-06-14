@@ -355,7 +355,7 @@ func (productBrand *ProductBrand) Update() error {
 	collection := db.GetDB("store_" + productBrand.StoreID.Hex()).Collection("product_brand")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	now := time.Now()
@@ -467,7 +467,7 @@ func (productBrand *ProductBrand) DeleteProductBrand(tokenClaims TokenClaims) (e
 	collection := db.GetDB("store_" + productBrand.StoreID.Hex()).Collection("product_brand")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
@@ -499,7 +499,7 @@ func (productBrand *ProductBrand) RestoreProductBrand(tokenClaims TokenClaims) (
 	collection := db.GetDB("store_" + productBrand.StoreID.Hex()).Collection("product_brand")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	productBrand.Deleted = false

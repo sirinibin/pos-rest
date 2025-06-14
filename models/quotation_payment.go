@@ -570,7 +570,7 @@ func (quotationPayment *QuotationPayment) Update() error {
 	collection := db.GetDB("store_" + quotationPayment.StoreID.Hex()).Collection("quotation_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err := quotationPayment.UpdateForeignLabelFields()
@@ -735,7 +735,7 @@ func (quotationPayment *QuotationPayment) DeleteQuotationPayment() (err error) {
 	collection := db.GetDB("store_" + quotationPayment.StoreID.Hex()).Collection("quotation_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err = collection.UpdateOne(

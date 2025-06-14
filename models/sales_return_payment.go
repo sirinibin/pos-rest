@@ -618,7 +618,7 @@ func (salesreturnPayment *SalesReturnPayment) Update() error {
 	collection := db.GetDB("store_" + salesreturnPayment.StoreID.Hex()).Collection("sales_return_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err := salesreturnPayment.UpdateForeignLabelFields()
@@ -778,7 +778,7 @@ func (salesReturnPayment *SalesReturnPayment) DeleteSalesReturnPayment() (err er
 	collection := db.GetDB("store_" + salesReturnPayment.StoreID.Hex()).Collection("sales_return_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err = collection.UpdateOne(

@@ -2505,7 +2505,7 @@ func (product *Product) DeleteProduct(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = product.UpdateForeignLabelFields()
@@ -2540,7 +2540,7 @@ func (product *Product) RestoreProduct(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = product.UpdateForeignLabelFields()

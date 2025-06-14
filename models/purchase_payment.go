@@ -542,7 +542,7 @@ func (purchasePayment *PurchasePayment) Update() error {
 	collection := db.GetDB("store_" + purchasePayment.StoreID.Hex()).Collection("purchase_payment")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err := purchasePayment.UpdateForeignLabelFields()

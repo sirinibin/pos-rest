@@ -904,7 +904,7 @@ func (capitalwithdrawal *CapitalWithdrawal) DeleteCapitalWithdrawal(tokenClaims 
 	collection := db.GetDB("store_" + capitalwithdrawal.StoreID.Hex()).Collection("capitalwithdrawal")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = capitalwithdrawal.UpdateForeignLabelFields()

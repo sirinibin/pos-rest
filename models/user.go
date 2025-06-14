@@ -680,7 +680,7 @@ func (user *User) Update() error {
 	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	_, err := collection.UpdateOne(
@@ -700,7 +700,7 @@ func (user *User) DeleteUser(tokenClaims TokenClaims) (err error) {
 	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = user.UpdateForeignLabelFields()

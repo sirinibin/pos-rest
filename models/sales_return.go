@@ -2399,7 +2399,7 @@ func (salesreturn *SalesReturn) UpdateSalesReturnStatus(status string) (*SalesRe
 	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 	updateResult, err := collection.UpdateOne(
 		ctx,
@@ -2421,7 +2421,7 @@ func (salesreturn *SalesReturn) Update() error {
 	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	updateResult, err := collection.UpdateOne(
@@ -2444,7 +2444,7 @@ func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err 
 	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = salesreturn.UpdateForeignLabelFields()

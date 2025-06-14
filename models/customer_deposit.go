@@ -1302,7 +1302,7 @@ func (customerdeposit *CustomerDeposit) DeleteCustomerDeposit(tokenClaims TokenC
 	collection := db.GetDB("store_" + customerdeposit.StoreID.Hex()).Collection("customerdeposit")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = customerdeposit.UpdateForeignLabelFields()

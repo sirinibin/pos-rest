@@ -641,7 +641,7 @@ func (model *ProductQuotationHistory) Update() error {
 	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	updateResult, err := collection.UpdateOne(

@@ -445,7 +445,7 @@ func (signature *UserSignature) DeleteSignature(tokenClaims TokenClaims) (err er
 	collection := db.GetDB("store_" + signature.StoreID.Hex()).Collection("signature")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = signature.UpdateForeignLabelFields()

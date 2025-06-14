@@ -984,7 +984,7 @@ func (capital *Capital) DeleteCapital(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + capital.StoreID.Hex()).Collection("capital")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
-	updateOptions.SetUpsert(true)
+	updateOptions.SetUpsert(false)
 	defer cancel()
 
 	err = capital.UpdateForeignLabelFields()
