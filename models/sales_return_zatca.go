@@ -496,18 +496,17 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 
 	invoice.InvoiceLines = []InvoiceLine{}
 
-	for i, product := range salesReturn.Products {
-		if !product.Selected {
-			continue
-		}
-		//lineExtensionAmount := (product.UnitPrice - (product.Discount / product.Quantity)) * product.Quantity
+	for i, product := range order.Products {
 		lineExtensionAmount := ((product.UnitPrice - product.UnitDiscount) * product.Quantity)
 		lineExtensionAmount = RoundTo2Decimals(lineExtensionAmount)
-		taxTotal := lineExtensionAmount * (*salesReturn.VatPercent / 100)
+		taxTotal := lineExtensionAmount * (*order.VatPercent / 100)
+		taxTotal = RoundTo2Decimals(taxTotal)
+		roundingAmount := RoundTo2Decimals(lineExtensionAmount + taxTotal)
 
 		price := Price{
 			PriceAmount: PriceAmount{
-				Value:      RoundTo4Decimals((product.UnitPrice - product.UnitDiscount)),
+				Value: RoundTo4Decimals(product.UnitPrice - product.UnitDiscount),
+				//Value:      (product.UnitPrice - product.UnitDiscount),
 				CurrencyID: "SAR",
 			},
 			BaseQuantity: BaseQuantity{
@@ -526,32 +525,32 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 				},
 				BaseAmount: &BaseAmount{
 					CurrencyID: "SAR",
-					Value:      RoundTo4Decimals(product.UnitPrice),
+					//Value:      ToFixed(product.UnitPrice, 2),
+					Value: RoundTo4Decimals(product.UnitPrice),
 				},
 			}
 		}
 
 		invoice.InvoiceLines = append(invoice.InvoiceLines, InvoiceLine{
 			ID: strconv.Itoa((i + 1)),
-			Note: &Note{
-				LanguageID: "en",
-				Value:      "Return goods or services",
-			},
 			InvoicedQuantity: InvoicedQuantity{
 				UnitCode: product.GetZatcaUnit(),
 				Value:    ToFixed(product.Quantity, 2),
 			},
 			LineExtensionAmount: LineAmount{
-				Value:      ToFixed2(lineExtensionAmount, 2),
+				//Value:      ToFixed2(lineExtensionAmount, 2),
+				Value:      lineExtensionAmount,
 				CurrencyID: "SAR",
 			},
 			TaxTotal: TaxTotal{
 				TaxAmount: TaxAmount{
-					Value:      ToFixed2(taxTotal, 2),
+					//Value:      ToFixed2(taxTotal, 2),
+					Value:      taxTotal,
 					CurrencyID: "SAR",
 				},
 				RoundingAmount: &RoundingAmount{
-					Value:      ToFixed2((lineExtensionAmount + taxTotal), 2),
+					//Value:      ToFixed2((lineExtensionAmount + taxTotal), 2),
+					Value:      roundingAmount,
 					CurrencyID: "SAR",
 				},
 			},
@@ -559,7 +558,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 				Name: product.Name,
 				ClassifiedTaxCategory: ClassifiedTaxCategory{
 					ID:      "S",
-					Percent: ToFixed2(*salesReturn.VatPercent, 2),
+					Percent: ToFixed2(*order.VatPercent, 2),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
