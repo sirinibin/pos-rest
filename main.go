@@ -203,6 +203,9 @@ func main() {
 	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")
 	//SalesReturnHistory
 	router.HandleFunc("/v1/sales-return/history", controller.ListSalesReturnHistory).Methods("GET")
+	//QuotationSalesReturnHistory
+	router.HandleFunc("/v1/quotation-sales-return/history", controller.ListQuotationSalesReturnHistory).Methods("GET")
+
 	//PurchaseHistory
 	router.HandleFunc("/v1/purchase/history", controller.ListPurchaseHistory).Methods("GET")
 	//PurchaseReturnHistory
@@ -214,6 +217,13 @@ func main() {
 	router.HandleFunc("/v1/sales-return/{id}", controller.UpdateSalesReturn).Methods("PUT")
 	router.HandleFunc("/v1/sales-return", controller.ListSalesReturn).Methods("GET")
 	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
+
+	//QuotationSalesReturn
+	router.HandleFunc("/v1/quotation-sales-return", controller.CreateQuotationSalesReturn).Methods("POST")
+	router.HandleFunc("/v1/quotation-sales-return/calculate-net-total", controller.CalculateQuotationSalesReturnNetTotal).Methods("POST")
+	router.HandleFunc("/v1/quotation-sales-return/{id}", controller.UpdateQuotationSalesReturn).Methods("PUT")
+	router.HandleFunc("/v1/quotation-sales-return", controller.ListQuotationSalesReturn).Methods("GET")
+	router.HandleFunc("/v1/quotation-sales-return/{id}", controller.ViewQuotationSalesReturn).Methods("GET")
 	/*
 		router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 		router.HandleFunc("/v1/order/{id}", controller.DeleteOrder).Methods("DELETE")
@@ -270,6 +280,13 @@ func main() {
 	router.HandleFunc("/v1/sales-return-payment/{id}", controller.ViewSalesReturnPayment).Methods("GET")
 	router.HandleFunc("/v1/sales-return-payment/{id}", controller.UpdateSalesReturnPayment).Methods("PUT")
 	router.HandleFunc("/v1/sales-return-payment/{id}", controller.DeleteSalesReturnPayment).Methods("DELETE")
+
+	//QuotationSalesReturnPayment
+	router.HandleFunc("/v1/quotation-sales-return-payment", controller.CreateQuotationSalesReturnPayment).Methods("POST")
+	router.HandleFunc("/v1/quotation-sales-return-payment", controller.ListQuotationSalesReturnPayment).Methods("GET")
+	router.HandleFunc("/v1/quotation-sales-return-payment/{id}", controller.ViewQuotationSalesReturnPayment).Methods("GET")
+	router.HandleFunc("/v1/quotation-sales-return-payment/{id}", controller.UpdateQuotationSalesReturnPayment).Methods("PUT")
+	router.HandleFunc("/v1/quotation-sales-return-payment/{id}", controller.DeleteQuotationSalesReturnPayment).Methods("DELETE")
 
 	//PurchasePayment
 	router.HandleFunc("/v1/purchase-payment", controller.CreatePurchasePayment).Methods("POST")
