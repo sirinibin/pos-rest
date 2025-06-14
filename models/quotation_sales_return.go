@@ -2484,15 +2484,26 @@ func ProcessQuotationSalesReturns() error {
 				continue
 			}
 
-			quotationsalesReturn.UndoAccounting()
-			quotationsalesReturn.DoAccounting()
-
-			if quotationsalesReturn.CustomerID != nil && !quotationsalesReturn.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(quotationsalesReturn.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
+			if store.Code == "LGK-SIMULATION" {
+				if quotationsalesReturn.Code == "0" {
+					quotationsalesReturn.Code = "QTN-SR-20250614-001"
+				} else if quotationsalesReturn.Code == "QTN-SR-20250614-001" {
+					quotationsalesReturn.Code = "QTN-SR-20250614-002"
 				}
+
+				quotationsalesReturn.Update()
 			}
+			/*
+				quotationsalesReturn.UndoAccounting()
+				quotationsalesReturn.DoAccounting()
+
+				if quotationsalesReturn.CustomerID != nil && !quotationsalesReturn.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(quotationsalesReturn.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}
+			*/
 
 			/*
 				quotation, _ := store.FindQuotationByID(quotationsalesReturn.QuotationID, bson.M{})
