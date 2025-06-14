@@ -3074,21 +3074,22 @@ func ProcessOrders() error {
 				continue
 			}
 
-			if store.Code == "MBDI" {
-				if order.Code == "S-INV-20250614-111" {
-					//	order.Code = "S-INV-20250614-110"
-					//	order.Update()
+			/*
+				if store.Code == "MBDI" {
+					if order.Code == "S-INV-20250614-111" {
+						//	order.Code = "S-INV-20250614-110"
+						//	order.Update()
 
-					if order.CustomerName == "SULTAN MOHAMMED AL-QAHTANI AND SONS TRANSPORT COMPANY" {
-						order.Code = "S-INV-20250614-110"
-						order.Update()
+						if order.CustomerName == "SULTAN MOHAMMED AL-QAHTANI AND SONS TRANSPORT COMPANY" {
+							order.Code = "S-INV-20250614-110"
+							order.Update()
+						}
+						//order.HardDelete()
+
+						//order.ID = primitive.NewObjectID()
+						//
 					}
-					//order.HardDelete()
-
-					//order.ID = primitive.NewObjectID()
-					//
-				}
-			}
+				}*/
 
 			/*
 				if store.Code != "new1" {
