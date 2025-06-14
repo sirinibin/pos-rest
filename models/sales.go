@@ -3075,9 +3075,11 @@ func ProcessOrders() error {
 			}
 
 			if store.Code == "MBDI" {
-				if order.Code == "S-INV-20250614-109" {
-					order.ID = primitive.NewObjectID()
-					order.Update()
+				if order.Code == "S-INV-20250614-109" && order.ID.IsZero() {
+					order.HardDelete()
+
+					//order.ID = primitive.NewObjectID()
+					//order.Update()
 				}
 			}
 
