@@ -441,8 +441,6 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	taxExclusiveAmount := RoundTo2Decimals(order.NetTotal - order.VatPrice)
 
-	log.Print("order.VatPrice:")
-	log.Print(order.VatPrice)
 	//taxExclusiveAmount := (order.Total - totalAllowance + chargeTotalAmount)
 	// Fix floating-point error by rounding
 	//taxExclusiveAmount = math.Round(taxExclusiveAmount*100) / 100

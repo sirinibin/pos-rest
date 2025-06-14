@@ -496,7 +496,11 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 
 	invoice.InvoiceLines = []InvoiceLine{}
 
-	for i, product := range order.Products {
+	for i, product := range salesReturn.Products {
+		if !product.Selected {
+			continue
+		}
+
 		lineExtensionAmount := ((product.UnitPrice - product.UnitDiscount) * product.Quantity)
 		lineExtensionAmount = RoundTo2Decimals(lineExtensionAmount)
 		taxTotal := lineExtensionAmount * (*order.VatPercent / 100)
