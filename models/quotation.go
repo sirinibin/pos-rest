@@ -1025,10 +1025,12 @@ func (quotation *Quotation) FindTotal() {
 
 		total += (product.Quantity * (quotation.Products[i].UnitPrice - quotation.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (quotation.Products[i].UnitPriceWithVAT - quotation.Products[i].UnitDiscountWithVAT))
+		total = RoundTo2Decimals(total)
+		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 	}
 
-	quotation.Total = RoundTo2Decimals(total)
-	quotation.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	quotation.Total = total
+	quotation.TotalWithVAT = totalWithVAT
 }
 
 func (quotation *Quotation) CalculateDiscountPercentage() {

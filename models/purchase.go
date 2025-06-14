@@ -722,10 +722,12 @@ func (purchase *Purchase) FindTotal() {
 
 		total += (product.Quantity * (purchase.Products[i].PurchaseUnitPrice - purchase.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (purchase.Products[i].PurchaseUnitPriceWithVAT - purchase.Products[i].UnitDiscountWithVAT))
+		total = RoundTo2Decimals(total)
+		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 	}
 
-	purchase.Total = RoundTo2Decimals(total)
-	purchase.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	purchase.Total = total
+	purchase.TotalWithVAT = totalWithVAT
 }
 
 func (purchase *Purchase) CalculateDiscountPercentage() {

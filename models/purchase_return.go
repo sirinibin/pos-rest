@@ -508,10 +508,12 @@ func (purchaseReturn *PurchaseReturn) FindTotal() {
 
 		total += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPrice - purchaseReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT - purchaseReturn.Products[i].UnitDiscountWithVAT))
+		total = RoundTo2Decimals(total)
+		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 	}
 
-	purchaseReturn.Total = RoundTo2Decimals(total)
-	purchaseReturn.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	purchaseReturn.Total = total
+	purchaseReturn.TotalWithVAT = totalWithVAT
 }
 
 func (purchaseReturn *PurchaseReturn) CalculateDiscountPercentage() {
