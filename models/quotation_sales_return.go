@@ -634,10 +634,12 @@ func (quotationsalesReturn *QuotationSalesReturn) FindTotal() {
 
 		total += (product.Quantity * (quotationsalesReturn.Products[i].UnitPrice - quotationsalesReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (quotationsalesReturn.Products[i].UnitPriceWithVAT - quotationsalesReturn.Products[i].UnitDiscountWithVAT))
+		total = RoundTo2Decimals(total)
+		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 	}
 
-	quotationsalesReturn.Total = RoundTo2Decimals(total)
-	quotationsalesReturn.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	quotationsalesReturn.Total = total
+	quotationsalesReturn.TotalWithVAT = totalWithVAT
 }
 
 func (quotationsalesReturn *QuotationSalesReturn) CalculateDiscountPercentage() {
