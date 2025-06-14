@@ -440,6 +440,9 @@ func (order *Order) MakeXMLContent() (string, error) {
 	chargeTotalAmount += order.ShippingOrHandlingFees
 
 	taxExclusiveAmount := RoundTo2Decimals(order.NetTotal - order.VatPrice)
+
+	log.Print("order.VatPrice:")
+	log.Print(order.VatPrice)
 	//taxExclusiveAmount := (order.Total - totalAllowance + chargeTotalAmount)
 	// Fix floating-point error by rounding
 	//taxExclusiveAmount = math.Round(taxExclusiveAmount*100) / 100
@@ -456,11 +459,35 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	invoice.InvoiceLines = []InvoiceLine{}
 
+	totalVAT := float64(0.00)
 	for i, product := range order.Products {
+		//log.Print("product.UnitPrice:")
+		//log.Print(product.UnitPrice)
 		//lineExtensionAmount := (product.UnitPrice - (product.Discount / product.Quantity)) * product.Quantity
 		lineExtensionAmount := ((product.UnitPrice - product.UnitDiscount) * product.Quantity)
+		//lineExtensionAmount = RoundTo4Decimals(lineExtensionAmount)
+		//log.Print("lineExtensionAmount:")
+		//log.Print(lineExtensionAmount)
 		lineExtensionAmount = RoundTo2Decimals(lineExtensionAmount)
+		//log.Print(" After rounding lineExtensionAmount:")
+		//log.Print(lineExtensionAmount)
 		taxTotal := lineExtensionAmount * (*order.VatPercent / 100)
+
+		//log.Print("after rounding taxTotal")
+		//log.Print(taxTotal)
+
+		taxTotal = RoundTo2Decimals(taxTotal)
+
+		roundingAmount := RoundTo2Decimals(lineExtensionAmount + taxTotal)
+		//log.Print("roundingAmount :")
+		//log.Print(roundingAmount)
+		//taxTotal := RoundTo2Decimals(lineExtensionAmount * (*order.VatPercent / 100))
+
+		//log.Print("taxTotal")
+		//log.Print(taxTotal)
+		//taxTotal = RoundTo2Decimals(taxTotal)
+
+		totalVAT += taxTotal
 
 		price := Price{
 			PriceAmount: PriceAmount{
@@ -497,16 +524,19 @@ func (order *Order) MakeXMLContent() (string, error) {
 				Value:    ToFixed(product.Quantity, 2),
 			},
 			LineExtensionAmount: LineAmount{
-				Value:      ToFixed2(lineExtensionAmount, 2),
+				//Value:      ToFixed2(lineExtensionAmount, 2),
+				Value:      lineExtensionAmount,
 				CurrencyID: "SAR",
 			},
 			TaxTotal: TaxTotal{
 				TaxAmount: TaxAmount{
-					Value:      ToFixed2(taxTotal, 2),
+					//Value:      ToFixed2(taxTotal, 2),
+					Value:      taxTotal,
 					CurrencyID: "SAR",
 				},
 				RoundingAmount: &RoundingAmount{
-					Value:      ToFixed2((lineExtensionAmount + taxTotal), 2),
+					//Value:      ToFixed2((lineExtensionAmount + taxTotal), 2),
+					Value:      roundingAmount,
 					CurrencyID: "SAR",
 				},
 			},
@@ -527,6 +557,9 @@ func (order *Order) MakeXMLContent() (string, error) {
 			Price: price,
 		})
 	}
+
+	log.Print("totalVAT :")
+	log.Print(totalVAT)
 
 	// **Marshal Back to XML**
 	updatedXML, err := xml.MarshalIndent(invoice, "", "  ")

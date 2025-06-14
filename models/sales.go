@@ -529,12 +529,17 @@ func (order *Order) FindTotal() {
 			}*/
 
 		total += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+		total = RoundTo2Decimals(total)
 		//totalWithVAT = RoundTo2Decimals(total * (1 + (*order.VatPercent / 100)))
 		totalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
+		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 	}
 
-	order.Total = RoundTo2Decimals(total)
-	order.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	order.Total = total
+	order.TotalWithVAT = totalWithVAT
+
+	//order.Total = RoundTo2Decimals(total)
+	//order.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
 }
 
 func (order *Order) CalculateDiscountPercentage() {

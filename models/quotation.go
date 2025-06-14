@@ -30,6 +30,7 @@ type QuotationProduct struct {
 	PrefixPartNumber         string             `bson:"prefix_part_number" json:"prefix_part_number"`
 	PartNumber               string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	Quantity                 float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned         float64            `json:"quantity_returned" bson:"quantity_returned"`
 	Unit                     string             `bson:"unit,omitempty" json:"unit,omitempty"`
 	UnitPrice                float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	UnitPriceWithVAT         float64            `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
@@ -69,6 +70,10 @@ type Quotation struct {
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	DiscountWithVAT          float64             `bson:"discount_with_vat" json:"discount_with_vat"`
 	DiscountPercentWithVAT   float64             `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
+	ReturnDiscountWithVAT    float64             `bson:"return_discount_with_vat" json:"return_discount_vat"`
+	ReturnDiscount           float64             `bson:"return_discount" json:"return_discount"`
+	ReturnCashDiscount       float64             `bson:"return_cash_discount" json:"return_cash_discount"`
+	ReturnCount              int64               `bson:"return_count" json:"return_count"`
 	Status                   string              `bson:"status,omitempty" json:"status,omitempty"`
 	TotalQuantity            float64             `bson:"total_quantity" json:"total_quantity"`
 	VatPrice                 float64             `bson:"vat_price" json:"vat_price"`
@@ -114,6 +119,61 @@ type Quotation struct {
 	OrderCode                *string             `json:"order_code" bson:"order_code"`
 	ReportedToZatca          bool                `bson:"reported_to_zatca" json:"reported_to_zatca"`
 	ReportedToZatcaAt        *time.Time          `bson:"reported_to_zatca_at" json:"reported_to_zatca_at"`
+	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
+}
+
+func (store *Store) GetReturnedAmountByQuotationID(quotationID primitive.ObjectID) (returnedAmount float64, returnCount int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation_sales_return")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats QuotationSalesReturnStats
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": map[string]interface{}{
+				"quotation_id": quotationID,
+			},
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                          nil,
+				"quotation_sales_return_count": bson.M{"$sum": 1},
+				"paid_quotation_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats.PaidQuotationSalesReturn, stats.QuotationSalesReturnCount, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats.PaidQuotationSalesReturn, stats.QuotationSalesReturnCount, err
+		}
+		stats.PaidQuotationSalesReturn = RoundFloat(stats.PaidQuotationSalesReturn, 2)
+	}
+
+	return stats.PaidQuotationSalesReturn, stats.QuotationSalesReturnCount, nil
 }
 
 func (quotation *Quotation) LinkOrUnLinkSales(quotationOld *Quotation) (err error) {

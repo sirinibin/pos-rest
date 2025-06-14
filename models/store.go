@@ -70,6 +70,7 @@ type Store struct {
 	PurchaseSerialNumber               SerialNumber          `bson:"purchase_serial_number,omitempty" json:"purchase_serial_number"`
 	PurchaseReturnSerialNumber         SerialNumber          `bson:"purchase_return_serial_number" json:"purchase_return_serial_number"`
 	QuotationSerialNumber              SerialNumber          `bson:"quotation_serial_number" json:"quotation_serial_number"`
+	QuotationSalesReturnSerialNumber   SerialNumber          `bson:"quotation_sales_return_serial_number" json:"quotation_sales_return_serial_number"`
 	BankAccount                        BankAccount           `bson:"bank_account,omitempty" json:"bank_account,omitempty"`
 	CustomerSerialNumber               SerialNumber          `bson:"customer_serial_number" json:"customer_serial_number"`
 	VendorSerialNumber                 SerialNumber          `bson:"vendor_serial_number" json:"vendor_serial_number"`
