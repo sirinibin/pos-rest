@@ -15,11 +15,11 @@ import (
 	"github.com/jung-kurt/gofpdf"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type QuotationProduct struct {
@@ -472,17 +472,17 @@ func (quotation *Quotation) SetPaymentStatus() (models []QuotationPayment, err e
 		}
 	} //end for loop
 
-	quotation.TotalPaymentReceived = ToFixed(totalPaymentReceived, 2)
-	quotation.BalanceAmount = ToFixed((quotation.NetTotal-quotation.CashDiscount)-totalPaymentReceived, 2)
+	quotation.TotalPaymentReceived = RoundTo2Decimals(totalPaymentReceived)
+	quotation.BalanceAmount = RoundTo2Decimals((quotation.NetTotal - quotation.CashDiscount) - totalPaymentReceived)
 	quotation.PaymentMethods = paymentMethods
 	quotation.Payments = models
 	quotation.PaymentsCount = int64(len(models))
 
-	if ToFixed((quotation.NetTotal-quotation.CashDiscount), 2) <= ToFixed(totalPaymentReceived, 2) {
+	if RoundTo2Decimals((quotation.NetTotal - quotation.CashDiscount)) <= totalPaymentReceived {
 		quotation.PaymentStatus = "paid"
-	} else if ToFixed(totalPaymentReceived, 2) > 0 {
+	} else if totalPaymentReceived > 0 {
 		quotation.PaymentStatus = "paid_partially"
-	} else if ToFixed(totalPaymentReceived, 2) <= 0 {
+	} else if totalPaymentReceived <= 0 {
 		quotation.PaymentStatus = "not_paid"
 	}
 
@@ -3224,7 +3224,7 @@ func (quotation *Quotation) UpdatePaymentFromReceivablePayment(
 
 	paymentExists := false
 	for _, quotationPayment := range quotation.Payments {
-		if quotationPayment.ReceivablePaymentID.Hex() == receivablePayment.ID.Hex() {
+		if quotationPayment.ReceivablePaymentID != nil && quotationPayment.ReceivablePaymentID.Hex() == receivablePayment.ID.Hex() {
 			paymentExists = true
 			quotationPayment, err := store.FindQuotationPaymentByID(&quotationPayment.ID, bson.M{})
 			if err != nil {

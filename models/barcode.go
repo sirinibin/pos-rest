@@ -15,11 +15,11 @@ import (
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/code128"
 	"github.com/boombuler/barcode/ean"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
-	"gopkg.in/mgo.v2/bson"
 )
 
 func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectID) (err error) {

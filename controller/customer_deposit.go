@@ -8,8 +8,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // ListCustomerDeposit : handler for GET /customerdeposit
@@ -169,10 +169,28 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if customerdeposit.VendorID != nil && !customerdeposit.VendorID.IsZero() {
+		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+		if store != nil {
+			vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{})
+			if vendor != nil {
+				vendor.SetCreditBalance()
+			}
+		}
+	}
+
 	err = customerdeposit.CloseSalesPayments()
 	if err != nil {
 		response.Status = false
 		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerdeposit.ClosePurchaseReturnPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_purchase_return"] = "error closing purchase return payments: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -331,12 +349,32 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if customerdeposit.VendorID != nil && !customerdeposit.VendorID.IsZero() {
+		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+		if store != nil {
+			vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{})
+			if vendor != nil {
+				vendor.SetCreditBalance()
+			}
+		}
+	}
+
 	if customerdepositOld.CustomerID != nil && !customerdepositOld.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerdepositOld.StoreID, bson.M{})
 		if store != nil {
 			customer, _ := store.FindCustomerByID(customerdepositOld.CustomerID, bson.M{})
 			if customer != nil {
 				customer.SetCreditBalance()
+			}
+		}
+	}
+
+	if customerdepositOld.VendorID != nil && !customerdepositOld.VendorID.IsZero() {
+		store, _ := models.FindStoreByID(customerdepositOld.StoreID, bson.M{})
+		if store != nil {
+			vendor, _ := store.FindVendorByID(customerdepositOld.VendorID, bson.M{})
+			if vendor != nil {
+				vendor.SetCreditBalance()
 			}
 		}
 	}
@@ -353,6 +391,14 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerdeposit.ClosePurchaseReturnPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_purchase_return"] = "error closing purchase return payments: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -417,9 +463,16 @@ func ViewCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
-	customer.SetSearchLabel()
-	customerdeposit.Customer = customer
+	if customerdeposit.Type == "customer" {
+		customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+		customer.SetSearchLabel()
+		customerdeposit.Customer = customer
+
+	} else if customerdeposit.Type == "vendor" {
+		vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{})
+		vendor.SetSearchLabel()
+		customerdeposit.Vendor = vendor
+	}
 
 	response.Status = true
 	response.Result = customerdeposit

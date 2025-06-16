@@ -12,32 +12,34 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // PurchasePayment : PurchasePayment structure
 type PurchasePayment struct {
-	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr       string              `json:"date_str,omitempty" bson:"-"`
-	PurchaseID    *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
-	PurchaseCode  string              `json:"purchase_code" bson:"purchase_code"`
-	Amount        *float64            `json:"amount" bson:"amount"`
-	Method        string              `json:"method" bson:"method"`
-	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	StoreID       *primitive.ObjectID `json:"store_id" bson:"store_id"`
-	StoreName     string              `json:"store_name" bson:"store_name"`
-	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	ID               primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date             *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr          string              `json:"date_str,omitempty" bson:"-"`
+	PurchaseID       *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
+	PurchaseCode     string              `json:"purchase_code" bson:"purchase_code"`
+	Amount           *float64            `json:"amount" bson:"amount"`
+	Method           string              `json:"method" bson:"method"`
+	CreatedAt        *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt        *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy        *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy        *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByName    string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName    string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	StoreID          *primitive.ObjectID `json:"store_id" bson:"store_id"`
+	StoreName        string              `json:"store_name" bson:"store_name"`
+	Deleted          bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy        *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser    *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt        *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	PayableID        *primitive.ObjectID `json:"payable_id" bson:"payable_id"`
+	PayablePaymentID *primitive.ObjectID `json:"payable_payment_id" bson:"payable_payment_id"`
 }
 
 /*

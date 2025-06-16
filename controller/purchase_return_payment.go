@@ -8,8 +8,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // ListPurchaseReturnPayment : handler for GET /purchasereturnpayment
@@ -139,7 +139,7 @@ func CreatePurchaseReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating purchase.payments
 	purchaseReturn, _ := store.FindPurchaseReturnByID(purchasereturnpayment.PurchaseReturnID, map[string]interface{}{})
-	purchaseReturn.GetPayments()
+	purchaseReturn.SetPaymentStatus()
 	purchaseReturn.Update()
 
 	err = purchaseReturn.UndoAccounting()
@@ -248,7 +248,7 @@ func UpdatePurchaseReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating purchase.payments
 	purchaseReturn, _ := store.FindPurchaseReturnByID(purchasereturnpayment.PurchaseReturnID, map[string]interface{}{})
-	purchaseReturn.GetPayments()
+	purchaseReturn.SetPaymentStatus()
 	purchaseReturn.SetVendorPurchaseReturnStats()
 	purchaseReturn.Update()
 
@@ -401,7 +401,7 @@ func DeletePurchaseReturnPayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating purchase.payments
 	purchaseReturn, _ := store.FindPurchaseReturnByID(purchaseReturnPayment.PurchaseReturnID, map[string]interface{}{})
-	purchaseReturn.GetPayments()
+	purchaseReturn.SetPaymentStatus()
 	purchaseReturn.SetVendorPurchaseReturnStats()
 	purchaseReturn.Update()
 

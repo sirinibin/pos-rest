@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"gopkg.in/mgo.v2/bson"
 )
 
 func (orderProduct OrderProduct) GetZatcaUnit() string {

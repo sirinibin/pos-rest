@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/sirinibin/pos-rest/models"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
 )
 
 func ParseStore(r *http.Request) (store *models.Store, err error) {

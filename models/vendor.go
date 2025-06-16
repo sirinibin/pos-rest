@@ -15,10 +15,10 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type VendorStore struct {
@@ -774,9 +774,10 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 			//	{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
 		}*/
 	}
-
+	textSearching := false
 	keys, ok = r.URL.Query()["search[query]"]
 	if ok && len(keys[0]) >= 1 {
+		textSearching = true
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
 		/*criterias.SearchBy["$or"] = []bson.M{
@@ -847,7 +848,16 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		findOptions.SetProjection(criterias.Select)
 	}
 
-	findOptions.SetSort(criterias.SortBy)
+	if textSearching {
+
+		sortBy := bson.D{
+			bson.E{Key: "score", Value: bson.M{"$meta": "textScore"}},
+			//bson.E{Key: sortFieldName, Value: sortValue},
+		}
+		findOptions.SetSort(sortBy)
+	} else {
+		findOptions.SetSort(criterias.SortBy)
+	}
 
 	//Fetch all device documents with (garbage:true AND (gc_processed:false if exist OR gc_processed not exist ))
 	/* Note: Actual Record fetching will not happen here

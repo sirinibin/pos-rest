@@ -14,16 +14,17 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // CustomerDeposit : CustomerDeposit structure
 type CustomerDeposit struct {
-	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	ID primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+
 	Code            string              `bson:"code" json:"code"`
 	Amount          float64             `bson:"amount" json:"amount"`
 	Description     string              `bson:"description" json:"description"`
@@ -31,9 +32,13 @@ type CustomerDeposit struct {
 	BankReferenceNo string              `bson:"bank_reference_no" json:"bank_reference_no"`
 	Date            *time.Time          `bson:"date" json:"date"`
 	DateStr         string              `json:"date_str,omitempty" bson:"-"`
-	CustomerID      *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerID      *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
 	Customer        *Customer           `json:"customer" bson:"-"`
 	CustomerName    string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	Type            string              `bson:"type" json:"type"`
+	VendorID        *primitive.ObjectID `json:"vendor_id" bson:"vendor_id"`
+	Vendor          *Vendor             `json:"vendor" bson:"-"`
+	VendorName      string              `json:"vendor_name" bson:"vendor_name"`
 	PaymentMethod   string              `json:"payment_method" bson:"payment_method"`
 	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName       string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
@@ -85,18 +90,18 @@ func (customerdeposit *CustomerDeposit) HandleDeletedPayments(customerdepositOld
 
 	for _, oldPayment := range customerdepositOld.Payments {
 		found := false
-		deleteSalesPayment := false
+		deletePayment := false
 		for _, payment := range customerdeposit.Payments {
 			if payment.ID.Hex() == oldPayment.ID.Hex() {
 				found = true
 				if (payment.InvoiceID == nil || payment.InvoiceID.IsZero()) && (oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero()) {
-					deleteSalesPayment = true
+					deletePayment = true
 				}
 				break
 			}
 		} //end for2
 
-		if !found || deleteSalesPayment {
+		if !found || deletePayment {
 			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && *oldPayment.InvoiceType == "sales" {
 				order, err := store.FindOrderByID(oldPayment.InvoiceID, bson.M{})
 				if err != nil {
@@ -168,6 +173,42 @@ func (customerdeposit *CustomerDeposit) HandleDeletedPayments(customerdepositOld
 					return err
 				}
 			}
+
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && *oldPayment.InvoiceType == "purchase_return" {
+				purchaseReturn, err := store.FindPurchaseReturnByID(oldPayment.InvoiceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = purchaseReturn.DeletePaymentsByReceivablePaymentID(oldPayment.ID)
+				if err != nil {
+					return err
+				}
+
+				_, err = purchaseReturn.SetPaymentStatus()
+				if err != nil {
+					return err
+				}
+
+				err = purchaseReturn.Update()
+				if err != nil {
+					return err
+				}
+
+				err = purchaseReturn.UndoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = purchaseReturn.DoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = purchaseReturn.SetVendorPurchaseReturnStats()
+				if err != nil {
+					return err
+				}
+			}
 		}
 	} //end for1
 	return nil
@@ -205,6 +246,46 @@ func (customerdeposit *CustomerDeposit) CloseSalesPayments() error {
 			}
 
 			err = order.DoAccounting()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (customerdeposit *CustomerDeposit) ClosePurchaseReturnPayments() error {
+	store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+
+	for _, receivablePayment := range customerdeposit.Payments {
+		if receivablePayment.InvoiceID != nil && !receivablePayment.InvoiceID.IsZero() && *receivablePayment.InvoiceType == "purchase_return" {
+			purchaseReturn, _ := store.FindPurchaseReturnByID(receivablePayment.InvoiceID, bson.M{})
+			err := purchaseReturn.UpdatePaymentFromReceivablePayment(receivablePayment, customerdeposit)
+			if err != nil {
+				return errors.New("error updating sales payment from receivable payment: " + err.Error())
+			}
+
+			_, err = purchaseReturn.SetPaymentStatus()
+			if err != nil {
+				return errors.New("error setting payment status: " + err.Error())
+			}
+
+			err = purchaseReturn.Update()
+			if err != nil {
+				return errors.New("error updating order inside payment status: " + err.Error())
+			}
+
+			err = purchaseReturn.SetVendorPurchaseReturnStats()
+			if err != nil {
+				return err
+			}
+
+			err = purchaseReturn.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = purchaseReturn.DoAccounting()
 			if err != nil {
 				return err
 			}
@@ -287,6 +368,14 @@ func (customerdeposit *CustomerDeposit) UpdateForeignLabelFields() error {
 			return err
 		}
 		customerdeposit.CustomerName = customer.Name
+	}
+
+	if customerdeposit.VendorID != nil && !customerdeposit.VendorID.IsZero() {
+		vendor, err := store.FindVendorByID(customerdeposit.VendorID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		customerdeposit.VendorName = vendor.Name
 	}
 
 	if customerdeposit.CreatedBy != nil {
@@ -383,6 +472,13 @@ func (store *Store) SearchCustomerDeposit(w http.ResponseWriter, r *http.Request
 
 	}
 
+	keys, ok = r.URL.Query()["search[type]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["type"] = keys[0]
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
@@ -473,6 +569,26 @@ func (store *Store) SearchCustomerDeposit(w http.ResponseWriter, r *http.Request
 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[vendor_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		vendorIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range vendorIds {
+			customerID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return customerdeposits, criterias, err
+			}
+			objecIds = append(objecIds, customerID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["vendor_id"] = bson.M{"$in": objecIds}
 		}
 	}
 
@@ -722,8 +838,12 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 		return errs
 	}
 
-	if customerDeposit.CustomerID == nil || customerDeposit.CustomerID.IsZero() {
+	if customerDeposit.Type == "customer" && (customerDeposit.CustomerID == nil || customerDeposit.CustomerID.IsZero()) {
 		errs["customer_id"] = "Customer is required"
+	}
+
+	if customerDeposit.Type == "vendor" && (customerDeposit.VendorID == nil || customerDeposit.VendorID.IsZero()) {
+		errs["vendor_id"] = "Vendor is required"
 	}
 
 	if govalidator.IsNull(customerDeposit.DateStr) {
@@ -817,7 +937,6 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 					totalInvoicePaidAmount += *payment2.Amount
 				}
 			}
-
 		}
 
 		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() && *payment.InvoiceType == "quotation_sales" {
@@ -863,7 +982,51 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 					totalInvoicePaidAmount += *payment2.Amount
 				}
 			}
+		}
 
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() && *payment.InvoiceType == "purchase_return" {
+			purchaseReturn, err := store.FindPurchaseReturnByID(payment.InvoiceID, bson.M{})
+			if err != nil {
+				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+			}
+
+			if purchaseReturn.VendorID != nil &&
+				!purchaseReturn.VendorID.IsZero() &&
+				customerDeposit.VendorID != nil &&
+				!customerDeposit.VendorID.IsZero() &&
+				purchaseReturn.VendorID.Hex() != customerDeposit.VendorID.Hex() {
+				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "Invoice is not belongs to the selected vendor"
+			}
+
+			purchaseReturnBalanceAmount := purchaseReturn.BalanceAmount
+
+			if scenario == "update" {
+				oldTotalInvoicePaidAmount := float64(0.00)
+				for _, oldPayment := range customerDepositOld.Payments {
+					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == purchaseReturn.ID.Hex() {
+						oldTotalInvoicePaidAmount += *oldPayment.Amount
+					}
+				}
+				purchaseReturnBalanceAmount += oldTotalInvoicePaidAmount
+			}
+
+			if *payment.Amount > purchaseReturnBalanceAmount {
+				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", purchaseReturn.BalanceAmount) + " (Invoice Balance)"
+			}
+
+			totalInvoicePaidAmount := float64(0.00)
+			for index2, payment2 := range customerDeposit.Payments {
+				if payment2.InvoiceID != nil && !payment2.InvoiceID.IsZero() && payment2.InvoiceID.Hex() == purchaseReturn.ID.Hex() {
+					if (purchaseReturnBalanceAmount - totalInvoicePaidAmount) == 0 {
+						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
+						break
+					} else if (totalInvoicePaidAmount + *payment2.Amount) > purchaseReturnBalanceAmount {
+						errs["customer_receivable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (purchaseReturnBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
+						break
+					}
+					totalInvoicePaidAmount += *payment2.Amount
+				}
+			}
 		}
 
 	} //end for
@@ -1473,14 +1636,17 @@ func ProcessCustomerDeposits() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			model.UndoAccounting()
-			model.DoAccounting()
-			if model.CustomerID != nil && !model.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+			model.Type = "customer"
+			model.Update()
+			/*
+				model.UndoAccounting()
+				model.DoAccounting()
+				if model.CustomerID != nil && !model.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
 			/*
 				if len(model.Payments) == 0 {
@@ -1571,23 +1737,55 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 	}
 
 	now := time.Now()
+	var customer *Customer
+	var vendor *Vendor
 
-	customer, err := store.FindCustomerByID(customerDeposit.CustomerID, bson.M{})
-	if err != nil {
-		return nil, err
+	if customerDeposit.Type == "customer" && customerDeposit.CustomerID != nil && !customerDeposit.CustomerID.IsZero() {
+		customer, err = store.FindCustomerByID(customerDeposit.CustomerID, bson.M{})
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	referenceModel := "customer"
-	customerAccount, err := store.CreateAccountIfNotExists(
-		customerDeposit.StoreID,
-		&customer.ID,
-		&referenceModel,
-		customer.Name,
-		&customer.Phone,
-		&customer.VATNo,
-	)
-	if err != nil {
-		return nil, err
+	if customerDeposit.Type == "vendor" && customerDeposit.VendorID != nil && !customerDeposit.VendorID.IsZero() {
+		vendor, err = store.FindVendorByID(customerDeposit.VendorID, bson.M{})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	referenceModel := ""
+
+	var sendingAccount *Account
+
+	if customerDeposit.Type == "customer" {
+		referenceModel = "customer"
+		customerAccount, err := store.CreateAccountIfNotExists(
+			customerDeposit.StoreID,
+			&customer.ID,
+			&referenceModel,
+			customer.Name,
+			&customer.Phone,
+			&customer.VATNo,
+		)
+		if err != nil {
+			return nil, err
+		}
+		sendingAccount = customerAccount
+	} else if customerDeposit.Type == "vendor" {
+		referenceModel = "vendor"
+		vendorAccount, err := store.CreateAccountIfNotExists(
+			customerDeposit.StoreID,
+			&vendor.ID,
+			&referenceModel,
+			vendor.Name,
+			&vendor.Phone,
+			&vendor.VATNo,
+		)
+		if err != nil {
+			return nil, err
+		}
+		sendingAccount = vendorAccount
 	}
 
 	cashAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil, nil)
@@ -1626,9 +1824,9 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 
 		journals = append(journals, Journal{
 			Date:          payment.Date,
-			AccountID:     customerAccount.ID,
-			AccountNumber: customerAccount.Number,
-			AccountName:   customerAccount.Name,
+			AccountID:     sendingAccount.ID,
+			AccountNumber: sendingAccount.Number,
+			AccountName:   sendingAccount.Name,
 			DebitOrCredit: "credit",
 			Credit:        *payment.Amount,
 			GroupID:       groupID,
@@ -1636,10 +1834,17 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			UpdatedAt:     &now,
 		})
 
+		referenceModel = ""
+		if customerDeposit.Type == "customer" {
+			referenceModel = "customer_deposit"
+		} else if customerDeposit.Type == "vendor" {
+			referenceModel = "vendor_deposit"
+		}
+
 		ledger := &Ledger{
 			StoreID:        customerDeposit.StoreID,
 			ReferenceID:    customerDeposit.ID,
-			ReferenceModel: "customer_deposit",
+			ReferenceModel: referenceModel,
 			ReferenceCode:  customerDeposit.Code,
 			Journals:       journals,
 			CreatedAt:      &now,

@@ -15,11 +15,11 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type SalesReturnProduct struct {
@@ -137,7 +137,7 @@ func (salesReturn *SalesReturn) UpdatePaymentFromPayablePayment(
 
 	paymentExists := false
 	for _, salesReturnPayment := range salesReturn.Payments {
-		if salesReturnPayment.PayablePaymentID.Hex() == payablePayment.ID.Hex() {
+		if salesReturnPayment.PayablePaymentID != nil && salesReturnPayment.PayablePaymentID.Hex() == payablePayment.ID.Hex() {
 			paymentExists = true
 			salesReturnPaymentObj, err := store.FindSalesReturnPaymentByID(&salesReturnPayment.ID, bson.M{})
 			if err != nil {
@@ -2745,18 +2745,18 @@ func (salesReturn *SalesReturn) SetPaymentStatus() (payments []SalesReturnPaymen
 		}
 	} //end for loop
 
-	salesReturn.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
+	salesReturn.TotalPaymentPaid = RoundTo2Decimals(totalPaymentPaid)
 	//salesReturn.BalanceAmount = ToFixed(salesReturn.NetTotal-totalPaymentPaid, 2)
-	salesReturn.BalanceAmount = ToFixed((salesReturn.NetTotal-salesReturn.CashDiscount)-totalPaymentPaid, 2)
+	salesReturn.BalanceAmount = RoundTo2Decimals((salesReturn.NetTotal - salesReturn.CashDiscount) - totalPaymentPaid)
 	salesReturn.PaymentMethods = paymentMethods
 	salesReturn.Payments = payments
 	salesReturn.PaymentsCount = int64(len(payments))
 
-	if ToFixed((salesReturn.NetTotal-salesReturn.CashDiscount), 2) <= ToFixed(totalPaymentPaid, 2) {
+	if RoundTo2Decimals((salesReturn.NetTotal - salesReturn.CashDiscount)) <= totalPaymentPaid {
 		salesReturn.PaymentStatus = "paid"
-	} else if ToFixed(totalPaymentPaid, 2) > 0 {
+	} else if totalPaymentPaid > 0 {
 		salesReturn.PaymentStatus = "paid_partially"
-	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
+	} else if totalPaymentPaid <= 0 {
 		salesReturn.PaymentStatus = "not_paid"
 	}
 

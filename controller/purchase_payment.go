@@ -8,8 +8,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // ListPurchasePayment : handler for GET /purchasepayment
@@ -139,7 +139,7 @@ func CreatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating purchase.payments
 	purchase, _ := store.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
-	purchase.GetPayments()
+	purchase.SetPaymentStatus()
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()
 
@@ -249,7 +249,7 @@ func UpdatePurchasePayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating purchase.payments
 	purchase, _ := store.FindPurchaseByID(purchasepayment.PurchaseID, map[string]interface{}{})
-	purchase.GetPayments()
+	purchase.SetPaymentStatus()
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()
 
@@ -403,7 +403,7 @@ func DeletePurchasePayment(w http.ResponseWriter, r *http.Request) {
 
 	//Updating purchase.payments
 	purchase, _ := store.FindPurchaseByID(purchasePayment.PurchaseID, map[string]interface{}{})
-	purchase.GetPayments()
+	purchase.SetPaymentStatus()
 	purchase.SetVendorPurchaseStats()
 	purchase.Update()
 

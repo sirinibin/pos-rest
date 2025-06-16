@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // AccesstokenRequest : Access token request structure

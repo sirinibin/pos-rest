@@ -13,11 +13,11 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // CustomerWithdrawal : CustomerWithdrawal structure
@@ -30,9 +30,13 @@ type CustomerWithdrawal struct {
 	BankReferenceNo string              `bson:"bank_reference_no" json:"bank_reference_no"`
 	Date            *time.Time          `bson:"date" json:"date"`
 	DateStr         string              `json:"date_str,omitempty" bson:"-"`
-	CustomerID      *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerID      *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
 	Customer        *Customer           `json:"customer" bson:"-"`
 	CustomerName    string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	Type            string              `bson:"type" json:"type"`
+	VendorID        *primitive.ObjectID `json:"vendor_id" bson:"vendor_id"`
+	Vendor          *Vendor             `json:"vendor" bson:"-"`
+	VendorName      string              `json:"vendor_name" bson:"vendor_name"`
 	PaymentMethod   string              `json:"payment_method" bson:"payment_method"`
 	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName       string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
@@ -84,19 +88,19 @@ func (customerwithdrawal *CustomerWithdrawal) HandleDeletedPayments(customerwith
 
 	for _, oldPayment := range customerwithdrawalOld.Payments {
 		found := false
-		deleteSalesPayment := false
+		deletePayment := false
 		for _, payment := range customerwithdrawal.Payments {
 			if payment.ID.Hex() == oldPayment.ID.Hex() {
 				found = true
 				if (payment.InvoiceID == nil || payment.InvoiceID.IsZero()) && (oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero()) {
-					deleteSalesPayment = true
+					deletePayment = true
 				}
 				break
 			}
 		} //end for2
 
-		if !found || deleteSalesPayment {
-			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() {
+		if !found || deletePayment {
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && *oldPayment.InvoiceType == "sales_return" {
 				salesreturn, err := store.FindSalesReturnByID(oldPayment.InvoiceID, bson.M{})
 				if err != nil {
 					return err
@@ -132,16 +136,88 @@ func (customerwithdrawal *CustomerWithdrawal) HandleDeletedPayments(customerwith
 				}
 
 			}
+
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && *oldPayment.InvoiceType == "quotation_sales_return" {
+				quotationSalesReturn, err := store.FindQuotationSalesReturnByID(oldPayment.InvoiceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = quotationSalesReturn.DeletePaymentsByPayablePaymentID(oldPayment.ID)
+				if err != nil {
+					return err
+				}
+
+				_, err = quotationSalesReturn.SetPaymentStatus()
+				if err != nil {
+					return err
+				}
+
+				err = quotationSalesReturn.Update()
+				if err != nil {
+					return err
+				}
+
+				err = quotationSalesReturn.UndoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = quotationSalesReturn.DoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = quotationSalesReturn.SetCustomerQuotationSalesReturnStats()
+				if err != nil {
+					return err
+				}
+			}
+
+			if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && *oldPayment.InvoiceType == "purchase" {
+				purchase, err := store.FindPurchaseByID(oldPayment.InvoiceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = purchase.DeletePaymentsByPayablePaymentID(oldPayment.ID)
+				if err != nil {
+					return err
+				}
+
+				_, err = purchase.SetPaymentStatus()
+				if err != nil {
+					return err
+				}
+
+				err = purchase.Update()
+				if err != nil {
+					return err
+				}
+
+				err = purchase.UndoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = purchase.DoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = purchase.SetVendorPurchaseStats()
+				if err != nil {
+					return err
+				}
+			}
 		}
 	} //end for1
 	return nil
 }
 
-func (customerwithdrawal *CustomerWithdrawal) CloseSalesPayments() error {
+func (customerwithdrawal *CustomerWithdrawal) CloseSalesReturnPayments() error {
 	store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
 
 	for _, payablePayment := range customerwithdrawal.Payments {
-		if payablePayment.InvoiceID != nil && !payablePayment.InvoiceID.IsZero() {
+		if payablePayment.InvoiceID != nil && !payablePayment.InvoiceID.IsZero() && *payablePayment.InvoiceType == "sales_return" {
 			salesreturn, _ := store.FindSalesReturnByID(payablePayment.InvoiceID, bson.M{})
 			err := salesreturn.UpdatePaymentFromPayablePayment(payablePayment, customerwithdrawal)
 			if err != nil {
@@ -169,6 +245,85 @@ func (customerwithdrawal *CustomerWithdrawal) CloseSalesPayments() error {
 			}
 
 			err = salesreturn.DoAccounting()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (customerwithdrawal *CustomerWithdrawal) CloseQuotationSalesReturnPayments() error {
+	store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	for _, payablePayment := range customerwithdrawal.Payments {
+		if payablePayment.InvoiceID != nil && !payablePayment.InvoiceID.IsZero() && *payablePayment.InvoiceType == "quotation_sales_return" {
+			quotationSalesreturn, _ := store.FindQuotationSalesReturnByID(payablePayment.InvoiceID, bson.M{})
+			err := quotationSalesreturn.UpdatePaymentFromPayablePayment(payablePayment, customerwithdrawal)
+			if err != nil {
+				return errors.New("error updating sales payment from payable payment: " + err.Error())
+			}
+
+			_, err = quotationSalesreturn.SetPaymentStatus()
+			if err != nil {
+				return errors.New("error setting payment status: " + err.Error())
+			}
+
+			err = quotationSalesreturn.Update()
+			if err != nil {
+				return errors.New("error updating quotation sales return inside payment status: " + err.Error())
+			}
+
+			err = quotationSalesreturn.SetCustomerQuotationSalesReturnStats()
+			if err != nil {
+				return err
+			}
+
+			err = quotationSalesreturn.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = quotationSalesreturn.DoAccounting()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (customerwithdrawal *CustomerWithdrawal) ClosePurchasePayments() error {
+	store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+
+	for _, payablePayment := range customerwithdrawal.Payments {
+		if payablePayment.InvoiceID != nil && !payablePayment.InvoiceID.IsZero() && *payablePayment.InvoiceType == "purchase" {
+			purchase, _ := store.FindPurchaseByID(payablePayment.InvoiceID, bson.M{})
+			err := purchase.UpdatePaymentFromPayablePayment(payablePayment, customerwithdrawal)
+			if err != nil {
+				return errors.New("error updating purchase payment from payable payment: " + err.Error())
+			}
+
+			_, err = purchase.SetPaymentStatus()
+			if err != nil {
+				return errors.New("error setting payment status: " + err.Error())
+			}
+
+			err = purchase.Update()
+			if err != nil {
+				return errors.New("error updating salesreturn inside payment status: " + err.Error())
+			}
+
+			err = purchase.SetVendorPurchaseStats()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.DoAccounting()
 			if err != nil {
 				return err
 			}
@@ -211,6 +366,14 @@ func (customerwithdrawal *CustomerWithdrawal) UpdateForeignLabelFields() error {
 			return err
 		}
 		customerwithdrawal.CustomerName = customer.Name
+	}
+
+	if customerwithdrawal.VendorID != nil && !customerwithdrawal.VendorID.IsZero() {
+		vendor, err := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		customerwithdrawal.VendorName = vendor.Name
 	}
 
 	if customerwithdrawal.CreatedBy != nil {
@@ -307,6 +470,13 @@ func (store *Store) SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Requ
 
 	}
 
+	keys, ok = r.URL.Query()["search[type]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["type"] = keys[0]
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[amount]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -397,6 +567,26 @@ func (store *Store) SearchCustomerWithdrawal(w http.ResponseWriter, r *http.Requ
 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[vendor_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		customerIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range customerIds {
+			customerID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return customerwithdrawals, criterias, err
+			}
+			objecIds = append(objecIds, customerID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["vendor_id"] = bson.M{"$in": objecIds}
 		}
 	}
 
@@ -646,8 +836,12 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		return errs
 	}
 
-	if customerWithdrawal.CustomerID == nil || customerWithdrawal.CustomerID.IsZero() {
+	if customerWithdrawal.Type == "customer" && (customerWithdrawal.CustomerID == nil || customerWithdrawal.CustomerID.IsZero()) {
 		errs["customer_id"] = "Customer is required"
+	}
+
+	if customerWithdrawal.Type == "vendor" && (customerWithdrawal.VendorID == nil || customerWithdrawal.VendorID.IsZero()) {
+		errs["vendor_id"] = "Vendor is required"
 	}
 
 	if govalidator.IsNull(customerWithdrawal.DateStr) {
@@ -698,7 +892,7 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			errs["customer_payable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() {
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() && *payment.InvoiceType == "sales_return" {
 			salesreturn, err := store.FindSalesReturnByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
@@ -736,6 +930,98 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 						break
 					} else if (totalInvoicePaidAmount + *payment2.Amount) > salesreturnBalanceAmount {
 						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (salesreturnBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
+						break
+					}
+					totalInvoicePaidAmount += *payment2.Amount
+				}
+			}
+
+		}
+
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() && *payment.InvoiceType == "quotation_sales_return" {
+			quotationSalesReturn, err := store.FindQuotationSalesReturnByID(payment.InvoiceID, bson.M{})
+			if err != nil {
+				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+			}
+
+			if quotationSalesReturn.CustomerID != nil &&
+				!quotationSalesReturn.CustomerID.IsZero() &&
+				customerWithdrawal.CustomerID != nil &&
+				!customerWithdrawal.CustomerID.IsZero() &&
+				quotationSalesReturn.CustomerID.Hex() != customerWithdrawal.CustomerID.Hex() {
+				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "Invoice is not belongs to the selected customer"
+			}
+
+			quotationSalesReturnBalanceAmount := quotationSalesReturn.BalanceAmount
+
+			if scenario == "update" {
+				oldTotalInvoicePaidAmount := float64(0.00)
+				for _, oldPayment := range customerWithdrawalOld.Payments {
+					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == quotationSalesReturn.ID.Hex() {
+						oldTotalInvoicePaidAmount += *oldPayment.Amount
+					}
+				}
+				quotationSalesReturnBalanceAmount += oldTotalInvoicePaidAmount
+			}
+
+			if *payment.Amount > quotationSalesReturnBalanceAmount {
+				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", quotationSalesReturn.BalanceAmount) + " (Invoice Balance)"
+			}
+
+			totalInvoicePaidAmount := float64(0.00)
+			for index2, payment2 := range customerWithdrawal.Payments {
+				if payment2.InvoiceID != nil && !payment2.InvoiceID.IsZero() && payment2.InvoiceID.Hex() == quotationSalesReturn.ID.Hex() {
+					if (quotationSalesReturnBalanceAmount - totalInvoicePaidAmount) == 0 {
+						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
+						break
+					} else if (totalInvoicePaidAmount + *payment2.Amount) > quotationSalesReturnBalanceAmount {
+						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (quotationSalesReturnBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
+						break
+					}
+					totalInvoicePaidAmount += *payment2.Amount
+				}
+			}
+
+		}
+
+		if payment.InvoiceID != nil && !payment.InvoiceID.IsZero() && *payment.InvoiceType == "purchase" {
+			purchase, err := store.FindPurchaseByID(payment.InvoiceID, bson.M{})
+			if err != nil {
+				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+			}
+
+			if purchase.VendorID != nil &&
+				!purchase.VendorID.IsZero() &&
+				customerWithdrawal.VendorID != nil &&
+				!customerWithdrawal.VendorID.IsZero() &&
+				purchase.VendorID.Hex() != customerWithdrawal.VendorID.Hex() {
+				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "Invoice is not belongs to the selected vendor"
+			}
+
+			purchaseBalanceAmount := purchase.BalanceAmount
+
+			if scenario == "update" {
+				oldTotalInvoicePaidAmount := float64(0.00)
+				for _, oldPayment := range customerWithdrawalOld.Payments {
+					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == purchase.ID.Hex() {
+						oldTotalInvoicePaidAmount += *oldPayment.Amount
+					}
+				}
+				purchaseBalanceAmount += oldTotalInvoicePaidAmount
+			}
+
+			if *payment.Amount > purchaseBalanceAmount {
+				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", purchase.BalanceAmount) + " (Invoice Balance)"
+			}
+
+			totalInvoicePaidAmount := float64(0.00)
+			for index2, payment2 := range customerWithdrawal.Payments {
+				if payment2.InvoiceID != nil && !payment2.InvoiceID.IsZero() && payment2.InvoiceID.Hex() == purchase.ID.Hex() {
+					if (purchaseBalanceAmount - totalInvoicePaidAmount) == 0 {
+						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
+						break
+					} else if (totalInvoicePaidAmount + *payment2.Amount) > purchaseBalanceAmount {
+						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (purchaseBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
 						break
 					}
 					totalInvoicePaidAmount += *payment2.Amount
@@ -1320,14 +1606,18 @@ func ProcessCustomerWithdrawals() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			model.UndoAccounting()
-			model.DoAccounting()
-			if model.CustomerID != nil && !model.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+			model.Type = "customer"
+			model.Update()
+
+			/*
+				model.UndoAccounting()
+				model.DoAccounting()
+				if model.CustomerID != nil && !model.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
 			/*
 
@@ -1420,22 +1710,55 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 
 	now := time.Now()
 
-	customer, err := store.FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
-	if err != nil {
-		return nil, err
+	var customer *Customer
+	var vendor *Vendor
+
+	if customerWithdrawal.Type == "customer" && customerWithdrawal.CustomerID != nil && !customerWithdrawal.CustomerID.IsZero() {
+		customer, err = store.FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	referenceModel := "customer"
-	customerAccount, err := store.CreateAccountIfNotExists(
-		customerWithdrawal.StoreID,
-		&customer.ID,
-		&referenceModel,
-		customer.Name,
-		&customer.Phone,
-		&customer.VATNo,
-	)
-	if err != nil {
-		return nil, err
+	if customerWithdrawal.Type == "vendor" && customerWithdrawal.VendorID != nil && !customerWithdrawal.VendorID.IsZero() {
+		vendor, err = store.FindVendorByID(customerWithdrawal.VendorID, bson.M{})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	referenceModel := ""
+
+	var receivingAccount *Account
+
+	if customerWithdrawal.Type == "customer" {
+		referenceModel = "customer"
+		customerAccount, err := store.CreateAccountIfNotExists(
+			customerWithdrawal.StoreID,
+			&customer.ID,
+			&referenceModel,
+			customer.Name,
+			&customer.Phone,
+			&customer.VATNo,
+		)
+		if err != nil {
+			return nil, err
+		}
+		receivingAccount = customerAccount
+	} else if customerWithdrawal.Type == "vendor" {
+		referenceModel = "vendor"
+		vendorAccount, err := store.CreateAccountIfNotExists(
+			customerWithdrawal.StoreID,
+			&vendor.ID,
+			&referenceModel,
+			vendor.Name,
+			&vendor.Phone,
+			&vendor.VATNo,
+		)
+		if err != nil {
+			return nil, err
+		}
+		receivingAccount = vendorAccount
 	}
 
 	cashAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil, nil)
@@ -1462,9 +1785,9 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 
 		journals = append(journals, Journal{
 			Date:          payment.Date,
-			AccountID:     customerAccount.ID,
-			AccountNumber: customerAccount.Number,
-			AccountName:   customerAccount.Name,
+			AccountID:     receivingAccount.ID,
+			AccountNumber: receivingAccount.Number,
+			AccountName:   receivingAccount.Name,
 			DebitOrCredit: "debit",
 			Debit:         *payment.Amount,
 			GroupID:       groupID,
@@ -1484,10 +1807,17 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			UpdatedAt:     &now,
 		})
 
+		referenceModel = ""
+		if customerWithdrawal.Type == "customer" {
+			referenceModel = "customer_withdrawal"
+		} else if customerWithdrawal.Type == "vendor" {
+			referenceModel = "vendor_withdrawal"
+		}
+
 		ledger := &Ledger{
 			StoreID:        customerWithdrawal.StoreID,
 			ReferenceID:    customerWithdrawal.ID,
-			ReferenceModel: "customer_withdrawal",
+			ReferenceModel: referenceModel,
 			ReferenceCode:  customerWithdrawal.Code,
 			Journals:       journals,
 			CreatedAt:      &now,

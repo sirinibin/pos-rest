@@ -15,11 +15,11 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type PurchaseReturnProduct struct {
@@ -107,6 +107,72 @@ type PurchaseReturn struct {
 	Address                string                  `bson:"address" json:"address"`
 }
 
+func (purchaseReturn *PurchaseReturn) DeletePaymentsByReceivablePaymentID(receivablePaymentID primitive.ObjectID) error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.GetDB("store_" + purchaseReturn.StoreID.Hex()).Collection("purchase_return_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"receivable_payment_id": receivablePaymentID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (purchaseReturn *PurchaseReturn) UpdatePaymentFromReceivablePayment(
+	receivablePayment ReceivablePayment,
+	customerDeposit *CustomerDeposit,
+) error {
+	store, _ := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+
+	paymentExists := false
+	for _, purchaseReturnPayment := range purchaseReturn.Payments {
+		if purchaseReturnPayment.ReceivablePaymentID != nil && purchaseReturnPayment.ReceivablePaymentID.Hex() == receivablePayment.ID.Hex() {
+			paymentExists = true
+			purchaseRerturnPaymentObj, err := store.FindPurchaseReturnPaymentByID(&purchaseReturnPayment.ID, bson.M{})
+			if err != nil {
+				return errors.New("error finding purchase return payment: " + err.Error())
+			}
+
+			purchaseRerturnPaymentObj.Amount = receivablePayment.Amount
+			purchaseRerturnPaymentObj.Date = receivablePayment.Date
+			purchaseRerturnPaymentObj.UpdatedAt = receivablePayment.UpdatedAt
+			purchaseRerturnPaymentObj.CreatedAt = receivablePayment.CreatedAt
+			purchaseRerturnPaymentObj.UpdatedBy = receivablePayment.UpdatedBy
+			purchaseRerturnPaymentObj.CreatedBy = receivablePayment.CreatedBy
+			purchaseRerturnPaymentObj.ReceivableID = &customerDeposit.ID
+
+			err = purchaseRerturnPaymentObj.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	if !paymentExists {
+		newPurchaseReturnPayment := PurchaseReturnPayment{
+			PurchaseReturnID:    &purchaseReturn.ID,
+			PurchaseReturnCode:  purchaseReturn.Code,
+			Amount:              receivablePayment.Amount,
+			Date:                receivablePayment.Date,
+			Method:              "vendor_account",
+			ReceivablePaymentID: &receivablePayment.ID,
+			ReceivableID:        &customerDeposit.ID,
+			CreatedBy:           receivablePayment.CreatedBy,
+			UpdatedBy:           receivablePayment.UpdatedBy,
+			CreatedAt:           receivablePayment.CreatedAt,
+			UpdatedAt:           receivablePayment.UpdatedAt,
+			StoreID:             purchaseReturn.StoreID,
+		}
+		err := newPurchaseReturnPayment.Insert()
+		if err != nil {
+			return errors.New("error inserting purchase return payment: " + err.Error())
+		}
+	}
+
+	return nil
+}
+
 func (model *PurchaseReturn) AddPayments() error {
 	for _, payment := range model.PaymentsInput {
 		purchaseReturnPayment := PurchaseReturnPayment{
@@ -140,7 +206,7 @@ func (model *PurchaseReturn) UpdatePayments() error {
 		return err
 	}
 
-	model.GetPayments()
+	model.SetPaymentStatus()
 	now := time.Now()
 	for _, payment := range model.PaymentsInput {
 		if payment.ID.IsZero() {
@@ -2305,7 +2371,7 @@ func (model *PurchaseReturn) GetPaymentsCount() (count int64, err error) {
 	})
 }
 
-func (model *PurchaseReturn) GetPayments() (payments []PurchaseReturnPayment, err error) {
+func (model *PurchaseReturn) SetPaymentStatus() (payments []PurchaseReturnPayment, err error) {
 	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("purchase_return_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -2348,17 +2414,17 @@ func (model *PurchaseReturn) GetPayments() (payments []PurchaseReturnPayment, er
 		}
 	} //end for loop
 
-	model.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
-	model.BalanceAmount = ToFixed((model.NetTotal-model.CashDiscount)-totalPaymentPaid, 2)
+	model.TotalPaymentPaid = RoundTo2Decimals(totalPaymentPaid)
+	model.BalanceAmount = RoundTo2Decimals((model.NetTotal - model.CashDiscount) - totalPaymentPaid)
 	model.PaymentMethods = paymentMethods
 	model.Payments = payments
 	model.PaymentsCount = int64(len(payments))
 
-	if ToFixed((model.NetTotal-model.CashDiscount), 2) <= ToFixed(totalPaymentPaid, 2) {
+	if RoundTo2Decimals((model.NetTotal - model.CashDiscount)) <= totalPaymentPaid {
 		model.PaymentStatus = "paid"
-	} else if ToFixed(totalPaymentPaid, 2) > 0 {
+	} else if totalPaymentPaid > 0 {
 		model.PaymentStatus = "paid_partially"
-	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
+	} else if totalPaymentPaid <= 0 {
 		model.PaymentStatus = "not_paid"
 	}
 

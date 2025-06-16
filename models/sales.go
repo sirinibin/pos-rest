@@ -15,11 +15,11 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type OrderProduct struct {
@@ -171,7 +171,7 @@ func (order *Order) UpdatePaymentFromReceivablePayment(
 
 	paymentExists := false
 	for _, orderPayment := range order.Payments {
-		if orderPayment.ReceivablePaymentID.Hex() == receivablePayment.ID.Hex() {
+		if orderPayment.ReceivablePaymentID != nil && orderPayment.ReceivablePaymentID.Hex() == receivablePayment.ID.Hex() {
 			paymentExists = true
 			salesPayment, err := store.FindSalesPaymentByID(&orderPayment.ID, bson.M{})
 			if err != nil {
@@ -2427,17 +2427,17 @@ func (order *Order) SetPaymentStatus() (models []SalesPayment, err error) {
 		}
 	} //end for loop
 
-	order.TotalPaymentReceived = ToFixed(totalPaymentReceived, 2)
-	order.BalanceAmount = ToFixed((order.NetTotal-order.CashDiscount)-totalPaymentReceived, 2)
+	order.TotalPaymentReceived = RoundTo2Decimals(totalPaymentReceived)
+	order.BalanceAmount = RoundTo2Decimals((order.NetTotal - order.CashDiscount) - totalPaymentReceived)
 	order.PaymentMethods = paymentMethods
 	order.Payments = models //updating payments
 	order.PaymentsCount = int64(len(models))
 
-	if ToFixed((order.NetTotal-order.CashDiscount), 2) <= ToFixed(totalPaymentReceived, 2) {
+	if RoundTo2Decimals((order.NetTotal - order.CashDiscount)) <= totalPaymentReceived {
 		order.PaymentStatus = "paid"
-	} else if ToFixed(totalPaymentReceived, 2) > 0 {
+	} else if totalPaymentReceived > 0 {
 		order.PaymentStatus = "paid_partially"
-	} else if ToFixed(totalPaymentReceived, 2) <= 0 {
+	} else if totalPaymentReceived <= 0 {
 		order.PaymentStatus = "not_paid"
 	}
 

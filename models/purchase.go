@@ -14,11 +14,11 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type PurchaseProduct struct {
@@ -122,6 +122,73 @@ type Purchase struct {
 	Phone             string              `bson:"phone" json:"phone"`
 	VatNo             string              `bson:"vat_no" json:"vat_no"`
 	Address           string              `bson:"address" json:"address"`
+}
+
+func (purchase *Purchase) DeletePaymentsByPayablePaymentID(receivablePaymentID primitive.ObjectID) error {
+	//log.Printf("Clearing Sales history of order id:%s", order.Code)
+	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("purchase_payment")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"payable_payment_id": receivablePaymentID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (purchase *Purchase) UpdatePaymentFromPayablePayment(
+	payablePayment PayablePayment,
+	customerWithdrawal *CustomerWithdrawal,
+) error {
+	store, _ := FindStoreByID(purchase.StoreID, bson.M{})
+
+	paymentExists := false
+	for _, purchasePayment := range purchase.Payments {
+		if purchasePayment.PayablePaymentID != nil && purchasePayment.PayablePaymentID.Hex() == payablePayment.ID.Hex() {
+			paymentExists = true
+			purchasePaymentObj, err := store.FindPurchasePaymentByID(&purchasePayment.ID, bson.M{})
+			if err != nil {
+				return errors.New("error finding purchase payment: " + err.Error())
+			}
+
+			purchasePaymentObj.Amount = payablePayment.Amount
+			purchasePaymentObj.Date = payablePayment.Date
+			purchasePaymentObj.Method = "vendor_account"
+			purchasePaymentObj.UpdatedAt = payablePayment.UpdatedAt
+			purchasePaymentObj.CreatedAt = payablePayment.CreatedAt
+			purchasePaymentObj.UpdatedBy = payablePayment.UpdatedBy
+			purchasePaymentObj.CreatedBy = payablePayment.CreatedBy
+			purchasePaymentObj.PayableID = &customerWithdrawal.ID
+
+			err = purchasePaymentObj.Update()
+			if err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	if !paymentExists {
+		newPurchasePayment := PurchasePayment{
+			PurchaseID:       &purchase.ID,
+			PurchaseCode:     purchase.Code,
+			Amount:           payablePayment.Amount,
+			Date:             payablePayment.Date,
+			Method:           "vendor_account",
+			PayablePaymentID: &payablePayment.ID,
+			PayableID:        &customerWithdrawal.ID,
+			CreatedBy:        payablePayment.CreatedBy,
+			UpdatedBy:        payablePayment.UpdatedBy,
+			CreatedAt:        payablePayment.CreatedAt,
+			UpdatedAt:        payablePayment.UpdatedAt,
+			StoreID:          purchase.StoreID,
+		}
+		err := newPurchasePayment.Insert()
+		if err != nil {
+			return errors.New("error inserting purchase payment: " + err.Error())
+		}
+	}
+
+	return nil
 }
 
 func (purchase *Purchase) CreateNewVendorFromName() error {
@@ -262,7 +329,7 @@ func (model *Purchase) UpdatePayments() error {
 		return err
 	}
 
-	model.GetPayments()
+	model.SetPaymentStatus()
 	now := time.Now()
 	for _, payment := range model.PaymentsInput {
 		if payment.ID.IsZero() {
@@ -1463,7 +1530,7 @@ func (purchase *Purchase) Validate(
 				if scenario == "update" {
 					extraAmount := 0.00
 					var oldPurchasePayment *PurchasePayment
-					oldPurchase.GetPayments()
+					oldPurchase.SetPaymentStatus()
 					for _, oldPayment := range oldPurchase.Payments {
 						if oldPayment.ID.Hex() == payment.ID.Hex() {
 							oldPurchasePayment = &oldPayment
@@ -1511,7 +1578,7 @@ func (purchase *Purchase) Validate(
 			if scenario == "update" {
 				oldTotalAmountFromVendorAccount := 0.0
 				extraAmountRequired := 0.00
-				oldPurchase.GetPayments()
+				oldPurchase.SetPaymentStatus()
 				for _, oldPayment := range oldPurchase.Payments {
 					if oldPayment.Method == "vendor_account" {
 						oldTotalAmountFromVendorAccount += *oldPayment.Amount
@@ -2431,7 +2498,7 @@ func ProcessPurchases() error {
 	return nil
 }
 
-func (model *Purchase) GetPayments() (payments []PurchasePayment, err error) {
+func (model *Purchase) SetPaymentStatus() (payments []PurchasePayment, err error) {
 	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("purchase_payment")
 	ctx := context.Background()
 	findOptions := options.Find()
@@ -2474,17 +2541,17 @@ func (model *Purchase) GetPayments() (payments []PurchasePayment, err error) {
 		}
 	} //end for loop
 
-	model.TotalPaymentPaid = ToFixed(totalPaymentPaid, 2)
-	model.BalanceAmount = ToFixed((model.NetTotal-model.CashDiscount)-totalPaymentPaid, 2)
+	model.TotalPaymentPaid = RoundTo2Decimals(totalPaymentPaid)
+	model.BalanceAmount = RoundTo2Decimals((model.NetTotal - model.CashDiscount) - totalPaymentPaid)
 	model.PaymentMethods = paymentMethods
 	model.Payments = payments
 	model.PaymentsCount = int64(len(payments))
 
-	if ToFixed((model.NetTotal-model.CashDiscount), 2) <= ToFixed(totalPaymentPaid, 2) {
+	if RoundTo2Decimals((model.NetTotal - model.CashDiscount)) <= totalPaymentPaid {
 		model.PaymentStatus = "paid"
-	} else if ToFixed(totalPaymentPaid, 2) > 0 {
+	} else if totalPaymentPaid > 0 {
 		model.PaymentStatus = "paid_partially"
-	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
+	} else if totalPaymentPaid <= 0 {
 		model.PaymentStatus = "not_paid"
 	}
 

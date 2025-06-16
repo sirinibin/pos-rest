@@ -8,8 +8,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
 	"github.com/sirinibin/pos-rest/utils"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
 )
 
 // ListCustomerWithdrawal : handler for GET /customerwithdrawal
@@ -169,10 +169,36 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = customerwithdrawal.CloseSalesPayments()
+	if customerwithdrawal.VendorID != nil && !customerwithdrawal.VendorID.IsZero() {
+		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+		if store != nil {
+			vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
+			if vendor != nil {
+				vendor.SetCreditBalance()
+			}
+		}
+	}
+
+	err = customerwithdrawal.CloseSalesReturnPayments()
 	if err != nil {
 		response.Status = false
-		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		response.Errors["closing_sales_return"] = "error closing sales return payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerwithdrawal.CloseQuotationSalesReturnPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_quotation_sales_return"] = "error closing quotation sales return payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerwithdrawal.ClosePurchasePayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_purchase"] = "error closing purchase payments: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -323,12 +349,32 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if customerwithdrawal.VendorID != nil && !customerwithdrawal.VendorID.IsZero() {
+		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+		if store != nil {
+			vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
+			if vendor != nil {
+				vendor.SetCreditBalance()
+			}
+		}
+	}
+
 	if customerwithdrawalOld.CustomerID != nil && !customerwithdrawalOld.CustomerID.IsZero() {
 		store, _ := models.FindStoreByID(customerwithdrawalOld.StoreID, bson.M{})
 		if store != nil {
 			customer, _ := store.FindCustomerByID(customerwithdrawalOld.CustomerID, bson.M{})
 			if customer != nil {
 				customer.SetCreditBalance()
+			}
+		}
+	}
+
+	if customerwithdrawalOld.VendorID != nil && !customerwithdrawalOld.VendorID.IsZero() {
+		store, _ := models.FindStoreByID(customerwithdrawalOld.StoreID, bson.M{})
+		if store != nil {
+			vendor, _ := store.FindVendorByID(customerwithdrawalOld.VendorID, bson.M{})
+			if vendor != nil {
+				vendor.SetCreditBalance()
 			}
 		}
 	}
@@ -341,10 +387,26 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = customerwithdrawal.CloseSalesPayments()
+	err = customerwithdrawal.CloseSalesReturnPayments()
 	if err != nil {
 		response.Status = false
 		response.Errors["closing_sales"] = "error closing sales payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerwithdrawal.CloseQuotationSalesReturnPayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_quotation_sales_return"] = "error closing quotation sales return payments: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = customerwithdrawal.ClosePurchasePayments()
+	if err != nil {
+		response.Status = false
+		response.Errors["closing_purchase"] = "error closing purchase payments: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -401,9 +463,16 @@ func ViewCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
-	customer.SetSearchLabel()
-	customerwithdrawal.Customer = customer
+	if customerwithdrawal.Type == "customer" {
+		customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+		customer.SetSearchLabel()
+		customerwithdrawal.Customer = customer
+
+	} else if customerwithdrawal.Type == "vendor" {
+		vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
+		vendor.SetSearchLabel()
+		customerwithdrawal.Vendor = vendor
+	}
 
 	response.Status = true
 	response.Result = customerwithdrawal
@@ -459,6 +528,17 @@ func ViewCustomerWithdrawalByCode(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if customerwithdrawal.Type == "customer" {
+		customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+		customer.SetSearchLabel()
+		customerwithdrawal.Customer = customer
+
+	} else if customerwithdrawal.Type == "vendor" {
+		vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
+		vendor.SetSearchLabel()
+		customerwithdrawal.Vendor = vendor
 	}
 
 	response.Status = true

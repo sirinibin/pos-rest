@@ -15,11 +15,11 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
-	"gopkg.in/mgo.v2/bson"
 )
 
 type QuotationSalesReturnProduct struct {
@@ -138,7 +138,7 @@ func (quotationsalesReturn *QuotationSalesReturn) UpdatePaymentFromPayablePaymen
 
 	paymentExists := false
 	for _, quotationsalesReturnPayment := range quotationsalesReturn.Payments {
-		if quotationsalesReturnPayment.PayablePaymentID.Hex() == payablePayment.ID.Hex() {
+		if quotationsalesReturnPayment.PayablePaymentID != nil && quotationsalesReturnPayment.PayablePaymentID.Hex() == payablePayment.ID.Hex() {
 			paymentExists = true
 			quotationsalesReturnPaymentObj, err := store.FindQuotationSalesReturnPaymentByID(&quotationsalesReturnPayment.ID, bson.M{})
 			if err != nil {
@@ -2484,15 +2484,16 @@ func ProcessQuotationSalesReturns() error {
 				continue
 			}
 
-			if store.Code == "LGK-SIMULATION" {
-				if quotationsalesReturn.Code == "0" {
-					quotationsalesReturn.Code = "QTN-SR-20250614-001"
-				} else if quotationsalesReturn.Code == "QTN-SR-20250614-001" {
-					quotationsalesReturn.Code = "QTN-SR-20250614-002"
-				}
+			/*
+				if store.Code == "LGK-SIMULATION" {
+					if quotationsalesReturn.Code == "0" {
+						quotationsalesReturn.Code = "QTN-SR-20250614-001"
+					} else if quotationsalesReturn.Code == "QTN-SR-20250614-001" {
+						quotationsalesReturn.Code = "QTN-SR-20250614-002"
+					}
 
-				quotationsalesReturn.Update()
-			}
+					quotationsalesReturn.Update()
+				}*/
 			/*
 				quotationsalesReturn.UndoAccounting()
 				quotationsalesReturn.DoAccounting()

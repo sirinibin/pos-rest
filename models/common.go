@@ -15,8 +15,8 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/sirinibin/pos-rest/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"gopkg.in/mgo.v2/bson"
 )
 
 var BANK_PAYMENT_METHODS = []string{"debit_card", "credit_card", "bank_card", "bank_transfer", "bank_cheque"}
