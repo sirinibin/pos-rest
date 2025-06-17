@@ -1777,11 +1777,15 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 		}
 	}
 
+	if vendor == nil && customer == nil {
+		return ledgers, err
+	}
+
 	referenceModel := ""
 
 	var sendingAccount *Account
 
-	if customerDeposit.Type == "customer" {
+	if customerDeposit.Type == "customer" && customer != nil {
 		referenceModel = "customer"
 		customerAccount, err := store.CreateAccountIfNotExists(
 			customerDeposit.StoreID,
@@ -1795,7 +1799,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			return ledgers, err
 		}
 		sendingAccount = customerAccount
-	} else if customerDeposit.Type == "vendor" {
+	} else if customerDeposit.Type == "vendor" && vendor != nil {
 		referenceModel = "vendor"
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			customerDeposit.StoreID,

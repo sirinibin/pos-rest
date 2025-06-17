@@ -1739,15 +1739,19 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 	if customerWithdrawal.Type == "customer" && customerWithdrawal.CustomerID != nil && !customerWithdrawal.CustomerID.IsZero() {
 		customer, err = store.FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
 		if err != nil {
-			return nil, err
+			return ledgers, err
 		}
 	}
 
 	if customerWithdrawal.Type == "vendor" && customerWithdrawal.VendorID != nil && !customerWithdrawal.VendorID.IsZero() {
 		vendor, err = store.FindVendorByID(customerWithdrawal.VendorID, bson.M{})
 		if err != nil {
-			return nil, err
+			return ledgers, err
 		}
+	}
+
+	if vendor == nil && customer == nil {
+		return ledgers, err
 	}
 
 	referenceModel := ""
