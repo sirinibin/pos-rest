@@ -93,6 +93,7 @@ type Store struct {
 	OneLineProductNameInInvoice            bool                  `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
 	ShowMinusOnCreditBalanceInBalanceSheet bool                  `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
 	HideTotalAmountRowInBalanceSheet       bool                  `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
+	ShowSellerInfoInInvoice                bool                  `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
 }
 
 type SerialNumber struct {
