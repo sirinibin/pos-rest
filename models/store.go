@@ -24,73 +24,75 @@ import (
 
 // Store : Store structure
 type Store struct {
-	ID                                 primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	Name                               string                `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic                       string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	Code                               string                `bson:"code" json:"code"`
-	BranchName                         string                `bson:"branch_name" json:"branch_name"`
-	BusinessCategory                   string                `bson:"business_category" json:"business_category"`
-	Title                              string                `bson:"title,omitempty" json:"title,omitempty"`
-	TitleInArabic                      string                `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
-	RegistrationNumber                 string                `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
-	RegistrationNumberInArabic         string                `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
-	Email                              string                `bson:"email,omitempty" json:"email,omitempty"`
-	Phone                              string                `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic                      string                `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
-	Address                            string                `bson:"address,omitempty" json:"address,omitempty"`
-	AddressInArabic                    string                `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	ZipCode                            string                `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
-	ZipCodeInArabic                    string                `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
-	CountryName                        string                `bson:"country_name" json:"country_name"`
-	CountryCode                        string                `bson:"country_code" json:"country_code"`
-	VATNo                              string                `bson:"vat_no" json:"vat_no"`
-	VATNoInArabic                      string                `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	VatPercent                         float64               `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	Logo                               string                `bson:"logo,omitempty" json:"logo,omitempty"`
-	LogoContent                        string                `json:"logo_content,omitempty"`
-	NationalAddress                    NationalAddress       `bson:"national_address,omitempty" json:"national_address,omitempty"`
-	Deleted                            bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy                          *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser                      *User                 `json:"deleted_by_user,omitempty"`
-	DeletedAt                          *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt                          *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt                          *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy                          *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy                          *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser                      *User                 `json:"created_by_user,omitempty"`
-	UpdatedByUser                      *User                 `json:"updated_by_user,omitempty"`
-	CreatedByName                      string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName                      string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName                      string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	UseProductsFromStoreID             []*primitive.ObjectID `json:"use_products_from_store_id" bson:"use_products_from_store_id"`
-	UseProductsFromStoreNames          []string              `json:"use_products_from_store_names" bson:"use_products_from_store_names"`
-	Zatca                              Zatca                 `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	SalesSerialNumber                  SerialNumber          `bson:"sales_serial_number" json:"sales_serial_number"`
-	SalesReturnSerialNumber            SerialNumber          `bson:"sales_return_serial_number" json:"sales_return_serial_number"`
-	PurchaseSerialNumber               SerialNumber          `bson:"purchase_serial_number,omitempty" json:"purchase_serial_number"`
-	PurchaseReturnSerialNumber         SerialNumber          `bson:"purchase_return_serial_number" json:"purchase_return_serial_number"`
-	QuotationSerialNumber              SerialNumber          `bson:"quotation_serial_number" json:"quotation_serial_number"`
-	QuotationSalesReturnSerialNumber   SerialNumber          `bson:"quotation_sales_return_serial_number" json:"quotation_sales_return_serial_number"`
-	BankAccount                        BankAccount           `bson:"bank_account,omitempty" json:"bank_account,omitempty"`
-	CustomerSerialNumber               SerialNumber          `bson:"customer_serial_number" json:"customer_serial_number"`
-	VendorSerialNumber                 SerialNumber          `bson:"vendor_serial_number" json:"vendor_serial_number"`
-	ExpenseSerialNumber                SerialNumber          `bson:"expense_serial_number" json:"expense_serial_number"`
-	DeliveryNoteSerialNumber           SerialNumber          `bson:"delivery_note_serial_number" json:"delivery_note_serial_number"`
-	CustomerDepositSerialNumber        SerialNumber          `bson:"customer_deposit_serial_number" json:"customer_deposit_serial_number"`
-	CustomerWithdrawalSerialNumber     SerialNumber          `bson:"customer_withdrawal_serial_number" json:"customer_withdrawal_serial_number"`
-	CapitalDepositSerialNumber         SerialNumber          `bson:"capital_deposit_serial_number" json:"capital_deposit_serial_number"`
-	DividentSerialNumber               SerialNumber          `bson:"divident_serial_number" json:"divident_serial_number"`
-	ShowAddressInInvoiceFooter         bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
-	DefaultQuotationValidityDays       *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
-	DefaultQuotationDeliveryDays       *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
-	ZatcaQrOnLeftBottom                bool                  `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
-	DefaultUnitPriceIsWithVAT          bool                  `bson:"default_unit_price_is_with_vat" json:"default_unit_price_is_with_vat"`
-	ShowReceivedByFooterInInvoice      bool                  `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
-	ClientFilter                       bool                  `bson:"client_filter" json:"client_filter"`
-	BlockSaleWhenPurchasePriceIsHigher bool                  `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
-	EnableMonthlySerialNumber          bool                  `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
-	QuotationInvoiceAccounting         bool                  `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
-	OneLineProductNameInInvoice        bool                  `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
+	ID                                     primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                                   string                `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic                           string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	Code                                   string                `bson:"code" json:"code"`
+	BranchName                             string                `bson:"branch_name" json:"branch_name"`
+	BusinessCategory                       string                `bson:"business_category" json:"business_category"`
+	Title                                  string                `bson:"title,omitempty" json:"title,omitempty"`
+	TitleInArabic                          string                `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
+	RegistrationNumber                     string                `bson:"registration_number,omitempty" json:"registration_number,omitempty"`
+	RegistrationNumberInArabic             string                `bson:"registration_number_arabic,omitempty" json:"registration_number_in_arabic,omitempty"`
+	Email                                  string                `bson:"email,omitempty" json:"email,omitempty"`
+	Phone                                  string                `bson:"phone,omitempty" json:"phone,omitempty"`
+	PhoneInArabic                          string                `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	Address                                string                `bson:"address,omitempty" json:"address,omitempty"`
+	AddressInArabic                        string                `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
+	ZipCode                                string                `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
+	ZipCodeInArabic                        string                `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
+	CountryName                            string                `bson:"country_name" json:"country_name"`
+	CountryCode                            string                `bson:"country_code" json:"country_code"`
+	VATNo                                  string                `bson:"vat_no" json:"vat_no"`
+	VATNoInArabic                          string                `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
+	VatPercent                             float64               `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	Logo                                   string                `bson:"logo,omitempty" json:"logo,omitempty"`
+	LogoContent                            string                `json:"logo_content,omitempty"`
+	NationalAddress                        NationalAddress       `bson:"national_address,omitempty" json:"national_address,omitempty"`
+	Deleted                                bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                              *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser                          *User                 `json:"deleted_by_user,omitempty"`
+	DeletedAt                              *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                              *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                              *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                              *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                              *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser                          *User                 `json:"created_by_user,omitempty"`
+	UpdatedByUser                          *User                 `json:"updated_by_user,omitempty"`
+	CreatedByName                          string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName                          string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName                          string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	UseProductsFromStoreID                 []*primitive.ObjectID `json:"use_products_from_store_id" bson:"use_products_from_store_id"`
+	UseProductsFromStoreNames              []string              `json:"use_products_from_store_names" bson:"use_products_from_store_names"`
+	Zatca                                  Zatca                 `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	SalesSerialNumber                      SerialNumber          `bson:"sales_serial_number" json:"sales_serial_number"`
+	SalesReturnSerialNumber                SerialNumber          `bson:"sales_return_serial_number" json:"sales_return_serial_number"`
+	PurchaseSerialNumber                   SerialNumber          `bson:"purchase_serial_number,omitempty" json:"purchase_serial_number"`
+	PurchaseReturnSerialNumber             SerialNumber          `bson:"purchase_return_serial_number" json:"purchase_return_serial_number"`
+	QuotationSerialNumber                  SerialNumber          `bson:"quotation_serial_number" json:"quotation_serial_number"`
+	QuotationSalesReturnSerialNumber       SerialNumber          `bson:"quotation_sales_return_serial_number" json:"quotation_sales_return_serial_number"`
+	BankAccount                            BankAccount           `bson:"bank_account,omitempty" json:"bank_account,omitempty"`
+	CustomerSerialNumber                   SerialNumber          `bson:"customer_serial_number" json:"customer_serial_number"`
+	VendorSerialNumber                     SerialNumber          `bson:"vendor_serial_number" json:"vendor_serial_number"`
+	ExpenseSerialNumber                    SerialNumber          `bson:"expense_serial_number" json:"expense_serial_number"`
+	DeliveryNoteSerialNumber               SerialNumber          `bson:"delivery_note_serial_number" json:"delivery_note_serial_number"`
+	CustomerDepositSerialNumber            SerialNumber          `bson:"customer_deposit_serial_number" json:"customer_deposit_serial_number"`
+	CustomerWithdrawalSerialNumber         SerialNumber          `bson:"customer_withdrawal_serial_number" json:"customer_withdrawal_serial_number"`
+	CapitalDepositSerialNumber             SerialNumber          `bson:"capital_deposit_serial_number" json:"capital_deposit_serial_number"`
+	DividentSerialNumber                   SerialNumber          `bson:"divident_serial_number" json:"divident_serial_number"`
+	ShowAddressInInvoiceFooter             bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
+	DefaultQuotationValidityDays           *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
+	DefaultQuotationDeliveryDays           *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
+	ZatcaQrOnLeftBottom                    bool                  `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
+	DefaultUnitPriceIsWithVAT              bool                  `bson:"default_unit_price_is_with_vat" json:"default_unit_price_is_with_vat"`
+	ShowReceivedByFooterInInvoice          bool                  `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
+	ClientFilter                           bool                  `bson:"client_filter" json:"client_filter"`
+	BlockSaleWhenPurchasePriceIsHigher     bool                  `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
+	EnableMonthlySerialNumber              bool                  `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
+	QuotationInvoiceAccounting             bool                  `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
+	OneLineProductNameInInvoice            bool                  `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
+	ShowMinusOnCreditBalanceInBalanceSheet bool                  `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
+	HideTotalAmountRowInBalanceSheet       bool                  `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
 }
 
 type SerialNumber struct {
