@@ -1756,7 +1756,7 @@ func (customerDeposit *CustomerDeposit) UndoAccounting() error {
 func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err error) {
 	store, err := FindStoreByID(customerDeposit.StoreID, bson.M{})
 	if err != nil {
-		return nil, err
+		return ledgers, err
 	}
 
 	now := time.Now()
@@ -1766,14 +1766,14 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 	if customerDeposit.Type == "customer" && customerDeposit.CustomerID != nil && !customerDeposit.CustomerID.IsZero() {
 		customer, err = store.FindCustomerByID(customerDeposit.CustomerID, bson.M{})
 		if err != nil {
-			return nil, err
+			return ledgers, err
 		}
 	}
 
 	if customerDeposit.Type == "vendor" && customerDeposit.VendorID != nil && !customerDeposit.VendorID.IsZero() {
 		vendor, err = store.FindVendorByID(customerDeposit.VendorID, bson.M{})
 		if err != nil {
-			return nil, err
+			return ledgers, err
 		}
 	}
 
@@ -1792,7 +1792,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			&customer.VATNo,
 		)
 		if err != nil {
-			return nil, err
+			return ledgers, err
 		}
 		sendingAccount = customerAccount
 	} else if customerDeposit.Type == "vendor" {
@@ -1806,19 +1806,19 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			&vendor.VATNo,
 		)
 		if err != nil {
-			return nil, err
+			return ledgers, err
 		}
 		sendingAccount = vendorAccount
 	}
 
 	cashAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil, nil)
 	if err != nil {
-		return nil, err
+		return ledgers, err
 	}
 
 	bankAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Bank", nil, nil)
 	if err != nil {
-		return nil, err
+		return ledgers, err
 	}
 
 	for _, payment := range customerDeposit.Payments {
@@ -1876,7 +1876,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 
 		err = ledger.Insert()
 		if err != nil {
-			return nil, err
+			return ledgers, err
 		}
 
 		ledgers = append(ledgers, *ledger)
