@@ -411,6 +411,8 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go customerdeposit.SetPostBalances()
+
 	response.Status = true
 	response.Result = customerdeposit
 	json.NewEncoder(w).Encode(response)

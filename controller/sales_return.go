@@ -493,6 +493,8 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	go salesreturn.SetPostBalances()
+
 	store.NotifyUsers("sales_return_updated")
 
 	response.Status = true

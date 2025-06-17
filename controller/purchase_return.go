@@ -423,6 +423,8 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 
 	store.NotifyUsers("purchase_return_updated")
 
+	go purchasereturn.SetPostBalances()
+
 	response.Status = true
 	response.Result = purchasereturn
 	json.NewEncoder(w).Encode(response)

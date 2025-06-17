@@ -4165,19 +4165,33 @@ func (order *Order) UndoAccounting() error {
 
 //End Accounting
 
-func (order *Order) RectifyBalances() error {
-	store, err := FindStoreByID(order.StoreID, bson.M{})
+func (model *Order) SetPostBalances() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	ledger, err := store.FindLedgerByReferenceID(order.ID, *order.StoreID, bson.M{})
+	ledger, err := store.FindLedgerByReferenceID(model.ID, *model.StoreID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return errors.New("Error finding ledger by reference id: " + err.Error())
 	}
 
 	if err == mongo.ErrNoDocuments {
 		return nil
+	}
+
+	err = ledger.SetPostBalancesByLedger(model.Date)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) {
+	store, err := FindStoreByID(ledger.StoreID, bson.M{})
+	if err != nil {
+		return err
 	}
 
 	ledgerAccounts := map[string]Account{}
@@ -4190,104 +4204,148 @@ func (order *Order) RectifyBalances() error {
 	}
 
 	for _, account := range ledgerAccounts {
-		err = account.CalculateBalance(nil)
+		postings, err := store.FindPostsByAccountID(&account.ID, afterDate)
 		if err != nil {
 			return err
 		}
 
-		lastPost, err := store.FindLastPostingByAccountID(&account.ID, bson.M{})
-		if err != nil {
-			return err
-		}
+		for _, post := range postings {
+			if post.ReferenceModel == "sales" {
+				postOrder, err := store.FindOrderByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postOrder.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postOrder.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "sales_return" {
+				postSalesReturn, err := store.FindSalesReturnByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postSalesReturn.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postSalesReturn.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "purchase" {
+				postPurchase, err := store.FindPurchaseByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
 
-		if account.Balance != lastPost.Posts[0].Balance {
-			log.Print("Issue detected in account:" + account.Name)
-			log.Print("account balance:")
-			log.Print(account.Balance)
-			log.Print("lastPost.Posts[0].Balance :")
-			log.Print(lastPost.Posts[0].Balance)
+				err = postPurchase.UndoAccounting()
+				if err != nil {
+					return err
+				}
 
-			postings, err := store.FindPostsByAccountID(&account.ID, order.Date)
-			if err != nil {
-				return err
-			}
+				err = postPurchase.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "purchase_return" {
+				postPurchaseReturn, err := store.FindPurchaseReturnByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
 
-			for _, post := range postings {
-				if post.ReferenceModel == "sales" {
-					postOrder, err := store.FindOrderByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postOrder.UndoAccounting()
-					postOrder.DoAccounting()
-				} else if post.ReferenceModel == "sales_return" {
-					postSalesReturn, err := store.FindSalesReturnByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postSalesReturn.UndoAccounting()
-					postSalesReturn.DoAccounting()
-				} else if post.ReferenceModel == "purchase" {
-					postPurchase, err := store.FindPurchaseByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postPurchase.UndoAccounting()
-					postPurchase.DoAccounting()
-				} else if post.ReferenceModel == "purchase_return" {
-					postPurchaseReturn, err := store.FindPurchaseReturnByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postPurchaseReturn.UndoAccounting()
-					postPurchaseReturn.DoAccounting()
-				} else if post.ReferenceModel == "quotation_sales" {
-					postQuotation, err := store.FindQuotationByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postQuotation.UndoAccounting()
-					postQuotation.DoAccounting()
-				} else if post.ReferenceModel == "customer_deposit" {
-					postCustomerDeposit, err := store.FindCustomerDepositByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postCustomerDeposit.UndoAccounting()
-					postCustomerDeposit.DoAccounting()
-				} else if post.ReferenceModel == "customer_withdrawal" {
-					postCustomerWithdrawal, err := store.FindCustomerWithdrawalByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postCustomerWithdrawal.UndoAccounting()
-					postCustomerWithdrawal.DoAccounting()
-				} else if post.ReferenceModel == "capital" {
-					postCapital, err := store.FindCapitalByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postCapital.UndoAccounting()
-					postCapital.DoAccounting()
-				} else if post.ReferenceModel == "expense" {
-					postExpense, err := store.FindExpenseByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postExpense.UndoAccounting()
-					postExpense.DoAccounting()
-				} else if post.ReferenceModel == "drawing" {
-					postDivident, err := store.FindDividentByID(&post.ReferenceID, bson.M{})
-					if err != nil {
-						return err
-					}
-					postDivident.UndoAccounting()
-					postDivident.DoAccounting()
+				err = postPurchaseReturn.UndoAccounting()
+				if err != nil {
+					return err
+				}
+
+				err = postPurchaseReturn.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "quotation_sales" {
+				postQuotation, err := store.FindQuotationByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postQuotation.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postQuotation.DoAccounting()
+				if err != nil {
+					return err
+				}
+
+			} else if post.ReferenceModel == "customer_deposit" || post.ReferenceModel == "vendor_deposit" {
+				postCustomerDeposit, err := store.FindCustomerDepositByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postCustomerDeposit.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postCustomerDeposit.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "customer_withdrawal" || post.ReferenceModel == "vendor_withdrawal" {
+				postCustomerWithdrawal, err := store.FindCustomerWithdrawalByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postCustomerWithdrawal.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postCustomerWithdrawal.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "capital" {
+				postCapital, err := store.FindCapitalByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postCapital.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postCapital.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "expense" {
+				postExpense, err := store.FindExpenseByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postExpense.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postExpense.DoAccounting()
+				if err != nil {
+					return err
+				}
+			} else if post.ReferenceModel == "drawing" {
+				postDivident, err := store.FindDividentByID(&post.ReferenceID, bson.M{})
+				if err != nil {
+					return err
+				}
+				err = postDivident.UndoAccounting()
+				if err != nil {
+					return err
+				}
+				err = postDivident.DoAccounting()
+				if err != nil {
+					return err
 				}
 			}
-
-			break
-
 		}
 	}
 

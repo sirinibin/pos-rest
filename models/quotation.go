@@ -122,6 +122,29 @@ type Quotation struct {
 	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
 }
 
+func (model *Quotation) SetPostBalances() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(model.ID, *model.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	err = ledger.SetPostBalancesByLedger(model.Date)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (store *Store) GetReturnedAmountByQuotationID(quotationID primitive.ObjectID) (returnedAmount float64, returnCount int64, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation_sales_return")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

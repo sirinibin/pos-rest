@@ -282,6 +282,8 @@ func UpdateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go capital.SetPostBalances()
+
 	response.Status = true
 	response.Result = capital
 	json.NewEncoder(w).Encode(response)

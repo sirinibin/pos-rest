@@ -442,6 +442,8 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		purchaseOld.SetProductsPurchaseStats()
 	}
 
+	go purchase.SetPostBalances()
+
 	store.NotifyUsers("purchase_updated")
 	response.Status = true
 	response.Result = purchase

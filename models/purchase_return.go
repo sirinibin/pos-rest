@@ -107,6 +107,29 @@ type PurchaseReturn struct {
 	Address                string                  `bson:"address" json:"address"`
 }
 
+func (model *PurchaseReturn) SetPostBalances() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(model.ID, *model.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	err = ledger.SetPostBalancesByLedger(model.Date)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (purchaseReturn *PurchaseReturn) DeletePaymentsByReceivablePaymentID(receivablePaymentID primitive.ObjectID) error {
 	//log.Printf("Clearing Sales history of order id:%s", order.Code)
 	collection := db.GetDB("store_" + purchaseReturn.StoreID.Hex()).Collection("purchase_return_payment")

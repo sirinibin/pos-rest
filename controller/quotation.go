@@ -541,6 +541,8 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go quotation.SetPostBalances()
+
 	store.NotifyUsers("quotation_updated")
 	response.Status = true
 	response.Result = quotation

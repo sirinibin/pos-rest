@@ -53,6 +53,29 @@ type Capital struct {
 	DeletedAt          *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 }
 
+func (model *Capital) SetPostBalances() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(model.ID, *model.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	err = ledger.SetPostBalancesByLedger(model.Date)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (capital *Capital) AttributesValueChangeEvent(capitalOld *Capital) error {
 
 	return nil

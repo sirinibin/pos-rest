@@ -573,6 +573,17 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		orderOld.SetProductsSalesStats()
 	}
 
+	go order.SetPostBalances()
+
+	/*
+		err = order.SetPostBalances()
+		if err != nil {
+			response.Status = false
+			response.Errors["rectinfying"] = "Error rectifying: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
+
 	/*
 		err = order.RectifyBalances()
 		if err != nil {

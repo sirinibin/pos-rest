@@ -119,6 +119,29 @@ type QuotationSalesReturn struct {
 	EnableReportToZatca bool                          `json:"enable_report_to_zatca" bson:"-"`
 }
 
+func (model *QuotationSalesReturn) SetPostBalances() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(model.ID, *model.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	err = ledger.SetPostBalancesByLedger(model.Date)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (quotationsalesReturn *QuotationSalesReturn) DeletePaymentsByPayablePaymentID(payablePaymentID primitive.ObjectID) error {
 	//log.Printf("Clearing QuotationSales history of quotation id:%s", quotation.Code)
 	collection := db.GetDB("store_" + quotationsalesReturn.StoreID.Hex()).Collection("quotation_sales_return_payment")

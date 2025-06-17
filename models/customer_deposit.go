@@ -85,6 +85,29 @@ type ReceivablePayment struct {
 	StoreName     string              `json:"store_name" bson:"store_name"`
 }
 
+func (model *CustomerDeposit) SetPostBalances() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(model.ID, *model.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	err = ledger.SetPostBalancesByLedger(model.Date)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (customerdeposit *CustomerDeposit) HandleDeletedPayments(customerdepositOld *CustomerDeposit) error {
 	store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
 

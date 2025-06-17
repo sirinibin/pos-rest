@@ -411,6 +411,8 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go customerwithdrawal.SetPostBalances()
+
 	response.Status = true
 	response.Result = customerwithdrawal
 	json.NewEncoder(w).Encode(response)

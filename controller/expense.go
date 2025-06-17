@@ -279,6 +279,8 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go expense.SetPostBalances()
+
 	expense, err = store.FindExpenseByID(&expense.ID, bson.M{})
 	if err != nil {
 		response.Status = false

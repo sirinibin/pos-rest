@@ -908,7 +908,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "debit",
 					Debit:         amount,
-					Balance:       postBalance,
+					Balance:       RoundTo2Decimals(postBalance),
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
@@ -952,7 +952,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "credit",
 					Credit:        amount,
-					Balance:       postBalance,
+					Balance:       RoundTo2Decimals(postBalance),
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
@@ -986,7 +986,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "credit",
 					Credit:        amount,
-					Balance:       postBalance,
+					Balance:       RoundTo2Decimals(postBalance),
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
@@ -1019,7 +1019,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 					AccountNumber: journal2.AccountNumber,
 					DebitOrCredit: "debit",
 					Debit:         amount,
-					Balance:       postBalance,
+					Balance:       RoundTo2Decimals(postBalance),
 					CreatedAt:     &now,
 					UpdatedAt:     &now,
 				})
