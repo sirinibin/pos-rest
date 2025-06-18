@@ -81,6 +81,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+
 	}
 
 	response.Meta = map[string]interface{}{}
@@ -133,7 +134,16 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 			creditTotal += balanceBoughtDown
 		}
 
+		if !endDate.IsZero() {
+			account.CalculateBalance(&endDate)
+		}
+
+		response.Meta["account"] = account
 		response.Meta[balanceBoughtDownType+"_balance_bought_down"] = balanceBoughtDown
+		/*
+			if !endDate.IsZero() {
+				account.CalculateBalance(&endDate)
+			}*/
 	}
 
 	response.Meta["debit_total"] = models.RoundFloat(debitTotal, 2)
