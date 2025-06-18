@@ -727,3 +727,14 @@ func (store *Store) GetCountByCollectionInRange(from, to time.Time, collectionNa
 		"deleted": bson.M{"$ne": true},
 	})
 }
+
+func ParseBoolToInt(s string) int {
+	switch strings.ToLower(s) {
+	case "true":
+		return 1
+	case "false":
+		return 0
+	default:
+		return -1 // or handle error as needed
+	}
+}

@@ -469,6 +469,14 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[ignore_zero_credit_balance]"]
+	if ok && len(keys[0]) >= 1 {
+		value := ParseBoolToInt(keys[0])
+		if value == 1 {
+			criterias.SearchBy["credit_balance"] = bson.M{"$ne": 0}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[quotation_invoice_paid_count]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -628,23 +636,6 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			criterias.SearchBy["stores."+storeID.Hex()+".sales_count"] = bson.M{operator: value}
 		} else {
 			criterias.SearchBy["stores."+storeID.Hex()+".sales_count"] = value
-		}
-	}
-
-	keys, ok = r.URL.Query()["search[credit_balance]"]
-	if ok && len(keys[0]) >= 1 {
-		operator := GetMongoLogicalOperator(keys[0])
-		keys[0] = TrimLogicalOperatorPrefix(keys[0])
-
-		value, err := strconv.ParseInt(keys[0], 10, 64)
-		if err != nil {
-			return customers, criterias, err
-		}
-
-		if operator != "" {
-			criterias.SearchBy["credit_balance"] = bson.M{operator: value}
-		} else {
-			criterias.SearchBy["credit_balance"] = value
 		}
 	}
 
