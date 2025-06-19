@@ -719,7 +719,7 @@ func (capitalWithdrawal *CapitalWithdrawal) MakeRedisCode() error {
 		if err != nil {
 			return err
 		}
-		if store.EnableMonthlySerialNumber {
+		if store.Settings.EnableMonthlySerialNumber {
 			serialNumber = monthlyIncr
 		}
 	}

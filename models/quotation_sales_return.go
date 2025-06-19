@@ -2054,7 +2054,7 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 		if err != nil {
 			return err
 		}
-		if store.EnableMonthlySerialNumber {
+		if store.Settings.EnableMonthlySerialNumber {
 			serialNumber = monthlyIncr
 		}
 	}
@@ -3671,7 +3671,7 @@ func (quotationsalesReturn *QuotationSalesReturn) DoAccounting() error {
 		return err
 	}
 
-	if !store.QuotationInvoiceAccounting {
+	if !store.Settings.QuotationInvoiceAccounting {
 		return nil
 	}
 

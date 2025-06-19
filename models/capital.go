@@ -751,7 +751,7 @@ func (capital *Capital) MakeRedisCode() error {
 		if err != nil {
 			return err
 		}
-		if store.EnableMonthlySerialNumber {
+		if store.Settings.EnableMonthlySerialNumber {
 			serialNumber = monthlyIncr
 		}
 	}
