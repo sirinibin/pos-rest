@@ -468,7 +468,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 		//order.Products[i].Name = productObject.Name
 		order.Products[i].NameInArabic = productObject.NameInArabic
 		order.Products[i].ItemCode = productObject.ItemCode
-		order.Products[i].PartNumber = productObject.PartNumber
+		//order.Products[i].PartNumber = productObject.PartNumber
 		order.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 	}
 

@@ -151,7 +151,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 		//deliverynote.Products[i].Name = productObject.Name
 		deliverynote.Products[i].NameInArabic = productObject.NameInArabic
 		deliverynote.Products[i].ItemCode = productObject.ItemCode
-		deliverynote.Products[i].PartNumber = productObject.PartNumber
+		//deliverynote.Products[i].PartNumber = productObject.PartNumber
 		deliverynote.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 	}
 

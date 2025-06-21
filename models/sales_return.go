@@ -592,7 +592,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		//salesreturn.Products[i].Name = productObject.Name
 		salesreturn.Products[i].NameInArabic = productObject.NameInArabic
 		salesreturn.Products[i].ItemCode = productObject.ItemCode
-		salesreturn.Products[i].PartNumber = productObject.PartNumber
+		//salesreturn.Products[i].PartNumber = productObject.PartNumber
 		salesreturn.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 	}
 
