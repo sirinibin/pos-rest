@@ -1173,7 +1173,8 @@ func ProcessStores() error {
 		}
 
 		if store.Code == "LGK-SIMULATION" || store.Code == "LGK" || store.Code == "LGK-TEST" || store.Code == "PH2" {
-			store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
+			//store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
+			store.UpdateProductStockFromExcel("xl/STOCK.xlsx")
 			//store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
 			//store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
 			//store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
@@ -1658,18 +1659,12 @@ func (store *Store) ImportProductsFromExcel(filename string) {
 		if i > 0 {
 			now := time.Now()
 
-			product, err := store.FindProductByPartNumber(row[0]+" | "+row[1], bson.M{})
+			partNumber := strings.TrimSpace(row[1])
+
+			product, err := store.FindProductByPartNumber(partNumber, bson.M{})
 			if err != nil && err != mongo.ErrNoDocuments {
 				log.Print("Skipping product,error fetching product,err:" + err.Error())
 				continue
-			}
-
-			if product == nil {
-				product, err = store.FindProductByPartNumber(row[1], bson.M{})
-				if err != nil && err != mongo.ErrNoDocuments {
-					log.Print("Skipping product,error fetching product,err:" + err.Error())
-					continue
-				}
 			}
 
 			if product == nil {
@@ -1679,9 +1674,9 @@ func (store *Store) ImportProductsFromExcel(filename string) {
 			product.CreatedAt = &now
 			product.UpdatedAt = &now
 			//	product.PartNumber = row[0] + " | " + row[1]
-			product.PartNumber = row[1]
-			product.ItemCode = row[1]
-			product.Name = row[2]
+			product.PartNumber = partNumber
+			product.ItemCode = partNumber
+			product.Name = strings.TrimSpace(row[2])
 			if row[7] == "Meter" {
 				product.Unit = "Meter(s)"
 			}
@@ -1733,6 +1728,131 @@ func (store *Store) ImportProductsFromExcel(filename string) {
 				log.Print("Skipping product,error update foreign:" + product.Name + ",err:" + err.Error())
 				continue
 			}
+			err = product.CalculateUnitProfit()
+			if err != nil {
+				log.Print("Skipping product,error calculate unit profit:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			product.GeneratePrefixes()
+			product.SetAdditionalkeywords()
+			product.SetSearchLabel(&store.ID)
+
+			err = product.SetStock()
+			if err != nil {
+				log.Print("Skipping product,error setting stock:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			if product.ID.IsZero() {
+				err = product.Insert()
+				if err != nil {
+					log.Print("Skipping product,error insert:" + product.Name + ",err:" + err.Error())
+					continue
+				}
+			} else {
+				err = product.Update(&store.ID)
+				if err != nil {
+					log.Print("Skipping product,error update:" + product.Name + ",err:" + err.Error())
+					continue
+				}
+			}
+
+			bar.Add(1) // 1 product added
+		}
+	}
+}
+
+func (store *Store) UpdateProductStockFromExcel(filename string) {
+	// Open the Excel file
+	f, err := excelize.OpenFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	// Get the first sheet name
+	sheetName := f.GetSheetName(0)
+
+	// Read all rows from the sheet
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Print each row
+	bar := progressbar.Default(int64(len(rows) - 1))
+	for i, row := range rows {
+		//fmt.Printf("Row %d: ", i+1)
+		//fmt.Println()
+		if i > 0 {
+
+			if len(row) < 4 {
+				continue
+			}
+
+			now := time.Now()
+
+			partNumber := strings.TrimSpace(row[1])
+			partNumber = strings.ReplaceAll(partNumber, " ", "")
+			//partNumber = strings.ReplaceAll(partNumber, "- ", "-")
+
+			partNumber = strings.ReplaceAll(partNumber, "\r\n", "") // First remove Windows-style
+			partNumber = strings.ReplaceAll(partNumber, "\n", "")
+
+			product, err := store.FindProductByPartNumber(partNumber, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				log.Print("Skipping product,error fetching product,err:" + err.Error())
+				continue
+			}
+
+			if product == nil {
+				product = &Product{StoreID: &store.ID}
+			}
+
+			product.CreatedAt = &now
+			product.UpdatedAt = &now
+			//	product.PartNumber = row[0] + " | " + row[1]
+			product.PartNumber = partNumber
+			product.ItemCode = partNumber
+			product.Name = strings.TrimSpace(row[2])
+
+			stock, err := strconv.ParseFloat(row[3], 64)
+			if err != nil {
+				log.Print("Skipping product,error stock parsing:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			productStore, ok := product.ProductStores[store.ID.Hex()]
+			if !ok {
+				product.ProductStores = map[string]ProductStore{}
+				product.ProductStores[store.ID.Hex()] = ProductStore{
+					StoreID:   *product.StoreID,
+					StoreName: store.Name,
+				}
+				productStore = product.ProductStores[store.ID.Hex()]
+			}
+
+			if stock > 0 {
+				productStore.StocksAdded = stock
+			} else if stock < 0 {
+				productStore.StocksRemoved = stock * (-1)
+			}
+
+			product.ProductStores[store.ID.Hex()] = productStore
+
+			err = product.SetBarcode()
+			if err != nil {
+				log.Print("Skipping product,error barcode:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
+			err = product.UpdateForeignLabelFields()
+			if err != nil {
+				log.Print("Skipping product,error update foreign:" + product.Name + ",err:" + err.Error())
+				continue
+			}
+
 			err = product.CalculateUnitProfit()
 			if err != nil {
 				log.Print("Skipping product,error calculate unit profit:" + product.Name + ",err:" + err.Error())
