@@ -995,7 +995,12 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	return nil
 }
 
-func (quotation *Quotation) FindNetTotal() {
+func (quotation *Quotation) FindNetTotal() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	quotation.ShippingOrHandlingFees = RoundTo2Decimals(quotation.ShippingOrHandlingFees)
 	quotation.Discount = RoundTo2Decimals(quotation.Discount)
 
@@ -1017,9 +1022,14 @@ func (quotation *Quotation) FindNetTotal() {
 	// Now calculate VAT on the discounted base
 	quotation.VatPrice = RoundTo2Decimals(baseTotal * (*quotation.VatPercent / 100))
 
+	if store.Settings.HideQuotationInvoiceVAT && quotation.Type == "invoice" {
+		quotation.VatPrice = 0
+	}
+
 	quotation.NetTotal = RoundTo2Decimals(baseTotal + quotation.VatPrice)
 
 	quotation.CalculateDiscountPercentage()
+	return nil
 }
 
 func (quotation *Quotation) FindTotal() {
