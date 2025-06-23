@@ -1172,44 +1172,15 @@ func ProcessStores() error {
 			return errors.New("Cursor decode error:" + err.Error())
 		}
 
-		store.Settings.ShowAddressInInvoiceFooter = store.ShowAddressInInvoiceFooter
-		store.Settings.DefaultQuotationValidityDays = store.DefaultQuotationValidityDays
-		store.Settings.DefaultQuotationDeliveryDays = store.DefaultQuotationDeliveryDays
-		store.Settings.ZatcaQrOnLeftBottom = store.ZatcaQrOnLeftBottom
-		store.Settings.ShowReceivedByFooterInInvoice = store.ShowReceivedByFooterInInvoice
-		store.Settings.BlockSaleWhenPurchasePriceIsHigher = store.BlockSaleWhenPurchasePriceIsHigher
-		store.Settings.EnableMonthlySerialNumber = store.EnableMonthlySerialNumber
-		store.Settings.QuotationInvoiceAccounting = store.QuotationInvoiceAccounting
-		store.Settings.OneLineProductNameInInvoice = store.OneLineProductNameInInvoice
-		store.Settings.ShowMinusOnCreditBalanceInBalanceSheet = store.ShowMinusOnCreditBalanceInBalanceSheet
-		store.Settings.HideTotalAmountRowInBalanceSheet = store.HideTotalAmountRowInBalanceSheet
-		store.Settings.ShowSellerInfoInInvoice = store.ShowSellerInfoInInvoice
-		store.Update()
-		/*
-				ShowAddressInInvoiceFooter             bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
-			DefaultQuotationValidityDays           *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
-			DefaultQuotationDeliveryDays           *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
-			ZatcaQrOnLeftBottom                    bool                  `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
-			DefaultUnitPriceIsWithVAT              bool                  `bson:"default_unit_price_is_with_vat" json:"default_unit_price_is_with_vat"`
-			ShowReceivedByFooterInInvoice          bool                  `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
-			BlockSaleWhenPurchasePriceIsHigher     bool                  `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
-			EnableMonthlySerialNumber              bool                  `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
-			QuotationInvoiceAccounting             bool                  `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
-			OneLineProductNameInInvoice            bool                  `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
-			ShowMinusOnCreditBalanceInBalanceSheet bool                  `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
-			HideTotalAmountRowInBalanceSheet       bool                  `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
-			ShowSellerInfoInInvoice                bool                  `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
-		*/
-		/*
-			if store.Code == "LGK-SIMULATION" || store.Code == "LGK" || store.Code == "LGK-TEST" || store.Code == "PH2" {
-				store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
-				//store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
-				//store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
-				//store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
+		if store.Code == "LGK-SIMULATION" || store.Code == "LGK" || store.Code == "LGK-TEST" || store.Code == "PH2" {
+			store.ImportProductsFromExcel("xl/ALL_ITEAM_AND_PRICE.xlsx")
+			//store.ImportProductCategoriesFromExcel("xl/CategoryDateList.xlsx")
+			//store.ImportCustomersFromExcel("xl/CUSTOMER_LIST.xlsx")
+			//store.ImportVendorsFromExcel("xl/SuppLIERList03-06-2025.csv.xlsx")
 
-			} else {
-				continue
-			}*/
+		} else {
+			continue
+		}
 
 		/*
 			_, err = store.CreateDB()
@@ -1694,12 +1665,21 @@ func (store *Store) ImportProductsFromExcel(filename string) {
 			}
 
 			if product == nil {
+				product, err = store.FindProductByPartNumber(row[1], bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					log.Print("Skipping product,error fetching product,err:" + err.Error())
+					continue
+				}
+			}
+
+			if product == nil {
 				product = &Product{StoreID: &store.ID}
 			}
 
 			product.CreatedAt = &now
 			product.UpdatedAt = &now
-			product.PartNumber = row[0] + " | " + row[1]
+			//	product.PartNumber = row[0] + " | " + row[1]
+			product.PartNumber = row[1]
 			product.ItemCode = row[1]
 			product.Name = row[2]
 			if row[7] == "Meter" {
