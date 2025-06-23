@@ -566,7 +566,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if orderOld.CustomerID != nil && !orderOld.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(orderOld.CustomerID, bson.M{})
 		if customer != nil {
-			log.Print("Setting old customer credit balance")
+			//	log.Print("Setting old customer credit balance")
 			customer.SetCreditBalance()
 			orderOld.SetCustomerSalesStats()
 		}

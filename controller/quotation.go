@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
@@ -526,7 +525,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	if quotationOld.CustomerID != nil && !quotationOld.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(quotationOld.CustomerID, bson.M{})
 		if customer != nil {
-			log.Print("Setting old customer credit balance")
+			//	log.Print("Setting old customer credit balance")
 			customer.SetCreditBalance()
 			quotationOld.SetCustomerQuotationStats()
 		}

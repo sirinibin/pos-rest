@@ -3361,7 +3361,91 @@ func (purchaseReturn *PurchaseReturn) CreateLedger() (ledger *Ledger, err error)
 	return ledger, nil
 }
 
+func (purchaseReturn *PurchaseReturn) GetPayments() (models []PurchaseReturnPayment, err error) {
+	collection := db.GetDB("store_" + purchaseReturn.StoreID.Hex()).Collection("purchase_return_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"purchase_return_id": purchaseReturn.ID, "deleted": bson.M{"$ne": true}}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching order payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := PurchaseReturnPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		models = append(models, model)
+
+	} //end for loop
+
+	return models, nil
+}
+
+func (purchaseReturn *PurchaseReturn) AdjustPayments() error {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.AllowAdjustSameDatePayments {
+		return nil
+	}
+
+	for i, payment := range purchaseReturn.Payments {
+		if IsDateTimesEqual(purchaseReturn.Date, payment.Date) {
+			newTime := purchaseReturn.Payments[i].Date.Add(1 * time.Minute)
+			purchaseReturn.Payments[i].Date = &newTime
+			err = purchaseReturn.Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	purchaseReturnPayments, err := purchaseReturn.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	for i, payment := range purchaseReturnPayments {
+		if IsDateTimesEqual(purchaseReturn.Date, payment.Date) {
+			newTime := purchaseReturnPayments[i].Date.Add(1 * time.Minute)
+			purchaseReturnPayments[i].Date = &newTime
+			err = purchaseReturnPayments[i].Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (purchaseReturn *PurchaseReturn) DoAccounting() error {
+	err := purchaseReturn.AdjustPayments()
+	if err != nil {
+		return errors.New("error adjusting payments: " + err.Error())
+	}
+
 	ledger, err := purchaseReturn.CreateLedger()
 	if err != nil {
 		return errors.New("error creating ledger: " + err.Error())

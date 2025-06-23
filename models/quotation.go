@@ -2627,6 +2627,85 @@ func (quotation *Quotation) SetCustomerQuotationStats() error {
 	return nil
 }
 
+func (quotation *Quotation) GetPayments() (models []QuotationPayment, err error) {
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"quotation_id": quotation.ID, "deleted": bson.M{"$ne": true}}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching order payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := QuotationPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		models = append(models, model)
+
+	} //end for loop
+
+	return models, nil
+}
+
+func (quotation *Quotation) AdjustPayments() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.AllowAdjustSameDatePayments {
+		return nil
+	}
+
+	for i, quotationPayment := range quotation.Payments {
+		if IsDateTimesEqual(quotation.Date, quotationPayment.Date) {
+			newTime := quotation.Payments[i].Date.Add(1 * time.Minute)
+			quotation.Payments[i].Date = &newTime
+			err = quotation.Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	quotationPayments, err := quotation.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	for i, payment := range quotationPayments {
+		if IsDateTimesEqual(quotation.Date, payment.Date) {
+			newTime := quotationPayments[i].Date.Add(1 * time.Minute)
+			quotationPayments[i].Date = &newTime
+			err = quotationPayments[i].Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (quotation *Quotation) DoAccounting() error {
 	if quotation.Type == "quotation" {
 		return nil
@@ -2639,6 +2718,11 @@ func (quotation *Quotation) DoAccounting() error {
 
 	if !store.Settings.QuotationInvoiceAccounting {
 		return nil
+	}
+
+	err = quotation.AdjustPayments()
+	if err != nil {
+		return errors.New("error adjusting payments: " + err.Error())
 	}
 
 	ledger, err := quotation.CreateLedger()

@@ -3528,7 +3528,91 @@ func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
 	return ledger, nil
 }
 
+func (purchase *Purchase) GetPayments() (models []PurchasePayment, err error) {
+	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("purchase_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"purchase_id": purchase.ID, "deleted": bson.M{"$ne": true}}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching order payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := PurchasePayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		models = append(models, model)
+
+	} //end for loop
+
+	return models, nil
+}
+
+func (purchase *Purchase) AdjustPayments() error {
+	store, err := FindStoreByID(purchase.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.AllowAdjustSameDatePayments {
+		return nil
+	}
+
+	for i, payment := range purchase.Payments {
+		if IsDateTimesEqual(purchase.Date, payment.Date) {
+			newTime := purchase.Payments[i].Date.Add(1 * time.Minute)
+			purchase.Payments[i].Date = &newTime
+			err = purchase.Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	purchasePayments, err := purchase.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	for i, payment := range purchasePayments {
+		if IsDateTimesEqual(purchase.Date, payment.Date) {
+			newTime := purchasePayments[i].Date.Add(1 * time.Minute)
+			purchasePayments[i].Date = &newTime
+			err = purchasePayments[i].Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (purchase *Purchase) DoAccounting() error {
+	err := purchase.AdjustPayments()
+	if err != nil {
+		return errors.New("error adjusting payments: " + err.Error())
+	}
+
 	ledger, err := purchase.CreateLedger()
 	if err != nil {
 		return errors.New("error creating ledger: " + err.Error())

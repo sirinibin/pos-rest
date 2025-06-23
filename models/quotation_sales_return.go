@@ -3665,6 +3665,85 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateLedger() (ledger *Ledger
 	return ledger, nil
 }
 
+func (quotationSalesReturn *QuotationSalesReturn) GetPayments() (models []QuotationSalesReturnPayment, err error) {
+	collection := db.GetDB("store_" + quotationSalesReturn.StoreID.Hex()).Collection("quotation_sales_return_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"quotation_sales_return_id": quotationSalesReturn.ID, "deleted": bson.M{"$ne": true}}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching order payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := QuotationSalesReturnPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		models = append(models, model)
+
+	} //end for loop
+
+	return models, nil
+}
+
+func (quotationSalesReturn *QuotationSalesReturn) AdjustPayments() error {
+	store, err := FindStoreByID(quotationSalesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.AllowAdjustSameDatePayments {
+		return nil
+	}
+
+	for i, payment := range quotationSalesReturn.Payments {
+		if IsDateTimesEqual(quotationSalesReturn.Date, payment.Date) {
+			newTime := quotationSalesReturn.Payments[i].Date.Add(1 * time.Minute)
+			quotationSalesReturn.Payments[i].Date = &newTime
+			err = quotationSalesReturn.Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	quotationSalesReturnPayments, err := quotationSalesReturn.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	for i, payment := range quotationSalesReturnPayments {
+		if IsDateTimesEqual(quotationSalesReturn.Date, payment.Date) {
+			newTime := quotationSalesReturnPayments[i].Date.Add(1 * time.Minute)
+			quotationSalesReturnPayments[i].Date = &newTime
+			err = quotationSalesReturnPayments[i].Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (quotationsalesReturn *QuotationSalesReturn) DoAccounting() error {
 	store, err := FindStoreByID(quotationsalesReturn.StoreID, bson.M{})
 	if err != nil {
@@ -3673,6 +3752,11 @@ func (quotationsalesReturn *QuotationSalesReturn) DoAccounting() error {
 
 	if !store.Settings.QuotationInvoiceAccounting {
 		return nil
+	}
+
+	err = quotationsalesReturn.AdjustPayments()
+	if err != nil {
+		return errors.New("error adjusting payments: " + err.Error())
 	}
 
 	ledger, err := quotationsalesReturn.CreateLedger()

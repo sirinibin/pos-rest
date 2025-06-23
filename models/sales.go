@@ -3922,6 +3922,85 @@ func RegroupSalesPaymentsByDatetime(payments []SalesPayment) [][]SalesPayment {
 	return paymentsByDatetime2
 }
 
+func (order *Order) GetPayments() (models []SalesPayment, err error) {
+	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("sales_payment")
+	ctx := context.Background()
+	findOptions := options.Find()
+
+	sortBy := map[string]interface{}{}
+	sortBy["date"] = 1
+	findOptions.SetSort(sortBy)
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{"order_id": order.ID, "deleted": bson.M{"$ne": true}}, findOptions)
+	if err != nil {
+		return models, errors.New("Error fetching order payment history" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	//	log.Print("Starting for")
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		//log.Print("Loop")
+		err := cur.Err()
+		if err != nil {
+			return models, errors.New("Cursor error:" + err.Error())
+		}
+		model := SalesPayment{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return models, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		models = append(models, model)
+
+	} //end for loop
+
+	return models, nil
+}
+
+func (order *Order) AdjustPayments() error {
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.AllowAdjustSameDatePayments {
+		return nil
+	}
+
+	for i, payment := range order.Payments {
+		if IsDateTimesEqual(order.Date, payment.Date) {
+			newTime := order.Payments[i].Date.Add(1 * time.Minute)
+			order.Payments[i].Date = &newTime
+			err = order.Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	salesPayments, err := order.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	for i, payment := range salesPayments {
+		if IsDateTimesEqual(order.Date, payment.Date) {
+			newTime := salesPayments[i].Date.Add(1 * time.Minute)
+			salesPayments[i].Date = &newTime
+			err = salesPayments[i].Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 //End customer account journals
 
 func (order *Order) CreateLedger() (ledger *Ledger, err error) {
@@ -4108,6 +4187,11 @@ func (order *Order) GetCashDiscounts() (models []SalesCashDiscount, err error) {
 }
 
 func (order *Order) DoAccounting() error {
+	err := order.AdjustPayments()
+	if err != nil {
+		return errors.New("error adjusting payments: " + err.Error())
+	}
+
 	ledger, err := order.CreateLedger()
 	if err != nil {
 		return errors.New("error creating ledger: " + err.Error())

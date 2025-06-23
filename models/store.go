@@ -109,6 +109,7 @@ type StoreSettings struct {
 	HideTotalAmountRowInBalanceSheet       bool   `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
 	ShowSellerInfoInInvoice                bool   `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
 	EnableInvoicePrintTypeSelection        bool   `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
+	AllowAdjustSameDatePayments            bool   `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
 }
 
 type SerialNumber struct {
