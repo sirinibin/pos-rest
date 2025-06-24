@@ -23,10 +23,9 @@ import (
 
 // CustomerDeposit : CustomerDeposit structure
 type CustomerDeposit struct {
-	ID primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-
-	Code            string              `bson:"code" json:"code"`
-	Amount          float64             `bson:"amount" json:"amount"`
+	ID   primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Code string             `bson:"code" json:"code"`
+	//Amount          float64             `bson:"amount" json:"amount"`
 	Description     string              `bson:"description" json:"description"`
 	Remarks         string              `bson:"remarks" json:"remarks"`
 	BankReferenceNo string              `bson:"bank_reference_no" json:"bank_reference_no"`
@@ -69,6 +68,7 @@ type ReceivablePayment struct {
 	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	Amount        *float64            `json:"amount" bson:"amount"`
+	Discount      *float64            `bson:"discount" json:"discount"`
 	Method        string              `json:"method" bson:"method"`
 	BankReference *string             `json:"bank_reference" bson:"bank_reference"`
 	Description   *string             `json:"description" bson:"description"`
@@ -362,13 +362,18 @@ func (customerdeposit *CustomerDeposit) FindNetTotal() {
 	paymentMethods := []string{}
 
 	for _, payment := range customerdeposit.Payments {
-		netTotal += *payment.Amount
+		amount := *payment.Amount
+		if payment.Discount != nil {
+			amount -= *payment.Discount
+		}
+
+		netTotal += amount
 
 		if !slices.Contains(paymentMethods, payment.Method) {
 			paymentMethods = append(paymentMethods, payment.Method)
 		}
 	}
-	customerdeposit.NetTotal = netTotal
+	customerdeposit.NetTotal = RoundTo2Decimals(netTotal)
 	customerdeposit.PaymentMethods = paymentMethods
 }
 
@@ -913,6 +918,10 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 			errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
+		if *payment.Amount < *payment.Discount {
+			errs["customer_receivable_payment_discount_"+strconv.Itoa(index)] = "Payment discount should not be grater than amount"
+		}
+
 		if payment.Method == "" {
 			errs["customer_receivable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
@@ -943,8 +952,8 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 				orderBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if *payment.Amount > orderBalanceAmount {
-				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", order.BalanceAmount) + " (Invoice Balance)"
+			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > orderBalanceAmount {
+				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (-discount) should not be greater than " + fmt.Sprintf("%.02f", orderBalanceAmount) + " (Invoice Balance)"
 			}
 
 			totalInvoicePaidAmount := float64(0.00)
@@ -988,8 +997,8 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 				quotationBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if *payment.Amount > quotationBalanceAmount {
-				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", quotation.BalanceAmount) + " (Invoice Balance)"
+			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > quotationBalanceAmount {
+				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (Amount - Discount) should not be greater than " + fmt.Sprintf("%.02f", quotation.BalanceAmount) + " (Invoice Balance)"
 			}
 
 			totalInvoicePaidAmount := float64(0.00)
@@ -1033,8 +1042,8 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 				purchaseReturnBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if *payment.Amount > purchaseReturnBalanceAmount {
-				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", purchaseReturn.BalanceAmount) + " (Invoice Balance)"
+			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > purchaseReturnBalanceAmount {
+				errs["customer_receivable_payment_amount_"+strconv.Itoa(index)] = "Payment amount(Amount - Discount) should not be greater than " + fmt.Sprintf("%.02f", purchaseReturn.BalanceAmount) + " (Invoice Balance)"
 			}
 
 			totalInvoicePaidAmount := float64(0.00)
@@ -1843,7 +1852,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			AccountNumber: receivingAccount.Number,
 			AccountName:   receivingAccount.Name,
 			DebitOrCredit: "debit",
-			Debit:         *payment.Amount,
+			Debit:         RoundTo2Decimals(*payment.Amount - *payment.Discount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
@@ -1855,7 +1864,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			AccountNumber: sendingAccount.Number,
 			AccountName:   sendingAccount.Name,
 			DebitOrCredit: "credit",
-			Credit:        *payment.Amount,
+			Credit:        RoundTo2Decimals(*payment.Amount - *payment.Discount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,

@@ -67,6 +67,7 @@ type PayablePayment struct {
 	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	Amount        *float64            `json:"amount" bson:"amount"`
+	Discount      *float64            `bson:"discount" json:"discount"`
 	Method        string              `json:"method" bson:"method"`
 	BankReference *string             `json:"bank_reference" bson:"bank_reference"`
 	Description   *string             `json:"description" bson:"description"`
@@ -360,13 +361,18 @@ func (customerwithdrawal *CustomerWithdrawal) FindNetTotal() {
 	paymentMethods := []string{}
 
 	for _, payment := range customerwithdrawal.Payments {
-		netTotal += *payment.Amount
+		amount := *payment.Amount
+		if payment.Discount != nil {
+			amount -= *payment.Discount
+		}
+
+		netTotal += amount
 
 		if !slices.Contains(paymentMethods, payment.Method) {
 			paymentMethods = append(paymentMethods, payment.Method)
 		}
 	}
-	customerwithdrawal.NetTotal = netTotal
+	customerwithdrawal.NetTotal = RoundTo2Decimals(netTotal)
 	customerwithdrawal.PaymentMethods = paymentMethods
 }
 
@@ -911,6 +917,10 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
+		if *payment.Amount < *payment.Discount {
+			errs["customer_payable_payment_discount_"+strconv.Itoa(index)] = "Payment discount should not be grater than amount"
+		}
+
 		if payment.Method == "" {
 			errs["customer_payable_payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
@@ -941,8 +951,8 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 				salesreturnBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if *payment.Amount > salesreturnBalanceAmount {
-				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", salesreturn.BalanceAmount) + " (Invoice Balance)"
+			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > salesreturnBalanceAmount {
+				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (-discount) should not be greater than " + fmt.Sprintf("%.02f", salesreturn.BalanceAmount) + " (Invoice Balance)"
 			}
 
 			totalInvoicePaidAmount := float64(0.00)
@@ -987,8 +997,8 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 				quotationSalesReturnBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if *payment.Amount > quotationSalesReturnBalanceAmount {
-				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", quotationSalesReturn.BalanceAmount) + " (Invoice Balance)"
+			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > quotationSalesReturnBalanceAmount {
+				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (-discount) should not be greater than " + fmt.Sprintf("%.02f", quotationSalesReturn.BalanceAmount) + " (Invoice Balance)"
 			}
 
 			totalInvoicePaidAmount := float64(0.00)
@@ -1033,8 +1043,8 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 				purchaseBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if *payment.Amount > purchaseBalanceAmount {
-				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", purchase.BalanceAmount) + " (Invoice Balance)"
+			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > purchaseBalanceAmount {
+				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (-discount) should not be greater than " + fmt.Sprintf("%.02f", purchase.BalanceAmount) + " (Invoice Balance)"
 			}
 
 			totalInvoicePaidAmount := float64(0.00)
@@ -1816,7 +1826,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			AccountNumber: receivingAccount.Number,
 			AccountName:   receivingAccount.Name,
 			DebitOrCredit: "debit",
-			Debit:         *payment.Amount,
+			Debit:         RoundTo2Decimals(*payment.Amount - *payment.Discount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
@@ -1828,7 +1838,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			AccountNumber: spendingAccount.Number,
 			AccountName:   spendingAccount.Name,
 			DebitOrCredit: "credit",
-			Credit:        *payment.Amount,
+			Credit:        RoundTo2Decimals(*payment.Amount - *payment.Discount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
