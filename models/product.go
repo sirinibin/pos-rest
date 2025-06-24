@@ -108,7 +108,7 @@ type Product struct {
 	CountryCode          string                  `bson:"country_code" json:"country_code"`
 	ProductStores        map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
 	Unit                 string                  `bson:"unit,omitempty" json:"unit,omitempty"`
-	Images               []string                `bson:"images,omitempty" json:"images,omitempty"`
+	Images               []string                `bson:"images" json:"images"`
 	ImagesContent        []string                `json:"images_content,omitempty" bson:"-"`
 	Deleted              bool                    `bson:"deleted" json:"deleted"`
 	DeletedBy            *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`

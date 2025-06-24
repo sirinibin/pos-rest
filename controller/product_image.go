@@ -144,15 +144,17 @@ func DeleteProductImage(w http.ResponseWriter, r *http.Request) {
 
 	productObjectID, err := primitive.ObjectIDFromHex(productID)
 	if err != nil {
-		if err != nil {
-			http.Error(w, "invalid store id", http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "invalid store id", http.StatusInternalServerError)
+		return
 	}
 
 	product, _ := store.FindProductByID(&productObjectID, bson.M{})
 	product.Images = removeItem(product.Images, imageUrl)
-	product.Update(&store.ID)
+	err = product.Update(&store.ID)
+	if err != nil {
+		http.Error(w, "error updating product", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 }
