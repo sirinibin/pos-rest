@@ -494,19 +494,19 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 		errs["sales_return"] = "error finding sales return" + err.Error()
 	}
 
-	if *purchasereturnPayment.Amount > (purchaseReturn.NetTotal - purchaseReturn.CashDiscount) {
-		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+	if *purchasereturnPayment.Amount > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
+		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
 	if scenario == "update" {
-		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - *oldPurchaseReturnPayment.Amount)) > (purchaseReturn.NetTotal - purchaseReturn.CashDiscount) {
-			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - *oldPurchaseReturnPayment.Amount)) > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 	} else {
-		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > (purchaseReturn.NetTotal - purchaseReturn.CashDiscount) {
-			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 	}

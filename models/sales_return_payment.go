@@ -497,19 +497,19 @@ func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 		errs["sales_return"] = "error finding sales return" + err.Error()
 	}
 
-	if *salesReturnPayment.Amount > (salesReturn.NetTotal - salesReturn.CashDiscount) {
-		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-salesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+	if *salesReturnPayment.Amount > RoundTo2Decimals(salesReturn.NetTotal-salesReturn.CashDiscount) {
+		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(salesReturn.NetTotal-salesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
 	if scenario == "update" {
-		if (*salesReturnPayment.Amount + (salesReturn.TotalPaymentPaid - *oldSalesReturnPayment.Amount)) > (salesReturn.NetTotal - salesReturn.CashDiscount) {
-			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-salesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+		if (*salesReturnPayment.Amount + (salesReturn.TotalPaymentPaid - *oldSalesReturnPayment.Amount)) > RoundTo2Decimals(salesReturn.NetTotal-salesReturn.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(salesReturn.NetTotal-salesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 	} else {
-		if (*salesReturnPayment.Amount + (salesReturn.TotalPaymentPaid)) > (salesReturn.NetTotal - salesReturn.CashDiscount) {
-			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (salesReturn.NetTotal-salesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
+		if (*salesReturnPayment.Amount + (salesReturn.TotalPaymentPaid)) > RoundTo2Decimals(salesReturn.NetTotal-salesReturn.CashDiscount) {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(salesReturn.NetTotal-salesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 	}

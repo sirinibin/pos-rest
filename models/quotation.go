@@ -1622,8 +1622,8 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			}
 		}
 
-		if totalPayment > (quotation.NetTotal - quotation.CashDiscount) {
-			errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (quotation.NetTotal-quotation.CashDiscount)) + " (Net Total - Cash Discount)"
+		if totalPayment > RoundTo2Decimals(quotation.NetTotal-quotation.CashDiscount) {
+			errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(quotation.NetTotal-quotation.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 

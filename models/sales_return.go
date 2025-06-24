@@ -1668,8 +1668,8 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if totalPayment > (salesreturn.NetTotal - salesreturn.CashDiscount) {
-		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (salesreturn.NetTotal-salesreturn.CashDiscount)) + " (Net Total - Cash Discount)"
+	if totalPayment > RoundTo2Decimals(salesreturn.NetTotal-salesreturn.CashDiscount) {
+		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(salesreturn.NetTotal-salesreturn.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
