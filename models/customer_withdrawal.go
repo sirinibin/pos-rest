@@ -1849,17 +1849,20 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			UpdatedAt:     &now,
 		})
 
-		journals = append(journals, Journal{
-			Date:          payment.Date,
-			AccountID:     cashDiscountReceivedAccount.ID,
-			AccountNumber: cashDiscountReceivedAccount.Number,
-			AccountName:   cashDiscountReceivedAccount.Name,
-			DebitOrCredit: "credit",
-			Credit:        RoundTo2Decimals(*payment.Discount),
-			GroupID:       groupID,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
-		})
+		if *payment.Discount > 0 {
+			journals = append(journals, Journal{
+				Date:          payment.Date,
+				AccountID:     cashDiscountReceivedAccount.ID,
+				AccountNumber: cashDiscountReceivedAccount.Number,
+				AccountName:   cashDiscountReceivedAccount.Name,
+				DebitOrCredit: "credit",
+				Credit:        RoundTo2Decimals(*payment.Discount),
+				GroupID:       groupID,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+
+		}
 
 		referenceModel = ""
 		if customerWithdrawal.Type == "customer" {

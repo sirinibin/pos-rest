@@ -1863,17 +1863,19 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			UpdatedAt:     &now,
 		})
 
-		journals = append(journals, Journal{
-			Date:          payment.Date,
-			AccountID:     cashDiscountAllowedAccount.ID,
-			AccountNumber: cashDiscountAllowedAccount.Number,
-			AccountName:   cashDiscountAllowedAccount.Name,
-			DebitOrCredit: "debit",
-			Debit:         RoundTo2Decimals(*payment.Discount),
-			GroupID:       groupID,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
-		})
+		if *payment.Discount > 0 {
+			journals = append(journals, Journal{
+				Date:          payment.Date,
+				AccountID:     cashDiscountAllowedAccount.ID,
+				AccountNumber: cashDiscountAllowedAccount.Number,
+				AccountName:   cashDiscountAllowedAccount.Name,
+				DebitOrCredit: "debit",
+				Debit:         RoundTo2Decimals(*payment.Discount),
+				GroupID:       groupID,
+				CreatedAt:     &now,
+				UpdatedAt:     &now,
+			})
+		}
 
 		journals = append(journals, Journal{
 			Date:          payment.Date,
