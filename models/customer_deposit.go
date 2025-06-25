@@ -1834,6 +1834,11 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 		return ledgers, err
 	}
 
+	cashDiscountAllowedAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash discount allowed", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, payment := range customerDeposit.Payments {
 		journals := []Journal{}
 
@@ -1860,11 +1865,23 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 
 		journals = append(journals, Journal{
 			Date:          payment.Date,
+			AccountID:     cashDiscountAllowedAccount.ID,
+			AccountNumber: cashDiscountAllowedAccount.Number,
+			AccountName:   cashDiscountAllowedAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         RoundTo2Decimals(*payment.Discount),
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
 			AccountID:     sendingAccount.ID,
 			AccountNumber: sendingAccount.Number,
 			AccountName:   sendingAccount.Name,
 			DebitOrCredit: "credit",
-			Credit:        RoundTo2Decimals(*payment.Amount - *payment.Discount),
+			Credit:        RoundTo2Decimals(*payment.Amount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,

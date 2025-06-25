@@ -1808,6 +1808,11 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 		return nil, err
 	}
 
+	cashDiscountReceivedAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash discount received", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, payment := range customerWithdrawal.Payments {
 		journals := []Journal{}
 
@@ -1826,7 +1831,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			AccountNumber: receivingAccount.Number,
 			AccountName:   receivingAccount.Name,
 			DebitOrCredit: "debit",
-			Debit:         RoundTo2Decimals(*payment.Amount - *payment.Discount),
+			Debit:         RoundTo2Decimals(*payment.Amount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
@@ -1839,6 +1844,18 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			AccountName:   spendingAccount.Name,
 			DebitOrCredit: "credit",
 			Credit:        RoundTo2Decimals(*payment.Amount - *payment.Discount),
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		journals = append(journals, Journal{
+			Date:          payment.Date,
+			AccountID:     cashDiscountReceivedAccount.ID,
+			AccountNumber: cashDiscountReceivedAccount.Number,
+			AccountName:   cashDiscountReceivedAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        RoundTo2Decimals(*payment.Discount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
