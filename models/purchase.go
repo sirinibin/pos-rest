@@ -139,9 +139,11 @@ func (model *Purchase) SetPostBalances() error {
 		return nil
 	}
 
-	err = ledger.SetPostBalancesByLedger(model.Date)
-	if err != nil {
-		return err
+	if model.Date != nil {
+		err = ledger.SetPostBalancesByLedger(model.Date)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

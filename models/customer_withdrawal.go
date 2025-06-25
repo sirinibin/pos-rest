@@ -1548,21 +1548,6 @@ func (store *Store) FindCustomerWithdrawalByID(
 		return nil, err
 	}
 
-	if _, ok := selectFields["created_by_user.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "created_by_user")
-		customerwithdrawal.CreatedByUser, _ = FindUserByID(customerwithdrawal.CreatedBy, fields)
-	}
-
-	if _, ok := selectFields["updated_by_user.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
-		customerwithdrawal.UpdatedByUser, _ = FindUserByID(customerwithdrawal.UpdatedBy, fields)
-	}
-
-	if _, ok := selectFields["deleted_by_user.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
-		customerwithdrawal.DeletedByUser, _ = FindUserByID(customerwithdrawal.DeletedBy, fields)
-	}
-
 	return customerwithdrawal, err
 }
 

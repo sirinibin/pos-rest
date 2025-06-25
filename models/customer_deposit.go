@@ -1577,21 +1577,6 @@ func (store *Store) FindCustomerDepositByID(
 		return nil, err
 	}
 
-	if _, ok := selectFields["created_by_user.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "created_by_user")
-		customerdeposit.CreatedByUser, _ = FindUserByID(customerdeposit.CreatedBy, fields)
-	}
-
-	if _, ok := selectFields["updated_by_user.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
-		customerdeposit.UpdatedByUser, _ = FindUserByID(customerdeposit.UpdatedBy, fields)
-	}
-
-	if _, ok := selectFields["deleted_by_user.id"]; ok {
-		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
-		customerdeposit.DeletedByUser, _ = FindUserByID(customerdeposit.DeletedBy, fields)
-	}
-
 	return customerdeposit, err
 }
 

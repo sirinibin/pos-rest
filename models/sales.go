@@ -4296,9 +4296,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 		for _, post := range postings {
 			if post.ReferenceModel == "sales" {
 				postOrder, err := store.FindOrderByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postOrder == nil {
+					continue
+				}
+
 				err = postOrder.UndoAccounting()
 				if err != nil {
 					return err
@@ -4309,9 +4314,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "sales_return" {
 				postSalesReturn, err := store.FindSalesReturnByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postSalesReturn == nil {
+					continue
+				}
+
 				err = postSalesReturn.UndoAccounting()
 				if err != nil {
 					return err
@@ -4322,8 +4332,12 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "purchase" {
 				postPurchase, err := store.FindPurchaseByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
+				}
+
+				if postPurchase == nil {
+					continue
 				}
 
 				err = postPurchase.UndoAccounting()
@@ -4337,8 +4351,12 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "purchase_return" {
 				postPurchaseReturn, err := store.FindPurchaseReturnByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
+				}
+
+				if postPurchaseReturn == nil {
+					continue
 				}
 
 				err = postPurchaseReturn.UndoAccounting()
@@ -4352,9 +4370,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "quotation_sales" {
 				postQuotation, err := store.FindQuotationByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postQuotation == nil {
+					continue
+				}
+
 				err = postQuotation.UndoAccounting()
 				if err != nil {
 					return err
@@ -4366,9 +4389,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 
 			} else if post.ReferenceModel == "customer_deposit" || post.ReferenceModel == "vendor_deposit" {
 				postCustomerDeposit, err := store.FindCustomerDepositByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postCustomerDeposit == nil {
+					continue
+				}
+
 				err = postCustomerDeposit.UndoAccounting()
 				if err != nil {
 					return err
@@ -4379,9 +4407,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "customer_withdrawal" || post.ReferenceModel == "vendor_withdrawal" {
 				postCustomerWithdrawal, err := store.FindCustomerWithdrawalByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postCustomerWithdrawal == nil {
+					continue
+				}
+
 				err = postCustomerWithdrawal.UndoAccounting()
 				if err != nil {
 					return err
@@ -4392,9 +4425,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "capital" {
 				postCapital, err := store.FindCapitalByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postCapital == nil {
+					continue
+				}
+
 				err = postCapital.UndoAccounting()
 				if err != nil {
 					return err
@@ -4405,9 +4443,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "expense" {
 				postExpense, err := store.FindExpenseByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postExpense == nil {
+					continue
+				}
+
 				err = postExpense.UndoAccounting()
 				if err != nil {
 					return err
@@ -4418,9 +4461,14 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 				}
 			} else if post.ReferenceModel == "drawing" {
 				postDivident, err := store.FindDividentByID(&post.ReferenceID, bson.M{})
-				if err != nil {
+				if err != nil && err != mongo.ErrNoDocuments {
 					return err
 				}
+
+				if postDivident == nil {
+					continue
+				}
+
 				err = postDivident.UndoAccounting()
 				if err != nil {
 					return err
