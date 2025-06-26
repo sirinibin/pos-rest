@@ -247,6 +247,17 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = quotation.SetProductsQuotationSalesStats()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["insert"] = "error adding product quotation sales stats" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = quotation.SetCustomerQuotationStats()
 	if err != nil {
 		response.Status = false
@@ -470,7 +481,27 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 
-	quotation.SetProductsQuotationStats()
+	err = quotation.SetProductsQuotationStats()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["insert"] = "error adding product quotation  stats" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.SetProductsQuotationSalesStats()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["insert"] = "error adding product quotation sales stats" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = quotation.SetCustomerQuotationStats()
 	if err != nil {

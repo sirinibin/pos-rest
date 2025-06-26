@@ -51,6 +51,11 @@ type ProductStore struct {
 	SalesReturn                  float64            `bson:"sales_return,omitempty" json:"sales_return,omitempty"`
 	SalesProfit                  float64            `bson:"sales_profit,omitempty" json:"sales_profit,omitempty"`
 	SalesLoss                    float64            `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
+	QuotationSalesCount          int64              `bson:"quotation_sales_count" json:"quotation_sales_count"`
+	QuotationSalesQuantity       float64            `bson:"quotation_sales_quantity,omitempty" json:"quotation_sales_quantity,omitempty"`
+	QuotationSales               float64            `bson:"quotation_sales,omitempty" json:"quotation_sales,omitempty"`
+	QuotationSalesProfit         float64            `bson:"quotation_sales_profit,omitempty" json:"quotation_sales_profit,omitempty"`
+	QuotationSalesLoss           float64            `bson:"quotation_sales_loss,omitempty" json:"quotation_sales_loss,omitempty"`
 	QuotationSalesReturnCount    int64              `bson:"quotation_sales_return_count" json:"quotation_sales_return_count"`
 	QuotationSalesReturnQuantity float64            `bson:"quotation_sales_return_quantity,omitempty" json:"quotation_sales_return_quantity,omitempty"`
 	QuotationSalesReturn         float64            `bson:"quotation_sales_return,omitempty" json:"quotation_sales_return,omitempty"`
@@ -133,19 +138,23 @@ type Product struct {
 }
 
 type ProductSet struct {
-	Name          string       `json:"name" bson:"name"`
-	Products      []SetProduct `json:"products" bson:"products"`
-	Total         float64      `json:"total" bson:"total"`
-	TotalWithVAT  float64      `json:"total_with_vat" bson:"total_with_vat"`
-	TotalQuantity float64      `json:"total_quantity" bson:"total_quantity"`
+	Name                 string       `json:"name" bson:"name"`
+	Products             []SetProduct `json:"products" bson:"products"`
+	Total                float64      `json:"total" bson:"total"`
+	TotalWithVAT         float64      `json:"total_with_vat" bson:"total_with_vat"`
+	PurchaseTotal        float64      `json:"purchase_total" bson:"purchase_total"`
+	PurchaseTotalWithVAT float64      `json:"purchase_total_with_vat" bson:"purchase_total_with_vat"`
+	TotalQuantity        float64      `json:"total_quantity" bson:"total_quantity"`
 }
 
 type SetProduct struct {
-	ProductID              *primitive.ObjectID `json:"product_id" bson:"produc_id"`
-	Name                   string              `bson:"name" json:"name"`
-	Quantity               *float64            `bson:"quantity" json:"quantity"`
-	RetailUnitPrice        *float64            `bson:"retail_unit_price" json:"retail_unit_price"`
-	RetailUnitPriceWithVAT *float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
+	ProductID                *primitive.ObjectID `json:"product_id" bson:"produc_id"`
+	Name                     string              `bson:"name" json:"name"`
+	Quantity                 *float64            `bson:"quantity" json:"quantity"`
+	PurchaseUnitPrice        *float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
+	PurchaseUnitPriceWithVAT *float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
+	RetailUnitPrice          *float64            `bson:"retail_unit_price" json:"retail_unit_price"`
+	RetailUnitPriceWithVAT   *float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
 }
 
 type ProductStats struct {

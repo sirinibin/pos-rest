@@ -122,6 +122,54 @@ type Quotation struct {
 	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
 }
 
+func (product *Product) SetProductQuotationInvoiceQuantityByStoreID(storeID primitive.ObjectID) error {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductQuotationStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":            nil,
+				"sales_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+	}
+
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		//productStoreTemp.QuotationQuantity = stats.QuotationQuantity
+		//productStoreTemp.QuotationSales
+		//productStoreTemp.Qu
+		product.ProductStores[storeID.Hex()] = productStoreTemp
+	}
+
+	return nil
+}
+
 func (model *Quotation) SetPostBalances() error {
 	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {
@@ -2280,6 +2328,7 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 	filter := map[string]interface{}{
 		"store_id":   storeID,
 		"product_id": product.ID,
+		"type":       "quotation",
 	}
 
 	pipeline := []bson.M{
@@ -2319,21 +2368,6 @@ func (product *Product) SetProductQuotationStatsByStoreID(storeID primitive.Obje
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 
-	/*
-		for storeIndex, store := range product.Stores {
-			if store.StoreID.Hex() == storeID.Hex() {
-				product.Stores[storeIndex].QuotationCount = stats.QuotationCount
-				product.Stores[storeIndex].QuotationQuantity = stats.QuotationQuantity
-				product.Stores[storeIndex].Quotation = stats.Quotation
-				err = product.Update()
-				if err != nil {
-					return err
-				}
-				break
-			}
-		}
-	*/
-
 	return nil
 }
 
@@ -2350,6 +2384,92 @@ func (quotation *Quotation) SetProductsQuotationStats() error {
 		}
 
 		err = product.SetProductQuotationStatsByStoreID(*quotation.StoreID)
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//Qtn. sales
+
+type ProductQuotationSalesStats struct {
+	QuotationSalesCount    int64   `json:"quotation_sales_count" bson:"quotation_sales_count"`
+	QuotationSalesQuantity float64 `json:"quotation_sales_quantity" bson:"quotation_sales_quantity"`
+	QuotationSales         float64 `json:"quotation_sales" bson:"quotation_sales"`
+}
+
+func (product *Product) SetProductQuotationSalesStatsByStoreID(storeID primitive.ObjectID) error {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductQuotationSalesStats
+
+	filter := map[string]interface{}{
+		"store_id":   storeID,
+		"product_id": product.ID,
+		"type":       "invoice",
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                      nil,
+				"quotation_sales_count":    bson.M{"$sum": 1},
+				"quotation_sales_quantity": bson.M{"$sum": "$quantity"},
+				"quotation_sales":          bson.M{"$sum": "$net_price"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return err
+		}
+
+		stats.QuotationSales = RoundFloat(stats.QuotationSales, 2)
+	}
+
+	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+		productStoreTemp.QuotationSalesCount = stats.QuotationSalesCount
+		productStoreTemp.QuotationSalesQuantity = stats.QuotationSalesQuantity
+		productStoreTemp.QuotationSales = stats.QuotationSales
+		product.ProductStores[storeID.Hex()] = productStoreTemp
+	}
+
+	return nil
+}
+
+func (quotation *Quotation) SetProductsQuotationSalesStats() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	for _, quotationProduct := range quotation.Products {
+		product, err := store.FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductQuotationSalesStatsByStoreID(*quotation.StoreID)
 		if err != nil {
 			return err
 		}
