@@ -215,6 +215,13 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
 	purchase.Update()
 
+	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
+		vendor, _ := store.FindVendorByID(purchasereturn.VendorID, bson.M{})
+		if vendor != nil {
+			vendor.SetCreditBalance()
+		}
+	}
+
 	store.NotifyUsers("purchase_return_updated")
 
 	response.Status = true
@@ -415,6 +422,13 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to find purchasereturn:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
+		vendor, _ := store.FindVendorByID(purchasereturn.VendorID, bson.M{})
+		if vendor != nil {
+			vendor.SetCreditBalance()
+		}
 	}
 
 	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})

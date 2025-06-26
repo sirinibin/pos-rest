@@ -122,16 +122,17 @@ type Quotation struct {
 	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
 }
 
-func (product *Product) SetProductQuotationInvoiceQuantityByStoreID(storeID primitive.ObjectID) error {
+func (product *Product) SetProductQuotationSalesQuantityByStoreID(storeID primitive.ObjectID) error {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var stats ProductQuotationStats
+	var stats ProductQuotationSalesStats
 
 	filter := map[string]interface{}{
 		"store_id":   storeID,
 		"product_id": product.ID,
+		"type":       "invoice",
 	}
 
 	pipeline := []bson.M{
@@ -140,8 +141,8 @@ func (product *Product) SetProductQuotationInvoiceQuantityByStoreID(storeID prim
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":            nil,
-				"sales_quantity": bson.M{"$sum": "$quantity"},
+				"_id":                      nil,
+				"quotation_sales_quantity": bson.M{"$sum": "$quantity"},
 			},
 		},
 	}
@@ -161,9 +162,7 @@ func (product *Product) SetProductQuotationInvoiceQuantityByStoreID(storeID prim
 	}
 
 	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
-		//productStoreTemp.QuotationQuantity = stats.QuotationQuantity
-		//productStoreTemp.QuotationSales
-		//productStoreTemp.Qu
+		productStoreTemp.QuotationSalesQuantity = stats.QuotationSalesQuantity
 		product.ProductStores[storeID.Hex()] = productStoreTemp
 	}
 

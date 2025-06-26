@@ -111,6 +111,7 @@ type StoreSettings struct {
 	EnableInvoicePrintTypeSelection        bool   `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
 	AllowAdjustSameDatePayments            bool   `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
 	HideQuotationInvoiceVAT                bool   `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
+	UpdateProductStockOnQuotationSales     bool   `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
 }
 
 type SerialNumber struct {

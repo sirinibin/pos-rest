@@ -149,12 +149,15 @@ type ProductSet struct {
 
 type SetProduct struct {
 	ProductID                *primitive.ObjectID `json:"product_id" bson:"produc_id"`
+	PartNumber               string              `bson:"part_number" json:"part_number"`
 	Name                     string              `bson:"name" json:"name"`
 	Quantity                 *float64            `bson:"quantity" json:"quantity"`
 	PurchaseUnitPrice        *float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
 	PurchaseUnitPriceWithVAT *float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
 	RetailUnitPrice          *float64            `bson:"retail_unit_price" json:"retail_unit_price"`
 	RetailUnitPriceWithVAT   *float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
+	RetailPricePercent       *float64            `bson:"retail_price_percent" json:"retail_price_percent"`
+	PurchasePricePercent     *float64            `bson:"purchase_price_percent" json:"purchase_price_percent"`
 }
 
 type ProductStats struct {
@@ -1367,6 +1370,23 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
 	}
 
+	keys, ok = r.URL.Query()["search[quotation]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = value
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[quotation_quantity]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -1382,7 +1402,108 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		} else {
 			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = value
 		}
-		//criterias.SearchBy["stores"] = GetFloatSearchElement("quotation_quantity", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = value
+		}
 	}
 
 	//Delivery note
@@ -3305,26 +3426,62 @@ func sanitizeUTF8(input string) string {
 }
 
 func (product *Product) SetStock() error {
-	err := product.SetProductSalesQuantityByStoreID(*product.StoreID)
+	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
 		return err
 	}
+
+	err = product.SetProductSalesQuantityByStoreID(*product.StoreID)
+	if err != nil {
+		return err
+	}
+
 	err = product.SetProductSalesReturnQuantityByStoreID(*product.StoreID)
 	if err != nil {
 		return err
 	}
+
 	err = product.SetProductPurchaseQuantityByStoreID(*product.StoreID)
 	if err != nil {
 		return err
 	}
+
 	err = product.SetProductPurchaseReturnQuantityByStoreID(*product.StoreID)
 	if err != nil {
 		return err
 	}
+
+	if store.Settings.UpdateProductStockOnQuotationSales {
+		err = product.SetProductQuotationSalesQuantityByStoreID(*product.StoreID)
+		if err != nil {
+			return err
+		}
+
+		err = product.SetProductQuotationSalesReturnQuantityByStoreID(*product.StoreID)
+		if err != nil {
+			return err
+		}
+	}
+
 	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
-		productStoreTemp.Stock = (productStoreTemp.PurchaseQuantity - productStoreTemp.PurchaseReturnQuantity) - (productStoreTemp.SalesQuantity - productStoreTemp.SalesReturnQuantity)
-		productStoreTemp.Stock += productStoreTemp.StocksAdded
-		productStoreTemp.Stock -= productStoreTemp.StocksRemoved
+		//newStock := (productStoreTemp.PurchaseQuantity - productStoreTemp.PurchaseReturnQuantity) - (productStoreTemp.SalesQuantity - productStoreTemp.SalesReturnQuantity) - (productStoreTemp.QuotationSalesQuantity - productStoreTemp.QuotationSalesReturnQuantity)
+
+		newStock := float64(0)
+		newStock += productStoreTemp.PurchaseQuantity
+		newStock -= productStoreTemp.PurchaseReturnQuantity
+
+		newStock -= productStoreTemp.SalesQuantity
+		newStock += productStoreTemp.SalesReturnQuantity
+
+		if store.Settings.UpdateProductStockOnQuotationSales {
+			newStock -= productStoreTemp.QuotationSalesQuantity
+			newStock += productStoreTemp.QuotationSalesReturnQuantity
+		}
+
+		newStock += productStoreTemp.StocksAdded
+		newStock -= productStoreTemp.StocksRemoved
+
+		productStoreTemp.Stock = newStock
 		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
 	}
 
