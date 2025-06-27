@@ -865,7 +865,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			accountBalance := float64(0.00)
 
 			//postBalance = float64(0.00)
-			if postBalance > 0 {
+			if postBalance > 0 || postBalance < 0 {
 				accountBalance = postBalance
 			} else {
 				err = account.CalculateBalance(journal2.Date)
@@ -875,7 +875,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				accountBalance = account.Balance
 			}
 
-			if account.Type == "liability" {
+			if account.Type == "liability" && accountBalance > 0 {
 				accountBalance = account.Balance * (-1)
 			}
 
