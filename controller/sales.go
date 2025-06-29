@@ -273,7 +273,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = order.RemoveStock()
+	err = order.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -317,6 +317,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 			customer.SetCreditBalance()
 		}
 	}
+
+	go order.SetPostBalances()
 
 	store.NotifyUsers("sales_updated")
 
@@ -507,7 +509,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.SetPaymentStatus()
 	order.Update()
 
-	err = orderOld.AddStock()
+	err = orderOld.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -518,7 +520,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = order.RemoveStock()
+	err = order.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -530,6 +532,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.SetProductsSalesStats()
+	orderOld.SetProductsSalesStats()
 	order.SetCustomerSalesStats()
 
 	order, err = store.FindOrderByID(&order.ID, bson.M{})
@@ -721,19 +724,6 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
-	}
-
-	if order.Status == "delivered" {
-		err = order.AddStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
 	}
 
 	response.Status = true

@@ -2391,6 +2391,26 @@ func (quotation *Quotation) SetProductsQuotationStats() error {
 		if err != nil {
 			return err
 		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetProductQuotationStatsByStoreID(store.ID)
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
 	}
 	return nil
 }
@@ -2477,7 +2497,77 @@ func (quotation *Quotation) SetProductsQuotationSalesStats() error {
 		if err != nil {
 			return err
 		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetProductQuotationSalesStatsByStoreID(store.ID)
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
+	return nil
+}
+
+func (quotation *Quotation) SetProductsStock() (err error) {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if len(quotation.Products) == 0 {
+		return nil
+	}
+
+	for _, quotationProduct := range quotation.Products {
+		product, err := store.FindProductByID(&quotationProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetStock()
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(&store.ID)
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetStock()
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
+		}
+
+	}
+
 	return nil
 }
 

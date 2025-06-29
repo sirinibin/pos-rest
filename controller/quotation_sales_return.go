@@ -147,13 +147,14 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if quotationsalesreturn.EnableReportToZatca && !IsConnectedToInternet() {
-		response.Status = false
-		response.Errors["reporting_to_zatca"] = "not connected to internet"
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	/*
+		if quotationsalesreturn.EnableReportToZatca && !IsConnectedToInternet() {
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "not connected to internet"
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
 
 	quotationsalesreturn.FindTotalQuantity()
 	quotationsalesreturn.UpdateForeignLabelFields()
@@ -189,12 +190,8 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	quotationsalesreturn.UpdateQuotationReturnCount()
 	quotationsalesreturn.UpdateQuotationReturnDiscount(nil)
 	quotationsalesreturn.UpdateQuotationReturnCashDiscount(nil)
+
 	quotationsalesreturn.CreateProductsQuotationSalesReturnHistory()
-	/*
-		if quotationsalesreturn.PaymentStatus != "not_paid" {
-			quotationsalesreturn.AddPayment()
-		}
-	*/
 
 	err = quotationsalesreturn.AddPayments()
 	if err != nil {
@@ -207,7 +204,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	quotationsalesreturn.SetPaymentStatus()
 	quotationsalesreturn.Update()
 
-	err = quotationsalesreturn.AddStock()
+	err = quotationsalesreturn.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -230,6 +227,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotationsalesreturn.SetProductsQuotationSalesReturnStats()
+
 	quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
 
 	err = quotationsalesreturn.DoAccounting()
@@ -394,18 +392,7 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	quotationsalesreturn.SetPaymentStatus()
 	quotationsalesreturn.Update()
 
-	err = quotationsalesreturnOld.RemoveStock()
-	if err != nil {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
-
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = quotationsalesreturn.AddStock()
+	err = quotationsalesreturn.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -441,6 +428,8 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	quotationsalesreturn.SetProductsQuotationSalesReturnStats()
+	quotationsalesreturnOld.SetProductsQuotationSalesReturnStats()
+
 	quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
 
 	err = quotationsalesreturn.UndoAccounting()

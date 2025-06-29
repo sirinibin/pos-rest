@@ -201,11 +201,22 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = quotation.AddProductsQuotationHistory()
+	err = quotation.CreateProductsQuotationHistory()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["insert"] = "error adding product history" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.SetProductsStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
 
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
@@ -459,11 +470,22 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = quotation.AddProductsQuotationHistory()
+	err = quotation.CreateProductsQuotationHistory()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["add_history"] = "error adding products quotation histor " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.SetProductsStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["stock"] = "Unable to update stock:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -529,6 +551,7 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	quotationOld.SetProductsQuotationStats()
+	quotationOld.SetProductsQuotationSalesStats()
 
 	err = quotation.UndoAccounting()
 	if err != nil {
@@ -560,7 +583,6 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 			customer.SetCreditBalance()
 			quotationOld.SetCustomerQuotationStats()
 		}
-		quotationOld.SetProductsQuotationStats()
 	}
 
 	quotation, err = store.FindQuotationByID(&quotation.ID, bson.M{})

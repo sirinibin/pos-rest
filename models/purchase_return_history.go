@@ -30,6 +30,7 @@ type ProductPurchaseReturnHistory struct {
 	PurchaseCode       string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
 	Quantity           float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice          float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitDiscount       float64             `bson:"unit_discount" json:"unit_discount"`
 	Discount           float64             `bson:"discount" json:"discount"`
 	DiscountPercent    float64             `bson:"discount_percent" json:"discount_percent"`
 	Price              float64             `bson:"price,omitempty" json:"price,omitempty"`
@@ -480,7 +481,7 @@ func (store *Store) SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.R
 	return models, criterias, nil
 }
 
-func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
+func (purchaseReturn *PurchaseReturn) CreateProductsPurchaseReturnHistory() error {
 	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -535,6 +536,54 @@ func (purchaseReturn *PurchaseReturn) AddProductsPurchaseReturnHistory() error {
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
+		}
+
+		product, err := store.FindProductByID(&purchaseReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				history := ProductPurchaseReturnHistory{
+					Date:               purchaseReturn.Date,
+					StoreID:            purchaseReturn.StoreID,
+					StoreName:          purchaseReturn.StoreName,
+					ProductID:          *setProduct.ProductID,
+					VendorID:           purchaseReturn.VendorID,
+					VendorName:         purchaseReturn.VendorName,
+					PurchaseReturnID:   &purchaseReturn.ID,
+					PurchaseReturnCode: purchaseReturn.Code,
+					PurchaseID:         purchaseReturn.PurchaseID,
+					PurchaseCode:       purchaseReturn.PurchaseCode,
+					Quantity:           RoundTo8Decimals(purchaseReturnProduct.Quantity * *setProduct.Quantity),
+					UnitPrice:          RoundTo4Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Unit:               setProductObj.Unit,
+					UnitDiscount:       RoundTo8Decimals(purchaseReturnProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)),
+					Discount:           RoundTo8Decimals((purchaseReturnProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)) * RoundTo8Decimals(purchaseReturnProduct.Quantity**setProduct.Quantity)),
+					DiscountPercent:    purchaseReturnProduct.UnitDiscountPercent,
+					CreatedAt:          purchaseReturn.CreatedAt,
+					UpdatedAt:          purchaseReturn.UpdatedAt,
+				}
+
+				history.UnitPrice = RoundTo4Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (*setProduct.PurchasePricePercent / 100))
+				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
+
+				history.VatPercent = RoundTo2Decimals(*purchaseReturn.VatPercent)
+				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))
+				history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
+				history.ID = primitive.NewObjectID()
+
+				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

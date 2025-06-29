@@ -176,7 +176,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase.AddProductsPurchaseHistory()
+	purchase.CreateProductsPurchaseHistory()
 
 	err = purchase.AddPayments()
 	if err != nil {
@@ -189,7 +189,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.SetPaymentStatus()
 	purchase.Update()
 
-	err = purchase.AddStock()
+	err = purchase.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -212,6 +212,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.SetProductsPurchaseStats()
+
 	purchase.SetVendorPurchaseStats()
 
 	err = purchase.DoAccounting()
@@ -342,7 +343,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.ClearProductsPurchaseHistory()
-	purchase.AddProductsPurchaseHistory()
+	purchase.CreateProductsPurchaseHistory()
 
 	err = purchase.UpdatePayments()
 	if err != nil {
@@ -355,7 +356,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.SetPaymentStatus()
 	purchase.Update()
 
-	err = purchaseOld.RemoveStock()
+	err = purchaseOld.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -366,7 +367,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchase.AddStock()
+	err = purchase.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -400,6 +401,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.SetProductsPurchaseStats()
+	purchaseOld.SetProductsPurchaseStats()
 	purchase.SetVendorPurchaseStats()
 
 	err = purchase.UndoAccounting()
@@ -571,19 +573,6 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
-	}
-
-	if purchase.Status == "delivered" {
-		err = purchase.RemoveStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
 	}
 
 	response.Status = true

@@ -139,7 +139,7 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deliverynote.AddProductsDeliveryNoteHistory()
+	deliverynote.CreateProductsDeliveryNoteHistory()
 
 	deliverynote.SetProductsDeliveryNoteStats()
 	deliverynote.SetCustomerDeliveryNoteStats()
@@ -178,21 +178,20 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	/*
-		deliverynoteOld, err = models.FindDeliveryNoteByID(&deliverynoteID, bson.M{})
-		if err != nil {
-			response.Status = false
-			response.Errors["view"] = "Unable to view:" + err.Error()
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	*/
 
 	store, err := ParseStore(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	deliverynoteOld, err := store.FindDeliveryNoteByID(&deliverynoteID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -251,10 +250,13 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	deliverynote.ClearProductsDeliveryNoteHistory()
-	deliverynote.AddProductsDeliveryNoteHistory()
+	deliverynote.CreateProductsDeliveryNoteHistory()
 
 	deliverynote.SetProductsDeliveryNoteStats()
+	deliverynoteOld.SetProductsDeliveryNoteStats()
+
 	deliverynote.SetCustomerDeliveryNoteStats()
+	deliverynoteOld.SetCustomerDeliveryNoteStats()
 
 	deliverynote, err = store.FindDeliveryNoteByID(&deliverynote.ID, bson.M{})
 	if err != nil {

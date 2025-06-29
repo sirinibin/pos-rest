@@ -494,24 +494,6 @@ func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats Sa
 
 func (salesreturn *SalesReturn) AttributesValueChangeEvent(salesreturnOld *SalesReturn) error {
 
-	if salesreturn.Status != salesreturnOld.Status {
-
-		//if salesreturn.Status == "delivered" || salesreturn.Status == "dispatched" {
-
-		err := salesreturnOld.AddStock()
-		if err != nil {
-			return err
-		}
-
-		/*
-			err = salesreturn.RemoveStock()
-			if err != nil {
-				return err
-			}
-		*/
-		//}
-	}
-
 	return nil
 }
 
@@ -1847,7 +1829,7 @@ func (salesreturn *SalesReturn) RemoveStock() (err error) {
 }
 */
 
-func (salesreturn *SalesReturn) AddStock() (err error) {
+func (salesreturn *SalesReturn) SetProductsStock() (err error) {
 	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1867,47 +1849,35 @@ func (salesreturn *SalesReturn) AddStock() (err error) {
 			return err
 		}
 
-		if productStoreTemp, ok := product.ProductStores[salesreturn.StoreID.Hex()]; ok {
-			productStoreTemp.Stock += salesreturnProduct.Quantity
-			product.ProductStores[salesreturn.StoreID.Hex()] = productStoreTemp
-		} else {
-			product.ProductStores = map[string]ProductStore{}
-			product.ProductStores[salesreturn.StoreID.Hex()] = ProductStore{
-				StoreID: *salesreturn.StoreID,
-				Stock:   salesreturnProduct.Quantity,
-			}
+		err = product.SetStock()
+		if err != nil {
+			return err
 		}
-
-		/*
-			storeExistInProductStore := false
-			for k, productStore := range product.ProductStores {
-				if productStore.StoreID.Hex() == salesreturn.StoreID.Hex() {
-
-					product.Stores[k].Stock += salesreturnProduct.Quantity
-					storeExistInProductStore = true
-					break
-				}
-			}
-
-			if !storeExistInProductStore {
-				productStore := ProductStore{
-					StoreID: *salesreturn.StoreID,
-					Stock:   salesreturnProduct.Quantity,
-				}
-				product.Stores = append(product.Stores, productStore)
-			}
-		*/
 
 		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
-	}
 
-	salesreturn.StockAdded = false
-	err = salesreturn.Update()
-	if err != nil {
-		return err
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetStock()
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
+		}
 	}
 
 	return nil
@@ -3024,6 +2994,26 @@ func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
 		err = product.Update(nil)
 		if err != nil {
 			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetProductSalesReturnStatsByStoreID(store.ID)
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
 		}
 
 	}

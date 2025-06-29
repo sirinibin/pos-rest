@@ -28,6 +28,7 @@ type ProductPurchaseHistory struct {
 	PurchaseCode    string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
 	Quantity        float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitDiscount    float64             `bson:"unit_discount" json:"unit_discount"`
 	Discount        float64             `bson:"discount" json:"discount"`
 	DiscountPercent float64             `bson:"discount_percent" json:"discount_percent"`
 	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
@@ -517,7 +518,7 @@ func (store *Store) SearchPurchaseHistory(w http.ResponseWriter, r *http.Request
 	return models, criterias, nil
 }
 
-func (purchase *Purchase) AddProductsPurchaseHistory() error {
+func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -559,10 +560,11 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 		history.UnitPrice = RoundFloat(purchaseProduct.PurchaseUnitPrice, 2)
 		history.Price = RoundFloat(((purchaseProduct.PurchaseUnitPrice - purchaseProduct.UnitDiscount) * purchaseProduct.Quantity), 2)
 
-		history.RetailProfit = RoundFloat(purchase.ExpectedRetailProfit, 2)
-		history.WholesaleProfit = RoundFloat(purchase.ExpectedWholesaleProfit, 2)
-		history.RetailLoss = RoundFloat(purchase.ExpectedRetailLoss, 2)
-		history.WholesaleLoss = RoundFloat(purchase.ExpectedWholesaleLoss, 2)
+		/*
+			history.RetailProfit = RoundFloat(purchase.ExpectedRetailProfit, 2)
+			history.WholesaleProfit = RoundFloat(purchase.ExpectedWholesaleProfit, 2)
+			history.RetailLoss = RoundFloat(purchase.ExpectedRetailLoss, 2)
+			history.WholesaleLoss = RoundFloat(purchase.ExpectedWholesaleLoss, 2)*/
 
 		history.VatPercent = RoundFloat(*purchase.VatPercent, 2)
 		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
@@ -574,6 +576,68 @@ func (purchase *Purchase) AddProductsPurchaseHistory() error {
 		if err != nil {
 			return err
 		}
+
+		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				history := ProductPurchaseHistory{
+					Date:            purchase.Date,
+					StoreID:         purchase.StoreID,
+					StoreName:       purchase.StoreName,
+					ProductID:       *setProduct.ProductID,
+					VendorID:        purchase.VendorID,
+					VendorName:      purchase.VendorName,
+					PurchaseID:      &purchase.ID,
+					PurchaseCode:    purchase.Code,
+					Quantity:        RoundTo8Decimals(purchaseProduct.Quantity * *setProduct.Quantity),
+					UnitPrice:       RoundTo4Decimals(purchaseProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Unit:            setProductObj.Unit,
+					UnitDiscount:    RoundTo8Decimals(purchaseProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)),
+					Discount:        RoundTo8Decimals((purchaseProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)) * RoundTo8Decimals(purchaseProduct.Quantity**setProduct.Quantity)),
+					DiscountPercent: purchaseProduct.UnitDiscountPercent,
+					CreatedAt:       purchase.CreatedAt,
+					UpdatedAt:       purchase.UpdatedAt,
+				}
+
+				history.UnitPrice = RoundTo4Decimals(purchaseProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100))
+				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
+
+				history.RetailProfit = RoundTo4Decimals(setProductObj.ProductStores[store.ID.Hex()].RetailUnitPrice - history.UnitPrice)
+				history.WholesaleProfit = RoundTo4Decimals(setProductObj.ProductStores[store.ID.Hex()].WholesaleUnitPrice - history.UnitPrice)
+
+				if setProductObj.ProductStores[store.ID.Hex()].RetailUnitPrice < history.UnitPrice {
+					history.RetailLoss = RoundTo4Decimals((history.UnitPrice - setProductObj.ProductStores[store.ID.Hex()].RetailUnitPrice))
+				} else {
+					history.RetailLoss = 0
+				}
+
+				if setProductObj.ProductStores[store.ID.Hex()].WholesaleUnitPrice < history.UnitPrice {
+					history.WholesaleLoss = RoundTo4Decimals((history.UnitPrice - setProductObj.ProductStores[store.ID.Hex()].WholesaleUnitPrice))
+				} else {
+					history.WholesaleLoss = 0
+				}
+
+				history.VatPercent = RoundTo2Decimals(*purchase.VatPercent)
+				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))
+				history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
+				history.ID = primitive.NewObjectID()
+
+				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
 	}
 	return nil
 }

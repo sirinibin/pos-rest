@@ -400,7 +400,7 @@ func (store *Store) SearchDeliveryNoteHistory(w http.ResponseWriter, r *http.Req
 	return models, criterias, nil
 }
 
-func (deliverynote *DeliveryNote) AddProductsDeliveryNoteHistory() error {
+func (deliverynote *DeliveryNote) CreateProductsDeliveryNoteHistory() error {
 	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -440,6 +440,36 @@ func (deliverynote *DeliveryNote) AddProductsDeliveryNoteHistory() error {
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
+		}
+
+		product, err := store.FindProductByID(&deliverynoteProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				history := ProductDeliveryNoteHistory{
+					Date:             deliverynote.Date,
+					StoreID:          deliverynote.StoreID,
+					StoreName:        deliverynote.StoreName,
+					ProductID:        *setProduct.ProductID,
+					CustomerID:       deliverynote.CustomerID,
+					CustomerName:     deliverynote.CustomerName,
+					DeliveryNoteID:   &deliverynote.ID,
+					DeliveryNoteCode: deliverynote.Code,
+					Quantity:         (deliverynoteProduct.Quantity * *setProduct.Quantity),
+					Unit:             deliverynoteProduct.Unit,
+					CreatedAt:        deliverynote.CreatedAt,
+					UpdatedAt:        deliverynote.UpdatedAt,
+				}
+
+				history.ID = primitive.NewObjectID()
+				_, err := collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 

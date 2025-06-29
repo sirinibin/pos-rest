@@ -870,7 +870,7 @@ func (store *Store) ProcessDeliveryNotes() error {
 			return err
 		}
 
-		err = deliverynote.AddProductsDeliveryNoteHistory()
+		err = deliverynote.CreateProductsDeliveryNoteHistory()
 		if err != nil {
 			return err
 		}
@@ -978,6 +978,26 @@ func (deliveryNote *DeliveryNote) SetProductsDeliveryNoteStats() error {
 		if err != nil {
 			return err
 		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetProductDeliveryNoteStatsByStoreID(store.ID)
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
+		}
 	}
 	return nil
 }
@@ -1058,6 +1078,10 @@ func (customer *Customer) SetCustomerDeliveryNoteStatsByStoreID(storeID primitiv
 }
 
 func (deliveryNote *DeliveryNote) SetCustomerDeliveryNoteStats() error {
+	if deliveryNote.CustomerID == nil || deliveryNote.CustomerID.IsZero() {
+		return nil
+	}
+
 	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
 	if err != nil {
 		return err

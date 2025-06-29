@@ -1589,90 +1589,50 @@ func (purchaseReturn *PurchaseReturn) UpdateReturnedQuantityInPurchaseProduct(pu
 	return nil
 }
 
-func (purchasereturn *PurchaseReturn) AddStock() (err error) {
-	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
+func (purchaseReturn *PurchaseReturn) SetProductsStock() (err error) {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	for _, purchasereturnProduct := range purchasereturn.Products {
-		if !purchasereturnProduct.Selected {
+	for _, purchaseReturnProduct := range purchaseReturn.Products {
+		if !purchaseReturnProduct.Selected {
 			continue
 		}
 
-		product, err := store.FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
+		product, err := store.FindProductByID(&purchaseReturnProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
 
-		if productStoreTemp, ok := product.ProductStores[purchasereturn.StoreID.Hex()]; ok {
-			productStoreTemp.Stock += purchasereturnProduct.Quantity
-			product.ProductStores[purchasereturn.StoreID.Hex()] = productStoreTemp
-		} else {
-			product.ProductStores = map[string]ProductStore{}
-			product.ProductStores[purchasereturn.StoreID.Hex()] = ProductStore{
-				StoreID: *purchasereturn.StoreID,
-				Stock:   purchasereturnProduct.Quantity,
-			}
+		err = product.SetStock()
+		if err != nil {
+			return err
 		}
-
-		/*
-			storeExistInProductStore := false
-			for k, productStore := range product.ProductStores {
-				if productStore.StoreID.Hex() == purchasereturn.StoreID.Hex() {
-					product.ProductStores[k].Stock += purchasereturnProduct.Quantity
-					storeExistInProductStore = true
-					break
-				}
-			}
-
-			if !storeExistInProductStore {
-				productStore := ProductStore{
-					StoreID: *purchasereturn.StoreID,
-					Stock:   purchasereturnProduct.Quantity,
-				}
-				product.Stores = append(product.Stores, productStore)
-			}
-		*/
 
 		err = product.Update(nil)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
 
-func (purchasereturn *PurchaseReturn) RemoveStock() (err error) {
-	store, err := FindStoreByID(purchasereturn.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	for _, purchasereturnProduct := range purchasereturn.Products {
-		if !purchasereturnProduct.Selected {
-			continue
-		}
-
-		product, err := store.FindProductByID(&purchasereturnProduct.ProductID, bson.M{})
-		if err != nil {
-			return err
-		}
-
-		for k, productStore := range product.ProductStores {
-			if productStore.StoreID.Hex() == purchasereturn.StoreID.Hex() {
-				if productStoreTemp, ok := product.ProductStores[k]; ok {
-					productStoreTemp.Stock -= purchasereturnProduct.Quantity
-					product.ProductStores[k] = productStoreTemp
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
 				}
-				//product.Stores[k].Stock -= purchasereturnProduct.Quantity
-				break
-			}
-		}
 
-		err = product.Update(nil)
-		if err != nil {
-			return err
+				err = setProductObj.SetStock()
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
 		}
 	}
 	return nil
@@ -2602,6 +2562,26 @@ func (purchaseReturn *PurchaseReturn) SetProductsPurchaseReturnStats() error {
 		err = product.Update(nil)
 		if err != nil {
 			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetProductPurchaseReturnStatsByStoreID(store.ID)
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
 		}
 
 	}

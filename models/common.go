@@ -61,6 +61,10 @@ func RoundTo4Decimals(num float64) float64 {
 	return math.Round(num*10000) / 10000
 }
 
+func RoundTo8Decimals(num float64) float64 {
+	return math.Round(num*100000000) / 100000000
+}
+
 func ConvertToArabicNumerals(input string) string {
 	var result strings.Builder
 	for _, r := range input {

@@ -526,7 +526,7 @@ func ViewProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = product.GenerateBarCodeBase64ByStoreID(store.ID)
+	err = product.GenerateBarCodeBase64ByStoreID()
 	if err != nil {
 		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)

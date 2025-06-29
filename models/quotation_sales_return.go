@@ -119,6 +119,60 @@ type QuotationSalesReturn struct {
 	EnableReportToZatca bool                          `json:"enable_report_to_zatca" bson:"-"`
 }
 
+func (quotationSalesReturn *QuotationSalesReturn) SetProductsStock() (err error) {
+	store, err := FindStoreByID(quotationSalesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if len(quotationSalesReturn.Products) == 0 {
+		return nil
+	}
+
+	for _, quotationSalesReturnProduct := range quotationSalesReturn.Products {
+		if !quotationSalesReturnProduct.Selected {
+			continue
+		}
+
+		product, err := store.FindProductByID(&quotationSalesReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		err = product.SetStock()
+		if err != nil {
+			return err
+		}
+
+		err = product.Update(nil)
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetStock()
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
+		}
+	}
+
+	return nil
+}
+
 func (model *QuotationSalesReturn) SetPostBalances() error {
 	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {
@@ -2918,6 +2972,26 @@ func (quotationsalesReturn *QuotationSalesReturn) SetProductsQuotationSalesRetur
 		err = product.Update(nil)
 		if err != nil {
 			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetProductQuotationSalesReturnStatsByStoreID(store.ID)
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
 		}
 
 	}

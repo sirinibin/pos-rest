@@ -16,21 +16,21 @@ import (
 	"github.com/boombuler/barcode/code128"
 	"github.com/boombuler/barcode/ean"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 )
 
-func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectID) (err error) {
-	scale := 6
-	var store *Store
-	if !storeID.IsZero() {
-		store, err = FindStoreByID(&storeID, bson.M{})
-		if err != nil {
-			return errors.New("error finding store: " + err.Error())
-		}
+func (product *Product) GenerateBarCodeBase64ByStoreID() (err error) {
+	if product.Ean12 == "" && product.BarCode == "" {
+		return nil
 	}
+	scale := 6
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return errors.New("error finding store: " + err.Error())
+	}
+
 	data := ""
 	if product.Ean12 != "" {
 		data = product.Ean12
@@ -58,10 +58,7 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 		draw.Draw(img1, img1.Bounds(), &image.Uniform{whiteColor}, image.Point{}, draw.Src)
 	}
 
-	storeName := "STORE NAME"
-	if !storeID.IsZero() {
-		storeName = store.Name
-	}
+	storeName := store.Name
 
 	/*
 		width, err = addLabel(img1, 10*scale, 15*scale, storeName, color.Black, 6.8*float64(scale), true)
@@ -99,21 +96,19 @@ func (product *Product) GenerateBarCodeBase64ByStoreID(storeID primitive.ObjectI
 	vatPercent := 15.00
 	price := "N/A"
 
-	if !storeID.IsZero() {
-		retailUnitPriceWithVAT, err := product.getRetailUnitPriceWithVATByStoreID(storeID)
-		if err != nil {
-			return errors.New("error get retail unit price: " + err.Error())
-		}
+	retailUnitPriceWithVAT, err := product.getRetailUnitPriceWithVATByStoreID(store.ID)
+	if err != nil {
+		return errors.New("error get retail unit price: " + err.Error())
+	}
 
-		purchaseUnitPriceSecret, err = product.getPurchaseUnitPriceSecretByStoreID(storeID)
-		if err != nil {
-			return errors.New("error get purchase unit price secret: " + err.Error())
-		}
+	purchaseUnitPriceSecret, err = product.getPurchaseUnitPriceSecretByStoreID(store.ID)
+	if err != nil {
+		return errors.New("error get purchase unit price secret: " + err.Error())
+	}
 
-		vatPercent = store.VatPercent
-		if retailUnitPriceWithVAT > 0 {
-			price = fmt.Sprintf("%.02f", retailUnitPriceWithVAT)
-		}
+	vatPercent = store.VatPercent
+	if retailUnitPriceWithVAT > 0 {
+		price = fmt.Sprintf("%.02f", retailUnitPriceWithVAT)
 	}
 
 	addLabel(img1, 10*scale, 72*scale, "SAR: "+price, color.Black, 14*float64(scale), true)

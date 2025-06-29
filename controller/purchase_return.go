@@ -165,7 +165,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchasereturn.UpdatePurchaseReturnDiscount(false)
-	purchasereturn.AddProductsPurchaseReturnHistory()
+	purchasereturn.CreateProductsPurchaseReturnHistory()
 
 	err = purchasereturn.AddPayments()
 	if err != nil {
@@ -177,7 +177,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchasereturn.SetPaymentStatus()
 	purchasereturn.Update()
 
-	err = purchasereturn.RemoveStock()
+	err = purchasereturn.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -200,7 +200,9 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchasereturn.UpdatePurchaseReturnCount()
+
 	purchasereturn.SetProductsPurchaseReturnStats()
+
 	purchasereturn.SetVendorPurchaseReturnStats()
 
 	err = purchasereturn.DoAccounting()
@@ -326,7 +328,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchasereturn.ClearProductsPurchaseReturnHistory()
-	purchasereturn.AddProductsPurchaseReturnHistory()
+	purchasereturn.CreateProductsPurchaseReturnHistory()
 
 	err = purchasereturn.UpdatePayments()
 	if err != nil {
@@ -350,7 +352,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturnOld.AddStock()
+	err = purchasereturnOld.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -361,7 +363,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturn.RemoveStock()
+	err = purchasereturn.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -384,7 +386,10 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchasereturn.UpdatePurchaseReturnCount()
+
 	purchasereturn.SetProductsPurchaseReturnStats()
+	purchasereturnOld.SetProductsPurchaseReturnStats()
+
 	purchasereturn.SetVendorPurchaseReturnStats()
 
 	err = purchasereturn.UndoAccounting()
@@ -555,19 +560,6 @@ func DeletePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
-	}
-
-	if purchasereturn.Status == "delivered" {
-		err = purchasereturn.RemoveStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
 	}
 
 	response.Status = true

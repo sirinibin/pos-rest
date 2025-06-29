@@ -30,6 +30,7 @@ type ProductSalesHistory struct {
 	PurchaseUnitPrice float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	UnitPrice         float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitDiscount      float64             `bson:"unit_discount" json:"unit_discount"`
 	Discount          float64             `bson:"discount" json:"discount"`
 	DiscountPercent   float64             `bson:"discount_percent" json:"discount_percent"`
 	Price             float64             `bson:"price,omitempty" json:"price,omitempty"`
@@ -539,7 +540,6 @@ func (order *Order) CreateProductsSalesHistory() error {
 	defer cancel()
 
 	for _, orderProduct := range order.Products {
-
 		history := ProductSalesHistory{
 			Date:              order.Date,
 			StoreID:           order.StoreID,
@@ -552,7 +552,8 @@ func (order *Order) CreateProductsSalesHistory() error {
 			Quantity:          orderProduct.Quantity,
 			PurchaseUnitPrice: orderProduct.PurchaseUnitPrice,
 			Unit:              orderProduct.Unit,
-			Discount:          orderProduct.UnitDiscount,
+			UnitDiscount:      orderProduct.UnitDiscount,
+			Discount:          (orderProduct.UnitDiscount * orderProduct.Quantity),
 			DiscountPercent:   orderProduct.UnitDiscountPercent,
 			CreatedAt:         order.CreatedAt,
 			UpdatedAt:         order.UpdatedAt,
@@ -566,13 +567,59 @@ func (order *Order) CreateProductsSalesHistory() error {
 		history.VatPercent = RoundFloat(*order.VatPercent, 2)
 		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
 		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)
-
 		history.ID = primitive.NewObjectID()
 
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
-			log.Print(err)
 			return err
+		}
+
+		product, err := store.FindProductByID(&orderProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				history := ProductSalesHistory{
+					Date:              order.Date,
+					StoreID:           order.StoreID,
+					StoreName:         order.StoreName,
+					ProductID:         *setProduct.ProductID,
+					CustomerID:        order.CustomerID,
+					CustomerName:      order.CustomerName,
+					OrderID:           &order.ID,
+					OrderCode:         order.Code,
+					Quantity:          RoundTo8Decimals(orderProduct.Quantity * *setProduct.Quantity),
+					PurchaseUnitPrice: RoundTo4Decimals(orderProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Unit:              setProductObj.Unit,
+					UnitDiscount:      RoundTo8Decimals(orderProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)),
+					Discount:          RoundTo8Decimals((orderProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(orderProduct.Quantity**setProduct.Quantity)),
+					DiscountPercent:   orderProduct.UnitDiscountPercent,
+					CreatedAt:         order.CreatedAt,
+					UpdatedAt:         order.UpdatedAt,
+				}
+
+				history.UnitPrice = RoundTo4Decimals(orderProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
+				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
+				history.Profit = RoundTo4Decimals(orderProduct.Profit * (*setProduct.RetailPricePercent / 100))
+				history.Loss = RoundTo4Decimals(orderProduct.Loss * (*setProduct.RetailPricePercent / 100))
+
+				history.VatPercent = RoundTo2Decimals(*order.VatPercent)
+				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))
+				history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
+				history.ID = primitive.NewObjectID()
+
+				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 

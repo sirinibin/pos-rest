@@ -17,32 +17,34 @@ import (
 )
 
 type ProductSalesReturnHistory struct {
-	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName       string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	ProductID       primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	CustomerID      *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	CustomerName    string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	OrderID         *primitive.ObjectID `json:"order_id,omitempty" bson:"order_id,omitempty"`
-	OrderCode       string              `json:"order_code,omitempty" bson:"order_code,omitempty"`
-	SalesReturnID   *primitive.ObjectID `json:"sales_return_id,omitempty" bson:"sales_return_id,omitempty"`
-	SalesReturnCode string              `json:"sales_return_code,omitempty" bson:"sales_return_code,omitempty"`
-	Quantity        float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	Discount        float64             `bson:"discount" json:"discount"`
-	DiscountPercent float64             `bson:"discount_percent" json:"discount_percent"`
-	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
-	NetPrice        float64             `bson:"net_price" json:"net_price"`
-	Profit          float64             `bson:"profit" json:"profit"`
-	Loss            float64             `bson:"loss" json:"loss"`
-	VatPercent      float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	VatPrice        float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
-	Unit            string              `bson:"unit,omitempty" json:"unit,omitempty"`
-	Store           *Store              `json:"store,omitempty"`
-	Customer        *Customer           `json:"customer,omitempty"`
-	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ID                primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date              *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName         string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	ProductID         primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerName      string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	OrderID           *primitive.ObjectID `json:"order_id,omitempty" bson:"order_id,omitempty"`
+	OrderCode         string              `json:"order_code,omitempty" bson:"order_code,omitempty"`
+	SalesReturnID     *primitive.ObjectID `json:"sales_return_id,omitempty" bson:"sales_return_id,omitempty"`
+	SalesReturnCode   string              `json:"sales_return_code,omitempty" bson:"sales_return_code,omitempty"`
+	Quantity          float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	PurchaseUnitPrice float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	UnitPrice         float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitDiscount      float64             `bson:"unit_discount" json:"unit_discount"`
+	Discount          float64             `bson:"discount" json:"discount"`
+	DiscountPercent   float64             `bson:"discount_percent" json:"discount_percent"`
+	Price             float64             `bson:"price,omitempty" json:"price,omitempty"`
+	NetPrice          float64             `bson:"net_price" json:"net_price"`
+	Profit            float64             `bson:"profit" json:"profit"`
+	Loss              float64             `bson:"loss" json:"loss"`
+	VatPercent        float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPrice          float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
+	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	Store             *Store              `json:"store,omitempty"`
+	Customer          *Customer           `json:"customer,omitempty"`
+	CreatedAt         *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt         *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 type SalesReturnHistoryStats struct {
@@ -547,6 +549,56 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
+		}
+
+		product, err := store.FindProductByID(&salesReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				history := ProductSalesReturnHistory{
+					Date:              salesReturn.Date,
+					StoreID:           salesReturn.StoreID,
+					StoreName:         salesReturn.StoreName,
+					ProductID:         *setProduct.ProductID,
+					CustomerID:        salesReturn.CustomerID,
+					CustomerName:      salesReturn.CustomerName,
+					SalesReturnID:     &salesReturn.ID,
+					SalesReturnCode:   salesReturn.Code,
+					OrderID:           salesReturn.OrderID,
+					OrderCode:         salesReturn.OrderCode,
+					Quantity:          RoundTo8Decimals(salesReturnProduct.Quantity * *setProduct.Quantity),
+					PurchaseUnitPrice: RoundTo4Decimals(salesReturnProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Unit:              setProductObj.Unit,
+					UnitDiscount:      RoundTo8Decimals(salesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)),
+					Discount:          RoundTo8Decimals((salesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(salesReturnProduct.Quantity**setProduct.Quantity)),
+					DiscountPercent:   salesReturnProduct.UnitDiscountPercent,
+					CreatedAt:         salesReturn.CreatedAt,
+					UpdatedAt:         salesReturn.UpdatedAt,
+				}
+
+				history.UnitPrice = RoundTo4Decimals(salesReturnProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
+				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
+				history.Profit = RoundTo4Decimals(salesReturnProduct.Profit * (*setProduct.RetailPricePercent / 100))
+				history.Loss = RoundTo4Decimals(salesReturnProduct.Loss * (*setProduct.RetailPricePercent / 100))
+
+				history.VatPercent = RoundTo2Decimals(*salesReturn.VatPercent)
+				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))
+				history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
+				history.ID = primitive.NewObjectID()
+
+				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 

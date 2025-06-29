@@ -204,6 +204,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.UpdateOrderReturnCount()
 	salesreturn.UpdateOrderReturnDiscount(nil)
 	salesreturn.UpdateOrderReturnCashDiscount(nil)
+
 	salesreturn.CreateProductsSalesReturnHistory()
 	/*
 		if salesreturn.PaymentStatus != "not_paid" {
@@ -222,7 +223,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.SetPaymentStatus()
 	salesreturn.Update()
 
-	err = salesreturn.AddStock()
+	err = salesreturn.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -245,6 +246,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	salesreturn.SetProductsSalesReturnStats()
+
 	salesreturn.SetCustomerSalesReturnStats()
 
 	err = salesreturn.DoAccounting()
@@ -267,6 +269,8 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store.NotifyUsers("sales_return_updated")
+
+	go salesreturn.SetPostBalances()
 
 	response.Status = true
 	response.Result = salesreturn
@@ -409,7 +413,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.SetPaymentStatus()
 	salesreturn.Update()
 
-	err = salesreturnOld.RemoveStock()
+	err = salesreturn.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -420,7 +424,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = salesreturn.AddStock()
+	err = salesreturnOld.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -456,6 +460,9 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	salesreturn.SetProductsSalesReturnStats()
+
+	salesreturnOld.SetProductsSalesReturnStats()
+
 	salesreturn.SetCustomerSalesReturnStats()
 
 	err = salesreturn.UndoAccounting()
@@ -615,17 +622,15 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if salesreturn.Status == "delivered" {
-		err = salesreturn.AddStock()
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
+	err = salesreturn.SetProductsStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
 
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	response.Status = true

@@ -1954,7 +1954,7 @@ func (store *Store) GetProductStockInStore(
 	return 0, err
 }
 
-func (order *Order) RemoveStock() (err error) {
+func (order *Order) SetProductsStock() (err error) {
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1969,103 +1969,36 @@ func (order *Order) RemoveStock() (err error) {
 		if err != nil {
 			return err
 		}
-
-		if len(product.ProductStores) == 0 {
-			store, err := FindStoreByID(order.StoreID, bson.M{})
-			if err != nil {
-				return err
-			}
-			product.ProductStores = map[string]ProductStore{}
-			product.ProductStores[order.StoreID.Hex()] = ProductStore{
-				StoreID:           *order.StoreID,
-				StoreName:         order.StoreName,
-				StoreNameInArabic: store.NameInArabic,
-				Stock:             float64(0),
-			}
-		}
-
-		if productStoreTemp, ok := product.ProductStores[order.StoreID.Hex()]; ok {
-			productStoreTemp.Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
-			product.ProductStores[order.StoreID.Hex()] = productStoreTemp
-		}
-		/*
-			for k, productStore := range product.ProductStores {
-				if productStore.StoreID.Hex() == order.StoreID.Hex() {
-					product.ProductStores[k].Stock -= (orderProduct.Quantity - orderProduct.QuantityReturned)
-					break
-				}
-			}
-		*/
-
-		err = product.Update(nil)
+		err = product.SetStock()
 		if err != nil {
 			return err
 		}
 
-	}
-
-	err = order.Update()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (order *Order) AddStock() (err error) {
-	store, err := FindStoreByID(order.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	if len(order.Products) == 0 {
-		return nil
-	}
-
-	for _, orderProduct := range order.Products {
-		product, err := store.FindProductByID(&orderProduct.ProductID, bson.M{})
+		err = product.Update(&store.ID)
 		if err != nil {
 			return err
 		}
 
-		/*
-			storeExistInProductStore := false
-			for k, productStore := range product.ProductStores {
-				if productStore.StoreID.Hex() == order.StoreID.Hex() {
-					product.Stores[k].Stock += orderProduct.Quantity
-					storeExistInProductStore = true
-					break
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
 				}
-			}
 
-			if !storeExistInProductStore {
-				productStore := ProductStore{
-					StoreID: *order.StoreID,
-					Stock:   orderProduct.Quantity,
+				err = setProductObj.SetStock()
+				if err != nil {
+					return err
 				}
-				product.Stores = append(product.Stores, productStore)
-			}
-		*/
 
-		if productStoreTemp, ok := product.ProductStores[order.StoreID.Hex()]; ok {
-			productStoreTemp.Stock += orderProduct.Quantity
-			product.ProductStores[order.StoreID.Hex()] = productStoreTemp
-		} else {
-			product.ProductStores = map[string]ProductStore{}
-			product.ProductStores[order.StoreID.Hex()] = ProductStore{
-				StoreID: *order.StoreID,
-				Stock:   orderProduct.Quantity,
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
 			}
 		}
 
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = order.Update()
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -3347,6 +3280,26 @@ func (order *Order) SetProductsSalesStats() error {
 		err = product.Update(nil)
 		if err != nil {
 			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.SetProductSalesStatsByStoreID(store.ID)
+				if err != nil {
+					return err
+				}
+
+				err = setProductObj.Update(&store.ID)
+				if err != nil {
+					return err
+				}
+
+			}
 		}
 
 	}

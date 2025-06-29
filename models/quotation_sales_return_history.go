@@ -29,7 +29,9 @@ type ProductQuotationSalesReturnHistory struct {
 	QuotationSalesReturnID   *primitive.ObjectID `json:"quotation_sales_return_id,omitempty" bson:"quotation_sales_return_id,omitempty"`
 	QuotationSalesReturnCode string              `json:"quotation_sales_return_code,omitempty" bson:"quotation_sales_return_code,omitempty"`
 	Quantity                 float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	PurchaseUnitPrice        float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	UnitPrice                float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitDiscount             float64             `bson:"unit_discount" json:"unit_discount"`
 	Discount                 float64             `bson:"discount" json:"discount"`
 	DiscountPercent          float64             `bson:"discount_percent" json:"discount_percent"`
 	Price                    float64             `bson:"price,omitempty" json:"price,omitempty"`
@@ -547,6 +549,56 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 		_, err := collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
+		}
+
+		product, err := store.FindProductByID(&quotationsalesReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				history := ProductQuotationSalesReturnHistory{
+					Date:                     quotationsalesReturn.Date,
+					StoreID:                  quotationsalesReturn.StoreID,
+					StoreName:                quotationsalesReturn.StoreName,
+					ProductID:                *setProduct.ProductID,
+					CustomerID:               quotationsalesReturn.CustomerID,
+					CustomerName:             quotationsalesReturn.CustomerName,
+					QuotationSalesReturnID:   &quotationsalesReturn.ID,
+					QuotationSalesReturnCode: quotationsalesReturn.Code,
+					QuotationID:              quotationsalesReturn.QuotationID,
+					QuotationCode:            quotationsalesReturn.QuotationCode,
+					Quantity:                 RoundTo8Decimals(quotationsalesReturnProduct.Quantity * *setProduct.Quantity),
+					PurchaseUnitPrice:        RoundTo4Decimals(quotationsalesReturnProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Unit:                     setProductObj.Unit,
+					UnitDiscount:             RoundTo8Decimals(quotationsalesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)),
+					Discount:                 RoundTo8Decimals((quotationsalesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(quotationsalesReturnProduct.Quantity**setProduct.Quantity)),
+					DiscountPercent:          quotationsalesReturnProduct.UnitDiscountPercent,
+					CreatedAt:                quotationsalesReturn.CreatedAt,
+					UpdatedAt:                quotationsalesReturn.UpdatedAt,
+				}
+
+				history.UnitPrice = RoundTo4Decimals(quotationsalesReturnProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
+				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
+				history.Profit = RoundTo4Decimals(quotationsalesReturnProduct.Profit * (*setProduct.RetailPricePercent / 100))
+				history.Loss = RoundTo4Decimals(quotationsalesReturnProduct.Loss * (*setProduct.RetailPricePercent / 100))
+
+				history.VatPercent = RoundTo2Decimals(*quotationsalesReturn.VatPercent)
+				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))
+				history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
+				history.ID = primitive.NewObjectID()
+
+				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
