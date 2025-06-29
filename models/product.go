@@ -116,6 +116,7 @@ type Product struct {
 	Images               []string                `bson:"images" json:"images"`
 	ImagesContent        []string                `json:"images_content,omitempty" bson:"-"`
 	Deleted              bool                    `bson:"deleted" json:"deleted"`
+	IsSet                bool                    `bson:"is_set" json:"is_set"`
 	DeletedBy            *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser        *User                   `json:"deleted_by_user" bson:"-"`
 	DeletedAt            *time.Time              `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -673,6 +674,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		if value == 1 {
 			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[is_set]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["is_set"] = bson.M{"$eq": true}
 		}
 	}
 
@@ -2269,6 +2282,12 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 				errs["damaged_stock_0"] = " damaged stock should be greater than stock value"
 			}
 		}*/
+
+	if govalidator.IsNull(product.Set.Name) {
+		product.IsSet = false
+	} else {
+		product.IsSet = true
+	}
 
 	if govalidator.IsNull(product.Name) {
 		errs["name"] = "Name is required"
