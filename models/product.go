@@ -3080,6 +3080,16 @@ func ProcessProducts() error {
 				continue
 			}
 
+			if store.Code == "MBDI" {
+				if govalidator.IsNull(product.Set.Name) {
+					product.IsSet = false
+				} else {
+					product.IsSet = true
+				}
+
+				product.Update(&store.ID)
+			}
+
 			/*
 				for i, productStore := range product.ProductStores {
 					productStoreTemp := productStore
@@ -3110,17 +3120,18 @@ func ProcessProducts() error {
 				}
 			*/
 
-			product.GeneratePrefixes()
-			product.SetSearchLabel(&store.ID)
-			product.SetAdditionalkeywords()
-			err = product.Update(&store.ID)
-			if err != nil {
-				log.Print("Store ID:" + store.ID.Hex())
-				log.Print("Part No.:" + product.PartNumber)
-				log.Print("Product ID:" + product.ID.Hex())
-				continue
-				//return err
-			}
+			/*
+				product.GeneratePrefixes()
+				product.SetSearchLabel(&store.ID)
+				product.SetAdditionalkeywords()
+				err = product.Update(&store.ID)
+				if err != nil {
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Part No.:" + product.PartNumber)
+					log.Print("Product ID:" + product.ID.Hex())
+					continue
+					//return err
+				}*/
 
 			/*
 				if !isValidUTF8(product.Name) {
