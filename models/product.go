@@ -3511,7 +3511,7 @@ func (product *Product) SetStock() error {
 		newStock += productStoreTemp.StocksAdded
 		newStock -= productStoreTemp.StocksRemoved
 
-		productStoreTemp.Stock = newStock
+		productStoreTemp.Stock = RoundTo4Decimals(newStock)
 		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
 	}
 
