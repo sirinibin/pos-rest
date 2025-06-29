@@ -24,7 +24,7 @@ type PurchasePayment struct {
 	DateStr          string              `json:"date_str,omitempty" bson:"-"`
 	PurchaseID       *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
 	PurchaseCode     string              `json:"purchase_code" bson:"purchase_code"`
-	Amount           *float64            `json:"amount" bson:"amount"`
+	Amount           float64             `json:"amount" bson:"amount"`
 	Method           string              `json:"method" bson:"method"`
 	CreatedAt        *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt        *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -453,9 +453,9 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 
 	}
 
-	if purchasePayment.Amount == nil {
+	if purchasePayment.Amount == 0 {
 		errs["amount"] = "Amount is required"
-	} else if ToFixed(*purchasePayment.Amount, 2) <= 0 {
+	} else if ToFixed(purchasePayment.Amount, 2) < 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
@@ -464,18 +464,18 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 		errs["sales_return"] = "error finding sales return" + err.Error()
 	}
 
-	if *purchasePayment.Amount > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {
+	if purchasePayment.Amount > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {
 		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
 	if scenario == "update" {
-		if (*purchasePayment.Amount + (purchase.TotalPaymentPaid - *oldPurchasePayment.Amount)) > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {
+		if (purchasePayment.Amount + (purchase.TotalPaymentPaid - oldPurchasePayment.Amount)) > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 	} else {
-		if (*purchasePayment.Amount + (purchase.TotalPaymentPaid)) > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {
+		if (purchasePayment.Amount + (purchase.TotalPaymentPaid)) > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}

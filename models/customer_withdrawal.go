@@ -66,8 +66,8 @@ type PayablePayment struct {
 	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr       string              `json:"date_str,omitempty" bson:"-"`
-	Amount        *float64            `json:"amount" bson:"amount"`
-	Discount      *float64            `bson:"discount" json:"discount"`
+	Amount        float64             `json:"amount" bson:"amount"`
+	Discount      float64             `bson:"discount" json:"discount"`
 	Method        string              `json:"method" bson:"method"`
 	BankReference *string             `json:"bank_reference" bson:"bank_reference"`
 	Description   *string             `json:"description" bson:"description"`
@@ -361,9 +361,9 @@ func (customerwithdrawal *CustomerWithdrawal) FindNetTotal() {
 	paymentMethods := []string{}
 
 	for _, payment := range customerwithdrawal.Payments {
-		amount := *payment.Amount
-		if payment.Discount != nil {
-			amount -= *payment.Discount
+		amount := payment.Amount
+		if payment.Discount > 0 {
+			amount -= payment.Discount
 		}
 
 		netTotal += amount
@@ -911,13 +911,13 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			}
 		}
 
-		if payment.Amount == nil {
+		if payment.Amount == 0 {
 			errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
-		} else if *payment.Amount <= 0 {
+		} else if payment.Amount < 0 {
 			errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
-		if *payment.Amount < *payment.Discount {
+		if payment.Amount < payment.Discount {
 			errs["customer_payable_payment_discount_"+strconv.Itoa(index)] = "Payment discount should not be grater than amount"
 		}
 
@@ -945,13 +945,13 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 				oldTotalInvoicePaidAmount := float64(0.00)
 				for _, oldPayment := range customerWithdrawalOld.Payments {
 					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == salesreturn.ID.Hex() {
-						oldTotalInvoicePaidAmount += *oldPayment.Amount
+						oldTotalInvoicePaidAmount += oldPayment.Amount
 					}
 				}
 				salesreturnBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > salesreturnBalanceAmount {
+			if RoundTo2Decimals(payment.Amount-payment.Discount) > salesreturnBalanceAmount {
 				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (-discount) should not be greater than " + fmt.Sprintf("%.02f", salesreturn.BalanceAmount) + " (Invoice Balance)"
 			}
 
@@ -961,11 +961,11 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 					if (salesreturnBalanceAmount - totalInvoicePaidAmount) == 0 {
 						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
 						break
-					} else if (totalInvoicePaidAmount + *payment2.Amount) > salesreturnBalanceAmount {
+					} else if (totalInvoicePaidAmount + payment2.Amount) > salesreturnBalanceAmount {
 						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (salesreturnBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
 						break
 					}
-					totalInvoicePaidAmount += *payment2.Amount
+					totalInvoicePaidAmount += payment2.Amount
 				}
 			}
 
@@ -991,13 +991,13 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 				oldTotalInvoicePaidAmount := float64(0.00)
 				for _, oldPayment := range customerWithdrawalOld.Payments {
 					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == quotationSalesReturn.ID.Hex() {
-						oldTotalInvoicePaidAmount += *oldPayment.Amount
+						oldTotalInvoicePaidAmount += oldPayment.Amount
 					}
 				}
 				quotationSalesReturnBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > quotationSalesReturnBalanceAmount {
+			if RoundTo2Decimals(payment.Amount-payment.Discount) > quotationSalesReturnBalanceAmount {
 				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (-discount) should not be greater than " + fmt.Sprintf("%.02f", quotationSalesReturn.BalanceAmount) + " (Invoice Balance)"
 			}
 
@@ -1007,11 +1007,11 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 					if (quotationSalesReturnBalanceAmount - totalInvoicePaidAmount) == 0 {
 						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
 						break
-					} else if (totalInvoicePaidAmount + *payment2.Amount) > quotationSalesReturnBalanceAmount {
+					} else if (totalInvoicePaidAmount + payment2.Amount) > quotationSalesReturnBalanceAmount {
 						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (quotationSalesReturnBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
 						break
 					}
-					totalInvoicePaidAmount += *payment2.Amount
+					totalInvoicePaidAmount += payment2.Amount
 				}
 			}
 
@@ -1037,13 +1037,13 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 				oldTotalInvoicePaidAmount := float64(0.00)
 				for _, oldPayment := range customerWithdrawalOld.Payments {
 					if oldPayment.InvoiceID != nil && !oldPayment.InvoiceID.IsZero() && oldPayment.InvoiceID.Hex() == purchase.ID.Hex() {
-						oldTotalInvoicePaidAmount += *oldPayment.Amount
+						oldTotalInvoicePaidAmount += oldPayment.Amount
 					}
 				}
 				purchaseBalanceAmount += oldTotalInvoicePaidAmount
 			}
 
-			if RoundTo2Decimals(*payment.Amount-*payment.Discount) > purchaseBalanceAmount {
+			if RoundTo2Decimals(payment.Amount-payment.Discount) > purchaseBalanceAmount {
 				errs["customer_payable_payment_amount_"+strconv.Itoa(index)] = "Payment amount (-discount) should not be greater than " + fmt.Sprintf("%.02f", purchase.BalanceAmount) + " (Invoice Balance)"
 			}
 
@@ -1053,11 +1053,11 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 					if (purchaseBalanceAmount - totalInvoicePaidAmount) == 0 {
 						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment is already closed for this invoice"
 						break
-					} else if (totalInvoicePaidAmount + *payment2.Amount) > purchaseBalanceAmount {
+					} else if (totalInvoicePaidAmount + payment2.Amount) > purchaseBalanceAmount {
 						errs["customer_payable_payment_amount_"+strconv.Itoa(index2)] = "Payment amount should not be greater than " + fmt.Sprintf("%.02f", (purchaseBalanceAmount-totalInvoicePaidAmount)) + " (Invoice Balance)"
 						break
 					}
-					totalInvoicePaidAmount += *payment2.Amount
+					totalInvoicePaidAmount += payment2.Amount
 				}
 			}
 
@@ -1816,7 +1816,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			AccountNumber: receivingAccount.Number,
 			AccountName:   receivingAccount.Name,
 			DebitOrCredit: "debit",
-			Debit:         RoundTo2Decimals(*payment.Amount),
+			Debit:         RoundTo2Decimals(payment.Amount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
@@ -1828,20 +1828,20 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			AccountNumber: spendingAccount.Number,
 			AccountName:   spendingAccount.Name,
 			DebitOrCredit: "credit",
-			Credit:        RoundTo2Decimals(*payment.Amount - *payment.Discount),
+			Credit:        RoundTo2Decimals(payment.Amount - payment.Discount),
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 		})
 
-		if *payment.Discount > 0 {
+		if payment.Discount > 0 {
 			journals = append(journals, Journal{
 				Date:          payment.Date,
 				AccountID:     cashDiscountReceivedAccount.ID,
 				AccountNumber: cashDiscountReceivedAccount.Number,
 				AccountName:   cashDiscountReceivedAccount.Name,
 				DebitOrCredit: "credit",
-				Credit:        RoundTo2Decimals(*payment.Discount),
+				Credit:        RoundTo2Decimals(payment.Discount),
 				GroupID:       groupID,
 				CreatedAt:     &now,
 				UpdatedAt:     &now,

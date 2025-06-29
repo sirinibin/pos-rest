@@ -1409,8 +1409,8 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	totalPayment := float64(0.00)
 	for _, payment := range salesreturn.PaymentsInput {
-		if payment.Amount != nil {
-			totalPayment += *payment.Amount
+		if payment.Amount > 0 {
+			totalPayment += payment.Amount
 		}
 	}
 
@@ -1436,9 +1436,9 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		if payment.Amount == nil {
+		if payment.Amount == 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
-		} else if *payment.Amount == 0 {
+		} else if payment.Amount < 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
@@ -1450,26 +1450,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
 		}
 
-		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
-			if *payment.Amount <= 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
-			}
-
-			/*
-				maxAllowedAmount := (salesreturn.NetTotal - salesreturn.CashDiscount) - (totalPayment - *payment.Amount)
-
-				if maxAllowedAmount < 0 {
-					maxAllowedAmount = 0
-				}
-
-				if maxAllowedAmount == 0 {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (salesreturn.NetTotal-salesreturn.CashDiscount)) + ", Please delete this payment"
-				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-				}
-			*/
-
-		}
 	} //end for
 
 	if salesreturn.OrderID == nil || salesreturn.OrderID.IsZero() {
@@ -2731,7 +2711,7 @@ func (salesReturn *SalesReturn) SetPaymentStatus() (payments []SalesReturnPaymen
 
 		payments = append(payments, model)
 
-		totalPaymentPaid += *model.Amount
+		totalPaymentPaid += model.Amount
 
 		if !slices.Contains(paymentMethods, model.Method) {
 			paymentMethods = append(paymentMethods, model.Method)
@@ -3277,22 +3257,22 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	extraSalesReturnAmountPaidTemp := extraSalesReturnAmountPaid
 
 	for _, payment := range payments {
-		totalSalesReturnPaidAmount += *payment.Amount
+		totalSalesReturnPaidAmount += payment.Amount
 		if totalSalesReturnPaidAmount > (salesReturn.NetTotal - salesReturn.CashDiscount) {
 			extraSalesReturnAmountPaid = RoundFloat((totalSalesReturnPaidAmount - (salesReturn.NetTotal - salesReturn.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraSalesReturnAmountPaid > 0 {
 			skip := false
-			if extraSalesReturnAmountPaid < *payment.Amount {
-				amount = RoundFloat((*payment.Amount - extraSalesReturnAmountPaid), 2)
+			if extraSalesReturnAmountPaid < payment.Amount {
+				amount = RoundFloat((payment.Amount - extraSalesReturnAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraSalesReturnAmountPaid = 0
-			} else if extraSalesReturnAmountPaid >= *payment.Amount {
+			} else if extraSalesReturnAmountPaid >= payment.Amount {
 				skip = true
-				extraSalesReturnAmountPaid = RoundFloat((extraSalesReturnAmountPaid - *payment.Amount), 2)
+				extraSalesReturnAmountPaid = RoundFloat((extraSalesReturnAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3366,26 +3346,26 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 	//Credits
 	totalPayment = float64(0.00)
 	for _, payment := range payments {
-		totalSalesReturnPaidAmount += *payment.Amount
+		totalSalesReturnPaidAmount += payment.Amount
 		if totalSalesReturnPaidAmount > (salesReturn.NetTotal - salesReturn.CashDiscount) {
 			extraSalesReturnAmountPaid = RoundFloat((totalSalesReturnPaidAmount - (salesReturn.NetTotal - salesReturn.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraSalesReturnAmountPaid > 0 {
 			skip := false
-			if extraSalesReturnAmountPaid < *payment.Amount {
+			if extraSalesReturnAmountPaid < payment.Amount {
 				extraAmount := extraSalesReturnAmountPaid
 				extraSalesReturnPayments = append(extraSalesReturnPayments, SalesReturnPayment{
 					Date:   payment.Date,
-					Amount: &extraAmount,
+					Amount: extraAmount,
 					Method: payment.Method,
 				})
-				amount = RoundFloat((*payment.Amount - extraSalesReturnAmountPaid), 2)
+				amount = RoundFloat((payment.Amount - extraSalesReturnAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraSalesReturnAmountPaid = 0
-			} else if extraSalesReturnAmountPaid >= *payment.Amount {
+			} else if extraSalesReturnAmountPaid >= payment.Amount {
 				extraSalesReturnPayments = append(extraSalesReturnPayments, SalesReturnPayment{
 					Date:   payment.Date,
 					Amount: payment.Amount,
@@ -3393,7 +3373,7 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 				})
 
 				skip = true
-				extraSalesReturnAmountPaid = RoundFloat((extraSalesReturnAmountPaid - *payment.Amount), 2)
+				extraSalesReturnAmountPaid = RoundFloat((extraSalesReturnAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3593,7 +3573,7 @@ func MakeJournalsForSalesReturnExtraPayments(
 			AccountNumber: cashPayingAccount.Number,
 			AccountName:   cashPayingAccount.Name,
 			DebitOrCredit: "credit",
-			Credit:        *payment.Amount,
+			Credit:        payment.Amount,
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,

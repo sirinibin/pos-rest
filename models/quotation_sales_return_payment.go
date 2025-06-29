@@ -26,7 +26,7 @@ type QuotationSalesReturnPayment struct {
 	QuotationSalesReturnCode string              `json:"quotation_sales_return_code" bson:"quotation_sales_return_code"`
 	QuotationID              *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
 	QuotationCode            string              `json:"quotation_code" bson:"quotation_code"`
-	Amount                   *float64            `json:"amount" bson:"amount"`
+	Amount                   float64             `json:"amount" bson:"amount"`
 	Method                   string              `json:"method" bson:"method"`
 	CreatedAt                *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt                *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -484,11 +484,11 @@ func (quotationsalesReturnPayment *QuotationSalesReturnPayment) Validate(w http.
 
 	}
 
-	if quotationsalesReturnPayment.Amount == nil {
+	if quotationsalesReturnPayment.Amount == 0 {
 		errs["amount"] = "Amount is required"
 	}
 
-	if ToFixed(*quotationsalesReturnPayment.Amount, 2) <= 0 {
+	if ToFixed(quotationsalesReturnPayment.Amount, 2) <= 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
@@ -497,19 +497,18 @@ func (quotationsalesReturnPayment *QuotationSalesReturnPayment) Validate(w http.
 		errs["quotation_sales_return"] = "error finding quotationsales return" + err.Error()
 	}
 
-	log.Print(quotationsalesReturn.NetTotal)
-	if *quotationsalesReturnPayment.Amount > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
+	if quotationsalesReturnPayment.Amount > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
 		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", (quotationsalesReturn.NetTotal-quotationsalesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
 	if scenario == "update" {
-		if (*quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid - *oldQuotationSalesReturnPayment.Amount)) > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
+		if (quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid - oldQuotationSalesReturnPayment.Amount)) > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (quotationsalesReturn.NetTotal-quotationsalesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 	} else {
-		if (*quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid)) > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
+		if (quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid)) > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (quotationsalesReturn.NetTotal-quotationsalesReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
@@ -522,12 +521,12 @@ func (quotationsalesReturnPayment *QuotationSalesReturnPayment) Validate(w http.
 	}
 
 	if scenario == "update" {
-		if (*quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid - *oldQuotationSalesReturnPayment.Amount)) > quotation.TotalPaymentReceived {
+		if (quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid - oldQuotationSalesReturnPayment.Amount)) > quotation.TotalPaymentReceived {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (quotation.TotalPaymentReceived)) + " (Total Received payment)"
 			return
 		}
 	} else {
-		if (*quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid)) > quotation.TotalPaymentReceived {
+		if (quotationsalesReturnPayment.Amount + (quotationsalesReturn.TotalPaymentPaid)) > quotation.TotalPaymentReceived {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (quotation.TotalPaymentReceived)) + " (Total Received payment)"
 			return
 		}

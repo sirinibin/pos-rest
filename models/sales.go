@@ -1327,8 +1327,8 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	totalPayment := float64(0.00)
 	for _, payment := range order.PaymentsInput {
-		if payment.Amount != nil {
-			totalPayment += *payment.Amount
+		if payment.Amount > 0 {
+			totalPayment += payment.Amount
 		}
 	}
 
@@ -1491,21 +1491,14 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			}
 		}
 
-		if payment.Amount == nil {
+		if payment.Amount == 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
-		} else if *payment.Amount == 0 {
+		} else if payment.Amount < 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
 		if payment.Method == "" {
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
-		}
-
-		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
-			if *payment.Amount <= 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
-			}
-
 		}
 
 		if payment.Method == "customer_account" && customer == nil {
@@ -2353,7 +2346,7 @@ func (order *Order) SetPaymentStatus() (models []SalesPayment, err error) {
 
 		models = append(models, model)
 
-		totalPaymentReceived += *model.Amount
+		totalPaymentReceived += model.Amount
 
 		if !slices.Contains(paymentMethods, model.Method) {
 			paymentMethods = append(paymentMethods, model.Method)
@@ -3562,26 +3555,26 @@ func MakeJournalsForSalesPaymentsByDatetime(
 	}
 
 	for _, payment := range payments {
-		totalSalesPaidAmount += *payment.Amount
+		totalSalesPaidAmount += payment.Amount
 		if totalSalesPaidAmount > (order.NetTotal - order.CashDiscount) {
 			extraSalesAmountPaid = RoundFloat((totalSalesPaidAmount - (order.NetTotal - order.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraSalesAmountPaid > 0 {
 			skip := false
-			if extraSalesAmountPaid < *payment.Amount {
+			if extraSalesAmountPaid < payment.Amount {
 				extraAmount := extraSalesAmountPaid
 				extraSalesPayments = append(extraSalesPayments, SalesPayment{
 					Date:   payment.Date,
-					Amount: &extraAmount,
+					Amount: extraAmount,
 					Method: payment.Method,
 				})
-				amount = RoundFloat((*payment.Amount - extraSalesAmountPaid), 2)
+				amount = RoundFloat((payment.Amount - extraSalesAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraSalesAmountPaid = 0
-			} else if extraSalesAmountPaid >= *payment.Amount {
+			} else if extraSalesAmountPaid >= payment.Amount {
 				extraSalesPayments = append(extraSalesPayments, SalesPayment{
 					Date:   payment.Date,
 					Amount: payment.Amount,
@@ -3589,7 +3582,7 @@ func MakeJournalsForSalesPaymentsByDatetime(
 				})
 
 				skip = true
-				extraSalesAmountPaid = RoundFloat((extraSalesAmountPaid - *payment.Amount), 2)
+				extraSalesAmountPaid = RoundFloat((extraSalesAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3807,7 +3800,7 @@ func MakeJournalsForSalesExtraPayments(
 			AccountNumber: cashReceivingAccount.Number,
 			AccountName:   cashReceivingAccount.Name,
 			DebitOrCredit: "debit",
-			Debit:         *payment.Amount,
+			Debit:         payment.Amount,
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,

@@ -25,7 +25,7 @@ type QuotationPayment struct {
 	DateStr             string              `json:"date_str,omitempty" bson:"-"`
 	QuotationID         *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
 	QuotationCode       string              `json:"quotation_code" bson:"quotation_code"`
-	Amount              *float64            `json:"amount" bson:"amount"`
+	Amount              float64             `json:"amount" bson:"amount"`
 	Method              string              `json:"method" bson:"method"`
 	CreatedAt           *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt           *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -460,11 +460,11 @@ func (quotationPayment *QuotationPayment) Validate(w http.ResponseWriter, r *htt
 		}
 	}
 
-	if quotationPayment.Amount == nil {
+	if quotationPayment.Amount == 0 {
 		errs["amount"] = "Amount is required"
 	}
 
-	if quotationPayment.Amount != nil && ToFixed(*quotationPayment.Amount, 2) <= 0 {
+	if quotationPayment.Amount < 0 && ToFixed(quotationPayment.Amount, 2) < 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
@@ -509,8 +509,8 @@ func (quotationPayment *QuotationPayment) Validate(w http.ResponseWriter, r *htt
 		if customerAccount != nil {
 			if scenario == "update" {
 				extraAmount := 0.00
-				if oldQuotationPayment != nil && *oldQuotationPayment.Amount > *quotationPayment.Amount {
-					extraAmount = *oldQuotationPayment.Amount - *quotationPayment.Amount
+				if oldQuotationPayment != nil && oldQuotationPayment.Amount > quotationPayment.Amount {
+					extraAmount = oldQuotationPayment.Amount - quotationPayment.Amount
 				}
 
 				if extraAmount > 0 {
@@ -529,7 +529,7 @@ func (quotationPayment *QuotationPayment) Validate(w http.ResponseWriter, r *htt
 					errs["payment_method"] = "customer account balance is zero"
 				} else if customerAccount.Type == "asset" {
 					errs["payment_method"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-				} else if customerAccount.Type == "liability" && customerAccount.Balance < *quotationPayment.Amount {
+				} else if customerAccount.Type == "liability" && customerAccount.Balance < quotationPayment.Amount {
 					errs["payment_method"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
 				}
 

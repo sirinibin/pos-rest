@@ -1460,8 +1460,8 @@ func (purchase *Purchase) Validate(
 
 	totalPayment := float64(0.00)
 	for _, payment := range purchase.PaymentsInput {
-		if payment.Amount != nil {
-			totalPayment += *payment.Amount
+		if payment.Amount > 0 {
+			totalPayment += payment.Amount
 		}
 	}
 
@@ -1512,9 +1512,9 @@ func (purchase *Purchase) Validate(
 			}
 		}
 
-		if payment.Amount == nil {
+		if payment.Amount == 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
-		} else if *payment.Amount == 0 && purchase.NetTotal > 0 {
+		} else if payment.Amount < 0 && purchase.NetTotal > 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
@@ -1522,33 +1522,12 @@ func (purchase *Purchase) Validate(
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
-			if *payment.Amount <= 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
-			}
-
-			/*
-				maxAllowedAmount := (order.NetTotal - order.CashDiscount) - (totalPayment - *payment.Amount)
-
-				if maxAllowedAmount < 0 {
-					maxAllowedAmount = 0
-				}
-
-				if maxAllowedAmount == 0 {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (order.NetTotal-order.CashDiscount)) + ", Please delete this payment"
-				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-				}
-			*/
-
-		}
-
 		if payment.Method == "vendor_account" && vendor == nil {
 			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Vendor account"
 		}
 
 		if payment.Method == "vendor_account" && vendor != nil {
-			totalAmountFromVendorAccount += *payment.Amount
+			totalAmountFromVendorAccount += payment.Amount
 			log.Print("Checking vendor account Balance")
 
 			if vendorAccount != nil {
@@ -1563,11 +1542,11 @@ func (purchase *Purchase) Validate(
 						}
 					}
 
-					if oldPurchasePayment != nil && *oldPurchasePayment.Amount < *payment.Amount {
-						extraAmount = *payment.Amount - *oldPurchasePayment.Amount
+					if oldPurchasePayment != nil && oldPurchasePayment.Amount < payment.Amount {
+						extraAmount = payment.Amount - oldPurchasePayment.Amount
 					} else if oldPurchasePayment == nil {
 						//New payment added
-						extraAmount = *payment.Amount
+						extraAmount = payment.Amount
 					} else {
 						log.Print("payment amount not increased")
 					}
@@ -1584,11 +1563,11 @@ func (purchase *Purchase) Validate(
 
 				} else {
 					if vendorAccount.Balance == 0 {
-						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (*payment.Amount)) + " to vendor account to continue"
+						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (payment.Amount)) + " to vendor account to continue"
 					} else if vendorAccount.Type == "liability" {
-						errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+*payment.Amount)) + " to vendor account to continue"
-					} else if vendorAccount.Type == "asset" && vendorAccount.Balance < *payment.Amount {
-						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+*payment.Amount)) + " to vendor account to continue"
+						errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
+					} else if vendorAccount.Type == "asset" && vendorAccount.Balance < payment.Amount {
+						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
 					}
 				}
 
@@ -1606,7 +1585,7 @@ func (purchase *Purchase) Validate(
 				oldPurchase.SetPaymentStatus()
 				for _, oldPayment := range oldPurchase.Payments {
 					if oldPayment.Method == "vendor_account" {
-						oldTotalAmountFromVendorAccount += *oldPayment.Amount
+						oldTotalAmountFromVendorAccount += oldPayment.Amount
 					}
 				}
 
@@ -2521,7 +2500,7 @@ func (model *Purchase) SetPaymentStatus() (payments []PurchasePayment, err error
 
 		payments = append(payments, payment)
 
-		totalPaymentPaid += *payment.Amount
+		totalPaymentPaid += payment.Amount
 
 		if !slices.Contains(paymentMethods, payment.Method) {
 			paymentMethods = append(paymentMethods, payment.Method)
@@ -3022,22 +3001,22 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 	extraPurchaseAmountPaidTemp := extraPurchaseAmountPaid
 
 	for _, payment := range payments {
-		totalPurchasePaidAmount += *payment.Amount
+		totalPurchasePaidAmount += payment.Amount
 		if totalPurchasePaidAmount > (purchase.NetTotal - purchase.CashDiscount) {
 			extraPurchaseAmountPaid = RoundFloat((totalPurchasePaidAmount - (purchase.NetTotal - purchase.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraPurchaseAmountPaid > 0 {
 			skip := false
-			if extraPurchaseAmountPaid < *payment.Amount {
-				amount = RoundFloat((*payment.Amount - extraPurchaseAmountPaid), 2)
+			if extraPurchaseAmountPaid < payment.Amount {
+				amount = RoundFloat((payment.Amount - extraPurchaseAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraPurchaseAmountPaid = 0
-			} else if extraPurchaseAmountPaid >= *payment.Amount {
+			} else if extraPurchaseAmountPaid >= payment.Amount {
 				skip = true
-				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - *payment.Amount), 2)
+				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3113,26 +3092,26 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 	//Credits
 	totalPayment = float64(0.00)
 	for _, payment := range payments {
-		totalPurchasePaidAmount += *payment.Amount
+		totalPurchasePaidAmount += payment.Amount
 		if totalPurchasePaidAmount > (purchase.NetTotal - purchase.CashDiscount) {
 			extraPurchaseAmountPaid = RoundFloat((totalPurchasePaidAmount - (purchase.NetTotal - purchase.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraPurchaseAmountPaid > 0 {
 			skip := false
-			if extraPurchaseAmountPaid < *payment.Amount {
+			if extraPurchaseAmountPaid < payment.Amount {
 				extraAmount := extraPurchaseAmountPaid
 				extraPurchasePayments = append(extraPurchasePayments, PurchasePayment{
 					Date:   payment.Date,
-					Amount: &extraAmount,
+					Amount: extraAmount,
 					Method: payment.Method,
 				})
-				amount = RoundFloat((*payment.Amount - extraPurchaseAmountPaid), 2)
+				amount = RoundFloat((payment.Amount - extraPurchaseAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraPurchaseAmountPaid = 0
-			} else if extraPurchaseAmountPaid >= *payment.Amount {
+			} else if extraPurchaseAmountPaid >= payment.Amount {
 				extraPurchasePayments = append(extraPurchasePayments, PurchasePayment{
 					Date:   payment.Date,
 					Amount: payment.Amount,
@@ -3140,7 +3119,7 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 				})
 
 				skip = true
-				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - *payment.Amount), 2)
+				extraPurchaseAmountPaid = RoundFloat((extraPurchaseAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3340,7 +3319,7 @@ func MakeJournalsForPurchaseExtraPayments(
 			AccountNumber: cashPayingAccount.Number,
 			AccountName:   cashPayingAccount.Name,
 			DebitOrCredit: "credit",
-			Credit:        *payment.Amount,
+			Credit:        payment.Amount,
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,

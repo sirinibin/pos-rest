@@ -1444,8 +1444,8 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 
 	totalPayment := float64(0.00)
 	for _, payment := range quotationsalesreturn.PaymentsInput {
-		if payment.Amount != nil {
-			totalPayment += *payment.Amount
+		if payment.Amount > 0 {
+			totalPayment += payment.Amount
 		}
 	}
 
@@ -1471,9 +1471,9 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 			}
 		}
 
-		if payment.Amount == nil {
+		if payment.Amount == 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
-		} else if *payment.Amount == 0 {
+		} else if payment.Amount < 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
@@ -1485,26 +1485,6 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
 		}
 
-		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
-			if *payment.Amount <= 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
-			}
-
-			/*
-				maxAllowedAmount := (quotationsalesreturn.NetTotal - quotationsalesreturn.CashDiscount) - (totalPayment - *payment.Amount)
-
-				if maxAllowedAmount < 0 {
-					maxAllowedAmount = 0
-				}
-
-				if maxAllowedAmount == 0 {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (quotationsalesreturn.NetTotal-quotationsalesreturn.CashDiscount)) + ", Please delete this payment"
-				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-				}
-			*/
-
-		}
 	} //end for
 
 	if quotationsalesreturn.QuotationID == nil || quotationsalesreturn.QuotationID.IsZero() {
@@ -2709,7 +2689,7 @@ func (quotationsalesReturn *QuotationSalesReturn) SetPaymentStatus() (payments [
 
 		payments = append(payments, model)
 
-		totalPaymentPaid += *model.Amount
+		totalPaymentPaid += model.Amount
 
 		if !slices.Contains(paymentMethods, model.Method) {
 			paymentMethods = append(paymentMethods, model.Method)
@@ -3255,22 +3235,22 @@ func MakeJournalsForQuotationSalesReturnPaymentsByDatetime(
 	extraQuotationSalesReturnAmountPaidTemp := extraQuotationSalesReturnAmountPaid
 
 	for _, payment := range payments {
-		totalQuotationSalesReturnPaidAmount += *payment.Amount
+		totalQuotationSalesReturnPaidAmount += payment.Amount
 		if totalQuotationSalesReturnPaidAmount > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
 			extraQuotationSalesReturnAmountPaid = RoundFloat((totalQuotationSalesReturnPaidAmount - (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraQuotationSalesReturnAmountPaid > 0 {
 			skip := false
-			if extraQuotationSalesReturnAmountPaid < *payment.Amount {
-				amount = RoundFloat((*payment.Amount - extraQuotationSalesReturnAmountPaid), 2)
+			if extraQuotationSalesReturnAmountPaid < payment.Amount {
+				amount = RoundFloat((payment.Amount - extraQuotationSalesReturnAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraQuotationSalesReturnAmountPaid = 0
-			} else if extraQuotationSalesReturnAmountPaid >= *payment.Amount {
+			} else if extraQuotationSalesReturnAmountPaid >= payment.Amount {
 				skip = true
-				extraQuotationSalesReturnAmountPaid = RoundFloat((extraQuotationSalesReturnAmountPaid - *payment.Amount), 2)
+				extraQuotationSalesReturnAmountPaid = RoundFloat((extraQuotationSalesReturnAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3344,26 +3324,26 @@ func MakeJournalsForQuotationSalesReturnPaymentsByDatetime(
 	//Credits
 	totalPayment = float64(0.00)
 	for _, payment := range payments {
-		totalQuotationSalesReturnPaidAmount += *payment.Amount
+		totalQuotationSalesReturnPaidAmount += payment.Amount
 		if totalQuotationSalesReturnPaidAmount > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
 			extraQuotationSalesReturnAmountPaid = RoundFloat((totalQuotationSalesReturnPaidAmount - (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraQuotationSalesReturnAmountPaid > 0 {
 			skip := false
-			if extraQuotationSalesReturnAmountPaid < *payment.Amount {
+			if extraQuotationSalesReturnAmountPaid < payment.Amount {
 				extraAmount := extraQuotationSalesReturnAmountPaid
 				extraQuotationSalesReturnPayments = append(extraQuotationSalesReturnPayments, QuotationSalesReturnPayment{
 					Date:   payment.Date,
-					Amount: &extraAmount,
+					Amount: extraAmount,
 					Method: payment.Method,
 				})
-				amount = RoundFloat((*payment.Amount - extraQuotationSalesReturnAmountPaid), 2)
+				amount = RoundFloat((payment.Amount - extraQuotationSalesReturnAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraQuotationSalesReturnAmountPaid = 0
-			} else if extraQuotationSalesReturnAmountPaid >= *payment.Amount {
+			} else if extraQuotationSalesReturnAmountPaid >= payment.Amount {
 				extraQuotationSalesReturnPayments = append(extraQuotationSalesReturnPayments, QuotationSalesReturnPayment{
 					Date:   payment.Date,
 					Amount: payment.Amount,
@@ -3371,7 +3351,7 @@ func MakeJournalsForQuotationSalesReturnPaymentsByDatetime(
 				})
 
 				skip = true
-				extraQuotationSalesReturnAmountPaid = RoundFloat((extraQuotationSalesReturnAmountPaid - *payment.Amount), 2)
+				extraQuotationSalesReturnAmountPaid = RoundFloat((extraQuotationSalesReturnAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3571,7 +3551,7 @@ func MakeJournalsForQuotationSalesReturnExtraPayments(
 			AccountNumber: cashPayingAccount.Number,
 			AccountName:   cashPayingAccount.Name,
 			DebitOrCredit: "credit",
-			Credit:        *payment.Amount,
+			Credit:        payment.Amount,
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,

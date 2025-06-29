@@ -27,7 +27,7 @@ type PurchaseReturnPayment struct {
 	PurchaseReturnCode  string              `json:"purchase_return_code" bson:"purchase_return_code"`
 	PurchaseID          *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
 	PurchaseCode        string              `json:"purchase_code" bson:"purchase_code"`
-	Amount              *float64            `json:"amount" bson:"amount"`
+	Amount              float64             `json:"amount" bson:"amount"`
 	Method              string              `json:"method" bson:"method"`
 	CreatedAt           *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt           *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -483,9 +483,9 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 
 	}
 
-	if purchasereturnPayment.Amount == nil {
+	if purchasereturnPayment.Amount == 0 {
 		errs["amount"] = "Amount is required"
-	} else if ToFixed(*purchasereturnPayment.Amount, 2) <= 0 {
+	} else if ToFixed(purchasereturnPayment.Amount, 2) < 0 {
 		errs["amount"] = "Amount should be > 0"
 	}
 
@@ -494,18 +494,18 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 		errs["sales_return"] = "error finding sales return" + err.Error()
 	}
 
-	if *purchasereturnPayment.Amount > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
+	if purchasereturnPayment.Amount > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
 		errs["amount"] = "Amount should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
 	if scenario == "update" {
-		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - *oldPurchaseReturnPayment.Amount)) > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
+		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - oldPurchaseReturnPayment.Amount)) > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 	} else {
-		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
+		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
@@ -518,12 +518,12 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 	}
 
 	if scenario == "update" {
-		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - *oldPurchaseReturnPayment.Amount)) > purchase.TotalPaymentReceived {
+		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - oldPurchaseReturnPayment.Amount)) > purchase.TotalPaymentReceived {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentReceived)) + " (Total Paid payment)"
 			return
 		}
 	} else {
-		if (*purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > purchase.TotalPaymentReceived {
+		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > purchase.TotalPaymentReceived {
 			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentReceived)) + " (Total Paid payment)"
 			return
 		}

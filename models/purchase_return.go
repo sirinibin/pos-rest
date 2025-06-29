@@ -1251,8 +1251,8 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 	totalPayment := float64(0.00)
 	for _, payment := range purchasereturn.PaymentsInput {
-		if payment.Amount != nil {
-			totalPayment += *payment.Amount
+		if payment.Amount > 0 {
+			totalPayment += payment.Amount
 		}
 	}
 
@@ -1274,9 +1274,9 @@ func (purchasereturn *PurchaseReturn) Validate(
 			}
 		}
 
-		if payment.Amount == nil {
+		if payment.Amount == 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount is required"
-		} else if *payment.Amount == 0 {
+		} else if payment.Amount < 0 {
 			errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
 		}
 
@@ -1284,26 +1284,6 @@ func (purchasereturn *PurchaseReturn) Validate(
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.DateStr != "" && payment.Amount != nil && payment.Method != "" {
-			if *payment.Amount <= 0 {
-				errs["payment_amount_"+strconv.Itoa(index)] = "Payment amount should be greater than zero"
-			}
-
-			/*
-				maxAllowedAmount := (salesreturn.NetTotal - salesreturn.CashDiscount) - (totalPayment - *payment.Amount)
-
-				if maxAllowedAmount < 0 {
-					maxAllowedAmount = 0
-				}
-
-				if maxAllowedAmount == 0 {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Total amount should not exceed " + fmt.Sprintf("%.02f", (salesreturn.NetTotal-salesreturn.CashDiscount)) + ", Please delete this payment"
-				} else if *payment.Amount > RoundFloat(maxAllowedAmount, 2) {
-					errs["payment_amount_"+strconv.Itoa(index)] = "Amount should not be greater than " + fmt.Sprintf("%.02f", (maxAllowedAmount)) + ", Please delete or edit this payment"
-				}
-			*/
-
-		}
 	} //end for
 
 	purchasereturn.PurchaseCode = purchase.Code
@@ -2390,7 +2370,7 @@ func (model *PurchaseReturn) SetPaymentStatus() (payments []PurchaseReturnPaymen
 
 		payments = append(payments, payment)
 
-		totalPaymentPaid += *payment.Amount
+		totalPaymentPaid += payment.Amount
 
 		if !slices.Contains(paymentMethods, payment.Method) {
 			paymentMethods = append(paymentMethods, payment.Method)
@@ -2886,26 +2866,26 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 	}
 
 	for _, payment := range payments {
-		totalPurchaseReturnPaidAmount += *payment.Amount
+		totalPurchaseReturnPaidAmount += payment.Amount
 		if totalPurchaseReturnPaidAmount > (purchaseReturn.NetTotal - purchaseReturn.CashDiscount) {
 			extraPurchaseReturnAmountPaid = RoundFloat((totalPurchaseReturnPaidAmount - (purchaseReturn.NetTotal - purchaseReturn.CashDiscount)), 2)
 		}
-		amount := *payment.Amount
+		amount := payment.Amount
 
 		if extraPurchaseReturnAmountPaid > 0 {
 			skip := false
-			if extraPurchaseReturnAmountPaid < *payment.Amount {
+			if extraPurchaseReturnAmountPaid < payment.Amount {
 				extraAmount := extraPurchaseReturnAmountPaid
 				extraPurchaseReturnPayments = append(extraPurchaseReturnPayments, PurchaseReturnPayment{
 					Date:   payment.Date,
-					Amount: &extraAmount,
+					Amount: extraAmount,
 					Method: payment.Method,
 				})
-				amount = RoundFloat((*payment.Amount - extraPurchaseReturnAmountPaid), 2)
+				amount = RoundFloat((payment.Amount - extraPurchaseReturnAmountPaid), 2)
 				//totalPaidAmount -= *payment.Amount
 				//totalPaidAmount += amount
 				extraPurchaseReturnAmountPaid = 0
-			} else if extraPurchaseReturnAmountPaid >= *payment.Amount {
+			} else if extraPurchaseReturnAmountPaid >= payment.Amount {
 				extraPurchaseReturnPayments = append(extraPurchaseReturnPayments, PurchaseReturnPayment{
 					Date:   payment.Date,
 					Amount: payment.Amount,
@@ -2913,7 +2893,7 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 				})
 
 				skip = true
-				extraPurchaseReturnAmountPaid = RoundFloat((extraPurchaseReturnAmountPaid - *payment.Amount), 2)
+				extraPurchaseReturnAmountPaid = RoundFloat((extraPurchaseReturnAmountPaid - payment.Amount), 2)
 			}
 
 			if skip {
@@ -3131,7 +3111,7 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 			AccountNumber: cashReceivingAccount.Number,
 			AccountName:   cashReceivingAccount.Name,
 			DebitOrCredit: "debit",
-			Debit:         *payment.Amount,
+			Debit:         payment.Amount,
 			GroupID:       groupID,
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
