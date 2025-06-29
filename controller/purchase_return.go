@@ -224,6 +224,8 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	go purchasereturn.SetPostBalances()
+
 	store.NotifyUsers("purchase_return_updated")
 
 	response.Status = true

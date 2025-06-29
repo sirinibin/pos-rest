@@ -249,6 +249,8 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	go quotationsalesreturn.SetPostBalances()
+
 	store.NotifyUsers("quotationsales_return_updated")
 
 	response.Status = true

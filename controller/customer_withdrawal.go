@@ -203,6 +203,8 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go customerwithdrawal.SetPostBalances()
+
 	response.Status = true
 	response.Result = customerwithdrawal
 

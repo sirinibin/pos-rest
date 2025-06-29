@@ -230,6 +230,8 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	go purchase.SetPostBalances()
+
 	store.NotifyUsers("purchase_updated")
 	response.Status = true
 	response.Result = purchase

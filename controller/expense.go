@@ -158,6 +158,8 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go expense.SetPostBalances()
+
 	response.Status = true
 	response.Result = expense
 

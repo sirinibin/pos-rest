@@ -153,6 +153,8 @@ func CreateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go capital.SetPostBalances()
+
 	response.Status = true
 	response.Result = capital
 

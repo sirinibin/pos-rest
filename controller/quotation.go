@@ -306,6 +306,8 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go quotation.SetPostBalances()
+
 	response.Status = true
 	response.Result = quotation
 

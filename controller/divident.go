@@ -141,6 +141,8 @@ func CreateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go divident.SetPostBalances()
+
 	response.Status = true
 	response.Result = divident
 
