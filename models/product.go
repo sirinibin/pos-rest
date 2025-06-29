@@ -3080,13 +3080,15 @@ func ProcessProducts() error {
 				continue
 			}
 
-			if store.Code == "MBDI" {
-				if govalidator.IsNull(product.Set.Name) {
-					product.IsSet = false
-				} else {
-					product.IsSet = true
-				}
-
+			if store.Code == "MBDI" || store.Code == "LGK" || store.Code == "LGK-SIMULATION" {
+				/*
+					if govalidator.IsNull(product.Set.Name) {
+						product.IsSet = false
+					} else {
+						product.IsSet = true
+					}
+				*/
+				product.SetStock()
 				product.Update(&store.ID)
 			}
 
