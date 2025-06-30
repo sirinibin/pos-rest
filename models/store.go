@@ -2018,6 +2018,9 @@ func GetAllStores() (stores []Store, err error) {
 	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx := context.Background()
 	findOptions := options.Find()
+	findOptions.SetSort(map[string]interface{}{
+		"created_at": 1,
+	})
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 

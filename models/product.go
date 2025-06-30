@@ -3038,6 +3038,8 @@ func ProcessProducts() error {
 		return err
 	}
 
+	productsToExport := []Product{}
+
 	for _, store := range stores {
 		/*
 			log.Print("Branch name:" + store.BranchName)
@@ -3080,17 +3082,28 @@ func ProcessProducts() error {
 				continue
 			}
 
-			if store.Code == "MBDI" || store.Code == "LGK" || store.Code == "LGK-SIMULATION" {
-				/*
-					if govalidator.IsNull(product.Set.Name) {
-						product.IsSet = false
-					} else {
-						product.IsSet = true
-					}
-				*/
-				product.SetStock()
-				product.Update(&store.ID)
+			if store.Code == "RAA-JDA-DEL" {
+				productsToExport = append(productsToExport, product)
 			}
+
+			if store.Code == "RAA-JDA" {
+				newProduct := Product{}
+				for _, productToExport := range productsToExport {
+					newProduct = productToExport
+					newProduct.StoreID = &store.ID
+					for _, productStore := range newProduct.ProductStores {
+						newProduct.ProductStores[store.ID.Hex()] = productStore
+					}
+					newProduct.Insert()
+				}
+				productsToExport = []Product{}
+			}
+			/*
+				if store.Code == "MBDI" || store.Code == "LGK" || store.Code == "LGK-SIMULATION" {
+
+					product.SetStock()
+					product.Update(&store.ID)
+				}*/
 
 			/*
 				for i, productStore := range product.ProductStores {
