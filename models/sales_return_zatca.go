@@ -437,7 +437,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 			},
 			TaxSubtotal: &TaxSubtotal{
 				TaxableAmount: TaxableAmount{
-					Value:      ToFixed2((salesReturn.NetTotal - salesReturn.VatPrice), 2),
+					Value:      RoundTo2Decimals((salesReturn.NetTotal - salesReturn.RoundingAmount) - salesReturn.VatPrice),
 					CurrencyID: "SAR",
 				},
 				TaxAmount: TaxAmount{
@@ -482,16 +482,17 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 	totalAllowance += salesReturn.Discount
 	chargeTotalAmount += salesReturn.ShippingOrHandlingFees
 
-	taxExclusiveAmount := RoundTo2Decimals(salesReturn.NetTotal - salesReturn.VatPrice)
+	taxExclusiveAmount := RoundTo2Decimals((salesReturn.NetTotal - salesReturn.RoundingAmount) - salesReturn.VatPrice)
 
 	invoice.LegalMonetaryTotal = LegalMonetaryTotal{
-		LineExtensionAmount:  MonetaryAmount{Value: ToFixed2(salesReturn.Total, 2), CurrencyID: "SAR"},
-		TaxExclusiveAmount:   MonetaryAmount{Value: ToFixed2(taxExclusiveAmount, 2), CurrencyID: "SAR"},
-		TaxInclusiveAmount:   MonetaryAmount{Value: ToFixed2(salesReturn.NetTotal, 2), CurrencyID: "SAR"},
-		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed2(totalAllowance, 2), CurrencyID: "SAR"},
-		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed2(chargeTotalAmount, 2), CurrencyID: "SAR"},
-		PrepaidAmount:        MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"},
-		PayableAmount:        MonetaryAmount{Value: ToFixed2(salesReturn.NetTotal, 2), CurrencyID: "SAR"},
+		LineExtensionAmount:   MonetaryAmount{Value: ToFixed2(salesReturn.Total, 2), CurrencyID: "SAR"},
+		TaxExclusiveAmount:    MonetaryAmount{Value: ToFixed2(taxExclusiveAmount, 2), CurrencyID: "SAR"},
+		TaxInclusiveAmount:    MonetaryAmount{Value: RoundTo2Decimals(salesReturn.NetTotal - salesReturn.RoundingAmount), CurrencyID: "SAR"},
+		AllowanceTotalAmount:  MonetaryAmount{Value: ToFixed2(totalAllowance, 2), CurrencyID: "SAR"},
+		ChargeTotalAmount:     MonetaryAmount{Value: ToFixed2(chargeTotalAmount, 2), CurrencyID: "SAR"},
+		PrepaidAmount:         MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"},
+		PayableRoundingAmount: MonetaryAmount{Value: RoundTo2Decimals(salesReturn.RoundingAmount), CurrencyID: "SAR"},
+		PayableAmount:         MonetaryAmount{Value: ToFixed2(salesReturn.NetTotal, 2), CurrencyID: "SAR"},
 	}
 
 	invoice.InvoiceLines = []InvoiceLine{}

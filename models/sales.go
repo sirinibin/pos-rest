@@ -31,7 +31,7 @@ type OrderProduct struct {
 	PartNumber                 string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
 	Quantity                   float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	QuantityReturned           float64            `json:"quantity_returned" bson:"quantity_returned"`
-	UnitPrice                  float64            `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitPrice                  float64            `bson:"unit_price" json:"unit_price"`
 	UnitPriceWithVAT           float64            `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
 	PurchaseUnitPrice          float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
@@ -40,8 +40,13 @@ type OrderProduct struct {
 	UnitDiscountWithVAT        float64            `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
 	UnitDiscountPercent        float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
 	UnitDiscountPercentWithVAT float64            `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
-	Profit                     float64            `bson:"profit" json:"profit"`
-	Loss                       float64            `bson:"loss" json:"loss"`
+	/*LineTotal                  float64            `bson:"line_total" json:"line_total"`
+	LineTotalWithVAT           float64            `bson:"line_total_with_vat" json:"line_total_with_vat"`
+	ActualLineTotal            float64            `bson:"actual_line_total" json:"actual_line_total"`
+	ActualLineTotalWithVAT     float64            `bson:"actual_line_total_with_vat" json:"actual_line_total_with_vat"`
+	*/
+	Profit float64 `bson:"profit" json:"profit"`
+	Loss   float64 `bson:"loss" json:"loss"`
 }
 
 // Order : Order structure
@@ -74,7 +79,12 @@ type Order struct {
 	VatPrice               float64             `bson:"vat_price" json:"vat_price"`
 	Total                  float64             `bson:"total" json:"total"`
 	TotalWithVAT           float64             `bson:"total_with_vat" json:"total_with_vat"`
+	ActualVatPrice         float64             `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal            float64             `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT     float64             `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
 	NetTotal               float64             `bson:"net_total" json:"net_total"`
+	ActualNetTotal         float64             `bson:"actual_net_total" json:"actual_net_total"`
+	RoundingAmount         float64             `bson:"rounding_amount" json:"rounding_amount"`
 	CashDiscount           float64             `bson:"cash_discount" json:"cash_discount"`
 	ReturnCashDiscount     float64             `bson:"return_cash_discount" json:"return_cash_discount"`
 	TotalPaymentReceived   float64             `bson:"total_payment_received" json:"total_payment_received"`
@@ -500,8 +510,23 @@ func (order *Order) FindNetTotal() {
 	// Now calculate VAT on the discounted base
 	order.VatPrice = RoundTo2Decimals(baseTotal * (*order.VatPercent / 100))
 
+	//Actual
+	actualBaseTotal := order.ActualTotal + order.ShippingOrHandlingFees - order.Discount
+	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
+
+	// Now calculate VAT on the discounted base
+	order.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*order.VatPercent / 100))
+
 	//log.Print(baseTotal + order.VatPrice)
 	order.NetTotal = RoundTo2Decimals(baseTotal + order.VatPrice)
+	//actual
+	order.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + order.ActualVatPrice)
+
+	order.RoundingAmount = RoundTo2Decimals(order.ActualNetTotal - order.NetTotal)
+
+	//order.NetTotalBeforeRounding = RoundTo2Decimals(order.NetTotal)
+
+	order.NetTotal = RoundTo2Decimals(order.NetTotal + order.RoundingAmount)
 
 	order.CalculateDiscountPercentage()
 }
@@ -509,6 +534,8 @@ func (order *Order) FindNetTotal() {
 func (order *Order) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
+	actualTotal := float64(0.0)
+	actualTotalWithVAT := float64(0.0)
 	for i, product := range order.Products {
 		/*
 			if product.UnitPriceWithVAT > 0 {
@@ -530,19 +557,28 @@ func (order *Order) FindTotal() {
 			}*/
 
 		total += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
-		//total = RoundTo8Decimals(total)
 		total = RoundTo2Decimals(total)
-		//totalWithVAT = RoundTo2Decimals(total * (1 + (*order.VatPercent / 100)))
+
+		actualTotal += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+		actualTotal = RoundTo8Decimals(actualTotal)
+
+		//order.Products[i].LineTotal = RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+		//order.Products[i].ActualLineTotal = RoundTo8Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+
 		totalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
-		//totalWithVAT = RoundTo8Decimals(totalWithVAT)
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+
+		actualTotalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
+		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
+
+		//order.Products[i].LineTotalWithVAT = RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
+		//order.Products[i].ActualLineTotalWithVAT = RoundTo8Decimals(product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
 	}
 
 	order.Total = total
 	order.TotalWithVAT = totalWithVAT
-
-	//order.Total = RoundTo2Decimals(total)
-	//order.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	order.ActualTotal = actualTotal
+	order.ActualTotalWithVAT = actualTotalWithVAT
 }
 
 func (order *Order) CalculateDiscountPercentage() {

@@ -81,7 +81,12 @@ type SalesReturn struct {
 	VatPrice               float64  `bson:"vat_price" json:"vat_price"`
 	Total                  float64  `bson:"total" json:"total"`
 	TotalWithVAT           float64  `bson:"total_with_vat" json:"total_with_vat"`
+	ActualVatPrice         float64  `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal            float64  `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT     float64  `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
+	RoundingAmount         float64  `bson:"rounding_amount" json:"rounding_amount"`
 	NetTotal               float64  `bson:"net_total" json:"net_total"`
+	ActualNetTotal         float64  `bson:"actual_net_total" json:"actual_net_total"`
 	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
 	PaymentMethods         []string `json:"payment_methods" bson:"payment_methods"`
 	PaymentStatus          string   `bson:"payment_status" json:"payment_status"`
@@ -601,10 +606,24 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 	baseTotal := salesReturn.Total + salesReturn.ShippingOrHandlingFees - salesReturn.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
 
+	//Actual
+	actualBaseTotal := salesReturn.ActualTotal + salesReturn.ShippingOrHandlingFees - salesReturn.Discount
+	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
+
 	// Now calculate VAT on the discounted base
 	salesReturn.VatPrice = RoundTo2Decimals(baseTotal * (*salesReturn.VatPercent / 100))
 
+	//Actual
+	salesReturn.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*salesReturn.VatPercent / 100))
+
 	salesReturn.NetTotal = RoundTo2Decimals(baseTotal + salesReturn.VatPrice)
+
+	//actual
+	salesReturn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + salesReturn.ActualVatPrice)
+
+	salesReturn.RoundingAmount = RoundTo2Decimals(salesReturn.ActualNetTotal - salesReturn.NetTotal)
+
+	salesReturn.NetTotal = RoundTo2Decimals(salesReturn.NetTotal + salesReturn.RoundingAmount)
 
 	salesReturn.CalculateDiscountPercentage()
 }
@@ -612,6 +631,8 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 func (salesReturn *SalesReturn) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
+	actualTotal := float64(0.0)
+	actualTotalWithVAT := float64(0.0)
 	for i, product := range salesReturn.Products {
 		if !product.Selected {
 			continue
@@ -639,14 +660,22 @@ func (salesReturn *SalesReturn) FindTotal() {
 		total += (product.Quantity * (salesReturn.Products[i].UnitPrice - salesReturn.Products[i].UnitDiscount))
 		total = RoundTo2Decimals(total)
 
+		actualTotal += (product.Quantity * (salesReturn.Products[i].UnitPrice - salesReturn.Products[i].UnitDiscount))
+		actualTotal = RoundTo8Decimals(actualTotal)
+
 		totalWithVAT += (product.Quantity * (salesReturn.Products[i].UnitPriceWithVAT - salesReturn.Products[i].UnitDiscountWithVAT))
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+
+		actualTotalWithVAT += (product.Quantity * (salesReturn.Products[i].UnitPriceWithVAT - salesReturn.Products[i].UnitDiscountWithVAT))
+		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 	}
 
 	//salesReturn.Total = RoundTo2Decimals(total)
 	//salesReturn.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
 	salesReturn.Total = total
 	salesReturn.TotalWithVAT = totalWithVAT
+	salesReturn.ActualTotal = actualTotal
+	salesReturn.ActualTotalWithVAT = actualTotalWithVAT
 }
 
 func (salesReturn *SalesReturn) CalculateDiscountPercentage() {

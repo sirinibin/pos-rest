@@ -95,14 +95,15 @@ type AccountingCustomerParty struct {
 
 // LegalMonetaryTotal represents the <cac:LegalMonetaryTotal> element
 type LegalMonetaryTotal struct {
-	XMLName              xml.Name       `xml:"cac:LegalMonetaryTotal"`
-	LineExtensionAmount  MonetaryAmount `xml:"cbc:LineExtensionAmount"`
-	TaxExclusiveAmount   MonetaryAmount `xml:"cbc:TaxExclusiveAmount"`
-	TaxInclusiveAmount   MonetaryAmount `xml:"cbc:TaxInclusiveAmount"`
-	AllowanceTotalAmount MonetaryAmount `xml:"cbc:AllowanceTotalAmount"`
-	ChargeTotalAmount    MonetaryAmount `xml:"cbc:ChargeTotalAmount"`
-	PrepaidAmount        MonetaryAmount `xml:"cbc:PrepaidAmount"`
-	PayableAmount        MonetaryAmount `xml:"cbc:PayableAmount"`
+	XMLName               xml.Name       `xml:"cac:LegalMonetaryTotal"`
+	LineExtensionAmount   MonetaryAmount `xml:"cbc:LineExtensionAmount"`
+	TaxExclusiveAmount    MonetaryAmount `xml:"cbc:TaxExclusiveAmount"`
+	TaxInclusiveAmount    MonetaryAmount `xml:"cbc:TaxInclusiveAmount"`
+	AllowanceTotalAmount  MonetaryAmount `xml:"cbc:AllowanceTotalAmount"`
+	ChargeTotalAmount     MonetaryAmount `xml:"cbc:ChargeTotalAmount"`
+	PrepaidAmount         MonetaryAmount `xml:"cbc:PrepaidAmount"`
+	PayableRoundingAmount MonetaryAmount `xml:"cbc:PayableRoundingAmount"`
+	PayableAmount         MonetaryAmount `xml:"cbc:PayableAmount"`
 }
 
 // MonetaryAmount represents a monetary value with a currencyID attribute

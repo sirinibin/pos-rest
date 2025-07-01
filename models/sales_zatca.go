@@ -394,7 +394,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 			},
 			TaxSubtotal: &TaxSubtotal{
 				TaxableAmount: TaxableAmount{
-					Value:      ToFixed2((order.NetTotal - order.VatPrice), 2),
+					Value:      RoundTo2Decimals((order.NetTotal - order.RoundingAmount) - order.VatPrice),
 					CurrencyID: "SAR",
 				},
 				TaxAmount: TaxAmount{
@@ -439,20 +439,21 @@ func (order *Order) MakeXMLContent() (string, error) {
 	totalAllowance += order.Discount
 	chargeTotalAmount += order.ShippingOrHandlingFees
 
-	taxExclusiveAmount := RoundTo2Decimals(order.NetTotal - order.VatPrice)
+	taxExclusiveAmount := RoundTo2Decimals((order.NetTotal - order.RoundingAmount) - order.VatPrice)
 
 	//taxExclusiveAmount := (order.Total - totalAllowance + chargeTotalAmount)
 	// Fix floating-point error by rounding
 	//taxExclusiveAmount = math.Round(taxExclusiveAmount*100) / 100
 
 	invoice.LegalMonetaryTotal = LegalMonetaryTotal{
-		LineExtensionAmount:  MonetaryAmount{Value: ToFixed2(order.Total, 2), CurrencyID: "SAR"},
-		TaxExclusiveAmount:   MonetaryAmount{Value: ToFixed2(taxExclusiveAmount, 2), CurrencyID: "SAR"},
-		TaxInclusiveAmount:   MonetaryAmount{Value: ToFixed2(order.NetTotal, 2), CurrencyID: "SAR"},
-		AllowanceTotalAmount: MonetaryAmount{Value: ToFixed2(totalAllowance, 2), CurrencyID: "SAR"},
-		ChargeTotalAmount:    MonetaryAmount{Value: ToFixed2(chargeTotalAmount, 2), CurrencyID: "SAR"},
-		PrepaidAmount:        MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"},
-		PayableAmount:        MonetaryAmount{Value: ToFixed2(order.NetTotal, 2), CurrencyID: "SAR"},
+		LineExtensionAmount:   MonetaryAmount{Value: ToFixed2(order.Total, 2), CurrencyID: "SAR"},
+		TaxExclusiveAmount:    MonetaryAmount{Value: ToFixed2(taxExclusiveAmount, 2), CurrencyID: "SAR"},
+		TaxInclusiveAmount:    MonetaryAmount{Value: RoundTo2Decimals(order.NetTotal - order.RoundingAmount), CurrencyID: "SAR"},
+		AllowanceTotalAmount:  MonetaryAmount{Value: ToFixed2(totalAllowance, 2), CurrencyID: "SAR"},
+		ChargeTotalAmount:     MonetaryAmount{Value: ToFixed2(chargeTotalAmount, 2), CurrencyID: "SAR"},
+		PrepaidAmount:         MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"},
+		PayableRoundingAmount: MonetaryAmount{Value: RoundTo2Decimals(order.RoundingAmount), CurrencyID: "SAR"},
+		PayableAmount:         MonetaryAmount{Value: RoundTo2Decimals((order.NetTotal)), CurrencyID: "SAR"},
 	}
 
 	invoice.InvoiceLines = []InvoiceLine{}
