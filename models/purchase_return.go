@@ -75,6 +75,12 @@ type PurchaseReturn struct {
 	Total                  float64  `bson:"total" json:"total"`
 	TotalWithVAT           float64  `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal               float64  `bson:"net_total" json:"net_total"`
+	ActualVatPrice         float64  `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal            float64  `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT     float64  `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
+	ActualNetTotal         float64  `bson:"actual_net_total" json:"actual_net_total"`
+	RoundingAmount         float64  `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount     bool     `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
 	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
 	PaymentStatus          string   `bson:"payment_status" json:"payment_status"`
 	/*
@@ -565,44 +571,53 @@ func (purchaseReturn *PurchaseReturn) FindNetTotal() {
 
 	purchaseReturn.NetTotal = RoundTo2Decimals(baseTotal + purchaseReturn.VatPrice)
 
+	//Actual
+	actualBaseTotal := purchaseReturn.ActualTotal + purchaseReturn.ShippingOrHandlingFees - purchaseReturn.Discount
+	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
+
+	// Now calculate VAT on the discounted base
+	purchaseReturn.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*purchaseReturn.VatPercent / 100))
+
+	purchaseReturn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + purchaseReturn.ActualVatPrice)
+
+	if purchaseReturn.AutoRoundingAmount {
+		purchaseReturn.RoundingAmount = RoundTo2Decimals(purchaseReturn.ActualNetTotal - purchaseReturn.NetTotal)
+	}
+
+	purchaseReturn.NetTotal = RoundTo2Decimals(purchaseReturn.NetTotal + purchaseReturn.RoundingAmount)
+
 	purchaseReturn.CalculateDiscountPercentage()
 }
 
 func (purchaseReturn *PurchaseReturn) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
+	//Actual
+	actualTotal := float64(0.0)
+	actualTotalWithVAT := float64(0.0)
 	for i, product := range purchaseReturn.Products {
 		if !product.Selected {
 			continue
 		}
 
-		/*
-			if product.PurchaseReturnUnitPriceWithVAT > 0 {
-				purchaseReturn.Products[i].PurchaseReturnUnitPrice = RoundTo2Decimals(product.PurchaseReturnUnitPriceWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
-			} else if product.PurchaseReturnUnitPrice > 0 {
-				purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT = RoundTo2Decimals(product.PurchaseReturnUnitPrice * (1 + (*purchaseReturn.VatPercent / 100)))
-			}
-
-			if product.UnitDiscountWithVAT > 0 {
-				purchaseReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
-			} else if product.UnitDiscount > 0 {
-				purchaseReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*purchaseReturn.VatPercent / 100)))
-			}
-
-			if product.UnitDiscountPercentWithVAT > 0 {
-				purchaseReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.PurchaseReturnUnitPrice) * 100)
-			} else if product.UnitDiscountPercent > 0 {
-				purchaseReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.PurchaseReturnUnitPriceWithVAT) * 100)
-			}*/
-
 		total += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPrice - purchaseReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT - purchaseReturn.Products[i].UnitDiscountWithVAT))
 		total = RoundTo2Decimals(total)
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+
+		//Actual values
+		actualTotal += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPrice - purchaseReturn.Products[i].UnitDiscount))
+		actualTotal = RoundTo8Decimals(actualTotal)
+		actualTotalWithVAT += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT - purchaseReturn.Products[i].UnitDiscountWithVAT))
+		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 	}
 
 	purchaseReturn.Total = total
 	purchaseReturn.TotalWithVAT = totalWithVAT
+
+	//Actual
+	purchaseReturn.ActualTotal = actualTotal
+	purchaseReturn.ActualTotalWithVAT = actualTotalWithVAT
 }
 
 func (purchaseReturn *PurchaseReturn) CalculateDiscountPercentage() {

@@ -81,6 +81,12 @@ type Purchase struct {
 	Total                      float64  `bson:"total" json:"total"`
 	TotalWithVAT               float64  `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal                   float64  `bson:"net_total" json:"net_total"`
+	ActualVatPrice             float64  `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal                float64  `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT         float64  `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
+	ActualNetTotal             float64  `bson:"actual_net_total" json:"actual_net_total"`
+	RoundingAmount             float64  `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount         bool     `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
 	CashDiscount               float64  `bson:"cash_discount" json:"cash_discount"`
 	ReturnCashDiscount         float64  `bson:"return_cash_discount" json:"return_cash_discount"`
 	PaymentStatus              string   `bson:"payment_status" json:"payment_status"`
@@ -786,40 +792,50 @@ func (purchase *Purchase) FindNetTotal() {
 
 	purchase.NetTotal = RoundTo2Decimals(baseTotal + purchase.VatPrice)
 
+	//Actual
+	actualBaseTotal := purchase.ActualTotal + purchase.ShippingOrHandlingFees - purchase.Discount
+	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
+
+	// Now calculate VAT on the discounted base
+	purchase.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*purchase.VatPercent / 100))
+
+	purchase.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + purchase.ActualVatPrice)
+
+	if purchase.AutoRoundingAmount {
+		purchase.RoundingAmount = RoundTo2Decimals(purchase.ActualNetTotal - purchase.NetTotal)
+	}
+
+	purchase.NetTotal = RoundTo2Decimals(purchase.NetTotal + purchase.RoundingAmount)
+
 	purchase.CalculateDiscountPercentage()
 }
 
 func (purchase *Purchase) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
+	//Actual
+	actualTotal := float64(0.0)
+	actualTotalWithVAT := float64(0.0)
+
 	for i, product := range purchase.Products {
-		/*
-			if product.PurchaseUnitPriceWithVAT > 0 {
-				purchase.Products[i].PurchaseUnitPrice = RoundTo2Decimals(product.PurchaseUnitPriceWithVAT / (1 + (*purchase.VatPercent / 100)))
-			} else if product.PurchaseUnitPrice > 0 {
-				purchase.Products[i].PurchaseUnitPriceWithVAT = RoundTo2Decimals(product.PurchaseUnitPrice * (1 + (*purchase.VatPercent / 100)))
-			}
-
-			if product.UnitDiscountWithVAT > 0 {
-				purchase.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*purchase.VatPercent / 100)))
-			} else if product.UnitDiscount > 0 {
-				purchase.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*purchase.VatPercent / 100)))
-			}
-
-			if product.UnitDiscountPercentWithVAT > 0 {
-				purchase.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.PurchaseUnitPrice) * 100)
-			} else if product.UnitDiscountPercent > 0 {
-				purchase.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.PurchaseUnitPriceWithVAT) * 100)
-			}*/
-
 		total += (product.Quantity * (purchase.Products[i].PurchaseUnitPrice - purchase.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (purchase.Products[i].PurchaseUnitPriceWithVAT - purchase.Products[i].UnitDiscountWithVAT))
 		total = RoundTo2Decimals(total)
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+
+		//Actual values
+		actualTotal += (product.Quantity * (purchase.Products[i].PurchaseUnitPrice - purchase.Products[i].UnitDiscount))
+		actualTotal = RoundTo8Decimals(actualTotal)
+		actualTotalWithVAT += (product.Quantity * (purchase.Products[i].PurchaseUnitPriceWithVAT - purchase.Products[i].UnitDiscountWithVAT))
+		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 	}
 
 	purchase.Total = total
 	purchase.TotalWithVAT = totalWithVAT
+
+	//Actual
+	purchase.ActualTotal = actualTotal
+	purchase.ActualTotalWithVAT = actualTotalWithVAT
 }
 
 func (purchase *Purchase) CalculateDiscountPercentage() {
