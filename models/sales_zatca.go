@@ -466,7 +466,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 		price := Price{
 			PriceAmount: PriceAmount{
-				Value: RoundTo4Decimals(product.UnitPrice - product.UnitDiscount),
+				Value: RoundTo8Decimals(product.UnitPrice - product.UnitDiscount),
 				//Value:      (product.UnitPrice - product.UnitDiscount),
 				CurrencyID: "SAR",
 			},
@@ -487,7 +487,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				BaseAmount: &BaseAmount{
 					CurrencyID: "SAR",
 					//Value:      ToFixed(product.UnitPrice, 2),
-					Value: RoundTo4Decimals(product.UnitPrice),
+					Value: RoundTo8Decimals(product.UnitPrice),
 				},
 			}
 		}
@@ -583,10 +583,11 @@ func (order *Order) RecordZatcaComplianceCheckFailure(errorMessage string) error
 	order.Zatca.ComplianceCheckErrors = append(order.Zatca.ComplianceCheckErrors, errorMessage)
 	order.Zatca.ComplianceCheckLastFailedAt = &now
 
-	err := order.Update()
-	if err != nil {
-		return err
-	}
+	/*
+		err := order.Update()
+		if err != nil {
+			return err
+		}*/
 	return nil
 }
 
@@ -684,7 +685,7 @@ func (order *Order) ReportToZatca() error {
 	cmd.Stdout = &output // Capture stdout
 	cmd.Stderr = &output // Capture stderr
 
-	var complianceCheckResponse ZatcaComplianceCheckResponse
+	complianceCheckResponse := ZatcaComplianceCheckResponse{}
 
 	// Run the command
 	err = cmd.Run()
@@ -772,7 +773,7 @@ func (order *Order) ReportToZatca() error {
 		cmd.Stdout = &output // Capture stdout
 		cmd.Stderr = &output // Capture stderr
 
-		var reportingResponse ZatcaReportingResponse
+		reportingResponse := ZatcaReportingResponse{}
 
 		// Run the command
 		err = cmd.Run()

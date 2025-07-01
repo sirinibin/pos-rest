@@ -15,7 +15,6 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
-	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -430,21 +429,22 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	err := models.ProcessProducts()
-	if err != nil {
-		log.Print(err)
-	}
-
 	/*
-		err := models.ProcessCustomerDeposits()
+		err := models.ProcessProducts()
 		if err != nil {
 			log.Print(err)
 		}
 
-		err = models.ProcessCustomerWithdrawals()
-		if err != nil {
-			log.Print(err)
-		}*/
+
+			err := models.ProcessCustomerDeposits()
+			if err != nil {
+				log.Print(err)
+			}
+
+			err = models.ProcessCustomerWithdrawals()
+			if err != nil {
+				log.Print(err)
+			}*/
 
 	/*
 		err := models.ProcessQuotationSalesReturns()

@@ -509,7 +509,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 
 		price := Price{
 			PriceAmount: PriceAmount{
-				Value: RoundTo4Decimals(product.UnitPrice - product.UnitDiscount),
+				Value: RoundTo8Decimals(product.UnitPrice - product.UnitDiscount),
 				//Value:      (product.UnitPrice - product.UnitDiscount),
 				CurrencyID: "SAR",
 			},
@@ -530,7 +530,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 				BaseAmount: &BaseAmount{
 					CurrencyID: "SAR",
 					//Value:      ToFixed(product.UnitPrice, 2),
-					Value: RoundTo4Decimals(product.UnitPrice),
+					Value: RoundTo8Decimals(product.UnitPrice),
 				},
 			}
 		}
@@ -712,7 +712,7 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 	cmd.Stdout = &output // Capture stdout
 	cmd.Stderr = &output // Capture stderr
 
-	var complianceCheckResponse ZatcaComplianceCheckResponse
+	complianceCheckResponse := ZatcaComplianceCheckResponse{}
 
 	// Run the command
 	err = cmd.Run()
@@ -800,7 +800,7 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 		cmd.Stdout = &output // Capture stdout
 		cmd.Stderr = &output // Capture stderr
 
-		var reportingResponse ZatcaReportingResponse
+		reportingResponse := ZatcaReportingResponse{}
 
 		// Run the command
 		err = cmd.Run()

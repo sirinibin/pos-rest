@@ -3038,7 +3038,7 @@ func ProcessProducts() error {
 		return err
 	}
 
-	productsToExport := []Product{}
+	//productsToExport := []Product{}
 
 	for _, store := range stores {
 		/*
@@ -3082,22 +3082,23 @@ func ProcessProducts() error {
 				continue
 			}
 
-			if store.Code == "RAA-JDA-DEL" {
-				productsToExport = append(productsToExport, product)
-			}
-
-			if store.Code == "RAA-JDA" {
-				newProduct := Product{}
-				for _, productToExport := range productsToExport {
-					newProduct = productToExport
-					newProduct.StoreID = &store.ID
-					for _, productStore := range newProduct.ProductStores {
-						newProduct.ProductStores[store.ID.Hex()] = productStore
-					}
-					newProduct.Insert()
+			/*
+				if store.Code == "RAA-JDA-DEL" {
+					productsToExport = append(productsToExport, product)
 				}
-				productsToExport = []Product{}
-			}
+
+				if store.Code == "RAA-JDA" {
+					newProduct := Product{}
+					for _, productToExport := range productsToExport {
+						newProduct = productToExport
+						newProduct.StoreID = &store.ID
+						for _, productStore := range newProduct.ProductStores {
+							newProduct.ProductStores[store.ID.Hex()] = productStore
+						}
+						newProduct.Insert()
+					}
+					productsToExport = []Product{}
+				}*/
 			/*
 				if store.Code == "MBDI" || store.Code == "LGK" || store.Code == "LGK-SIMULATION" {
 
