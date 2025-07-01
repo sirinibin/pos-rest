@@ -79,10 +79,10 @@ type Order struct {
 	VatPrice               float64             `bson:"vat_price" json:"vat_price"`
 	Total                  float64             `bson:"total" json:"total"`
 	TotalWithVAT           float64             `bson:"total_with_vat" json:"total_with_vat"`
+	NetTotal               float64             `bson:"net_total" json:"net_total"`
 	ActualVatPrice         float64             `bson:"actual_vat_price" json:"actual_vat_price"`
 	ActualTotal            float64             `bson:"actual_total" json:"actual_total"`
 	ActualTotalWithVAT     float64             `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
-	NetTotal               float64             `bson:"net_total" json:"net_total"`
 	ActualNetTotal         float64             `bson:"actual_net_total" json:"actual_net_total"`
 	RoundingAmount         float64             `bson:"rounding_amount" json:"rounding_amount"`
 	AutoRoundingAmount     bool                `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
@@ -511,16 +511,15 @@ func (order *Order) FindNetTotal() {
 	// Now calculate VAT on the discounted base
 	order.VatPrice = RoundTo2Decimals(baseTotal * (*order.VatPercent / 100))
 
+	//log.Print(baseTotal + order.VatPrice)
+	order.NetTotal = RoundTo2Decimals(baseTotal + order.VatPrice)
+
 	//Actual
 	actualBaseTotal := order.ActualTotal + order.ShippingOrHandlingFees - order.Discount
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
 	// Now calculate VAT on the discounted base
 	order.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*order.VatPercent / 100))
-
-	//log.Print(baseTotal + order.VatPrice)
-	order.NetTotal = RoundTo2Decimals(baseTotal + order.VatPrice)
-	//actual
 	order.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + order.ActualVatPrice)
 
 	if order.AutoRoundingAmount {
@@ -535,8 +534,10 @@ func (order *Order) FindNetTotal() {
 func (order *Order) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
+	//Actual
 	actualTotal := float64(0.0)
 	actualTotalWithVAT := float64(0.0)
+
 	for i, product := range order.Products {
 		/*
 			if product.UnitPriceWithVAT > 0 {
@@ -560,15 +561,15 @@ func (order *Order) FindTotal() {
 		total += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
 		total = RoundTo2Decimals(total)
 
-		actualTotal += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
-		actualTotal = RoundTo8Decimals(actualTotal)
-
 		//order.Products[i].LineTotal = RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
 		//order.Products[i].ActualLineTotal = RoundTo8Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
 
 		totalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 
+		//Actual values
+		actualTotal += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+		actualTotal = RoundTo8Decimals(actualTotal)
 		actualTotalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
 		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 
@@ -578,6 +579,8 @@ func (order *Order) FindTotal() {
 
 	order.Total = total
 	order.TotalWithVAT = totalWithVAT
+
+	//Actual
 	order.ActualTotal = actualTotal
 	order.ActualTotalWithVAT = actualTotalWithVAT
 }

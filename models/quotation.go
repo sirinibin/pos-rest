@@ -80,6 +80,12 @@ type Quotation struct {
 	Total                    float64             `bson:"total" json:"total"`
 	TotalWithVAT             float64             `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal                 float64             `bson:"net_total" json:"net_total"`
+	ActualVatPrice           float64             `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal              float64             `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT       float64             `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
+	ActualNetTotal           float64             `bson:"actual_net_total" json:"actual_net_total"`
+	RoundingAmount           float64             `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount       bool                `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
 	Payments                 []QuotationPayment  `bson:"payments" json:"payments"`
 	PaymentsInput            []QuotationPayment  `bson:"-" json:"payments_input"`
 	PaymentsCount            int64               `bson:"payments_count" json:"payments_count"`
@@ -1075,6 +1081,24 @@ func (quotation *Quotation) FindNetTotal() error {
 
 	quotation.NetTotal = RoundTo2Decimals(baseTotal + quotation.VatPrice)
 
+	//Actual
+	actualBaseTotal := quotation.ActualTotal + quotation.ShippingOrHandlingFees - quotation.Discount
+	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
+
+	// Now calculate VAT on the discounted base
+	quotation.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*quotation.VatPercent / 100))
+	if store.Settings.HideQuotationInvoiceVAT && quotation.Type == "invoice" {
+		quotation.ActualVatPrice = 0
+	}
+
+	quotation.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + quotation.ActualVatPrice)
+
+	if quotation.AutoRoundingAmount {
+		quotation.RoundingAmount = RoundTo2Decimals(quotation.ActualNetTotal - quotation.NetTotal)
+	}
+
+	quotation.NetTotal = RoundTo2Decimals(quotation.NetTotal + quotation.RoundingAmount)
+
 	quotation.CalculateDiscountPercentage()
 	return nil
 }
@@ -1082,6 +1106,9 @@ func (quotation *Quotation) FindNetTotal() error {
 func (quotation *Quotation) FindTotal() {
 	total := float64(0.0)
 	totalWithVAT := float64(0.0)
+	//Actual
+	actualTotal := float64(0.0)
+	actualTotalWithVAT := float64(0.0)
 	for i, product := range quotation.Products {
 
 		/*
@@ -1107,10 +1134,20 @@ func (quotation *Quotation) FindTotal() {
 		totalWithVAT += (product.Quantity * (quotation.Products[i].UnitPriceWithVAT - quotation.Products[i].UnitDiscountWithVAT))
 		total = RoundTo2Decimals(total)
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+
+		//Actual values
+		actualTotal += (product.Quantity * (quotation.Products[i].UnitPrice - quotation.Products[i].UnitDiscount))
+		actualTotal = RoundTo8Decimals(actualTotal)
+		actualTotalWithVAT += (product.Quantity * (quotation.Products[i].UnitPriceWithVAT - quotation.Products[i].UnitDiscountWithVAT))
+		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 	}
 
 	quotation.Total = total
 	quotation.TotalWithVAT = totalWithVAT
+
+	//Actual
+	quotation.ActualTotal = actualTotal
+	quotation.ActualTotalWithVAT = actualTotalWithVAT
 }
 
 func (quotation *Quotation) CalculateDiscountPercentage() {
