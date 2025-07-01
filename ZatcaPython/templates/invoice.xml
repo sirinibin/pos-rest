@@ -144,7 +144,7 @@
 		<cac:Price>
 			<cbc:PriceAmount currencyID="SAR">3.00</cbc:PriceAmount>
 			<cac:AllowanceCharge>
-				<cbc:ChargeIndicator>true</cbc:ChargeIndicator>
+				<cbc:ChargeIndicator>false</cbc:ChargeIndicator>
 				<cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>
 				<cbc:Amount currencyID="SAR">0.00</cbc:Amount>
 			</cac:AllowanceCharge>
@@ -171,7 +171,7 @@
 		<cac:Price>
 			<cbc:PriceAmount currencyID="SAR">34.00</cbc:PriceAmount>
 			<cac:AllowanceCharge>
-				<cbc:ChargeIndicator>true</cbc:ChargeIndicator>
+				<cbc:ChargeIndicator>false</cbc:ChargeIndicator>
 				<cbc:AllowanceChargeReason>discount</cbc:AllowanceChargeReason>
 				<cbc:Amount currencyID="SAR">0.00</cbc:Amount>
 			</cac:AllowanceCharge>
