@@ -85,6 +85,7 @@ type Order struct {
 	NetTotal               float64             `bson:"net_total" json:"net_total"`
 	ActualNetTotal         float64             `bson:"actual_net_total" json:"actual_net_total"`
 	RoundingAmount         float64             `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount     bool                `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
 	CashDiscount           float64             `bson:"cash_discount" json:"cash_discount"`
 	ReturnCashDiscount     float64             `bson:"return_cash_discount" json:"return_cash_discount"`
 	TotalPaymentReceived   float64             `bson:"total_payment_received" json:"total_payment_received"`
@@ -522,9 +523,9 @@ func (order *Order) FindNetTotal() {
 	//actual
 	order.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + order.ActualVatPrice)
 
-	order.RoundingAmount = RoundTo2Decimals(order.ActualNetTotal - order.NetTotal)
-
-	//order.NetTotalBeforeRounding = RoundTo2Decimals(order.NetTotal)
+	if order.AutoRoundingAmount {
+		order.RoundingAmount = RoundTo2Decimals(order.ActualNetTotal - order.NetTotal)
+	}
 
 	order.NetTotal = RoundTo2Decimals(order.NetTotal + order.RoundingAmount)
 

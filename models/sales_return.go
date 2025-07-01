@@ -85,6 +85,7 @@ type SalesReturn struct {
 	ActualTotal            float64  `bson:"actual_total" json:"actual_total"`
 	ActualTotalWithVAT     float64  `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
 	RoundingAmount         float64  `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount     bool     `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
 	NetTotal               float64  `bson:"net_total" json:"net_total"`
 	ActualNetTotal         float64  `bson:"actual_net_total" json:"actual_net_total"`
 	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
@@ -621,7 +622,9 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 	//actual
 	salesReturn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + salesReturn.ActualVatPrice)
 
-	salesReturn.RoundingAmount = RoundTo2Decimals(salesReturn.ActualNetTotal - salesReturn.NetTotal)
+	if salesReturn.AutoRoundingAmount {
+		salesReturn.RoundingAmount = RoundTo2Decimals(salesReturn.ActualNetTotal - salesReturn.NetTotal)
+	}
 
 	salesReturn.NetTotal = RoundTo2Decimals(salesReturn.NetTotal + salesReturn.RoundingAmount)
 
