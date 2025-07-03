@@ -112,7 +112,7 @@ type Product struct {
 	CountryName          string                  `bson:"country_name" json:"country_name"`
 	CountryCode          string                  `bson:"country_code" json:"country_code"`
 	ProductStores        map[string]ProductStore `bson:"product_stores,omitempty" json:"product_stores,omitempty"`
-	Unit                 string                  `bson:"unit,omitempty" json:"unit,omitempty"`
+	Unit                 string                  `bson:"unit" json:"unit"`
 	Images               []string                `bson:"images" json:"images"`
 	ImagesContent        []string                `json:"images_content,omitempty" bson:"-"`
 	Deleted              bool                    `bson:"deleted" json:"deleted"`
@@ -153,6 +153,7 @@ type SetProduct struct {
 	PartNumber               string              `bson:"part_number" json:"part_number"`
 	Name                     string              `bson:"name" json:"name"`
 	Quantity                 *float64            `bson:"quantity" json:"quantity"`
+	Unit                     string              `bson:"unit" json:"unit"`
 	PurchaseUnitPrice        *float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
 	PurchaseUnitPriceWithVAT *float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
 	RetailUnitPrice          *float64            `bson:"retail_unit_price" json:"retail_unit_price"`
@@ -2283,7 +2284,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 			}
 		}*/
 
-	if govalidator.IsNull(product.Set.Name) {
+	if len(product.Set.Products) > 0 {
 		product.IsSet = false
 	} else {
 		product.IsSet = true

@@ -482,7 +482,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				ChargeIndicator:       false,
 				AllowanceChargeReason: "discount",
 				Amount: Amount{
-					Value:      ToFixed(product.UnitDiscount, 2),
+					Value:      RoundTo8Decimals(product.UnitDiscount),
 					CurrencyID: "SAR",
 				},
 				BaseAmount: &BaseAmount{
