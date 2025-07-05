@@ -477,6 +477,17 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[ignore_zero_qtn_credit_balance]"]
+	if ok && len(keys[0]) >= 1 {
+		value := ParseBoolToInt(keys[0])
+		if value == 1 {
+			criterias.SearchBy["$and"] = []bson.M{
+				bson.M{"stores." + storeID.Hex() + ".quotation_invoice_balance_amount": bson.M{"$ne": 0}},
+				bson.M{"stores." + storeID.Hex() + ".quotation_invoice_balance_amount": bson.M{"$ne": nil}},
+			}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[quotation_invoice_paid_count]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
