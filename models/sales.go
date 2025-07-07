@@ -989,6 +989,23 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["discount"] = value
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[total_payment_received]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])

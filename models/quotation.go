@@ -1260,6 +1260,40 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return quotations, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return quotations, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_amount"] = value
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
 		const shortForm = "Jan 02 2006"
@@ -1335,6 +1369,40 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 		endDate := startDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
 		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return quotations, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["discount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[cash_discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return quotations, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["cash_discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["cash_discount"] = value
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[created_at_from]"]

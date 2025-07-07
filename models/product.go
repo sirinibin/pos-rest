@@ -687,6 +687,8 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		if value == 1 {
 			criterias.SearchBy["is_set"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["is_set"] = bson.M{"$ne": true}
 		}
 	}
 
@@ -1077,7 +1079,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1168,7 +1170,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1260,7 +1262,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1316,7 +1318,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1371,7 +1373,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1389,7 +1391,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1423,7 +1425,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1440,7 +1442,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1474,7 +1476,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1491,7 +1493,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
@@ -1526,7 +1528,7 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return products, criterias, err
 		}
