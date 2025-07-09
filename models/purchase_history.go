@@ -616,18 +616,18 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 					VendorName:      purchase.VendorName,
 					PurchaseID:      &purchase.ID,
 					PurchaseCode:    purchase.Code,
-					Quantity:        RoundTo8Decimals(purchaseProduct.Quantity * *setProduct.Quantity),
-					UnitPrice:       RoundTo4Decimals(purchaseProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Quantity:        RoundTo8Decimals(purchaseProduct.Quantity * setProduct.Quantity),
+					UnitPrice:       RoundTo4Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:            setProductObj.Unit,
-					UnitDiscount:    RoundTo8Decimals(purchaseProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)),
-					Discount:        RoundTo8Decimals((purchaseProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)) * RoundTo8Decimals(purchaseProduct.Quantity**setProduct.Quantity)),
+					UnitDiscount:    RoundTo8Decimals(purchaseProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)),
+					Discount:        RoundTo8Decimals((purchaseProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)) * RoundTo8Decimals(purchaseProduct.Quantity*setProduct.Quantity)),
 					DiscountPercent: purchaseProduct.UnitDiscountPercent,
 					CreatedAt:       purchase.CreatedAt,
 					UpdatedAt:       purchase.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo8Decimals(purchaseProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100))
-				history.UnitPriceWithVAT = RoundTo8Decimals(purchaseProduct.PurchaseUnitPriceWithVAT * (*setProduct.PurchasePricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(purchaseProduct.PurchaseUnitPriceWithVAT * (setProduct.PurchasePricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
 
 				history.RetailProfit = RoundTo4Decimals(setProductObj.ProductStores[store.ID.Hex()].RetailUnitPrice - history.UnitPrice)

@@ -458,7 +458,7 @@ func (deliverynote *DeliveryNote) CreateProductsDeliveryNoteHistory() error {
 					CustomerName:     deliverynote.CustomerName,
 					DeliveryNoteID:   &deliverynote.ID,
 					DeliveryNoteCode: deliverynote.Code,
-					Quantity:         (deliverynoteProduct.Quantity * *setProduct.Quantity),
+					Quantity:         (deliverynoteProduct.Quantity * setProduct.Quantity),
 					Unit:             deliverynoteProduct.Unit,
 					CreatedAt:        deliverynote.CreatedAt,
 					UpdatedAt:        deliverynote.UpdatedAt,

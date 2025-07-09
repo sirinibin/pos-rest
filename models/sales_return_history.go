@@ -592,21 +592,21 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 					SalesReturnCode:   salesReturn.Code,
 					OrderID:           salesReturn.OrderID,
 					OrderCode:         salesReturn.OrderCode,
-					Quantity:          RoundTo8Decimals(salesReturnProduct.Quantity * *setProduct.Quantity),
-					PurchaseUnitPrice: RoundTo4Decimals(salesReturnProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Quantity:          RoundTo8Decimals(salesReturnProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice: RoundTo4Decimals(salesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:              setProductObj.Unit,
-					UnitDiscount:      RoundTo8Decimals(salesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)),
-					Discount:          RoundTo8Decimals((salesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(salesReturnProduct.Quantity**setProduct.Quantity)),
+					UnitDiscount:      RoundTo8Decimals(salesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:          RoundTo8Decimals((salesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(salesReturnProduct.Quantity*setProduct.Quantity)),
 					DiscountPercent:   salesReturnProduct.UnitDiscountPercent,
 					CreatedAt:         salesReturn.CreatedAt,
 					UpdatedAt:         salesReturn.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo8Decimals(salesReturnProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
-				history.UnitPriceWithVAT = RoundTo8Decimals(salesReturnProduct.UnitPriceWithVAT * (*setProduct.RetailPricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(salesReturnProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(salesReturnProduct.UnitPriceWithVAT * (setProduct.RetailPricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
-				history.Profit = RoundTo4Decimals(salesReturnProduct.Profit * (*setProduct.RetailPricePercent / 100))
-				history.Loss = RoundTo4Decimals(salesReturnProduct.Loss * (*setProduct.RetailPricePercent / 100))
+				history.Profit = RoundTo4Decimals(salesReturnProduct.Profit * (setProduct.RetailPricePercent / 100))
+				history.Loss = RoundTo4Decimals(salesReturnProduct.Loss * (setProduct.RetailPricePercent / 100))
 
 				history.VatPercent = RoundTo2Decimals(*salesReturn.VatPercent)
 				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))

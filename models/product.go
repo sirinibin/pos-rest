@@ -152,14 +152,14 @@ type SetProduct struct {
 	ProductID                *primitive.ObjectID `json:"product_id" bson:"produc_id"`
 	PartNumber               string              `bson:"part_number" json:"part_number"`
 	Name                     string              `bson:"name" json:"name"`
-	Quantity                 *float64            `bson:"quantity" json:"quantity"`
+	Quantity                 float64             `bson:"quantity" json:"quantity"`
 	Unit                     string              `bson:"unit" json:"unit"`
-	PurchaseUnitPrice        *float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
-	PurchaseUnitPriceWithVAT *float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
-	RetailUnitPrice          *float64            `bson:"retail_unit_price" json:"retail_unit_price"`
-	RetailUnitPriceWithVAT   *float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
-	RetailPricePercent       *float64            `bson:"retail_price_percent" json:"retail_price_percent"`
-	PurchasePricePercent     *float64            `bson:"purchase_price_percent" json:"purchase_price_percent"`
+	PurchaseUnitPrice        float64             `bson:"purchase_unit_price" json:"purchase_unit_price"`
+	PurchaseUnitPriceWithVAT float64             `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
+	RetailUnitPrice          float64             `bson:"retail_unit_price" json:"retail_unit_price"`
+	RetailUnitPriceWithVAT   float64             `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
+	RetailPricePercent       float64             `bson:"retail_price_percent" json:"retail_price_percent"`
+	PurchasePricePercent     float64             `bson:"purchase_price_percent" json:"purchase_price_percent"`
 }
 
 type ProductStats struct {
@@ -175,9 +175,9 @@ func (product *Product) FindSetTotal() {
 	totalWithVAT := float64(0.00)
 	totalQuantity := float64(0.00)
 	for _, setProduct := range product.Set.Products {
-		total += *setProduct.RetailUnitPrice * *setProduct.Quantity
-		totalWithVAT += *setProduct.RetailUnitPriceWithVAT * *setProduct.Quantity
-		totalQuantity += *setProduct.Quantity
+		total += setProduct.RetailUnitPrice * setProduct.Quantity
+		totalWithVAT += setProduct.RetailUnitPriceWithVAT * setProduct.Quantity
+		totalQuantity += setProduct.Quantity
 	}
 
 	product.Set.Total = RoundTo2Decimals(total)

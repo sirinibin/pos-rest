@@ -592,21 +592,21 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 					QuotationSalesReturnCode: quotationsalesReturn.Code,
 					QuotationID:              quotationsalesReturn.QuotationID,
 					QuotationCode:            quotationsalesReturn.QuotationCode,
-					Quantity:                 RoundTo8Decimals(quotationsalesReturnProduct.Quantity * *setProduct.Quantity),
-					PurchaseUnitPrice:        RoundTo4Decimals(quotationsalesReturnProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Quantity:                 RoundTo8Decimals(quotationsalesReturnProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice:        RoundTo4Decimals(quotationsalesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:                     setProductObj.Unit,
-					UnitDiscount:             RoundTo8Decimals(quotationsalesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)),
-					Discount:                 RoundTo8Decimals((quotationsalesReturnProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(quotationsalesReturnProduct.Quantity**setProduct.Quantity)),
+					UnitDiscount:             RoundTo8Decimals(quotationsalesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:                 RoundTo8Decimals((quotationsalesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(quotationsalesReturnProduct.Quantity*setProduct.Quantity)),
 					DiscountPercent:          quotationsalesReturnProduct.UnitDiscountPercent,
 					CreatedAt:                quotationsalesReturn.CreatedAt,
 					UpdatedAt:                quotationsalesReturn.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo8Decimals(quotationsalesReturnProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
-				history.UnitPriceWithVAT = RoundTo8Decimals(quotationsalesReturnProduct.UnitPriceWithVAT * (*setProduct.RetailPricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(quotationsalesReturnProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(quotationsalesReturnProduct.UnitPriceWithVAT * (setProduct.RetailPricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
-				history.Profit = RoundTo4Decimals(quotationsalesReturnProduct.Profit * (*setProduct.RetailPricePercent / 100))
-				history.Loss = RoundTo4Decimals(quotationsalesReturnProduct.Loss * (*setProduct.RetailPricePercent / 100))
+				history.Profit = RoundTo4Decimals(quotationsalesReturnProduct.Profit * (setProduct.RetailPricePercent / 100))
+				history.Loss = RoundTo4Decimals(quotationsalesReturnProduct.Loss * (setProduct.RetailPricePercent / 100))
 
 				history.VatPercent = RoundTo2Decimals(*quotationsalesReturn.VatPercent)
 				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))

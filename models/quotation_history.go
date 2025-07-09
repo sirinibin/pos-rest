@@ -601,21 +601,21 @@ func (quotation *Quotation) CreateProductsQuotationHistory() error {
 					CustomerName:      quotation.CustomerName,
 					QuotationID:       &quotation.ID,
 					QuotationCode:     quotation.Code,
-					Quantity:          RoundTo8Decimals(quotationProduct.Quantity * *setProduct.Quantity),
-					PurchaseUnitPrice: RoundTo4Decimals(quotationProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Quantity:          RoundTo8Decimals(quotationProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice: RoundTo4Decimals(quotationProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:              setProductObj.Unit,
-					UnitDiscount:      RoundTo8Decimals(quotationProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)),
-					Discount:          RoundTo8Decimals((quotationProduct.UnitDiscount * (*setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(quotationProduct.Quantity**setProduct.Quantity)),
+					UnitDiscount:      RoundTo8Decimals(quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:          RoundTo8Decimals((quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(quotationProduct.Quantity*setProduct.Quantity)),
 					DiscountPercent:   quotationProduct.UnitDiscountPercent,
 					CreatedAt:         quotation.CreatedAt,
 					UpdatedAt:         quotation.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo8Decimals(quotationProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
-				history.UnitPriceWithVAT = RoundTo8Decimals(quotationProduct.UnitPriceWithVAT * (*setProduct.RetailPricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(quotationProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(quotationProduct.UnitPriceWithVAT * (setProduct.RetailPricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
-				history.Profit = RoundTo4Decimals(quotationProduct.Profit * (*setProduct.RetailPricePercent / 100))
-				history.Loss = RoundTo4Decimals(quotationProduct.Loss * (*setProduct.RetailPricePercent / 100))
+				history.Profit = RoundTo4Decimals(quotationProduct.Profit * (setProduct.RetailPricePercent / 100))
+				history.Loss = RoundTo4Decimals(quotationProduct.Loss * (setProduct.RetailPricePercent / 100))
 
 				history.VatPercent = RoundTo2Decimals(*quotation.VatPercent)
 				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))

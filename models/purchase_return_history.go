@@ -580,18 +580,18 @@ func (purchaseReturn *PurchaseReturn) CreateProductsPurchaseReturnHistory() erro
 					PurchaseReturnCode: purchaseReturn.Code,
 					PurchaseID:         purchaseReturn.PurchaseID,
 					PurchaseCode:       purchaseReturn.PurchaseCode,
-					Quantity:           RoundTo8Decimals(purchaseReturnProduct.Quantity * *setProduct.Quantity),
-					UnitPrice:          RoundTo4Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (*setProduct.PurchasePricePercent / 100)),
+					Quantity:           RoundTo8Decimals(purchaseReturnProduct.Quantity * setProduct.Quantity),
+					UnitPrice:          RoundTo4Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:               setProductObj.Unit,
-					UnitDiscount:       RoundTo8Decimals(purchaseReturnProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)),
-					Discount:           RoundTo8Decimals((purchaseReturnProduct.UnitDiscount * (*setProduct.PurchasePricePercent / 100)) * RoundTo8Decimals(purchaseReturnProduct.Quantity**setProduct.Quantity)),
+					UnitDiscount:       RoundTo8Decimals(purchaseReturnProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)),
+					Discount:           RoundTo8Decimals((purchaseReturnProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)) * RoundTo8Decimals(purchaseReturnProduct.Quantity*setProduct.Quantity)),
 					DiscountPercent:    purchaseReturnProduct.UnitDiscountPercent,
 					CreatedAt:          purchaseReturn.CreatedAt,
 					UpdatedAt:          purchaseReturn.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo8Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (*setProduct.PurchasePricePercent / 100))
-				history.UnitPriceWithVAT = RoundTo8Decimals(purchaseReturnProduct.PurchaseReturnUnitPriceWithVAT * (*setProduct.PurchasePricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(purchaseReturnProduct.PurchaseReturnUnitPriceWithVAT * (setProduct.PurchasePricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
 
 				history.VatPercent = RoundTo2Decimals(*purchaseReturn.VatPercent)
