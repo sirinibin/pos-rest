@@ -269,7 +269,40 @@ func (store *Store) SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.R
 		} else {
 			criterias.SearchBy["price"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[net_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_price"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_price"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[vat_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["vat_price"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["vat_price"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[unit_price]"]

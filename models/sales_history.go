@@ -377,7 +377,6 @@ func (store *Store) SearchSalesHistory(w http.ResponseWriter, r *http.Request) (
 		} else {
 			criterias.SearchBy["profit"] = float64(value)
 		}
-
 	}
 
 	keys, ok = r.URL.Query()["search[loss]"]
@@ -395,7 +394,23 @@ func (store *Store) SearchSalesHistory(w http.ResponseWriter, r *http.Request) (
 		} else {
 			criterias.SearchBy["loss"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[vat_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["vat_price"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["vat_price"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
