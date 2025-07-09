@@ -42,6 +42,7 @@ type ProductSalesReturnHistory struct {
 	VatPrice          float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
 	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
 	Store             *Store              `json:"store,omitempty"`
+	UnitPriceWithVAT  float64             `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
 	Customer          *Customer           `json:"customer,omitempty"`
 	CreatedAt         *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt         *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -296,7 +297,23 @@ func (store *Store) SearchSalesReturnHistory(w http.ResponseWriter, r *http.Requ
 		} else {
 			criterias.SearchBy["unit_price"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[unit_price_with_vat]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["unit_price_with_vat"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["unit_price_with_vat"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[discount]"]
@@ -536,11 +553,12 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 			UpdatedAt:       salesReturn.UpdatedAt,
 		}
 
-		history.UnitPrice = RoundFloat(salesReturnProduct.UnitPrice, 2)
-		history.Price = RoundFloat(((salesReturnProduct.UnitPrice - salesReturnProduct.UnitDiscount) * salesReturnProduct.Quantity), 2)
+		history.UnitPrice = RoundTo8Decimals(salesReturnProduct.UnitPrice)
+		history.UnitPriceWithVAT = RoundTo8Decimals(salesReturnProduct.UnitPriceWithVAT)
+		history.Price = RoundTo2Decimals(((salesReturnProduct.UnitPrice - salesReturnProduct.UnitDiscount) * salesReturnProduct.Quantity))
 		history.VatPercent = RoundFloat(*salesReturn.VatPercent, 2)
-		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
-		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)
+		history.VatPrice = RoundTo2Decimals((history.Price * (history.VatPercent / 100)))
+		history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
 		history.Profit = RoundFloat(salesReturnProduct.Profit, 2)
 		history.Loss = RoundFloat(salesReturnProduct.Loss, 2)
 
@@ -584,7 +602,8 @@ func (salesReturn *SalesReturn) CreateProductsSalesReturnHistory() error {
 					UpdatedAt:         salesReturn.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo4Decimals(salesReturnProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(salesReturnProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(salesReturnProduct.UnitPriceWithVAT * (*setProduct.RetailPricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
 				history.Profit = RoundTo4Decimals(salesReturnProduct.Profit * (*setProduct.RetailPricePercent / 100))
 				history.Loss = RoundTo4Decimals(salesReturnProduct.Loss * (*setProduct.RetailPricePercent / 100))

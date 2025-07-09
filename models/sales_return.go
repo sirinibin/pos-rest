@@ -2635,15 +2635,20 @@ func ProcessSalesReturns() error {
 				continue
 			}
 
-			salesReturn.UndoAccounting()
-			salesReturn.DoAccounting()
-
-			if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
+			if store.Code == "MBDI" || store.Code == "LGK" {
+				salesReturn.ClearProductsSalesReturnHistory()
+				salesReturn.CreateProductsSalesReturnHistory()
 			}
+			/*
+				salesReturn.UndoAccounting()
+				salesReturn.DoAccounting()
+
+				if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
 			/*
 				order, _ := store.FindOrderByID(salesReturn.OrderID, bson.M{})

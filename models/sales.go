@@ -32,7 +32,7 @@ type OrderProduct struct {
 	Quantity                   float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	QuantityReturned           float64            `json:"quantity_returned" bson:"quantity_returned"`
 	UnitPrice                  float64            `bson:"unit_price" json:"unit_price"`
-	UnitPriceWithVAT           float64            `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
+	UnitPriceWithVAT           float64            `bson:"unit_price_with_vat" json:"unit_price_with_vat"`
 	PurchaseUnitPrice          float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
 	Unit                       string             `bson:"unit,omitempty" json:"unit,omitempty"`
@@ -3060,6 +3060,10 @@ func ProcessOrders() error {
 				continue
 			}
 
+			if store.Code == "MBDI" || store.Code == "LGK" {
+				order.ClearProductsSalesHistory()
+				order.CreateProductsSalesHistory()
+			}
 			/*
 				if store.Code == "MBDI" {
 					if order.Code == "S-INV-20250614-111" {

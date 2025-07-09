@@ -2209,14 +2209,20 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
-			model.UndoAccounting()
-			model.DoAccounting()
-			if model.VendorID != nil && !model.VendorID.IsZero() {
-				vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
-				if vendor != nil {
-					vendor.SetCreditBalance()
-				}
+			if store.Code == "MBDI" || store.Code == "LGK" {
+				model.ClearProductsPurchaseReturnHistory()
+				model.CreateProductsPurchaseReturnHistory()
 			}
+
+			/*
+				model.UndoAccounting()
+				model.DoAccounting()
+				if model.VendorID != nil && !model.VendorID.IsZero() {
+					vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
+				}*/
 
 			//purchase, _ := store.FindPurchaseByID(model.PurchaseID, bson.M{})
 			//purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)

@@ -17,33 +17,34 @@ import (
 )
 
 type ProductPurchaseHistory struct {
-	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName       string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	ProductID       primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	VendorID        *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
-	VendorName      string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
-	PurchaseID      *primitive.ObjectID `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
-	PurchaseCode    string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
-	Quantity        float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	UnitPrice       float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	UnitDiscount    float64             `bson:"unit_discount" json:"unit_discount"`
-	Discount        float64             `bson:"discount" json:"discount"`
-	DiscountPercent float64             `bson:"discount_percent" json:"discount_percent"`
-	Price           float64             `bson:"price,omitempty" json:"price,omitempty"`
-	NetPrice        float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
-	RetailProfit    float64             `bson:"retail_profit" json:"retail_profit"`
-	WholesaleProfit float64             `bson:"wholesale_profit" json:"wholesale_profit"`
-	RetailLoss      float64             `bson:"retail_loss" json:"retail_loss"`
-	WholesaleLoss   float64             `bson:"wholesale_loss" json:"wholesale_loss"`
-	VatPercent      float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	VatPrice        float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
-	Unit            string              `bson:"unit,omitempty" json:"unit,omitempty"`
-	Store           *Store              `json:"store,omitempty"`
-	Vendor          *Vendor             `json:"vendor,omitempty"`
-	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ID               primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date             *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	StoreID          *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName        string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	ProductID        primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	VendorID         *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	VendorName       string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	PurchaseID       *primitive.ObjectID `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
+	PurchaseCode     string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
+	Quantity         float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	UnitPrice        float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitDiscount     float64             `bson:"unit_discount" json:"unit_discount"`
+	Discount         float64             `bson:"discount" json:"discount"`
+	DiscountPercent  float64             `bson:"discount_percent" json:"discount_percent"`
+	Price            float64             `bson:"price,omitempty" json:"price,omitempty"`
+	NetPrice         float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
+	RetailProfit     float64             `bson:"retail_profit" json:"retail_profit"`
+	WholesaleProfit  float64             `bson:"wholesale_profit" json:"wholesale_profit"`
+	RetailLoss       float64             `bson:"retail_loss" json:"retail_loss"`
+	WholesaleLoss    float64             `bson:"wholesale_loss" json:"wholesale_loss"`
+	VatPercent       float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPrice         float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
+	Unit             string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	Store            *Store              `json:"store,omitempty"`
+	UnitPriceWithVAT float64             `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
+	Vendor           *Vendor             `json:"vendor,omitempty"`
+	CreatedAt        *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt        *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 type PurchaseHistoryStats struct {
@@ -300,7 +301,23 @@ func (store *Store) SearchPurchaseHistory(w http.ResponseWriter, r *http.Request
 		} else {
 			criterias.SearchBy["unit_price"] = float64(value)
 		}
+	}
 
+	keys, ok = r.URL.Query()["search[unit_price_with_vat]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["unit_price_with_vat"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["unit_price_with_vat"] = float64(value)
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[discount]"]
@@ -557,8 +574,9 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 			UpdatedAt:       purchase.UpdatedAt,
 		}
 
-		history.UnitPrice = RoundFloat(purchaseProduct.PurchaseUnitPrice, 2)
-		history.Price = RoundFloat(((purchaseProduct.PurchaseUnitPrice - purchaseProduct.UnitDiscount) * purchaseProduct.Quantity), 2)
+		history.UnitPrice = RoundTo8Decimals(purchaseProduct.PurchaseUnitPrice)
+		history.UnitPriceWithVAT = RoundTo8Decimals(purchaseProduct.PurchaseUnitPriceWithVAT)
+		history.Price = RoundTo2Decimals(((purchaseProduct.PurchaseUnitPrice - purchaseProduct.UnitDiscount) * purchaseProduct.Quantity))
 
 		/*
 			history.RetailProfit = RoundFloat(purchase.ExpectedRetailProfit, 2)
@@ -567,8 +585,8 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 			history.WholesaleLoss = RoundFloat(purchase.ExpectedWholesaleLoss, 2)*/
 
 		history.VatPercent = RoundFloat(*purchase.VatPercent, 2)
-		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
-		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)
+		history.VatPrice = RoundTo2Decimals((history.Price * (history.VatPercent / 100)))
+		history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
 
 		history.ID = primitive.NewObjectID()
 
@@ -608,7 +626,8 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 					UpdatedAt:       purchase.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo4Decimals(purchaseProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(purchaseProduct.PurchaseUnitPrice * (*setProduct.PurchasePricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(purchaseProduct.PurchaseUnitPriceWithVAT * (*setProduct.PurchasePricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
 
 				history.RetailProfit = RoundTo4Decimals(setProductObj.ProductStores[store.ID.Hex()].RetailUnitPrice - history.UnitPrice)

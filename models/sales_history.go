@@ -33,12 +33,13 @@ type ProductSalesHistory struct {
 	UnitDiscount      float64             `bson:"unit_discount" json:"unit_discount"`
 	Discount          float64             `bson:"discount" json:"discount"`
 	DiscountPercent   float64             `bson:"discount_percent" json:"discount_percent"`
-	Price             float64             `bson:"price,omitempty" json:"price,omitempty"`
-	NetPrice          float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
+	Price             float64             `bson:"price" json:"price"`
+	NetPrice          float64             `bson:"net_price" json:"net_price"`
 	Profit            float64             `bson:"profit" json:"profit"`
 	Loss              float64             `bson:"loss" json:"loss"`
 	VatPercent        float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	VatPrice          float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
+	UnitPriceWithVAT  float64             `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
 	Store             *Store              `json:"store,omitempty"`
 	Customer          *Customer           `json:"customer,omitempty"`
 	CreatedAt         *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
@@ -290,6 +291,23 @@ func (store *Store) SearchSalesHistory(w http.ResponseWriter, r *http.Request) (
 			criterias.SearchBy["unit_price"] = bson.M{operator: float64(value)}
 		} else {
 			criterias.SearchBy["unit_price"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[unit_price_with_vat]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["unit_price_with_vat"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["unit_price_with_vat"] = float64(value)
 		}
 	}
 
@@ -559,14 +577,15 @@ func (order *Order) CreateProductsSalesHistory() error {
 			UpdatedAt:         order.UpdatedAt,
 		}
 
-		history.UnitPrice = RoundFloat(orderProduct.UnitPrice, 2)
-		history.Price = RoundFloat(((orderProduct.UnitPrice - orderProduct.UnitDiscount) * orderProduct.Quantity), 2)
-		history.Profit = RoundFloat(orderProduct.Profit, 2)
-		history.Loss = RoundFloat(orderProduct.Loss, 2)
+		history.UnitPrice = RoundTo8Decimals(orderProduct.UnitPrice)
+		history.UnitPriceWithVAT = RoundTo8Decimals(orderProduct.UnitPriceWithVAT)
+		history.Price = RoundTo2Decimals(((orderProduct.UnitPrice - orderProduct.UnitDiscount) * orderProduct.Quantity))
+		history.Profit = RoundTo2Decimals(orderProduct.Profit)
+		history.Loss = RoundTo2Decimals(orderProduct.Loss)
 
-		history.VatPercent = RoundFloat(*order.VatPercent, 2)
-		history.VatPrice = RoundFloat((history.Price * (history.VatPercent / 100)), 2)
-		history.NetPrice = RoundFloat((history.Price + history.VatPrice), 2)
+		history.VatPercent = RoundTo2Decimals(*order.VatPercent)
+		history.VatPrice = RoundTo2Decimals((history.Price * (history.VatPercent / 100)))
+		history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
 		history.ID = primitive.NewObjectID()
 
 		_, err := collection.InsertOne(ctx, &history)
@@ -605,7 +624,8 @@ func (order *Order) CreateProductsSalesHistory() error {
 					UpdatedAt:         order.UpdatedAt,
 				}
 
-				history.UnitPrice = RoundTo4Decimals(orderProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
+				history.UnitPrice = RoundTo8Decimals(orderProduct.UnitPrice * (*setProduct.RetailPricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo8Decimals(orderProduct.UnitPriceWithVAT * (*setProduct.RetailPricePercent / 100))
 				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
 				history.Profit = RoundTo4Decimals(orderProduct.Profit * (*setProduct.RetailPricePercent / 100))
 				history.Loss = RoundTo4Decimals(orderProduct.Loss * (*setProduct.RetailPricePercent / 100))

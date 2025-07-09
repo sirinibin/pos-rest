@@ -2334,6 +2334,11 @@ func ProcessQuotations() error {
 				continue
 			}
 
+			if store.Code == "MBDI" || store.Code == "LGK" {
+				quotation.ClearProductsQuotationHistory()
+				quotation.CreateProductsQuotationHistory()
+			}
+
 			/*
 				if quotation.Type == "quotation" {
 					quotation.SetPaymentStatus()
@@ -2343,14 +2348,16 @@ func ProcessQuotations() error {
 					}
 				}*/
 
-			quotation.UndoAccounting()
-			quotation.DoAccounting()
-			if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() && quotation.Type == "invoice" {
-				customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+			/*
+
+				quotation.UndoAccounting()
+				quotation.DoAccounting()
+				if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() && quotation.Type == "invoice" {
+					customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
 			/*
 				if quotation.Type != "invoice" {

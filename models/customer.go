@@ -410,8 +410,8 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 
 	keys, ok = r.URL.Query()["search[code]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
-		//criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		//criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[customer_id]"]
@@ -466,6 +466,23 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			criterias.SearchBy["credit_balance"] = bson.M{operator: value}
 		} else {
 			criterias.SearchBy["credit_balance"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[credit_limit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["credit_limit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["credit_limit"] = value
 		}
 	}
 

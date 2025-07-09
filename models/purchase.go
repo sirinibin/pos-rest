@@ -2456,15 +2456,21 @@ func ProcessPurchases() error {
 				continue
 			}
 
-			purchase.UndoAccounting()
-			purchase.DoAccounting()
-
-			if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
-				vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
-				if vendor != nil {
-					vendor.SetCreditBalance()
-				}
+			if store.Code == "MBDI" || store.Code == "LGK" {
+				purchase.ClearProductsPurchaseHistory()
+				purchase.CreateProductsPurchaseHistory()
 			}
+
+			/*
+				purchase.UndoAccounting()
+				purchase.DoAccounting()
+
+				if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+					vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
+				}*/
 
 			//purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
 			//purchase.Update()

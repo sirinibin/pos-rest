@@ -2608,6 +2608,11 @@ func ProcessQuotationSalesReturns() error {
 				continue
 			}
 
+			if store.Code == "MBDI" || store.Code == "LGK" {
+				quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
+				quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
+			}
+
 			/*
 				if store.Code == "LGK-SIMULATION" {
 					if quotationsalesReturn.Code == "0" {
