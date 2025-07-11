@@ -224,6 +224,15 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	err = purchasereturn.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	go purchasereturn.SetPostBalances()
 
 	store.NotifyUsers("purchase_return_updated")
@@ -443,6 +452,15 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchase.Update()
 
 	store.NotifyUsers("purchase_return_updated")
+
+	err = purchasereturn.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	go purchasereturn.SetPostBalances()
 

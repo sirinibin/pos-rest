@@ -2273,7 +2273,7 @@ func (order *Order) UpdatePayments() error {
 			//Update
 			salesPayment, err := store.FindSalesPaymentByID(&payment.ID, bson.M{})
 			if err != nil {
-				return err
+				return errors.New("sales payment is not found: " + err.Error())
 			}
 
 			salesPayment.Date = payment.Date

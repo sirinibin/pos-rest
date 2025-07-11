@@ -270,6 +270,15 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	store.NotifyUsers("sales_return_updated")
 
+	err = salesreturn.CloseSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	go salesreturn.SetPostBalances()
 
 	response.Status = true
@@ -404,6 +413,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = salesreturn.UpdatePayments()
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["updated_payments"] = "Error updating payments: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -467,6 +477,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = salesreturn.UndoAccounting()
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -479,6 +490,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = salesreturn.DoAccounting()
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -487,6 +499,7 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	salesreturn, err = store.FindSalesReturnByID(&salesreturn.ID, bson.M{})
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["view"] = "Unable to find salesreturn:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -500,6 +513,14 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	err = salesreturn.CloseSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 	go salesreturn.SetPostBalances()
 
 	store.NotifyUsers("sales_return_updated")

@@ -249,6 +249,15 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	err = quotationsalesreturn.CloseQuotationSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_qtn_sales_payment"] = "error closing qtn. sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	go quotationsalesreturn.SetPostBalances()
 
 	store.NotifyUsers("quotationsales_return_updated")
@@ -467,6 +476,15 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		if customer != nil {
 			customer.SetCreditBalance()
 		}
+	}
+
+	err = quotationsalesreturn.CloseQuotationSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_qtn_sales_payment"] = "error closing qtn. sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	go quotationsalesreturn.SetPostBalances()

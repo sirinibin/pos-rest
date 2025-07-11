@@ -125,6 +125,102 @@ type QuotationSalesReturn struct {
 	EnableReportToZatca bool                          `json:"enable_report_to_zatca" bson:"-"`
 }
 
+func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() error {
+	store, err := FindStoreByID(quotationSalesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.EnableAutoPaymentCloseOnReturn {
+		return nil
+	}
+
+	quotation, err := store.FindQuotationByID(quotationSalesReturn.QuotationID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if quotation.PaymentStatus != "paid" && quotationSalesReturn.PaymentStatus != "paid" {
+		newQuotationSalesPayment := QuotationPayment{
+			Date:          quotationSalesReturn.Date,
+			QuotationID:   &quotation.ID,
+			QuotationCode: quotation.Code,
+			Amount:        quotationSalesReturn.BalanceAmount,
+			Method:        "customer_account",
+			CreatedAt:     quotationSalesReturn.CreatedAt,
+			UpdatedAt:     quotationSalesReturn.UpdatedAt,
+			StoreID:       quotationSalesReturn.StoreID,
+			CreatedBy:     quotationSalesReturn.CreatedBy,
+			UpdatedBy:     quotationSalesReturn.UpdatedBy,
+			CreatedByName: quotationSalesReturn.CreatedByName,
+			UpdatedByName: quotationSalesReturn.UpdatedByName,
+		}
+		err = newQuotationSalesPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		quotation.Payments = append(quotation.Payments, newQuotationSalesPayment)
+
+		err = quotation.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = quotation.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = quotation.Update()
+		if err != nil {
+			return err
+		}
+
+		//Sales Return
+		newQuotationSalesReturnPayment := QuotationSalesReturnPayment{
+			Date:                     quotationSalesReturn.Date,
+			QuotationSalesReturnID:   &quotationSalesReturn.ID,
+			QuotationSalesReturnCode: quotationSalesReturn.Code,
+			QuotationID:              &quotation.ID,
+			QuotationCode:            quotation.Code,
+			Amount:                   quotationSalesReturn.BalanceAmount,
+			Method:                   "customer_account",
+			CreatedAt:                quotationSalesReturn.CreatedAt,
+			UpdatedAt:                quotationSalesReturn.UpdatedAt,
+			StoreID:                  quotationSalesReturn.StoreID,
+			CreatedBy:                quotationSalesReturn.CreatedBy,
+			UpdatedBy:                quotationSalesReturn.UpdatedBy,
+			CreatedByName:            quotationSalesReturn.CreatedByName,
+			UpdatedByName:            quotationSalesReturn.UpdatedByName,
+		}
+		err = newQuotationSalesReturnPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		quotationSalesReturn.Payments = append(quotationSalesReturn.Payments, newQuotationSalesReturnPayment)
+
+		err = quotationSalesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = quotationSalesReturn.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = quotationSalesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
 func (quotationSalesReturn *QuotationSalesReturn) SetProductsStock() (err error) {
 	store, err := FindStoreByID(quotationSalesReturn.StoreID, bson.M{})
 	if err != nil {

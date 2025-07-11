@@ -113,6 +113,102 @@ type PurchaseReturn struct {
 	Address                string                  `bson:"address" json:"address"`
 }
 
+func (purchaseReturn *PurchaseReturn) ClosePurchasePayment() error {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.EnableAutoPaymentCloseOnReturn {
+		return nil
+	}
+
+	purchase, err := store.FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if purchase.PaymentStatus != "paid" && purchaseReturn.PaymentStatus != "paid" {
+		newPurchasePayment := PurchasePayment{
+			Date:          purchaseReturn.Date,
+			PurchaseID:    &purchase.ID,
+			PurchaseCode:  purchase.Code,
+			Amount:        purchaseReturn.BalanceAmount,
+			Method:        "vendor_account",
+			CreatedAt:     purchaseReturn.CreatedAt,
+			UpdatedAt:     purchaseReturn.UpdatedAt,
+			StoreID:       purchaseReturn.StoreID,
+			CreatedBy:     purchaseReturn.CreatedBy,
+			UpdatedBy:     purchaseReturn.UpdatedBy,
+			CreatedByName: purchaseReturn.CreatedByName,
+			UpdatedByName: purchaseReturn.UpdatedByName,
+		}
+		err = newPurchasePayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		purchase.Payments = append(purchase.Payments, newPurchasePayment)
+
+		err = purchase.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = purchase.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = purchase.Update()
+		if err != nil {
+			return err
+		}
+
+		//Sales Return
+		newPurchaseReturnPayment := PurchaseReturnPayment{
+			Date:               purchaseReturn.Date,
+			PurchaseReturnID:   &purchaseReturn.ID,
+			PurchaseReturnCode: purchaseReturn.Code,
+			PurchaseID:         &purchase.ID,
+			PurchaseCode:       purchase.Code,
+			Amount:             purchaseReturn.BalanceAmount,
+			Method:             "vendor_account",
+			CreatedAt:          purchaseReturn.CreatedAt,
+			UpdatedAt:          purchaseReturn.UpdatedAt,
+			StoreID:            purchaseReturn.StoreID,
+			CreatedBy:          purchaseReturn.CreatedBy,
+			UpdatedBy:          purchaseReturn.UpdatedBy,
+			CreatedByName:      purchaseReturn.CreatedByName,
+			UpdatedByName:      purchaseReturn.UpdatedByName,
+		}
+		err = newPurchaseReturnPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		purchaseReturn.Payments = append(purchaseReturn.Payments, newPurchaseReturnPayment)
+
+		err = purchaseReturn.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = purchaseReturn.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = purchaseReturn.Update()
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
 func (model *PurchaseReturn) SetPostBalances() error {
 	store, err := FindStoreByID(model.StoreID, bson.M{})
 	if err != nil {

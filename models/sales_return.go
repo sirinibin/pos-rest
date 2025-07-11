@@ -280,7 +280,7 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 			//Update
 			salesReturnPayment, err := store.FindSalesReturnPaymentByID(&payment.ID, bson.M{})
 			if err != nil {
-				return err
+				return errors.New("sales return payment id not found: " + err.Error())
 			}
 
 			salesReturnPayment.Date = payment.Date
@@ -2367,6 +2367,102 @@ func (salesReturn *SalesReturn) UpdateOrderReturnAmount() (count int64, err erro
 	return returnCount, nil
 }
 */
+
+func (salesReturn *SalesReturn) CloseSalesPayment() error {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.EnableAutoPaymentCloseOnReturn {
+		return nil
+	}
+
+	order, err := store.FindOrderByID(salesReturn.OrderID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if order.PaymentStatus != "paid" && salesReturn.PaymentStatus != "paid" {
+		newSalesPayment := SalesPayment{
+			Date:          salesReturn.Date,
+			OrderID:       &order.ID,
+			OrderCode:     order.Code,
+			Amount:        salesReturn.BalanceAmount,
+			Method:        "customer_account",
+			CreatedAt:     salesReturn.CreatedAt,
+			UpdatedAt:     salesReturn.UpdatedAt,
+			StoreID:       salesReturn.StoreID,
+			CreatedBy:     salesReturn.CreatedBy,
+			UpdatedBy:     salesReturn.UpdatedBy,
+			CreatedByName: salesReturn.CreatedByName,
+			UpdatedByName: salesReturn.UpdatedByName,
+		}
+		err = newSalesPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		order.Payments = append(order.Payments, newSalesPayment)
+
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = order.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+
+		//Sales Return
+		newSalesReturnPayment := SalesReturnPayment{
+			Date:            salesReturn.Date,
+			SalesReturnID:   &salesReturn.ID,
+			SalesReturnCode: salesReturn.Code,
+			OrderID:         &order.ID,
+			OrderCode:       order.Code,
+			Amount:          salesReturn.BalanceAmount,
+			Method:          "customer_account",
+			CreatedAt:       salesReturn.CreatedAt,
+			UpdatedAt:       salesReturn.UpdatedAt,
+			StoreID:         salesReturn.StoreID,
+			CreatedBy:       salesReturn.CreatedBy,
+			UpdatedBy:       salesReturn.UpdatedBy,
+			CreatedByName:   salesReturn.CreatedByName,
+			UpdatedByName:   salesReturn.UpdatedByName,
+		}
+		err = newSalesReturnPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		salesReturn.Payments = append(salesReturn.Payments, newSalesReturnPayment)
+
+		err = salesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = salesReturn.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = salesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
 
 func (salesReturn *SalesReturn) UpdateOrderReturnCashDiscount(salesReturnOld *SalesReturn) error {
 	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
