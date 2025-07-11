@@ -105,6 +105,7 @@ type StoreSettings struct {
 	EnableMonthlySerialNumber              bool   `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
 	QuotationInvoiceAccounting             bool   `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
 	OneLineProductNameInInvoice            bool   `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
+	OneLineProductNameInPrintInvoice       bool   `bson:"one_line_product_name_in_print_invoice" json:"one_line_product_name_in_print_invoice"`
 	ShowMinusOnCreditBalanceInBalanceSheet bool   `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
 	HideTotalAmountRowInBalanceSheet       bool   `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
 	ShowSellerInfoInInvoice                bool   `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
