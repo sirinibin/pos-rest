@@ -238,10 +238,6 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation, _ := store.FindQuotationByID(quotationsalesreturn.QuotationID, bson.M{})
-	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
-	quotation.Update()
-
 	if quotationsalesreturn.CustomerID != nil && !quotationsalesreturn.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(quotationsalesreturn.CustomerID, bson.M{})
 		if customer != nil {
@@ -257,6 +253,10 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	quotation, _ := store.FindQuotationByID(quotationsalesreturn.QuotationID, bson.M{})
+	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
+	quotation.Update()
 
 	go quotationsalesreturn.SetPostBalances()
 
@@ -451,10 +451,6 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation, _ := store.FindQuotationByID(quotationsalesreturn.QuotationID, bson.M{})
-	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
-	quotation.Update()
-
 	err = quotationsalesreturn.DoAccounting()
 	if err != nil {
 		response.Status = false
@@ -486,6 +482,10 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	quotation, _ := store.FindQuotationByID(quotationsalesreturn.QuotationID, bson.M{})
+	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
+	quotation.Update()
 
 	go quotationsalesreturn.SetPostBalances()
 

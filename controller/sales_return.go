@@ -257,10 +257,6 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
-	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
-	order.Update()
-
 	if salesreturn.CustomerID != nil && !salesreturn.CustomerID.IsZero() {
 		customer, _ := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
 		if customer != nil {
@@ -278,6 +274,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.Update()
 
 	go salesreturn.SetPostBalances()
 
@@ -484,10 +484,6 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
-	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
-	order.Update()
-
 	err = salesreturn.DoAccounting()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -521,6 +517,11 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	order.Update()
+
 	go salesreturn.SetPostBalances()
 
 	store.NotifyUsers("sales_return_updated")

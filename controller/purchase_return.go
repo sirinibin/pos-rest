@@ -213,10 +213,6 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
-	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
-	purchase.Update()
-
 	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchasereturn.VendorID, bson.M{})
 		if vendor != nil {
@@ -232,6 +228,10 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+	purchase.Update()
 
 	go purchasereturn.SetPostBalances()
 
@@ -447,10 +447,6 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
-	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
-	purchase.Update()
-
 	store.NotifyUsers("purchase_return_updated")
 
 	err = purchasereturn.ClosePurchasePayment()
@@ -461,6 +457,10 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
+	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
+	purchase.Update()
 
 	go purchasereturn.SetPostBalances()
 
