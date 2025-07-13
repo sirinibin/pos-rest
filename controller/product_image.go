@@ -89,7 +89,7 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 	if fileExists(savePath) {
 		err = store.SaveProductImage(&productObjectID, imageUrl)
 		if err != nil {
-			http.Error(w, "error saving image to db", http.StatusInternalServerError)
+			http.Error(w, "error saving image to db:"+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

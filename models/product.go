@@ -188,9 +188,22 @@ func (product *Product) FindSetTotal() {
 func (store *Store) SaveProductImage(productID *primitive.ObjectID, filename string) error {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 
-	filter := bson.M{
+	// Only match documents where `images` is null
+	nullImagesFilter := bson.M{
 		"_id":      productID,
 		"store_id": store.ID,
+		"images":   bson.M{"$eq": nil},
+	}
+
+	setArrayUpdate := bson.M{
+		"$set": bson.M{
+			"images": bson.A{},
+		},
+	}
+
+	_, err := collection.UpdateOne(context.TODO(), nullImagesFilter, setArrayUpdate)
+	if err != nil {
+		return err
 	}
 
 	update := bson.M{
@@ -199,7 +212,12 @@ func (store *Store) SaveProductImage(productID *primitive.ObjectID, filename str
 		},
 	}
 
-	_, err := collection.UpdateOne(context.TODO(), filter, update)
+	filter := bson.M{
+		"_id":      productID,
+		"store_id": store.ID,
+	}
+
+	_, err = collection.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		return err
 	}
