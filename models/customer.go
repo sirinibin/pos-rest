@@ -975,6 +975,7 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 	}
 
 	//qtn. sales return
+
 	keys, ok = r.URL.Query()["search[quotation_sales_return_count]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
