@@ -972,8 +972,170 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		} else {
 			criterias.SearchBy["stores."+storeID.Hex()+".sales_return_paid_partially_count"] = value
 		}
-		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_partially_count", operator, &storeID, value)
 	}
+
+	//qtn. sales return
+	keys, ok = r.URL.Query()["search[quotation_sales_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_amount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_paid_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_paid_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_paid_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_paid_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_balance_amount"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_balance_amount", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_profit"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_loss"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_loss"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_paid_count"] = value
+		}
+
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_not_paid_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_not_paid_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_not_paid_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_not_paid_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_paid_partially_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return customers, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_paid_partially_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["stores."+storeID.Hex()+".quotation_sales_return_paid_partially_count"] = value
+		}
+	}
+
+	//end qtn. sales return
 
 	keys, ok = r.URL.Query()["search[quotation_invoice_credit_count]"]
 	if ok && len(keys[0]) >= 1 {
