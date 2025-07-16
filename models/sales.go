@@ -1561,10 +1561,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.Method == "customer_account" && customer == nil {
-			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
-		}
-
 		/*if customer != nil && payment.Method == "customer_account" {
 			totalAmountFromCustomerAccount += *payment.Amount
 			log.Print("Checking customer account Balance")

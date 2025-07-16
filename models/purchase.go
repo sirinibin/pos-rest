@@ -1555,10 +1555,6 @@ func (purchase *Purchase) Validate(
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.Method == "vendor_account" && vendor == nil {
-			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Vendor account"
-		}
-
 		if payment.Method == "vendor_account" && vendor != nil {
 			totalAmountFromVendorAccount += payment.Amount
 			log.Print("Checking vendor account Balance")

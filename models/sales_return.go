@@ -1495,10 +1495,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.Method == "customer_account" && customer == nil {
-			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
-		}
-
 	} //end for
 
 	if salesreturn.OrderID == nil || salesreturn.OrderID.IsZero() {

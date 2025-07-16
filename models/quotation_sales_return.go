@@ -1633,10 +1633,6 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.Method == "customer_account" && customer == nil {
-			errs["payment_method_"+strconv.Itoa(index)] = "Invalid payment method: Customer account"
-		}
-
 	} //end for
 
 	if quotationsalesreturn.QuotationID == nil || quotationsalesreturn.QuotationID.IsZero() {
