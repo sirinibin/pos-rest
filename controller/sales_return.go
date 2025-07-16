@@ -245,9 +245,14 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	salesreturn.SetProductsSalesReturnStats()
-
-	salesreturn.SetCustomerSalesReturnStats()
+	err = salesreturn.CloseSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = salesreturn.DoAccounting()
 	if err != nil {
@@ -264,22 +269,16 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	store.NotifyUsers("sales_return_updated")
-
-	err = salesreturn.CloseSalesPayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
 	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
 	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
 
+	go salesreturn.SetProductsSalesReturnStats()
+	go salesreturn.SetCustomerSalesReturnStats()
+	go order.SetCustomerSalesStats()
 	go salesreturn.SetPostBalances()
+
+	store.NotifyUsers("sales_return_updated")
 
 	response.Status = true
 	response.Result = salesreturn
@@ -469,11 +468,14 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 
-	salesreturn.SetProductsSalesReturnStats()
-
-	salesreturnOld.SetProductsSalesReturnStats()
-
-	salesreturn.SetCustomerSalesReturnStats()
+	err = salesreturn.CloseSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = salesreturn.UndoAccounting()
 	if err != nil {
@@ -509,19 +511,14 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = salesreturn.CloseSalesPayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
 	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
 	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
 
+	go salesreturn.SetProductsSalesReturnStats()
+	go salesreturnOld.SetProductsSalesReturnStats()
+	go salesreturn.SetCustomerSalesReturnStats()
+	go order.SetCustomerSalesStats()
 	go salesreturn.SetPostBalances()
 
 	store.NotifyUsers("sales_return_updated")

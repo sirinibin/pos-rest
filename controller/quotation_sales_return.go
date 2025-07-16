@@ -226,9 +226,14 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotationsalesreturn.SetProductsQuotationSalesReturnStats()
-
-	quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
+	err = quotationsalesreturn.CloseQuotationSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_qtn_sales_payment"] = "error closing qtn. sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = quotationsalesreturn.DoAccounting()
 	if err != nil {
@@ -245,18 +250,14 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = quotationsalesreturn.CloseQuotationSalesPayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_qtn_sales_payment"] = "error closing qtn. sales payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
 	quotation, _ := store.FindQuotationByID(quotationsalesreturn.QuotationID, bson.M{})
 	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
 	quotation.Update()
+
+	go quotationsalesreturn.SetProductsQuotationSalesReturnStats()
+
+	go quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
+	go quotation.SetCustomerQuotationStats()
 
 	go quotationsalesreturn.SetPostBalances()
 
@@ -438,10 +439,14 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	*/
 
-	quotationsalesreturn.SetProductsQuotationSalesReturnStats()
-	quotationsalesreturnOld.SetProductsQuotationSalesReturnStats()
-
-	quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
+	err = quotationsalesreturn.CloseQuotationSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_qtn_sales_payment"] = "error closing qtn. sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = quotationsalesreturn.UndoAccounting()
 	if err != nil {
@@ -474,18 +479,15 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = quotationsalesreturn.CloseQuotationSalesPayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_qtn_sales_payment"] = "error closing qtn. sales payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
 	quotation, _ := store.FindQuotationByID(quotationsalesreturn.QuotationID, bson.M{})
 	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
 	quotation.Update()
+
+	go quotationsalesreturn.SetProductsQuotationSalesReturnStats()
+	go quotationsalesreturnOld.SetProductsQuotationSalesReturnStats()
+
+	go quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
+	go quotation.SetCustomerQuotationStats()
 
 	go quotationsalesreturn.SetPostBalances()
 

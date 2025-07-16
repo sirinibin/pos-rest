@@ -199,11 +199,14 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasereturn.UpdatePurchaseReturnCount()
-
-	purchasereturn.SetProductsPurchaseReturnStats()
-
-	purchasereturn.SetVendorPurchaseReturnStats()
+	err = purchasereturn.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = purchasereturn.DoAccounting()
 	if err != nil {
@@ -220,18 +223,14 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = purchasereturn.ClosePurchasePayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
 	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
 	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
 	purchase.Update()
+
+	go purchasereturn.UpdatePurchaseReturnCount()
+	go purchasereturn.SetProductsPurchaseReturnStats()
+	go purchasereturn.SetVendorPurchaseReturnStats()
+	go purchase.SetVendorPurchaseStats()
 
 	go purchasereturn.SetPostBalances()
 
@@ -396,12 +395,14 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchasereturn.UpdatePurchaseReturnCount()
-
-	purchasereturn.SetProductsPurchaseReturnStats()
-	purchasereturnOld.SetProductsPurchaseReturnStats()
-
-	purchasereturn.SetVendorPurchaseReturnStats()
+	err = purchasereturn.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = purchasereturn.UndoAccounting()
 	if err != nil {
@@ -419,19 +420,6 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/*
-		err = purchasereturn.AttributesValueChangeEvent(purchasereturnOld)
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
-
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	*/
-
 	purchasereturn, err = store.FindPurchaseReturnByID(&purchasereturn.ID, bson.M{})
 	if err != nil {
 		response.Status = false
@@ -447,22 +435,18 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	store.NotifyUsers("purchase_return_updated")
-
-	err = purchasereturn.ClosePurchasePayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
 	purchase, _ := store.FindPurchaseByID(purchasereturn.PurchaseID, bson.M{})
 	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
 	purchase.Update()
 
+	go purchasereturn.UpdatePurchaseReturnCount()
+	go purchasereturn.SetProductsPurchaseReturnStats()
+	go purchasereturnOld.SetProductsPurchaseReturnStats()
+	go purchasereturn.SetVendorPurchaseReturnStats()
+	go purchase.SetVendorPurchaseStats()
 	go purchasereturn.SetPostBalances()
+
+	store.NotifyUsers("purchase_return_updated")
 
 	response.Status = true
 	response.Result = purchasereturn
