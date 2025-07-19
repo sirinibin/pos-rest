@@ -3056,10 +3056,13 @@ func ProcessOrders() error {
 				continue
 			}
 
-			if store.Code == "MBDI" || store.Code == "LGK" {
-				order.ClearProductsSalesHistory()
-				order.CreateProductsSalesHistory()
-			}
+			order.ClearProductsHistory()
+			order.CreateProductsHistory()
+			/*
+				if store.Code == "MBDI" || store.Code == "LGK" {
+					order.ClearProductsSalesHistory()
+					order.CreateProductsSalesHistory()
+				}*/
 			/*
 				if store.Code == "MBDI" {
 					if order.Code == "S-INV-20250614-111" {

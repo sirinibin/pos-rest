@@ -2305,10 +2305,13 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
-			if store.Code == "MBDI" || store.Code == "LGK" {
+			model.ClearProductsHistory()
+			model.CreateProductsHistory()
+
+			/*if store.Code == "MBDI" || store.Code == "LGK" {
 				model.ClearProductsPurchaseReturnHistory()
 				model.CreateProductsPurchaseReturnHistory()
-			}
+			}*/
 
 			/*
 				model.UndoAccounting()

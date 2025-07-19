@@ -838,61 +838,73 @@ func (store *Store) IsDeliveryNoteExists(ID *primitive.ObjectID) (exists bool, e
 	return (count > 0), err
 }
 
-func (store *Store) ProcessDeliveryNotes() error {
+func ProcessDeliveryNotes() error {
 	log.Print("Processing delivery notes")
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
 
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	stores, err := GetAllStores()
 	if err != nil {
-		return errors.New("Error fetching deliverynotes:" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
+		return err
 	}
 
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
+	for _, store := range stores {
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
 		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
+			return errors.New("Error fetching deliverynotes:" + err.Error())
 		}
-		deliverynote := DeliveryNote{}
-		err = cur.Decode(&deliverynote)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
+		if cur != nil {
+			defer cur.Close(ctx)
 		}
 
-		err = deliverynote.ClearProductsDeliveryNoteHistory()
-		if err != nil {
-			return err
-		}
-
-		err = deliverynote.CreateProductsDeliveryNoteHistory()
-		if err != nil {
-			return err
-		}
-		/*
-
-			err = deliverynote.SetProductsDeliveryNoteStats()
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
 			if err != nil {
-				return err
+				return errors.New("Cursor error:" + err.Error())
 			}
-		*/
-
-		/*
-			err = deliverynote.SetCustomerDeliveryNoteStats()
+			deliverynote := DeliveryNote{}
+			err = cur.Decode(&deliverynote)
 			if err != nil {
-				return err
+				return errors.New("Cursor decode error:" + err.Error())
 			}
 
+			deliverynote.ClearProductsHistory()
+			deliverynote.CreateProductsHistory()
 
-			err = deliverynote.Update()
-			if err != nil {
-				return err
-			}*/
+			/*
+				err = deliverynote.ClearProductsDeliveryNoteHistory()
+				if err != nil {
+					return err
+				}
+
+				err = deliverynote.CreateProductsDeliveryNoteHistory()
+				if err != nil {
+					return err
+				}*/
+			/*
+
+				err = deliverynote.SetProductsDeliveryNoteStats()
+				if err != nil {
+					return err
+				}
+			*/
+
+			/*
+				err = deliverynote.SetCustomerDeliveryNoteStats()
+				if err != nil {
+					return err
+				}
+
+
+				err = deliverynote.Update()
+				if err != nil {
+					return err
+				}*/
+		}
 	}
 	log.Print("DONE!")
 	return nil

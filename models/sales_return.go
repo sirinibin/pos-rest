@@ -2727,10 +2727,14 @@ func ProcessSalesReturns() error {
 				continue
 			}
 
-			if store.Code == "MBDI" || store.Code == "LGK" {
-				salesReturn.ClearProductsSalesReturnHistory()
-				salesReturn.CreateProductsSalesReturnHistory()
-			}
+			salesReturn.ClearProductsHistory()
+			salesReturn.CreateProductsHistory()
+
+			/*
+				if store.Code == "MBDI" || store.Code == "LGK" {
+					salesReturn.ClearProductsSalesReturnHistory()
+					salesReturn.CreateProductsSalesReturnHistory()
+				}*/
 			/*
 				salesReturn.UndoAccounting()
 				salesReturn.DoAccounting()

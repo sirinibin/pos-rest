@@ -2334,10 +2334,15 @@ func ProcessQuotations() error {
 				continue
 			}
 
-			if store.Code == "MBDI" || store.Code == "LGK" {
-				quotation.ClearProductsQuotationHistory()
-				quotation.CreateProductsQuotationHistory()
-			}
+			quotation.ClearProductsHistory()
+			quotation.CreateProductsHistory()
+
+			/*
+
+				if store.Code == "MBDI" || store.Code == "LGK" {
+					quotation.ClearProductsQuotationHistory()
+					quotation.CreateProductsQuotationHistory()
+				}*/
 
 			/*
 				if quotation.Type == "quotation" {

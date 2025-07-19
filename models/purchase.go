@@ -2452,10 +2452,14 @@ func ProcessPurchases() error {
 				continue
 			}
 
-			if store.Code == "MBDI" || store.Code == "LGK" {
-				purchase.ClearProductsPurchaseHistory()
-				purchase.CreateProductsPurchaseHistory()
-			}
+			purchase.ClearProductsHistory()
+			purchase.CreateProductsHistory()
+
+			/*
+				if store.Code == "MBDI" || store.Code == "LGK" {
+					purchase.ClearProductsPurchaseHistory()
+					purchase.CreateProductsPurchaseHistory()
+				}*/
 
 			/*
 				purchase.UndoAccounting()

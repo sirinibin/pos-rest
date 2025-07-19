@@ -15,6 +15,7 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -86,6 +87,9 @@ func main() {
 	router.HandleFunc("/v1/product/restore/{id}", controller.RestoreProduct).Methods("POST")
 	router.HandleFunc("/v1/product/upload-image", controller.UploadProductImage).Methods("POST")
 	router.HandleFunc("/v1/product/delete-image", controller.DeleteProductImage).Methods("POST")
+
+	//ProductHistory
+	router.HandleFunc("/v1/product/history/{id}", controller.ListProductHistory).Methods("GET")
 
 	//Expense
 	router.HandleFunc("/v1/expense", controller.CreateExpense).Methods("POST")
@@ -429,36 +433,40 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	/*
-		err := models.ProcessOrders()
-		if err != nil {
-			log.Print(err)
-		}
+	err := models.ProcessOrders()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessPurchases()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessPurchases()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessPurchaseReturns()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessPurchaseReturns()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessQuotations()
-		if err != nil {
-			log.Print(err)
-		}
+	err = models.ProcessQuotations()
+	if err != nil {
+		log.Print(err)
+	}
 
-		err = models.ProcessQuotationSalesReturns()
-		if err != nil {
-			log.Print(err)
-		}*/
+	err = models.ProcessQuotationSalesReturns()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessDeliveryNotes()
+	if err != nil {
+		log.Print(err)
+	}
 
 	/*
 		err = models.ProcessCustomerWithdrawals()

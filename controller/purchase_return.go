@@ -234,6 +234,8 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 
 	go purchasereturn.SetPostBalances()
 
+	go purchasereturn.CreateProductsHistory()
+
 	store.NotifyUsers("purchase_return_updated")
 
 	response.Status = true
@@ -445,6 +447,11 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	go purchasereturn.SetVendorPurchaseReturnStats()
 	go purchase.SetVendorPurchaseStats()
 	go purchasereturn.SetPostBalances()
+
+	go func() {
+		purchasereturn.ClearProductsHistory()
+		purchasereturn.CreateProductsHistory()
+	}()
 
 	store.NotifyUsers("purchase_return_updated")
 

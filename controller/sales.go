@@ -318,6 +318,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	go order.CreateProductsHistory()
 	go order.SetPostBalances()
 
 	store.NotifyUsers("sales_updated")
@@ -575,6 +576,11 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		}
 		orderOld.SetProductsSalesStats()
 	}
+
+	go func() {
+		order.ClearProductsHistory()
+		order.CreateProductsHistory()
+	}()
 
 	go order.SetPostBalances()
 
