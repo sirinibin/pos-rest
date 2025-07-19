@@ -596,12 +596,15 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	quotation.ClearProductsHistory()
+	quotation.CreateProductsHistory()
+
 	go quotation.SetPostBalances()
 
-	go func() {
+	/*go func() {
 		quotation.ClearProductsHistory()
 		quotation.CreateProductsHistory()
-	}()
+	}()*/
 
 	store.NotifyUsers("quotation_updated")
 	response.Status = true
