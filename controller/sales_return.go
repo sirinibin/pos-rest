@@ -155,12 +155,20 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "sales_return")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	salesreturn.FindTotalQuantity()
 	salesreturn.UpdateForeignLabelFields()
 	salesreturn.CalculateSalesReturnProfit()
 
 	err = salesreturn.MakeCode()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["code"] = "Error making code: " + err.Error()
@@ -174,6 +182,8 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && salesreturn.EnableReportToZatca {
 		err = salesreturn.ReportToZatca()
 		if err != nil {
+			queue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 			redisErr := salesreturn.UnMakeCode()
 			if redisErr != nil {
 				response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -188,6 +198,8 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = salesreturn.Insert()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 		redisErr := salesreturn.UnMakeCode()
 		if redisErr != nil {
 			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -200,6 +212,9 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	queue.Pop()
+	CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 
 	salesreturn.UpdateOrderReturnCount()
 	salesreturn.UpdateOrderReturnDiscount(nil)

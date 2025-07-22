@@ -147,21 +147,44 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/*
-		if quotationsalesreturn.EnableReportToZatca && !IsConnectedToInternet() {
-			response.Status = false
-			response.Errors["reporting_to_zatca"] = "not connected to internet"
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-			return
-		}*/
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "quotation_sales_return")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
 
 	quotationsalesreturn.FindTotalQuantity()
-	quotationsalesreturn.UpdateForeignLabelFields()
-	quotationsalesreturn.CalculateQuotationSalesReturnProfit()
+	err = quotationsalesreturn.UpdateForeignLabelFields()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["update_foreign_fields"] = "error updating foreign fields: " + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotationsalesreturn.CalculateQuotationSalesReturnProfit()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["profit_calculation"] = "error calc: " + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = quotationsalesreturn.MakeCode()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["code"] = "Error making code: " + err.Error()
@@ -170,10 +193,14 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
 	quotationsalesreturn.UUID = uuid.New().String()
 
 	err = quotationsalesreturn.Insert()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+
 		redisErr := quotationsalesreturn.UnMakeCode()
 		if redisErr != nil {
 			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -186,6 +213,9 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	queue.Pop()
+	CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
 
 	quotationsalesreturn.UpdateQuotationReturnCount()
 	quotationsalesreturn.UpdateQuotationReturnDiscount(nil)

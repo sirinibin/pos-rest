@@ -145,12 +145,44 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "purchase_return")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	purchasereturn.FindTotalQuantity()
-	purchasereturn.UpdateForeignLabelFields()
-	purchasereturn.MakeCode()
+
+	err = purchasereturn.UpdateForeignLabelFields()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase_return")
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["update_foreign_fields"] = "error updating foreign fields: " + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchasereturn.MakeCode()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase_return")
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["code"] = "error making code: " + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = purchasereturn.Insert()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase_return")
 		redisErr := purchasereturn.UnMakeRedisCode()
 		if redisErr != nil {
 			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -163,6 +195,9 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	queue.Pop()
+	CleanupQueueIfEmpty(store.ID.Hex(), "purchase_return")
 
 	purchasereturn.UpdatePurchaseReturnDiscount(false)
 	purchasereturn.CreateProductsPurchaseReturnHistory()

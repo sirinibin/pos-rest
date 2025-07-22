@@ -162,8 +162,16 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "sales")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	err = order.CreateNewCustomerFromName()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		response.Status = false
 		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -174,6 +182,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.UpdateForeignLabelFields()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		response.Status = false
 		response.Errors["foreign_fields"] = "Error updating foreign fields: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -182,6 +192,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.MakeCode()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		response.Status = false
 		response.Errors["code"] = "Error making code: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -190,6 +202,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.CalculateOrderProfit()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		response.Status = false
 		response.Errors["profit"] = "Error calculating order profit: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -201,6 +215,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && order.EnableReportToZatca {
 		err = order.ReportToZatca()
 		if err != nil {
+			queue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 			log.Print("reporting failed")
 			redisErr := order.UnMakeRedisCode()
 			if redisErr != nil {
@@ -217,6 +233,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.Insert()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		redisErr := order.UnMakeRedisCode()
 		if redisErr != nil {
 			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -230,6 +248,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	queue.Pop()
+	CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 
 	err = order.LinkQuotation()
 	if err != nil {

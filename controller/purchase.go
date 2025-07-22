@@ -148,8 +148,16 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "purchase")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	err = purchase.CreateNewVendorFromName()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase")
 		response.Status = false
 		response.Errors["new_vendor_from_name"] = "error creating new vendor from name: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -157,12 +165,36 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	purchase.FindTotalQuantity()
-	purchase.UpdateForeignLabelFields()
-	purchase.MakeCode()
-	purchase.CalculatePurchaseExpectedProfit()
+	err = purchase.UpdateForeignLabelFields()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase")
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["update_foreign_fields"] = "error updating foreign fields: " + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	err = purchase.MakeCode()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase")
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["code"] = "error making code: " + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = purchase.Insert()
 	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase")
+
 		redisErr := purchase.UnMakeRedisCode()
 		if redisErr != nil {
 			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -175,6 +207,9 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	queue.Pop()
+	CleanupQueueIfEmpty(store.ID.Hex(), "purchase")
 
 	purchase.CreateProductsPurchaseHistory()
 
