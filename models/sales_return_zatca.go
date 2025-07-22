@@ -97,10 +97,12 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 	invoice.IssueDate = salesReturn.Date.In(loc).Format("2006-01-02")
 	invoice.IssueTime = salesReturn.Date.In(loc).Format("15:04:05")
 
-	if customer != nil && strings.TrimSpace(customer.VATNo) != "" {
-		invoice.InvoiceTypeCode.Name = "0100000" //standard invoice
-	} else {
+	isSimplified := !customer.IsB2B()
+
+	if isSimplified {
 		invoice.InvoiceTypeCode.Name = "0200000" //simplified invoice
+	} else {
+		invoice.InvoiceTypeCode.Name = "0100000" //standard invoice
 	}
 
 	invoice.InvoiceTypeCode.Value = "383"
@@ -678,12 +680,8 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 	if err != nil {
 		return errors.New("error making xml: " + err.Error())
 	}
-	var isSimplified bool
-	if customer != nil && customer.VATNo != "" {
-		isSimplified = false
-	} else {
-		isSimplified = true
-	}
+
+	isSimplified := !customer.IsB2B()
 
 	// Create JSON payload
 	payload := map[string]interface{}{

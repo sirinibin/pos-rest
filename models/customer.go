@@ -1613,32 +1613,12 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	//National address
 	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && store.Zatca.Phase == "2" {
-		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
-			errs["national_address_building_no"] = "Building number is required"
-		} else {
-			if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
-				errs["national_address_building_no"] = "Building number should be 4 digits"
-			}
+		if !govalidator.IsNull(customer.NationalAddress.BuildingNo) && !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+			errs["national_address_building_no"] = "Building number should be 4 digits"
 		}
 
-		if govalidator.IsNull(customer.NationalAddress.StreetName) {
-			errs["national_address_street_name"] = "Street name is required"
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
-			errs["national_address_district_name"] = "District name is required"
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.CityName) {
-			errs["national_address_city_name"] = "City name is required"
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
-			errs["national_address_zipcode"] = "Zip code is required"
-		} else {
-			if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
-				errs["national_address_zipcode"] = "Zip code should be 5 digits"
-			}
+		if !govalidator.IsNull(customer.NationalAddress.ZipCode) && !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+			errs["national_address_zipcode"] = "Zip code should be 5 digits"
 		}
 	}
 

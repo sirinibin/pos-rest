@@ -493,12 +493,9 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	go quotationsalesreturn.SetPostBalances()
 
-	go quotationsalesreturn.ClearProductsHistory()
-	go quotationsalesreturn.CreateProductsHistory()
-
 	go func() {
-		quotation.ClearProductsHistory()
-		quotation.CreateProductsHistory()
+		quotationsalesreturn.ClearProductsHistory()
+		quotationsalesreturn.CreateProductsHistory()
 	}()
 
 	store.NotifyUsers("quotationsales_return_updated")

@@ -29,7 +29,8 @@ type ProductHistory struct {
 	CustomerName      string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	VendorID          *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorName        string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
-	Quantity          float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Stock             float64             `json:"stock" bson:"stock"`
+	Quantity          float64             `json:"quantity" bson:"quantity"`
 	PurchaseUnitPrice float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	UnitPrice         float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
 	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
@@ -577,6 +578,23 @@ func (store *Store) SearchHistory(w http.ResponseWriter, r *http.Request) (model
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[stock]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["stock"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["stock"] = float64(value)
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[profit]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -847,6 +865,16 @@ func (order *Order) CreateProductsHistory() error {
 	defer cancel()
 
 	for _, orderProduct := range order.Products {
+		product, err := store.FindProductByID(&orderProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantity(order.Date)
+		if err != nil {
+			return err
+		}
+
 		history := ProductHistory{
 			Date:              order.Date,
 			StoreID:           order.StoreID,
@@ -857,6 +885,7 @@ func (order *Order) CreateProductsHistory() error {
 			ReferenceType:     "sales",
 			ReferenceID:       &order.ID,
 			ReferenceCode:     order.Code,
+			Stock:             (stock - orderProduct.Quantity),
 			Quantity:          orderProduct.Quantity,
 			PurchaseUnitPrice: orderProduct.PurchaseUnitPrice,
 			Unit:              orderProduct.Unit,
@@ -878,12 +907,7 @@ func (order *Order) CreateProductsHistory() error {
 		history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
 		history.ID = primitive.NewObjectID()
 
-		_, err := collection.InsertOne(ctx, &history)
-		if err != nil {
-			return err
-		}
-
-		product, err := store.FindProductByID(&orderProduct.ProductID, bson.M{})
+		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -891,6 +915,11 @@ func (order *Order) CreateProductsHistory() error {
 		if len(product.Set.Products) > 0 {
 			for _, setProduct := range product.Set.Products {
 				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantity(order.Date)
 				if err != nil {
 					return err
 				}
@@ -905,6 +934,7 @@ func (order *Order) CreateProductsHistory() error {
 					ReferenceType:     "sales",
 					ReferenceID:       &order.ID,
 					ReferenceCode:     order.Code,
+					Stock:             (stock - RoundTo2Decimals(orderProduct.Quantity*setProduct.Quantity)),
 					Quantity:          RoundTo2Decimals(orderProduct.Quantity * setProduct.Quantity),
 					PurchaseUnitPrice: RoundTo2Decimals(orderProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:              setProductObj.Unit,
@@ -960,6 +990,16 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 			continue
 		}
 
+		product, err := store.FindProductByID(&salesReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantity(salesReturn.Date)
+		if err != nil {
+			return err
+		}
+
 		history := ProductHistory{
 			Date:            salesReturn.Date,
 			StoreID:         salesReturn.StoreID,
@@ -970,6 +1010,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 			ReferenceType:   "sales_return",
 			ReferenceID:     &salesReturn.ID,
 			ReferenceCode:   salesReturn.Code,
+			Stock:           (stock + salesReturnProduct.Quantity),
 			Quantity:        salesReturnProduct.Quantity,
 			UnitPrice:       salesReturnProduct.UnitPrice,
 			Unit:            salesReturnProduct.Unit,
@@ -990,12 +1031,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 
 		history.ID = primitive.NewObjectID()
 
-		_, err := collection.InsertOne(ctx, &history)
-		if err != nil {
-			return err
-		}
-
-		product, err := store.FindProductByID(&salesReturnProduct.ProductID, bson.M{})
+		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -1003,6 +1039,11 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 		if len(product.Set.Products) > 0 {
 			for _, setProduct := range product.Set.Products {
 				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantity(salesReturn.Date)
 				if err != nil {
 					return err
 				}
@@ -1017,6 +1058,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 					ReferenceType:     "sales_return",
 					ReferenceID:       &salesReturn.ID,
 					ReferenceCode:     salesReturn.Code,
+					Stock:             (stock + RoundTo2Decimals(salesReturnProduct.Quantity*setProduct.Quantity)),
 					Quantity:          RoundTo2Decimals(salesReturnProduct.Quantity * setProduct.Quantity),
 					PurchaseUnitPrice: RoundTo2Decimals(salesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:              setProductObj.Unit,
@@ -1070,6 +1112,16 @@ func (purchase *Purchase) CreateProductsHistory() error {
 
 	for _, purchaseProduct := range purchase.Products {
 
+		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantity(purchase.Date)
+		if err != nil {
+			return err
+		}
+
 		history := ProductHistory{
 			Date:            purchase.Date,
 			StoreID:         purchase.StoreID,
@@ -1080,6 +1132,7 @@ func (purchase *Purchase) CreateProductsHistory() error {
 			ReferenceType:   "purchase",
 			ReferenceID:     &purchase.ID,
 			ReferenceCode:   purchase.Code,
+			Stock:           (stock + purchaseProduct.Quantity),
 			Quantity:        purchaseProduct.Quantity,
 			UnitPrice:       purchaseProduct.PurchaseUnitPrice,
 			Unit:            purchaseProduct.Unit,
@@ -1099,12 +1152,7 @@ func (purchase *Purchase) CreateProductsHistory() error {
 
 		history.ID = primitive.NewObjectID()
 
-		_, err := collection.InsertOne(ctx, &history)
-		if err != nil {
-			return err
-		}
-
-		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
+		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -1112,6 +1160,11 @@ func (purchase *Purchase) CreateProductsHistory() error {
 		if len(product.Set.Products) > 0 {
 			for _, setProduct := range product.Set.Products {
 				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantity(purchase.Date)
 				if err != nil {
 					return err
 				}
@@ -1126,6 +1179,7 @@ func (purchase *Purchase) CreateProductsHistory() error {
 					ReferenceType:   "purchase",
 					ReferenceID:     &purchase.ID,
 					ReferenceCode:   purchase.Code,
+					Stock:           (stock + RoundTo2Decimals(purchaseProduct.Quantity*setProduct.Quantity)),
 					Quantity:        RoundTo2Decimals(purchaseProduct.Quantity * setProduct.Quantity),
 					UnitPrice:       RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:            setProductObj.Unit,
@@ -1180,6 +1234,16 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 			continue
 		}
 
+		product, err := store.FindProductByID(&purchaseReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantity(purchaseReturn.Date)
+		if err != nil {
+			return err
+		}
+
 		history := ProductHistory{
 			Date:            purchaseReturn.Date,
 			StoreID:         purchaseReturn.StoreID,
@@ -1190,6 +1254,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 			ReferenceType:   "purchase_return",
 			ReferenceID:     &purchaseReturn.ID,
 			ReferenceCode:   purchaseReturn.Code,
+			Stock:           (stock - purchaseReturnProduct.Quantity),
 			Quantity:        purchaseReturnProduct.Quantity,
 			UnitPrice:       purchaseReturnProduct.PurchaseReturnUnitPrice,
 			Unit:            purchaseReturnProduct.Unit,
@@ -1208,12 +1273,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 
 		history.ID = primitive.NewObjectID()
 
-		_, err := collection.InsertOne(ctx, &history)
-		if err != nil {
-			return err
-		}
-
-		product, err := store.FindProductByID(&purchaseReturnProduct.ProductID, bson.M{})
+		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -1221,6 +1281,11 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 		if len(product.Set.Products) > 0 {
 			for _, setProduct := range product.Set.Products {
 				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantity(purchaseReturn.Date)
 				if err != nil {
 					return err
 				}
@@ -1235,6 +1300,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 					ReferenceType:   "purchase_return",
 					ReferenceID:     &purchaseReturn.ID,
 					ReferenceCode:   purchaseReturn.Code,
+					Stock:           (stock - RoundTo2Decimals(purchaseReturnProduct.Quantity*setProduct.Quantity)),
 					Quantity:        RoundTo2Decimals(purchaseReturnProduct.Quantity * setProduct.Quantity),
 					UnitPrice:       RoundTo2Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:            setProductObj.Unit,
@@ -1284,6 +1350,15 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 	defer cancel()
 
 	for _, deliverynoteProduct := range deliverynote.Products {
+		product, err := store.FindProductByID(&deliverynoteProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantity(deliverynote.Date)
+		if err != nil {
+			return err
+		}
 
 		history := ProductHistory{
 			Date:          deliverynote.Date,
@@ -1295,6 +1370,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 			ReferenceType: "delivery_note",
 			ReferenceID:   &deliverynote.ID,
 			ReferenceCode: deliverynote.Code,
+			Stock:         (stock + deliverynoteProduct.Quantity),
 			Quantity:      deliverynoteProduct.Quantity,
 			Unit:          deliverynoteProduct.Unit,
 			CreatedAt:     deliverynote.CreatedAt,
@@ -1302,18 +1378,23 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 		}
 
 		history.ID = primitive.NewObjectID()
-		_, err := collection.InsertOne(ctx, &history)
-		if err != nil {
-			return err
-		}
-
-		product, err := store.FindProductByID(&deliverynoteProduct.ProductID, bson.M{})
+		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
 
 		if len(product.Set.Products) > 0 {
 			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantity(deliverynote.Date)
+				if err != nil {
+					return err
+				}
+
 				history := ProductHistory{
 					Date:          deliverynote.Date,
 					StoreID:       deliverynote.StoreID,
@@ -1324,6 +1405,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 					ReferenceType: "delivery_note",
 					ReferenceID:   &deliverynote.ID,
 					ReferenceCode: deliverynote.Code,
+					Stock:         (stock + (deliverynoteProduct.Quantity * setProduct.Quantity)),
 					Quantity:      (deliverynoteProduct.Quantity * setProduct.Quantity),
 					Unit:          deliverynoteProduct.Unit,
 					CreatedAt:     deliverynote.CreatedAt,
@@ -1331,7 +1413,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 				}
 
 				history.ID = primitive.NewObjectID()
-				_, err := collection.InsertOne(ctx, &history)
+				_, err = collection.InsertOne(ctx, &history)
 				if err != nil {
 					return err
 				}
@@ -1369,6 +1451,22 @@ func (quotation *Quotation) CreateProductsHistory() error {
 	defer cancel()
 
 	for _, quotationProduct := range quotation.Products {
+		product, err := store.FindProductByID(&quotationProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantity(quotation.Date)
+		if err != nil {
+			return err
+		}
+
+		if quotation.Type == "invoice" {
+			if store.Settings.UpdateProductStockOnQuotationSales {
+				stock -= quotationProduct.Quantity
+			}
+		}
+
 		history := ProductHistory{
 			Date:            quotation.Date,
 			StoreID:         quotation.StoreID,
@@ -1379,6 +1477,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 			ReferenceType:   referenceType,
 			ReferenceID:     &quotation.ID,
 			ReferenceCode:   quotation.Code,
+			Stock:           stock,
 			Quantity:        quotationProduct.Quantity,
 			UnitPrice:       quotationProduct.UnitPrice,
 			Unit:            quotationProduct.Unit,
@@ -1399,12 +1498,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 		history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
 
 		history.ID = primitive.NewObjectID()
-		_, err := collection.InsertOne(ctx, &history)
-		if err != nil {
-			return err
-		}
-
-		product, err := store.FindProductByID(&quotationProduct.ProductID, bson.M{})
+		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -1414,6 +1508,17 @@ func (quotation *Quotation) CreateProductsHistory() error {
 				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
 				if err != nil {
 					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantity(quotation.Date)
+				if err != nil {
+					return err
+				}
+
+				if quotation.Type == "invoice" {
+					if store.Settings.UpdateProductStockOnQuotationSales {
+						stock -= quotationProduct.Quantity
+					}
 				}
 
 				history := ProductHistory{
@@ -1426,6 +1531,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 					ReferenceType:     referenceType,
 					ReferenceID:       &quotation.ID,
 					ReferenceCode:     quotation.Code,
+					Stock:             stock,
 					Quantity:          RoundTo2Decimals(quotationProduct.Quantity * setProduct.Quantity),
 					PurchaseUnitPrice: RoundTo2Decimals(quotationProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:              setProductObj.Unit,
@@ -1482,6 +1588,20 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 			continue
 		}
 
+		product, err := store.FindProductByID(&quotationsalesReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantity(quotationsalesReturn.Date)
+		if err != nil {
+			return err
+		}
+
+		if store.Settings.UpdateProductStockOnQuotationSales {
+			stock += quotationsalesReturnProduct.Quantity
+		}
+
 		history := ProductHistory{
 			Date:            quotationsalesReturn.Date,
 			StoreID:         quotationsalesReturn.StoreID,
@@ -1492,6 +1612,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 			ReferenceType:   "quotation_sales_return",
 			ReferenceID:     &quotationsalesReturn.ID,
 			ReferenceCode:   quotationsalesReturn.Code,
+			Stock:           stock,
 			Quantity:        quotationsalesReturnProduct.Quantity,
 			UnitPrice:       quotationsalesReturnProduct.UnitPrice,
 			Unit:            quotationsalesReturnProduct.Unit,
@@ -1512,12 +1633,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 
 		history.ID = primitive.NewObjectID()
 
-		_, err := collection.InsertOne(ctx, &history)
-		if err != nil {
-			return err
-		}
-
-		product, err := store.FindProductByID(&quotationsalesReturnProduct.ProductID, bson.M{})
+		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
 			return err
 		}
@@ -1527,6 +1643,15 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
 				if err != nil {
 					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantity(quotationsalesReturn.Date)
+				if err != nil {
+					return err
+				}
+
+				if store.Settings.UpdateProductStockOnQuotationSales {
+					stock += quotationsalesReturnProduct.Quantity
 				}
 
 				history := ProductHistory{
@@ -1539,6 +1664,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 					ReferenceType:     "quotation_sales_return",
 					ReferenceID:       &quotationsalesReturn.ID,
 					ReferenceCode:     quotationsalesReturn.Code,
+					Stock:             stock,
 					Quantity:          RoundTo2Decimals(quotationsalesReturnProduct.Quantity * setProduct.Quantity),
 					PurchaseUnitPrice: RoundTo2Decimals(quotationsalesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
 					Unit:              setProductObj.Unit,

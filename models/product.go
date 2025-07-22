@@ -3554,3 +3554,132 @@ func (product *Product) SetStock() error {
 
 	return nil
 }
+
+type ProductQtyStats struct {
+	Quantity float64 `json:"quantity" bson:"quantity"`
+}
+
+func (product *Product) GetProductQuantity(toDate *time.Time) (float64, error) {
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return 0, err
+	}
+
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductQtyStats
+
+	filter := map[string]interface{}{
+		"store_id":   product.StoreID,
+		"product_id": product.ID,
+		//"reference_type": bson.M{"$ne": "quotation"},
+	}
+
+	if toDate != nil {
+		filter["date"] = bson.M{"$lte": toDate}
+	}
+
+	/*
+		if !store.Settings.UpdateProductStockOnQuotationSales {
+			filter["$and"] = []bson.M{
+				bson.M{"reference_type": bson.M{"$ne": "quotation_invoice"}},
+				bson.M{"reference_type": bson.M{"$ne": "quotation_sales_return"}},
+			}
+		}*/
+
+	effectiveQuantityExpr := bson.M{
+		"$cond": bson.M{
+			"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase"}},
+			"then": "$quantity",
+			"else": bson.M{
+				"$cond": bson.M{
+					"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales"}},
+					"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+					"else": bson.M{
+						"$cond": bson.M{
+							"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales_return"}},
+							"then": "$quantity",
+							"else": bson.M{
+								"$cond": bson.M{
+									"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase_return"}},
+									"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+									"else": 0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Extend logic if quotation stock setting is enabled
+	if store.Settings.UpdateProductStockOnQuotationSales {
+		effectiveQuantityExpr = bson.M{
+			"$cond": bson.M{
+				"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase"}},
+				"then": "$quantity",
+				"else": bson.M{
+					"$cond": bson.M{
+						"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales"}},
+						"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+						"else": bson.M{
+							"$cond": bson.M{
+								"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales_return"}},
+								"then": "$quantity",
+								"else": bson.M{
+									"$cond": bson.M{
+										"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase_return"}},
+										"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+										"else": bson.M{
+											"$cond": bson.M{
+												"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_invoice"}},
+												"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+												"else": bson.M{
+													"$cond": bson.M{
+														"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_sales_return"}},
+														"then": "$quantity",
+														"else": 0,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	pipeline := []bson.M{
+		{"$match": filter},
+		{"$project": bson.M{
+			"effective_quantity": effectiveQuantityExpr,
+		}},
+		{"$group": bson.M{
+			"_id":      nil,
+			"quantity": bson.M{"$sum": "$effective_quantity"},
+		}},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return stats.Quantity, nil
+}

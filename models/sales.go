@@ -1449,33 +1449,34 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			customerErrorMessages = append(customerErrorMessages, "Registration Number should be alpha numeric(a-zA-Z|0-9)")
 		}
 
-		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
-			customerErrorMessages = append(customerErrorMessages, "Building number is required")
-		} else {
-			if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
-				customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+		if !govalidator.IsNull(customer.NationalAddress.BuildingNo) && !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+			customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+		}
+
+		if !govalidator.IsNull(customer.NationalAddress.ZipCode) && !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+			customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+		}
+
+		/*
+			if govalidator.IsNull(customer.NationalAddress.StreetName) {
+				customerErrorMessages = append(customerErrorMessages, "Street name is required")
 			}
-		}
 
-		if govalidator.IsNull(customer.NationalAddress.StreetName) {
-			customerErrorMessages = append(customerErrorMessages, "Street name is required")
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
-			customerErrorMessages = append(customerErrorMessages, "District name is required")
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.CityName) {
-			customerErrorMessages = append(customerErrorMessages, "City name is required")
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
-			customerErrorMessages = append(customerErrorMessages, "Zip code is required")
-		} else {
-			if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
-				customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+			if govalidator.IsNull(customer.NationalAddress.DistrictName) {
+				customerErrorMessages = append(customerErrorMessages, "District name is required")
 			}
-		}
+
+			if govalidator.IsNull(customer.NationalAddress.CityName) {
+				customerErrorMessages = append(customerErrorMessages, "City name is required")
+			}
+
+			if govalidator.IsNull(customer.NationalAddress.ZipCode) {
+				customerErrorMessages = append(customerErrorMessages, "Zip code is required")
+			} else {
+				if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+					customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+				}
+			}*/
 
 		if len(customerErrorMessages) > 0 {
 			errs["customer_id"] = "Fix the customer errors: " + strings.Join(customerErrorMessages, ",")
@@ -1915,6 +1916,55 @@ func (customer *Customer) WillEditExceedCreditLimit(oldAmount, newAmount float64
 	}
 }
 
+func (customer *Customer) IsB2B() bool {
+	if customer == nil {
+		return false
+	}
+
+	if govalidator.IsNull(customer.VATNo) {
+		return false
+	}
+
+	if !IsValidDigitNumber(customer.VATNo, "15") {
+		return false
+	}
+
+	if !govalidator.IsNull(customer.RegistrationNumber) && !IsAlphanumeric(customer.RegistrationNumber) {
+		return false
+	}
+
+	if govalidator.IsNull(customer.NationalAddress.ZipCode) {
+		return false
+	}
+
+	if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+		return false
+	}
+
+	if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+		return false
+	}
+
+	if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+		return false
+	}
+
+	if govalidator.IsNull(customer.NationalAddress.StreetName) {
+		return false
+	}
+
+	if govalidator.IsNull(customer.NationalAddress.DistrictName) {
+		return false
+	}
+
+	if govalidator.IsNull(customer.NationalAddress.CityName) {
+		return false
+	}
+
+	return true
+
+}
+
 func (order *Order) ValidateZatcaReporting() (errs map[string]string) {
 	errs = make(map[string]string)
 
@@ -1943,33 +1993,44 @@ func (order *Order) ValidateZatcaReporting() (errs map[string]string) {
 			customerErrorMessages = append(customerErrorMessages, "Registration Number should be alpha numeric(a-zA-Z|0-9)")
 		}
 
-		if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
-			customerErrorMessages = append(customerErrorMessages, "Building number is required")
-		} else {
-			if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
-				customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+		if !govalidator.IsNull(customer.NationalAddress.BuildingNo) && !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+			customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+		}
+
+		if !govalidator.IsNull(customer.NationalAddress.ZipCode) && !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+			customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+		}
+
+		/*
+			if govalidator.IsNull(customer.NationalAddress.BuildingNo) {
+				customerErrorMessages = append(customerErrorMessages, "Building number is required")
+			} else {
+				if !IsValidDigitNumber(customer.NationalAddress.BuildingNo, "4") {
+					customerErrorMessages = append(customerErrorMessages, "Building number should be 4 digits")
+				}
+			}*/
+
+		/*
+			if govalidator.IsNull(customer.NationalAddress.StreetName) {
+				customerErrorMessages = append(customerErrorMessages, "Street name is required")
 			}
-		}
 
-		if govalidator.IsNull(customer.NationalAddress.StreetName) {
-			customerErrorMessages = append(customerErrorMessages, "Street name is required")
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.DistrictName) {
-			customerErrorMessages = append(customerErrorMessages, "District name is required")
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.CityName) {
-			customerErrorMessages = append(customerErrorMessages, "City name is required")
-		}
-
-		if govalidator.IsNull(customer.NationalAddress.ZipCode) {
-			customerErrorMessages = append(customerErrorMessages, "Zip code is required")
-		} else {
-			if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
-				customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+			if govalidator.IsNull(customer.NationalAddress.DistrictName) {
+				customerErrorMessages = append(customerErrorMessages, "District name is required")
 			}
-		}
+
+			if govalidator.IsNull(customer.NationalAddress.CityName) {
+				customerErrorMessages = append(customerErrorMessages, "City name is required")
+			}*/
+
+		/*
+			if govalidator.IsNull(customer.NationalAddress.ZipCode) {
+				customerErrorMessages = append(customerErrorMessages, "Zip code is required")
+			} else {
+				if !IsValidDigitNumber(customer.NationalAddress.ZipCode, "5") {
+					customerErrorMessages = append(customerErrorMessages, "Zip code should be 5 digits")
+				}
+			}*/
 
 		if len(customerErrorMessages) > 0 {
 			errs["customer_id"] = "Fix the customer errors: " + strings.Join(customerErrorMessages, ", ")

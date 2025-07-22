@@ -596,8 +596,10 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quotation.ClearProductsHistory()
-	quotation.CreateProductsHistory()
+	go func() {
+		quotation.ClearProductsHistory()
+		quotation.CreateProductsHistory()
+	}()
 
 	go quotation.SetPostBalances()
 
