@@ -774,6 +774,16 @@ func (store *Store) SearchHistory(w http.ResponseWriter, r *http.Request) (model
 	return models, criterias, nil
 }
 
+func (model *Product) ClearStockAdjustmentHistory() error {
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"reference_id": model.ID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (model *Order) ClearProductsHistory() error {
 	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_history")
 	ctx := context.Background()
@@ -844,6 +854,68 @@ func (model *QuotationSalesReturn) ClearProductsHistory() error {
 	return nil
 }
 
+func (product *Product) CreateStockAdjustmentHistory() error {
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	//log.Printf("Creating  history of order id:%s", order.Code)
+	exists, err := store.IsHistoryExistsByReferenceID(&product.ID)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for _, stockAdjustment := range product.ProductStores[store.ID.Hex()].StockAdjustments {
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(stockAdjustment.Date)
+		if err != nil {
+			return err
+		}
+
+		newStock := float64(0.00)
+
+		if stockAdjustment.Type == "adding" {
+			newStock = stock + stockAdjustment.Quantity
+		} else if stockAdjustment.Type == "removing" {
+			newStock = stock - stockAdjustment.Quantity
+		}
+
+		history := ProductHistory{
+			Date:          stockAdjustment.Date,
+			StoreID:       product.StoreID,
+			StoreName:     product.StoreName,
+			ProductID:     product.ID,
+			CustomerID:    nil,
+			CustomerName:  "",
+			ReferenceType: "stock_adjustment_by_" + stockAdjustment.Type,
+			ReferenceID:   &product.ID,
+			ReferenceCode: product.PartNumber,
+			Stock:         newStock,
+			Quantity:      stockAdjustment.Quantity,
+			Unit:          product.Unit,
+			CreatedAt:     stockAdjustment.CreatedAt,
+			UpdatedAt:     stockAdjustment.CreatedAt,
+		}
+
+		history.ID = primitive.NewObjectID()
+
+		_, err = collection.InsertOne(ctx, &history)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
 func (order *Order) CreateProductsHistory() error {
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
@@ -870,7 +942,7 @@ func (order *Order) CreateProductsHistory() error {
 			return err
 		}
 
-		stock, err := product.GetProductQuantity(order.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(order.Date)
 		if err != nil {
 			return err
 		}
@@ -919,7 +991,7 @@ func (order *Order) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantity(order.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(order.Date)
 				if err != nil {
 					return err
 				}
@@ -995,7 +1067,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 			return err
 		}
 
-		stock, err := product.GetProductQuantity(salesReturn.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(salesReturn.Date)
 		if err != nil {
 			return err
 		}
@@ -1043,7 +1115,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantity(salesReturn.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(salesReturn.Date)
 				if err != nil {
 					return err
 				}
@@ -1117,7 +1189,7 @@ func (purchase *Purchase) CreateProductsHistory() error {
 			return err
 		}
 
-		stock, err := product.GetProductQuantity(purchase.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(purchase.Date)
 		if err != nil {
 			return err
 		}
@@ -1164,7 +1236,7 @@ func (purchase *Purchase) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantity(purchase.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(purchase.Date)
 				if err != nil {
 					return err
 				}
@@ -1239,7 +1311,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 			return err
 		}
 
-		stock, err := product.GetProductQuantity(purchaseReturn.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(purchaseReturn.Date)
 		if err != nil {
 			return err
 		}
@@ -1285,7 +1357,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantity(purchaseReturn.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(purchaseReturn.Date)
 				if err != nil {
 					return err
 				}
@@ -1355,7 +1427,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 			return err
 		}
 
-		stock, err := product.GetProductQuantity(deliverynote.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(deliverynote.Date)
 		if err != nil {
 			return err
 		}
@@ -1390,7 +1462,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantity(deliverynote.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(deliverynote.Date)
 				if err != nil {
 					return err
 				}
@@ -1456,7 +1528,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 			return err
 		}
 
-		stock, err := product.GetProductQuantity(quotation.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(quotation.Date)
 		if err != nil {
 			return err
 		}
@@ -1510,7 +1582,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantity(quotation.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(quotation.Date)
 				if err != nil {
 					return err
 				}
@@ -1593,7 +1665,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 			return err
 		}
 
-		stock, err := product.GetProductQuantity(quotationsalesReturn.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(quotationsalesReturn.Date)
 		if err != nil {
 			return err
 		}
@@ -1645,7 +1717,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantity(quotationsalesReturn.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(quotationsalesReturn.Date)
 				if err != nil {
 					return err
 				}

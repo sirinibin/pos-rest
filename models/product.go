@@ -39,6 +39,7 @@ type ProductStore struct {
 	Stock                        float64            `bson:"stock" json:"stock"`
 	StocksAdded                  float64            `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
 	StocksRemoved                float64            `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
+	StockAdjustments             []StockAdjustment  `bson:"stock_adjustments" json:"stock_adjustments"`
 	RetailUnitProfit             float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
 	RetailUnitProfitPerc         float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
 	WholesaleUnitProfit          float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
@@ -74,6 +75,14 @@ type ProductStore struct {
 	Quotation                    float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
 	DeliveryNoteCount            int64              `bson:"delivery_note_count" json:"delivery_note_count"`
 	DeliveryNoteQuantity         float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
+}
+
+type StockAdjustment struct {
+	Date      *time.Time `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr   string     `json:"date_str,omitempty" bson:"-"`
+	Type      string     `bson:"type" json:"type"` // added|removed
+	Quantity  float64    `bson:"quantity" json:"quantity"`
+	CreatedAt *time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
 }
 
 type AdditionalStock struct {
@@ -2270,6 +2279,54 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		errs["store_id"] = err.Error()
 		return errs
 	}
+	stocksAdded := float64(0.00)
+	stocksRemoved := float64(0.00)
+	for index, stockAdjustment := range product.ProductStores[store.ID.Hex()].StockAdjustments {
+		if govalidator.IsNull(stockAdjustment.DateStr) {
+			errs["adjustment_date_"+strconv.Itoa(index)] = "Date is required"
+		} else {
+			const shortForm = "2006-01-02T15:04:05Z07:00"
+			date, err := time.Parse(shortForm, stockAdjustment.DateStr)
+			if err != nil {
+				errs["adjustment_date_"+strconv.Itoa(index)] = "Invalid date format"
+			}
+			product.ProductStores[store.ID.Hex()].StockAdjustments[index].Date = &date
+			stockAdjustment.Date = &date
+		}
+
+		if stockAdjustment.Quantity == 0 {
+			errs["adjustment_quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		} else if stockAdjustment.Quantity < 0 {
+			errs["adjustment_quantity_"+strconv.Itoa(index)] = "Quantity should be greater than zero"
+		}
+
+		if stockAdjustment.Type == "" {
+			errs["adjustment_type_"+strconv.Itoa(index)] = "Type is required"
+		}
+
+		if stockAdjustment.Type == "adding" {
+			stocksAdded += stockAdjustment.Quantity
+		} else if stockAdjustment.Type == "removing" {
+			stocksRemoved += stockAdjustment.Quantity
+		}
+
+		if index > 0 {
+			if stockAdjustment.Date.Truncate(time.Minute).Equal(product.ProductStores[store.ID.Hex()].StockAdjustments[index-1].Date.Truncate(time.Minute)) {
+				productStores := product.ProductStores[store.ID.Hex()]
+				newTime := productStores.StockAdjustments[index].Date.Add(1 * time.Minute)
+				productStores.StockAdjustments[index].Date = &newTime
+				product.ProductStores[store.ID.Hex()] = productStores
+			}
+		}
+
+	} //end for
+
+	productStores := product.ProductStores[store.ID.Hex()]
+
+	productStores.StocksAdded = stocksAdded
+	productStores.StocksRemoved = stocksRemoved
+
+	product.ProductStores[store.ID.Hex()] = productStores
 
 	if scenario == "update" {
 		if product.ID.IsZero() {
@@ -2295,14 +2352,6 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		errs["stock"] = "error setting stock: " + err.Error()
 		return errs
 	}
-
-	/*
-		_, ok := product.ProductStores[store.ID.Hex()]
-		if ok {
-			if product.ProductStores[store.ID.Hex()].DamagedStock > product.ProductStores[store.ID.Hex()].Stock {
-				errs["damaged_stock_0"] = " damaged stock should be greater than stock value"
-			}
-		}*/
 
 	if len(product.Set.Products) > 0 {
 		product.IsSet = false
@@ -3103,6 +3152,41 @@ func ProcessProducts() error {
 				continue
 			}
 
+			now := time.Now()
+
+			for i, productStore := range product.ProductStores {
+				if len(productStore.StockAdjustments) > 0 {
+					continue
+				}
+
+				if productStore.StocksAdded > 0 {
+					productStores := product.ProductStores[i]
+					productStores.StockAdjustments = []StockAdjustment{
+						StockAdjustment{
+							Date:      product.CreatedAt,
+							Quantity:  productStore.StocksAdded,
+							Type:      "adding",
+							CreatedAt: &now,
+						},
+					}
+					product.ProductStores[i] = productStores
+				}
+
+				if productStore.StocksRemoved > 0 {
+					productStores := product.ProductStores[i]
+					productStores.StockAdjustments = []StockAdjustment{
+						StockAdjustment{
+							Date:      product.CreatedAt,
+							Quantity:  productStore.StocksRemoved,
+							Type:      "removing",
+							CreatedAt: &now,
+						},
+					}
+					product.ProductStores[i] = productStores
+				}
+
+				product.Update(&store.ID)
+			}
 			/*
 				if store.Code == "RAA-JDA-DEL" {
 					productsToExport = append(productsToExport, product)
@@ -3559,7 +3643,7 @@ type ProductQtyStats struct {
 	Quantity float64 `json:"quantity" bson:"quantity"`
 }
 
-func (product *Product) GetProductQuantity(toDate *time.Time) (float64, error) {
+func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (float64, error) {
 	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
 		return 0, err
@@ -3578,8 +3662,13 @@ func (product *Product) GetProductQuantity(toDate *time.Time) (float64, error) {
 	}
 
 	if toDate != nil {
-		filter["date"] = bson.M{"$lte": toDate}
+		filter["date"] = bson.M{"$lt": toDate}
 	}
+
+	/*
+		if excludeReferenceID != nil {
+			filter["reference_id"] = bson.M{"$ne": excludeReferenceID}
+		}*/
 
 	/*
 		if !store.Settings.UpdateProductStockOnQuotationSales {
@@ -3605,7 +3694,19 @@ func (product *Product) GetProductQuantity(toDate *time.Time) (float64, error) {
 								"$cond": bson.M{
 									"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase_return"}},
 									"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-									"else": 0,
+									"else": bson.M{
+										"$cond": bson.M{
+											"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
+											"then": "$quantity",
+											"else": bson.M{
+												"$cond": bson.M{
+													"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
+													"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+													"else": 0,
+												},
+											},
+										},
+									},
 								},
 							},
 						},
@@ -3641,7 +3742,19 @@ func (product *Product) GetProductQuantity(toDate *time.Time) (float64, error) {
 													"$cond": bson.M{
 														"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_sales_return"}},
 														"then": "$quantity",
-														"else": 0,
+														"else": bson.M{
+															"$cond": bson.M{
+																"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
+																"then": "$quantity",
+																"else": bson.M{
+																	"$cond": bson.M{
+																		"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
+																		"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+																		"else": 0,
+																	},
+																},
+															},
+														},
 													},
 												},
 											},
