@@ -3152,41 +3152,45 @@ func ProcessProducts() error {
 				continue
 			}
 
-			now := time.Now()
+			product.ClearStockAdjustmentHistory()
+			product.CreateStockAdjustmentHistory()
 
-			for i, productStore := range product.ProductStores {
-				if len(productStore.StockAdjustments) > 0 {
-					continue
-				}
+			//now := time.Now()
 
-				if productStore.StocksAdded > 0 {
-					productStores := product.ProductStores[i]
-					productStores.StockAdjustments = []StockAdjustment{
-						StockAdjustment{
-							Date:      product.CreatedAt,
-							Quantity:  productStore.StocksAdded,
-							Type:      "adding",
-							CreatedAt: &now,
-						},
+			/*
+				for i, productStore := range product.ProductStores {
+					if len(productStore.StockAdjustments) > 0 {
+						continue
 					}
-					product.ProductStores[i] = productStores
-				}
 
-				if productStore.StocksRemoved > 0 {
-					productStores := product.ProductStores[i]
-					productStores.StockAdjustments = []StockAdjustment{
-						StockAdjustment{
-							Date:      product.CreatedAt,
-							Quantity:  productStore.StocksRemoved,
-							Type:      "removing",
-							CreatedAt: &now,
-						},
+					if productStore.StocksAdded > 0 {
+						productStores := product.ProductStores[i]
+						productStores.StockAdjustments = []StockAdjustment{
+							StockAdjustment{
+								Date:      product.CreatedAt,
+								Quantity:  productStore.StocksAdded,
+								Type:      "adding",
+								CreatedAt: &now,
+							},
+						}
+						product.ProductStores[i] = productStores
 					}
-					product.ProductStores[i] = productStores
-				}
 
-				product.Update(&store.ID)
-			}
+					if productStore.StocksRemoved > 0 {
+						productStores := product.ProductStores[i]
+						productStores.StockAdjustments = []StockAdjustment{
+							StockAdjustment{
+								Date:      product.CreatedAt,
+								Quantity:  productStore.StocksRemoved,
+								Type:      "removing",
+								CreatedAt: &now,
+							},
+						}
+						product.ProductStores[i] = productStores
+					}
+
+					product.Update(&store.ID)
+				}*/
 			/*
 				if store.Code == "RAA-JDA-DEL" {
 					productsToExport = append(productsToExport, product)
