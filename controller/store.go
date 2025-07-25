@@ -80,6 +80,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -88,6 +89,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 
 	accessingUser, err := models.FindUserByID(&userID, bson.M{})
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["user_id"] = "invalid user: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -95,6 +97,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if accessingUser.Role != "Admin" {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["user_id"] = "unauthorized access"
 		json.NewEncoder(w).Encode(response)
@@ -109,6 +112,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := store.Validate(w, r, "create"); len(errs) > 0 {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -184,6 +188,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	storeID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -192,6 +197,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	storeOld, err = models.FindStoreByID(&storeID, bson.M{})
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -200,6 +206,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	store, err = models.FindStoreByID(&storeID, bson.M{})
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -213,6 +220,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -221,6 +229,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	accessingUser, err := models.FindUserByID(&userID, bson.M{})
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["user_id"] = "invalid user: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -228,6 +237,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ObjectIDExists(store.ID, accessingUser.StoreIDs) && accessingUser.Role != "Admin" {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["user_id"] = "unauthorized access"
 		json.NewEncoder(w).Encode(response)
@@ -240,6 +250,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := store.Validate(w, r, "update"); len(errs) > 0 {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -270,6 +281,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	store, err = models.FindStoreByID(&store.ID, bson.M{})
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["view"] = "Unable to find store:" + err.Error()
 		json.NewEncoder(w).Encode(response)

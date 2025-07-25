@@ -1703,24 +1703,15 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		errs["store_id"] = "invalid store id"
 	}
 
-	/*
-		if govalidator.IsNull(quotation.Status) {
-			errs["status"] = "Status is required"
-		}
-	*/
+	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_id"] = "Invalid customer"
+		return errs
+	}
 
-	/*
-		if govalidator.IsNull(quotation.DateStr) {
-			errs["date_str"] = "date_str is required"
-		} else {
-			const shortForm = "Jan 02 2006"
-			date, err := time.Parse(shortForm, quotation.DateStr)
-			if err != nil {
-				errs["date_str"] = "Invalid date format"
-			}
-			quotation.Date = &date
-		}
-	*/
+	if customer == nil && govalidator.IsNull(quotation.CustomerName) {
+		quotation.CustomerID = nil
+	}
 
 	if govalidator.IsNull(quotation.DateStr) {
 		errs["date_str"] = "Date is required"
@@ -1731,7 +1722,6 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["date_str"] = "Invalid date format"
 		}
 		quotation.Date = &date
-		//quotation.CreatedAt = &date
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(quotation.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(quotation.Phone)) {

@@ -1392,7 +1392,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	//totalAmountFromCustomerAccount := 0.00
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "Invalid customer"
@@ -1427,14 +1426,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			}
 		}
 	}
-
-	/*
-		if scenario == "update" && customer == nil && govalidator.IsNull(order.CustomerName) && oldOrder.CustomerID != nil && !oldOrder.CustomerID.IsZero() {
-			if order.ReturnCount > 0 {
-				errs["customer_id"] = "You can't remove this customer as this sales have a sales return created"
-				return
-			}
-		}*/
 
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
@@ -1473,21 +1464,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return
 	}
 
-	/*
-		if scenario == "update" {
-			if totalPayment > (order.TotalPaymentReceived - (order.ReturnAmount - oldSalesReturn.TotalPaymentPaid)) {
-				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
-				return errs
-			}
-		} else {
-			if totalPayment > (order.TotalPaymentReceived - order.ReturnAmount) {
-				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
-				return errs
-			}
-		}*/
-
-	//var customerAccount *Account
-
 	//validation
 	if customer != nil && customer.CreditLimit > 0 {
 		if customer.Account == nil {
@@ -1500,15 +1476,9 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 		if scenario != "update" && customer.IsCreditLimitExceeded(order.BalanceAmount, false) {
 			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit-customer.CreditBalance))
-			/*if customer.CreditBalance > 0 {
-				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
-			}*/
 			return errs
 		} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldOrder.BalanceAmount, order.BalanceAmount, false) {
 			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", ((customer.CreditLimit+oldOrder.BalanceAmount)-customer.CreditBalance))
-			/*if customer.CreditBalance > 0 {
-				errs["customer_credit_limit"] += ", Current credit balance: " + fmt.Sprintf("%.02f", (customer.CreditBalance))
-			}*/
 			return errs
 		}
 	}
@@ -1540,100 +1510,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		if payment.Method == "" {
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
-
-		/*if customer != nil && payment.Method == "customer_account" {
-			totalAmountFromCustomerAccount += *payment.Amount
-			log.Print("Checking customer account Balance")
-
-			if customerAccount != nil {
-				if scenario == "update" {
-					extraAmount := 0.00
-					var oldSalesPayment *SalesPayment
-					oldOrder.SetPaymentStatus()
-					for _, oldPayment := range oldOrder.Payments {
-						if oldPayment.ID.Hex() == payment.ID.Hex() {
-							oldSalesPayment = &oldPayment
-							break
-						}
-					}
-
-					if oldSalesPayment != nil && *oldSalesPayment.Amount < *payment.Amount {
-						extraAmount = *payment.Amount - *oldSalesPayment.Amount
-					} else if oldSalesPayment == nil {
-						//New payment added
-						extraAmount = *payment.Amount
-					} else {
-						log.Print("payment amount not increased")
-					}
-
-					if extraAmount > 0 {
-						if customerAccount.Balance == 0 {
-							errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmount)) + " to customer account to continue"
-						} else if customerAccount.Type == "asset" {
-							errs["payment_method_"+strconv.Itoa(index)] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (customerAccount.Balance+extraAmount)) + " to customer account to continue"
-						} else if customerAccount.Type == "liability" && customerAccount.Balance < extraAmount {
-							errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", extraAmount) + " to customer account to continue"
-						}
-					}
-
-				} else {
-					if customerAccount.Balance == 0 {
-						errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
-					} else if customerAccount.Type == "asset" {
-						errs["payment_method_"+strconv.Itoa(index)] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-					} else if customerAccount.Type == "liability" && customerAccount.Balance < *payment.Amount {
-						errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-					}
-				}
-
-			} else {
-				errs["payment_method_"+strconv.Itoa(index)] = "customer account balance is zero"
-			}
-		}*/
-
 	} //end for
-
-	/*if totalAmountFromCustomerAccount > 0 {
-		if customer != nil && customerAccount != nil {
-			if scenario == "update" {
-				oldTotalAmountFromCustomerAccount := 0.0
-				extraAmountRequired := 0.00
-				oldOrder.SetPaymentStatus()
-				for _, oldPayment := range oldOrder.Payments {
-					if oldPayment.Method == "customer_account" {
-						oldTotalAmountFromCustomerAccount += *oldPayment.Amount
-					}
-				}
-
-				if totalAmountFromCustomerAccount > oldTotalAmountFromCustomerAccount {
-					extraAmountRequired = totalAmountFromCustomerAccount - oldTotalAmountFromCustomerAccount
-				}
-
-				if extraAmountRequired > 0 {
-					if customerAccount.Balance == 0 {
-						errs["customer_id"] = "customer account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmountRequired)) + " to customer account to continue"
-					} else if customerAccount.Type == "asset" {
-						errs["customer_id"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (customerAccount.Balance+extraAmountRequired)) + " to customer account to continue"
-					} else if customerAccount.Type == "liability" && customerAccount.Balance < extraAmountRequired {
-						errs["customer_id"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", extraAmountRequired) + " to customer account to continue"
-					}
-
-				}
-
-			} else {
-				if customerAccount.Balance == 0 {
-					errs["customer_id"] = "customer account balance is zero"
-				} else if customerAccount.Type == "asset" {
-					errs["customer_id"] = "customer owe us: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-				} else if customerAccount.Balance < totalAmountFromCustomerAccount {
-					errs["customer_id"] = "customer account balance is only: " + fmt.Sprintf("%.02f", customerAccount.Balance)
-				}
-			}
-
-		} else {
-			errs["customer_id"] = "customer account balance is zero"
-		}
-	}*/
 
 	if scenario == "update" {
 		if order.ID.IsZero() {

@@ -96,25 +96,67 @@ type Store struct {
 }
 
 type StoreSettings struct {
-	ShowAddressInInvoiceFooter             bool   `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
-	DefaultQuotationValidityDays           *int64 `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
-	DefaultQuotationDeliveryDays           *int64 `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
-	ZatcaQrOnLeftBottom                    bool   `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
-	ShowReceivedByFooterInInvoice          bool   `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
-	BlockSaleWhenPurchasePriceIsHigher     bool   `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
-	EnableMonthlySerialNumber              bool   `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
-	QuotationInvoiceAccounting             bool   `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
-	OneLineProductNameInInvoice            bool   `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
-	OneLineProductNameInPrintInvoice       bool   `bson:"one_line_product_name_in_print_invoice" json:"one_line_product_name_in_print_invoice"`
-	ShowMinusOnCreditBalanceInBalanceSheet bool   `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
-	HideTotalAmountRowInBalanceSheet       bool   `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
-	ShowSellerInfoInInvoice                bool   `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
-	EnableInvoicePrintTypeSelection        bool   `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
-	AllowAdjustSameDatePayments            bool   `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
-	HideQuotationInvoiceVAT                bool   `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
-	UpdateProductStockOnQuotationSales     bool   `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
-	EnableAutoPaymentCloseOnReturn         bool   `bson:"enable_auto_payment_close_on_return" json:"enable_auto_payment_close_on_return"`
+	ShowAddressInInvoiceFooter             bool            `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
+	DefaultQuotationValidityDays           *int64          `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
+	DefaultQuotationDeliveryDays           *int64          `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
+	ZatcaQrOnLeftBottom                    bool            `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
+	ShowReceivedByFooterInInvoice          bool            `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
+	BlockSaleWhenPurchasePriceIsHigher     bool            `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
+	EnableMonthlySerialNumber              bool            `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
+	QuotationInvoiceAccounting             bool            `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
+	OneLineProductNameInInvoice            bool            `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
+	OneLineProductNameInPrintInvoice       bool            `bson:"one_line_product_name_in_print_invoice" json:"one_line_product_name_in_print_invoice"`
+	ShowMinusOnCreditBalanceInBalanceSheet bool            `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
+	HideTotalAmountRowInBalanceSheet       bool            `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
+	ShowSellerInfoInInvoice                bool            `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
+	EnableInvoicePrintTypeSelection        bool            `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
+	AllowAdjustSameDatePayments            bool            `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
+	HideQuotationInvoiceVAT                bool            `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
+	UpdateProductStockOnQuotationSales     bool            `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
+	EnableAutoPaymentCloseOnReturn         bool            `bson:"enable_auto_payment_close_on_return" json:"enable_auto_payment_close_on_return"`
+	Invoice                                InvoiceSettings `bson:"invoice" json:"invoice"`
 }
+
+type InvoiceSettings struct {
+	Phase1               PhaseInvoiceSettings `bson:"phase1" json:"phase1"`
+	Phase2               PhaseInvoiceSettings `bson:"phase2" json:"phase2"`
+	Phase2B2B            PhaseInvoiceSettings `bson:"phase2_b2b" json:"phase2_b2b"`
+	QuotationSales       InvoiceTitles        `bson:"quotation_sales_titles" json:"quotation_sales_titles"`
+	QuotationSalesReturn InvoiceTitles        `bson:"quotation_sales_return_titles" json:"quotation_sales_return_titles"`
+	Quotation            string               `bson:"quotation_title" json:"quotation_title"`
+	DeliveryNoteTitle    string               `bson:"delivery_note_title" json:"delivery_note_title"`
+	PayableTitle         string               `bson:"payable_title" json:"payable_title"`
+	ReceivableTitle      string               `bson:"receivabale_title" json:"receivable_title"`
+}
+
+type PhaseInvoiceSettings struct {
+	SalesTitles          InvoiceTitles `bson:"sales_titles" json:"sales_titles"`
+	SalesReturnTitles    InvoiceTitles `bson:"sales_return_titles" json:"sales_return_titles"`
+	PurchaseTitles       InvoiceTitles `bson:"purchase_titles" json:"purchase_titles"`
+	PurchaseReturnTitles InvoiceTitles `bson:"purchase_return_titles" json:"purchase_return_titles"`
+}
+
+type InvoiceTitles struct {
+	Paid   string `bson:"paid" json:"paid"`
+	Credit string `bson:"credit" json:"credit"`
+	Cash   string `bson:"cash" json:"cash"`
+}
+
+/*
+type InvoiceSettings struct {
+	Phase1InvoiceSettings Phase1InvoiceSettings `bson:"phase1_invoice_settings" json:"phase1_invoice"` //1 or 2
+	Phase2InvoiceSettings Phase2InvoiceSettings `bson:"phase2_invoice_settings" json:"phase1_invoice"` //1 or 2
+}
+
+type Phase1InvoiceSettings struct {
+	SalesInvoiceTitle       string `bson:"prefix" json:"prefix"` //1 or 2
+	SalesReturnInvoiceTitle string `bson:"prefix" json:"prefix"` //1 or 2
+}
+
+type Phase2InvoiceSettings struct {
+	SalesInvoiceTitle       string `bson:"prefix" json:"prefix"` //1 or 2
+	SalesReturnInvoiceTitle string `bson:"prefix" json:"prefix"` //1 or 2
+}*/
 
 type SerialNumber struct {
 	Prefix         string `bson:"prefix" json:"prefix"` //1 or 2
