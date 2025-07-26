@@ -12,6 +12,7 @@ import (
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ListOrder : handler for GET /order
@@ -531,7 +532,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.Update()
 
 	err = orderOld.SetProductsStock()
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
@@ -682,6 +683,199 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order, err = store.FindOrderByID(&orderID, selectFields)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+	customer.SetSearchLabel()
+	order.Customer = customer
+
+	response.Status = true
+	response.Result = order
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// ViewOrder : handler function for GET /v1/order/<id> call
+func ViewPreviousOrder(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid Order ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var order *models.Order
+
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err = store.FindOrderByID(&orderID, selectFields)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	previousOrder, err := order.FindPreviousOrder(selectFields)
+	if err != nil && err != mongo.ErrNoDocuments {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if previousOrder != nil {
+		customer, _ := store.FindCustomerByID(previousOrder.CustomerID, bson.M{})
+		customer.SetSearchLabel()
+		previousOrder.Customer = customer
+	}
+
+	response.Status = true
+	response.Result = previousOrder
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// ViewOrder : handler function for GET /v1/order/<id> call
+func ViewNextOrder(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	orderID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid Order ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var order *models.Order
+
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err = store.FindOrderByID(&orderID, selectFields)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	nextOrder, err := order.FindNextOrder(selectFields)
+	if err != nil && err != mongo.ErrNoDocuments {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if nextOrder != nil {
+		customer, _ := store.FindCustomerByID(nextOrder.CustomerID, bson.M{})
+		customer.SetSearchLabel()
+		nextOrder.Customer = customer
+	}
+
+	response.Status = true
+	response.Result = nextOrder
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func ViewLastOrder(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var order *models.Order
+
+	selectFields := map[string]interface{}{}
+	keys, ok := r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	order, err = store.FindLastOrderByStoreID(&store.ID, selectFields)
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()

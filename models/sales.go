@@ -52,6 +52,7 @@ type OrderProduct struct {
 // Order : Order structure
 type Order struct {
 	ID                     primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	PreviousID             *primitive.ObjectID `json:"previous_id" bson:"previous_id"`
 	Date                   *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr                string              `json:"date_str,omitempty" bson:"-"`
 	InvoiceCountValue      int64               `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`

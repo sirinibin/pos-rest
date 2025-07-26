@@ -201,6 +201,9 @@ func main() {
 	router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 	router.HandleFunc("/v1/order", controller.ListOrder).Methods("GET")
 	router.HandleFunc("/v1/order/{id}", controller.ViewOrder).Methods("GET")
+	router.HandleFunc("/v1/previous-order/{id}", controller.ViewPreviousOrder).Methods("GET")
+	router.HandleFunc("/v1/next-order/{id}", controller.ViewNextOrder).Methods("GET")
+	router.HandleFunc("/v1/last-order", controller.ViewLastOrder).Methods("GET")
 
 	//SalesHistory
 	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")
