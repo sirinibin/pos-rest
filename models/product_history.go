@@ -1590,9 +1590,9 @@ func (quotation *Quotation) CreateProductsHistory() error {
 				}
 
 				if quotation.Type == "invoice" {
-					if store.Settings.UpdateProductStockOnQuotationSales {
-						stock -= quotationProduct.Quantity
-					}
+					//if store.Settings.UpdateProductStockOnQuotationSales {
+					stock -= quotationProduct.Quantity
+					//}
 				}
 
 				history := ProductHistory{
@@ -1672,9 +1672,9 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 			return err
 		}
 
-		if store.Settings.UpdateProductStockOnQuotationSales {
-			stock += quotationsalesReturnProduct.Quantity
-		}
+		//if store.Settings.UpdateProductStockOnQuotationSales {
+		stock += quotationsalesReturnProduct.Quantity
+		//}
 
 		history := ProductHistory{
 			Date:            quotationsalesReturn.Date,
@@ -1724,9 +1724,9 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 					return err
 				}
 
-				if store.Settings.UpdateProductStockOnQuotationSales {
-					stock += quotationsalesReturnProduct.Quantity
-				}
+				//if store.Settings.UpdateProductStockOnQuotationSales {
+				stock += quotationsalesReturnProduct.Quantity
+				//}
 
 				history := ProductHistory{
 					Date:              quotationsalesReturn.Date,

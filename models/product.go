@@ -3583,12 +3583,12 @@ func sanitizeUTF8(input string) string {
 }
 
 func (product *Product) SetStock() error {
-	store, err := FindStoreByID(product.StoreID, bson.M{})
+	/*store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
 		return err
-	}
+	}*/
 
-	err = product.SetProductSalesQuantityByStoreID(*product.StoreID)
+	err := product.SetProductSalesQuantityByStoreID(*product.StoreID)
 	if err != nil {
 		return err
 	}
@@ -3630,10 +3630,10 @@ func (product *Product) SetStock() error {
 		newStock -= productStoreTemp.SalesQuantity
 		newStock += productStoreTemp.SalesReturnQuantity
 
-		if store.Settings.UpdateProductStockOnQuotationSales {
-			newStock -= productStoreTemp.QuotationSalesQuantity
-			newStock += productStoreTemp.QuotationSalesReturnQuantity
-		}
+		//if store.Settings.UpdateProductStockOnQuotationSales {
+		newStock -= productStoreTemp.QuotationSalesQuantity
+		newStock += productStoreTemp.QuotationSalesReturnQuantity
+		//}
 
 		newStock += productStoreTemp.StocksAdded
 		newStock -= productStoreTemp.StocksRemoved
