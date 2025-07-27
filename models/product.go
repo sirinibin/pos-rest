@@ -3152,6 +3152,8 @@ func ProcessProducts() error {
 				continue
 			}
 
+			product.SetStock()
+
 			product.ClearStockAdjustmentHistory()
 			product.CreateStockAdjustmentHistory()
 
