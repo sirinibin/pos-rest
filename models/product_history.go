@@ -1541,11 +1541,12 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 			ReferenceType: "delivery_note",
 			ReferenceID:   &deliverynote.ID,
 			ReferenceCode: deliverynote.Code,
-			Stock:         (stock + deliverynoteProduct.Quantity),
-			Quantity:      deliverynoteProduct.Quantity,
-			Unit:          deliverynoteProduct.Unit,
-			CreatedAt:     deliverynote.CreatedAt,
-			UpdatedAt:     deliverynote.UpdatedAt,
+			//Stock:         (stock + deliverynoteProduct.Quantity),
+			Stock:     stock,
+			Quantity:  deliverynoteProduct.Quantity,
+			Unit:      deliverynoteProduct.Unit,
+			CreatedAt: deliverynote.CreatedAt,
+			UpdatedAt: deliverynote.UpdatedAt,
 		}
 
 		history.ID = primitive.NewObjectID()
@@ -1578,11 +1579,12 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 					ReferenceType: "delivery_note",
 					ReferenceID:   &deliverynote.ID,
 					ReferenceCode: deliverynote.Code,
-					Stock:         (stock + (deliverynoteProduct.Quantity * setProduct.Quantity)),
-					Quantity:      (deliverynoteProduct.Quantity * setProduct.Quantity),
-					Unit:          deliverynoteProduct.Unit,
-					CreatedAt:     deliverynote.CreatedAt,
-					UpdatedAt:     deliverynote.UpdatedAt,
+					//Stock:         (stock + (deliverynoteProduct.Quantity * setProduct.Quantity)),
+					Stock:     stock,
+					Quantity:  (deliverynoteProduct.Quantity * setProduct.Quantity),
+					Unit:      deliverynoteProduct.Unit,
+					CreatedAt: deliverynote.CreatedAt,
+					UpdatedAt: deliverynote.UpdatedAt,
 				}
 
 				history.ID = primitive.NewObjectID()
