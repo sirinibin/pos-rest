@@ -918,6 +918,11 @@ func (product *Product) CreateStockAdjustmentHistory() error {
 }
 
 func (product *Product) AdjustStockInHistoryAfter(after *time.Time) error {
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
 	histories, err := product.GetHistoriesAfter(after)
 	if err != nil {
 		return err
@@ -940,9 +945,13 @@ func (product *Product) AdjustStockInHistoryAfter(after *time.Time) error {
 		} else if history.ReferenceType == "purchase_return" {
 			newStock = stock - history.Quantity
 		} else if history.ReferenceType == "quotation_invoice" {
-			newStock = stock - history.Quantity
+			if store.Settings.UpdateProductStockOnQuotationSales {
+				newStock = stock - history.Quantity
+			}
 		} else if history.ReferenceType == "quotation_sales_return" {
-			newStock = stock + history.Quantity
+			if store.Settings.UpdateProductStockOnQuotationSales {
+				newStock = stock + history.Quantity
+			}
 		} else if history.ReferenceType == "stock_adjustment_by_adding" {
 			newStock = stock + history.Quantity
 		} else if history.ReferenceType == "stock_adjustment_by_removing" {
