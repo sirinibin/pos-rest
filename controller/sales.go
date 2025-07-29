@@ -252,97 +252,121 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	queue.Pop()
 	CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 
-	err = order.LinkQuotation()
+	order.AddPayments()
+	order.SetPaymentStatus()
+	order.Update()
+
+	go func() {
+		order.LinkQuotation()
+		order.CreateProductsSalesHistory()
+		order.SetProductsStock()
+		order.SetProductsSalesStats()
+		order.SetCustomerSalesStats()
+		order.DoAccounting()
+		go order.CreateProductsHistory()
+		go order.SetPostBalances()
+		if order.CustomerID != nil && !order.CustomerID.IsZero() {
+			customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+			if customer != nil {
+				customer.SetCreditBalance()
+			}
+		}
+		store.NotifyUsers("sales_updated")
+	}()
+
+	/*
+		err = order.LinkQuotation()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["link_quotation"] = "error linking quotation:" + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
+
+	/*
+		err = order.CreateProductsSalesHistory()
+		if err != nil {
+			response.Status = false
+			response.Errors["product"] = "Error creating products sales history: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
+
+	/*
+			err = order.AddPayments()
+			if err != nil {
+				response.Status = false
+				response.Errors["creating_payments"] = "Error creating payments: " + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			_, err = order.SetPaymentStatus()
+			if err != nil {
+				response.Status = false
+				response.Errors["order"] = "Error getting payments: " + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			err = order.Update()
+			if err != nil {
+				response.Status = false
+				response.Errors["order"] = "Error updating order: " + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			err = order.SetProductsStock()
+			if err != nil {
+				response.Status = false
+				response.Errors = make(map[string]string)
+				response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
+
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+		err = order.SetProductsSalesStats()
+		if err != nil {
+			response.Status = false
+			response.Errors["product"] = "Error setting product sales stats: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		err = order.SetCustomerSalesStats()
+		if err != nil {
+			response.Status = false
+			response.Errors["customer"] = "Error setting customer sales stats: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
+
+	/*
+		err = order.DoAccounting()
+		if err != nil {
+			response.Status = false
+			response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	*/
+
+	order, err = store.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {
 		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["link_quotation"] = "error linking quotation:" + err.Error()
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = order.CreateProductsSalesHistory()
-	if err != nil {
-		response.Status = false
-		response.Errors["product"] = "Error creating products sales history: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = order.AddPayments()
-	if err != nil {
-		response.Status = false
-		response.Errors["creating_payments"] = "Error creating payments: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	_, err = order.SetPaymentStatus()
-	if err != nil {
-		response.Status = false
-		response.Errors["order"] = "Error getting payments: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = order.Update()
-	if err != nil {
-		response.Status = false
-		response.Errors["order"] = "Error updating order: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = order.SetProductsStock()
-	if err != nil {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["remove_stock"] = "Unable to update stock:" + err.Error()
-
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = order.SetProductsSalesStats()
-	if err != nil {
-		response.Status = false
-		response.Errors["product"] = "Error setting product sales stats: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = order.SetCustomerSalesStats()
-	if err != nil {
-		response.Status = false
-		response.Errors["customer"] = "Error setting customer sales stats: " + err.Error()
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
 	response.Result = order
-
-	err = order.DoAccounting()
-	if err != nil {
-		response.Status = false
-		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	if order.CustomerID != nil && !order.CustomerID.IsZero() {
-		customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-		if customer != nil {
-			customer.SetCreditBalance()
-		}
-	}
-
-	go order.CreateProductsHistory()
-	go order.SetPostBalances()
-
-	store.NotifyUsers("sales_updated")
 
 	json.NewEncoder(w).Encode(response)
 }
