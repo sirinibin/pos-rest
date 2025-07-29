@@ -3583,12 +3583,12 @@ func sanitizeUTF8(input string) string {
 }
 
 func (product *Product) SetStock() error {
-	/*store, err := FindStoreByID(product.StoreID, bson.M{})
+	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
 		return err
-	}*/
+	}
 
-	err := product.SetProductSalesQuantityByStoreID(*product.StoreID)
+	err = product.SetProductSalesQuantityByStoreID(*product.StoreID)
 	if err != nil {
 		return err
 	}
@@ -3630,10 +3630,10 @@ func (product *Product) SetStock() error {
 		newStock -= productStoreTemp.SalesQuantity
 		newStock += productStoreTemp.SalesReturnQuantity
 
-		//if store.Settings.UpdateProductStockOnQuotationSales {
-		newStock -= productStoreTemp.QuotationSalesQuantity
-		newStock += productStoreTemp.QuotationSalesReturnQuantity
-		//}
+		if store.Settings.UpdateProductStockOnQuotationSales {
+			newStock -= productStoreTemp.QuotationSalesQuantity
+			newStock += productStoreTemp.QuotationSalesReturnQuantity
+		}
 
 		newStock += productStoreTemp.StocksAdded
 		newStock -= productStoreTemp.StocksRemoved
@@ -3650,10 +3650,10 @@ type ProductQtyStats struct {
 }
 
 func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (float64, error) {
-	/*store, err := FindStoreByID(product.StoreID, bson.M{})
+	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
 		return 0, err
-	}*/
+	}
 
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -3684,47 +3684,6 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 			}
 		}*/
 
-	/*
-		effectiveQuantityExpr := bson.M{
-			"$cond": bson.M{
-				"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase"}},
-				"then": "$quantity",
-				"else": bson.M{
-					"$cond": bson.M{
-						"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales"}},
-						"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-						"else": bson.M{
-							"$cond": bson.M{
-								"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales_return"}},
-								"then": "$quantity",
-								"else": bson.M{
-									"$cond": bson.M{
-										"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase_return"}},
-										"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-										"else": bson.M{
-											"$cond": bson.M{
-												"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
-												"then": "$quantity",
-												"else": bson.M{
-													"$cond": bson.M{
-														"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
-														"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-														"else": 0,
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}*/
-
-	// Extend logic if quotation stock setting is enabled
-	//if store.Settings.UpdateProductStockOnQuotationSales {
 	effectiveQuantityExpr := bson.M{
 		"$cond": bson.M{
 			"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase"}},
@@ -3743,21 +3702,62 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 									"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
 									"else": bson.M{
 										"$cond": bson.M{
-											"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_invoice"}},
-											"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+											"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
+											"then": "$quantity",
 											"else": bson.M{
 												"$cond": bson.M{
-													"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_sales_return"}},
-													"then": "$quantity",
-													"else": bson.M{
-														"$cond": bson.M{
-															"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
-															"then": "$quantity",
-															"else": bson.M{
-																"$cond": bson.M{
-																	"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
-																	"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-																	"else": 0,
+													"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
+													"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+													"else": 0,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Extend logic if quotation stock setting is enabled
+	if store.Settings.UpdateProductStockOnQuotationSales {
+		effectiveQuantityExpr = bson.M{
+			"$cond": bson.M{
+				"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase"}},
+				"then": "$quantity",
+				"else": bson.M{
+					"$cond": bson.M{
+						"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales"}},
+						"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+						"else": bson.M{
+							"$cond": bson.M{
+								"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales_return"}},
+								"then": "$quantity",
+								"else": bson.M{
+									"$cond": bson.M{
+										"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase_return"}},
+										"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+										"else": bson.M{
+											"$cond": bson.M{
+												"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_invoice"}},
+												"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+												"else": bson.M{
+													"$cond": bson.M{
+														"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_sales_return"}},
+														"then": "$quantity",
+														"else": bson.M{
+															"$cond": bson.M{
+																"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
+																"then": "$quantity",
+																"else": bson.M{
+																	"$cond": bson.M{
+																		"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
+																		"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+																		"else": 0,
+																	},
 																},
 															},
 														},
@@ -3772,9 +3772,8 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 					},
 				},
 			},
-		},
+		}
 	}
-	//}
 
 	pipeline := []bson.M{
 		{"$match": filter},
