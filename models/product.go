@@ -3683,25 +3683,13 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 	filter := map[string]interface{}{
 		"store_id":   product.StoreID,
 		"product_id": product.ID,
-		//"reference_type": bson.M{"$ne": "quotation"},
 	}
 
 	if toDate != nil {
 		filter["date"] = bson.M{"$lt": toDate}
 	}
 
-	/*
-		if excludeReferenceID != nil {
-			filter["reference_id"] = bson.M{"$ne": excludeReferenceID}
-		}*/
-
-	/*
-		if !store.Settings.UpdateProductStockOnQuotationSales {
-			filter["$and"] = []bson.M{
-				bson.M{"reference_type": bson.M{"$ne": "quotation_invoice"}},
-				bson.M{"reference_type": bson.M{"$ne": "quotation_sales_return"}},
-			}
-		}*/
+	cutoffDate := time.Date(2025, 7, 28, 0, 0, 0, 0, time.UTC)
 
 	effectiveQuantityExpr := bson.M{
 		"$cond": bson.M{
@@ -3721,62 +3709,43 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 									"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
 									"else": bson.M{
 										"$cond": bson.M{
-											"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
-											"then": "$quantity",
-											"else": bson.M{
+											"if": bson.M{"$eq": []interface{}{"$reference_type", "quotation_invoice"}},
+											"then": bson.M{
 												"$cond": bson.M{
-													"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
-													"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-													"else": 0,
+													"if": bson.M{
+														"$and": []interface{}{
+															bson.M{"$eq": []interface{}{store.Code, "MBDI"}},
+															bson.M{"$lt": []interface{}{"$date", cutoffDate}},
+														},
+													},
+													"then": 0,
+													"else": bson.M{"$multiply": []interface{}{"$quantity", -1}},
 												},
 											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Extend logic if quotation stock setting is enabled
-	if store.Settings.UpdateProductStockOnQuotationSales {
-		effectiveQuantityExpr = bson.M{
-			"$cond": bson.M{
-				"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase"}},
-				"then": "$quantity",
-				"else": bson.M{
-					"$cond": bson.M{
-						"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales"}},
-						"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-						"else": bson.M{
-							"$cond": bson.M{
-								"if":   bson.M{"$eq": []interface{}{"$reference_type", "sales_return"}},
-								"then": "$quantity",
-								"else": bson.M{
-									"$cond": bson.M{
-										"if":   bson.M{"$eq": []interface{}{"$reference_type", "purchase_return"}},
-										"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-										"else": bson.M{
-											"$cond": bson.M{
-												"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_invoice"}},
-												"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-												"else": bson.M{
-													"$cond": bson.M{
-														"if":   bson.M{"$eq": []interface{}{"$reference_type", "quotation_sales_return"}},
-														"then": "$quantity",
-														"else": bson.M{
-															"$cond": bson.M{
-																"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
-																"then": "$quantity",
-																"else": bson.M{
-																	"$cond": bson.M{
-																		"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
-																		"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
-																		"else": 0,
-																	},
+											"else": bson.M{
+												"$cond": bson.M{
+													"if": bson.M{"$eq": []interface{}{"$reference_type", "quotation_sales_return"}},
+													"then": bson.M{
+														"$cond": bson.M{
+															"if": bson.M{
+																"$and": []interface{}{
+																	bson.M{"$eq": []interface{}{store.Code, "MBDI"}},
+																	bson.M{"$lt": []interface{}{"$date", cutoffDate}},
+																},
+															},
+															"then": 0,
+															"else": "$quantity",
+														},
+													},
+													"else": bson.M{
+														"$cond": bson.M{
+															"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_adding"}},
+															"then": "$quantity",
+															"else": bson.M{
+																"$cond": bson.M{
+																	"if":   bson.M{"$eq": []interface{}{"$reference_type", "stock_adjustment_by_removing"}},
+																	"then": bson.M{"$multiply": []interface{}{"$quantity", -1}},
+																	"else": 0,
 																},
 															},
 														},
@@ -3791,8 +3760,7 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 					},
 				},
 			},
-		}
-	}
+		}}
 
 	pipeline := []bson.M{
 		{"$match": filter},
