@@ -3631,8 +3631,27 @@ func (product *Product) SetStock() error {
 		newStock += productStoreTemp.SalesReturnQuantity
 
 		if store.Settings.UpdateProductStockOnQuotationSales {
-			newStock -= productStoreTemp.QuotationSalesQuantity
-			newStock += productStoreTemp.QuotationSalesReturnQuantity
+
+			if store.Code == "MBDI" {
+				since := time.Date(2025, 7, 28, 0, 0, 0, 0, time.UTC)
+
+				salesQtySince, err := product.GetProductQuotationSalesQuantitySince(&since)
+				if err != nil {
+					return err
+				}
+
+				salesReturnQtySince, err := product.GetProductQuotationSalesReturnQuantitySince(&since)
+				if err != nil {
+					return err
+				}
+
+				newStock -= salesQtySince
+				newStock += salesReturnQtySince
+
+			} else {
+				newStock -= productStoreTemp.QuotationSalesQuantity
+				newStock += productStoreTemp.QuotationSalesReturnQuantity
+			}
 		}
 
 		newStock += productStoreTemp.StocksAdded

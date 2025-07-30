@@ -3085,6 +3085,51 @@ func (product *Product) SetProductQuotationSalesReturnQuantityByStoreID(storeID 
 	return nil
 }
 
+func (product *Product) GetProductQuotationSalesReturnQuantitySince(since *time.Time) (float64, error) {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_sales_return_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductQuotationSalesReturnStats
+
+	filter := map[string]interface{}{
+		"store_id":   product.StoreID,
+		"product_id": product.ID,
+	}
+
+	if since != nil {
+		filter["date"] = bson.M{"$gte": since}
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                             nil,
+				"quotation_sales_return_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return stats.QuotationSalesReturnQuantity, nil
+}
+
 func (quotationsalesReturn *QuotationSalesReturn) SetProductsQuotationSalesReturnStats() error {
 	store, err := FindStoreByID(quotationsalesReturn.StoreID, bson.M{})
 	if err != nil {

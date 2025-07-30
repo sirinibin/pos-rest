@@ -946,11 +946,15 @@ func (product *Product) AdjustStockInHistoryAfter(after *time.Time) error {
 			newStock = stock - history.Quantity
 		} else if history.ReferenceType == "quotation_invoice" {
 			if store.Settings.UpdateProductStockOnQuotationSales {
-				newStock = stock - history.Quantity
+				if store.IfStore2QuotationSalesShouldAffectTheStock(history.Date) {
+					newStock = stock - history.Quantity
+				}
 			}
 		} else if history.ReferenceType == "quotation_sales_return" {
 			if store.Settings.UpdateProductStockOnQuotationSales {
-				newStock = stock + history.Quantity
+				if store.IfStore2QuotationSalesShouldAffectTheStock(history.Date) {
+					newStock = stock + history.Quantity
+				}
 			}
 		} else if history.ReferenceType == "stock_adjustment_by_adding" {
 			newStock = stock + history.Quantity
@@ -1651,7 +1655,9 @@ func (quotation *Quotation) CreateProductsHistory() error {
 			//stock -= quotationProduct.Quantity
 
 			if store.Settings.UpdateProductStockOnQuotationSales {
-				stock -= quotationProduct.Quantity
+				if store.IfStore2QuotationSalesShouldAffectTheStock(quotation.Date) {
+					stock -= quotationProduct.Quantity
+				}
 			}
 		}
 
@@ -1707,7 +1713,9 @@ func (quotation *Quotation) CreateProductsHistory() error {
 
 				if quotation.Type == "invoice" {
 					if store.Settings.UpdateProductStockOnQuotationSales {
-						stock -= quotationProduct.Quantity
+						if store.IfStore2QuotationSalesShouldAffectTheStock(quotation.Date) {
+							stock -= quotationProduct.Quantity
+						}
 					}
 				}
 
@@ -1791,7 +1799,9 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 		}
 
 		if store.Settings.UpdateProductStockOnQuotationSales {
-			stock += quotationsalesReturnProduct.Quantity
+			if store.IfStore2QuotationSalesShouldAffectTheStock(quotationsalesReturn.Date) {
+				stock += quotationsalesReturnProduct.Quantity
+			}
 		}
 
 		history := ProductHistory{
@@ -1845,7 +1855,9 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 				}
 
 				if store.Settings.UpdateProductStockOnQuotationSales {
-					stock += quotationsalesReturnProduct.Quantity
+					if store.IfStore2QuotationSalesShouldAffectTheStock(quotationsalesReturn.Date) {
+						stock += quotationsalesReturnProduct.Quantity
+					}
 				}
 
 				history := ProductHistory{

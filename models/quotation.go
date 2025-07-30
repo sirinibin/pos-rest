@@ -128,6 +128,26 @@ type Quotation struct {
 	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
 }
 
+func (store *Store) IfStore2QuotationSalesShouldAffectTheStock(refDate *time.Time) bool {
+	//store, _ := FindStoreByID(storeID, bson.M{})
+	if store.Code != "MBDI" {
+		return true
+	}
+
+	// Target date: July 28, 2025 (midnight by default)
+	targetDate := time.Date(2025, 7, 28, 0, 0, 0, 0, time.UTC)
+	// Compare
+	if refDate.Before(targetDate) {
+		return false
+		//fmt.Println("Time is before July 28, 2025")
+	} else if refDate.After(targetDate) {
+		return true
+		//fmt.Println("Time is after July 28, 2025")
+	}
+
+	return false
+}
+
 func (product *Product) SetProductQuotationSalesQuantityByStoreID(storeID primitive.ObjectID) error {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -140,6 +160,8 @@ func (product *Product) SetProductQuotationSalesQuantityByStoreID(storeID primit
 		"product_id": product.ID,
 		"type":       "invoice",
 	}
+
+	//if Store2QuotationSalesShouldAffectTheStock()
 
 	pipeline := []bson.M{
 		bson.M{
@@ -173,6 +195,54 @@ func (product *Product) SetProductQuotationSalesQuantityByStoreID(storeID primit
 	}
 
 	return nil
+}
+
+func (product *Product) GetProductQuotationSalesQuantitySince(since *time.Time) (float64, error) {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats ProductQuotationSalesStats
+
+	filter := map[string]interface{}{
+		"store_id":   product.StoreID,
+		"product_id": product.ID,
+		"type":       "invoice",
+	}
+
+	if since != nil {
+		filter["date"] = bson.M{"$gte": since}
+	}
+
+	//if Store2QuotationSalesShouldAffectTheStock()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":                      nil,
+				"quotation_sales_quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return stats.QuotationSalesQuantity, nil
 }
 
 func (model *Quotation) SetPostBalances() error {
