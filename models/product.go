@@ -673,6 +673,18 @@ func (store *Store) GetBarTenderProducts(r *http.Request) (products []BarTenderP
 	return products, nil
 }
 
+func escapeTextSearchInput(input string) string {
+	// Replace hyphens with space to allow tokenization
+	input = strings.ReplaceAll(input, "-", " ")
+	// Remove other punctuation (optional)
+	input = strings.ReplaceAll(input, `"`, "")
+	input = strings.ReplaceAll(input, `'`, "")
+	input = strings.ReplaceAll(input, "\\", "")
+	// Trim extra spaces
+	input = strings.Join(strings.Fields(input), " ")
+	return input
+}
+
 func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadData bool) (products []Product, criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
@@ -746,7 +758,11 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
-		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
+		searchWord := strings.ToLower(keys[0])
+		searchWord = escapeTextSearchInput(searchWord)
+		//log.Print("|" + searchWord + "|")
+
+		searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
 		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
 		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
 		searchWord = strings.Replace(searchWord, "{", `\{`, -1)
@@ -3557,7 +3573,8 @@ func (product *Product) GeneratePrefixes() {
 }
 */
 
-var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
+// var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
+var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s\-]+`)
 
 func CleanString(input string) string {
 	// Replace special characters with a space
