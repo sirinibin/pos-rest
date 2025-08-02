@@ -1351,6 +1351,16 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["store_id"] = "invalid store id"
 	}
 
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_id"] = "Invalid customer"
+		return errs
+	}
+
+	if customer == nil && govalidator.IsNull(order.CustomerName) {
+		order.CustomerID = nil
+	}
+
 	if govalidator.IsNull(order.DateStr) {
 		errs["date_str"] = "Date is required"
 	} else {
@@ -1367,13 +1377,15 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(order.VatNo), "15") {
-		errs["vat_no"] = "VAT No. should be 15 digits"
-		return
-	} /*else if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(order.VatNo), "3") {
-		errs["vat_no"] = "VAT No. should start and end with 3"
-		return
-	}*/
+	if customer.CountryCode == "" || customer.CountryCode == "SA" {
+		if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(order.VatNo), "15") {
+			errs["vat_no"] = "VAT No. should be 15 digits"
+			return
+		} else if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(order.VatNo), "3") {
+			errs["vat_no"] = "VAT No. should start and end with 3"
+			return
+		}
+	}
 
 	if order.Discount < 0 {
 		errs["discount"] = "Cash discount should not be < 0"
@@ -1390,16 +1402,6 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		if payment.Amount > 0 {
 			totalPayment += payment.Amount
 		}
-	}
-
-	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		errs["customer_id"] = "Invalid customer"
-		return errs
-	}
-
-	if customer == nil && govalidator.IsNull(order.CustomerName) {
-		order.CustomerID = nil
 	}
 
 	if scenario == "update" {
