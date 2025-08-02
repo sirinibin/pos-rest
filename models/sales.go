@@ -1377,7 +1377,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return
 	}
 
-	if customer != nil && customer.CountryCode == "" || customer.CountryCode == "SA" {
+	if customer != nil && (customer.CountryCode == "" || customer.CountryCode == "SA") {
 		if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(order.VatNo), "15") {
 			errs["vat_no"] = "VAT No. should be 15 digits"
 			return
