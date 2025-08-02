@@ -1601,11 +1601,12 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsValidDigitNumber(strings.TrimSpace(customer.VATNo), "15") {
-		errs["vat_no"] = "VAT No. should be 15 digits"
-	} else if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(customer.VATNo), "3") {
-		errs["vat_no"] = "VAT No. should start and end with 3"
-	}
+	/*
+		if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsValidDigitNumber(strings.TrimSpace(customer.VATNo), "15") {
+			errs["vat_no"] = "VAT No. should be 15 digits"
+		} else if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(customer.VATNo), "3") {
+			errs["vat_no"] = "VAT No. should start and end with 3"
+		}*/
 
 	if !govalidator.IsNull(customer.RegistrationNumber) && !IsAlphanumeric(customer.RegistrationNumber) {
 		errs["registration_number"] = "Registration Number should be alpha numeric(a-zA-Z|0-9)"
