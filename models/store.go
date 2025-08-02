@@ -114,6 +114,8 @@ type StoreSettings struct {
 	HideQuotationInvoiceVAT                bool            `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
 	UpdateProductStockOnQuotationSales     bool            `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
 	EnableAutoPaymentCloseOnReturn         bool            `bson:"enable_auto_payment_close_on_return" json:"enable_auto_payment_close_on_return"`
+	EnableAutoSalesPaymentCloseOnPurchase  bool            `bson:"enable_auto_sales_payment_close_on_purchase" json:"enable_auto_sales_payment_close_on_purchase"`
+	EnableAutoPurchasePaymentCloseOnSales  bool            `bson:"enable_auto_purchase_payment_close_on_sales" json:"enable_auto_purchase_payment_close_on_sales"`
 	Invoice                                InvoiceSettings `bson:"invoice" json:"invoice"`
 }
 

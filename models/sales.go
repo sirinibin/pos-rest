@@ -1370,10 +1370,10 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(order.VatNo), "15") {
 		errs["vat_no"] = "VAT No. should be 15 digits"
 		return
-	} else if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(order.VatNo), "3") {
+	} /*else if !govalidator.IsNull(strings.TrimSpace(order.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(order.VatNo), "3") {
 		errs["vat_no"] = "VAT No. should start and end with 3"
 		return
-	}
+	}*/
 
 	if order.Discount < 0 {
 		errs["discount"] = "Cash discount should not be < 0"
