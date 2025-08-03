@@ -3675,6 +3675,7 @@ func (customer *Customer) GetPendingSales() (sales []Order, err error) {
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("order")
 	ctx := context.Background()
 	findOptions := options.Find()
+	findOptions.SetSort(map[string]interface{}{"created_at": -1})
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
