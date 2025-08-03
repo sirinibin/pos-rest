@@ -146,6 +146,187 @@ type ZatcaReporting struct {
 	ReportingLastFailedAt              *time.Time `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
 }
 
+func (vendor *Vendor) GetPendingPurchases() (purchases []Purchase, err error) {
+	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("purchase")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{
+		"balance_amount": bson.M{"$gt": 0},
+		"vendor_id":      vendor.ID,
+	}, findOptions)
+	if err != nil {
+		return nil, errors.New("Error fetching pending vendor purchases:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return nil, errors.New("Cursor error:" + err.Error())
+		}
+		model := Purchase{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return nil, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		purchases = append(purchases, model)
+
+	}
+
+	return purchases, nil
+}
+
+func (order *Order) ClosePurchasePayment() error {
+	if order.PaymentStatus == "paid" || order.BalanceAmount == 0 {
+		return nil
+	}
+
+	store, err := FindStoreByID(order.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if !store.Settings.EnableAutoPurchasePaymentCloseOnSales {
+		return nil
+	}
+
+	if order.CustomerID == nil || order.CustomerID.IsZero() {
+		return nil
+	}
+
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer == nil {
+		return nil
+	}
+
+	if strings.TrimSpace(customer.VATNo) == "" {
+		return nil
+	}
+
+	vendor, err := store.FindVendorByNameByVatNo(customer.Name, customer.VATNo, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendor == nil {
+		return nil
+	}
+
+	pendingPurchases, err := vendor.GetPendingPurchases()
+	if err != nil {
+		return err
+	}
+
+	salesBalanceAmount := order.BalanceAmount
+
+	amountToSettle := float64(0.00)
+
+	for _, pendingPurchase := range pendingPurchases {
+		if pendingPurchase.BalanceAmount > salesBalanceAmount {
+			amountToSettle = salesBalanceAmount
+			salesBalanceAmount = float64(0.00)
+		} else {
+			amountToSettle = pendingPurchase.BalanceAmount
+			salesBalanceAmount -= amountToSettle
+		}
+
+		//make payments and change payement status
+
+		now := time.Now()
+		//Add payment to purchase
+		newPurchasePayment := PurchasePayment{
+			Date:          &now,
+			PurchaseID:    &pendingPurchase.ID,
+			PurchaseCode:  pendingPurchase.Code,
+			Amount:        amountToSettle,
+			Method:        "vendor_account",
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       order.StoreID,
+			CreatedBy:     order.UpdatedBy,
+			UpdatedBy:     order.UpdatedBy,
+			CreatedByName: order.UpdatedByName,
+			UpdatedByName: order.UpdatedByName,
+		}
+		err = newPurchasePayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		pendingPurchase.Payments = append(pendingPurchase.Payments, newPurchasePayment)
+
+		err = pendingPurchase.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = pendingPurchase.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = pendingPurchase.Update()
+		if err != nil {
+			return err
+		}
+
+		//Add payment to sales
+		newSalesPayment := SalesPayment{
+			Date:          &now,
+			OrderID:       &order.ID,
+			OrderCode:     order.Code,
+			Amount:        amountToSettle,
+			Method:        "customer_account",
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       order.StoreID,
+			CreatedBy:     order.UpdatedBy,
+			UpdatedBy:     order.UpdatedBy,
+			CreatedByName: order.UpdatedByName,
+			UpdatedByName: order.UpdatedByName,
+		}
+		err = newSalesPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		order.Payments = append(order.Payments, newSalesPayment)
+
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = order.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = order.Update()
+		if err != nil {
+			return err
+		}
+
+		if salesBalanceAmount > 0 {
+			continue
+		} else {
+			break
+		}
+	}
+
+	return nil
+}
+
 func (order *Order) LinkQuotation() error {
 	store, _ := FindStoreByID(order.StoreID, bson.M{})
 

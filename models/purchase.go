@@ -1555,55 +1555,56 @@ func (purchase *Purchase) Validate(
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		if payment.Method == "vendor_account" && vendor != nil {
-			totalAmountFromVendorAccount += payment.Amount
-			log.Print("Checking vendor account Balance")
+		/*
+			if payment.Method == "vendor_account" && vendor != nil {
+				totalAmountFromVendorAccount += payment.Amount
+				log.Print("Checking vendor account Balance")
 
-			if vendorAccount != nil {
-				if scenario == "update" {
-					extraAmount := 0.00
-					var oldPurchasePayment *PurchasePayment
-					oldPurchase.SetPaymentStatus()
-					for _, oldPayment := range oldPurchase.Payments {
-						if oldPayment.ID.Hex() == payment.ID.Hex() {
-							oldPurchasePayment = &oldPayment
-							break
+				if vendorAccount != nil {
+					if scenario == "update" {
+						extraAmount := 0.00
+						var oldPurchasePayment *PurchasePayment
+						oldPurchase.SetPaymentStatus()
+						for _, oldPayment := range oldPurchase.Payments {
+							if oldPayment.ID.Hex() == payment.ID.Hex() {
+								oldPurchasePayment = &oldPayment
+								break
+							}
 						}
-					}
 
-					if oldPurchasePayment != nil && oldPurchasePayment.Amount < payment.Amount {
-						extraAmount = payment.Amount - oldPurchasePayment.Amount
-					} else if oldPurchasePayment == nil {
-						//New payment added
-						extraAmount = payment.Amount
+						if oldPurchasePayment != nil && oldPurchasePayment.Amount < payment.Amount {
+							extraAmount = payment.Amount - oldPurchasePayment.Amount
+						} else if oldPurchasePayment == nil {
+							//New payment added
+							extraAmount = payment.Amount
+						} else {
+							log.Print("payment amount not increased")
+						}
+
+						if extraAmount > 0 {
+							if vendorAccount.Balance == 0 {
+								errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmount)) + " to vendor account to continue"
+							} else if vendorAccount.Type == "liability" {
+								errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
+							} else if vendorAccount.Type == "asset" && vendorAccount.Balance < extraAmount {
+								errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
+							}
+						}
+
 					} else {
-						log.Print("payment amount not increased")
-					}
-
-					if extraAmount > 0 {
 						if vendorAccount.Balance == 0 {
-							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmount)) + " to vendor account to continue"
+							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (payment.Amount)) + " to vendor account to continue"
 						} else if vendorAccount.Type == "liability" {
-							errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
-						} else if vendorAccount.Type == "asset" && vendorAccount.Balance < extraAmount {
-							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
+							errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
+						} else if vendorAccount.Type == "asset" && vendorAccount.Balance < payment.Amount {
+							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
 						}
 					}
 
 				} else {
-					if vendorAccount.Balance == 0 {
-						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (payment.Amount)) + " to vendor account to continue"
-					} else if vendorAccount.Type == "liability" {
-						errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
-					} else if vendorAccount.Type == "asset" && vendorAccount.Balance < payment.Amount {
-						errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
-					}
+					errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero"
 				}
-
-			} else {
-				errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero"
-			}
-		}
+			}*/
 	} //end for
 
 	if totalAmountFromVendorAccount > 0 {
@@ -3670,7 +3671,47 @@ func (purchase *Purchase) UndoAccounting() error {
 	return nil
 }
 
+func (customer *Customer) GetPendingSales() (sales []Order, err error) {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("order")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{
+		"balance_amount": bson.M{"$gt": 0},
+		"customer_id":    customer.ID,
+	}, findOptions)
+	if err != nil {
+		return nil, errors.New("Error fetching pending customer sales:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return nil, errors.New("Cursor error:" + err.Error())
+		}
+		model := Order{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return nil, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		sales = append(sales, model)
+
+	}
+
+	return sales, nil
+}
+
 func (purchase *Purchase) CloseSalesPayment() error {
+	if purchase.PaymentStatus == "paid" || purchase.BalanceAmount == 0 {
+		return nil
+	}
+
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -3693,6 +3734,10 @@ func (purchase *Purchase) CloseSalesPayment() error {
 		return nil
 	}
 
+	if strings.TrimSpace(vendor.VATNo) == "" {
+		return nil
+	}
+
 	customer, err := store.FindCustomerByNameByVatNo(vendor.Name, vendor.VATNo, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
@@ -3702,90 +3747,107 @@ func (purchase *Purchase) CloseSalesPayment() error {
 		return nil
 	}
 
-	/*
-		order, err := store.FindOrderByID(salesReturn.OrderID, bson.M{})
+	pendingSales, err := customer.GetPendingSales()
+	if err != nil {
+		return err
+	}
+
+	purchaseBalanceAmount := purchase.BalanceAmount
+
+	amountToSettle := float64(0.00)
+
+	for _, pendingSale := range pendingSales {
+		if pendingSale.BalanceAmount > purchaseBalanceAmount {
+			amountToSettle = purchaseBalanceAmount
+			purchaseBalanceAmount = float64(0.00)
+		} else {
+			amountToSettle = pendingSale.BalanceAmount
+			purchaseBalanceAmount -= amountToSettle
+		}
+
+		//make payments and change payement status
+
+		now := time.Now()
+		//Add payment to sales
+		newSalesPayment := SalesPayment{
+			Date:          &now,
+			OrderID:       &pendingSale.ID,
+			OrderCode:     pendingSale.Code,
+			Amount:        amountToSettle,
+			Method:        "customer_account",
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       purchase.StoreID,
+			CreatedBy:     purchase.UpdatedBy,
+			UpdatedBy:     purchase.UpdatedBy,
+			CreatedByName: purchase.UpdatedByName,
+			UpdatedByName: purchase.UpdatedByName,
+		}
+		err = newSalesPayment.Insert()
 		if err != nil {
 			return err
 		}
 
-		if order.PaymentStatus != "paid" && salesReturn.PaymentStatus != "paid" {
-			newSalesPayment := SalesPayment{
-				Date:          salesReturn.Date,
-				OrderID:       &order.ID,
-				OrderCode:     order.Code,
-				Amount:        salesReturn.BalanceAmount,
-				Method:        "customer_account",
-				CreatedAt:     salesReturn.CreatedAt,
-				UpdatedAt:     salesReturn.UpdatedAt,
-				StoreID:       salesReturn.StoreID,
-				CreatedBy:     salesReturn.CreatedBy,
-				UpdatedBy:     salesReturn.UpdatedBy,
-				CreatedByName: salesReturn.CreatedByName,
-				UpdatedByName: salesReturn.UpdatedByName,
-			}
-			err = newSalesPayment.Insert()
-			if err != nil {
-				return err
-			}
+		pendingSale.Payments = append(pendingSale.Payments, newSalesPayment)
 
-			order.Payments = append(order.Payments, newSalesPayment)
+		err = pendingSale.Update()
+		if err != nil {
+			return err
+		}
 
-			err = order.Update()
-			if err != nil {
-				return err
-			}
+		_, err = pendingSale.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
 
-			_, err = order.SetPaymentStatus()
-			if err != nil {
-				return err
-			}
+		err = pendingSale.Update()
+		if err != nil {
+			return err
+		}
 
-			err = order.Update()
-			if err != nil {
-				return err
-			}
+		//Add payment to purchase
+		newPurchasePayment := PurchasePayment{
+			Date:          &now,
+			PurchaseID:    &purchase.ID,
+			PurchaseCode:  purchase.Code,
+			Amount:        amountToSettle,
+			Method:        "vendor_account",
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       purchase.StoreID,
+			CreatedBy:     purchase.UpdatedBy,
+			UpdatedBy:     purchase.UpdatedBy,
+			CreatedByName: purchase.UpdatedByName,
+			UpdatedByName: purchase.UpdatedByName,
+		}
+		err = newPurchasePayment.Insert()
+		if err != nil {
+			return err
+		}
 
-			//Sales Return
-			newSalesReturnPayment := SalesReturnPayment{
-				Date:            salesReturn.Date,
-				SalesReturnID:   &salesReturn.ID,
-				SalesReturnCode: salesReturn.Code,
-				OrderID:         &order.ID,
-				OrderCode:       order.Code,
-				Amount:          salesReturn.BalanceAmount,
-				Method:          "customer_account",
-				CreatedAt:       salesReturn.CreatedAt,
-				UpdatedAt:       salesReturn.UpdatedAt,
-				StoreID:         salesReturn.StoreID,
-				CreatedBy:       salesReturn.CreatedBy,
-				UpdatedBy:       salesReturn.UpdatedBy,
-				CreatedByName:   salesReturn.CreatedByName,
-				UpdatedByName:   salesReturn.UpdatedByName,
-			}
-			err = newSalesReturnPayment.Insert()
-			if err != nil {
-				return err
-			}
+		purchase.Payments = append(purchase.Payments, newPurchasePayment)
 
-			salesReturn.Payments = append(salesReturn.Payments, newSalesReturnPayment)
+		err = purchase.Update()
+		if err != nil {
+			return err
+		}
 
-			err = salesReturn.Update()
-			if err != nil {
-				return err
-			}
+		_, err = purchase.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
 
-			_, err = salesReturn.SetPaymentStatus()
-			if err != nil {
-				return err
-			}
+		err = purchase.Update()
+		if err != nil {
+			return err
+		}
 
-			err = salesReturn.Update()
-			if err != nil {
-				return err
-			}
-
-
-		}*/
+		if purchaseBalanceAmount > 0 {
+			continue
+		} else {
+			break
+		}
+	}
 
 	return nil
 }

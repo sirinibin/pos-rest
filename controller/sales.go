@@ -365,6 +365,15 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = order.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = order
 
@@ -657,6 +666,15 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}*/
+
+	err = order.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	store.NotifyUsers("sales_updated")
 	response.Status = true
