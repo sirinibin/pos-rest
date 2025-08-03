@@ -1016,7 +1016,7 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(vendor.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(vendor.Phone)) {
-		errs["phone"] = "Invalid phone no."
+		//errs["phone"] = "Invalid phone no."
 	} else if !govalidator.IsNull(strings.TrimSpace(vendor.Phone)) {
 
 		if strings.HasPrefix(vendor.Phone, "+966") {
