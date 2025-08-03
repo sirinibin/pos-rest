@@ -116,6 +116,7 @@ type StoreSettings struct {
 	EnableAutoPaymentCloseOnReturn         bool            `bson:"enable_auto_payment_close_on_return" json:"enable_auto_payment_close_on_return"`
 	EnableAutoSalesPaymentCloseOnPurchase  bool            `bson:"enable_auto_sales_payment_close_on_purchase" json:"enable_auto_sales_payment_close_on_purchase"`
 	EnableAutoPurchasePaymentCloseOnSales  bool            `bson:"enable_auto_purchase_payment_close_on_sales" json:"enable_auto_purchase_payment_close_on_sales"`
+	DisablePurchasesOnAccounts             bool            `bson:"disable_purchases_on_accounts" json:"disable_purchases_on_accounts"`
 	Invoice                                InvoiceSettings `bson:"invoice" json:"invoice"`
 }
 

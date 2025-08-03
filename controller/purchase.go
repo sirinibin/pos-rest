@@ -250,22 +250,28 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	purchase.SetVendorPurchaseStats()
 
-	err = purchase.DoAccounting()
-	if err != nil {
-		response.Status = false
-		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	if !store.Settings.DisablePurchasesOnAccounts {
+		err = purchase.DoAccounting()
+		if err != nil {
+			response.Status = false
+			response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
 		if vendor != nil {
-			vendor.SetCreditBalance()
+			if !store.Settings.DisablePurchasesOnAccounts {
+				vendor.SetCreditBalance()
+			}
 		}
 	}
 
-	go purchase.SetPostBalances()
+	if !store.Settings.DisablePurchasesOnAccounts {
+		go purchase.SetPostBalances()
+	}
 
 	go purchase.CreateProductsHistory()
 
@@ -443,20 +449,22 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchaseOld.SetProductsPurchaseStats()
 	purchase.SetVendorPurchaseStats()
 
-	err = purchase.UndoAccounting()
-	if err != nil {
-		response.Status = false
-		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	if !store.Settings.DisablePurchasesOnAccounts {
+		err = purchase.UndoAccounting()
+		if err != nil {
+			response.Status = false
+			response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 
-	err = purchase.DoAccounting()
-	if err != nil {
-		response.Status = false
-		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+		err = purchase.DoAccounting()
+		if err != nil {
+			response.Status = false
+			response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	purchase, err = store.FindPurchaseByID(&purchase.ID, bson.M{})
@@ -470,20 +478,26 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
 		if vendor != nil {
-			vendor.SetCreditBalance()
+			if !store.Settings.DisablePurchasesOnAccounts {
+				vendor.SetCreditBalance()
+			}
 		}
 	}
 
 	if purchaseOld.VendorID != nil && !purchaseOld.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchaseOld.VendorID, bson.M{})
 		if vendor != nil {
-			vendor.SetCreditBalance()
+			if !store.Settings.DisablePurchasesOnAccounts {
+				vendor.SetCreditBalance()
+			}
 			purchaseOld.SetVendorPurchaseStats()
 		}
 		purchaseOld.SetProductsPurchaseStats()
 	}
 
-	go purchase.SetPostBalances()
+	if !store.Settings.DisablePurchasesOnAccounts {
+		go purchase.SetPostBalances()
+	}
 
 	go func() {
 		purchase.ClearProductsHistory()
