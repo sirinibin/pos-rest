@@ -150,7 +150,7 @@ func (vendor *Vendor) GetPendingPurchases() (purchases []Purchase, err error) {
 	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("purchase")
 	ctx := context.Background()
 	findOptions := options.Find()
-	findOptions.SetSort(map[string]interface{}{"created_at": -1})
+	findOptions.SetSort(map[string]interface{}{"created_at": 1})
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
 
