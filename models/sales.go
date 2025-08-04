@@ -157,6 +157,7 @@ func (vendor *Vendor) GetPendingPurchases() (purchases []Purchase, err error) {
 	cur, err := collection.Find(ctx, bson.M{
 		"balance_amount": bson.M{"$gt": 0},
 		"vendor_id":      vendor.ID,
+		"payment_status": bson.M{"$ne": "paid"},
 	}, findOptions)
 	if err != nil {
 		return nil, errors.New("Error fetching pending vendor purchases:" + err.Error())
