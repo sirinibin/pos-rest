@@ -282,6 +282,11 @@ func (order *Order) ClosePurchasePayment() error {
 			return err
 		}
 
+		err = pendingPurchase.SetVendorPurchaseStats()
+		if err != nil {
+			return err
+		}
+
 		//Add payment to sales
 		newSalesPayment := SalesPayment{
 			Date:          &now,

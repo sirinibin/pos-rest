@@ -3807,6 +3807,11 @@ func (purchase *Purchase) CloseSalesPayment() error {
 			return err
 		}
 
+		err = pendingSale.SetCustomerSalesStats()
+		if err != nil {
+			return err
+		}
+
 		//Add payment to purchase
 		newPurchasePayment := PurchasePayment{
 			Date:          &now,
