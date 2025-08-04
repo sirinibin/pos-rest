@@ -246,6 +246,15 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = purchase.CloseSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	purchase.SetProductsPurchaseStats()
 
 	purchase.SetVendorPurchaseStats()
@@ -274,15 +283,6 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go purchase.CreateProductsHistory()
-
-	err = purchase.CloseSalesPayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
 	store.NotifyUsers("purchase_updated")
 	response.Status = true
@@ -454,6 +454,15 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = purchase.CloseSalesPayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	purchase.SetProductsPurchaseStats()
 	purchaseOld.SetProductsPurchaseStats()
 	purchase.SetVendorPurchaseStats()
@@ -512,15 +521,6 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		purchase.ClearProductsHistory()
 		purchase.CreateProductsHistory()
 	}()
-
-	err = purchase.CloseSalesPayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_sales_payment"] = "error closing sales payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
 	store.NotifyUsers("purchase_updated")
 	response.Status = true

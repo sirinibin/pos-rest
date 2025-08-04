@@ -256,6 +256,15 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.SetPaymentStatus()
 	order.Update()
 
+	err = order.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	go func() {
 		order.LinkQuotation()
 		order.CreateProductsSalesHistory()
@@ -361,15 +370,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = order.ClosePurchasePayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -586,6 +586,15 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = order.ClosePurchasePayment()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	order.SetProductsSalesStats()
 	orderOld.SetProductsSalesStats()
 	order.SetCustomerSalesStats()
@@ -666,15 +675,6 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}*/
-
-	err = order.ClosePurchasePayment()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		response.Status = false
-		response.Errors["closing_purchase_payment"] = "error closing purchase payment: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
 	store.NotifyUsers("sales_updated")
 	response.Status = true
