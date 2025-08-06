@@ -32,20 +32,23 @@ type Post struct {
 
 // Account : Account structure
 type Posting struct {
-	ID             primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date           *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	StoreID        *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	AccountID      primitive.ObjectID  `json:"account_id,omitempty" bson:"account_id,omitempty"`
-	AccountName    string              `json:"account_name,omitempty" bson:"account_name,omitempty"`
-	AccountNumber  string              `bson:"account_number,omitempty" json:"account_number,omitempty"`
-	ReferenceID    primitive.ObjectID  `json:"reference_id,omitempty" bson:"reference_id,omitempty"`
-	ReferenceModel string              `bson:"reference_model,omitempty" json:"reference_model,omitempty"`
-	ReferenceCode  string              `bson:"reference_code,omitempty" json:"reference_code,omitempty"`
-	Posts          []Post              `json:"posts,omitempty" bson:"posts,omitempty"`
-	DebitTotal     float64             `bson:"debit_total" json:"debit_total"`
-	CreditTotal    float64             `bson:"credit_total" json:"credit_total"`
-	CreatedAt      *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt      *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	AccountID       primitive.ObjectID  `json:"account_id,omitempty" bson:"account_id,omitempty"`
+	AccountName     string              `json:"account_name,omitempty" bson:"account_name,omitempty"`
+	AccountNumber   string              `bson:"account_number,omitempty" json:"account_number,omitempty"`
+	ReferenceID     primitive.ObjectID  `json:"reference_id,omitempty" bson:"reference_id,omitempty"`
+	ReferenceModel  string              `bson:"reference_model,omitempty" json:"reference_model,omitempty"`
+	ReferenceCode   string              `bson:"reference_code,omitempty" json:"reference_code,omitempty"`
+	Reference2ID    primitive.ObjectID  `json:"reference2_id,omitempty" bson:"reference2_id,omitempty"`
+	Reference2Model string              `bson:"reference2_model,omitempty" json:"reference2_model,omitempty"`
+	Reference2Code  string              `bson:"reference2_code,omitempty" json:"reference2_code,omitempty"`
+	Posts           []Post              `json:"posts,omitempty" bson:"posts,omitempty"`
+	DebitTotal      float64             `bson:"debit_total" json:"debit_total"`
+	CreditTotal     float64             `bson:"credit_total" json:"credit_total"`
+	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 type PostingListStats struct {

@@ -28,6 +28,9 @@ type SalesReturnPayment struct {
 	OrderCode        string              `json:"order_code" bson:"order_code"`
 	Amount           float64             `json:"amount" bson:"amount"`
 	Method           string              `json:"method" bson:"method"`
+	ReferenceType    string              `json:"reference_type" bson:"reference_type"`
+	ReferenceCode    string              `json:"reference_code" bson:"reference_code"`
+	ReferenceID      *primitive.ObjectID `json:"reference_id" bson:"reference_id"`
 	CreatedAt        *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt        *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy        *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`

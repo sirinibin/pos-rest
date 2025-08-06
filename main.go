@@ -216,6 +216,8 @@ func main() {
 	router.HandleFunc("/v1/purchase/history", controller.ListPurchaseHistory).Methods("GET")
 	//PurchaseReturnHistory
 	router.HandleFunc("/v1/purchase-return/history", controller.ListPurchaseReturnHistory).Methods("GET")
+	//upload image
+	router.HandleFunc("/v1/purchase/upload/image", controller.ParsePurchaseBill).Methods("POST")
 
 	//SalesReturn
 	router.HandleFunc("/v1/sales-return", controller.CreateSalesReturn).Methods("POST")
