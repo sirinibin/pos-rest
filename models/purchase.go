@@ -23,16 +23,16 @@ import (
 
 type PurchaseProduct struct {
 	ProductID                  primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name                       string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic               string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode                   string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	Name                       string             `bson:"name" json:"name"`
+	NameInArabic               string             `bson:"name_in_arabic" json:"name_in_arabic"`
+	ItemCode                   string             `bson:"item_code" json:"item_code"`
 	PrefixPartNumber           string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber                 string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity                   float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	PartNumber                 string             `bson:"part_number" json:"part_number"`
+	Quantity                   float64            `json:"quantity" bson:"quantity"`
 	QuantityReturned           float64            `json:"quantity_returned" bson:"quantity_returned"`
-	Unit                       string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	PurchaseUnitPrice          float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
+	Unit                       string             `bson:"unit" json:"unit"`
+	PurchaseUnitPrice          float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
+	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
 	RetailUnitPrice            float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
 	RetailUnitPriceWithVAT     float64            `bson:"retail_unit_price_with_vat,omitempty" json:"retail_unit_price_with_vat,omitempty"`
 	WholesaleUnitPrice         float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
