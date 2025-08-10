@@ -964,49 +964,90 @@ func SetAccountBalances(accounts map[string]Account) error {
 	return nil
 }
 
-func (store *Store) ProcessAccounts() error {
+func ProcessAccounts() error {
 	log.Print("Processing accounts")
-	totalCount, err := store.GetTotalCount(bson.M{}, "account")
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
 
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching accounts" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		model := Account{}
-		err = cur.Decode(&model)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
-		}
-
-		if model.ReferenceModel != nil && *model.ReferenceModel == "expense_category" {
-			model.Type = "expense"
-		}
-
-		err = model.Update()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "account")
 		if err != nil {
 			return err
 		}
 
-		bar.Add(1)
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching accounts" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			model := Account{}
+			err = cur.Decode(&model)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if model.ReferenceModel != nil && *model.ReferenceModel == "customer" && model.ReferenceID != nil && model.Open {
+				customer, err := store.FindCustomerByID(model.ReferenceID, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
+
+				if customer == nil {
+					continue
+				}
+
+				customer.Account = &model
+				err = customer.Update()
+				if err != nil {
+					return err
+				}
+			}
+
+			if model.ReferenceModel != nil && *model.ReferenceModel == "vendor" && model.ReferenceID != nil && model.Open {
+				vendor, err := store.FindVendorByID(model.ReferenceID, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
+
+				if vendor == nil {
+					continue
+				}
+
+				vendor.Account = &model
+				err = vendor.Update()
+				if err != nil {
+					return err
+				}
+			}
+			/*
+				if model.ReferenceModel != nil && *model.ReferenceModel == "expense_category" {
+					model.Type = "expense"
+				}
+
+				err = model.Update()
+				if err != nil {
+					return err
+				}*/
+
+			bar.Add(1)
+		}
 	}
 	log.Print("Accounts DONE!")
 	return nil
