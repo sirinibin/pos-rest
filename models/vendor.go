@@ -1270,7 +1270,7 @@ func (vendor *Vendor) SaveLogoFile() error {
 }
 
 func (vendor *Vendor) Update() error {
-	if vendor.StoreID == nil {
+	if vendor.StoreID == nil || vendor.StoreID.IsZero() {
 		return nil
 	}
 
