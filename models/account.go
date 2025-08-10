@@ -27,6 +27,7 @@ type Account struct {
 	Type                 string              `bson:"type,omitempty" json:"type,omitempty"` //drawing,expense,asset,liability,equity,revenue
 	Number               string              `bson:"number,omitempty" json:"number,omitempty"`
 	Name                 string              `bson:"name,omitempty" json:"name,omitempty"`
+	NameArabic           string              `bson:"name_arabic,omitempty" json:"name_arabic,omitempty"`
 	Phone                *string             `bson:"phone,omitempty" json:"phone,omitempty"`
 	VatNo                *string             `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
 	Balance              float64             `bson:"balance" json:"balance"`
@@ -241,7 +242,12 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 
 	keys, ok = r.URL.Query()["search[name]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"name_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+
+		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[search]"]
@@ -1036,6 +1042,13 @@ func ProcessAccounts() error {
 				if err != nil {
 					return err
 				}
+
+				model.Name = customer.Name
+				model.NameArabic = customer.NameInArabic
+				err = model.Update()
+				if err != nil {
+					return err
+				}
 			}
 
 			if model.ReferenceModel != nil && *model.ReferenceModel == "vendor" && model.ReferenceID != nil && model.Open {
@@ -1050,6 +1063,14 @@ func ProcessAccounts() error {
 
 				vendor.Account = &model
 				err = vendor.Update()
+				if err != nil {
+					return err
+				}
+
+				model.Name = vendor.Name
+				model.NameArabic = vendor.NameInArabic
+
+				err = model.Update()
 				if err != nil {
 					return err
 				}

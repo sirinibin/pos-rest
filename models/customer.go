@@ -298,9 +298,39 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		}
 
 		err = store.UpdateManyByCollectionName(
+			"sales_return",
+			bson.M{"customer_id": customer.ID},
+			bson.M{"customer_name": customer.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
 			"quotation",
 			bson.M{"customer_id": customer.ID},
 			bson.M{"customer_name": customer.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"quotation_sales_return",
+			bson.M{"customer_id": customer.ID},
+			bson.M{"customer_name": customer.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"account",
+			bson.M{"reference_id": customer.ID},
+			bson.M{
+				"name":        customer.Name,
+				"name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil

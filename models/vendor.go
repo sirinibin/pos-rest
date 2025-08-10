@@ -232,8 +232,43 @@ func (vendor *Vendor) SetCreditBalance() error {
 //Stores2                    []VendorStore          `bson:"stores,omitempty" json:"stores,omitempty"`
 
 func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
+	store, err := FindStoreByID(vendor.StoreID, bson.M{})
+	if err != nil {
+		return nil
+	}
 
 	if vendor.Name != vendorOld.Name {
+
+		err := store.UpdateManyByCollectionName(
+			"purchase",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{"vendor_name": vendor.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"purchase_return",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{"vendor_name": vendor.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"account",
+			bson.M{"reference_id": vendor.ID},
+			bson.M{
+				"name":        vendor.Name,
+				"name_arabic": vendor.NameInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
 		/*
 			usedInCollections := []string{
 				"purchase",
