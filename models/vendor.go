@@ -1270,6 +1270,10 @@ func (vendor *Vendor) SaveLogoFile() error {
 }
 
 func (vendor *Vendor) Update() error {
+	if vendor.StoreID == nil {
+		return nil
+	}
+
 	collection := db.GetDB("store_" + vendor.StoreID.Hex()).Collection("vendor")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
