@@ -725,11 +725,29 @@ func (store *Store) FindAccountByReferenceID(
 		findOneOptions.SetProjection(selectFields)
 	}
 
-	err = collection.FindOne(ctx,
-		bson.M{
+	totalCount, err := store.GetTotalCount(bson.M{
+		"reference_id": referenceID,
+		"store_id":     store.ID,
+	}, "account")
+	if err != nil {
+		return nil, err
+	}
+
+	criteria := bson.M{
+		"reference_id": referenceID,
+		"store_id":     store.ID,
+	}
+
+	if totalCount > 1 {
+		criteria = bson.M{
 			"reference_id": referenceID,
 			"store_id":     store.ID,
-		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+			"open":         true,
+		}
+	}
+
+	err = collection.FindOne(ctx,
+		criteria, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
 	if err != nil {
 		return nil, err
