@@ -237,7 +237,7 @@ func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 		return nil
 	}
 
-	if vendor.Name != vendorOld.Name {
+	if vendor.Name != vendorOld.Name || vendor.NameInArabic != vendorOld.NameInArabic {
 
 		err := store.UpdateManyByCollectionName(
 			"purchase",

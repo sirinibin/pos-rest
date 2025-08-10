@@ -15,7 +15,6 @@ import (
 	"github.com/sirinibin/pos-rest/controller"
 	"github.com/sirinibin/pos-rest/db"
 	"github.com/sirinibin/pos-rest/env"
-	"github.com/sirinibin/pos-rest/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -322,6 +321,8 @@ func main() {
 	//Accounts
 	router.HandleFunc("/v1/account", controller.ListAccounts).Methods("GET")
 	router.HandleFunc("/v1/account/{id}", controller.ViewAccount).Methods("GET")
+	router.HandleFunc("/v1/account/{id}", controller.DeleteAccount).Methods("DELETE")
+	router.HandleFunc("/v1/account/restore/{id}", controller.RestoreAccount).Methods("POST")
 	//Postings
 	router.HandleFunc("/v1/posting", controller.ListPostings).Methods("GET")
 
@@ -437,10 +438,11 @@ func ListAllIndexes(collectionName string) {
 
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
-	err := models.ProcessAccounts()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessAccounts()
+		if err != nil {
+			log.Print(err)
+		}*/
 
 	/*
 		err := models.ProcessProducts()

@@ -2708,8 +2708,17 @@ func ProcessSalesReturns() error {
 				continue
 			}
 
-			salesReturn.ClearProductsHistory()
-			salesReturn.CreateProductsHistory()
+			salesReturn.UndoAccounting()
+			salesReturn.DoAccounting()
+			if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
+				customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
+				if customer != nil {
+					customer.SetCreditBalance()
+				}
+			}
+
+			//salesReturn.ClearProductsHistory()
+			//salesReturn.CreateProductsHistory()
 
 			/*
 				if store.Code == "MBDI" || store.Code == "LGK" {

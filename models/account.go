@@ -38,6 +38,7 @@ type Account struct {
 	SearchLabel          string              `json:"search_label"`
 	CreatedAt            *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt            *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	Deleted              bool                `bson:"deleted" json:"deleted"`
 }
 
 type AccountStats struct {
@@ -202,6 +203,18 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 	if ok && len(keys[0]) >= 1 {
 		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
 			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return models, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
 		}
 	}
 
@@ -734,6 +747,7 @@ func (store *Store) FindAccountByReferenceID(
 	totalCount, err := store.GetTotalCount(bson.M{
 		"reference_id": referenceID,
 		"store_id":     store.ID,
+		"deleted":      bson.M{"$ne": true},
 	}, "account")
 	if err != nil {
 		return nil, err
@@ -742,6 +756,7 @@ func (store *Store) FindAccountByReferenceID(
 	criteria := bson.M{
 		"reference_id": referenceID,
 		"store_id":     store.ID,
+		"deleted":      bson.M{"$ne": true},
 	}
 
 	if totalCount > 1 {
@@ -749,6 +764,7 @@ func (store *Store) FindAccountByReferenceID(
 			"reference_id": referenceID,
 			"store_id":     store.ID,
 			"open":         true,
+			"deleted":      bson.M{"$ne": true},
 		}
 	}
 
@@ -783,9 +799,10 @@ func (store *Store) FindAccountByReferenceIDByName(
 			"reference_id": referenceID,
 			"name":         name,
 			"store_id":     store.ID,
+			"deleted":      bson.M{"$ne": true},
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -812,9 +829,10 @@ func (store *Store) FindAccountByPhoneByName(
 			"phone":    phone,
 			"name":     name,
 			"store_id": storeID,
+			"deleted":  bson.M{"$ne": true},
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -841,9 +859,10 @@ func (store *Store) FindAccountByVatNoByName(
 			"vat_no":   vatNo,
 			"name":     name,
 			"store_id": storeID,
+			"deleted":  bson.M{"$ne": true},
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -869,9 +888,10 @@ func (store *Store) FindAccountByVatNo(
 			"vat_no": vatNo,
 			//"name":     name,
 			"store_id": storeID,
+			"deleted":  bson.M{"$ne": true},
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -896,9 +916,10 @@ func (store *Store) FindAccountByPhone(
 		bson.M{
 			"phone":    phone,
 			"store_id": storeID,
+			"deleted":  bson.M{"$ne": true},
 		}, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -923,6 +944,7 @@ func (store *Store) FindAccountByName(
 	filter := bson.M{
 		"name":     name,
 		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
 	}
 
 	if referenceID != nil {
@@ -931,7 +953,7 @@ func (store *Store) FindAccountByName(
 
 	err = collection.FindOne(ctx, filter, findOneOptions). //"deleted": bson.M{"$ne": true}
 								Decode(&account)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
@@ -948,11 +970,13 @@ func (account *Account) IsPhoneExists() (exists bool, err error) {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"phone":    account.Phone,
 			"store_id": account.StoreID,
+			"deleted":  bson.M{"$ne": true},
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"phone":    account.Phone,
 			"store_id": account.StoreID,
+			"deleted":  bson.M{"$ne": true},
 			"_id":      bson.M{"$ne": account.ID},
 		})
 	}
@@ -1089,5 +1113,51 @@ func ProcessAccounts() error {
 		}
 	}
 	log.Print("Accounts DONE!")
+	return nil
+}
+
+func (account *Account) DeleteAccount(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("account")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(false)
+	defer cancel()
+
+	account.Deleted = true
+
+	//productCategory.SetChangeLog("delete", nil, nil, nil)
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": account.ID},
+		bson.M{"$set": account},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (account *Account) RestoreAccount(tokenClaims TokenClaims) (err error) {
+	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("account")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(false)
+	defer cancel()
+
+	account.Deleted = false
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": account.ID},
+		bson.M{"$set": account},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

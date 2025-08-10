@@ -3165,8 +3165,17 @@ func ProcessOrders() error {
 				continue
 			}
 
-			order.ClearProductsHistory()
-			order.CreateProductsHistory()
+			order.UndoAccounting()
+			order.DoAccounting()
+			if order.CustomerID != nil && !order.CustomerID.IsZero() {
+				customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+				if customer != nil {
+					customer.SetCreditBalance()
+				}
+			}
+
+			//order.ClearProductsHistory()
+			//order.CreateProductsHistory()
 			/*
 				if store.Code == "MBDI" || store.Code == "LGK" {
 					order.ClearProductsSalesHistory()
@@ -3194,15 +3203,6 @@ func ProcessOrders() error {
 					continue
 				}*/
 
-			/*
-				order.UndoAccounting()
-				order.DoAccounting()
-				if order.CustomerID != nil && !order.CustomerID.IsZero() {
-					customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-					if customer != nil {
-						customer.SetCreditBalance()
-					}
-				}*/
 			//order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 			//order.Update()
 

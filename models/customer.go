@@ -287,7 +287,7 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		return nil
 	}
 
-	if customer.Name != customerOld.Name {
+	if customer.Name != customerOld.Name || customer.NameInArabic != customerOld.NameInArabic {
 		err := store.UpdateManyByCollectionName(
 			"order",
 			bson.M{"customer_id": customer.ID},
