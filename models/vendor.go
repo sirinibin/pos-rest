@@ -269,6 +269,30 @@ func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 			return nil
 		}
 
+		err = store.UpdateManyByCollectionName(
+			"customerwithdrawal",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{
+				"vendor_name":        vendor.Name,
+				"vendor_name_arabic": vendor.NameInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"customerdeposit",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{
+				"vendor_name":        vendor.Name,
+				"vendor_name_arabic": vendor.NameInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
 		/*
 			usedInCollections := []string{
 				"purchase",

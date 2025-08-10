@@ -335,6 +335,31 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		if err != nil {
 			return nil
 		}
+
+		err = store.UpdateManyByCollectionName(
+			"customerwithdrawal",
+			bson.M{"customer_id": customer.ID},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"customerdeposit",
+			bson.M{"customer_id": customer.ID},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
 	}
 
 	return nil
