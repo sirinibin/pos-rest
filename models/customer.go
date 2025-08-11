@@ -291,7 +291,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err := store.UpdateManyByCollectionName(
 			"order",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -300,7 +303,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"sales_return",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -309,7 +315,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"quotation",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -318,7 +327,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"quotation_sales_return",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -376,7 +388,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"product_history",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -385,7 +400,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"product_sales_history",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -394,7 +412,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"product_sales_return_history",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -403,7 +424,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"product_quotation_history",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
@@ -412,7 +436,10 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		err = store.UpdateManyByCollectionName(
 			"product_quotation_sales_return_history",
 			bson.M{"customer_id": customer.ID},
-			bson.M{"customer_name": customer.Name},
+			bson.M{
+				"customer_name":        customer.Name,
+				"customer_name_arabic": customer.NameInArabic,
+			},
 		)
 		if err != nil {
 			return nil
