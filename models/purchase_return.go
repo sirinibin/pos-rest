@@ -97,6 +97,7 @@ type PurchaseReturn struct {
 	UpdatedByUser          *User                   `json:"updated_by_user,omitempty"`
 	PurchaseReturnedByName string                  `json:"purchase_returned_by_name,omitempty" bson:"purchase_returned_by_name,omitempty"`
 	VendorName             string                  `json:"vendor_name" bson:"vendor_name"`
+	VendorNameArabic       string                  `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
 	StoreName              string                  `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName          string                  `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string                  `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -577,13 +578,15 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 	}
 
 	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
-		vendor, err := store.FindVendorByID(purchasereturn.VendorID, bson.M{"id": 1, "name": 1})
+		vendor, err := store.FindVendorByID(purchasereturn.VendorID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1})
 		if err != nil {
 			return err
 		}
 		purchasereturn.VendorName = vendor.Name
+		purchasereturn.VendorNameArabic = vendor.NameInArabic
 	} else {
 		purchasereturn.VendorName = ""
+		purchasereturn.VendorNameArabic = ""
 	}
 
 	if purchasereturn.PurchaseReturnedBy != nil {
@@ -2304,6 +2307,12 @@ func ProcessPurchaseReturns() error {
 			if model.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+
+			model.UpdateForeignLabelFields()
+			model.ClearProductsHistory()
+			model.ClearProductsPurchaseReturnHistory()
+			model.CreateProductsHistory()
+			model.CreateProductsPurchaseReturnHistory()
 
 			model.UndoAccounting()
 			model.DoAccounting()

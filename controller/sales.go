@@ -229,7 +229,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-
 	}
 
 	err = order.Insert()

@@ -57,6 +57,7 @@ type Quotation struct {
 	CustomerID               *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
 	Customer                 *Customer           `json:"customer"  bson:"-" `
 	CustomerName             string              `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic       string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
 	Products                 []QuotationProduct  `bson:"products,omitempty" json:"products,omitempty"`
 	DeliveredBy              *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	DeliveredBySignatureID   *primitive.ObjectID `json:"delivered_by_signature_id,omitempty" bson:"delivered_by_signature_id,omitempty"`
@@ -1054,13 +1055,15 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	}
 
 	if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() {
-		customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1})
 		if err != nil {
 			return err
 		}
 		quotation.CustomerName = customer.Name
+		quotation.CustomerNameArabic = customer.NameInArabic
 	} else {
 		quotation.CustomerName = ""
+		quotation.CustomerNameArabic = ""
 	}
 
 	if quotation.DeliveredBy != nil {
@@ -2394,8 +2397,11 @@ func ProcessQuotations() error {
 				continue
 			}
 
+			quotation.UpdateForeignLabelFields()
 			quotation.ClearProductsHistory()
+			quotation.ClearProductsQuotationHistory()
 			quotation.CreateProductsHistory()
+			quotation.CreateProductsQuotationHistory()
 
 			/*
 

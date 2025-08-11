@@ -24,6 +24,7 @@ type ProductPurchaseHistory struct {
 	ProductID        primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	VendorID         *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorName       string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	VendorNameArabic string              `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
 	PurchaseID       *primitive.ObjectID `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`
 	PurchaseCode     string              `json:"purchase_code,omitempty" bson:"purchase_code,omitempty"`
 	Quantity         float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`

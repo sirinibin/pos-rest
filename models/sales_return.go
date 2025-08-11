@@ -103,6 +103,7 @@ type SalesReturn struct {
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 	//ReceivedByName   string               `json:"received_by_name,omitempty" bson:"received_by_name,omitempty"`
 	CustomerName        string               `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic  string               `json:"customer_name_arabic" bson:"customer_name_arabic"`
 	StoreName           string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName       string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName       string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -518,13 +519,15 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 	}
 
 	if salesreturn.CustomerID != nil && !salesreturn.CustomerID.IsZero() {
-		customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1})
 		if err != nil {
 			return err
 		}
 		salesreturn.CustomerName = customer.Name
+		salesreturn.CustomerNameArabic = customer.NameInArabic
 	} else {
 		salesreturn.CustomerName = ""
+		salesreturn.CustomerNameArabic = ""
 	}
 
 	/*
@@ -2707,6 +2710,12 @@ func ProcessSalesReturns() error {
 			if salesReturn.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+
+			salesReturn.UpdateForeignLabelFields()
+			salesReturn.ClearProductsHistory()
+			salesReturn.ClearProductsSalesReturnHistory()
+			salesReturn.CreateProductsHistory()
+			salesReturn.CreateProductsSalesReturnHistory()
 
 			salesReturn.UndoAccounting()
 			salesReturn.DoAccounting()

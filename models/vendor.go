@@ -293,6 +293,34 @@ func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 			return nil
 		}
 
+		//Histories
+		err = store.UpdateManyByCollectionName(
+			"product_history",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{"vendor_name": vendor.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"product_purchase_history",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{"vendor_name": vendor.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"product_purchase_return_history",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{"vendor_name": vendor.Name},
+		)
+		if err != nil {
+			return nil
+		}
+
 		/*
 			usedInCollections := []string{
 				"purchase",

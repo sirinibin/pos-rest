@@ -114,6 +114,7 @@ type Purchase struct {
 	UpdatedByUser     *User               `json:"updated_by_user,omitempty"`
 	OrderPlacedByName string              `json:"order_placed_by_name,omitempty" bson:"order_placed_by_name,omitempty"`
 	VendorName        string              `json:"vendor_name" bson:"vendor_name"`
+	VendorNameArabic  string              `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
 	StoreName         string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName     string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName     string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -692,13 +693,15 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 	}
 
 	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
-		vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{"id": 1, "name": 1})
+		vendor, err := store.FindVendorByID(purchase.VendorID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1})
 		if err != nil {
 			return err
 		}
 		purchase.VendorName = vendor.Name
+		purchase.VendorNameArabic = vendor.NameInArabic
 	} else {
 		purchase.VendorName = ""
+		purchase.VendorNameArabic = ""
 	}
 
 	if purchase.OrderPlacedBy != nil {
@@ -2452,6 +2455,12 @@ func ProcessPurchases() error {
 			if purchase.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+
+			purchase.UpdateForeignLabelFields()
+			purchase.ClearProductsHistory()
+			purchase.ClearProductsPurchaseHistory()
+			purchase.CreateProductsHistory()
+			purchase.CreateProductsPurchaseHistory()
 
 			purchase.UndoAccounting()
 			purchase.DoAccounting()

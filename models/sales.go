@@ -109,6 +109,7 @@ type Order struct {
 	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
 	DeliveredByName        string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
 	CustomerName           string              `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic     string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
 	StoreName              string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
@@ -604,15 +605,17 @@ func (order *Order) UpdateForeignLabelFields() error {
 	}
 
 	if order.CustomerID != nil && !order.CustomerID.IsZero() {
-		customer, err := store.FindCustomerByID(order.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(order.CustomerID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1})
 		if err != nil {
 			return errors.New("error finding customer: " + err.Error())
 		}
 		if customer != nil {
 			order.CustomerName = customer.Name
+			order.CustomerNameArabic = customer.NameInArabic
 		}
 	} else {
 		order.CustomerName = ""
+		order.CustomerNameArabic = ""
 	}
 
 	if order.DeliveredBy != nil {
@@ -3164,6 +3167,12 @@ func ProcessOrders() error {
 			if order.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+
+			order.UpdateForeignLabelFields()
+			order.ClearProductsHistory()
+			order.ClearProductsSalesHistory()
+			order.CreateProductsHistory()
+			order.CreateProductsSalesHistory()
 
 			order.UndoAccounting()
 			order.DoAccounting()

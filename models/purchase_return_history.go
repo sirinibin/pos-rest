@@ -24,6 +24,7 @@ type ProductPurchaseReturnHistory struct {
 	ProductID          primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	VendorID           *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorName         string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	VendorNameArabic   string              `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
 	PurchaseReturnID   *primitive.ObjectID `json:"purchase_return_id,omitempty" bson:"purchase_return_id,omitempty"`
 	PurchaseReturnCode string              `json:"purchase_return_code,omitempty" bson:"purchase_return_code,omitempty"`
 	PurchaseID         *primitive.ObjectID `json:"purchase_id,omitempty" bson:"purchase_id,omitempty"`

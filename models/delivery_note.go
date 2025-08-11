@@ -31,25 +31,26 @@ type DeliveryNoteProduct struct {
 
 // DeliveryNote : DeliveryNote structure
 type DeliveryNote struct {
-	ID              primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	Code            string                `bson:"code,omitempty" json:"code,omitempty"`
-	Date            *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr         string                `json:"date_str,omitempty" bson:"-"`
-	StoreID         *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID      *primitive.ObjectID   `json:"customer_id" bson:"customer_id"`
-	Customer        *Customer             `json:"customer"  bson:"-" `
-	CustomerName    string                `json:"customer_name" bson:"customer_name"`
-	Products        []DeliveryNoteProduct `bson:"products,omitempty" json:"products,omitempty"`
-	Remarks         string                `bson:"remarks" json:"remarks"`
-	DeliveredBy     *primitive.ObjectID   `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	CreatedAt       *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy       *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy       *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	StoreName       string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	DeliveredByName string                `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CreatedByName   string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName   string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	ID                 primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Code               string                `bson:"code,omitempty" json:"code,omitempty"`
+	Date               *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr            string                `json:"date_str,omitempty" bson:"-"`
+	StoreID            *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID         *primitive.ObjectID   `json:"customer_id" bson:"customer_id"`
+	Customer           *Customer             `json:"customer"  bson:"-" `
+	CustomerName       string                `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic string                `json:"customer_name_arabic" bson:"customer_name_arabic"`
+	Products           []DeliveryNoteProduct `bson:"products,omitempty" json:"products,omitempty"`
+	Remarks            string                `bson:"remarks" json:"remarks"`
+	DeliveredBy        *primitive.ObjectID   `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	CreatedAt          *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt          *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy          *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy          *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	StoreName          string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	DeliveredByName    string                `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CreatedByName      string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName      string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 }
 
 func (deliveryNote *DeliveryNote) CreateNewCustomerFromName() error {
@@ -109,13 +110,15 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 	}
 
 	if deliverynote.CustomerID != nil && !deliverynote.CustomerID.IsZero() {
-		customer, err := store.FindCustomerByID(deliverynote.CustomerID, bson.M{"id": 1, "name": 1})
+		customer, err := store.FindCustomerByID(deliverynote.CustomerID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1})
 		if err != nil {
 			return err
 		}
 		deliverynote.CustomerName = customer.Name
+		deliverynote.CustomerNameArabic = customer.NameInArabic
 	} else {
 		deliverynote.CustomerName = ""
+		deliverynote.CustomerNameArabic = ""
 	}
 
 	if deliverynote.DeliveredBy != nil {
@@ -872,8 +875,11 @@ func ProcessDeliveryNotes() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
+			deliverynote.UpdateForeignLabelFields()
 			deliverynote.ClearProductsHistory()
+			deliverynote.ClearProductsDeliveryNoteHistory()
 			deliverynote.CreateProductsHistory()
+			deliverynote.CreateProductsDeliveryNoteHistory()
 
 			/*
 				err = deliverynote.ClearProductsDeliveryNoteHistory()

@@ -17,38 +17,40 @@ import (
 )
 
 type ProductHistory struct {
-	ID                primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date              *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName         string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	ProductID         primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	ReferenceType     string              `json:"reference_type,omitempty" bson:"reference_type,omitempty"`
-	ReferenceID       *primitive.ObjectID `json:"reference_id,omitempty" bson:"reference_id,omitempty"`
-	ReferenceCode     string              `json:"reference_code,omitempty" bson:"reference_code,omitempty"`
-	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	CustomerName      string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	VendorID          *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
-	VendorName        string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
-	Stock             float64             `json:"stock" bson:"stock"`
-	Quantity          float64             `json:"quantity" bson:"quantity"`
-	PurchaseUnitPrice float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	UnitPrice         float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitDiscount      float64             `bson:"unit_discount" json:"unit_discount"`
-	Discount          float64             `bson:"discount" json:"discount"`
-	DiscountPercent   float64             `bson:"discount_percent" json:"discount_percent"`
-	Price             float64             `bson:"price" json:"price"`
-	NetPrice          float64             `bson:"net_price" json:"net_price"`
-	Profit            float64             `bson:"profit" json:"profit"`
-	Loss              float64             `bson:"loss" json:"loss"`
-	VatPercent        float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	VatPrice          float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
-	UnitPriceWithVAT  float64             `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
-	Store             *Store              `json:"store,omitempty" bson:"-"`
-	Customer          *Customer           `json:"customer,omitempty" bson:"-"`
-	Vendor            *Vendor             `json:"vendor,omitempty" bson:"-"`
-	CreatedAt         *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt         *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ID                 primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date               *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	StoreID            *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	ProductID          primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	ReferenceType      string              `json:"reference_type,omitempty" bson:"reference_type,omitempty"`
+	ReferenceID        *primitive.ObjectID `json:"reference_id,omitempty" bson:"reference_id,omitempty"`
+	ReferenceCode      string              `json:"reference_code,omitempty" bson:"reference_code,omitempty"`
+	CustomerID         *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerName       string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	CustomerNameArabic string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
+	VendorID           *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
+	VendorName         string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
+	VendorNameArabic   string              `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
+	Stock              float64             `json:"stock" bson:"stock"`
+	Quantity           float64             `json:"quantity" bson:"quantity"`
+	PurchaseUnitPrice  float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	UnitPrice          float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	Unit               string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitDiscount       float64             `bson:"unit_discount" json:"unit_discount"`
+	Discount           float64             `bson:"discount" json:"discount"`
+	DiscountPercent    float64             `bson:"discount_percent" json:"discount_percent"`
+	Price              float64             `bson:"price" json:"price"`
+	NetPrice           float64             `bson:"net_price" json:"net_price"`
+	Profit             float64             `bson:"profit" json:"profit"`
+	Loss               float64             `bson:"loss" json:"loss"`
+	VatPercent         float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPrice           float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
+	UnitPriceWithVAT   float64             `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
+	Store              *Store              `json:"store,omitempty" bson:"-"`
+	Customer           *Customer           `json:"customer,omitempty" bson:"-"`
+	Vendor             *Vendor             `json:"vendor,omitempty" bson:"-"`
+	CreatedAt          *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 }
 
 type HistoryStats struct {
@@ -1045,24 +1047,25 @@ func (order *Order) CreateProductsHistory() error {
 		}
 
 		history := ProductHistory{
-			Date:              order.Date,
-			StoreID:           order.StoreID,
-			StoreName:         order.StoreName,
-			ProductID:         orderProduct.ProductID,
-			CustomerID:        order.CustomerID,
-			CustomerName:      order.CustomerName,
-			ReferenceType:     "sales",
-			ReferenceID:       &order.ID,
-			ReferenceCode:     order.Code,
-			Stock:             (stock - orderProduct.Quantity),
-			Quantity:          orderProduct.Quantity,
-			PurchaseUnitPrice: orderProduct.PurchaseUnitPrice,
-			Unit:              orderProduct.Unit,
-			UnitDiscount:      orderProduct.UnitDiscount,
-			Discount:          (orderProduct.UnitDiscount * orderProduct.Quantity),
-			DiscountPercent:   orderProduct.UnitDiscountPercent,
-			CreatedAt:         order.CreatedAt,
-			UpdatedAt:         order.UpdatedAt,
+			Date:               order.Date,
+			StoreID:            order.StoreID,
+			StoreName:          order.StoreName,
+			ProductID:          orderProduct.ProductID,
+			CustomerID:         order.CustomerID,
+			CustomerName:       order.CustomerName,
+			CustomerNameArabic: order.CustomerNameArabic,
+			ReferenceType:      "sales",
+			ReferenceID:        &order.ID,
+			ReferenceCode:      order.Code,
+			Stock:              (stock - orderProduct.Quantity),
+			Quantity:           orderProduct.Quantity,
+			PurchaseUnitPrice:  orderProduct.PurchaseUnitPrice,
+			Unit:               orderProduct.Unit,
+			UnitDiscount:       orderProduct.UnitDiscount,
+			Discount:           (orderProduct.UnitDiscount * orderProduct.Quantity),
+			DiscountPercent:    orderProduct.UnitDiscountPercent,
+			CreatedAt:          order.CreatedAt,
+			UpdatedAt:          order.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(orderProduct.UnitPrice)
@@ -1096,24 +1099,25 @@ func (order *Order) CreateProductsHistory() error {
 				}
 
 				history := ProductHistory{
-					Date:              order.Date,
-					StoreID:           order.StoreID,
-					StoreName:         order.StoreName,
-					ProductID:         *setProduct.ProductID,
-					CustomerID:        order.CustomerID,
-					CustomerName:      order.CustomerName,
-					ReferenceType:     "sales",
-					ReferenceID:       &order.ID,
-					ReferenceCode:     order.Code,
-					Stock:             (stock - RoundTo2Decimals(orderProduct.Quantity*setProduct.Quantity)),
-					Quantity:          RoundTo2Decimals(orderProduct.Quantity * setProduct.Quantity),
-					PurchaseUnitPrice: RoundTo2Decimals(orderProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
-					Unit:              setProductObj.Unit,
-					UnitDiscount:      RoundTo2Decimals(orderProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
-					Discount:          RoundTo2Decimals((orderProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(orderProduct.Quantity*setProduct.Quantity)),
-					DiscountPercent:   orderProduct.UnitDiscountPercent,
-					CreatedAt:         order.CreatedAt,
-					UpdatedAt:         order.UpdatedAt,
+					Date:               order.Date,
+					StoreID:            order.StoreID,
+					StoreName:          order.StoreName,
+					ProductID:          *setProduct.ProductID,
+					CustomerID:         order.CustomerID,
+					CustomerName:       order.CustomerName,
+					CustomerNameArabic: order.CustomerNameArabic,
+					ReferenceType:      "sales",
+					ReferenceID:        &order.ID,
+					ReferenceCode:      order.Code,
+					Stock:              (stock - RoundTo2Decimals(orderProduct.Quantity*setProduct.Quantity)),
+					Quantity:           RoundTo2Decimals(orderProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice:  RoundTo2Decimals(orderProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:               setProductObj.Unit,
+					UnitDiscount:       RoundTo2Decimals(orderProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:           RoundTo2Decimals((orderProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(orderProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:    orderProduct.UnitDiscountPercent,
+					CreatedAt:          order.CreatedAt,
+					UpdatedAt:          order.UpdatedAt,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(orderProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
@@ -1174,23 +1178,24 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 		}
 
 		history := ProductHistory{
-			Date:            salesReturn.Date,
-			StoreID:         salesReturn.StoreID,
-			StoreName:       salesReturn.StoreName,
-			ProductID:       salesReturnProduct.ProductID,
-			CustomerID:      salesReturn.CustomerID,
-			CustomerName:    salesReturn.CustomerName,
-			ReferenceType:   "sales_return",
-			ReferenceID:     &salesReturn.ID,
-			ReferenceCode:   salesReturn.Code,
-			Stock:           (stock + salesReturnProduct.Quantity),
-			Quantity:        salesReturnProduct.Quantity,
-			UnitPrice:       salesReturnProduct.UnitPrice,
-			Unit:            salesReturnProduct.Unit,
-			Discount:        salesReturnProduct.UnitDiscount,
-			DiscountPercent: salesReturnProduct.UnitDiscountPercent,
-			CreatedAt:       salesReturn.CreatedAt,
-			UpdatedAt:       salesReturn.UpdatedAt,
+			Date:               salesReturn.Date,
+			StoreID:            salesReturn.StoreID,
+			StoreName:          salesReturn.StoreName,
+			ProductID:          salesReturnProduct.ProductID,
+			CustomerID:         salesReturn.CustomerID,
+			CustomerName:       salesReturn.CustomerName,
+			CustomerNameArabic: salesReturn.CustomerNameArabic,
+			ReferenceType:      "sales_return",
+			ReferenceID:        &salesReturn.ID,
+			ReferenceCode:      salesReturn.Code,
+			Stock:              (stock + salesReturnProduct.Quantity),
+			Quantity:           salesReturnProduct.Quantity,
+			UnitPrice:          salesReturnProduct.UnitPrice,
+			Unit:               salesReturnProduct.Unit,
+			Discount:           salesReturnProduct.UnitDiscount,
+			DiscountPercent:    salesReturnProduct.UnitDiscountPercent,
+			CreatedAt:          salesReturn.CreatedAt,
+			UpdatedAt:          salesReturn.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(salesReturnProduct.UnitPrice)
@@ -1224,24 +1229,25 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 				}
 
 				history := ProductHistory{
-					Date:              salesReturn.Date,
-					StoreID:           salesReturn.StoreID,
-					StoreName:         salesReturn.StoreName,
-					ProductID:         *setProduct.ProductID,
-					CustomerID:        salesReturn.CustomerID,
-					CustomerName:      salesReturn.CustomerName,
-					ReferenceType:     "sales_return",
-					ReferenceID:       &salesReturn.ID,
-					ReferenceCode:     salesReturn.Code,
-					Stock:             (stock + RoundTo2Decimals(salesReturnProduct.Quantity*setProduct.Quantity)),
-					Quantity:          RoundTo2Decimals(salesReturnProduct.Quantity * setProduct.Quantity),
-					PurchaseUnitPrice: RoundTo2Decimals(salesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
-					Unit:              setProductObj.Unit,
-					UnitDiscount:      RoundTo2Decimals(salesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
-					Discount:          RoundTo2Decimals((salesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(salesReturnProduct.Quantity*setProduct.Quantity)),
-					DiscountPercent:   salesReturnProduct.UnitDiscountPercent,
-					CreatedAt:         salesReturn.CreatedAt,
-					UpdatedAt:         salesReturn.UpdatedAt,
+					Date:               salesReturn.Date,
+					StoreID:            salesReturn.StoreID,
+					StoreName:          salesReturn.StoreName,
+					ProductID:          *setProduct.ProductID,
+					CustomerID:         salesReturn.CustomerID,
+					CustomerName:       salesReturn.CustomerName,
+					CustomerNameArabic: salesReturn.CustomerNameArabic,
+					ReferenceType:      "sales_return",
+					ReferenceID:        &salesReturn.ID,
+					ReferenceCode:      salesReturn.Code,
+					Stock:              (stock + RoundTo2Decimals(salesReturnProduct.Quantity*setProduct.Quantity)),
+					Quantity:           RoundTo2Decimals(salesReturnProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice:  RoundTo2Decimals(salesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:               setProductObj.Unit,
+					UnitDiscount:       RoundTo2Decimals(salesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:           RoundTo2Decimals((salesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(salesReturnProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:    salesReturnProduct.UnitDiscountPercent,
+					CreatedAt:          salesReturn.CreatedAt,
+					UpdatedAt:          salesReturn.UpdatedAt,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(salesReturnProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
@@ -1300,23 +1306,24 @@ func (purchase *Purchase) CreateProductsHistory() error {
 		}
 
 		history := ProductHistory{
-			Date:            purchase.Date,
-			StoreID:         purchase.StoreID,
-			StoreName:       purchase.StoreName,
-			ProductID:       purchaseProduct.ProductID,
-			VendorID:        purchase.VendorID,
-			VendorName:      purchase.VendorName,
-			ReferenceType:   "purchase",
-			ReferenceID:     &purchase.ID,
-			ReferenceCode:   purchase.Code,
-			Stock:           (stock + purchaseProduct.Quantity),
-			Quantity:        purchaseProduct.Quantity,
-			UnitPrice:       purchaseProduct.PurchaseUnitPrice,
-			Unit:            purchaseProduct.Unit,
-			Discount:        purchaseProduct.UnitDiscount,
-			DiscountPercent: purchaseProduct.UnitDiscountPercent,
-			CreatedAt:       purchase.CreatedAt,
-			UpdatedAt:       purchase.UpdatedAt,
+			Date:             purchase.Date,
+			StoreID:          purchase.StoreID,
+			StoreName:        purchase.StoreName,
+			ProductID:        purchaseProduct.ProductID,
+			VendorID:         purchase.VendorID,
+			VendorName:       purchase.VendorName,
+			VendorNameArabic: purchase.VendorNameArabic,
+			ReferenceType:    "purchase",
+			ReferenceID:      &purchase.ID,
+			ReferenceCode:    purchase.Code,
+			Stock:            (stock + purchaseProduct.Quantity),
+			Quantity:         purchaseProduct.Quantity,
+			UnitPrice:        purchaseProduct.PurchaseUnitPrice,
+			Unit:             purchaseProduct.Unit,
+			Discount:         purchaseProduct.UnitDiscount,
+			DiscountPercent:  purchaseProduct.UnitDiscountPercent,
+			CreatedAt:        purchase.CreatedAt,
+			UpdatedAt:        purchase.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice)
@@ -1349,24 +1356,25 @@ func (purchase *Purchase) CreateProductsHistory() error {
 				}
 
 				history := ProductHistory{
-					Date:            purchase.Date,
-					StoreID:         purchase.StoreID,
-					StoreName:       purchase.StoreName,
-					ProductID:       *setProduct.ProductID,
-					VendorID:        purchase.VendorID,
-					VendorName:      purchase.VendorName,
-					ReferenceType:   "purchase",
-					ReferenceID:     &purchase.ID,
-					ReferenceCode:   purchase.Code,
-					Stock:           (stock + RoundTo2Decimals(purchaseProduct.Quantity*setProduct.Quantity)),
-					Quantity:        RoundTo2Decimals(purchaseProduct.Quantity * setProduct.Quantity),
-					UnitPrice:       RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
-					Unit:            setProductObj.Unit,
-					UnitDiscount:    RoundTo2Decimals(purchaseProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)),
-					Discount:        RoundTo2Decimals((purchaseProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)) * RoundTo2Decimals(purchaseProduct.Quantity*setProduct.Quantity)),
-					DiscountPercent: purchaseProduct.UnitDiscountPercent,
-					CreatedAt:       purchase.CreatedAt,
-					UpdatedAt:       purchase.UpdatedAt,
+					Date:             purchase.Date,
+					StoreID:          purchase.StoreID,
+					StoreName:        purchase.StoreName,
+					ProductID:        *setProduct.ProductID,
+					VendorID:         purchase.VendorID,
+					VendorName:       purchase.VendorName,
+					VendorNameArabic: purchase.VendorNameArabic,
+					ReferenceType:    "purchase",
+					ReferenceID:      &purchase.ID,
+					ReferenceCode:    purchase.Code,
+					Stock:            (stock + RoundTo2Decimals(purchaseProduct.Quantity*setProduct.Quantity)),
+					Quantity:         RoundTo2Decimals(purchaseProduct.Quantity * setProduct.Quantity),
+					UnitPrice:        RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:             setProductObj.Unit,
+					UnitDiscount:     RoundTo2Decimals(purchaseProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)),
+					Discount:         RoundTo2Decimals((purchaseProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)) * RoundTo2Decimals(purchaseProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:  purchaseProduct.UnitDiscountPercent,
+					CreatedAt:        purchase.CreatedAt,
+					UpdatedAt:        purchase.UpdatedAt,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100))
@@ -1426,23 +1434,24 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 		}
 
 		history := ProductHistory{
-			Date:            purchaseReturn.Date,
-			StoreID:         purchaseReturn.StoreID,
-			StoreName:       purchaseReturn.StoreName,
-			ProductID:       purchaseReturnProduct.ProductID,
-			VendorID:        purchaseReturn.VendorID,
-			VendorName:      purchaseReturn.VendorName,
-			ReferenceType:   "purchase_return",
-			ReferenceID:     &purchaseReturn.ID,
-			ReferenceCode:   purchaseReturn.Code,
-			Stock:           (stock - purchaseReturnProduct.Quantity),
-			Quantity:        purchaseReturnProduct.Quantity,
-			UnitPrice:       purchaseReturnProduct.PurchaseReturnUnitPrice,
-			Unit:            purchaseReturnProduct.Unit,
-			Discount:        purchaseReturnProduct.UnitDiscount,
-			DiscountPercent: purchaseReturnProduct.UnitDiscountPercent,
-			CreatedAt:       purchaseReturn.CreatedAt,
-			UpdatedAt:       purchaseReturn.UpdatedAt,
+			Date:             purchaseReturn.Date,
+			StoreID:          purchaseReturn.StoreID,
+			StoreName:        purchaseReturn.StoreName,
+			ProductID:        purchaseReturnProduct.ProductID,
+			VendorID:         purchaseReturn.VendorID,
+			VendorName:       purchaseReturn.VendorName,
+			VendorNameArabic: purchaseReturn.VendorNameArabic,
+			ReferenceType:    "purchase_return",
+			ReferenceID:      &purchaseReturn.ID,
+			ReferenceCode:    purchaseReturn.Code,
+			Stock:            (stock - purchaseReturnProduct.Quantity),
+			Quantity:         purchaseReturnProduct.Quantity,
+			UnitPrice:        purchaseReturnProduct.PurchaseReturnUnitPrice,
+			Unit:             purchaseReturnProduct.Unit,
+			Discount:         purchaseReturnProduct.UnitDiscount,
+			DiscountPercent:  purchaseReturnProduct.UnitDiscountPercent,
+			CreatedAt:        purchaseReturn.CreatedAt,
+			UpdatedAt:        purchaseReturn.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice)
@@ -1473,24 +1482,25 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 				}
 
 				history := ProductHistory{
-					Date:            purchaseReturn.Date,
-					StoreID:         purchaseReturn.StoreID,
-					StoreName:       purchaseReturn.StoreName,
-					ProductID:       *setProduct.ProductID,
-					VendorID:        purchaseReturn.VendorID,
-					VendorName:      purchaseReturn.VendorName,
-					ReferenceType:   "purchase_return",
-					ReferenceID:     &purchaseReturn.ID,
-					ReferenceCode:   purchaseReturn.Code,
-					Stock:           (stock - RoundTo2Decimals(purchaseReturnProduct.Quantity*setProduct.Quantity)),
-					Quantity:        RoundTo2Decimals(purchaseReturnProduct.Quantity * setProduct.Quantity),
-					UnitPrice:       RoundTo2Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100)),
-					Unit:            setProductObj.Unit,
-					UnitDiscount:    RoundTo2Decimals(purchaseReturnProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)),
-					Discount:        RoundTo2Decimals((purchaseReturnProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)) * RoundTo2Decimals(purchaseReturnProduct.Quantity*setProduct.Quantity)),
-					DiscountPercent: purchaseReturnProduct.UnitDiscountPercent,
-					CreatedAt:       purchaseReturn.CreatedAt,
-					UpdatedAt:       purchaseReturn.UpdatedAt,
+					Date:             purchaseReturn.Date,
+					StoreID:          purchaseReturn.StoreID,
+					StoreName:        purchaseReturn.StoreName,
+					ProductID:        *setProduct.ProductID,
+					VendorID:         purchaseReturn.VendorID,
+					VendorName:       purchaseReturn.VendorName,
+					VendorNameArabic: purchaseReturn.VendorNameArabic,
+					ReferenceType:    "purchase_return",
+					ReferenceID:      &purchaseReturn.ID,
+					ReferenceCode:    purchaseReturn.Code,
+					Stock:            (stock - RoundTo2Decimals(purchaseReturnProduct.Quantity*setProduct.Quantity)),
+					Quantity:         RoundTo2Decimals(purchaseReturnProduct.Quantity * setProduct.Quantity),
+					UnitPrice:        RoundTo2Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:             setProductObj.Unit,
+					UnitDiscount:     RoundTo2Decimals(purchaseReturnProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)),
+					Discount:         RoundTo2Decimals((purchaseReturnProduct.UnitDiscount * (setProduct.PurchasePricePercent / 100)) * RoundTo2Decimals(purchaseReturnProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:  purchaseReturnProduct.UnitDiscountPercent,
+					CreatedAt:        purchaseReturn.CreatedAt,
+					UpdatedAt:        purchaseReturn.UpdatedAt,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100))
@@ -1545,15 +1555,16 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 		}
 
 		history := ProductHistory{
-			Date:          deliverynote.Date,
-			StoreID:       deliverynote.StoreID,
-			StoreName:     deliverynote.StoreName,
-			ProductID:     deliverynoteProduct.ProductID,
-			CustomerID:    deliverynote.CustomerID,
-			CustomerName:  deliverynote.CustomerName,
-			ReferenceType: "delivery_note",
-			ReferenceID:   &deliverynote.ID,
-			ReferenceCode: deliverynote.Code,
+			Date:               deliverynote.Date,
+			StoreID:            deliverynote.StoreID,
+			StoreName:          deliverynote.StoreName,
+			ProductID:          deliverynoteProduct.ProductID,
+			CustomerID:         deliverynote.CustomerID,
+			CustomerName:       deliverynote.CustomerName,
+			CustomerNameArabic: deliverynote.CustomerNameArabic,
+			ReferenceType:      "delivery_note",
+			ReferenceID:        &deliverynote.ID,
+			ReferenceCode:      deliverynote.Code,
 			//Stock:         (stock + deliverynoteProduct.Quantity),
 			Stock:     stock,
 			Quantity:  deliverynoteProduct.Quantity,
@@ -1583,15 +1594,16 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 				}
 
 				history := ProductHistory{
-					Date:          deliverynote.Date,
-					StoreID:       deliverynote.StoreID,
-					StoreName:     deliverynote.StoreName,
-					ProductID:     *setProduct.ProductID,
-					CustomerID:    deliverynote.CustomerID,
-					CustomerName:  deliverynote.CustomerName,
-					ReferenceType: "delivery_note",
-					ReferenceID:   &deliverynote.ID,
-					ReferenceCode: deliverynote.Code,
+					Date:               deliverynote.Date,
+					StoreID:            deliverynote.StoreID,
+					StoreName:          deliverynote.StoreName,
+					ProductID:          *setProduct.ProductID,
+					CustomerID:         deliverynote.CustomerID,
+					CustomerName:       deliverynote.CustomerName,
+					CustomerNameArabic: deliverynote.CustomerNameArabic,
+					ReferenceType:      "delivery_note",
+					ReferenceID:        &deliverynote.ID,
+					ReferenceCode:      deliverynote.Code,
 					//Stock:         (stock + (deliverynoteProduct.Quantity * setProduct.Quantity)),
 					Stock:     stock,
 					Quantity:  (deliverynoteProduct.Quantity * setProduct.Quantity),
@@ -1662,23 +1674,24 @@ func (quotation *Quotation) CreateProductsHistory() error {
 		}
 
 		history := ProductHistory{
-			Date:            quotation.Date,
-			StoreID:         quotation.StoreID,
-			StoreName:       quotation.StoreName,
-			ProductID:       quotationProduct.ProductID,
-			CustomerID:      quotation.CustomerID,
-			CustomerName:    quotation.CustomerName,
-			ReferenceType:   referenceType,
-			ReferenceID:     &quotation.ID,
-			ReferenceCode:   quotation.Code,
-			Stock:           stock,
-			Quantity:        quotationProduct.Quantity,
-			UnitPrice:       quotationProduct.UnitPrice,
-			Unit:            quotationProduct.Unit,
-			Discount:        quotationProduct.UnitDiscount,
-			DiscountPercent: quotationProduct.UnitDiscountPercent,
-			CreatedAt:       quotation.CreatedAt,
-			UpdatedAt:       quotation.UpdatedAt,
+			Date:               quotation.Date,
+			StoreID:            quotation.StoreID,
+			StoreName:          quotation.StoreName,
+			ProductID:          quotationProduct.ProductID,
+			CustomerID:         quotation.CustomerID,
+			CustomerName:       quotation.CustomerName,
+			CustomerNameArabic: quotation.CustomerNameArabic,
+			ReferenceType:      referenceType,
+			ReferenceID:        &quotation.ID,
+			ReferenceCode:      quotation.Code,
+			Stock:              stock,
+			Quantity:           quotationProduct.Quantity,
+			UnitPrice:          quotationProduct.UnitPrice,
+			Unit:               quotationProduct.Unit,
+			Discount:           quotationProduct.UnitDiscount,
+			DiscountPercent:    quotationProduct.UnitDiscountPercent,
+			CreatedAt:          quotation.CreatedAt,
+			UpdatedAt:          quotation.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(quotationProduct.UnitPrice)
@@ -1720,24 +1733,25 @@ func (quotation *Quotation) CreateProductsHistory() error {
 				}
 
 				history := ProductHistory{
-					Date:              quotation.Date,
-					StoreID:           quotation.StoreID,
-					StoreName:         quotation.StoreName,
-					ProductID:         *setProduct.ProductID,
-					CustomerID:        quotation.CustomerID,
-					CustomerName:      quotation.CustomerName,
-					ReferenceType:     referenceType,
-					ReferenceID:       &quotation.ID,
-					ReferenceCode:     quotation.Code,
-					Stock:             stock,
-					Quantity:          RoundTo2Decimals(quotationProduct.Quantity * setProduct.Quantity),
-					PurchaseUnitPrice: RoundTo2Decimals(quotationProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
-					Unit:              setProductObj.Unit,
-					UnitDiscount:      RoundTo2Decimals(quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
-					Discount:          RoundTo2Decimals((quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(quotationProduct.Quantity*setProduct.Quantity)),
-					DiscountPercent:   quotationProduct.UnitDiscountPercent,
-					CreatedAt:         quotation.CreatedAt,
-					UpdatedAt:         quotation.UpdatedAt,
+					Date:               quotation.Date,
+					StoreID:            quotation.StoreID,
+					StoreName:          quotation.StoreName,
+					ProductID:          *setProduct.ProductID,
+					CustomerID:         quotation.CustomerID,
+					CustomerName:       quotation.CustomerName,
+					CustomerNameArabic: quotation.CustomerNameArabic,
+					ReferenceType:      referenceType,
+					ReferenceID:        &quotation.ID,
+					ReferenceCode:      quotation.Code,
+					Stock:              stock,
+					Quantity:           RoundTo2Decimals(quotationProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice:  RoundTo2Decimals(quotationProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:               setProductObj.Unit,
+					UnitDiscount:       RoundTo2Decimals(quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:           RoundTo2Decimals((quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(quotationProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:    quotationProduct.UnitDiscountPercent,
+					CreatedAt:          quotation.CreatedAt,
+					UpdatedAt:          quotation.UpdatedAt,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(quotationProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
@@ -1805,23 +1819,24 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 		}
 
 		history := ProductHistory{
-			Date:            quotationsalesReturn.Date,
-			StoreID:         quotationsalesReturn.StoreID,
-			StoreName:       quotationsalesReturn.StoreName,
-			ProductID:       quotationsalesReturnProduct.ProductID,
-			CustomerID:      quotationsalesReturn.CustomerID,
-			CustomerName:    quotationsalesReturn.CustomerName,
-			ReferenceType:   "quotation_sales_return",
-			ReferenceID:     &quotationsalesReturn.ID,
-			ReferenceCode:   quotationsalesReturn.Code,
-			Stock:           stock,
-			Quantity:        quotationsalesReturnProduct.Quantity,
-			UnitPrice:       quotationsalesReturnProduct.UnitPrice,
-			Unit:            quotationsalesReturnProduct.Unit,
-			Discount:        quotationsalesReturnProduct.UnitDiscount,
-			DiscountPercent: quotationsalesReturnProduct.UnitDiscountPercent,
-			CreatedAt:       quotationsalesReturn.CreatedAt,
-			UpdatedAt:       quotationsalesReturn.UpdatedAt,
+			Date:               quotationsalesReturn.Date,
+			StoreID:            quotationsalesReturn.StoreID,
+			StoreName:          quotationsalesReturn.StoreName,
+			ProductID:          quotationsalesReturnProduct.ProductID,
+			CustomerID:         quotationsalesReturn.CustomerID,
+			CustomerName:       quotationsalesReturn.CustomerName,
+			CustomerNameArabic: quotationsalesReturn.CustomerNameArabic,
+			ReferenceType:      "quotation_sales_return",
+			ReferenceID:        &quotationsalesReturn.ID,
+			ReferenceCode:      quotationsalesReturn.Code,
+			Stock:              stock,
+			Quantity:           quotationsalesReturnProduct.Quantity,
+			UnitPrice:          quotationsalesReturnProduct.UnitPrice,
+			Unit:               quotationsalesReturnProduct.Unit,
+			Discount:           quotationsalesReturnProduct.UnitDiscount,
+			DiscountPercent:    quotationsalesReturnProduct.UnitDiscountPercent,
+			CreatedAt:          quotationsalesReturn.CreatedAt,
+			UpdatedAt:          quotationsalesReturn.UpdatedAt,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(quotationsalesReturnProduct.UnitPrice)
@@ -1861,24 +1876,25 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 				}
 
 				history := ProductHistory{
-					Date:              quotationsalesReturn.Date,
-					StoreID:           quotationsalesReturn.StoreID,
-					StoreName:         quotationsalesReturn.StoreName,
-					ProductID:         *setProduct.ProductID,
-					CustomerID:        quotationsalesReturn.CustomerID,
-					CustomerName:      quotationsalesReturn.CustomerName,
-					ReferenceType:     "quotation_sales_return",
-					ReferenceID:       &quotationsalesReturn.ID,
-					ReferenceCode:     quotationsalesReturn.Code,
-					Stock:             stock,
-					Quantity:          RoundTo2Decimals(quotationsalesReturnProduct.Quantity * setProduct.Quantity),
-					PurchaseUnitPrice: RoundTo2Decimals(quotationsalesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
-					Unit:              setProductObj.Unit,
-					UnitDiscount:      RoundTo2Decimals(quotationsalesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
-					Discount:          RoundTo2Decimals((quotationsalesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(quotationsalesReturnProduct.Quantity*setProduct.Quantity)),
-					DiscountPercent:   quotationsalesReturnProduct.UnitDiscountPercent,
-					CreatedAt:         quotationsalesReturn.CreatedAt,
-					UpdatedAt:         quotationsalesReturn.UpdatedAt,
+					Date:               quotationsalesReturn.Date,
+					StoreID:            quotationsalesReturn.StoreID,
+					StoreName:          quotationsalesReturn.StoreName,
+					ProductID:          *setProduct.ProductID,
+					CustomerID:         quotationsalesReturn.CustomerID,
+					CustomerName:       quotationsalesReturn.CustomerName,
+					CustomerNameArabic: quotationsalesReturn.CustomerNameArabic,
+					ReferenceType:      "quotation_sales_return",
+					ReferenceID:        &quotationsalesReturn.ID,
+					ReferenceCode:      quotationsalesReturn.Code,
+					Stock:              stock,
+					Quantity:           RoundTo2Decimals(quotationsalesReturnProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice:  RoundTo2Decimals(quotationsalesReturnProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:               setProductObj.Unit,
+					UnitDiscount:       RoundTo2Decimals(quotationsalesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:           RoundTo2Decimals((quotationsalesReturnProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(quotationsalesReturnProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:    quotationsalesReturnProduct.UnitDiscountPercent,
+					CreatedAt:          quotationsalesReturn.CreatedAt,
+					UpdatedAt:          quotationsalesReturn.UpdatedAt,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(quotationsalesReturnProduct.UnitPrice * (setProduct.RetailPricePercent / 100))

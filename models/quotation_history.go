@@ -17,35 +17,36 @@ import (
 )
 
 type ProductQuotationHistory struct {
-	ID                primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date              *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	StoreID           *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName         string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	ProductID         primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	CustomerName      string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	QuotationID       *primitive.ObjectID `json:"quotation_id,omitempty" bson:"quotation_id,omitempty"`
-	QuotationCode     string              `json:"quotation_code,omitempty" bson:"quotation_code,omitempty"`
-	Quantity          float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	PurchaseUnitPrice float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	UnitPrice         float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
-	UnitDiscount      float64             `bson:"unit_discount" json:"unit_discount"`
-	Discount          float64             `bson:"discount" json:"discount"`
-	DiscountPercent   float64             `bson:"discount_percent" json:"discount_percent"`
-	Price             float64             `bson:"price,omitempty" json:"price,omitempty"`
-	NetPrice          float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
-	Profit            float64             `bson:"profit" json:"profit"`
-	Loss              float64             `bson:"loss" json:"loss"`
-	VatPercent        float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
-	VatPrice          float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
-	Unit              string              `bson:"unit,omitempty" json:"unit,omitempty"`
-	Store             *Store              `json:"store,omitempty"`
-	UnitPriceWithVAT  float64             `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
-	Customer          *Customer           `json:"customer,omitempty"`
-	CreatedAt         *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt         *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	Type              string              `bson:"type" json:"type"`
-	PaymentStatus     string              `bson:"payment_status" json:"payment_status"`
+	ID                 primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date               *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	StoreID            *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	ProductID          primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	CustomerID         *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerName       string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	CustomerNameArabic string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
+	QuotationID        *primitive.ObjectID `json:"quotation_id,omitempty" bson:"quotation_id,omitempty"`
+	QuotationCode      string              `json:"quotation_code,omitempty" bson:"quotation_code,omitempty"`
+	Quantity           float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	PurchaseUnitPrice  float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	UnitPrice          float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
+	UnitDiscount       float64             `bson:"unit_discount" json:"unit_discount"`
+	Discount           float64             `bson:"discount" json:"discount"`
+	DiscountPercent    float64             `bson:"discount_percent" json:"discount_percent"`
+	Price              float64             `bson:"price,omitempty" json:"price,omitempty"`
+	NetPrice           float64             `bson:"net_price,omitempty" json:"net_price,omitempty"`
+	Profit             float64             `bson:"profit" json:"profit"`
+	Loss               float64             `bson:"loss" json:"loss"`
+	VatPercent         float64             `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
+	VatPrice           float64             `bson:"vat_price,omitempty" json:"vat_price,omitempty"`
+	Unit               string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	Store              *Store              `json:"store,omitempty"`
+	UnitPriceWithVAT   float64             `bson:"unit_price_with_vat,omitempty" json:"unit_price_with_vat,omitempty"`
+	Customer           *Customer           `json:"customer,omitempty"`
+	CreatedAt          *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	Type               string              `bson:"type" json:"type"`
+	PaymentStatus      string              `bson:"payment_status" json:"payment_status"`
 }
 
 type QuotationHistoryStats struct {
@@ -612,23 +613,24 @@ func (quotation *Quotation) CreateProductsQuotationHistory() error {
 
 	for _, quotationProduct := range quotation.Products {
 		history := ProductQuotationHistory{
-			Date:            quotation.Date,
-			StoreID:         quotation.StoreID,
-			StoreName:       quotation.StoreName,
-			ProductID:       quotationProduct.ProductID,
-			CustomerID:      quotation.CustomerID,
-			CustomerName:    quotation.CustomerName,
-			QuotationID:     &quotation.ID,
-			QuotationCode:   quotation.Code,
-			Quantity:        quotationProduct.Quantity,
-			UnitPrice:       quotationProduct.UnitPrice,
-			Unit:            quotationProduct.Unit,
-			Discount:        quotationProduct.UnitDiscount,
-			DiscountPercent: quotationProduct.UnitDiscountPercent,
-			CreatedAt:       quotation.CreatedAt,
-			UpdatedAt:       quotation.UpdatedAt,
-			Type:            quotation.Type,
-			PaymentStatus:   quotation.PaymentStatus,
+			Date:               quotation.Date,
+			StoreID:            quotation.StoreID,
+			StoreName:          quotation.StoreName,
+			ProductID:          quotationProduct.ProductID,
+			CustomerID:         quotation.CustomerID,
+			CustomerName:       quotation.CustomerName,
+			CustomerNameArabic: quotation.CustomerNameArabic,
+			QuotationID:        &quotation.ID,
+			QuotationCode:      quotation.Code,
+			Quantity:           quotationProduct.Quantity,
+			UnitPrice:          quotationProduct.UnitPrice,
+			Unit:               quotationProduct.Unit,
+			Discount:           quotationProduct.UnitDiscount,
+			DiscountPercent:    quotationProduct.UnitDiscountPercent,
+			CreatedAt:          quotation.CreatedAt,
+			UpdatedAt:          quotation.UpdatedAt,
+			Type:               quotation.Type,
+			PaymentStatus:      quotation.PaymentStatus,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(quotationProduct.UnitPrice)
@@ -660,23 +662,24 @@ func (quotation *Quotation) CreateProductsQuotationHistory() error {
 				}
 
 				history := ProductQuotationHistory{
-					Date:              quotation.Date,
-					Type:              quotation.Type,
-					StoreID:           quotation.StoreID,
-					StoreName:         quotation.StoreName,
-					ProductID:         *setProduct.ProductID,
-					CustomerID:        quotation.CustomerID,
-					CustomerName:      quotation.CustomerName,
-					QuotationID:       &quotation.ID,
-					QuotationCode:     quotation.Code,
-					Quantity:          RoundTo8Decimals(quotationProduct.Quantity * setProduct.Quantity),
-					PurchaseUnitPrice: RoundTo4Decimals(quotationProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
-					Unit:              setProductObj.Unit,
-					UnitDiscount:      RoundTo8Decimals(quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
-					Discount:          RoundTo8Decimals((quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(quotationProduct.Quantity*setProduct.Quantity)),
-					DiscountPercent:   quotationProduct.UnitDiscountPercent,
-					CreatedAt:         quotation.CreatedAt,
-					UpdatedAt:         quotation.UpdatedAt,
+					Date:               quotation.Date,
+					Type:               quotation.Type,
+					StoreID:            quotation.StoreID,
+					StoreName:          quotation.StoreName,
+					ProductID:          *setProduct.ProductID,
+					CustomerID:         quotation.CustomerID,
+					CustomerName:       quotation.CustomerName,
+					CustomerNameArabic: quotation.CustomerNameArabic,
+					QuotationID:        &quotation.ID,
+					QuotationCode:      quotation.Code,
+					Quantity:           RoundTo8Decimals(quotationProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice:  RoundTo4Decimals(quotationProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:               setProductObj.Unit,
+					UnitDiscount:       RoundTo8Decimals(quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:           RoundTo8Decimals((quotationProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo8Decimals(quotationProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:    quotationProduct.UnitDiscountPercent,
+					CreatedAt:          quotation.CreatedAt,
+					UpdatedAt:          quotation.UpdatedAt,
 				}
 
 				history.UnitPrice = RoundTo8Decimals(quotationProduct.UnitPrice * (setProduct.RetailPricePercent / 100))

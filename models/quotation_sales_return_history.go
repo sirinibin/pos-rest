@@ -24,6 +24,7 @@ type ProductQuotationSalesReturnHistory struct {
 	ProductID                primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	CustomerID               *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	CustomerName             string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	CustomerNameArabic       string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
 	QuotationID              *primitive.ObjectID `json:"quotation_id,omitempty" bson:"quotation_id,omitempty"`
 	QuotationCode            string              `json:"quotation_code,omitempty" bson:"quotation_code,omitempty"`
 	QuotationSalesReturnID   *primitive.ObjectID `json:"quotation_sales_return_id,omitempty" bson:"quotation_sales_return_id,omitempty"`
@@ -608,6 +609,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 			ProductID:                quotationsalesReturnProduct.ProductID,
 			CustomerID:               quotationsalesReturn.CustomerID,
 			CustomerName:             quotationsalesReturn.CustomerName,
+			CustomerNameArabic:       quotationsalesReturn.CustomerNameArabic,
 			QuotationID:              quotationsalesReturn.QuotationID,
 			QuotationCode:            quotationsalesReturn.QuotationCode,
 			QuotationSalesReturnID:   &quotationsalesReturn.ID,
@@ -656,6 +658,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 					ProductID:                *setProduct.ProductID,
 					CustomerID:               quotationsalesReturn.CustomerID,
 					CustomerName:             quotationsalesReturn.CustomerName,
+					CustomerNameArabic:       quotationsalesReturn.CustomerNameArabic,
 					QuotationSalesReturnID:   &quotationsalesReturn.ID,
 					QuotationSalesReturnCode: quotationsalesReturn.Code,
 					QuotationID:              quotationsalesReturn.QuotationID,
