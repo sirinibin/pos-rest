@@ -2672,7 +2672,8 @@ func ProcessQuotationSalesReturns() error {
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
 		findOptions.SetAllowDiskUse(true)
-		findOptions.SetSort(GetSortByFields("created_at"))
+		//findOptions.SetSort(GetSortByFields("created_at"))
+		findOptions.SetSort(bson.M{"date": 1})
 
 		cur, err := collection.Find(ctx, bson.M{
 			"store_id": store.ID,

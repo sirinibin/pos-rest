@@ -2432,6 +2432,7 @@ func ProcessPurchases() error {
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
 		findOptions.SetAllowDiskUse(true)
+		findOptions.SetSort(bson.M{"date": 1})
 
 		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
 		if err != nil {

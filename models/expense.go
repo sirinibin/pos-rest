@@ -1162,6 +1162,10 @@ func ProcessExpenses() error {
 	}
 
 	for _, store := range stores {
+
+		if store.Code != "GUOJ" {
+			continue
+		}
 		totalCount, err := store.GetTotalCount(bson.M{}, "expense")
 		if err != nil {
 			return err
@@ -1172,6 +1176,9 @@ func ProcessExpenses() error {
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
 		findOptions.SetAllowDiskUse(true)
+		//	findOptions.SetSort(bson.M{"date": 1})
+		//findOptions.SetSort(bson.M{"date": 1})
+		findOptions.SetSort(bson.M{"date": 1})
 
 		cur, err := collection.Find(ctx, bson.M{}, findOptions)
 		if err != nil {
@@ -1181,6 +1188,7 @@ func ProcessExpenses() error {
 			defer cur.Close(ctx)
 		}
 
+		var lastDate *time.Time
 		bar := progressbar.Default(totalCount)
 		for i := 0; cur != nil && cur.Next(ctx); i++ {
 			err := cur.Err()
@@ -1192,6 +1200,32 @@ func ProcessExpenses() error {
 			if err != nil {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
+
+			//model.Date = model.CreatedAt
+			//model.Update()
+			//model.UndoAccounting()
+			//model.DoAccounting()
+
+			/*if model.Date == nil || model.Date.IsZero() {
+				model.Date = model.CreatedAt
+				model.Update()
+			}*/
+
+			if lastDate != nil {
+				// 1=> model.Date>*lastDate
+
+				// 0=>same
+				var newDate time.Time
+				if model.Date.Compare(*lastDate) == 0 || model.Date.Compare(*lastDate) == -1 {
+					// -1=> model.Date<*lastDate
+					newDate = lastDate.Add(time.Minute * time.Duration(1))
+				}
+
+				model.Date = &newDate
+				model.Update()
+			}
+
+			lastDate = model.Date
 
 			model.UndoAccounting()
 			model.DoAccounting()

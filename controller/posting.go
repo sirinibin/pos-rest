@@ -135,7 +135,7 @@ func ListPostings(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if !endDate.IsZero() {
-			account.CalculateBalance(&endDate)
+			account.CalculateBalance(&endDate, nil)
 		}
 
 		response.Meta["account"] = account

@@ -97,7 +97,7 @@ func (store *Store) GetAccountListStats(filter map[string]interface{}) (stats Ac
 	return stats, nil
 }
 
-func (account *Account) CalculateBalance(beforeDate *time.Time) error {
+func (account *Account) CalculateBalance(beforeDate *time.Time, beforeID *primitive.ObjectID) error {
 	collection := db.GetDB("store_" + account.StoreID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -108,15 +108,14 @@ func (account *Account) CalculateBalance(beforeDate *time.Time) error {
 	}
 
 	if beforeDate != nil {
-		filter["date"] = bson.M{"$lte": beforeDate}
+		filter["date"] = bson.M{"$lt": beforeDate}
 	}
 
 	/*
-
 		if beforeID != nil {
-			filter["reference_id"] = bson.M{"$lt": beforeID}
-		}
-	*/
+			filter["posts._id"] = bson.M{"$lt": beforeID}
+		}*/
+
 	stats := AccountStats{}
 
 	pipeline := []bson.M{
@@ -999,7 +998,7 @@ func (store *Store) IsAccountExists(ID *primitive.ObjectID) (exists bool, err er
 
 func SetAccountBalances(accounts map[string]Account) error {
 	for _, account := range accounts {
-		err := account.CalculateBalance(nil)
+		err := account.CalculateBalance(nil, nil)
 		if err != nil {
 			return err
 		}

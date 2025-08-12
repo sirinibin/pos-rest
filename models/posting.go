@@ -18,7 +18,7 @@ import (
 // Post : Post structure
 type Post struct {
 	ID            primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Date          *time.Time         `bson:"date,omitempty" json:"date,omitempty"`
+	Date          *time.Time         `bson:"date" json:"date"`
 	AccountID     primitive.ObjectID `json:"account_id,omitempty" bson:"account_id,omitempty"`
 	AccountName   string             `json:"account_name,omitempty" bson:"account_name,omitempty"`
 	AccountNumber string             `bson:"account_number,omitempty" json:"account_number,omitempty"`
@@ -33,7 +33,7 @@ type Post struct {
 // Account : Account structure
 type Posting struct {
 	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date            *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	Date            *time.Time          `bson:"date" json:"date"`
 	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	AccountID       primitive.ObjectID  `json:"account_id,omitempty" bson:"account_id,omitempty"`
 	AccountName     string              `json:"account_name,omitempty" bson:"account_name,omitempty"`
@@ -871,7 +871,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 			if postBalance > 0 || postBalance < 0 {
 				accountBalance = postBalance
 			} else {
-				err = account.CalculateBalance(journal2.Date)
+				err = account.CalculateBalance(journal2.Date, nil)
 				if err != nil {
 					return nil, errors.New("error calculating account balance: " + err.Error())
 				}
@@ -1053,7 +1053,7 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 
 		postings = append(postings, *posting)
 
-		err = account.CalculateBalance(nil)
+		err = account.CalculateBalance(nil, nil)
 		if err != nil {
 			return nil, errors.New("error calculating account balance: " + err.Error())
 		}
@@ -1153,7 +1153,7 @@ func (store *Store) FindPostsByAccountID(
 	}
 
 	if afterDate != nil {
-		filter["date"] = bson.M{"$gte": afterDate}
+		filter["date"] = bson.M{"$gt": afterDate}
 	}
 
 	cur, err := collection.Find(ctx, filter, findOptions)

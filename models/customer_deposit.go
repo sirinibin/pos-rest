@@ -1634,6 +1634,7 @@ func ProcessCustomerDeposits() error {
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
 		findOptions.SetAllowDiskUse(true)
+		findOptions.SetSort(bson.M{"date": 1})
 
 		bar := progressbar.Default(totalCount)
 		cur, err := collection.Find(ctx, bson.M{}, findOptions)
