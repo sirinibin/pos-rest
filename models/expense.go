@@ -1226,7 +1226,6 @@ func ProcessExpenses() error {
 			}
 
 			lastDate = model.Date
-
 			model.UndoAccounting()
 			model.DoAccounting()
 
