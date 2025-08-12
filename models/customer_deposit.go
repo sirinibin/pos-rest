@@ -33,8 +33,8 @@ type CustomerDeposit struct {
 	DateStr            string              `json:"date_str,omitempty" bson:"-"`
 	CustomerID         *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
 	Customer           *Customer           `json:"customer" bson:"-"`
-	CustomerName       string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
-	CustomerNameArabic string              `json:"customer_name_arabic,omitempty" bson:"customer_name_arabic,omitempty"`
+	CustomerName       string              `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
 	Type               string              `bson:"type" json:"type"`
 	VendorID           *primitive.ObjectID `json:"vendor_id" bson:"vendor_id"`
 	Vendor             *Vendor             `json:"vendor" bson:"-"`
@@ -1655,8 +1655,24 @@ func ProcessCustomerDeposits() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			model.Type = "customer"
-			model.Update()
+			model.UndoAccounting()
+			model.DoAccounting()
+			if model.CustomerID != nil && !model.CustomerID.IsZero() {
+				customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
+				if customer != nil {
+					customer.SetCreditBalance()
+				}
+			}
+
+			if model.VendorID != nil && !model.VendorID.IsZero() {
+				vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
+				if vendor != nil {
+					vendor.SetCreditBalance()
+				}
+			}
+
+			//model.Type = "customer"
+			//model.Update()
 			/*
 				model.UndoAccounting()
 				model.DoAccounting()

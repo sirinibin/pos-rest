@@ -23,7 +23,7 @@ type ProductSalesReturnHistory struct {
 	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	ProductID          primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
 	CustomerID         *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
-	CustomerName       string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	CustomerName       string              `json:"customer_name" bson:"customer_name"`
 	CustomerNameArabic string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
 	OrderID            *primitive.ObjectID `json:"order_id,omitempty" bson:"order_id,omitempty"`
 	OrderCode          string              `json:"order_code,omitempty" bson:"order_code,omitempty"`
