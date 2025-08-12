@@ -1188,7 +1188,7 @@ func ProcessExpenses() error {
 			defer cur.Close(ctx)
 		}
 
-		//var lastDate *time.Time
+		var lastDate *time.Time
 		bar := progressbar.Default(totalCount)
 		for i := 0; cur != nil && cur.Next(ctx); i++ {
 			err := cur.Err()
@@ -1201,35 +1201,34 @@ func ProcessExpenses() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			model.Date = model.CreatedAt
+			/*model.Date = model.CreatedAt
 			model.Update()
 			model.UndoAccounting()
-			model.DoAccounting()
+			model.DoAccounting()*/
 
 			/*if model.Date == nil || model.Date.IsZero() {
 				model.Date = model.CreatedAt
 				model.Update()
 			}*/
 
-			/*
-				if lastDate != nil {
-					// 1=> model.Date>*lastDate
-
-					// 0=>same
-					var newDate time.Time
-					if model.Date.Compare(*lastDate) == 0 || model.Date.Compare(*lastDate) == -1 {
-						// -1=> model.Date<*lastDate
-						newDate = lastDate.Add(time.Minute * time.Duration(1))
-					}
-
+			if lastDate != nil {
+				// 1=> model.Date>*lastDate
+				// 0=>same
+				var newDate time.Time
+				if model.Date.Compare(*lastDate) == 0 || model.Date.Compare(*lastDate) == -1 {
+					// -1=> model.Date<*lastDate
+					newDate = lastDate.Add(time.Minute * time.Duration(1))
+					// order.Payments[i].Date.Add(1 * time.Minute)
 					model.Date = &newDate
 					model.Update()
-				}*/
+				}
 
-			//lastDate = model.Date
+			}
 
-			//model.UndoAccounting()
-			//	model.DoAccounting()
+			lastDate = model.Date
+
+			model.UndoAccounting()
+			model.DoAccounting()
 
 			/*
 				err = model.Update()
