@@ -1163,9 +1163,9 @@ func ProcessExpenses() error {
 
 	for _, store := range stores {
 
-		if store.Code != "GUOJ" {
+		/*if store.Code != "GUOJ" {
 			continue
-		}
+		}*/
 		totalCount, err := store.GetTotalCount(bson.M{}, "expense")
 		if err != nil {
 			return err
