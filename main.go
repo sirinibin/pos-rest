@@ -440,7 +440,13 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	err := models.ProcessPurchases()
+	/*
+		err := models.ProcessPurchases()
+		if err != nil {
+			log.Print(err)
+		}*/
+
+	err := models.ProcessPurchaseReturns()
 	if err != nil {
 		log.Print(err)
 	}
