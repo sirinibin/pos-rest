@@ -476,14 +476,15 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchaseOld.SetProductsPurchaseStats()
 	purchase.SetVendorPurchaseStats()
 
+	err = purchase.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if !store.Settings.DisablePurchasesOnAccounts {
-		err = purchase.UndoAccounting()
-		if err != nil {
-			response.Status = false
-			response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
 
 		err = purchase.DoAccounting()
 		if err != nil {

@@ -2464,7 +2464,9 @@ func ProcessPurchases() error {
 			purchase.CreateProductsPurchaseHistory()
 
 			purchase.UndoAccounting()
-			purchase.DoAccounting()
+			if !store.Settings.DisablePurchasesOnAccounts {
+				purchase.DoAccounting()
+			}
 
 			if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 				vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
