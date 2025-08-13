@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -506,7 +507,7 @@ func (store *Store) FindLedgerByReferenceID(
 	return ledger, err
 }
 
-func (store *Store) SetPostsBalanceByAccountID(
+func (store *Store) SetPostsBalancesByAccountID(
 	account *Account,
 	afterDate *time.Time,
 ) (err error) {
@@ -550,6 +551,7 @@ func (store *Store) SetPostsBalanceByAccountID(
 		for j, subPost := range post.Posts {
 			err = account.CalculateBalance(subPost.Date, &subPost.ID)
 			if err != nil {
+				log.Print("Error calulating post Balance:" + err.Error())
 				return err // send error back
 			}
 			accountBalance := account.Balance
@@ -578,6 +580,7 @@ func (store *Store) SetPostsBalanceByAccountID(
 			post.Posts[j].Balance = newBalance
 			err = post.Update()
 			if err != nil {
+				log.Print("Error updating post Balance:" + err.Error())
 				return err // send error back
 			}
 		}
@@ -589,7 +592,11 @@ func (store *Store) SetPostsBalanceByAccountID(
 		return err // send error back
 	}
 
-	account.Update()
+	err = account.Update()
+	if err != nil {
+		log.Print("Error updating account Balance:" + err.Error())
+		return err // send error back
+	}
 
 	return err
 }
@@ -610,7 +617,7 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 	}
 
 	for _, account := range ledgerAccounts {
-		go store.SetPostsBalanceByAccountID(&account, afterDate)
+		go store.SetPostsBalancesByAccountID(&account, afterDate)
 	}
 
 	return nil

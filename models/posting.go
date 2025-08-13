@@ -13,7 +13,6 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -1232,6 +1231,9 @@ func ProcessPostings() error {
 	}
 
 	for _, store := range stores {
+		if store.Code != "GUOJ" {
+			continue
+		}
 		totalCount, err := store.GetTotalCount(bson.M{}, "posting")
 		if err != nil {
 			return err
@@ -1251,7 +1253,7 @@ func ProcessPostings() error {
 		if cur != nil {
 			defer cur.Close(ctx)
 		}
-
+		var lastDate *time.Time
 		bar := progressbar.Default(totalCount)
 		for i := 0; cur != nil && cur.Next(ctx); i++ {
 			err := cur.Err()
@@ -1264,43 +1266,70 @@ func ProcessPostings() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if posting.ReferenceModel == "purchase" {
-				purchase, err := store.FindPurchaseByID(&posting.ReferenceID, bson.M{})
-				if err != nil && err != mongo.ErrNoDocuments {
-					return err
-				}
-
-				purchase.UndoAccounting()
-				if !store.Settings.DisablePurchasesOnAccounts {
-					purchase.DoAccounting()
-				}
-
-				if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
-					vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
-					if vendor != nil {
-						vendor.SetCreditBalance()
+			if lastDate != nil {
+				for i, post := range posting.Posts {
+					// 1=> model.Date>*lastDate
+					// 0=>same
+					var newDate time.Time
+					if post.Date.Compare(*lastDate) == 0 || post.Date.Compare(*lastDate) == -1 {
+						// -1=> model.Date<*lastDate
+						newDate = lastDate.Add(time.Second * time.Duration(1))
+						// order.Payments[i].Date.Add(1 * time.Minute)
+						//post.Date = &newDate
+						posting.Posts[i].Date = &newDate
+						posting.Update()
 					}
+				}
+
+				var newDate time.Time
+				if posting.Date.Compare(*lastDate) == 0 || posting.Date.Compare(*lastDate) == -1 {
+					// -1=> model.Date<*lastDate
+					newDate = lastDate.Add(time.Second * time.Duration(1))
+					posting.Date = &newDate
+					posting.Update()
 				}
 			}
 
-			if posting.ReferenceModel == "purchase_return" {
-				purchaseReturn, err := store.FindPurchaseReturnByID(&posting.ReferenceID, bson.M{})
-				if err != nil && err != mongo.ErrNoDocuments {
-					return err
-				}
+			lastDate = posting.Date
 
-				purchaseReturn.UndoAccounting()
-				if !store.Settings.DisablePurchasesOnAccounts {
-					purchaseReturn.DoAccounting()
-				}
+			/*
+				if posting.ReferenceModel == "purchase" {
+					purchase, err := store.FindPurchaseByID(&posting.ReferenceID, bson.M{})
+					if err != nil && err != mongo.ErrNoDocuments {
+						return err
+					}
 
-				if purchaseReturn.VendorID != nil && !purchaseReturn.VendorID.IsZero() {
-					vendor, _ := store.FindVendorByID(purchaseReturn.VendorID, bson.M{})
-					if vendor != nil {
-						vendor.SetCreditBalance()
+					purchase.UndoAccounting()
+					if !store.Settings.DisablePurchasesOnAccounts {
+						purchase.DoAccounting()
+					}
+
+					if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+						vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
+						if vendor != nil {
+							vendor.SetCreditBalance()
+						}
 					}
 				}
-			}
+
+				if posting.ReferenceModel == "purchase_return" {
+					purchaseReturn, err := store.FindPurchaseReturnByID(&posting.ReferenceID, bson.M{})
+					if err != nil && err != mongo.ErrNoDocuments {
+						return err
+					}
+
+					purchaseReturn.UndoAccounting()
+					if !store.Settings.DisablePurchasesOnAccounts {
+						purchaseReturn.DoAccounting()
+					}
+
+					if purchaseReturn.VendorID != nil && !purchaseReturn.VendorID.IsZero() {
+						vendor, _ := store.FindVendorByID(purchaseReturn.VendorID, bson.M{})
+						if vendor != nil {
+							vendor.SetCreditBalance()
+						}
+					}
+				}*/
 
 			/*
 				if posting.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
