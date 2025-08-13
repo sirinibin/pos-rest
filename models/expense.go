@@ -1202,10 +1202,10 @@ func ProcessExpenses() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			model.Date = model.CreatedAt
+			/*model.Date = model.CreatedAt
 			model.Update()
 			model.UndoAccounting()
-			model.DoAccounting()
+			model.DoAccounting()*/
 
 			/*if model.Date == nil || model.Date.IsZero() {
 				model.Date = model.CreatedAt
