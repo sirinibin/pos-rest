@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -1220,144 +1222,195 @@ func (store *Store) IsPostingExists(ID *primitive.ObjectID) (exists bool, err er
 	return (count > 0), err
 }
 
-func (store *Store) ProcessPostings() error {
+func ProcessPostings() error {
 	log.Print("Processing postings")
 	//postingCount := 0
 
-	//counts := map[string]int{}
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
+	stores, err := GetAllStores()
 	if err != nil {
-		return errors.New("Error fetching quotations:" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
+		return err
 	}
 
-	//productCount := 1
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{}, "posting")
 		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
-		}
-		posting := Posting{}
-		err = cur.Decode(&posting)
-		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
+			return err
 		}
 
-		/*
-			if posting.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
-				continue
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+		findOptions.SetSort(bson.M{"date": 1})
+
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching quotations:" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
+			if err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			posting := Posting{}
+			err = cur.Decode(&posting)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if posting.ReferenceModel != "sales" {
-				continue
-			}
+			if posting.ReferenceModel == "purchase" {
+				purchase, err := store.FindPurchaseByID(&posting.ReferenceID, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
 
-			if posting.AccountNumber != "1001" {
-				continue
-			}
+				purchase.UndoAccounting()
+				if !store.Settings.DisablePurchasesOnAccounts {
+					purchase.DoAccounting()
+				}
 
-			postingCount++
-
-			if _, ok := counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()]; ok {
-				counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()]++
-				log.Print("Increasing")
-			} else {
-				counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()] = 1
-			}
-
-			if counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()] > 1 {
-				log.Print("more than one found")
-				log.Print(counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()])
-				log.Print(posting.ReferenceCode)
-				log.Print("Store_id" + posting.StoreID.Hex())
-			}
-
-			order, _ := FindOrderByID(&posting.ReferenceID, bson.M{})
-			cashMethodFound := false
-			for _, method := range order.PaymentMethods {
-				if method == "cash" {
-					cashMethodFound = true
+				if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+					vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
 				}
 			}
 
-			if !cashMethodFound {
-				log.Print("Cash method not found")
-				log.Print(order.Code)
+			if posting.ReferenceModel == "purchase_return" {
+				purchaseReturn, err := store.FindPurchaseReturnByID(&posting.ReferenceID, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
 
+				purchaseReturn.UndoAccounting()
+				if !store.Settings.DisablePurchasesOnAccounts {
+					purchaseReturn.DoAccounting()
+				}
+
+				if purchaseReturn.VendorID != nil && !purchaseReturn.VendorID.IsZero() {
+					vendor, _ := store.FindVendorByID(purchaseReturn.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
+				}
 			}
-		*/
 
-		/*
-			if _, ok := counts[posting.ReferenceCode]; ok {
-
-			}
-			*
 			/*
-				if order.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
+				if posting.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
 					continue
 				}
 
+				if posting.ReferenceModel != "sales" {
+					continue
+				}
+
+				if posting.AccountNumber != "1001" {
+					continue
+				}
+
+				postingCount++
+
+				if _, ok := counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()]; ok {
+					counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()]++
+					log.Print("Increasing")
+				} else {
+					counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()] = 1
+				}
+
+				if counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()] > 1 {
+					log.Print("more than one found")
+					log.Print(counts[posting.ReferenceCode+"_"+posting.StoreID.Hex()])
+					log.Print(posting.ReferenceCode)
+					log.Print("Store_id" + posting.StoreID.Hex())
+				}
+
+				order, _ := FindOrderByID(&posting.ReferenceID, bson.M{})
+				cashMethodFound := false
 				for _, method := range order.PaymentMethods {
 					if method == "cash" {
-						cashOrdersCount++
-						ledgerCount, _ := GetTotalCount(bson.M{"reference_id": order.ID}, "ledger")
-						if ledgerCount > 1 {
-							log.Print("More than 1")
-							log.Print(ledgerCount)
-							log.Print(order.Code)
-						}
-
-						if ledgerCount == 0 {
-							log.Print("No ledger found")
-							log.Print(ledgerCount)
-							log.Print(order.Code)
-						}
-
-						if ledgerCount > 0 {
-							ledgersCount++
-						}
-
-						postingCount, _ := GetTotalCount(bson.M{"reference_id": order.ID, "account_number": "1001"}, "posting")
-						if postingCount > 0 {
-							postingsCount++
-						}
-
-						if postingCount == 0 {
-							log.Print("No posting found")
-							log.Print(postingCount)
-							log.Print(order.Code)
-						}
-
-						if postingCount > 1 {
-							log.Print("More than 1")
-							log.Print(postingCount)
-							log.Print(order.Code)
-						}
+						cashMethodFound = true
 					}
 				}
+
+				if !cashMethodFound {
+					log.Print("Cash method not found")
+					log.Print(order.Code)
+
+				}
+			*/
+
+			/*
+				if _, ok := counts[posting.ReferenceCode]; ok {
+
+				}
+				*
+				/*
+					if order.StoreID.Hex() != "61cf42e580e87d715a4cb9e6" {
+						continue
+					}
+
+					for _, method := range order.PaymentMethods {
+						if method == "cash" {
+							cashOrdersCount++
+							ledgerCount, _ := GetTotalCount(bson.M{"reference_id": order.ID}, "ledger")
+							if ledgerCount > 1 {
+								log.Print("More than 1")
+								log.Print(ledgerCount)
+								log.Print(order.Code)
+							}
+
+							if ledgerCount == 0 {
+								log.Print("No ledger found")
+								log.Print(ledgerCount)
+								log.Print(order.Code)
+							}
+
+							if ledgerCount > 0 {
+								ledgersCount++
+							}
+
+							postingCount, _ := GetTotalCount(bson.M{"reference_id": order.ID, "account_number": "1001"}, "posting")
+							if postingCount > 0 {
+								postingsCount++
+							}
+
+							if postingCount == 0 {
+								log.Print("No posting found")
+								log.Print(postingCount)
+								log.Print(order.Code)
+							}
+
+							if postingCount > 1 {
+								log.Print("More than 1")
+								log.Print(postingCount)
+								log.Print(order.Code)
+							}
+						}
+					}
+			*/
+			bar.Add(1)
+		}
+
+		//log.Print("postings count: ")
+		//log.Print(postingCount)
+		/*
+			log.Print("Ledger count: ")
+			log.Print(ledgersCount)
+			log.Print("Cash orders: ")
+			log.Print(cashOrdersCount)
+
+			log.Print("postings count: ")
+			log.Print(postingsCount)
 		*/
 
 	}
-
-	//log.Print("postings count: ")
-	//log.Print(postingCount)
-	/*
-		log.Print("Ledger count: ")
-		log.Print(ledgersCount)
-		log.Print("Cash orders: ")
-		log.Print(cashOrdersCount)
-
-		log.Print("postings count: ")
-		log.Print(postingsCount)
-	*/
 
 	log.Print("DONE!")
 	return nil
