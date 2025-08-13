@@ -506,6 +506,94 @@ func (store *Store) FindLedgerByReferenceID(
 	return ledger, err
 }
 
+func (store *Store) SetPostsBalanceByAccountID(
+	account *Account,
+	afterDate *time.Time,
+) (err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOptions := options.Find()
+	findOptions.SetSort(bson.M{"date": 1})
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	filter := bson.M{
+		"account_id": account.ID,
+		"store_id":   store.ID,
+	}
+
+	if afterDate != nil {
+		filter["date"] = bson.M{"$gt": afterDate}
+	}
+
+	cur, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return errors.New("Error fetching posts:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return errors.New("Cursor error:" + err.Error())
+		}
+		post := Posting{}
+		err = cur.Decode(&post)
+		if err != nil {
+			return errors.New("Cursor decode error:" + err.Error())
+		}
+
+		for j, subPost := range post.Posts {
+			err = account.CalculateBalance(subPost.Date, &subPost.ID)
+			if err != nil {
+				return err // send error back
+			}
+			accountBalance := account.Balance
+
+			if account.Type == "liability" && accountBalance > 0 {
+				accountBalance = account.Balance * (-1)
+			}
+
+			newBalance := float64(0.00)
+
+			amount := float64(0.00)
+			if subPost.Debit > subPost.Credit {
+				amount = subPost.Debit
+				newBalance = accountBalance + amount
+			} else {
+				amount = subPost.Credit
+				newBalance = accountBalance - amount
+
+				if account.Type == "revenue" || account.Type == "capital" {
+					newBalance = (accountBalance + amount)
+				}
+			}
+
+			//log.Print("Setting Balance:")
+			//log.Print(post.Posts[j].Balance)
+			post.Posts[j].Balance = newBalance
+			err = post.Update()
+			if err != nil {
+				return err // send error back
+			}
+		}
+
+	} //end for loop
+
+	err = account.CalculateBalance(nil, nil)
+	if err != nil {
+		return err // send error back
+	}
+
+	account.Update()
+
+	return err
+}
+
 func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) {
 	store, err := FindStoreByID(ledger.StoreID, bson.M{})
 	if err != nil {
@@ -520,250 +608,9 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 			return errors.New("Error getting related accounts: " + err.Error())
 		}
 	}
-	errCh := map[string]chan error{}
+
 	for _, account := range ledgerAccounts {
-		//log.Print(account.Name)
-
-		//errCh := make( chan error)
-
-		go func() {
-			//log.Print("Inside Async")
-			postings, err := store.FindPostsByAccountID(&account.ID, afterDate)
-			if err != nil {
-				errCh[account.Name] <- err // send error back
-			}
-
-			for _, post := range postings {
-				//log.Print(post.ReferenceCode)
-				for j, subPost := range post.Posts {
-
-					err = account.CalculateBalance(subPost.Date, &subPost.ID)
-					if err != nil {
-						errCh[account.Name] <- err // send error back
-					}
-					accountBalance := account.Balance
-
-					if account.Type == "liability" && accountBalance > 0 {
-						accountBalance = account.Balance * (-1)
-					}
-
-					newBalance := float64(0.00)
-
-					amount := float64(0.00)
-					if subPost.Debit > subPost.Credit {
-						amount = subPost.Debit
-						newBalance = accountBalance + amount
-					} else {
-						amount = subPost.Credit
-						newBalance = accountBalance - amount
-
-						if account.Type == "revenue" || account.Type == "capital" {
-							newBalance = (accountBalance + amount)
-						}
-					}
-
-					//log.Print("Setting Balance:")
-					//log.Print(post.Posts[j].Balance)
-					post.Posts[j].Balance = newBalance
-					err = post.Update()
-					if err != nil {
-						errCh[account.Name] <- err // send error back
-					}
-				}
-
-				/*
-					if post.ReferenceModel == "sales" {
-						postOrder, err := store.FindOrderByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postOrder == nil {
-							continue
-						}
-
-						err = postOrder.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postOrder.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "sales_return" {
-						postSalesReturn, err := store.FindSalesReturnByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postSalesReturn == nil {
-							continue
-						}
-
-						err = postSalesReturn.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postSalesReturn.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "purchase" {
-						postPurchase, err := store.FindPurchaseByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postPurchase == nil {
-							continue
-						}
-
-						err = postPurchase.UndoAccounting()
-						if err != nil {
-							return err
-						}
-
-						err = postPurchase.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "purchase_return" {
-						postPurchaseReturn, err := store.FindPurchaseReturnByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postPurchaseReturn == nil {
-							continue
-						}
-
-						err = postPurchaseReturn.UndoAccounting()
-						if err != nil {
-							return err
-						}
-
-						err = postPurchaseReturn.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "quotation_sales" {
-						postQuotation, err := store.FindQuotationByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postQuotation == nil {
-							continue
-						}
-
-						err = postQuotation.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postQuotation.DoAccounting()
-						if err != nil {
-							return err
-						}
-
-					} else if post.ReferenceModel == "customer_deposit" || post.ReferenceModel == "vendor_deposit" {
-						postCustomerDeposit, err := store.FindCustomerDepositByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postCustomerDeposit == nil {
-							continue
-						}
-
-						err = postCustomerDeposit.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postCustomerDeposit.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "customer_withdrawal" || post.ReferenceModel == "vendor_withdrawal" {
-						postCustomerWithdrawal, err := store.FindCustomerWithdrawalByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postCustomerWithdrawal == nil {
-							continue
-						}
-
-						err = postCustomerWithdrawal.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postCustomerWithdrawal.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "capital" {
-						postCapital, err := store.FindCapitalByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postCapital == nil {
-							continue
-						}
-
-						err = postCapital.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postCapital.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "expense" {
-						postExpense, err := store.FindExpenseByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postExpense == nil {
-							continue
-						}
-
-						err = postExpense.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postExpense.DoAccounting()
-						if err != nil {
-							return err
-						}
-					} else if post.ReferenceModel == "drawing" {
-						postDivident, err := store.FindDividentByID(&post.ReferenceID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if postDivident == nil {
-							continue
-						}
-
-						err = postDivident.UndoAccounting()
-						if err != nil {
-							return err
-						}
-						err = postDivident.DoAccounting()
-						if err != nil {
-							return err
-						}
-					}*/
-			}
-		}()
-
-		// Wait for goroutine result
-		/*if err := <-errCh[account.Name]; err != nil {
-			//return err
-			fmt.Println("Error:", err)
-		}*/
+		go store.SetPostsBalanceByAccountID(&account, afterDate)
 	}
 
 	return nil
