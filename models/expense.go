@@ -637,7 +637,8 @@ func (store *Store) FindLastExpense(
 	if len(selectFields) > 0 {
 		findOneOptions.SetProjection(selectFields)
 	}
-	findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+	//findOneOptions.SetSort(map[string]interface{}{"_id": -1})
+	findOneOptions.SetSort(map[string]interface{}{"date": -1})
 
 	err = collection.FindOne(ctx,
 		bson.M{
@@ -1243,9 +1244,100 @@ func ProcessExpenses() error {
 	return nil
 }
 
+func (expense *Expense) FindNextExpense(selectFields map[string]interface{}) (nextExpense *Expense, err error) {
+	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.M{"date": 1})
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"date":     bson.M{"$gte": expense.Date},
+			"_id":      bson.M{"$ne": expense.ID},
+			"store_id": expense.StoreID,
+		}, findOneOptions).
+		Decode(&nextExpense)
+	if err != nil && err != mongo.ErrNoDocuments {
+		return nil, err
+	}
+
+	return nextExpense, nil
+}
+
+func (expense *Expense) FindPreviousExpense(selectFields map[string]interface{}) (previousExpense *Expense, err error) {
+	collection := db.GetDB("store_" + expense.StoreID.Hex()).Collection("expense")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.M{"date": -1})
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"date":     bson.M{"$lte": expense.Date},
+			"_id":      bson.M{"$ne": expense.ID},
+			"store_id": expense.StoreID,
+		}, findOneOptions).
+		Decode(&previousExpense)
+	if err != nil && err != mongo.ErrNoDocuments {
+		return nil, err
+	}
+
+	return previousExpense, nil
+}
+
 //Accounting
 
 func (expense *Expense) DoAccounting() error {
+	previousExpense, err := expense.FindPreviousExpense(bson.M{})
+	if err != nil {
+		return errors.New("Error finding previous expense:" + err.Error())
+	}
+
+	if previousExpense != nil {
+		if IsDateTimesEqual(expense.Date, previousExpense.Date) {
+			newTime := expense.Date.Add(1 * time.Minute)
+			expense.Date = &newTime
+			err = expense.Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	nextExpense, err := expense.FindNextExpense(bson.M{})
+	if err != nil {
+		return errors.New("Error finding next expense:" + err.Error())
+	}
+
+	if nextExpense != nil {
+		if IsDateTimesEqual(expense.Date, nextExpense.Date) {
+			newTime := expense.Date.Add(1 * time.Minute)
+			nextExpense.Date = &newTime
+			err = nextExpense.Update()
+			if err != nil {
+				return err
+			}
+
+			err = nextExpense.UndoAccounting()
+			if err != nil {
+				return err
+			}
+			err = nextExpense.DoAccounting()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	ledger, err := expense.CreateLedger()
 	if err != nil {
 		return err
