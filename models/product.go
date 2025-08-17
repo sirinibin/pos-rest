@@ -2681,6 +2681,120 @@ func (product *Product) Insert() (err error) {
 	return nil
 }
 
+func (product *Product) CopyToStore(storeID *primitive.ObjectID) (err error) {
+	store, err := FindStoreByID(storeID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+
+	productInDb, err := store.FindProductByID(&product.ID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if productInDb != nil {
+		return nil
+	}
+
+	productInDb, err = store.FindProductByPartNumber(product.PartNumber, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if productInDb != nil {
+		return nil
+	}
+
+	oldProductStore := product.ProductStores[product.StoreID.Hex()]
+
+	product.StoreID = storeID // storeID> destination
+	product.InitStoreUnitPrice()
+	product.ProductStores[storeID.Hex()] = ProductStore{
+		StoreID:                   *storeID,
+		StoreName:                 store.Name,
+		PurchaseUnitPrice:         oldProductStore.PurchaseUnitPrice,
+		PurchaseUnitPriceWithVAT:  oldProductStore.PurchaseUnitPriceWithVAT,
+		WholesaleUnitPrice:        oldProductStore.WholesaleUnitPrice,
+		WholesaleUnitPriceWithVAT: oldProductStore.WholesaleUnitPriceWithVAT,
+		RetailUnitPrice:           oldProductStore.RetailUnitPrice,
+		RetailUnitPriceWithVAT:    oldProductStore.RetailUnitPriceWithVAT,
+	}
+
+	if product.BrandID != nil {
+		productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+
+		if productBrand != nil {
+			product.BrandID = &productBrand.ID
+			product.BrandName = productBrand.Name
+		}
+
+		if productBrand == nil {
+			productBrand, err = store.FindProductBrandByName(product.BrandName, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				return err
+			}
+
+			product.BrandID = &productBrand.ID
+			product.BrandName = productBrand.Name
+		}
+	}
+
+	if len(product.CategoryID) > 0 {
+		productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+
+		if productCategory != nil {
+			product.CategoryID[0] = &productCategory.ID
+			product.CategoryName[0] = productCategory.Name
+		}
+
+		if productCategory == nil && len(product.CategoryName) > 0 {
+			productCategory, err = store.FindProductCategoryByName(product.CategoryName[0], bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				return err
+			}
+
+			product.CategoryID = append(product.CategoryID, &productCategory.ID)
+			product.CategoryName = append(product.CategoryName, productCategory.Name)
+		}
+	}
+
+	_, err = collection.InsertOne(ctx, &product)
+	if err != nil {
+		return err
+	}
+
+	product.FindSetTotal()
+	product.UpdateForeignLabelFields()
+	product.SetBarcode()
+	product.SetPartNumber()
+	product.InitStoreUnitPrice()
+	product.CalculateUnitProfit()
+	product.GeneratePrefixes()
+	product.SetProductQuotationStatsByStoreID(*product.StoreID)
+	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
+	product.SetStock()
+	product.SetAdditionalkeywords()
+	product.SetSearchLabel(&store.ID)
+	product.ClearStockAdjustmentHistory()
+
+	err = product.Update(storeID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (product *Product) SaveImages() error {
 	if len(product.ImagesContent) == 0 {
 		return nil
@@ -3127,11 +3241,11 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		/*
-			log.Print("Branch name:" + store.BranchName)
-			if store.Name != "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment" {
-				continue
-			}*/
+		if store.Code != "MBDIT" && store.Code != "MBDI" {
+			continue
+		}
+
+		log.Print("Branch name:" + store.BranchName)
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
@@ -3168,10 +3282,55 @@ func ProcessProducts() error {
 				continue
 			}
 
-			product.SetStock()
+			destinations := []string{"MBDI-SIMULATION", "t1"}
 
-			product.ClearStockAdjustmentHistory()
-			product.CreateStockAdjustmentHistory()
+			for _, destinationCode := range destinations {
+				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
+
+				if destinationStore != nil {
+					if product.BrandID != nil {
+						productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
+						if err != nil && err != mongo.ErrNoDocuments {
+							return err
+						}
+
+						if productBrand != nil {
+							err = productBrand.CopyToStore(&destinationStore.ID)
+							if err != nil {
+								return err
+							}
+						}
+					}
+
+					if len(product.CategoryID) > 0 {
+						productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
+						if err != nil && err != mongo.ErrNoDocuments {
+							return err
+						}
+
+						if productCategory != nil {
+							err = productCategory.CopyToStore(&destinationStore.ID)
+							if err != nil {
+								return err
+							}
+						}
+					}
+
+					err = product.CopyToStore(&destinationStore.ID)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			/*
+				product.SetStock()
+				product.ClearStockAdjustmentHistory()
+				product.CreateStockAdjustmentHistory()
+			*/
 
 			//now := time.Now()
 

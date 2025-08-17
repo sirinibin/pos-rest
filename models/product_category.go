@@ -14,6 +14,7 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -436,6 +437,70 @@ func (productCategory *ProductCategory) Insert() error {
 	return nil
 }
 
+func (productCategory *ProductCategory) CopyToStore(storeID *primitive.ObjectID) (err error) {
+	store, err := FindStoreByID(storeID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("product_category")
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+
+	productCategoryInDb, err := store.FindProductCategoryByID(&productCategory.ID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if productCategoryInDb != nil {
+		return nil
+	}
+
+	productCategoryInDb, err = store.FindProductCategoryByName(productCategory.Name, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if productCategoryInDb != nil {
+		return nil
+	}
+
+	productCategory.StoreID = storeID
+
+	_, err = collection.InsertOne(ctx, &productCategory)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (store *Store) FindProductCategoryByName(
+	Name string,
+	selectFields map[string]interface{},
+) (productCategory *ProductCategory, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"name":     Name,
+			"store_id": store.ID,
+		}, findOneOptions).
+		Decode(&productCategory)
+	if err != nil {
+		return nil, err
+	}
+
+	return productCategory, err
+}
+
 func (productCategory *ProductCategory) Update() error {
 	collection := db.GetDB("store_" + productCategory.StoreID.Hex()).Collection("product_category")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -530,32 +595,6 @@ func (store *Store) FindProductCategoryByID(
 	if _, ok := selectFields["deleted_by_user.id"]; ok {
 		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
 		productCategory.DeletedByUser, _ = FindUserByID(productCategory.DeletedBy, fields)
-	}
-
-	return productCategory, err
-}
-
-func (store *Store) FindProductCategoryByName(
-	Name string,
-	selectFields map[string]interface{},
-) (productCategory *ProductCategory, err error) {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	findOneOptions := options.FindOne()
-	if len(selectFields) > 0 {
-		findOneOptions.SetProjection(selectFields)
-	}
-
-	err = collection.FindOne(ctx,
-		bson.M{
-			"name":     Name,
-			"store_id": store.ID,
-		}, findOneOptions).
-		Decode(&productCategory)
-	if err != nil {
-		return nil, err
 	}
 
 	return productCategory, err
