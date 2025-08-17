@@ -8,6 +8,7 @@ import (
 
 	"cloud.google.com/go/translate"
 	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/pos-rest/models"
 	"golang.org/x/text/language"
 	"google.golang.org/api/option"
 )
@@ -21,9 +22,15 @@ type TranslationResponse struct {
 }
 
 func TranslateHandler(w http.ResponseWriter, r *http.Request) {
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		http.Error(w, "UnAuthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Parse the incoming JSON request
 	var req TranslationRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
