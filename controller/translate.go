@@ -48,7 +48,6 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer client.Close()
-	//API KEY: AIzaSyDgiFpYptFRq5zk873EW9-SgaUv8kcWvKA
 
 	// Perform the translation
 	targetLang := language.Make("ar") // Convert target language to language.Tag
