@@ -485,7 +485,6 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !store.Settings.DisablePurchasesOnAccounts {
-
 		err = purchase.DoAccounting()
 		if err != nil {
 			response.Status = false
