@@ -326,6 +326,8 @@ func main() {
 	//Postings
 	router.HandleFunc("/v1/posting", controller.ListPostings).Methods("GET")
 
+	router.HandleFunc("/v1/translate", controller.TranslateHandler).Methods("POST")
+
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/pdfs/").Handler(http.StripPrefix("/pdfs/", http.FileServer(http.Dir("./pdfs/"))))
 	router.PathPrefix("/zatca/").Handler(http.StripPrefix("/zatca/", http.FileServer(http.Dir("./zatca/"))))

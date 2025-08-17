@@ -118,6 +118,7 @@ type StoreSettings struct {
 	EnableAutoPurchasePaymentCloseOnSales  bool            `bson:"enable_auto_purchase_payment_close_on_sales" json:"enable_auto_purchase_payment_close_on_sales"`
 	DisablePurchasesOnAccounts             bool            `bson:"disable_purchases_on_accounts" json:"disable_purchases_on_accounts"`
 	Invoice                                InvoiceSettings `bson:"invoice" json:"invoice"`
+	EnableAutoTranslationToArabic          bool            `bson:"enable_auto_translation_to_arabic" json:"enable_auto_translation_to_arabic"`
 }
 
 type InvoiceSettings struct {
