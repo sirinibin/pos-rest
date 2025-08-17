@@ -36,7 +36,7 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//Adding
+	//Adding 1,
 	// Set up Google Translate client
 	//aws: /home/ubuntu/google-account.json
 	//local: /Users/sirin/Downloads/startpos-464823-f6608ae0765c.json
