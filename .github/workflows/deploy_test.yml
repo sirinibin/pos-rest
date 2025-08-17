@@ -27,7 +27,7 @@ jobs:
       # Step 3: Forcefully clean Go module cache
       - name: Forcefully Clean Go Module Cache
         run: |
-          rm -rf ~/go/pkg/mod
+          sudo rm -rf ~/go/pkg/mod || true
           go clean -cache -modcache -i -r
 
       # Step 4: Clear GitHub Actions Cache

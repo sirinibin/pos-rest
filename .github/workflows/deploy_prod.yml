@@ -27,7 +27,7 @@ jobs:
       # Step 3: Forcefully clean Go module cache
       - name: Forcefully Clean Go Module Cache
         run: |
-          rm -rf ~/go/pkg/mod
+          sudo rm -rf ~/go/pkg/mod || true
           go clean -cache -modcache -i -r
 
       # Step 4: Clear GitHub Actions Cache
@@ -43,6 +43,9 @@ jobs:
 
       - name: Build Application
         run: go build -ldflags="-X 'main.version=${{ github.sha }}'" -o pos-rest
+
+      - name: Log Build Checksum
+        run: sha256sum ./pos-rest
 
       # Step 6: Set up SSH
       - name: Set up SSH
@@ -71,5 +74,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             sudo systemctl start start-api
-            sha256sum ${{secrets.AWS_GO_API_PROD_DEST_PATH}}/pos-rest
+            sha256sum ${{ secrets.AWS_GO_API_PROD_DEST_PATH }}/pos-rest
             sudo systemctl status start-api
