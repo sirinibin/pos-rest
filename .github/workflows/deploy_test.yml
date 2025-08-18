@@ -1,9 +1,9 @@
-name: Build and Deploy Go Application to production
+name: Build and Deploy Go Application to test
 
 on:
   push:
     branches:
-      - master
+      - test # Change to your test branch
     paths:
       - "**.go"
       - "**.mod"
@@ -18,55 +18,48 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up Go
+      # Set up Go
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: "1.23.0"
+          go-version: "1.20.5"
 
-      # Step 3: Forcefully clean Go module cache
-      - name: Forcefully Clean Go Module Cache
-        run: |
-          sudo chmod -R u+w ~/go/pkg/mod || true
-          sudo rm -rf ~/go/pkg/mod || true
-          go clean -cache -modcache -i -r
-
-      # Step 4: Clear GitHub Actions Cache
+      - name: Clean Go cache
+        run: go clean -cache -modcache -i -r
+      - name: Clean Build Directory
+        run: rm -rf ./bin ./build ./pos-rest
       - name: Clear GitHub Actions Cache
         uses: actions/cache@v3
         with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-mod-${{ github.run_id }}
-
-      # Step 5: Install dependencies and build
+          path: ./build
+          key: ${{ runner.os }}-build-${{ github.run_id }}
+      # Step 3: Install dependencies and build
       - name: Install dependencies
-        run: go mod tidy
-
-      - name: Build Application
-        run: go build -ldflags="-X 'main.version=${{ github.sha }}'" -o pos-rest
-
+        run: |
+          go mod tidy
+      # Step 3: Install dependencies and build
+      - name: Building
+        run: |
+          go build -ldflags="-X 'main.version=${{ github.sha }}'"  -o pos-rest
       - name: Log Build Checksum
         run: sha256sum ./pos-rest
 
-      # Step 6: Set up SSH
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
           chmod 600 private_key
           ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
-
-      # Step 7: Stop Service
+        # Stop Service
       - name: Stop Service
         run: |
-          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sudo systemctl stop start-api"
+          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sudo systemctl stop start-api-test"
 
-      # Step 8: Copy build file to server
+        # Copy build file to server
       - name: Copy build file to server
         run: |
-          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_PROD_DEST_PATH}}
-
-      # Step 9: Start service & Verify service status
+          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
+        # Start service & Verify the service status
       - name: Start service & Verify service status
         uses: appleboy/ssh-action@v0.1.5
         with:
@@ -74,6 +67,6 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo systemctl start start-api
-            sha256sum ${{ secrets.AWS_GO_API_PROD_DEST_PATH }}/pos-rest
-            sudo systemctl status start-api
+            sudo systemctl start start-api-test 
+            sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
+            sudo systemctl status start-api-test
