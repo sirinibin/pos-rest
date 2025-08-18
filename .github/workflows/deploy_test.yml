@@ -1,9 +1,9 @@
-name: Build and Deploy Go Application to test
+name: Build and Deploy Go Application to production
 
 on:
   push:
     branches:
-      - test # Change to your test branch
+      - master
     paths:
       - "**.go"
       - "**.mod"
@@ -59,12 +59,12 @@ jobs:
       # Step 7: Stop Service
       - name: Stop Service
         run: |
-          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sudo systemctl stop start-api-test"
+          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sudo systemctl stop start-api"
 
       # Step 8: Copy build file to server
       - name: Copy build file to server
         run: |
-          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_TEST_DEST_PATH }}
+          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_PROD_DEST_PATH}}
 
       # Step 9: Start service & Verify service status
       - name: Start service & Verify service status
@@ -74,6 +74,6 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo systemctl start start-api-test
-            sha256sum ${{ secrets.AWS_GO_API_TEST_DEST_PATH }}/pos-rest
-            sudo systemctl status start-api-test
+            sudo systemctl start start-api
+            sha256sum ${{ secrets.AWS_GO_API_PROD_DEST_PATH }}/pos-rest
+            sudo systemctl status start-api
