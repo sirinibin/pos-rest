@@ -125,6 +125,22 @@ func (store *Store) FindVendorByCode(
 	return vendor, err
 }
 
+func (vendor *Vendor) InitStore() (err error) {
+	if len(vendor.Stores) > 0 {
+		return nil
+	}
+
+	vendor.Stores = map[string]VendorStore{}
+
+	if !vendor.StoreID.IsZero() && vendor.StoreID.Hex() != "" {
+		vendor.Stores[vendor.StoreID.Hex()] = VendorStore{
+			StoreID: *vendor.StoreID,
+		}
+	}
+
+	return nil
+}
+
 func (vendor *Vendor) CopyToStore(storeID *primitive.ObjectID) (err error) {
 	store, err := FindStoreByID(storeID, bson.M{})
 	if err != nil {
@@ -164,6 +180,7 @@ func (vendor *Vendor) CopyToStore(storeID *primitive.ObjectID) (err error) {
 
 	vendor.StoreID = storeID
 	vendor.CreditBalance = 0
+	vendor.InitStore()
 	err = vendor.MakeCode()
 	if err != nil {
 		return err

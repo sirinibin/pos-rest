@@ -118,6 +118,22 @@ type Customer struct {
 	Images                     []string                 `bson:"images,omitempty" json:"images,omitempty"`
 }
 
+func (customer *Customer) InitStore() (err error) {
+	if len(customer.Stores) > 0 {
+		return nil
+	}
+
+	customer.Stores = map[string]CustomerStore{}
+
+	if !customer.StoreID.IsZero() && customer.StoreID.Hex() != "" {
+		customer.Stores[customer.StoreID.Hex()] = CustomerStore{
+			StoreID: *customer.StoreID,
+		}
+	}
+
+	return nil
+}
+
 func (customer *Customer) CopyToStore(storeID *primitive.ObjectID) (err error) {
 	store, err := FindStoreByID(storeID, bson.M{})
 	if err != nil {
@@ -157,6 +173,7 @@ func (customer *Customer) CopyToStore(storeID *primitive.ObjectID) (err error) {
 
 	customer.StoreID = storeID
 	customer.CreditBalance = 0
+	customer.InitStore()
 	err = customer.MakeCode()
 	if err != nil {
 		return err
