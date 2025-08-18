@@ -99,6 +99,32 @@ type Vendor struct {
 	Sponsor                    string                 `bson:"sponsor" json:"sponsor"`
 }
 
+func (store *Store) FindVendorByCode(
+	Code string,
+	selectFields map[string]interface{},
+) (vendor *Vendor, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"code":     Code,
+			"store_id": store.ID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&vendor)
+	if err != nil {
+		return nil, err
+	}
+
+	return vendor, err
+}
+
 func (vendor *Vendor) CopyToStore(storeID *primitive.ObjectID) (err error) {
 	store, err := FindStoreByID(storeID, bson.M{})
 	if err != nil {
