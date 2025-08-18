@@ -1762,6 +1762,12 @@ func ProcessVendors() error {
 	}
 
 	for _, store := range stores {
+		if store.Code != "MBDIT" && store.Code != "MBDI" {
+			continue
+		}
+
+		log.Print("Branch name:" + store.BranchName)
+
 		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "vendor")
 		if err != nil {
 			return err
@@ -1798,17 +1804,34 @@ func ProcessVendors() error {
 				continue
 			}
 
-			vendor.GenerateSearchWords()
-			vendor.SetSearchLabel()
-			vendor.SetAdditionalkeywords()
-			err = vendor.Update()
-			if err != nil {
-				log.Print("Store ID:" + store.ID.Hex())
-				log.Print("Vendor Code.:" + vendor.Code)
-				log.Print("Vendor ID:" + vendor.ID.Hex())
-				continue
-				//return err
+			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
+
+			for _, destinationCode := range destinations {
+				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
+
+				if destinationStore != nil {
+					err = vendor.CopyToStore(&destinationStore.ID)
+					if err != nil {
+						return err
+					}
+				}
 			}
+
+			/*
+				vendor.GenerateSearchWords()
+				vendor.SetSearchLabel()
+				vendor.SetAdditionalkeywords()
+				err = vendor.Update()
+				if err != nil {
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Vendor Code.:" + vendor.Code)
+					log.Print("Vendor ID:" + vendor.ID.Hex())
+					continue
+					//return err
+				}*/
 
 			/*
 				vendor.Name = strings.ToUpper(vendor.Name)
