@@ -126,8 +126,9 @@ func (store *Store) FindVendorByCode(
 }
 
 func (vendor *Vendor) InitStore() (err error) {
-	if len(vendor.Stores) > 0 {
-		return nil
+	_, ok := vendor.Stores[vendor.StoreID.Hex()]
+	if ok {
+		return
 	}
 
 	vendor.Stores = map[string]VendorStore{}

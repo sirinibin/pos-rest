@@ -119,8 +119,9 @@ type Customer struct {
 }
 
 func (customer *Customer) InitStore() (err error) {
-	if len(customer.Stores) > 0 {
-		return nil
+	_, ok := customer.Stores[customer.StoreID.Hex()]
+	if ok {
+		return
 	}
 
 	customer.Stores = map[string]CustomerStore{}
