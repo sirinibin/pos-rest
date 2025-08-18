@@ -99,6 +99,67 @@ type Vendor struct {
 	Sponsor                    string                 `bson:"sponsor" json:"sponsor"`
 }
 
+func (vendor *Vendor) CopyToStore(storeID *primitive.ObjectID) (err error) {
+	store, err := FindStoreByID(storeID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+
+	vendorInDb, err := store.FindVendorByID(&vendor.ID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendorInDb != nil {
+		return nil
+	}
+
+	vendorInDb, err = store.FindVendorByCode(vendor.Code, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendorInDb != nil {
+		return nil
+	}
+
+	vendorInDb, err = store.FindVendorByNameByVatNo(vendor.Name, vendor.VATNo, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendorInDb != nil {
+		return nil
+	}
+
+	vendor.StoreID = storeID
+	vendor.CreditBalance = 0
+	err = vendor.MakeCode()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.InsertOne(ctx, &vendor)
+	if err != nil {
+		return err
+	}
+
+	vendor.GenerateSearchWords()
+	vendor.SetAdditionalkeywords()
+	vendor.SetSearchLabel()
+
+	err = vendor.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (store *Store) SaveVendorImage(vendorID *primitive.ObjectID, filename string) error {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
 
