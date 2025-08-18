@@ -443,10 +443,15 @@ func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
 	//test
-	err := models.ProcessProducts()
+	err := models.ProcessCustomers()
 	if err != nil {
 		log.Print(err)
 	}
+	/*
+		err := models.ProcessProducts()
+		if err != nil {
+			log.Print(err)
+		}*/
 
 	/*
 		err := models.ProcessPostings()

@@ -118,6 +118,68 @@ type Customer struct {
 	Images                     []string                 `bson:"images,omitempty" json:"images,omitempty"`
 }
 
+func (customer *Customer) CopyToStore(storeID *primitive.ObjectID) (err error) {
+	store, err := FindStoreByID(storeID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
+	defer cancel()
+
+	customerInDb, err := store.FindCustomerByID(&customer.ID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customerInDb != nil {
+		return nil
+	}
+
+	customerInDb, err = store.FindCustomerByCode(customer.Code, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customerInDb != nil {
+		return nil
+	}
+
+	customerInDb, err = store.FindCustomerByNameByVatNo(customer.Name, customer.VATNo, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customerInDb != nil {
+		return nil
+	}
+
+	customer.StoreID = storeID
+	customer.CreditBalance = 0
+	err = customer.MakeCode()
+	if err != nil {
+		return err
+	}
+
+	_, err = collection.InsertOne(ctx, &customer)
+	if err != nil {
+		return err
+	}
+
+	customer.GenerateSearchWords()
+	customer.SetAdditionalkeywords()
+	customer.SetSearchLabel()
+
+	err = customer.Update()
+	if err != nil {
+		return err
+	}
+	log.Print("Code:" + customer.Code)
+
+	return nil
+}
+
 func (store *Store) SaveCustomerImage(customerID *primitive.ObjectID, filename string) error {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
 
@@ -2068,6 +2130,47 @@ func (store *Store) FindCustomerByID(
 	return customer, err
 }
 
+func (store *Store) FindCustomerByCode(
+	Code string,
+	selectFields map[string]interface{},
+) (customer *Customer, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"code":     Code,
+			"store_id": store.ID,
+		}, findOneOptions). //"deleted": bson.M{"$ne": true}
+		Decode(&customer)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, ok := selectFields["created_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "created_by_user")
+		customer.CreatedByUser, _ = FindUserByID(customer.CreatedBy, fields)
+	}
+
+	if _, ok := selectFields["updated_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "updated_by_user")
+		customer.UpdatedByUser, _ = FindUserByID(customer.UpdatedBy, fields)
+	}
+
+	if _, ok := selectFields["deleted_by_user.id"]; ok {
+		fields := ParseRelationalSelectString(selectFields, "deleted_by_user")
+		customer.DeletedByUser, _ = FindUserByID(customer.DeletedBy, fields)
+	}
+
+	return customer, err
+}
+
 func (customer *Customer) IsEmailExists() (exists bool, err error) {
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -2178,6 +2281,12 @@ func ProcessCustomers() error {
 	}
 
 	for _, store := range stores {
+		if store.Code != "MBDIT" && store.Code != "MBDI" {
+			continue
+		}
+
+		log.Print("Branch name:" + store.BranchName)
+
 		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customer")
 		if err != nil {
 			return err
@@ -2213,17 +2322,34 @@ func ProcessCustomers() error {
 				continue
 			}
 
-			customer.GenerateSearchWords()
-			customer.SetSearchLabel()
-			customer.SetAdditionalkeywords()
-			err = customer.Update()
-			if err != nil {
-				log.Print("Store ID:" + store.ID.Hex())
-				log.Print("Customer Code.:" + customer.Code)
-				log.Print("Customer ID:" + customer.ID.Hex())
-				continue
-				//return err
+			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
+
+			for _, destinationCode := range destinations {
+				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
+
+				if destinationStore != nil {
+					err = customer.CopyToStore(&destinationStore.ID)
+					if err != nil {
+						return err
+					}
+				}
 			}
+
+			/*
+				customer.GenerateSearchWords()
+				customer.SetSearchLabel()
+				customer.SetAdditionalkeywords()
+				err = customer.Update()
+				if err != nil {
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Customer Code.:" + customer.Code)
+					log.Print("Customer ID:" + customer.ID.Hex())
+					continue
+					//return err
+				}*/
 
 			/*customer.Name = strings.ToUpper(customer.Name)
 			customer.Update()
