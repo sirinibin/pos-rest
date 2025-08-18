@@ -3282,7 +3282,7 @@ func ProcessProducts() error {
 				continue
 			}
 
-			destinations := []string{"MBDI-SIMULATION", "t1"}
+			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
 
 			for _, destinationCode := range destinations {
 				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
