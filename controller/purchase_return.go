@@ -243,12 +243,14 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturn.DoAccounting()
-	if err != nil {
-		response.Status = false
-		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	if !store.Settings.DisablePurchasesOnAccounts {
+		err = purchasereturn.DoAccounting()
+		if err != nil {
+			response.Status = false
+			response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
@@ -449,12 +451,14 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchasereturn.DoAccounting()
-	if err != nil {
-		response.Status = false
-		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	if !store.Settings.DisablePurchasesOnAccounts {
+		err = purchasereturn.DoAccounting()
+		if err != nil {
+			response.Status = false
+			response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	purchasereturn, err = store.FindPurchaseReturnByID(&purchasereturn.ID, bson.M{})
