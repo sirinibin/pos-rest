@@ -24,7 +24,7 @@ type DeliveryNoteProduct struct {
 	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
 	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
 	PrefixPartNumber string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber       string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	PartNumber       string             `bson:"part_number" json:"part_number"`
 	Quantity         float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
 }
@@ -154,7 +154,7 @@ func (deliverynote *DeliveryNote) UpdateForeignLabelFields() error {
 		//deliverynote.Products[i].Name = productObject.Name
 		deliverynote.Products[i].NameInArabic = productObject.NameInArabic
 		deliverynote.Products[i].ItemCode = productObject.ItemCode
-		//deliverynote.Products[i].PartNumber = productObject.PartNumber
+		deliverynote.Products[i].PartNumber = productObject.PartNumber
 		deliverynote.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 	}
 
