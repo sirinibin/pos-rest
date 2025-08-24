@@ -271,6 +271,30 @@ func (order *Order) MakeXMLContent() (string, error) {
 		customerTaxScheme = PartyTaxScheme{}
 	}
 
+	if customerName == "" {
+		customerName = "Cash Customer"
+	}
+
+	if customerStreetName == "" {
+		customerStreetName = "NA"
+	}
+
+	if customerNationalAddressBuildingNo == "" {
+		customerNationalAddressBuildingNo = "0000"
+	}
+
+	if customerDistrictName == "" {
+		customerDistrictName = "NA"
+	}
+
+	if customerCityName == "" {
+		customerCityName = "NA"
+	}
+
+	if customerNationalAddressZipCode == "" {
+		customerNationalAddressZipCode = "00000"
+	}
+
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
 		Party: Party{
 			PartyIdentification: customerPartyIdentification,
