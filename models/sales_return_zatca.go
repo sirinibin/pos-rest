@@ -266,12 +266,18 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 			},
 		}
 	} else {
-		customerPartyIdentification = PartyIdentification{
-			ID: IdentificationID{
-				SchemeID: "OTH",
-				Value:    "CASH",
-			},
+		if isSimplified {
+			customerPartyIdentification = PartyIdentification{
+				ID: IdentificationID{
+					SchemeID: "OTH",
+					Value:    "CASH",
+				},
+			}
 		}
+	}
+
+	if isSimplified && customerStreetName == "" {
+		customerCountryCode = ""
 	}
 
 	invoice.AccountingCustomerParty = AccountingCustomerParty{

@@ -166,7 +166,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 		storeCountryCode = "SA"
 	}
 
-	log.Print("CRN:" + store.RegistrationNumber)
+	//log.Print("CRN:" + store.RegistrationNumber)
 	invoice.AccountingSupplierParty = AccountingSupplierParty{
 		Party: Party{
 			PartyIdentification: PartyIdentification{
@@ -248,12 +248,18 @@ func (order *Order) MakeXMLContent() (string, error) {
 			},
 		}
 	} else {
-		customerPartyIdentification = PartyIdentification{
-			ID: IdentificationID{
-				SchemeID: "OTH",
-				Value:    "CASH",
-			},
+		if isSimplified {
+			customerPartyIdentification = PartyIdentification{
+				ID: IdentificationID{
+					SchemeID: "OTH",
+					Value:    "CASH",
+				},
+			}
 		}
+	}
+
+	if isSimplified && customerStreetName == "" {
+		customerCountryCode = ""
 	}
 
 	var customerTaxScheme PartyTaxScheme
@@ -271,29 +277,30 @@ func (order *Order) MakeXMLContent() (string, error) {
 		customerTaxScheme = PartyTaxScheme{}
 	}
 
-	if customerName == "" {
-		customerName = "Cash Customer"
-	}
+	/*
+			if customerName == "" {
+				customerName = "Cash Customer"
+			}
 
-	if customerStreetName == "" {
-		customerStreetName = "NA"
-	}
+			if customerStreetName == "" {
+				customerStreetName = "NA"
+			}
 
-	if customerNationalAddressBuildingNo == "" {
-		customerNationalAddressBuildingNo = "0000"
-	}
+			if customerNationalAddressBuildingNo == "" {
+				customerNationalAddressBuildingNo = "0000"
+			}
 
-	if customerDistrictName == "" {
-		customerDistrictName = "NA"
-	}
+			if customerDistrictName == "" {
+				customerDistrictName = "NA"
+			}
 
-	if customerCityName == "" {
-		customerCityName = "NA"
-	}
+			if customerCityName == "" {
+				customerCityName = "NA"
+			}
 
-	if customerNationalAddressZipCode == "" {
-		customerNationalAddressZipCode = "00000"
-	}
+		if customerNationalAddressZipCode == "" {
+			customerNationalAddressZipCode = "00000"
+		}*/
 
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
 		Party: Party{
