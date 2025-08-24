@@ -142,7 +142,8 @@ def main():
             instruction_note,
             vat,
             crn,
-            invoice_code
+            invoice_code,
+            is_simplified
         )
         basPath = ""
         json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,basPath)
