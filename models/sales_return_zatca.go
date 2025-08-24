@@ -276,10 +276,6 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 		}
 	}
 
-	if isSimplified && customerStreetName == "" {
-		customerCountryCode = ""
-	}
-
 	if customerName == "" && isSimplified {
 		customerName = "Cash Customer"
 	}

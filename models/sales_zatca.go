@@ -258,10 +258,6 @@ func (order *Order) MakeXMLContent() (string, error) {
 		}
 	}
 
-	if isSimplified && customerStreetName == "" {
-		customerCountryCode = ""
-	}
-
 	var customerTaxScheme PartyTaxScheme
 
 	if customerVATNo != "" {
