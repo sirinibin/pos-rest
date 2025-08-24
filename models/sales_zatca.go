@@ -638,11 +638,13 @@ func (order *Order) RecordZatcaComplianceCheckFailure(errorMessage string) error
 	order.Zatca.ComplianceCheckErrors = append(order.Zatca.ComplianceCheckErrors, errorMessage)
 	order.Zatca.ComplianceCheckLastFailedAt = &now
 
-	/*
+	if !order.ID.IsZero() {
 		err := order.Update()
 		if err != nil {
 			return err
-		}*/
+		}
+	}
+
 	return nil
 }
 
