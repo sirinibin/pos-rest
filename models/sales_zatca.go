@@ -166,6 +166,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 		storeCountryCode = "SA"
 	}
 
+	log.Print("CRN:" + store.RegistrationNumber)
 	invoice.AccountingSupplierParty = AccountingSupplierParty{
 		Party: Party{
 			PartyIdentification: PartyIdentification{
@@ -237,14 +238,27 @@ func (order *Order) MakeXMLContent() (string, error) {
 		}
 	}
 
+	customerPartyIdentification := PartyIdentification{}
+
+	if customerRegistrationNumber != "" {
+		customerPartyIdentification = PartyIdentification{
+			ID: IdentificationID{
+				SchemeID: "CRN",
+				Value:    customerRegistrationNumber,
+			},
+		}
+	} else {
+		customerPartyIdentification = PartyIdentification{
+			ID: IdentificationID{
+				SchemeID: "OTH",
+				Value:    "CASH",
+			},
+		}
+	}
+
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
 		Party: Party{
-			PartyIdentification: PartyIdentification{
-				ID: IdentificationID{
-					SchemeID: "CRN",
-					Value:    customerRegistrationNumber,
-				},
-			},
+			PartyIdentification: customerPartyIdentification,
 			PostalAddress: Address{
 				StreetName:      customerStreetName,
 				BuildingNumber:  customerNationalAddressBuildingNo,
