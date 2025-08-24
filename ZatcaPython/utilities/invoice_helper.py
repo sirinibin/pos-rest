@@ -66,18 +66,6 @@ class invoice_helper:
         crn_node = new_doc.find('.//cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
         if  crn_node  is not None:
             crn_node.text = crn 
-        '''    
-        crn_node = new_doc.find('.//cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
-        if  crn_node  is not None:
-            crn_node.text = "1010010000"
-            crn_node.set('schemeID', "CRN")
-        '''    
-
-        if  is_simplified:
-            crn_node = new_doc.find('.//cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
-            if  crn_node  is not None:
-                crn_node.text = "CASH"
-                crn_node.set('schemeID', "OTH")
 
         vat_node = new_doc.find('.//cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID', namespaces=namespaces)
         if  vat_node  is not None:
@@ -89,6 +77,18 @@ class invoice_helper:
         invoice_customer_id_node = new_doc.find('.//cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
         if  invoice_customer_id_node  is not None:
             invoice_customer_id_node.text = '1010010002'
+
+        crn_node = new_doc.find('.//cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
+        if  crn_node  is not None:
+            crn_node.text = "1010010000"
+            crn_node.set('schemeID', "CRN")
+
+
+        if  is_simplified:
+            crn_node2 = new_doc.find('.//cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
+            if  crn_node2  is not None:
+                crn_node2.text = "CASH".strip()
+                crn_node2.set('schemeID', "OTH")
 
         '''
         <cac:AccountingCustomerParty>
