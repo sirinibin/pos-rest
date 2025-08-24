@@ -124,7 +124,8 @@ def main():
                 type_code,
                 icv,
                 pih,
-                instruction_note
+                instruction_note,
+                is_simplified
             )
         '''
 
