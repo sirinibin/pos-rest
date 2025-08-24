@@ -277,6 +277,10 @@ func (order *Order) MakeXMLContent() (string, error) {
 		customerTaxScheme = PartyTaxScheme{}
 	}
 
+	if customerName == "" && isSimplified {
+		customerName = "Cash Customer"
+	}
+
 	/*
 			if customerName == "" {
 				customerName = "Cash Customer"

@@ -280,6 +280,10 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 		customerCountryCode = ""
 	}
 
+	if customerName == "" && isSimplified {
+		customerName = "Cash Customer"
+	}
+
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
 		Party: Party{
 			PartyIdentification: customerPartyIdentification,
