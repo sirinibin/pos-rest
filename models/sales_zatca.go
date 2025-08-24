@@ -256,6 +256,21 @@ func (order *Order) MakeXMLContent() (string, error) {
 		}
 	}
 
+	var customerTaxScheme PartyTaxScheme
+
+	if customerVATNo != "" {
+		customerTaxScheme = PartyTaxScheme{
+			CompanyID: customerVATNo,
+			TaxScheme: TaxScheme{
+				ID: IDField{
+					Value: "VAT",
+				},
+			},
+		}
+	} else {
+		customerTaxScheme = PartyTaxScheme{}
+	}
+
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
 		Party: Party{
 			PartyIdentification: customerPartyIdentification,
@@ -267,14 +282,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				PostalZone:      customerNationalAddressZipCode,
 				CountryCode:     customerCountryCode,
 			},
-			PartyTaxScheme: PartyTaxScheme{
-				CompanyID: customerVATNo,
-				TaxScheme: TaxScheme{
-					ID: IDField{
-						Value: "VAT",
-					},
-				},
-			},
+			PartyTaxScheme: customerTaxScheme,
 			PartyLegalEntity: LegalEntity{
 				RegistrationName: customerName,
 			},

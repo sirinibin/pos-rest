@@ -110,9 +110,9 @@ def main():
     parser = etree.XMLParser(remove_blank_text=False)
     base_document = etree.parse(xml_template_path, parser)
     document_types = [
-        ["STDSI", "388", "Standard Invoice", ""],
-        ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
-        ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
+    #   ["STDSI", "388", "Standard Invoice", ""],
+    #   ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
+    #   ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
         ["SIMSI", "388", "Simplified Invoice", ""],
         ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
         ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
