@@ -238,7 +238,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 		}
 	}
 
-	customerPartyIdentification := PartyIdentification{}
+	var customerPartyIdentification PartyIdentification
 
 	if customerRegistrationNumber != "" {
 		customerPartyIdentification = PartyIdentification{

@@ -47,7 +47,7 @@
   <cac:AccountingCustomerParty>
     <cac:Party>
       <cac:PartyIdentification>
-        <cbc:ID schemeID="CRN"></cbc:ID>
+        <cbc:ID schemeID="OTH">CASH</cbc:ID>
       </cac:PartyIdentification>
       <cac:PostalAddress>
         <cbc:StreetName>prince mohammed ibn abdulaziz rd-al ulaya</cbc:StreetName>

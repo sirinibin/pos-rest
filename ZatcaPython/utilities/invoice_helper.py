@@ -73,7 +73,17 @@ class invoice_helper:
         if  invoice_id_node  is not None:
             invoice_id_node.text = invoice_code
 
+        invoice_customer_id_node = new_doc.find('.//cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID', namespaces=namespaces)
+        if  invoice_customer_id_node  is not None:
+            invoice_customer_id_node.text = '1010010002'
+
         '''
+        <cac:AccountingCustomerParty>
+		<cac:Party>
+		   	<cac:PartyIdentification>
+				<cbc:ID schemeID="CRN">1010010002</cbc:ID>
+			</cac:PartyIdentification>
+
         	<cac:AccountingSupplierParty>
 		<cac:Party>
 			<cac:PartyIdentification>
