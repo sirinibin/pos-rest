@@ -256,14 +256,27 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 
 	}
 
+	customerPartyIdentification := PartyIdentification{}
+
+	if customerRegistrationNumber != "" {
+		customerPartyIdentification = PartyIdentification{
+			ID: IdentificationID{
+				SchemeID: "CRN",
+				Value:    customerRegistrationNumber,
+			},
+		}
+	} else {
+		customerPartyIdentification = PartyIdentification{
+			ID: IdentificationID{
+				SchemeID: "OTH",
+				Value:    "CASH",
+			},
+		}
+	}
+
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
 		Party: Party{
-			PartyIdentification: PartyIdentification{
-				ID: IdentificationID{
-					SchemeID: "CRN",
-					Value:    customerRegistrationNumber,
-				},
-			},
+			PartyIdentification: customerPartyIdentification,
 			PostalAddress: Address{
 				StreetName:      customerStreetName,
 				BuildingNumber:  customerNationalAddressBuildingNo,
