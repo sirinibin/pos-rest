@@ -110,9 +110,9 @@ def main():
     parser = etree.XMLParser(remove_blank_text=False)
     base_document = etree.parse(xml_template_path, parser)
     document_types = [
-    #   ["STDSI", "388", "Standard Invoice", ""],
-    #   ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
-    #   ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
+        ["STDSI", "388", "Standard Invoice", ""],
+        ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
+        ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
         ["SIMSI", "388", "Simplified Invoice", ""],
         ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
         ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
@@ -121,7 +121,8 @@ def main():
     icv = 0
     pih = "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ=="
     vat = "399999999900003"
-    crn = "886431145"
+    #crn = "886431145"
+    crn = "3030303030"
     invoice_code = "TST-TST"
 
     for doc_type in document_types:
