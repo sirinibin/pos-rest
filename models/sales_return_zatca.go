@@ -266,7 +266,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 			},
 		}
 	} else {
-		if isSimplified {
+		if isSimplified && customerVATNo == "" {
 			customerPartyIdentification = PartyIdentification{
 				ID: IdentificationID{
 					SchemeID: "OTH",
