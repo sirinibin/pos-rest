@@ -153,10 +153,10 @@ type BinaryObject struct {
 
 // Party Details (Supplier/Customer)
 type Party struct {
-	PartyIdentification PartyIdentification `xml:"cac:PartyIdentification"`
-	PostalAddress       Address             `xml:"cac:PostalAddress"`
-	PartyTaxScheme      PartyTaxScheme      `xml:"cac:PartyTaxScheme"`
-	PartyLegalEntity    LegalEntity         `xml:"cac:PartyLegalEntity"`
+	PartyIdentification *PartyIdentification `xml:"cac:PartyIdentification"`
+	PostalAddress       Address              `xml:"cac:PostalAddress"`
+	PartyTaxScheme      PartyTaxScheme       `xml:"cac:PartyTaxScheme"`
+	PartyLegalEntity    LegalEntity          `xml:"cac:PartyLegalEntity"`
 }
 
 type PartyTaxScheme struct {

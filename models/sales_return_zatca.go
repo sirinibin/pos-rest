@@ -186,7 +186,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 
 	invoice.AccountingSupplierParty = AccountingSupplierParty{
 		Party: Party{
-			PartyIdentification: PartyIdentification{
+			PartyIdentification: &PartyIdentification{
 				ID: IdentificationID{
 					SchemeID: "CRN",
 					//Value:    "5903506195",
@@ -290,29 +290,35 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 		customerName = "Cash Customer"
 	}
 
-	invoice.AccountingCustomerParty = AccountingCustomerParty{
-		Party: Party{
-			PartyIdentification: customerPartyIdentification,
-			PostalAddress: Address{
-				StreetName:      customerStreetName,
-				BuildingNumber:  customerNationalAddressBuildingNo,
-				CitySubdivision: customerDistrictName,
-				CityName:        customerCityName,
-				PostalZone:      customerNationalAddressZipCode,
-				CountryCode:     customerCountryCode,
-			},
-			PartyTaxScheme: PartyTaxScheme{
-				CompanyID: customerVATNo,
-				TaxScheme: TaxScheme{
-					ID: IDField{
-						Value: "VAT",
-					},
+	party := Party{
+		PostalAddress: Address{
+			StreetName:      customerStreetName,
+			BuildingNumber:  customerNationalAddressBuildingNo,
+			CitySubdivision: customerDistrictName,
+			CityName:        customerCityName,
+			PostalZone:      customerNationalAddressZipCode,
+			CountryCode:     customerCountryCode,
+		},
+		PartyTaxScheme: PartyTaxScheme{
+			CompanyID: customerVATNo,
+			TaxScheme: TaxScheme{
+				ID: IDField{
+					Value: "VAT",
 				},
 			},
-			PartyLegalEntity: LegalEntity{
-				RegistrationName: customerName,
-			},
-		}}
+		},
+		PartyLegalEntity: LegalEntity{
+			RegistrationName: customerName,
+		},
+	}
+
+	if isSimplified {
+		party.PartyIdentification = &customerPartyIdentification
+	}
+
+	invoice.AccountingCustomerParty = AccountingCustomerParty{
+		Party: party,
+	}
 
 	invoice.Delivery = Delivery{
 		ActualDeliveryDate: salesReturn.Date.In(loc).Format("2006-01-02"),

@@ -169,7 +169,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 	//log.Print("CRN:" + store.RegistrationNumber)
 	invoice.AccountingSupplierParty = AccountingSupplierParty{
 		Party: Party{
-			PartyIdentification: PartyIdentification{
+			PartyIdentification: &PartyIdentification{
 				ID: IdentificationID{
 					SchemeID: "CRN",
 					//Value:    "5903506195",
@@ -270,7 +270,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	var customerTaxScheme PartyTaxScheme
 
-	if customerVATNo != "" {
+	if customerVATNo != "" && !isSimplified {
 		customerTaxScheme = PartyTaxScheme{
 			CompanyID: customerVATNo,
 			TaxScheme: TaxScheme{
@@ -279,55 +279,34 @@ func (order *Order) MakeXMLContent() (string, error) {
 				},
 			},
 		}
-	} else {
-		customerTaxScheme = PartyTaxScheme{}
 	}
 
 	if customerName == "" && isSimplified {
 		customerName = "Cash Customer"
 	}
 
-	/*
-			if customerName == "" {
-				customerName = "Cash Customer"
-			}
+	party := Party{
+		PostalAddress: Address{
+			StreetName:      customerStreetName,
+			BuildingNumber:  customerNationalAddressBuildingNo,
+			CitySubdivision: customerDistrictName,
+			CityName:        customerCityName,
+			PostalZone:      customerNationalAddressZipCode,
+			CountryCode:     customerCountryCode,
+		},
+		PartyTaxScheme: customerTaxScheme,
+		PartyLegalEntity: LegalEntity{
+			RegistrationName: customerName,
+		},
+	}
 
-			if customerStreetName == "" {
-				customerStreetName = "NA"
-			}
-
-			if customerNationalAddressBuildingNo == "" {
-				customerNationalAddressBuildingNo = "0000"
-			}
-
-			if customerDistrictName == "" {
-				customerDistrictName = "NA"
-			}
-
-			if customerCityName == "" {
-				customerCityName = "NA"
-			}
-
-		if customerNationalAddressZipCode == "" {
-			customerNationalAddressZipCode = "00000"
-		}*/
+	if isSimplified {
+		party.PartyIdentification = &customerPartyIdentification
+	}
 
 	invoice.AccountingCustomerParty = AccountingCustomerParty{
-		Party: Party{
-			PartyIdentification: customerPartyIdentification,
-			PostalAddress: Address{
-				StreetName:      customerStreetName,
-				BuildingNumber:  customerNationalAddressBuildingNo,
-				CitySubdivision: customerDistrictName,
-				CityName:        customerCityName,
-				PostalZone:      customerNationalAddressZipCode,
-				CountryCode:     customerCountryCode,
-			},
-			PartyTaxScheme: customerTaxScheme,
-			PartyLegalEntity: LegalEntity{
-				RegistrationName: customerName,
-			},
-		}}
+		Party: party,
+	}
 
 	invoice.Delivery = Delivery{
 		ActualDeliveryDate: order.Date.In(loc).Format("2006-01-02"),
@@ -987,13 +966,14 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 
 	// Delete xml files
 
-	xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
-	if _, err := os.Stat(xmlFilePath); err == nil {
-		err = os.Remove(xmlFilePath)
-		if err != nil {
-			return err
-		}
-	}
+	/*
+		xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
+		if _, err := os.Stat(xmlFilePath); err == nil {
+			err = os.Remove(xmlFilePath)
+			if err != nil {
+				return err
+			}
+		}*/
 
 	/*
 		if _, err := os.Stat(xmlResponseFilePath); err == nil {
