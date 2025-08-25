@@ -14,8 +14,8 @@ def main():
     #environment_type = 'NonProduction'
     environment_type = 'Simulation'
 
-    OTP = '682222'  # For Simulation and Production Get OTP from fatooraPortal
-    store_type = 'test'  #test | store1 | store2
+    OTP = '757830'  # For Simulation and Production Get OTP from fatooraPortal
+    store_type = 'store2'  #test | store1 | store2
 
     csr_config = {}
     if store_type == 'test':
