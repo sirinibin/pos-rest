@@ -202,13 +202,13 @@ func (order *Order) MakeXMLContent() (string, error) {
 	customerCityName := ""
 	customerName := ""
 	customerCountryCode := "SA"
-	customerRegistrationNumber := ""
+	//customerRegistrationNumber := ""
 	customerNationalAddressBuildingNo := ""
 	customerNationalAddressZipCode := ""
 	customerVATNo := ""
 
 	if customer != nil {
-		customerRegistrationNumber = customer.RegistrationNumber
+		//customerRegistrationNumber = customer.RegistrationNumber
 		customerNationalAddressBuildingNo = customer.NationalAddress.BuildingNo
 		customerNationalAddressZipCode = customer.NationalAddress.ZipCode
 		customerVATNo = customer.VATNo
@@ -240,21 +240,31 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	var customerPartyIdentification PartyIdentification
 
-	if customerRegistrationNumber != "" && customerVATNo == "" {
-		customerPartyIdentification = PartyIdentification{
-			ID: IdentificationID{
-				SchemeID: "CRN",
-				Value:    customerRegistrationNumber,
-			},
-		}
-	} else {
-		if isSimplified && customerVATNo == "" {
+	/*
+		if customerRegistrationNumber != "" && customerVATNo == "" {
 			customerPartyIdentification = PartyIdentification{
 				ID: IdentificationID{
-					SchemeID: "OTH",
-					Value:    "CASH",
+					SchemeID: "CRN",
+					Value:    customerRegistrationNumber,
 				},
 			}
+		} else {
+			if isSimplified && customerVATNo == "" {
+				customerPartyIdentification = PartyIdentification{
+					ID: IdentificationID{
+						SchemeID: "OTH",
+						Value:    "CASH",
+					},
+				}
+			}
+		}*/
+
+	if isSimplified {
+		customerPartyIdentification = PartyIdentification{
+			ID: IdentificationID{
+				SchemeID: "OTH",
+				Value:    "CASH",
+			},
 		}
 	}
 
