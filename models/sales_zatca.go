@@ -711,14 +711,14 @@ func (order *Order) ReportToZatca() error {
 
 	// Create JSON payload
 	payload := map[string]interface{}{
-		"env":         store.Zatca.Env,
-		"private_key": store.Zatca.PrivateKey,
-		//"binary_security_token": store.Zatca.BinarySecurityToken,
-		//"secret":                store.Zatca.Secret,
-		"binary_security_token": store.Zatca.ProductionBinarySecurityToken,
-		"secret":                store.Zatca.ProductionSecret,
-		"xml_file_path":         "ZatcaPython/templates/invoice_" + order.Code + ".xml",
-		"is_simplified":         isSimplified,
+		"env":                   store.Zatca.Env,
+		"private_key":           store.Zatca.PrivateKey,
+		"binary_security_token": store.Zatca.BinarySecurityToken,
+		"secret":                store.Zatca.Secret,
+		//"binary_security_token": store.Zatca.ProductionBinarySecurityToken,
+		//"secret":                store.Zatca.ProductionSecret,
+		"xml_file_path": "ZatcaPython/templates/invoice_" + order.Code + ".xml",
+		"is_simplified": isSimplified,
 	}
 
 	// Convert payload to JSON
