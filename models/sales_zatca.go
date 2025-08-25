@@ -966,14 +966,13 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 
 	// Delete xml files
 
-	/*
-		xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
-		if _, err := os.Stat(xmlFilePath); err == nil {
-			err = os.Remove(xmlFilePath)
-			if err != nil {
-				return err
-			}
-		}*/
+	xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
+	if _, err := os.Stat(xmlFilePath); err == nil {
+		err = os.Remove(xmlFilePath)
+		if err != nil {
+			return err
+		}
+	}
 
 	/*
 		if _, err := os.Stat(xmlResponseFilePath); err == nil {
