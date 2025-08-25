@@ -14,7 +14,7 @@ def main():
     #environment_type = 'NonProduction'
     environment_type = 'Simulation'
 
-    OTP = '726355'  # For Simulation and Production Get OTP from fatooraPortal
+    OTP = '682222'  # For Simulation and Production Get OTP from fatooraPortal
     store_type = 'store2'  #test | store1 | store2
 
     csr_config = {}
@@ -52,8 +52,8 @@ def main():
             "csr.organization.unit.name": "Jouhara Branch",
             "csr.organization.name": "Wassem Waleed Trading Est",
             "csr.country.name": "SA",
-            #"csr.invoice.type": "1100",
-            "csr.invoice.type": "1000",
+            "csr.invoice.type": "1100",
+            #"csr.invoice.type": "1000",
             "csr.location.address": "Building No.3654, Jouhara,Al Jawhara Dist, JEDDAH - 22416",
             "csr.industry.business.category": "Trading"
         }
@@ -152,9 +152,9 @@ def main():
         ["STDSI", "388", "Standard Invoice", ""],
         ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
         ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
-     #   ["SIMSI", "388", "Simplified Invoice", ""],
-     #   ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
-     #   ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
+        ["SIMSI", "388", "Simplified Invoice", ""],
+        ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
+        ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
     ]
 
     icv = 0

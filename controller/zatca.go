@@ -165,7 +165,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	// Run the command
 	err = cmd.Run()
 	if err != nil {
-		//fmt.Println("Error running Python script:", err)
+		fmt.Println("Error running Python script:", err)
 		response.Status = false
 		// Parse JSON response
 		var pythonResponse PythonResponse
