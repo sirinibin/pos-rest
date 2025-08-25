@@ -240,7 +240,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	var customerPartyIdentification PartyIdentification
 
-	if customerRegistrationNumber != "" {
+	if customerRegistrationNumber != "" && customerVATNo == "" {
 		customerPartyIdentification = PartyIdentification{
 			ID: IdentificationID{
 				SchemeID: "CRN",

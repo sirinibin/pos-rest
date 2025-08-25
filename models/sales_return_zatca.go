@@ -258,7 +258,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 
 	customerPartyIdentification := PartyIdentification{}
 
-	if customerRegistrationNumber != "" {
+	if customerRegistrationNumber != "" && customerVATNo == "" {
 		customerPartyIdentification = PartyIdentification{
 			ID: IdentificationID{
 				SchemeID: "CRN",
