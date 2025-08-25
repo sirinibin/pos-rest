@@ -173,9 +173,9 @@ def main():
             ["STDSI", "388", "Standard Invoice", ""],
             ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
             ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
-        #   ["SIMSI", "388", "Simplified Invoice", ""],
-        #   ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
-        #   ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
+            ["SIMSI", "388", "Simplified Invoice", ""],
+            ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
+            ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
         ]
 
         icv = 0
