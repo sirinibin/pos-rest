@@ -50,15 +50,7 @@ class CsrGenerator:
             critical=False
         )
         '''
-        csr_builder = csr_builder.add_extension(
-            x509.UnrecognizedExtension(
-                ObjectIdentifier("1.3.6.1.4.1.311.20.2"), 
-                self.asn_template.encode()
-                #UTF8String(self.asn_template).dump()
-            ),
-            critical=False
-        )
-        '''
+        
         if self.environment_type == 'NonProduction':
             csr_builder = csr_builder.add_extension(
                 x509.UnrecognizedExtension(
@@ -76,8 +68,7 @@ class CsrGenerator:
                     UTF8String(self.asn_template).dump()
                 ),
                 critical=False
-            )
-        '''    
+            ) 
         
         # Add SAN extension
         csr_builder = csr_builder.add_extension(
