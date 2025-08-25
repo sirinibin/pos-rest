@@ -48,6 +48,7 @@ class CsrGenerator:
             ),
             critical=False
         )
+        print("\nVAT:\n"+ self.config.get('csr.organization.identifier', ''))
         
         # Add SAN extension
         csr_builder = csr_builder.add_extension(

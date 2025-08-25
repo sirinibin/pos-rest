@@ -13,34 +13,52 @@ def main():
     # Define Variable
     #environment_type = 'NonProduction'
     environment_type = 'Simulation'
-    OTP = '516371'  # For Simulation and Production Get OTP from fatooraPortal
 
-    '''
-    csr_config = {
-    "csr.common.name": "TST-886431145-399999999900003",
-    "csr.serial.number": "1-TST|2-TST|3-ed22f1d8-e6a2-1118-9b58-d9a8f11e445f",
-    "csr.organization.identifier": "399999999900003",
-    "csr.organization.unit.name": "Riyadh Branch",
-    "csr.organization.name": "Maximum Speed Tech Supply LTD",
-    "csr.country.name": "SA",
-    "csr.invoice.type": "1100",
-    "csr.location.address": "RRRD2929",
-    "csr.industry.business.category": "Supply activities"
-    }
-    '''
+    OTP = '726355'  # For Simulation and Production Get OTP from fatooraPortal
+    store_type = 'store2'  #test | store1 | store2
 
-    #Simulation 
-    csr_config = {
-    "csr.common.name": "4030360927",
-    "csr.serial.number": "1-S|2-INV|3-20250819|4-002|5-ed22f1d8-e6a2-1118-9b58-d9a8f11e445f",
-    "csr.organization.identifier": "310399118500003",
-    "csr.organization.unit.name": "Jouhara Branch",
-    "csr.organization.name": "Wassem Waleed Trading Est",
-    "csr.country.name": "SA",
-    "csr.invoice.type": "1100",
-    "csr.location.address": "Building No.3654, Jouhara,Al Jawhara Dist, JEDDAH - 22416",
-    "csr.industry.business.category": "Supply activities"
-    }
+    csr_config = {}
+    if store_type == 'test':
+        OTP = '123456' 
+        environment_type = 'NonProduction'
+        csr_config = {
+        "csr.common.name": "TST-886431145-399999999900003",
+        "csr.serial.number": "1-TST|2-TST|3-ed22f1d8-e6a2-1118-9b58-d9a8f11e445f",
+        "csr.organization.identifier": "399999999900003",
+        "csr.organization.unit.name": "Riyadh Branch",
+        "csr.organization.name": "Maximum Speed Tech Supply LTD",
+        "csr.country.name": "SA",
+        "csr.invoice.type": "1100",
+        "csr.location.address": "RRRD2929",
+        "csr.industry.business.category": "Trading"
+        }
+    elif store_type == 'store1':
+        csr_config = {
+        "csr.common.name": "4030363216",
+        "csr.serial.number": "1-S|2-INV|3-20250819|4-002|5-ed22f1d8-e6a2-1118-9b58-d9a8f11e445f",
+        "csr.organization.identifier": "310328203700003",
+        "csr.organization.unit.name": "Jouhara Branch",
+        "csr.organization.name": "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment",
+        "csr.country.name": "SA",
+        "csr.invoice.type": "1100",
+        "csr.location.address": "JDSA7444",
+        "csr.industry.business.category": "Trading"
+        }
+    elif store_type == 'store2':
+        csr_config = {
+            "csr.common.name": "4030360927",
+            "csr.serial.number": "1-S|2-INV|3-20250819|4-002|5-ed22f1d8-e6a2-1118-9b58-d9a8f11e445f",
+            "csr.organization.identifier": "310399118500003",
+            "csr.organization.unit.name": "Jouhara Branch",
+            "csr.organization.name": "Wassem Waleed Trading Est",
+            "csr.country.name": "SA",
+            #"csr.invoice.type": "1100",
+            "csr.invoice.type": "1000",
+            "csr.location.address": "Building No.3654, Jouhara,Al Jawhara Dist, JEDDAH - 22416",
+            "csr.industry.business.category": "Trading"
+        }
+
+
 
     #config_file_path = 'certificates/csr-config-example-EN.properties'
 
@@ -77,6 +95,8 @@ def main():
 
     # 1. Generate CSR and PrivateKey
     print("\n1. Generate CSR and PrivateKey\n")
+     
+   
 
     #Generate CSR & Private Key
     csr_gen = CsrGenerator(csr_config, environment_type)
@@ -122,6 +142,9 @@ def main():
 
     private_key = cert_info["privateKey"]
     x509_certificate_content = base64.b64decode(cert_info["ccsid_binarySecurityToken"]).decode('utf-8')
+    print("\nx509_certificate_content:")
+    print(x509_certificate_content)
+
 
     parser = etree.XMLParser(remove_blank_text=False)
     base_document = etree.parse(xml_template_path, parser)
@@ -129,9 +152,9 @@ def main():
         ["STDSI", "388", "Standard Invoice", ""],
         ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
         ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
-        ["SIMSI", "388", "Simplified Invoice", ""],
-        ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
-        ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
+     #   ["SIMSI", "388", "Simplified Invoice", ""],
+     #   ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
+     #   ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
     ]
 
     icv = 0

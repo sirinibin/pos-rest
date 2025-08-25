@@ -57,8 +57,8 @@ def main():
         "csr.organization.name": payloadFromGo["name"],
         #"csr.country.name": "SA",
         "csr.country.name": payloadFromGo["country_code"],
-        #"csr.invoice.type": "1100",
-        "csr.invoice.type":  payloadFromGo["invoice_type"],
+        "csr.invoice.type": "1000",
+        #"csr.invoice.type":  payloadFromGo["invoice_type"],
         #"csr.location.address": "King Faisal Rd, al-safa district, Umluj 48323",
         "csr.location.address": payloadFromGo["address"],
         #"csr.industry.business.category": "Supply activities"
@@ -173,9 +173,9 @@ def main():
             ["STDSI", "388", "Standard Invoice", ""],
             ["STDCN", "383", "Standard CreditNote", "InstructionNotes for Standard CreditNote"],
             ["STDDN", "381", "Standard DebitNote", "InstructionNotes for Standard DebitNote"],
-            ["SIMSI", "388", "Simplified Invoice", ""],
-            ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
-            ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
+        #   ["SIMSI", "388", "Simplified Invoice", ""],
+        #   ["SIMCN", "383", "Simplified CreditNote", "InstructionNotes for Simplified CreditNote"],
+        #   ["SIMDN", "381", "Simplified DebitNote", "InstructionNotes for Simplified DebitNote"]
         ]
 
         icv = 0

@@ -167,55 +167,60 @@ class einvoice_signer:
 
     @staticmethod
     def sign_simplified_invoice(canonical_xml, base64_hash, x509_certificate_content, private_key_content, ubl_template_path, signature_path, uuid):
-        """Sign the simplified invoice and return the signed invoice."""
-        # Get current time in UTC (timezone-aware)
-      
+        """Sign the simplified invoice based on ZATCA's latest guidelines."""
+        # Get current time in Saudi Arabia timezone (UTC+3)
         utc_now = datetime.now(timezone.utc)
-
-        # Convert to Saudi Arabia timezone (UTC+3)
         saudi_tz = pytz.timezone("Asia/Riyadh")
         saudi_time = utc_now.astimezone(saudi_tz)
-
-        # Format the timestamp
         signature_timestamp = saudi_time.strftime("%Y-%m-%dT%H:%M:%S")
 
-        
-        #signature_timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
-        # Generate public key hashing
-        public_key_hashing = einvoice_signer.generate_public_key_hashing(x509_certificate_content)
-        #print("public_key_hashing:"+public_key_hashing)
-        
-
-        # Parse the X.509 certificate
+        # Wrap the certificate content
         pem_certificate = einvoice_signer.wrap_certificate(x509_certificate_content)
         certificate = x509.load_pem_x509_certificate(pem_certificate.encode(), default_backend())
 
-        # Extract certificate information
+        # Extract certificate details
         issuer_name = einvoice_signer.get_issuer_name(certificate)
-        serial_number = certificate.serial_number 
-        signed_properties_hash = einvoice_signer.get_signed_properties_hash(signature_timestamp, public_key_hashing, issuer_name, serial_number)
+        serial_number = certificate.serial_number
+
+        # Generate public key hashing
+        public_key_hashing = einvoice_signer.generate_public_key_hashing(x509_certificate_content)
+
+        # Generate the signed properties hash
+        signed_properties_hash = einvoice_signer.get_signed_properties_hash(
+            signature_timestamp, public_key_hashing, issuer_name, serial_number
+        )
+
+        # Generate the digital signature
         signature_value = einvoice_signer.get_digital_signature(base64_hash, private_key_content)
 
         # Generate the ECDSA result
         ecdsa_result = einvoice_signer.get_public_key_and_signature(x509_certificate_content)
 
-        # Populate UBL Template
-        ubl_content = einvoice_signer.populate_ubl_template(ubl_template_path, base64_hash, signed_properties_hash, signature_value, x509_certificate_content, signature_timestamp, public_key_hashing, issuer_name, serial_number)
+        # Populate the UBL template
+        ubl_content = einvoice_signer.populate_ubl_template(
+            ubl_template_path, base64_hash, signed_properties_hash, signature_value,
+            x509_certificate_content, signature_timestamp, public_key_hashing, issuer_name, serial_number
+        )
 
-        # Insert UBL into XML
+        # Insert the UBL content into the canonical XML
         updated_xml_string = einvoice_signer.insert_ubl_into_xml(canonical_xml, ubl_content)
 
-        # Generate QR Code, now including ecdsa_result
-        qr_code = qr_code_generator.generate_qr_code(canonical_xml, base64_hash, signature_value, ecdsa_result)
+        # Generate the QR code with the ECDSA result
+        qr_code = qr_code_generator.generate_qr_code(
+            canonical_xml, base64_hash, signature_value, ecdsa_result
+        )
 
-        # Load and insert signature content
-        updated_xml_string = einvoice_signer.insert_signature_into_xml(updated_xml_string, signature_path, qr_code)
+        # Insert the signature content into the XML
+        updated_xml_string = einvoice_signer.insert_signature_into_xml(
+            updated_xml_string, signature_path, qr_code
+        )
 
-           # Encode the final invoice
-        base64_invoice = einvoice_signer.encode_invoice('<?xml version="1.0" encoding="UTF-8"?>\n', updated_xml_string)
+        # Encode the final invoice
+        base64_invoice = einvoice_signer.encode_invoice(
+            '<?xml version="1.0" encoding="UTF-8"?>\n', updated_xml_string
+        )
 
-        # Create the result dictionary
+        # Return the result dictionary
         return json.dumps({
             "invoiceHash": base64_hash,
             "uuid": uuid,
@@ -409,5 +414,5 @@ class einvoice_signer:
         finally:
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
-    
+
 
