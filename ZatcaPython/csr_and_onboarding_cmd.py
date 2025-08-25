@@ -11,9 +11,11 @@ def main():
     print("\nPYTHON CODE ONBOARDING\n")
 
     # Define Variable
-    environment_type = 'NonProduction'
-    OTP = '123456'  # For Simulation and Production Get OTP from fatooraPortal
+    #environment_type = 'NonProduction'
+    environment_type = 'Simulation'
+    OTP = '516371'  # For Simulation and Production Get OTP from fatooraPortal
 
+    '''
     csr_config = {
     "csr.common.name": "TST-886431145-399999999900003",
     "csr.serial.number": "1-TST|2-TST|3-ed22f1d8-e6a2-1118-9b58-d9a8f11e445f",
@@ -23,6 +25,20 @@ def main():
     "csr.country.name": "SA",
     "csr.invoice.type": "1100",
     "csr.location.address": "RRRD2929",
+    "csr.industry.business.category": "Supply activities"
+    }
+    '''
+
+    #Simulation 
+    csr_config = {
+    "csr.common.name": "4030360927",
+    "csr.serial.number": "1-S|2-INV|3-20250819|4-002|5-ed22f1d8-e6a2-1118-9b58-d9a8f11e445f",
+    "csr.organization.identifier": "310399118500003",
+    "csr.organization.unit.name": "Jouhara Branch",
+    "csr.organization.name": "Wassem Waleed Trading Est",
+    "csr.country.name": "SA",
+    "csr.invoice.type": "1100",
+    "csr.location.address": "Building No.3654, Jouhara,Al Jawhara Dist, JEDDAH - 22416",
     "csr.industry.business.category": "Supply activities"
     }
 
@@ -120,9 +136,10 @@ def main():
 
     icv = 0
     pih = "NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ=="
-    vat = "399999999900003"
+    vat = "310399118500003"
     #crn = "886431145"
-    crn = "3030303030"
+    #crn = "3030303030"
+    crn = "4030360927"
     invoice_code = "TST-TST"
 
     for doc_type in document_types:
