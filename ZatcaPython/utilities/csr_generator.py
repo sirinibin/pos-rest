@@ -34,12 +34,12 @@ class CsrGenerator:
         # Build the CSR
         csr_builder = x509.CertificateSigningRequestBuilder()
         csr_builder = csr_builder.subject_name(x509.Name([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, self.config.get('csr.country.name', 'SA')),
-            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, self.config.get('csr.organization.unit.name', '')),
+            x509.NameAttribute(NameOID.COMMON_NAME, self.config.get('csr.common.name', '')),
             x509.NameAttribute(NameOID.ORGANIZATION_NAME, self.config.get('csr.organization.name', '')),
-            x509.NameAttribute(NameOID.COMMON_NAME, self.config.get('csr.common.name', ''))
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, self.config.get('csr.organization.unit.name', '')),
+            x509.NameAttribute(NameOID.COUNTRY_NAME, self.config.get('csr.country.name', 'SA')),
         ]))
-        
+
         # Add ASN.1 extension
         csr_builder = csr_builder.add_extension(
             x509.UnrecognizedExtension(
@@ -80,6 +80,8 @@ class CsrGenerator:
             r'-----BEGIN .* PRIVATE KEY-----|-----END .* PRIVATE KEY-----|\n', '', 
             private_key_pem.decode('utf-8')
         )
+
+        
 
         # Encode CSR in Base64
         csr_base64 = base64.b64encode(csr_pem).decode('utf-8')
