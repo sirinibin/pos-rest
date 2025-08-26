@@ -99,7 +99,7 @@ def main():
    
 
     #Generate CSR & Private Key
-    csr_gen = CsrGenerator(csr_config, environment_type)
+    csr_gen = CsrGenerator(csr_config, environment_type,"")
     private_key_content, csr_base64 = csr_gen.generate_csr()
 
     print("\nPrivate Key (without header and footer):")

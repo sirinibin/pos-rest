@@ -95,7 +95,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 
 	invoiceCode := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, 1)
 	invoiceCode = strings.ReplaceAll(invoiceCode, "DATE", currentDate)
-	log.Print("invoiceCode:" + invoiceCode)
+	//log.Print("invoiceCode:" + invoiceCode)
 
 	serialNumberTemplate := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, 1)
 
@@ -206,8 +206,8 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//log.Print("pythonResponse:")
-	//log.Print(pythonResponse)
+	log.Print("pythonResponse:")
+	log.Print(pythonResponse)
 
 	if pythonResponse.Error != "" {
 		//log.Print(pythonResponse.Error)

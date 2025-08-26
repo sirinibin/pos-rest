@@ -121,7 +121,7 @@ def main():
         #print("\n1. Generate CSR and PrivateKey\n")
 
         #Generate CSR & Private Key
-        csr_gen = CsrGenerator(csr_config, environment_type)
+        csr_gen = CsrGenerator(csr_config, environment_type,"ZatcaPython/")
         private_key_content, csr_base64 = csr_gen.generate_csr()
 
         #print("\nPrivate Key (without header and footer):")

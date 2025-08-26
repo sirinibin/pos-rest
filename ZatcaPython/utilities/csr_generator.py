@@ -8,12 +8,17 @@ import base64
 import os
 import re
 from asn1crypto.core import UTF8String
+import tempfile
+import subprocess
 
 class CsrGenerator:
-    def __init__(self, config, environment_type):
+    def __init__(self, config, environment_type,dirPrefix):
         self.config = config
         self.environment_type = environment_type
         self.asn_template = self.get_asn_template()
+        self.environment_type = environment_type
+        self.fatoora_cli_simulation = dirPrefix+"utilities/fatoora-cli-simulation/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
+        self.fatoora_cli = dirPrefix+"utilities/fatoora-cli/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
 
     def get_asn_template(self):
         if self.environment_type == 'NonProduction':
@@ -28,6 +33,77 @@ class CsrGenerator:
     def generate_private_key(self):
         return ec.generate_private_key(ec.SECP256K1(), default_backend())
 
+    def generate_csr(self):
+        """
+        Generate both private key and CSR using Fatoora CLI.
+        Returns:
+            - private_key_content: Base64 string of private key (no headers)
+            - csr_base64: Base64-encoded CSR
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csr_config_file = os.path.join(tmpdir, "csr.properties")
+            private_key_file = os.path.join(tmpdir, "private.key")
+            csr_file = os.path.join(tmpdir, "csr.pem")
+
+            # Write csr.properties
+            with open(csr_config_file, "w") as f:
+                f.write(f"csr.common.name={self.config.get('csr.common.name','')}\n")
+                f.write(f"csr.serial.number={self.config.get('csr.serial.number','')}\n")
+                f.write(f"csr.organization.identifier={self.config.get('csr.organization.identifier','')}\n")
+                f.write(f"csr.organization.unit.name={self.config.get('csr.organization.unit.name','')}\n")
+                f.write(f"csr.organization.name={self.config.get('csr.organization.name','')}\n")
+                f.write(f"csr.country.name={self.config.get('csr.country.name','SA')}\n")
+                f.write(f"csr.invoice.type={self.config.get('csr.invoice.type','')}\n")
+                f.write(f"csr.location.address={self.config.get('csr.location.address','')}\n")
+                f.write(f"csr.industry.business.category={self.config.get('csr.industry.business.category','')}\n")
+
+            # Build command
+            if self.environment_type in ["NonProduction", "Simulation"]:
+                cmd = [
+                    "java", "-jar", self.fatoora_cli_simulation,
+                    "-csr",
+                    "-csrConfig", csr_config_file,
+                    "-privateKey", private_key_file,
+                    "-generatedCsr", csr_file,
+                    "-pem"
+                ]
+            else:
+                cmd = [
+                    "java", "-jar", self.fatoora_cli,
+                    "-csr",
+                    "-csrConfig", csr_config_file,
+                    "-privateKey", private_key_file,
+                    "-generatedCsr", csr_file,
+                    "-pem"
+                ]
+
+            # Add sandbox flag for NonProduction or Simulation
+            if self.environment_type in ["Simulation"]:
+                cmd.insert(3, "-sim")
+
+            if self.environment_type in ["NonProduction"]:
+                cmd.insert(3, "-nonprod")
+
+            # Run Fatoora CLI
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                print("Error generating CSR with Fatoora CLI:", e.stderr)
+                raise
+
+            # Read private key
+            with open(private_key_file, "r") as f:
+                private_key_pem = f.read()
+            private_key_content = "".join(private_key_pem.strip().splitlines()[1:-1])
+
+            # Read CSR
+            with open(csr_file, "rb") as f:
+                csr_pem = f.read()
+            csr_base64 = base64.b64encode(csr_pem).decode("utf-8")
+
+            return private_key_content, csr_base64
+
+    '''
     def generate_csr(self):
         private_key = self.generate_private_key()
         
@@ -87,6 +163,7 @@ class CsrGenerator:
         csr_base64 = base64.b64encode(csr_pem).decode('utf-8')
 
         return private_key_content, csr_base64
+    '''    
 
     def save_to_files(self, private_key_pem, csr_pem):
         os.makedirs("certificates", exist_ok=True)
