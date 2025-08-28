@@ -218,7 +218,7 @@ class einvoice_signer:
             with open(private_key_file_path, "w") as key_file:
                 key_file.write(private_key)
             # Set 644 permissions
-            os.chmod(private_key_file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+            #os.chmod(private_key_file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
             # Save the CSR to a file
             with open(certificate_file_path, "w") as certificate_file:
