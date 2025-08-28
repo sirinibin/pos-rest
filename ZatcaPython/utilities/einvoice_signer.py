@@ -259,7 +259,7 @@ class einvoice_signer:
                 print(json.dumps(error_data))
                 exit(1);
 
-
+            '''
             cmd = [
                 "java", 
                 "-jar", jar_file,
@@ -268,9 +268,16 @@ class einvoice_signer:
                 "-signedInvoice", os.path.abspath(signed_file_path),
                 env_flag,
             ]
+            '''
+
+            cmd = f"""
+            export FATOORA_HOME={env["FATOORA_HOME"]} &&
+            export SDK_CONFIG={env["SDK_CONFIG"]} &&
+            java -jar {jar_file} -sign -invoice {os.path.abspath(xml_file_path)} -signedInvoice {os.path.abspath(signed_file_path)} {env_flag}
+            """
             
             try:
-                result = subprocess.run(cmd,env=env, check=True, capture_output=True, text=True)
+                result = subprocess.run(cmd,shell=True, check=True, capture_output=True, text=True)
                 '''
                 error_data = {
                         "error":f"Command error: {result.stderr}, out: {result.stdout}, pk:{private_key_file_path}",
@@ -279,6 +286,7 @@ class einvoice_signer:
                 print(json.dumps(error_data))  # Log the error as JSON
                 exit(1);
                 '''
+                
             except subprocess.CalledProcessError as e:
                 error_data = {
                     "error": f"error running sign command:{str(e)},out:{e.stdout}, err:{e.stderr}",
