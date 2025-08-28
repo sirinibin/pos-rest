@@ -203,7 +203,7 @@ class einvoice_signer:
         
         file_name = f"{uuid_lib.uuid4().hex}"
         private_key_file_path = os.path.join(jar_file_root_path,"Data/Certificates", f"ec-secp256k1-priv-key.pem")
-        certificate_file_path = os.path.join(jar_file_root_path,"Data/Certificates", f"Cert.pem")
+        certificate_file_path = os.path.join(jar_file_root_path,"Data/Certificates", f"cert.pem")
 
         xml_file_path = os.path.join("ZatcaPython", f"{file_name}.xml")
         signed_file_path = os.path.join("ZatcaPython", f"{file_name}_signed.xml")
