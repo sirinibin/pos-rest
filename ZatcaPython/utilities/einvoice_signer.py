@@ -226,8 +226,10 @@ class einvoice_signer:
 
               # Save the CSR to a file
             
+            '''
             with open(signed_file_path, "w") as signed_file:
                 signed_file.write("")
+            '''    
             
 
             if not os.path.exists(xml_file_path):
