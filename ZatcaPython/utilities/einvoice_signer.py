@@ -183,6 +183,8 @@ class einvoice_signer:
         - JSON string containing the invoiceHash, uuid, and invoice.
         """
 
+       
+
       
         jar_file_root_path = os.path.abspath("ZatcaPython/utilities/fatoora-cli")
         jar_file = os.path.join(jar_file_root_path,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
@@ -191,6 +193,10 @@ class einvoice_signer:
         if environment_type not in ["Production"]:
              jar_file_root_path = os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
              jar_file = os.path.join(jar_file_root_path,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
+
+        env = os.environ.copy()
+        env["SDK_CONFIG"] = os.path.join(jar_file_root_path,"Configuration/config.json")
+        env["FATOORA_HOME"] = jar_file_root_path
 
         env_flag = ""
 
@@ -264,7 +270,7 @@ class einvoice_signer:
             ]
             
             try:
-                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                result = subprocess.run(cmd,env=env, check=True, capture_output=True, text=True)
                 '''
                 error_data = {
                         "error":f"Command error: {result.stderr}, out: {result.stdout}, pk:{private_key_file_path}",
@@ -300,7 +306,7 @@ class einvoice_signer:
                 env_flag
             ]
             #print("Executing Fatoora invoice request command:", " ".join(invoice_request_command))
-            subprocess.run(invoice_request_command, check=True,capture_output=True, text=True)
+            subprocess.run(invoice_request_command,env=env, check=True,capture_output=True, text=True)
 
             if not os.path.exists(request_file_path):
                 error_data = {
