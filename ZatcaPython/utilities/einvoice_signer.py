@@ -14,6 +14,10 @@ from OpenSSL import crypto
 from utilities.qr_code_generator import qr_code_generator
 from cryptography.hazmat.primitives.asymmetric import ec
 import pytz
+import subprocess
+import uuid as uuid_lib
+import stat
+
 
 class einvoice_signer:
     @staticmethod
@@ -76,13 +80,13 @@ class einvoice_signer:
     #     return einvoice_signer.sign_simplified_invoice(canonical_xml, base64_hash, x509_certificate_content, private_key_content, resource_paths["ubl_template"], resource_paths["signature"], uuid)
 
     @staticmethod
-    def get_request_api(xml, x509_certificate_content, private_key_content,basePath):
+    def get_request_api(xml, x509_certificate_content, private_key_content,environment_type):
         """Main function to process the invoice request."""
         # Define resource file paths
         resource_paths = {
-            "xsl_file": basePath+'resources/xslfile.xsl',
-            "ubl_template": basePath+'resources/zatca_ubl.xml',
-            "signature": basePath+'resources/zatca_signature.xml'
+            "xsl_file": os.path.join("",'ZatcaPython/resources/xslfile.xsl'),
+            "ubl_template": os.path.join("",'ZatcaPython/resources/zatca_ubl.xml'),
+            "signature": os.path.join("",'ZatcaPython/resources/zatca_signature.xml'),
         }
 
         xml_declaration = '<?xml version="1.0" encoding="UTF-8"?>'
@@ -110,7 +114,7 @@ class einvoice_signer:
             return einvoice_signer.create_result(uuid, base64_hash, base64_invoice)
 
         # Sign the simplified invoice
-        return einvoice_signer.sign_simplified_invoice(canonical_xml, base64_hash, x509_certificate_content, private_key_content, resource_paths["ubl_template"], resource_paths["signature"], uuid)
+        return einvoice_signer.sign_simplified_invoice(canonical_xml,environment_type,private_key_content, x509_certificate_content)
 
     @staticmethod
     def extract_uuid(xml):
@@ -165,6 +169,199 @@ class einvoice_signer:
             "invoice": base64_invoice
         })
 
+    @staticmethod
+    def sign_simplified_invoice(canonical_xml, environment_type, private_key, certificate_content):
+        """
+        Sign the simplified invoice using Fatoora CLI based on the environment.
+        Arguments:
+        - canonical_xml: The canonicalized XML content to be signed.
+        - environment_type: The environment type ("Simulation", "NonProduction", or "Production").
+        - private_key: The private key content to be used for signing.
+        - generated_csr: The CSR content to be used for signing.
+        
+        Returns:
+        - JSON string containing the invoiceHash, uuid, and invoice.
+        """
+
+      
+        jar_file_root_path = os.path.abspath("ZatcaPython/utilities/fatoora-cli")
+        jar_file = os.path.join(jar_file_root_path,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
+
+
+        if environment_type not in ["Production"]:
+             jar_file_root_path = os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
+             jar_file = os.path.join(jar_file_root_path,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
+
+        env_flag = ""
+
+        # Add sandbox flag for NonProduction or Simulation
+        if environment_type in ["Simulation"]:
+            env_flag = "-sim"
+
+        if environment_type in ["NonProduction"]:
+            env_flag = "-nonprod"
+        
+        file_name = f"{uuid_lib.uuid4().hex}"
+        private_key_file_path = os.path.join(jar_file_root_path,"Data/Certificates", f"ec-secp256k1-priv-key.pem")
+        certificate_file_path = os.path.join(jar_file_root_path,"Data/Certificates", f"Cert.pem")
+
+        xml_file_path = os.path.join("ZatcaPython", f"{file_name}.xml")
+        signed_file_path = os.path.join("ZatcaPython", f"{file_name}_signed.xml")
+        request_file_path = os.path.join("ZatcaPython", f"{file_name}_request.json")
+
+        try:
+            # Save the canonical XML to the file
+            with open(xml_file_path, "w") as xml_file:
+                xml_file.write(canonical_xml)
+
+            # Save the private key to a file
+            with open(private_key_file_path, "w") as key_file:
+                key_file.write(private_key)
+            # Set 644 permissions
+            os.chmod(private_key_file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+
+            # Save the CSR to a file
+            with open(certificate_file_path, "w") as certificate_file:
+                certificate_file.write(certificate_content)
+
+              # Save the CSR to a file
+            
+            with open(signed_file_path, "w") as signed_file:
+                signed_file.write("")
+            
+
+            if not os.path.exists(xml_file_path):
+                error_data = {
+                    "error": f"canonical_xml file not found: {xml_file_path}",
+                }
+                print(json.dumps(error_data))
+                exit(1);
+
+            if not os.path.exists(private_key_file_path):
+                error_data = {
+                    "error": f"private_key_file_path file not found: {private_key_file_path}",
+                }
+                print(json.dumps(error_data))
+                exit(1);
+
+            if not os.path.exists(certificate_file_path):
+                error_data = {
+                    "error": f"certificate file not found: {certificate_file_path}",
+                }
+                print(json.dumps(error_data))
+                exit(1);
+
+
+            cmd = [
+                "java", 
+                "-jar", jar_file,
+                "-sign",
+                "-invoice", os.path.abspath(xml_file_path),
+                "-signedInvoice", os.path.abspath(signed_file_path),
+                env_flag,
+            ]
+            
+            try:
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                '''
+                error_data = {
+                        "error":f"Command error: {result.stderr}, out: {result.stdout}, pk:{private_key_file_path}",
+                        #"error":basePath,
+                }
+                print(json.dumps(error_data))  # Log the error as JSON
+                exit(1);
+                '''
+            except subprocess.CalledProcessError as e:
+                error_data = {
+                    "error": f"error running sign command:{str(e)},out:{e.stdout}, err:{e.stderr}",
+                }
+                print(json.dumps(error_data))  # Log the error as JSON
+                exit(1);
+               
+    
+            # Verify signed invoice file
+            if not os.path.exists(signed_file_path):
+                error_data = {
+                    "error": f"Signed invoice file not found: {signed_file_path}. Executing Fatoora sign command:"+ " ".join(sign_command),
+                }
+                print(json.dumps(error_data))
+                exit(1);
+            
+
+            # Step 3: Run the Fatoora invoice request command
+            invoice_request_command = [
+                "java", 
+                "-jar", jar_file,
+                "-invoice", signed_file_path,
+                "-invoiceRequest",
+                "-apiRequest", request_file_path,
+                env_flag
+            ]
+            #print("Executing Fatoora invoice request command:", " ".join(invoice_request_command))
+            subprocess.run(invoice_request_command, check=True,capture_output=True, text=True)
+
+            if not os.path.exists(request_file_path):
+                error_data = {
+                    "error": f"Request file not found: {request_file_path}. Executing Fatoora sign command:"+ " ".join(invoice_request_command),
+                }
+                print(json.dumps(error_data))
+                exit(1);
+
+            # Step 4: Extract content from the generated request JSON file
+            with open(request_file_path, "r") as request_file:
+                request_data = json.load(request_file)
+
+
+            
+            for file_path in [xml_file_path, private_key_file_path, certificate_file_path, signed_file_path, request_file_path]:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as cleanup_error:
+                        #print(f"Failed to remove file {file_path}: {cleanup_error}")
+                        error_data = {
+                        "error": str(cleanup_error),
+                        }
+                        print(json.dumps(error_data))
+                        exit(1);       
+                if os.path.exists(file_path):
+                    error_data = {
+                        "error": f"{file_path} Not Removed",
+                    }
+                    print(json.dumps(error_data))
+                    exit(1);       
+            # Return the extracted data
+            return json.dumps({
+                "invoiceHash": request_data["invoiceHash"],
+                "uuid": request_data["uuid"],
+                "invoice": request_data["invoice"]
+            })
+
+        except subprocess.CalledProcessError as e:
+            #print("Error executing Fatoora CLI command:", e.stderr)
+            for file_path in [xml_file_path, private_key_file_path, certificate_file_path, signed_file_path, request_file_path]:
+                if os.path.exists(file_path):
+                    os.remove(file_path) 
+            error_data = {
+            "error": str(e),
+            }
+            print(json.dumps(error_data))
+            exit(1)
+          
+        except Exception as e:
+            #print("An error occurred:", e)
+            for file_path in [xml_file_path, private_key_file_path, certificate_file_path, signed_file_path, request_file_path]:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            error_data = {
+            "error": str(e),
+            "traceback": ''
+            }
+            print(json.dumps(error_data)) 
+            exit(1)
+        
+             
+    '''
     @staticmethod
     def sign_simplified_invoice(canonical_xml, base64_hash, x509_certificate_content, private_key_content, ubl_template_path, signature_path, uuid):
         """Sign the simplified invoice based on ZATCA's latest guidelines."""
@@ -226,6 +423,7 @@ class einvoice_signer:
             "uuid": uuid,
             "invoice": base64_invoice,
         })
+    '''    
 
     @staticmethod
     def wrap_certificate(x509_certificate_content):

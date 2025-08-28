@@ -110,7 +110,7 @@ def main():
     cert_info["csr"] = csr_base64
     cert_info["privateKey"] = private_key_content
 
-    api_helper.save_json_to_file("certificates/certificateInfo.json", cert_info)
+    api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
 
     # 2. Get Compliance CSID
     print("\n2. Get Compliance CSID\n")
@@ -127,7 +127,7 @@ def main():
         cert_info["ccsid_binarySecurityToken"] = json_decoded_response["binarySecurityToken"]
         cert_info["ccsid_secret"] = json_decoded_response["secret"]
 
-        api_helper.save_json_to_file("certificates/certificateInfo.json", cert_info)
+        api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
 
         print("\ncomplianceCSID Server Response: \n" + clean_response)
         
@@ -137,8 +137,8 @@ def main():
     # 3: Sending Sample Documents
     print("\n3: Sending Sample Documents\n")
 
-    cert_info = api_helper.load_json_from_file("certificates/certificateInfo.json")
-    xml_template_path = "templates/invoice.xml"
+    cert_info = api_helper.load_json_from_file("ZatcaPython/certificates/certificateInfo.json")
+    xml_template_path = "ZatcaPython/templates/invoice.xml"
 
     private_key = cert_info["privateKey"]
     x509_certificate_content = base64.b64decode(cert_info["ccsid_binarySecurityToken"]).decode('utf-8')
@@ -185,8 +185,7 @@ def main():
             invoice_code,
             is_simplified
         )
-        basPath = ""
-        json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,basPath)
+        json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,environment_type)
         
         print(json_payload)
         
@@ -239,7 +238,7 @@ def main():
         cert_info["pcsid_binarySecurityToken"] = json_decoded_response["binarySecurityToken"]
         cert_info["pcsid_secret"] = json_decoded_response["secret"]
 
-        api_helper.save_json_to_file("certificates/certificateInfo.json", cert_info)
+        api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
 
         print(f"Production CSID Server Response: \n{clean_response}")
 

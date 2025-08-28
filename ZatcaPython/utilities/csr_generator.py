@@ -17,8 +17,8 @@ class CsrGenerator:
         self.environment_type = environment_type
         self.asn_template = self.get_asn_template()
         self.environment_type = environment_type
-        self.fatoora_cli_simulation = dirPrefix+"utilities/fatoora-cli-simulation/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
-        self.fatoora_cli = dirPrefix+"utilities/fatoora-cli/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
+        self.fatoora_cli_simulation = "ZatcaPython/utilities/fatoora-cli-simulation/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
+        self.fatoora_cli = "ZatcaPython/utilities/fatoora-cli/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
 
     def get_asn_template(self):
         if self.environment_type == 'NonProduction':

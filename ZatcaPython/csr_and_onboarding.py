@@ -7,6 +7,7 @@ from utilities.einvoice_signer import einvoice_signer
 from lxml import etree 
 import sys
 import traceback
+import os
 
 def main():
     try:
@@ -204,8 +205,8 @@ def main():
                 invoice_code,
                 is_simplified
             )
-            basePath = "ZatcaPython/"
-            json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,basePath)
+
+            json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,environment_type)
             
             #print(json_payload)
             
