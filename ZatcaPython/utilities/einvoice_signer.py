@@ -183,9 +183,7 @@ class einvoice_signer:
         - JSON string containing the invoiceHash, uuid, and invoice.
         """
 
-     
-        if "FATOORA_HOME" in os.environ:
-            jar_file_root_path = os.environ.get("FATOORA_HOME")
+        jar_file_root_path = os.environ.get("FATOORA_HOME", "/home/ubuntu/go/src/github.com/sirinibin/pos-rest/ZatcaPython/utilities/fatoora-cli-simulation")
       
         if not os.path.exists(jar_file_root_path):
             jar_file_root_path = "/home/ubuntu/go/src/github.com/sirinibin/pos-rest/ZatcaPython/utilities/fatoora-cli-simulation"
