@@ -185,6 +185,11 @@ class einvoice_signer:
 
     
         jar_file_root_path = os.environ.get("FATOORA_HOME")
+      
+        if not os.path.exists(jar_file_root_path):
+            jar_file_root_path = "/home/ubuntu/go/src/github.com/sirinibin/pos-rest/ZatcaPython/utilities/fatoora-cli-simulation"
+
+
         jar_file = os.path.join(jar_file_root_path,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
 
 
