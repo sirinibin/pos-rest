@@ -72,7 +72,7 @@ type Customer struct {
 	ID                         primitive.ObjectID       `json:"id,omitempty" bson:"_id,omitempty"`
 	Code                       string                   `bson:"code,omitempty" json:"code,omitempty"`
 	Name                       string                   `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic               string                   `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	NameInArabic               string                   `bson:"name_in_arabic" json:"name_in_arabic"`
 	SearchWords                []string                 `bson:"search_words,omitempty" json:"search_words,omitempty"`
 	SearchWordsInArabic        []string                 `bson:"search_words_in_arabic,omitempty" json:"search_words_in_arabic,omitempty"`
 	AdditionalKeywords         []string                 `bson:"additional_keywords" json:"additional_keywords"`
