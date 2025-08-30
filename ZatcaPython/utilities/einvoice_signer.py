@@ -182,19 +182,12 @@ class einvoice_signer:
         Returns:
         - JSON string containing the invoiceHash, uuid, and invoice.
         """
+        fatoora_cli_home = os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
 
-        jar_file_root_path = os.environ.get("FATOORA_HOME", "/home/ubuntu/go/src/github.com/sirinibin/pos-rest/ZatcaPython/utilities/fatoora-cli-simulation")
+        os.environ["FATOORA_HOME"] = fatoora_cli_home
       
-        if not os.path.exists(jar_file_root_path):
-            jar_file_root_path = "/home/ubuntu/go/src/github.com/sirinibin/pos-rest/ZatcaPython/utilities/fatoora-cli-simulation"
 
-
-        jar_file = os.path.join(jar_file_root_path,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
-
-
-        if environment_type not in ["Production"]:
-             jar_file_root_path = os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
-             jar_file = os.path.join(jar_file_root_path,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
+        jar_file_path = os.path.join(fatoora_cli_home,"Apps/zatca-einvoicing-sdk-238-R3.4.4.jar")
 
         env_flag = ""
 
@@ -206,8 +199,29 @@ class einvoice_signer:
             env_flag = "-nonprod"
         
         file_name = f"{uuid_lib.uuid4().hex}"
-        private_key_file_path = os.path.join(jar_file_root_path,"Data/Certificates", f"ec-secp256k1-priv-key.pem")
-        certificate_file_path = os.path.join(jar_file_root_path,"Data/Certificates", f"cert.pem")
+        config_file_path = os.path.join(fatoora_cli_home,"Configuration", f"{file_name}_config.json")
+
+        os.environ["SDK_CONFIG"] = os.path.join(fatoora_cli_home,  config_file_path)
+
+        private_key_file_path = os.path.join(fatoora_cli_home,"Data/Certificates", f"{file_name}_ec-secp256k1-priv-key.pem")
+        certificate_file_path = os.path.join(fatoora_cli_home,"Data/Certificates", f"{file_name}_cert.pem")
+
+        config_file_content =""
+        # Build config JSON using absolute/runtime paths so the SDK finds resources on Ubuntu/macOS
+        updated_config = {
+            "xsdPath": os.path.join(fatoora_cli_home, "Data", "Schemas", "xsds", "UBL2.1", "xsd", "maindoc", "UBL-Invoice-2.1.xsd"),
+            "enSchematron": os.path.join(fatoora_cli_home, "Data", "Rules", "schematrons", "CEN-EN16931-UBL.xsl"),
+            "zatcaSchematron": os.path.join(fatoora_cli_home, "Data", "Rules", "schematrons", "20210819_ZATCA_E-invoice_Validation_Rules.xsl"),
+            "certPath": certificate_file_path,
+            "privateKeyPath": private_key_file_path,
+            "pihPath": os.path.join(fatoora_cli_home, "Data", "PIH", "pih.txt"),
+            "inputPath": os.path.join(fatoora_cli_home, "Data", "Input"),
+            "usagePathFile": os.path.join(fatoora_cli_home, "Configuration", "usage.txt")
+        }
+        config_file_content = json.dumps(updated_config, indent=2)
+
+        with open(config_file_path, "w") as config_file:
+                config_file.write(config_file_content)
 
         xml_file_path = os.path.join("ZatcaPython", f"{file_name}.xml")
         signed_file_path = os.path.join("ZatcaPython", f"{file_name}_signed.xml")
@@ -228,13 +242,6 @@ class einvoice_signer:
             with open(certificate_file_path, "w") as certificate_file:
                 certificate_file.write(certificate_content)
 
-              # Save the CSR to a file
-            
-            '''
-            with open(signed_file_path, "w") as signed_file:
-                signed_file.write("")
-            '''    
-            
 
             if not os.path.exists(xml_file_path):
                 error_data = {
@@ -257,16 +264,20 @@ class einvoice_signer:
                 print(json.dumps(error_data))
                 exit(1);
 
+         
 
             cmd = [
                 "java", 
-                "-jar", jar_file,
+                "-jar", jar_file_path,
                 "-sign",
                 "-invoice", os.path.abspath(xml_file_path),
                 "-signedInvoice", os.path.abspath(signed_file_path),
                 env_flag,
             ]
+
             
+            result = {}
+
             try:
                 result = subprocess.run(cmd, check=True, capture_output=True, text=True)
                 '''
@@ -279,7 +290,7 @@ class einvoice_signer:
                 '''
             except subprocess.CalledProcessError as e:
                 error_data = {
-                    "error": f"error running sign command:{str(e)},out:{e.stdout}, err:{e.stderr}",
+                     "error":f"Command error: {result.stderr}, out: {result.stdout}, pk:{private_key_file_path}",
                 }
                 print(json.dumps(error_data))  # Log the error as JSON
                 exit(1);
@@ -297,7 +308,7 @@ class einvoice_signer:
             # Step 3: Run the Fatoora invoice request command
             invoice_request_command = [
                 "java", 
-                "-jar", jar_file,
+                "-jar", jar_file_path,
                 "-invoice", signed_file_path,
                 "-invoiceRequest",
                 "-apiRequest", request_file_path,
@@ -317,9 +328,7 @@ class einvoice_signer:
             with open(request_file_path, "r") as request_file:
                 request_data = json.load(request_file)
 
-
-            
-            for file_path in [xml_file_path, private_key_file_path, certificate_file_path, signed_file_path, request_file_path]:
+            for file_path in [private_key_file_path, certificate_file_path, xml_file_path, signed_file_path, request_file_path,config_file_path]:
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
