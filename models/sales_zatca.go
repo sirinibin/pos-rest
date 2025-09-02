@@ -348,7 +348,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
 				PaymentMeansCode: "20",
 			})
-		} else if paymentMethod == "customer_account" {
+		} else if paymentMethod == "customer_account" || paymentMethod == "sales_return" || paymentMethod == "purchase" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
 				PaymentMeansCode: "1",
 			})
