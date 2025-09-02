@@ -379,7 +379,7 @@ func (salesReturn *SalesReturn) MakeXMLContent() (string, error) {
 					Value: "Return goods or services",
 				},
 			})
-		} else if paymentMethod == "customer_account" {
+		} else if paymentMethod == "customer_account" || paymentMethod == "sales" {
 			invoice.PaymentMeans = append(invoice.PaymentMeans, PaymentMeans{
 				PaymentMeansCode: "1",
 				InstructionNote: &InstructionNote{
