@@ -176,12 +176,15 @@ func (salesReturn *SalesReturn) UpdatePaymentFromPayablePayment(
 
 			salesReturnPaymentObj.Amount = payablePayment.Amount
 			salesReturnPaymentObj.Date = payablePayment.Date
-			salesReturnPaymentObj.Method = "customer_account"
+			salesReturnPaymentObj.Method = payablePayment.Method
 			salesReturnPaymentObj.UpdatedAt = payablePayment.UpdatedAt
 			salesReturnPaymentObj.CreatedAt = payablePayment.CreatedAt
 			salesReturnPaymentObj.UpdatedBy = payablePayment.UpdatedBy
 			salesReturnPaymentObj.CreatedBy = payablePayment.CreatedBy
 			salesReturnPaymentObj.PayableID = &customerWithdrawal.ID
+			salesReturnPaymentObj.ReferenceID = &customerWithdrawal.ID
+			salesReturnPaymentObj.ReferenceType = "customer_withdrawal"
+			salesReturnPaymentObj.ReferenceCode = customerWithdrawal.Code
 
 			err = salesReturnPaymentObj.Update()
 			if err != nil {
@@ -199,7 +202,7 @@ func (salesReturn *SalesReturn) UpdatePaymentFromPayablePayment(
 			OrderCode:        salesReturn.OrderCode,
 			Amount:           payablePayment.Amount,
 			Date:             payablePayment.Date,
-			Method:           "customer_account",
+			Method:           payablePayment.Method,
 			PayablePaymentID: &payablePayment.ID,
 			PayableID:        &customerWithdrawal.ID,
 			CreatedBy:        payablePayment.CreatedBy,
@@ -207,6 +210,9 @@ func (salesReturn *SalesReturn) UpdatePaymentFromPayablePayment(
 			CreatedAt:        payablePayment.CreatedAt,
 			UpdatedAt:        payablePayment.UpdatedAt,
 			StoreID:          salesReturn.StoreID,
+			ReferenceID:      &customerWithdrawal.ID,
+			ReferenceType:    "customer_withdrawal",
+			ReferenceCode:    customerWithdrawal.Code,
 		}
 		err := newSalesReturnPayment.Insert()
 		if err != nil {
@@ -388,6 +394,7 @@ type SalesReturnStats struct {
 	BankAccountSalesReturn float64             `json:"bank_account_sales_return" bson:"bank_account_sales_return"`
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 	SalesReturnCount       int64               `json:"sales_return_count" bson:"sales_return_count"`
+	SalesSalesReturn       float64             `json:"sales_sales_return" bson:"sales_sales_return"`
 }
 
 func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
@@ -469,6 +476,22 @@ func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats Sa
 										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
 										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"sales_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "sales"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 								}},
 								"$$payment.amount",
 								0,
@@ -2363,13 +2386,32 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 		return err
 	}
 
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer != nil {
+		err = customer.CloseCustomerPendingSalesBySalesReturn(salesReturn)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	amount := salesReturn.BalanceAmount
+
+	if order.BalanceAmount < amount {
+		amount = order.BalanceAmount
+	}
+
 	if order.PaymentStatus != "paid" && salesReturn.PaymentStatus != "paid" {
 		newSalesPayment := SalesPayment{
 			Date:          salesReturn.Date,
 			OrderID:       &order.ID,
 			OrderCode:     order.Code,
-			Amount:        salesReturn.BalanceAmount,
-			Method:        "customer_account",
+			Amount:        amount,
+			Method:        "sales_return",
 			CreatedAt:     salesReturn.CreatedAt,
 			UpdatedAt:     salesReturn.UpdatedAt,
 			StoreID:       salesReturn.StoreID,
@@ -2377,6 +2419,9 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 			UpdatedBy:     salesReturn.UpdatedBy,
 			CreatedByName: salesReturn.CreatedByName,
 			UpdatedByName: salesReturn.UpdatedByName,
+			ReferenceType: "sales_return",
+			ReferenceCode: salesReturn.Code,
+			ReferenceID:   &salesReturn.ID,
 		}
 		err = newSalesPayment.Insert()
 		if err != nil {
@@ -2407,8 +2452,8 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 			SalesReturnCode: salesReturn.Code,
 			OrderID:         &order.ID,
 			OrderCode:       order.Code,
-			Amount:          salesReturn.BalanceAmount,
-			Method:          "customer_account",
+			Amount:          amount,
+			Method:          "sales",
 			CreatedAt:       salesReturn.CreatedAt,
 			UpdatedAt:       salesReturn.UpdatedAt,
 			StoreID:         salesReturn.StoreID,
@@ -2416,6 +2461,9 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 			UpdatedBy:       salesReturn.UpdatedBy,
 			CreatedByName:   salesReturn.CreatedByName,
 			UpdatedByName:   salesReturn.UpdatedByName,
+			ReferenceType:   "sales",
+			ReferenceCode:   order.Code,
+			ReferenceID:     &order.ID,
 		}
 		err = newSalesReturnPayment.Insert()
 		if err != nil {
@@ -2439,6 +2487,123 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 			return err
 		}
 
+	}
+
+	return nil
+}
+
+func (customer *Customer) CloseCustomerPendingSalesBySalesReturn(salesReturn *SalesReturn) error {
+	pendingSales, err := customer.GetPendingSales()
+	if err != nil {
+		return err
+	}
+
+	salesReturnBalanceAmount := salesReturn.BalanceAmount
+
+	amountToSettle := float64(0.00)
+
+	for _, pendingSale := range pendingSales {
+		if pendingSale.BalanceAmount > salesReturnBalanceAmount {
+			amountToSettle = salesReturnBalanceAmount
+			salesReturnBalanceAmount = float64(0.00)
+		} else {
+			amountToSettle = pendingSale.BalanceAmount
+			salesReturnBalanceAmount -= amountToSettle
+		}
+
+		//make payments and change payement status
+
+		now := time.Now()
+		//Add payment to sales
+		newSalesPayment := SalesPayment{
+			Date:          &now,
+			OrderID:       &pendingSale.ID,
+			OrderCode:     pendingSale.Code,
+			Amount:        amountToSettle,
+			Method:        "sales_return",
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       salesReturn.StoreID,
+			CreatedBy:     salesReturn.UpdatedBy,
+			UpdatedBy:     salesReturn.UpdatedBy,
+			CreatedByName: salesReturn.UpdatedByName,
+			UpdatedByName: salesReturn.UpdatedByName,
+			ReferenceType: "sales_return",
+			ReferenceCode: salesReturn.Code,
+			ReferenceID:   &salesReturn.ID,
+		}
+		err = newSalesPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		pendingSale.Payments = append(pendingSale.Payments, newSalesPayment)
+
+		err = pendingSale.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = pendingSale.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = pendingSale.Update()
+		if err != nil {
+			return err
+		}
+
+		err = pendingSale.SetCustomerSalesStats()
+		if err != nil {
+			return err
+		}
+
+		//Add payment to purchase
+		newSalesReturnPayment := SalesReturnPayment{
+			Date:            &now,
+			SalesReturnID:   &salesReturn.ID,
+			SalesReturnCode: salesReturn.Code,
+			Amount:          amountToSettle,
+			Method:          "sales",
+			CreatedAt:       &now,
+			UpdatedAt:       &now,
+			StoreID:         salesReturn.StoreID,
+			CreatedBy:       salesReturn.UpdatedBy,
+			UpdatedBy:       salesReturn.UpdatedBy,
+			CreatedByName:   salesReturn.UpdatedByName,
+			UpdatedByName:   salesReturn.UpdatedByName,
+			ReferenceType:   "sales",
+			ReferenceCode:   pendingSale.Code,
+			ReferenceID:     &pendingSale.ID,
+		}
+		err = newSalesReturnPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		salesReturn.Payments = append(salesReturn.Payments, newSalesReturnPayment)
+
+		err = salesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = salesReturn.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = salesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+		if salesReturnBalanceAmount > 0 {
+			continue
+		} else {
+			break
+		}
 	}
 
 	return nil
@@ -3533,7 +3698,9 @@ func MakeJournalsForSalesReturnPaymentsByDatetime(
 		}
 
 		cashPayingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_withdrawal" || payment.ReferenceType == "sales" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
@@ -3694,7 +3861,9 @@ func MakeJournalsForSalesReturnExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashPayingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_withdrawal" || payment.ReferenceType == "sales" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount

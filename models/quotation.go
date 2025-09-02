@@ -691,6 +691,7 @@ type QuotationInvoiceStats struct {
 	InvoiceCashSales              float64             `json:"invoice_cash_sales" bson:"invoice_cash_sales"`
 	InvoiceBankAccountSales       float64             `json:"invoice_bank_account_sales" bson:"invoice_bank_account_sales"`
 	InvoiceCashDiscount           float64             `json:"invoice_cash_discount" bson:"invoice_cash_discount"`
+	InvoiceSalesReturnSales       float64             `json:"invoice_sales_return_sales" bson:"invoice_sales_return_sales"`
 }
 
 func (store *Store) GetQuotationInvoiceStats(filter map[string]interface{}) (stats QuotationInvoiceStats, err error) {
@@ -785,6 +786,22 @@ func (store *Store) GetQuotationInvoiceStats(filter map[string]interface{}) (sta
 										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
 										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"invoice_sales_return_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "quotation_sales_return"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 								}},
 								"$$payment.amount",
 								0,
@@ -3463,7 +3480,9 @@ func MakeJournalsForQuotationSalesPaymentsByDatetime(
 		}
 
 		cashReceivingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_deposit" || payment.ReferenceType == "quotation_sales_return" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
@@ -3642,7 +3661,9 @@ func MakeJournalsForQuotationSalesExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashReceivingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_deposit" || payment.ReferenceType == "quotation_sales_return" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
@@ -3742,6 +3763,10 @@ func (quotation *Quotation) UpdatePaymentFromReceivablePayment(
 			quotationPayment.UpdatedBy = receivablePayment.UpdatedBy
 			quotationPayment.CreatedBy = receivablePayment.CreatedBy
 			quotationPayment.ReceivableID = &customerDeposit.ID
+			quotationPayment.Method = receivablePayment.Method
+			quotationPayment.ReferenceID = &customerDeposit.ID
+			quotationPayment.ReferenceType = "customer_deposit"
+			quotationPayment.ReferenceCode = customerDeposit.Code
 
 			err = quotationPayment.Update()
 			if err != nil {
@@ -3757,7 +3782,7 @@ func (quotation *Quotation) UpdatePaymentFromReceivablePayment(
 			QuotationCode:       quotation.Code,
 			Amount:              receivablePayment.Amount,
 			Date:                receivablePayment.Date,
-			Method:              "customer_account",
+			Method:              receivablePayment.Method,
 			ReceivablePaymentID: &receivablePayment.ID,
 			ReceivableID:        &customerDeposit.ID,
 			CreatedBy:           receivablePayment.CreatedBy,
@@ -3765,6 +3790,9 @@ func (quotation *Quotation) UpdatePaymentFromReceivablePayment(
 			CreatedAt:           receivablePayment.CreatedAt,
 			UpdatedAt:           receivablePayment.UpdatedAt,
 			StoreID:             quotation.StoreID,
+			ReferenceType:       "customer_deposit",
+			ReferenceCode:       customerDeposit.Code,
+			ReferenceID:         &customerDeposit.ID,
 		}
 		err := newQuotationPayment.Insert()
 		if err != nil {

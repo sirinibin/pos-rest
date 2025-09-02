@@ -79,6 +79,7 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["paid_purchase_return"] = purchaseReturnStats.PaidPurchaseReturn
 	response.Meta["unpaid_purchase_return"] = purchaseReturnStats.UnPaidPurchaseReturn
 	response.Meta["cash_purchase_return"] = purchaseReturnStats.CashPurchaseReturn
+	response.Meta["purchase_purchase_return"] = purchaseReturnStats.PurchasePurchaseReturn
 	response.Meta["bank_account_purchase_return"] = purchaseReturnStats.BankAccountPurchaseReturn
 	response.Meta["shipping_handling_fees"] = purchaseReturnStats.ShippingOrHandlingFees
 

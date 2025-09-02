@@ -18,17 +18,20 @@ import (
 
 // Post : Post structure
 type Post struct {
-	ID            primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Date          *time.Time         `bson:"date" json:"date"`
-	AccountID     primitive.ObjectID `json:"account_id,omitempty" bson:"account_id,omitempty"`
-	AccountName   string             `json:"account_name,omitempty" bson:"account_name,omitempty"`
-	AccountNumber string             `bson:"account_number,omitempty" json:"account_number,omitempty"`
-	DebitOrCredit string             `json:"debit_or_credit,omitempty" bson:"debit_or_credit,omitempty"`
-	Debit         float64            `bson:"debit" json:"debit"`
-	Credit        float64            `bson:"credit" json:"credit"`
-	Balance       float64            `bson:"balance" json:"balance"`
-	CreatedAt     *time.Time         `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time         `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ID             primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date           *time.Time          `bson:"date" json:"date"`
+	AccountID      primitive.ObjectID  `json:"account_id,omitempty" bson:"account_id,omitempty"`
+	AccountName    string              `json:"account_name,omitempty" bson:"account_name,omitempty"`
+	AccountNumber  string              `bson:"account_number,omitempty" json:"account_number,omitempty"`
+	DebitOrCredit  string              `json:"debit_or_credit,omitempty" bson:"debit_or_credit,omitempty"`
+	Debit          float64             `bson:"debit" json:"debit"`
+	Credit         float64             `bson:"credit" json:"credit"`
+	Balance        float64             `bson:"balance" json:"balance"`
+	CreatedAt      *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt      *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ReferenceID    *primitive.ObjectID `json:"reference_id" bson:"reference_id"`
+	ReferenceModel *string             `bson:"reference_model" json:"reference_model"`
+	ReferenceCode  *string             `bson:"reference_code" json:"reference_code"`
 }
 
 // Account : Account structure
@@ -905,16 +908,19 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				postBalance = (accountBalance + amount)
 
 				posts = append(posts, Post{
-					ID:            primitive.NewObjectID(),
-					Date:          journal2.Date,
-					AccountID:     journal2.AccountID,
-					AccountName:   journal2.AccountName,
-					AccountNumber: journal2.AccountNumber,
-					DebitOrCredit: "debit",
-					Debit:         amount,
-					Balance:       RoundTo2Decimals(postBalance),
-					CreatedAt:     &now,
-					UpdatedAt:     &now,
+					ID:             primitive.NewObjectID(),
+					Date:           journal2.Date,
+					AccountID:      journal2.AccountID,
+					AccountName:    journal2.AccountName,
+					AccountNumber:  journal2.AccountNumber,
+					DebitOrCredit:  "debit",
+					Debit:          amount,
+					Balance:        RoundTo2Decimals(postBalance),
+					CreatedAt:      &now,
+					UpdatedAt:      &now,
+					ReferenceID:    journal2.ReferenceID,
+					ReferenceModel: journal2.ReferenceModel,
+					ReferenceCode:  journal2.ReferenceCode,
 				})
 				debitTotal += amount
 			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "debit" {
@@ -949,16 +955,19 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				}
 
 				posts = append(posts, Post{
-					ID:            primitive.NewObjectID(),
-					Date:          journal2.Date,
-					AccountID:     journal2.AccountID,
-					AccountName:   journal2.AccountName,
-					AccountNumber: journal2.AccountNumber,
-					DebitOrCredit: "credit",
-					Credit:        amount,
-					Balance:       RoundTo2Decimals(postBalance),
-					CreatedAt:     &now,
-					UpdatedAt:     &now,
+					ID:             primitive.NewObjectID(),
+					Date:           journal2.Date,
+					AccountID:      journal2.AccountID,
+					AccountName:    journal2.AccountName,
+					AccountNumber:  journal2.AccountNumber,
+					DebitOrCredit:  "credit",
+					Credit:         amount,
+					Balance:        RoundTo2Decimals(postBalance),
+					CreatedAt:      &now,
+					UpdatedAt:      &now,
+					ReferenceID:    journal2.ReferenceID,
+					ReferenceModel: journal2.ReferenceModel,
+					ReferenceCode:  journal2.ReferenceCode,
 				})
 				creditTotal += amount
 			} else if journal.DebitOrCredit == "debit" && journal2.DebitOrCredit == "debit" {
@@ -983,16 +992,19 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				postBalance = (accountBalance - amount)
 
 				posts = append(posts, Post{
-					ID:            primitive.NewObjectID(),
-					Date:          journal2.Date,
-					AccountID:     journal2.AccountID,
-					AccountName:   journal2.AccountName,
-					AccountNumber: journal2.AccountNumber,
-					DebitOrCredit: "credit",
-					Credit:        amount,
-					Balance:       RoundTo2Decimals(postBalance),
-					CreatedAt:     &now,
-					UpdatedAt:     &now,
+					ID:             primitive.NewObjectID(),
+					Date:           journal2.Date,
+					AccountID:      journal2.AccountID,
+					AccountName:    journal2.AccountName,
+					AccountNumber:  journal2.AccountNumber,
+					DebitOrCredit:  "credit",
+					Credit:         amount,
+					Balance:        RoundTo2Decimals(postBalance),
+					CreatedAt:      &now,
+					UpdatedAt:      &now,
+					ReferenceID:    journal2.ReferenceID,
+					ReferenceModel: journal2.ReferenceModel,
+					ReferenceCode:  journal2.ReferenceCode,
 				})
 				creditTotal += amount
 			} else if journal.DebitOrCredit == "credit" && journal2.DebitOrCredit == "credit" {
@@ -1016,16 +1028,19 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 				postBalance = (accountBalance + amount)
 
 				posts = append(posts, Post{
-					ID:            primitive.NewObjectID(),
-					Date:          journal2.Date,
-					AccountID:     journal2.AccountID,
-					AccountName:   journal2.AccountName,
-					AccountNumber: journal2.AccountNumber,
-					DebitOrCredit: "debit",
-					Debit:         amount,
-					Balance:       RoundTo2Decimals(postBalance),
-					CreatedAt:     &now,
-					UpdatedAt:     &now,
+					ID:             primitive.NewObjectID(),
+					Date:           journal2.Date,
+					AccountID:      journal2.AccountID,
+					AccountName:    journal2.AccountName,
+					AccountNumber:  journal2.AccountNumber,
+					DebitOrCredit:  "debit",
+					Debit:          amount,
+					Balance:        RoundTo2Decimals(postBalance),
+					CreatedAt:      &now,
+					UpdatedAt:      &now,
+					ReferenceID:    journal2.ReferenceID,
+					ReferenceModel: journal2.ReferenceModel,
+					ReferenceCode:  journal2.ReferenceCode,
 				})
 				debitTotal += amount
 			}

@@ -32,16 +32,19 @@ type Ledger struct {
 type Journal struct {
 	Date *time.Time `bson:"date,omitempty" json:"date,omitempty"`
 	//Account       Account            `json:"account,omitempty" bson:"account,omitempty"`
-	AccountID     primitive.ObjectID `json:"account_id,omitempty" bson:"account_id,omitempty"`
-	AccountName   string             `json:"account_name,omitempty" bson:"account_name,omitempty"`
-	AccountNumber string             `bson:"account_number,omitempty" json:"account_number,omitempty"`
-	DebitOrCredit string             `json:"debit_or_credit,omitempty" bson:"debit_or_credit,omitempty"`
-	Debit         float64            `bson:"debit,omitempty" json:"debit,omitempty"`
-	Credit        float64            `bson:"credit,omitempty" json:"credit,omitempty"`
-	GroupAccounts []string           `bson:"group_accounts" json:"group_accounts"`
-	GroupID       primitive.ObjectID `json:"group_id,omitempty" bson:"group_id,omitempty"`
-	CreatedAt     *time.Time         `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt     *time.Time         `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	AccountID      primitive.ObjectID  `json:"account_id,omitempty" bson:"account_id,omitempty"`
+	AccountName    string              `json:"account_name,omitempty" bson:"account_name,omitempty"`
+	AccountNumber  string              `bson:"account_number,omitempty" json:"account_number,omitempty"`
+	DebitOrCredit  string              `json:"debit_or_credit,omitempty" bson:"debit_or_credit,omitempty"`
+	Debit          float64             `bson:"debit,omitempty" json:"debit,omitempty"`
+	Credit         float64             `bson:"credit,omitempty" json:"credit,omitempty"`
+	GroupAccounts  []string            `bson:"group_accounts" json:"group_accounts"`
+	GroupID        primitive.ObjectID  `json:"group_id,omitempty" bson:"group_id,omitempty"`
+	CreatedAt      *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt      *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	ReferenceID    *primitive.ObjectID `json:"reference_id" bson:"reference_id"`
+	ReferenceModel *string             `bson:"reference_model" json:"reference_model"`
+	ReferenceCode  *string             `bson:"reference_code" json:"reference_code"`
 }
 
 func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models []Ledger, criterias SearchCriterias, err error) {

@@ -1650,27 +1650,55 @@ func ProcessCustomerDeposits() error {
 			if err != nil {
 				return errors.New("Cursor error:" + err.Error())
 			}
-			model := CustomerDeposit{}
-			err = cur.Decode(&model)
+			customerdeposit := CustomerDeposit{}
+			err = cur.Decode(&customerdeposit)
 			if err != nil {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			model.UndoAccounting()
-			model.DoAccounting()
-			if model.CustomerID != nil && !model.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
+			customerdeposit.UndoAccounting()
+			customerdeposit.DoAccounting()
+
+			if customerdeposit.CustomerID != nil && !customerdeposit.CustomerID.IsZero() {
+				store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+				if store != nil {
+					customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
 				}
 			}
 
-			if model.VendorID != nil && !model.VendorID.IsZero() {
-				vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
-				if vendor != nil {
-					vendor.SetCreditBalance()
+			if customerdeposit.VendorID != nil && !customerdeposit.VendorID.IsZero() {
+				store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+				if store != nil {
+					vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
 				}
 			}
+
+			customerdeposit.CloseSalesPayments()
+			customerdeposit.ClosePurchaseReturnPayments()
+			customerdeposit.CloseQuotationSalesPayments()
+
+			/*
+				model.UndoAccounting()
+				model.DoAccounting()
+				if model.CustomerID != nil && !model.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}
+
+				if model.VendorID != nil && !model.VendorID.IsZero() {
+					vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
+				}*/
 
 			//model.Type = "customer"
 			//model.Update()
@@ -1856,41 +1884,50 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 		groupID := primitive.NewObjectID()
 
 		journals = append(journals, Journal{
-			Date:          payment.Date,
-			AccountID:     receivingAccount.ID,
-			AccountNumber: receivingAccount.Number,
-			AccountName:   receivingAccount.Name,
-			DebitOrCredit: "debit",
-			Debit:         RoundTo2Decimals(payment.Amount - payment.Discount),
-			GroupID:       groupID,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
+			Date:           payment.Date,
+			AccountID:      receivingAccount.ID,
+			AccountNumber:  receivingAccount.Number,
+			AccountName:    receivingAccount.Name,
+			DebitOrCredit:  "debit",
+			Debit:          RoundTo2Decimals(payment.Amount - payment.Discount),
+			GroupID:        groupID,
+			CreatedAt:      &now,
+			UpdatedAt:      &now,
+			ReferenceID:    payment.InvoiceID,
+			ReferenceModel: payment.InvoiceType,
+			ReferenceCode:  payment.InvoiceCode,
 		})
 
 		if payment.Discount > 0 {
 			journals = append(journals, Journal{
-				Date:          payment.Date,
-				AccountID:     cashDiscountAllowedAccount.ID,
-				AccountNumber: cashDiscountAllowedAccount.Number,
-				AccountName:   cashDiscountAllowedAccount.Name,
-				DebitOrCredit: "debit",
-				Debit:         RoundTo2Decimals(payment.Discount),
-				GroupID:       groupID,
-				CreatedAt:     &now,
-				UpdatedAt:     &now,
+				Date:           payment.Date,
+				AccountID:      cashDiscountAllowedAccount.ID,
+				AccountNumber:  cashDiscountAllowedAccount.Number,
+				AccountName:    cashDiscountAllowedAccount.Name,
+				DebitOrCredit:  "debit",
+				Debit:          RoundTo2Decimals(payment.Discount),
+				GroupID:        groupID,
+				CreatedAt:      &now,
+				UpdatedAt:      &now,
+				ReferenceID:    payment.InvoiceID,
+				ReferenceModel: payment.InvoiceType,
+				ReferenceCode:  payment.InvoiceCode,
 			})
 		}
 
 		journals = append(journals, Journal{
-			Date:          payment.Date,
-			AccountID:     sendingAccount.ID,
-			AccountNumber: sendingAccount.Number,
-			AccountName:   sendingAccount.Name,
-			DebitOrCredit: "credit",
-			Credit:        RoundTo2Decimals(payment.Amount),
-			GroupID:       groupID,
-			CreatedAt:     &now,
-			UpdatedAt:     &now,
+			Date:           payment.Date,
+			AccountID:      sendingAccount.ID,
+			AccountNumber:  sendingAccount.Number,
+			AccountName:    sendingAccount.Name,
+			DebitOrCredit:  "credit",
+			Credit:         RoundTo2Decimals(payment.Amount),
+			GroupID:        groupID,
+			CreatedAt:      &now,
+			UpdatedAt:      &now,
+			ReferenceID:    payment.InvoiceID,
+			ReferenceModel: payment.InvoiceType,
+			ReferenceCode:  payment.InvoiceCode,
 		})
 
 		referenceModel = ""

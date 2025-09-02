@@ -184,12 +184,15 @@ func (purchase *Purchase) UpdatePaymentFromPayablePayment(
 
 			purchasePaymentObj.Amount = payablePayment.Amount
 			purchasePaymentObj.Date = payablePayment.Date
-			purchasePaymentObj.Method = "vendor_account"
+			purchasePaymentObj.Method = payablePayment.Method
 			purchasePaymentObj.UpdatedAt = payablePayment.UpdatedAt
 			purchasePaymentObj.CreatedAt = payablePayment.CreatedAt
 			purchasePaymentObj.UpdatedBy = payablePayment.UpdatedBy
 			purchasePaymentObj.CreatedBy = payablePayment.CreatedBy
 			purchasePaymentObj.PayableID = &customerWithdrawal.ID
+			purchasePaymentObj.ReferenceType = "vendor_withdrawal"
+			purchasePaymentObj.ReferenceCode = customerWithdrawal.Code
+			purchasePaymentObj.ReferenceID = &customerWithdrawal.ID
 
 			err = purchasePaymentObj.Update()
 			if err != nil {
@@ -205,7 +208,7 @@ func (purchase *Purchase) UpdatePaymentFromPayablePayment(
 			PurchaseCode:     purchase.Code,
 			Amount:           payablePayment.Amount,
 			Date:             payablePayment.Date,
-			Method:           "vendor_account",
+			Method:           payablePayment.Method,
 			PayablePaymentID: &payablePayment.ID,
 			PayableID:        &customerWithdrawal.ID,
 			CreatedBy:        payablePayment.CreatedBy,
@@ -213,6 +216,9 @@ func (purchase *Purchase) UpdatePaymentFromPayablePayment(
 			CreatedAt:        payablePayment.CreatedAt,
 			UpdatedAt:        payablePayment.UpdatedAt,
 			StoreID:          purchase.StoreID,
+			ReferenceType:    "vendor_withdrawal",
+			ReferenceCode:    customerWithdrawal.Code,
+			ReferenceID:      &customerWithdrawal.ID,
 		}
 		err := newPurchasePayment.Insert()
 		if err != nil {
@@ -486,6 +492,8 @@ type PurchaseStats struct {
 	BankAccountPurchase    float64             `json:"bank_account_purchase" bson:"bank_account_purchase"`
 	ReturnCount            int64               `json:"return_count" bson:"return_count"`
 	ReturnAmount           float64             `json:"return_amount" bson:"return_amount"`
+	SalesPurchase          float64             `json:"sales_purchase" bson:"sales_purchase"`
+	PurchaseReturnPurchase float64             `json:"purchase_return_purchase" bson:"purchase_return_purchase"`
 }
 
 func (store *Store) GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err error) {
@@ -569,6 +577,38 @@ func (store *Store) GetPurchaseStats(filter map[string]interface{}) (stats Purch
 										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
 										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"sales_purchase": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "sales"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"purchase_return_purchase": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "purchase_return"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 								}},
 								"$$payment.amount",
 								0,
@@ -1501,7 +1541,6 @@ func (purchase *Purchase) Validate(
 		}
 	}
 
-	totalAmountFromVendorAccount := 0.00
 	var vendor *Vendor
 	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 		vendor, err = store.FindVendorByID(purchase.VendorID, bson.M{})
@@ -1518,15 +1557,6 @@ func (purchase *Purchase) Validate(
 		if purchase.ReturnCount > 0 {
 			errs["vendor_id"] = "You can't remove this vendor as this purchase have a purchase return created"
 			return
-		}
-	}
-
-	var vendorAccount *Account
-
-	if vendor != nil {
-		vendorAccount, err = store.FindAccountByReferenceID(vendor.ID, *purchase.StoreID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			errs["vendor_account"] = "Error finding vendor account: " + err.Error()
 		}
 	}
 
@@ -1558,97 +1588,7 @@ func (purchase *Purchase) Validate(
 			errs["payment_method_"+strconv.Itoa(index)] = "Payment method is required"
 		}
 
-		/*
-			if payment.Method == "vendor_account" && vendor != nil {
-				totalAmountFromVendorAccount += payment.Amount
-				log.Print("Checking vendor account Balance")
-
-				if vendorAccount != nil {
-					if scenario == "update" {
-						extraAmount := 0.00
-						var oldPurchasePayment *PurchasePayment
-						oldPurchase.SetPaymentStatus()
-						for _, oldPayment := range oldPurchase.Payments {
-							if oldPayment.ID.Hex() == payment.ID.Hex() {
-								oldPurchasePayment = &oldPayment
-								break
-							}
-						}
-
-						if oldPurchasePayment != nil && oldPurchasePayment.Amount < payment.Amount {
-							extraAmount = payment.Amount - oldPurchasePayment.Amount
-						} else if oldPurchasePayment == nil {
-							//New payment added
-							extraAmount = payment.Amount
-						} else {
-							log.Print("payment amount not increased")
-						}
-
-						if extraAmount > 0 {
-							if vendorAccount.Balance == 0 {
-								errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmount)) + " to vendor account to continue"
-							} else if vendorAccount.Type == "liability" {
-								errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
-							} else if vendorAccount.Type == "asset" && vendorAccount.Balance < extraAmount {
-								errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmount)) + " to vendor account to continue"
-							}
-						}
-
-					} else {
-						if vendorAccount.Balance == 0 {
-							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (payment.Amount)) + " to vendor account to continue"
-						} else if vendorAccount.Type == "liability" {
-							errs["payment_method_"+strconv.Itoa(index)] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please pay " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
-						} else if vendorAccount.Type == "asset" && vendorAccount.Balance < payment.Amount {
-							errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+payment.Amount)) + " to vendor account to continue"
-						}
-					}
-
-				} else {
-					errs["payment_method_"+strconv.Itoa(index)] = "vendor account balance is zero"
-				}
-			}*/
 	} //end for
-
-	if totalAmountFromVendorAccount > 0 {
-		if vendorAccount != nil && vendor != nil {
-			if scenario == "update" {
-				oldTotalAmountFromVendorAccount := 0.0
-				extraAmountRequired := 0.00
-				oldPurchase.SetPaymentStatus()
-				for _, oldPayment := range oldPurchase.Payments {
-					if oldPayment.Method == "vendor_account" {
-						oldTotalAmountFromVendorAccount += oldPayment.Amount
-					}
-				}
-
-				if totalAmountFromVendorAccount > oldTotalAmountFromVendorAccount {
-					extraAmountRequired = totalAmountFromVendorAccount - oldTotalAmountFromVendorAccount
-				}
-
-				if extraAmountRequired > 0 {
-					if vendorAccount.Balance == 0 {
-						errs["vendor_id"] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (extraAmountRequired)) + " to vendor account to continue"
-					} else if vendorAccount.Type == "asset" && vendorAccount.Balance < extraAmountRequired {
-						errs["vendor_id"] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", extraAmountRequired) + " to vendor account to continue"
-					} else if vendorAccount.Type == "liability" {
-						errs["vendor_id"] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+extraAmountRequired)) + " to vendor account to continue"
-					}
-				}
-
-			} else {
-				if vendorAccount.Balance == 0 {
-					errs["vendor_id"] = "vendor account balance is zero, Please add " + fmt.Sprintf("%.02f", (totalAmountFromVendorAccount)) + " to vendor account to continue"
-				} else if vendorAccount.Type == "asset" && vendorAccount.Balance < totalAmountFromVendorAccount {
-					errs["vendor_id"] = "vendor account balance is only: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", totalAmountFromVendorAccount) + " to vendor account to continue"
-				} else if vendorAccount.Type == "liability" {
-					errs["vendor_id"] = "we owe the vendor: " + fmt.Sprintf("%.02f", vendorAccount.Balance) + ", Please add " + fmt.Sprintf("%.02f", (vendorAccount.Balance+totalAmountFromVendorAccount)) + " to vendor account to continue"
-				}
-			}
-		} else {
-			errs["vendor_id"] = "vendor account balance is zero"
-		}
-	}
 
 	if len(purchase.Products) == 0 {
 		errs["product_id"] = "Atleast 1 product is required for purchase"
@@ -3183,7 +3123,9 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 		}
 
 		cashPayingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "vendor_withdrawal" || payment.ReferenceType == "purchase_return" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
@@ -3344,7 +3286,9 @@ func MakeJournalsForPurchaseExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashPayingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "vendor_withdrawal" || payment.ReferenceType == "purchase_return" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
@@ -3790,7 +3734,7 @@ func (purchase *Purchase) CloseSalesPayment() error {
 			OrderID:       &pendingSale.ID,
 			OrderCode:     pendingSale.Code,
 			Amount:        amountToSettle,
-			Method:        "customer_account",
+			Method:        "purchase",
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 			StoreID:       purchase.StoreID,
@@ -3798,6 +3742,9 @@ func (purchase *Purchase) CloseSalesPayment() error {
 			UpdatedBy:     purchase.UpdatedBy,
 			CreatedByName: purchase.UpdatedByName,
 			UpdatedByName: purchase.UpdatedByName,
+			ReferenceType: "purchase",
+			ReferenceCode: purchase.Code,
+			ReferenceID:   &purchase.ID,
 		}
 		err = newSalesPayment.Insert()
 		if err != nil {
@@ -3832,7 +3779,7 @@ func (purchase *Purchase) CloseSalesPayment() error {
 			PurchaseID:    &purchase.ID,
 			PurchaseCode:  purchase.Code,
 			Amount:        amountToSettle,
-			Method:        "vendor_account",
+			Method:        "sales",
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 			StoreID:       purchase.StoreID,
@@ -3840,6 +3787,9 @@ func (purchase *Purchase) CloseSalesPayment() error {
 			UpdatedBy:     purchase.UpdatedBy,
 			CreatedByName: purchase.UpdatedByName,
 			UpdatedByName: purchase.UpdatedByName,
+			ReferenceType: "sales",
+			ReferenceCode: pendingSale.Code,
+			ReferenceID:   &pendingSale.ID,
 		}
 		err = newPurchasePayment.Insert()
 		if err != nil {

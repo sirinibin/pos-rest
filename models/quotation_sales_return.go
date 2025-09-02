@@ -141,13 +141,19 @@ func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() e
 		return err
 	}
 
+	amount := quotationSalesReturn.BalanceAmount
+
+	if quotation.BalanceAmount < amount {
+		amount = quotation.BalanceAmount
+	}
+
 	if quotation.PaymentStatus != "paid" && quotationSalesReturn.PaymentStatus != "paid" {
 		newQuotationSalesPayment := QuotationPayment{
 			Date:          quotationSalesReturn.Date,
 			QuotationID:   &quotation.ID,
 			QuotationCode: quotation.Code,
-			Amount:        quotationSalesReturn.BalanceAmount,
-			Method:        "customer_account",
+			Amount:        amount,
+			Method:        "quotation_sales_return",
 			CreatedAt:     quotationSalesReturn.CreatedAt,
 			UpdatedAt:     quotationSalesReturn.UpdatedAt,
 			StoreID:       quotationSalesReturn.StoreID,
@@ -155,6 +161,9 @@ func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() e
 			UpdatedBy:     quotationSalesReturn.UpdatedBy,
 			CreatedByName: quotationSalesReturn.CreatedByName,
 			UpdatedByName: quotationSalesReturn.UpdatedByName,
+			ReferenceType: "quotation_sales_return",
+			ReferenceCode: quotationSalesReturn.Code,
+			ReferenceID:   &quotationSalesReturn.ID,
 		}
 		err = newQuotationSalesPayment.Insert()
 		if err != nil {
@@ -185,8 +194,8 @@ func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() e
 			QuotationSalesReturnCode: quotationSalesReturn.Code,
 			QuotationID:              &quotation.ID,
 			QuotationCode:            quotation.Code,
-			Amount:                   quotationSalesReturn.BalanceAmount,
-			Method:                   "customer_account",
+			Amount:                   amount,
+			Method:                   "quotation_sales",
 			CreatedAt:                quotationSalesReturn.CreatedAt,
 			UpdatedAt:                quotationSalesReturn.UpdatedAt,
 			StoreID:                  quotationSalesReturn.StoreID,
@@ -194,7 +203,12 @@ func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() e
 			UpdatedBy:                quotationSalesReturn.UpdatedBy,
 			CreatedByName:            quotationSalesReturn.CreatedByName,
 			UpdatedByName:            quotationSalesReturn.UpdatedByName,
+			ReferenceType:            "quotation_sales",
+			ReferenceCode:            quotation.Code,
+			ReferenceID:              &quotation.ID,
 		}
+
+		log.Print("newQuotationSalesReturnPayment.Re:" + newQuotationSalesReturnPayment.ReferenceCode)
 		err = newQuotationSalesReturnPayment.Insert()
 		if err != nil {
 			return err
@@ -327,12 +341,15 @@ func (quotationsalesReturn *QuotationSalesReturn) UpdatePaymentFromPayablePaymen
 
 			quotationsalesReturnPaymentObj.Amount = payablePayment.Amount
 			quotationsalesReturnPaymentObj.Date = payablePayment.Date
-			quotationsalesReturnPaymentObj.Method = "customer_account"
+			quotationsalesReturnPaymentObj.Method = payablePayment.Method
 			quotationsalesReturnPaymentObj.UpdatedAt = payablePayment.UpdatedAt
 			quotationsalesReturnPaymentObj.CreatedAt = payablePayment.CreatedAt
 			quotationsalesReturnPaymentObj.UpdatedBy = payablePayment.UpdatedBy
 			quotationsalesReturnPaymentObj.CreatedBy = payablePayment.CreatedBy
 			quotationsalesReturnPaymentObj.PayableID = &customerWithdrawal.ID
+			quotationsalesReturnPaymentObj.ReferenceType = "customer_withdrawal"
+			quotationsalesReturnPaymentObj.ReferenceID = &customerWithdrawal.ID
+			quotationsalesReturnPaymentObj.ReferenceCode = customerWithdrawal.Code
 
 			err = quotationsalesReturnPaymentObj.Update()
 			if err != nil {
@@ -350,7 +367,7 @@ func (quotationsalesReturn *QuotationSalesReturn) UpdatePaymentFromPayablePaymen
 			QuotationCode:            quotationsalesReturn.QuotationCode,
 			Amount:                   payablePayment.Amount,
 			Date:                     payablePayment.Date,
-			Method:                   "customer_account",
+			Method:                   payablePayment.Method,
 			PayablePaymentID:         &payablePayment.ID,
 			PayableID:                &customerWithdrawal.ID,
 			CreatedBy:                payablePayment.CreatedBy,
@@ -358,6 +375,9 @@ func (quotationsalesReturn *QuotationSalesReturn) UpdatePaymentFromPayablePaymen
 			CreatedAt:                payablePayment.CreatedAt,
 			UpdatedAt:                payablePayment.UpdatedAt,
 			StoreID:                  quotationsalesReturn.StoreID,
+			ReferenceType:            "customer_withdrawal",
+			ReferenceID:              &customerWithdrawal.ID,
+			ReferenceCode:            customerWithdrawal.Code,
 		}
 		err := newQuotationSalesReturnPayment.Insert()
 		if err != nil {
@@ -526,19 +546,20 @@ func (quotationsalesReturn *QuotationSalesReturn) RemoveInvoiceFromCustomerPayab
 
 // DiskQuotaUsageResult payload for disk quota usage
 type QuotationSalesReturnStats struct {
-	ID                              *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal                        float64             `json:"net_total" bson:"net_total"`
-	VatPrice                        float64             `json:"vat_price" bson:"vat_price"`
-	Discount                        float64             `json:"discount" bson:"discount"`
-	CashDiscount                    float64             `json:"cash_discount" bson:"cash_discount"`
-	NetProfit                       float64             `json:"net_profit" bson:"net_profit"`
-	NetLoss                         float64             `json:"net_loss" bson:"net_loss"`
-	PaidQuotationSalesReturn        float64             `json:"paid_quotation_sales_return" bson:"paid_quotation_sales_return"`
-	UnPaidQuotationSalesReturn      float64             `json:"unpaid_quotation_sales_return" bson:"unpaid_quotation_sales_return"`
-	CashQuotationSalesReturn        float64             `json:"cash_quotation_sales_return" bson:"cash_quotation_sales_return"`
-	BankAccountQuotationSalesReturn float64             `json:"bank_account_quotation_sales_return" bson:"bank_account_quotation_sales_return"`
-	ShippingOrHandlingFees          float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
-	QuotationSalesReturnCount       int64               `json:"quotation_sales_return_count" bson:"quotation_sales_return_count"`
+	ID                                 *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal                           float64             `json:"net_total" bson:"net_total"`
+	VatPrice                           float64             `json:"vat_price" bson:"vat_price"`
+	Discount                           float64             `json:"discount" bson:"discount"`
+	CashDiscount                       float64             `json:"cash_discount" bson:"cash_discount"`
+	NetProfit                          float64             `json:"net_profit" bson:"net_profit"`
+	NetLoss                            float64             `json:"net_loss" bson:"net_loss"`
+	PaidQuotationSalesReturn           float64             `json:"paid_quotation_sales_return" bson:"paid_quotation_sales_return"`
+	UnPaidQuotationSalesReturn         float64             `json:"unpaid_quotation_sales_return" bson:"unpaid_quotation_sales_return"`
+	CashQuotationSalesReturn           float64             `json:"cash_quotation_sales_return" bson:"cash_quotation_sales_return"`
+	BankAccountQuotationSalesReturn    float64             `json:"bank_account_quotation_sales_return" bson:"bank_account_quotation_sales_return"`
+	ShippingOrHandlingFees             float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	QuotationSalesReturnCount          int64               `json:"quotation_sales_return_count" bson:"quotation_sales_return_count"`
+	QuotationSalesQuotationSalesReturn float64             `json:"quotation_sales_quotation_sales_return" bson:"quotation_sales_quotation_sales_return"`
 }
 
 func (store *Store) GetQuotationSalesReturnStats(filter map[string]interface{}) (stats QuotationSalesReturnStats, err error) {
@@ -620,6 +641,22 @@ func (store *Store) GetQuotationSalesReturnStats(filter map[string]interface{}) 
 										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
 										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"quotation_sales_quotation_sales_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "quotation_sales"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 								}},
 								"$$payment.amount",
 								0,
@@ -3570,7 +3607,9 @@ func MakeJournalsForQuotationSalesReturnPaymentsByDatetime(
 		}
 
 		cashPayingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_withdrawal" || payment.ReferenceType == "quotation_sales" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount
@@ -3731,7 +3770,9 @@ func MakeJournalsForQuotationSalesReturnExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashPayingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_withdrawal" || payment.ReferenceType == "quotation_sales" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashPayingAccount = *bankAccount

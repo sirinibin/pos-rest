@@ -94,6 +94,7 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 	response.Meta["invoice_unpaid_sales"] = quotationInvoiceStats.InvoiceUnPaidSales
 	response.Meta["invoice_cash_sales"] = quotationInvoiceStats.InvoiceCashSales
 	response.Meta["invoice_bank_account_sales"] = quotationInvoiceStats.InvoiceBankAccountSales
+	response.Meta["invoice_sales_return_sales"] = quotationInvoiceStats.InvoiceSalesReturnSales
 
 	if len(quotations) == 0 {
 		response.Result = []interface{}{}

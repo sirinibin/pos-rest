@@ -83,6 +83,7 @@ func ListQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["cash_quotation_sales_return"] = quotationsalesReturnStats.CashQuotationSalesReturn
 	response.Meta["bank_account_quotation_sales_return"] = quotationsalesReturnStats.BankAccountQuotationSalesReturn
 	response.Meta["shipping_handling_fees"] = quotationsalesReturnStats.ShippingOrHandlingFees
+	response.Meta["quotation_sales_quotation_sales_return"] = quotationsalesReturnStats.QuotationSalesQuotationSalesReturn
 
 	if len(quotationsalesreturns) == 0 {
 		response.Result = []interface{}{}

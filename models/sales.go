@@ -252,7 +252,7 @@ func (order *Order) ClosePurchasePayment() error {
 			PurchaseID:    &pendingPurchase.ID,
 			PurchaseCode:  pendingPurchase.Code,
 			Amount:        amountToSettle,
-			Method:        "vendor_account",
+			Method:        "sales",
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 			StoreID:       order.StoreID,
@@ -260,6 +260,9 @@ func (order *Order) ClosePurchasePayment() error {
 			UpdatedBy:     order.UpdatedBy,
 			CreatedByName: order.UpdatedByName,
 			UpdatedByName: order.UpdatedByName,
+			ReferenceType: "sales",
+			ReferenceCode: order.Code,
+			ReferenceID:   &order.ID,
 		}
 		err = newPurchasePayment.Insert()
 		if err != nil {
@@ -294,7 +297,7 @@ func (order *Order) ClosePurchasePayment() error {
 			OrderID:       &order.ID,
 			OrderCode:     order.Code,
 			Amount:        amountToSettle,
-			Method:        "customer_account",
+			Method:        "purchase",
 			CreatedAt:     &now,
 			UpdatedAt:     &now,
 			StoreID:       order.StoreID,
@@ -302,6 +305,9 @@ func (order *Order) ClosePurchasePayment() error {
 			UpdatedBy:     order.UpdatedBy,
 			CreatedByName: order.UpdatedByName,
 			UpdatedByName: order.UpdatedByName,
+			ReferenceType: "purchase",
+			ReferenceCode: pendingPurchase.Code,
+			ReferenceID:   &pendingPurchase.ID,
 		}
 		err = newSalesPayment.Insert()
 		if err != nil {
@@ -385,6 +391,9 @@ func (order *Order) UpdatePaymentFromReceivablePayment(
 			salesPayment.UpdatedBy = receivablePayment.UpdatedBy
 			salesPayment.CreatedBy = receivablePayment.CreatedBy
 			salesPayment.ReceivableID = &customerDeposit.ID
+			salesPayment.ReferenceType = "customer_deposit"
+			salesPayment.ReferenceCode = customerDeposit.Code
+			salesPayment.ReferenceID = &customerDeposit.ID
 
 			err = salesPayment.Update()
 			if err != nil {
@@ -400,7 +409,7 @@ func (order *Order) UpdatePaymentFromReceivablePayment(
 			OrderCode:           order.Code,
 			Amount:              receivablePayment.Amount,
 			Date:                receivablePayment.Date,
-			Method:              "customer_account",
+			Method:              receivablePayment.Method,
 			ReceivablePaymentID: &receivablePayment.ID,
 			ReceivableID:        &customerDeposit.ID,
 			CreatedBy:           receivablePayment.CreatedBy,
@@ -408,6 +417,9 @@ func (order *Order) UpdatePaymentFromReceivablePayment(
 			CreatedAt:           receivablePayment.CreatedAt,
 			UpdatedAt:           receivablePayment.UpdatedAt,
 			StoreID:             order.StoreID,
+			ReferenceType:       "customer_deposit",
+			ReferenceCode:       customerDeposit.Code,
+			ReferenceID:         &customerDeposit.ID,
 		}
 		err := newSalesPayment.Insert()
 		if err != nil {
@@ -826,6 +838,8 @@ type SalesStats struct {
 	CashDiscount           float64             `json:"cash_discount" bson:"cash_discount"`
 	ReturnCount            int64               `json:"return_count" bson:"return_count"`
 	ReturnAmount           float64             `json:"return_amount" bson:"return_amount"`
+	PurchaseSales          float64             `json:"purchase_sales" bson:"purchase_sales"`
+	SalesReturnSales       float64             `json:"sales_return_sales" bson:"sales_return_sales"`
 }
 
 func (store *Store) GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
@@ -909,6 +923,38 @@ func (store *Store) GetSalesStats(filter map[string]interface{}) (stats SalesSta
 										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
 										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"purchase_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "purchase"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"sales_return_sales": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "sales_return"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 								}},
 								"$$payment.amount",
 								0,
@@ -3773,7 +3819,9 @@ func MakeJournalsForSalesPaymentsByDatetime(
 		}
 
 		cashReceivingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_deposit" || payment.ReferenceType == "purchase" || payment.ReferenceType == "sales_return" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
@@ -3952,7 +4000,9 @@ func MakeJournalsForSalesExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashReceivingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "customer_deposit" || payment.ReferenceType == "purchase" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount

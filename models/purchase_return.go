@@ -129,13 +129,19 @@ func (purchaseReturn *PurchaseReturn) ClosePurchasePayment() error {
 		return err
 	}
 
+	amount := purchaseReturn.BalanceAmount
+
+	if purchase.BalanceAmount < amount {
+		amount = purchase.BalanceAmount
+	}
+
 	if purchase.PaymentStatus != "paid" && purchaseReturn.PaymentStatus != "paid" {
 		newPurchasePayment := PurchasePayment{
 			Date:          purchaseReturn.Date,
 			PurchaseID:    &purchase.ID,
 			PurchaseCode:  purchase.Code,
-			Amount:        purchaseReturn.BalanceAmount,
-			Method:        "vendor_account",
+			Amount:        amount,
+			Method:        "purchase_return",
 			CreatedAt:     purchaseReturn.CreatedAt,
 			UpdatedAt:     purchaseReturn.UpdatedAt,
 			StoreID:       purchaseReturn.StoreID,
@@ -143,6 +149,9 @@ func (purchaseReturn *PurchaseReturn) ClosePurchasePayment() error {
 			UpdatedBy:     purchaseReturn.UpdatedBy,
 			CreatedByName: purchaseReturn.CreatedByName,
 			UpdatedByName: purchaseReturn.UpdatedByName,
+			ReferenceType: "purchase_return",
+			ReferenceCode: purchaseReturn.Code,
+			ReferenceID:   &purchaseReturn.ID,
 		}
 		err = newPurchasePayment.Insert()
 		if err != nil {
@@ -173,8 +182,8 @@ func (purchaseReturn *PurchaseReturn) ClosePurchasePayment() error {
 			PurchaseReturnCode: purchaseReturn.Code,
 			PurchaseID:         &purchase.ID,
 			PurchaseCode:       purchase.Code,
-			Amount:             purchaseReturn.BalanceAmount,
-			Method:             "vendor_account",
+			Amount:             amount,
+			Method:             "purchase",
 			CreatedAt:          purchaseReturn.CreatedAt,
 			UpdatedAt:          purchaseReturn.UpdatedAt,
 			StoreID:            purchaseReturn.StoreID,
@@ -182,6 +191,9 @@ func (purchaseReturn *PurchaseReturn) ClosePurchasePayment() error {
 			UpdatedBy:          purchaseReturn.UpdatedBy,
 			CreatedByName:      purchaseReturn.CreatedByName,
 			UpdatedByName:      purchaseReturn.UpdatedByName,
+			ReferenceType:      "purchase",
+			ReferenceCode:      purchase.Code,
+			ReferenceID:        &purchase.ID,
 		}
 		err = newPurchaseReturnPayment.Insert()
 		if err != nil {
@@ -265,7 +277,11 @@ func (purchaseReturn *PurchaseReturn) UpdatePaymentFromReceivablePayment(
 			purchaseRerturnPaymentObj.CreatedAt = receivablePayment.CreatedAt
 			purchaseRerturnPaymentObj.UpdatedBy = receivablePayment.UpdatedBy
 			purchaseRerturnPaymentObj.CreatedBy = receivablePayment.CreatedBy
+			purchaseRerturnPaymentObj.Method = receivablePayment.Method
 			purchaseRerturnPaymentObj.ReceivableID = &customerDeposit.ID
+			purchaseRerturnPaymentObj.ReferenceType = "vendor_deposit"
+			purchaseRerturnPaymentObj.ReferenceCode = customerDeposit.Code
+			purchaseRerturnPaymentObj.ReferenceID = &customerDeposit.ID
 
 			err = purchaseRerturnPaymentObj.Update()
 			if err != nil {
@@ -281,7 +297,7 @@ func (purchaseReturn *PurchaseReturn) UpdatePaymentFromReceivablePayment(
 			PurchaseReturnCode:  purchaseReturn.Code,
 			Amount:              receivablePayment.Amount,
 			Date:                receivablePayment.Date,
-			Method:              "vendor_account",
+			Method:              receivablePayment.Method,
 			ReceivablePaymentID: &receivablePayment.ID,
 			ReceivableID:        &customerDeposit.ID,
 			CreatedBy:           receivablePayment.CreatedBy,
@@ -289,6 +305,9 @@ func (purchaseReturn *PurchaseReturn) UpdatePaymentFromReceivablePayment(
 			CreatedAt:           receivablePayment.CreatedAt,
 			UpdatedAt:           receivablePayment.UpdatedAt,
 			StoreID:             purchaseReturn.StoreID,
+			ReferenceType:       "vendor_deposit",
+			ReferenceCode:       customerDeposit.Code,
+			ReferenceID:         &customerDeposit.ID,
 		}
 		err := newPurchaseReturnPayment.Insert()
 		if err != nil {
@@ -421,6 +440,7 @@ type PurchaseReturnStats struct {
 	CashPurchaseReturn        float64             `json:"cash_purchase_return" bson:"cash_purchase_return"`
 	BankAccountPurchaseReturn float64             `json:"bank_account_purchase_return" bson:"bank_account_purchase_return"`
 	ShippingOrHandlingFees    float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	PurchasePurchaseReturn    float64             `json:"purchase_purchase_return" bson:"purchase_purchase_return"`
 }
 
 func (store *Store) GetPurchaseReturnStats(filter map[string]interface{}) (stats PurchaseReturnStats, err error) {
@@ -500,6 +520,22 @@ func (store *Store) GetPurchaseReturnStats(filter map[string]interface{}) (stats
 										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
 										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"purchase_purchase_return": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "purchase"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
 								}},
 								"$$payment.amount",
 								0,
@@ -3055,7 +3091,9 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 		}
 
 		cashReceivingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "vendor_deposit" || payment.ReferenceType == "purchase" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount
@@ -3234,7 +3272,9 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashReceivingAccount := Account{}
-		if payment.Method == "cash" {
+		if payment.ReferenceType == "vendor_deposit" || payment.ReferenceType == "purchase" {
+			continue // Ignoring customer receivable payments as it has already entered into the ledger
+		} else if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			cashReceivingAccount = *bankAccount

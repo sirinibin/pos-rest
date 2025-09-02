@@ -1621,27 +1621,38 @@ func ProcessCustomerWithdrawals() error {
 			if err != nil {
 				return errors.New("Cursor error:" + err.Error())
 			}
-			model := CustomerWithdrawal{}
-			err = cur.Decode(&model)
+			customerwithdrawal := CustomerWithdrawal{}
+			err = cur.Decode(&customerwithdrawal)
 			if err != nil {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			model.UndoAccounting()
-			model.DoAccounting()
-			if model.CustomerID != nil && !model.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(model.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
+			customerwithdrawal.UndoAccounting()
+			customerwithdrawal.DoAccounting()
+
+			if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
+				store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+				if store != nil {
+					customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
 				}
 			}
 
-			if model.VendorID != nil && !model.VendorID.IsZero() {
-				vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
-				if vendor != nil {
-					vendor.SetCreditBalance()
+			if customerwithdrawal.VendorID != nil && !customerwithdrawal.VendorID.IsZero() {
+				store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+				if store != nil {
+					vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
 				}
 			}
+
+			customerwithdrawal.CloseSalesReturnPayments()
+			customerwithdrawal.CloseQuotationSalesReturnPayments()
+			customerwithdrawal.ClosePurchasePayments()
 
 			//model.Type = "customer"
 			//model.Update()
