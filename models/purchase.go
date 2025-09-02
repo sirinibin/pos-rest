@@ -3125,7 +3125,7 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 		}
 
 		cashPayingAccount := Account{}
-		if payment.ReferenceType == "vendor_withdrawal" || payment.ReferenceType == "purchase_return" {
+		if payment.ReferenceType == "vendor_withdrawal" || payment.ReferenceType == "purchase_return" || payment.ReferenceType == "sales" {
 			continue // Ignoring customer receivable payments as it has already entered into the ledger
 		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
@@ -3288,7 +3288,7 @@ func MakeJournalsForPurchaseExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashPayingAccount := Account{}
-		if payment.ReferenceType == "vendor_withdrawal" || payment.ReferenceType == "purchase_return" {
+		if payment.ReferenceType == "vendor_withdrawal" || payment.ReferenceType == "purchase_return" || payment.ReferenceType == "sales" {
 			continue // Ignoring customer receivable payments as it has already entered into the ledger
 		} else if payment.Method == "cash" {
 			cashPayingAccount = *cashAccount
