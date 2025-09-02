@@ -2386,18 +2386,19 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 		return err
 	}
 
-	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return err
-	}
-
-	if customer != nil {
-		err = customer.CloseCustomerPendingSalesBySalesReturn(salesReturn)
-		if err != nil {
+	/*
+		customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
 			return err
 		}
-		return nil
-	}
+
+		if customer != nil {
+			err = customer.CloseCustomerPendingSalesBySalesReturn(salesReturn)
+			if err != nil {
+				return err
+			}
+			return nil
+		}*/
 
 	amount := salesReturn.BalanceAmount
 
@@ -2405,89 +2406,89 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 		amount = order.BalanceAmount
 	}
 
-	if order.PaymentStatus != "paid" && salesReturn.PaymentStatus != "paid" {
-		newSalesPayment := SalesPayment{
-			Date:          salesReturn.Date,
-			OrderID:       &order.ID,
-			OrderCode:     order.Code,
-			Amount:        amount,
-			Method:        "sales_return",
-			CreatedAt:     salesReturn.CreatedAt,
-			UpdatedAt:     salesReturn.UpdatedAt,
-			StoreID:       salesReturn.StoreID,
-			CreatedBy:     salesReturn.CreatedBy,
-			UpdatedBy:     salesReturn.UpdatedBy,
-			CreatedByName: salesReturn.CreatedByName,
-			UpdatedByName: salesReturn.UpdatedByName,
-			ReferenceType: "sales_return",
-			ReferenceCode: salesReturn.Code,
-			ReferenceID:   &salesReturn.ID,
-		}
-		err = newSalesPayment.Insert()
-		if err != nil {
-			return err
-		}
-
-		order.Payments = append(order.Payments, newSalesPayment)
-
-		err = order.Update()
-		if err != nil {
-			return err
-		}
-
-		_, err = order.SetPaymentStatus()
-		if err != nil {
-			return err
-		}
-
-		err = order.Update()
-		if err != nil {
-			return err
-		}
-
-		//Sales Return
-		newSalesReturnPayment := SalesReturnPayment{
-			Date:            salesReturn.Date,
-			SalesReturnID:   &salesReturn.ID,
-			SalesReturnCode: salesReturn.Code,
-			OrderID:         &order.ID,
-			OrderCode:       order.Code,
-			Amount:          amount,
-			Method:          "sales",
-			CreatedAt:       salesReturn.CreatedAt,
-			UpdatedAt:       salesReturn.UpdatedAt,
-			StoreID:         salesReturn.StoreID,
-			CreatedBy:       salesReturn.CreatedBy,
-			UpdatedBy:       salesReturn.UpdatedBy,
-			CreatedByName:   salesReturn.CreatedByName,
-			UpdatedByName:   salesReturn.UpdatedByName,
-			ReferenceType:   "sales",
-			ReferenceCode:   order.Code,
-			ReferenceID:     &order.ID,
-		}
-		err = newSalesReturnPayment.Insert()
-		if err != nil {
-			return err
-		}
-
-		salesReturn.Payments = append(salesReturn.Payments, newSalesReturnPayment)
-
-		err = salesReturn.Update()
-		if err != nil {
-			return err
-		}
-
-		_, err = salesReturn.SetPaymentStatus()
-		if err != nil {
-			return err
-		}
-
-		err = salesReturn.Update()
-		if err != nil {
-			return err
-		}
-
+	//if order.PaymentStatus != "paid" && salesReturn.PaymentStatus != "paid" {
+	newSalesPayment := SalesPayment{
+		Date:          salesReturn.Date,
+		OrderID:       &order.ID,
+		OrderCode:     order.Code,
+		Amount:        amount,
+		Method:        "sales_return",
+		CreatedAt:     salesReturn.CreatedAt,
+		UpdatedAt:     salesReturn.UpdatedAt,
+		StoreID:       salesReturn.StoreID,
+		CreatedBy:     salesReturn.CreatedBy,
+		UpdatedBy:     salesReturn.UpdatedBy,
+		CreatedByName: salesReturn.CreatedByName,
+		UpdatedByName: salesReturn.UpdatedByName,
+		ReferenceType: "sales_return",
+		ReferenceCode: salesReturn.Code,
+		ReferenceID:   &salesReturn.ID,
 	}
+	err = newSalesPayment.Insert()
+	if err != nil {
+		return err
+	}
+
+	order.Payments = append(order.Payments, newSalesPayment)
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	_, err = order.SetPaymentStatus()
+	if err != nil {
+		return err
+	}
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	//Sales Return
+	newSalesReturnPayment := SalesReturnPayment{
+		Date:            salesReturn.Date,
+		SalesReturnID:   &salesReturn.ID,
+		SalesReturnCode: salesReturn.Code,
+		OrderID:         &order.ID,
+		OrderCode:       order.Code,
+		Amount:          amount,
+		Method:          "sales",
+		CreatedAt:       salesReturn.CreatedAt,
+		UpdatedAt:       salesReturn.UpdatedAt,
+		StoreID:         salesReturn.StoreID,
+		CreatedBy:       salesReturn.CreatedBy,
+		UpdatedBy:       salesReturn.UpdatedBy,
+		CreatedByName:   salesReturn.CreatedByName,
+		UpdatedByName:   salesReturn.UpdatedByName,
+		ReferenceType:   "sales",
+		ReferenceCode:   order.Code,
+		ReferenceID:     &order.ID,
+	}
+	err = newSalesReturnPayment.Insert()
+	if err != nil {
+		return err
+	}
+
+	salesReturn.Payments = append(salesReturn.Payments, newSalesReturnPayment)
+
+	err = salesReturn.Update()
+	if err != nil {
+		return err
+	}
+
+	_, err = salesReturn.SetPaymentStatus()
+	if err != nil {
+		return err
+	}
+
+	err = salesReturn.Update()
+	if err != nil {
+		return err
+	}
+
+	//}
 
 	return nil
 }
