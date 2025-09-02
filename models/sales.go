@@ -1699,13 +1699,12 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return
 	}
 
-	/*
-		if scenario == "update" {
-			if totalPayment < order.ReturnAmount {
-				errs["total_payment"] = "Total payment amount should not be less than, Total Returned Amount: " + fmt.Sprintf("%.02f", (order.ReturnAmount))
-				return
-			}
-		}*/
+	if scenario == "update" {
+		if totalPayment < order.ReturnAmount {
+			errs["total_payment"] = "Total payment amount should not be less than, Total Returned Amount: " + fmt.Sprintf("%.02f", (order.ReturnAmount))
+			return
+		}
+	}
 
 	//validation
 	if customer != nil && customer.CreditLimit > 0 {
