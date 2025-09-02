@@ -3555,23 +3555,24 @@ func (purchaseReturn *PurchaseReturn) GetPayments() (models []PurchaseReturnPaym
 }
 
 func (purchaseReturn *PurchaseReturn) AdjustPayments() error {
-	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	if !store.Settings.AllowAdjustSameDatePayments {
+	if len(purchaseReturn.Payments) == 0 || purchaseReturn.Date == nil {
 		return nil
 	}
 
-	for i, payment := range purchaseReturn.Payments {
-		if IsDateTimesEqual(purchaseReturn.Date, payment.Date) {
-			newTime := purchaseReturn.Payments[i].Date.Add(1 * time.Minute)
+	// 1. Ensure first payment is at least 1 minute after purchase.Date if they are the same
+	firstPayment := purchaseReturn.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*purchaseReturn.Date) {
+		newTime := purchaseReturn.Date.Add(1 * time.Minute)
+		purchaseReturn.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(purchaseReturn.Payments); i++ {
+		prev := purchaseReturn.Payments[i-1].Date
+		curr := purchaseReturn.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			purchaseReturn.Payments[i].Date = &newTime
-			err = purchaseReturn.Update()
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -3580,15 +3581,22 @@ func (purchaseReturn *PurchaseReturn) AdjustPayments() error {
 		return err
 	}
 
-	for i, payment := range purchaseReturnPayments {
-		if IsDateTimesEqual(purchaseReturn.Date, payment.Date) {
-			newTime := purchaseReturnPayments[i].Date.Add(1 * time.Minute)
+	for i := 1; i < len(purchaseReturnPayments); i++ {
+		prev := purchaseReturnPayments[i-1].Date
+		curr := purchaseReturnPayments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			purchaseReturnPayments[i].Date = &newTime
 			err = purchaseReturnPayments[i].Update()
 			if err != nil {
 				return err
 			}
 		}
+	}
+
+	err = purchaseReturn.Update()
+	if err != nil {
+		return err
 	}
 
 	return nil

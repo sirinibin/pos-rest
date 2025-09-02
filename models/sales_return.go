@@ -4133,23 +4133,24 @@ func (salesReturn *SalesReturn) GetPayments() (models []SalesReturnPayment, err 
 }
 
 func (salesReturn *SalesReturn) AdjustPayments() error {
-	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	if !store.Settings.AllowAdjustSameDatePayments {
+	if len(salesReturn.Payments) == 0 || salesReturn.Date == nil {
 		return nil
 	}
 
-	for i, payment := range salesReturn.Payments {
-		if IsDateTimesEqual(salesReturn.Date, payment.Date) {
-			newTime := salesReturn.Payments[i].Date.Add(1 * time.Minute)
+	// 1. Ensure first payment is at least 1 minute after salesReturn.Date if they are the same
+	firstPayment := salesReturn.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*salesReturn.Date) {
+		newTime := salesReturn.Date.Add(1 * time.Minute)
+		salesReturn.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(salesReturn.Payments); i++ {
+		prev := salesReturn.Payments[i-1].Date
+		curr := salesReturn.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			salesReturn.Payments[i].Date = &newTime
-			err = salesReturn.Update()
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -4158,15 +4159,22 @@ func (salesReturn *SalesReturn) AdjustPayments() error {
 		return err
 	}
 
-	for i, payment := range salesReturnPayments {
-		if IsDateTimesEqual(salesReturn.Date, payment.Date) {
-			newTime := salesReturnPayments[i].Date.Add(1 * time.Minute)
+	for i := 1; i < len(salesReturnPayments); i++ {
+		prev := salesReturnPayments[i-1].Date
+		curr := salesReturnPayments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			salesReturnPayments[i].Date = &newTime
 			err = salesReturnPayments[i].Update()
 			if err != nil {
 				return err
 			}
 		}
+	}
+
+	err = salesReturn.Update()
+	if err != nil {
+		return err
 	}
 
 	return nil

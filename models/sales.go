@@ -4142,6 +4142,55 @@ func (order *Order) GetPayments() (models []SalesPayment, err error) {
 }
 
 func (order *Order) AdjustPayments() error {
+	if len(order.Payments) == 0 || order.Date == nil {
+		return nil
+	}
+
+	// 1. Ensure first payment is at least 1 minute after order.Date if they are the same
+	firstPayment := order.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*order.Date) {
+		newTime := order.Date.Add(1 * time.Minute)
+		order.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(order.Payments); i++ {
+		prev := order.Payments[i-1].Date
+		curr := order.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
+			order.Payments[i].Date = &newTime
+		}
+	}
+
+	salesPayments, err := order.GetPayments()
+	if err != nil {
+		return err
+	}
+
+	for i := 1; i < len(salesPayments); i++ {
+		prev := salesPayments[i-1].Date
+		curr := salesPayments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
+			salesPayments[i].Date = &newTime
+			err = salesPayments[i].Update()
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/*
+func (order *Order) AdjustPayments() error {
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -4179,7 +4228,7 @@ func (order *Order) AdjustPayments() error {
 	}
 
 	return nil
-}
+}*/
 
 //End customer account journals
 

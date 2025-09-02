@@ -4021,23 +4021,24 @@ func (quotationSalesReturn *QuotationSalesReturn) GetPayments() (models []Quotat
 }
 
 func (quotationSalesReturn *QuotationSalesReturn) AdjustPayments() error {
-	store, err := FindStoreByID(quotationSalesReturn.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	if !store.Settings.AllowAdjustSameDatePayments {
+	if len(quotationSalesReturn.Payments) == 0 || quotationSalesReturn.Date == nil {
 		return nil
 	}
 
-	for i, payment := range quotationSalesReturn.Payments {
-		if IsDateTimesEqual(quotationSalesReturn.Date, payment.Date) {
-			newTime := quotationSalesReturn.Payments[i].Date.Add(1 * time.Minute)
+	// 1. Ensure first payment is at least 1 minute after quotation.Date if they are the same
+	firstPayment := quotationSalesReturn.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*quotationSalesReturn.Date) {
+		newTime := quotationSalesReturn.Date.Add(1 * time.Minute)
+		quotationSalesReturn.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(quotationSalesReturn.Payments); i++ {
+		prev := quotationSalesReturn.Payments[i-1].Date
+		curr := quotationSalesReturn.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			quotationSalesReturn.Payments[i].Date = &newTime
-			err = quotationSalesReturn.Update()
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -4046,15 +4047,22 @@ func (quotationSalesReturn *QuotationSalesReturn) AdjustPayments() error {
 		return err
 	}
 
-	for i, payment := range quotationSalesReturnPayments {
-		if IsDateTimesEqual(quotationSalesReturn.Date, payment.Date) {
-			newTime := quotationSalesReturnPayments[i].Date.Add(1 * time.Minute)
+	for i := 1; i < len(quotationSalesReturnPayments); i++ {
+		prev := quotationSalesReturnPayments[i-1].Date
+		curr := quotationSalesReturnPayments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			quotationSalesReturnPayments[i].Date = &newTime
 			err = quotationSalesReturnPayments[i].Update()
 			if err != nil {
 				return err
 			}
 		}
+	}
+
+	err = quotationSalesReturn.Update()
+	if err != nil {
+		return err
 	}
 
 	return nil

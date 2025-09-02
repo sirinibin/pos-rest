@@ -1698,7 +1698,42 @@ func ProcessCustomerWithdrawals() error {
 	return nil
 }
 
+func (customerWithdrawal *CustomerWithdrawal) AdjustPayments() error {
+	if len(customerWithdrawal.Payments) == 0 || customerWithdrawal.Date == nil {
+		return nil
+	}
+
+	// 1. Ensure first payment is at least 1 minute after customerWithdrawal.Date if they are the same
+	firstPayment := customerWithdrawal.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*customerWithdrawal.Date) {
+		newTime := customerWithdrawal.Date.Add(1 * time.Minute)
+		customerWithdrawal.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(customerWithdrawal.Payments); i++ {
+		prev := customerWithdrawal.Payments[i-1].Date
+		curr := customerWithdrawal.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
+			customerWithdrawal.Payments[i].Date = &newTime
+		}
+	}
+
+	err := customerWithdrawal.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (customerWithdrawal *CustomerWithdrawal) DoAccounting() error {
+	err := customerWithdrawal.AdjustPayments()
+	if err != nil {
+		return errors.New("error adjusting payments: " + err.Error())
+	}
+
 	ledgers, err := customerWithdrawal.CreateLedger()
 	if err != nil {
 		return err

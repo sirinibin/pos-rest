@@ -3531,23 +3531,24 @@ func (purchase *Purchase) GetPayments() (models []PurchasePayment, err error) {
 }
 
 func (purchase *Purchase) AdjustPayments() error {
-	store, err := FindStoreByID(purchase.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	if !store.Settings.AllowAdjustSameDatePayments {
+	if len(purchase.Payments) == 0 || purchase.Date == nil {
 		return nil
 	}
 
-	for i, payment := range purchase.Payments {
-		if IsDateTimesEqual(purchase.Date, payment.Date) {
-			newTime := purchase.Payments[i].Date.Add(1 * time.Minute)
+	// 1. Ensure first payment is at least 1 minute after purchase.Date if they are the same
+	firstPayment := purchase.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*purchase.Date) {
+		newTime := purchase.Date.Add(1 * time.Minute)
+		purchase.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(purchase.Payments); i++ {
+		prev := purchase.Payments[i-1].Date
+		curr := purchase.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			purchase.Payments[i].Date = &newTime
-			err = purchase.Update()
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -3556,15 +3557,22 @@ func (purchase *Purchase) AdjustPayments() error {
 		return err
 	}
 
-	for i, payment := range purchasePayments {
-		if IsDateTimesEqual(purchase.Date, payment.Date) {
-			newTime := purchasePayments[i].Date.Add(1 * time.Minute)
+	for i := 1; i < len(purchasePayments); i++ {
+		prev := purchasePayments[i-1].Date
+		curr := purchasePayments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			purchasePayments[i].Date = &newTime
 			err = purchasePayments[i].Update()
 			if err != nil {
 				return err
 			}
 		}
+	}
+
+	err = purchase.Update()
+	if err != nil {
+		return err
 	}
 
 	return nil

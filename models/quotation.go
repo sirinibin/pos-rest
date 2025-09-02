@@ -3079,23 +3079,24 @@ func (quotation *Quotation) GetPayments() (models []QuotationPayment, err error)
 }
 
 func (quotation *Quotation) AdjustPayments() error {
-	store, err := FindStoreByID(quotation.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	if !store.Settings.AllowAdjustSameDatePayments {
+	if len(quotation.Payments) == 0 || quotation.Date == nil {
 		return nil
 	}
 
-	for i, quotationPayment := range quotation.Payments {
-		if IsDateTimesEqual(quotation.Date, quotationPayment.Date) {
-			newTime := quotation.Payments[i].Date.Add(1 * time.Minute)
+	// 1. Ensure first payment is at least 1 minute after quotation.Date if they are the same
+	firstPayment := quotation.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*quotation.Date) {
+		newTime := quotation.Date.Add(1 * time.Minute)
+		quotation.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(quotation.Payments); i++ {
+		prev := quotation.Payments[i-1].Date
+		curr := quotation.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			quotation.Payments[i].Date = &newTime
-			err = quotation.Update()
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -3104,15 +3105,22 @@ func (quotation *Quotation) AdjustPayments() error {
 		return err
 	}
 
-	for i, payment := range quotationPayments {
-		if IsDateTimesEqual(quotation.Date, payment.Date) {
-			newTime := quotationPayments[i].Date.Add(1 * time.Minute)
+	for i := 1; i < len(quotationPayments); i++ {
+		prev := quotationPayments[i-1].Date
+		curr := quotationPayments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
 			quotationPayments[i].Date = &newTime
 			err = quotationPayments[i].Update()
 			if err != nil {
 				return err
 			}
 		}
+	}
+
+	err = quotation.Update()
+	if err != nil {
+		return err
 	}
 
 	return nil

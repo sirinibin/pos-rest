@@ -1742,7 +1742,42 @@ func ProcessCustomerDeposits() error {
 	return nil
 }
 
+func (customerDeposit *CustomerDeposit) AdjustPayments() error {
+	if len(customerDeposit.Payments) == 0 || customerDeposit.Date == nil {
+		return nil
+	}
+
+	// 1. Ensure first payment is at least 1 minute after customerDeposit.Date if they are the same
+	firstPayment := customerDeposit.Payments[0]
+	if firstPayment.Date != nil && firstPayment.Date.Equal(*customerDeposit.Date) {
+		newTime := customerDeposit.Date.Add(1 * time.Minute)
+		customerDeposit.Payments[0].Date = &newTime
+	}
+
+	// 2. For each subsequent payment, ensure strictly increasing by at least 1 minute
+	for i := 1; i < len(customerDeposit.Payments); i++ {
+		prev := customerDeposit.Payments[i-1].Date
+		curr := customerDeposit.Payments[i].Date
+		if prev != nil && curr != nil && (curr.Equal(*prev) || curr.Before(*prev)) {
+			newTime := prev.Add(1 * time.Minute)
+			customerDeposit.Payments[i].Date = &newTime
+		}
+	}
+
+	err := customerDeposit.Update()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (customerDeposit *CustomerDeposit) DoAccounting() error {
+	err := customerDeposit.AdjustPayments()
+	if err != nil {
+		return errors.New("error adjusting payments: " + err.Error())
+	}
+
 	ledgers, err := customerDeposit.CreateLedger()
 	if err != nil {
 		return err
