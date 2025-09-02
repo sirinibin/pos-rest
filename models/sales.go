@@ -390,6 +390,7 @@ func (order *Order) UpdatePaymentFromReceivablePayment(
 			salesPayment.CreatedAt = receivablePayment.CreatedAt
 			salesPayment.UpdatedBy = receivablePayment.UpdatedBy
 			salesPayment.CreatedBy = receivablePayment.CreatedBy
+			salesPayment.Method = receivablePayment.Method
 			salesPayment.ReceivableID = &customerDeposit.ID
 			salesPayment.ReferenceType = "customer_deposit"
 			salesPayment.ReferenceCode = customerDeposit.Code
