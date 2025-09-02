@@ -442,45 +442,52 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	err := models.ProcessCustomerDeposits()
+	err := models.ProcessPurchases()
 	if err != nil {
 		log.Print(err)
 	}
 
-	err = models.ProcessCustomerWithdrawals()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessCustomerDeposits()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessOrders()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessCustomerWithdrawals()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessSalesReturns()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessOrders()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessPurchases()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessSalesReturns()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessPurchaseReturns()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessPurchases()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessQuotations()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessPurchaseReturns()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessQuotationSalesReturns()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessQuotations()
+		if err != nil {
+			log.Print(err)
+		}
+
+		err = models.ProcessQuotationSalesReturns()
+		if err != nil {
+			log.Print(err)
+		}
+	*/
 
 	/*
 	 */
