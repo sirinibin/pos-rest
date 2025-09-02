@@ -4001,7 +4001,7 @@ func MakeJournalsForSalesExtraPayments(
 
 	for _, payment := range extraPayments {
 		cashReceivingAccount := Account{}
-		if payment.ReferenceType == "customer_deposit" || payment.ReferenceType == "purchase" {
+		if payment.ReferenceType == "customer_deposit" || payment.ReferenceType == "purchase" || payment.ReferenceType == "sales_return" {
 			continue // Ignoring customer receivable payments as it has already entered into the ledger
 		} else if payment.Method == "cash" {
 			cashReceivingAccount = *cashAccount
