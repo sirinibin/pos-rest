@@ -2345,11 +2345,13 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
-			model.UpdateForeignLabelFields()
-			model.ClearProductsHistory()
-			model.ClearProductsPurchaseReturnHistory()
-			model.CreateProductsHistory()
-			model.CreateProductsPurchaseReturnHistory()
+			/*
+				model.UpdateForeignLabelFields()
+				model.ClearProductsHistory()
+				model.ClearProductsPurchaseReturnHistory()
+				model.CreateProductsHistory()
+				model.CreateProductsPurchaseReturnHistory()
+			*/
 
 			model.UndoAccounting()
 			if !store.Settings.DisablePurchasesOnAccounts {

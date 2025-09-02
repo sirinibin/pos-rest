@@ -1650,9 +1650,11 @@ func ProcessCustomerWithdrawals() error {
 				}
 			}
 
-			customerwithdrawal.CloseSalesReturnPayments()
-			customerwithdrawal.CloseQuotationSalesReturnPayments()
-			customerwithdrawal.ClosePurchasePayments()
+			/*
+				customerwithdrawal.CloseSalesReturnPayments()
+				customerwithdrawal.CloseQuotationSalesReturnPayments()
+				customerwithdrawal.ClosePurchasePayments()
+			*/
 
 			//model.Type = "customer"
 			//model.Update()

@@ -2741,11 +2741,13 @@ func ProcessQuotationSalesReturns() error {
 				continue
 			}
 
-			quotationsalesReturn.UpdateForeignLabelFields()
-			quotationsalesReturn.ClearProductsHistory()
-			quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
-			quotationsalesReturn.CreateProductsHistory()
-			quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
+			/*
+				quotationsalesReturn.UpdateForeignLabelFields()
+				quotationsalesReturn.ClearProductsHistory()
+				quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
+				quotationsalesReturn.CreateProductsHistory()
+				quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
+			*/
 
 			/*
 				if store.Code == "MBDI" || store.Code == "LGK" {
@@ -2763,17 +2765,16 @@ func ProcessQuotationSalesReturns() error {
 
 					quotationsalesReturn.Update()
 				}*/
-			/*
-				quotationsalesReturn.UndoAccounting()
-				quotationsalesReturn.DoAccounting()
 
-				if quotationsalesReturn.CustomerID != nil && !quotationsalesReturn.CustomerID.IsZero() {
-					customer, _ := store.FindCustomerByID(quotationsalesReturn.CustomerID, bson.M{})
-					if customer != nil {
-						customer.SetCreditBalance()
-					}
+			quotationsalesReturn.UndoAccounting()
+			quotationsalesReturn.DoAccounting()
+
+			if quotationsalesReturn.CustomerID != nil && !quotationsalesReturn.CustomerID.IsZero() {
+				customer, _ := store.FindCustomerByID(quotationsalesReturn.CustomerID, bson.M{})
+				if customer != nil {
+					customer.SetCreditBalance()
 				}
-			*/
+			}
 
 			/*
 				quotation, _ := store.FindQuotationByID(quotationsalesReturn.QuotationID, bson.M{})

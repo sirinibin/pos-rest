@@ -2878,11 +2878,13 @@ func ProcessSalesReturns() error {
 				continue
 			}
 
-			salesReturn.UpdateForeignLabelFields()
-			salesReturn.ClearProductsHistory()
-			salesReturn.ClearProductsSalesReturnHistory()
-			salesReturn.CreateProductsHistory()
-			salesReturn.CreateProductsSalesReturnHistory()
+			/*
+				salesReturn.UpdateForeignLabelFields()
+				salesReturn.ClearProductsHistory()
+				salesReturn.ClearProductsSalesReturnHistory()
+				salesReturn.CreateProductsHistory()
+				salesReturn.CreateProductsSalesReturnHistory()
+			*/
 
 			salesReturn.UndoAccounting()
 			salesReturn.DoAccounting()

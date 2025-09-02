@@ -1679,9 +1679,11 @@ func ProcessCustomerDeposits() error {
 				}
 			}
 
-			customerdeposit.CloseSalesPayments()
-			customerdeposit.ClosePurchaseReturnPayments()
-			customerdeposit.CloseQuotationSalesPayments()
+			/*
+				customerdeposit.CloseSalesPayments()
+				customerdeposit.ClosePurchaseReturnPayments()
+				customerdeposit.CloseQuotationSalesPayments()
+			*/
 
 			/*
 				model.UndoAccounting()

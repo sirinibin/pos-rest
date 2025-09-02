@@ -2397,11 +2397,13 @@ func ProcessPurchases() error {
 				continue
 			}
 
-			purchase.UpdateForeignLabelFields()
-			purchase.ClearProductsHistory()
-			purchase.ClearProductsPurchaseHistory()
-			purchase.CreateProductsHistory()
-			purchase.CreateProductsPurchaseHistory()
+			/*
+				purchase.UpdateForeignLabelFields()
+				purchase.ClearProductsHistory()
+				purchase.ClearProductsPurchaseHistory()
+				purchase.CreateProductsHistory()
+				purchase.CreateProductsPurchaseHistory()
+			*/
 
 			purchase.UndoAccounting()
 			if !store.Settings.DisablePurchasesOnAccounts {

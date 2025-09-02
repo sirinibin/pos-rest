@@ -3215,11 +3215,13 @@ func ProcessOrders() error {
 				continue
 			}
 
-			order.UpdateForeignLabelFields()
-			order.ClearProductsHistory()
-			order.ClearProductsSalesHistory()
-			order.CreateProductsHistory()
-			order.CreateProductsSalesHistory()
+			/*
+				order.UpdateForeignLabelFields()
+				order.ClearProductsHistory()
+				order.ClearProductsSalesHistory()
+				order.CreateProductsHistory()
+				order.CreateProductsSalesHistory()
+			*/
 
 			order.UndoAccounting()
 			order.DoAccounting()
