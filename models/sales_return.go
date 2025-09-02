@@ -1697,18 +1697,17 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	/*
-		if scenario == "update" {
-			if totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid)) {
-				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
-				return errs
-			}
-		} else {
-			if totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-order.ReturnAmount) {
-				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
-				return errs
-			}
-		}*/
+	if scenario == "update" {
+		if totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid)) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
+			return errs
+		}
+	} else {
+		if totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-order.ReturnAmount) {
+			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
+			return errs
+		}
+	}
 
 	if customer != nil && customer.CreditLimit > 0 {
 		if customer.Account == nil {
