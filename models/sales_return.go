@@ -2386,19 +2386,18 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 		return err
 	}
 
-	/*
-		customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
+	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer != nil {
+		err = customer.CloseCustomerPendingSalesBySalesReturn(salesReturn)
+		if err != nil {
 			return err
 		}
-
-		if customer != nil {
-			err = customer.CloseCustomerPendingSalesBySalesReturn(salesReturn)
-			if err != nil {
-				return err
-			}
-			return nil
-		}*/
+		return nil
+	}
 
 	amount := salesReturn.BalanceAmount
 
