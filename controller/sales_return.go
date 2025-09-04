@@ -288,10 +288,11 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	order, _ := store.FindOrderByID(salesreturn.OrderID, bson.M{})
 	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
+	salesreturn.SetCustomerSalesReturnStats()
+	order.SetCustomerSalesStats()
 
 	go salesreturn.SetProductsSalesReturnStats()
-	go salesreturn.SetCustomerSalesReturnStats()
-	go order.SetCustomerSalesStats()
+
 	go salesreturn.SetPostBalances()
 
 	go salesreturn.CreateProductsHistory()
