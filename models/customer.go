@@ -332,18 +332,31 @@ func (customer *Customer) SetCreditBalance() error {
 	}
 
 	if account == nil && customer.VATNo != "" {
-		account, err = store.FindAccountByVatNo(customer.VATNo, &store.ID, bson.M{})
+		account, err = store.FindAccountByVatNoByName(customer.VATNo, customer.Name, &store.ID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
-			return errors.New("error finding customer account:" + err.Error())
+			return errors.New("error finding vendor account:" + err.Error())
 		}
 	}
 
-	if account == nil && customer.Phone != "" {
-		account, err = store.FindAccountByPhone(customer.Phone, &store.ID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			return errors.New("error finding customer account:" + err.Error())
-		}
+	if account == nil {
+		return nil
 	}
+
+	/*
+		if account == nil && customer.VATNo != "" {
+			account, err = store.FindAccountByVatNo(customer.VATNo, &store.ID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				return errors.New("error finding customer account:" + err.Error())
+			}
+		}
+
+		if account == nil && customer.Phone != "" {
+			account, err = store.FindAccountByPhone(customer.Phone, &store.ID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				return errors.New("error finding customer account:" + err.Error())
+			}
+		}
+	*/
 
 	if account != nil {
 		customer.Account = account
@@ -354,6 +367,19 @@ func (customer *Customer) SetCreditBalance() error {
 		err = customer.Update()
 		if err != nil {
 			return errors.New("error updating customer credit balance:" + err.Error())
+		}
+
+		vendor, err := store.FindVendorByNameByVatNo(customer.Name, customer.VATNo, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+
+		if vendor != nil {
+			vendor.CreditBalance = customer.CreditBalance
+			err = vendor.Update()
+			if err != nil {
+				return err
+			}
 		}
 	}
 

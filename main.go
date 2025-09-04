@@ -241,6 +241,7 @@ func main() {
 	router.HandleFunc("/v1/vendor", controller.CreateVendor).Methods("POST")
 	router.HandleFunc("/v1/vendor", controller.ListVendor).Methods("GET")
 	router.HandleFunc("/v1/vendor/{id}", controller.ViewVendor).Methods("GET")
+	router.HandleFunc("/v1/vendor/vat_no/name", controller.ViewVendorByVatNoByName).Methods("GET")
 	router.HandleFunc("/v1/vendor/{id}", controller.UpdateVendor).Methods("PUT")
 	router.HandleFunc("/v1/vendor/{id}", controller.DeleteVendor).Methods("DELETE")
 	router.HandleFunc("/v1/vendor/restore/{id}", controller.RestoreVendor).Methods("POST")

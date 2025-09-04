@@ -1583,6 +1583,8 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 
 func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldOrder *Order) (errs map[string]string) {
 	errs = make(map[string]string)
+	order.VatNo = strings.TrimSpace(order.VatNo)
+	order.Phone = strings.TrimSpace(order.Phone)
 
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {

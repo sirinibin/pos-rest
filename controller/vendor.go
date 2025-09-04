@@ -342,6 +342,90 @@ func ViewVendor(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func ViewVendorByVatNoByName(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vatNo := ""
+	name := ""
+
+	keys, ok := r.URL.Query()["vat_no"]
+	if ok && len(keys[0]) >= 1 {
+		vatNo = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["name"]
+	if ok && len(keys[0]) >= 1 {
+		name = keys[0]
+	}
+
+	var vendor *models.Vendor
+
+	selectFields := map[string]interface{}{}
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vendor, err = store.FindVendorByNameByVatNo(name, vatNo, selectFields)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if vendor.VATNo != "" {
+		account, err := store.FindAccountByVatNo(vendor.VATNo, &store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			response.Status = false
+			response.Errors["account"] = "error finding account:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		if account != nil {
+			vendor.CreditBalance = account.Balance
+		} else {
+			account, err = store.FindAccountByPhoneByName(vendor.Phone, vendor.Name, &store.ID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				response.Status = false
+				response.Errors["account"] = "error finding account:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			if account != nil {
+				vendor.CreditBalance = account.Balance
+			}
+		}
+
+	}
+
+	response.Status = true
+	response.Result = vendor
+
+	json.NewEncoder(w).Encode(response)
+
+}
+
 // DeleteVendor : handler function for DELETE /v1/vendor/<id> call
 func DeleteVendor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
