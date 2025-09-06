@@ -2390,7 +2390,7 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 		return nil
 	}
 
-	amount := salesReturn.BalanceAmount
+	amount := RoundTo2Decimals(salesReturn.BalanceAmount)
 
 	if order.BalanceAmount < amount {
 		amount = order.BalanceAmount
@@ -2498,6 +2498,44 @@ func (salesReturn *SalesReturn) CloseSalesPayment() error {
 	return nil
 }
 
+func (customer *Customer) GetPendingSales() (sales []Order, err error) {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("order")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetSort(map[string]interface{}{"created_at": 1})
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{
+		"balance_amount": bson.M{"$gt": 0},
+		"customer_id":    customer.ID,
+		"payment_status": bson.M{"$ne": "paid"},
+	}, findOptions)
+	if err != nil {
+		return nil, errors.New("Error fetching pending customer sales:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return nil, errors.New("Cursor error:" + err.Error())
+		}
+		model := Order{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return nil, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		sales = append(sales, model)
+
+	}
+
+	return sales, nil
+}
+
 func (customer *Customer) CloseCustomerPendingSalesBySalesReturn(salesReturn *SalesReturn) error {
 	pendingSales, err := customer.GetPendingSales()
 	if err != nil {
@@ -2510,10 +2548,10 @@ func (customer *Customer) CloseCustomerPendingSalesBySalesReturn(salesReturn *Sa
 
 	for _, pendingSale := range pendingSales {
 		if pendingSale.BalanceAmount > salesReturnBalanceAmount {
-			amountToSettle = salesReturnBalanceAmount
+			amountToSettle = RoundTo2Decimals(salesReturnBalanceAmount)
 			salesReturnBalanceAmount = float64(0.00)
 		} else {
-			amountToSettle = pendingSale.BalanceAmount
+			amountToSettle = RoundTo2Decimals(pendingSale.BalanceAmount)
 			salesReturnBalanceAmount -= amountToSettle
 		}
 

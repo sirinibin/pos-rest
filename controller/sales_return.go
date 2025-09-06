@@ -534,10 +534,12 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 	order.Update()
 
+	salesreturn.SetCustomerSalesReturnStats()
+	order.SetCustomerSalesStats()
+
 	go salesreturn.SetProductsSalesReturnStats()
 	go salesreturnOld.SetProductsSalesReturnStats()
-	go salesreturn.SetCustomerSalesReturnStats()
-	go order.SetCustomerSalesStats()
+
 	go salesreturn.SetPostBalances()
 
 	go func() {

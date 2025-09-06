@@ -141,7 +141,7 @@ func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() e
 		return err
 	}
 
-	amount := quotationSalesReturn.BalanceAmount
+	amount := RoundTo2Decimals(quotationSalesReturn.BalanceAmount)
 
 	if quotation.BalanceAmount < amount {
 		amount = quotation.BalanceAmount
@@ -231,6 +231,177 @@ func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() e
 			return err
 		}
 
+	}
+
+	if quotationSalesReturn.BalanceAmount > 0 {
+		customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+
+		if customer != nil {
+			err = customer.CloseCustomerPendingQuotationSalesByQuotationSalesReturn(quotationSalesReturn)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func (customer *Customer) GetPendingQuotationSales() (quotationSales []Quotation, err error) {
+	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("quotation")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetSort(map[string]interface{}{"created_at": 1})
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{
+		"type":           "invoice",
+		"balance_amount": bson.M{"$gt": 0},
+		"customer_id":    customer.ID,
+		"payment_status": bson.M{"$ne": "paid"},
+	}, findOptions)
+	if err != nil {
+		return nil, errors.New("Error fetching pending customer sales:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return nil, errors.New("Cursor error:" + err.Error())
+		}
+		model := Quotation{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return nil, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		quotationSales = append(quotationSales, model)
+
+	}
+
+	return quotationSales, nil
+}
+
+func (customer *Customer) CloseCustomerPendingQuotationSalesByQuotationSalesReturn(quotationSalesReturn *QuotationSalesReturn) error {
+	pendingSales, err := customer.GetPendingQuotationSales()
+	if err != nil {
+		return err
+	}
+
+	quotationSalesReturnBalanceAmount := RoundTo2Decimals(quotationSalesReturn.BalanceAmount)
+
+	amountToSettle := float64(0.00)
+
+	for _, pendingSale := range pendingSales {
+		if pendingSale.BalanceAmount > quotationSalesReturnBalanceAmount {
+			amountToSettle = RoundTo2Decimals(quotationSalesReturnBalanceAmount)
+			quotationSalesReturnBalanceAmount = float64(0.00)
+		} else {
+			amountToSettle = RoundTo2Decimals(pendingSale.BalanceAmount)
+			quotationSalesReturnBalanceAmount -= amountToSettle
+		}
+
+		//make payments and change payement status
+
+		now := time.Now()
+		//Add payment to sales
+		newSalesPayment := QuotationPayment{
+			Date:          &now,
+			QuotationID:   &pendingSale.ID,
+			QuotationCode: pendingSale.Code,
+			Amount:        amountToSettle,
+			Method:        "quotation_sales_return",
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+			StoreID:       quotationSalesReturn.StoreID,
+			CreatedBy:     quotationSalesReturn.UpdatedBy,
+			UpdatedBy:     quotationSalesReturn.UpdatedBy,
+			CreatedByName: quotationSalesReturn.UpdatedByName,
+			UpdatedByName: quotationSalesReturn.UpdatedByName,
+			ReferenceType: "quotation_sales_return",
+			ReferenceCode: quotationSalesReturn.Code,
+			ReferenceID:   &quotationSalesReturn.ID,
+		}
+		err = newSalesPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		pendingSale.Payments = append(pendingSale.Payments, newSalesPayment)
+
+		err = pendingSale.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = pendingSale.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = pendingSale.Update()
+		if err != nil {
+			return err
+		}
+
+		err = pendingSale.SetCustomerQuotationStats()
+		if err != nil {
+			return err
+		}
+
+		//Add payment to purchase
+		newQuotationSalesReturnPayment := QuotationSalesReturnPayment{
+			Date:                     &now,
+			QuotationSalesReturnID:   &quotationSalesReturn.ID,
+			QuotationSalesReturnCode: quotationSalesReturn.Code,
+			Amount:                   amountToSettle,
+			Method:                   "quotation_sales",
+			CreatedAt:                &now,
+			UpdatedAt:                &now,
+			StoreID:                  quotationSalesReturn.StoreID,
+			CreatedBy:                quotationSalesReturn.UpdatedBy,
+			UpdatedBy:                quotationSalesReturn.UpdatedBy,
+			CreatedByName:            quotationSalesReturn.UpdatedByName,
+			UpdatedByName:            quotationSalesReturn.UpdatedByName,
+			ReferenceType:            "quotation_sales",
+			ReferenceCode:            pendingSale.Code,
+			ReferenceID:              &pendingSale.ID,
+		}
+		err = newQuotationSalesReturnPayment.Insert()
+		if err != nil {
+			return err
+		}
+
+		quotationSalesReturn.Payments = append(quotationSalesReturn.Payments, newQuotationSalesReturnPayment)
+
+		err = quotationSalesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+		_, err = quotationSalesReturn.SetPaymentStatus()
+		if err != nil {
+			return err
+		}
+
+		err = quotationSalesReturn.Update()
+		if err != nil {
+			return err
+		}
+
+		if quotationSalesReturnBalanceAmount > 0 {
+			continue
+		} else {
+			break
+		}
 	}
 
 	return nil

@@ -285,10 +285,10 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
 	quotation.Update()
 
-	go quotationsalesreturn.SetProductsQuotationSalesReturnStats()
+	quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
+	quotation.SetCustomerQuotationStats()
 
-	go quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
-	go quotation.SetCustomerQuotationStats()
+	go quotationsalesreturn.SetProductsQuotationSalesReturnStats()
 
 	go quotationsalesreturn.SetPostBalances()
 
@@ -516,11 +516,11 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	quotation.ReturnAmount, quotation.ReturnCount, _ = store.GetReturnedAmountByQuotationID(quotation.ID)
 	quotation.Update()
 
+	quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
+	quotation.SetCustomerQuotationStats()
+
 	go quotationsalesreturn.SetProductsQuotationSalesReturnStats()
 	go quotationsalesreturnOld.SetProductsQuotationSalesReturnStats()
-
-	go quotationsalesreturn.SetCustomerQuotationSalesReturnStats()
-	go quotation.SetCustomerQuotationStats()
 
 	go quotationsalesreturn.SetPostBalances()
 
