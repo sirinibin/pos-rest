@@ -443,18 +443,6 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		}
 
 		err = store.UpdateManyByCollectionName(
-			"account",
-			bson.M{"reference_id": customer.ID},
-			bson.M{
-				"name":        customer.Name,
-				"name_arabic": customer.NameInArabic,
-			},
-		)
-		if err != nil {
-			return nil
-		}
-
-		err = store.UpdateManyByCollectionName(
 			"customerwithdrawal",
 			bson.M{"customer_id": customer.ID},
 			bson.M{
@@ -551,53 +539,94 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 			return nil
 		}
 
-		err = store.UpdateManyByCollectionName(
-			"vendor",
-			bson.M{
-				"name":   customerOld.Name,
-				"vat_no": customerOld.VATNo,
-			},
-			bson.M{
-				"name":           customer.Name,
-				"name_in_arabic": customer.NameInArabic,
-			},
-		)
-		if err != nil {
-			return nil
+		if customerOld.VATNo != "" {
+			err = store.UpdateManyByCollectionName(
+				"vendor",
+				bson.M{
+					"name":   customerOld.Name,
+					"vat_no": customerOld.VATNo,
+				},
+				bson.M{
+					"name":           customer.Name,
+					"name_in_arabic": customer.NameInArabic,
+				},
+			)
+			if err != nil {
+				return nil
+			}
+
+			err = store.UpdateManyByCollectionName(
+				"account",
+				bson.M{
+					"name":   customerOld.Name,
+					"vat_no": customerOld.VATNo,
+				},
+				bson.M{
+					"name":        customer.Name,
+					"name_arabic": customer.NameInArabic,
+				},
+			)
+			if err != nil {
+				return nil
+			}
+		} else {
+			err = store.UpdateManyByCollectionName(
+				"account",
+				bson.M{"reference_id": customer.ID},
+				bson.M{
+					"name":        customer.Name,
+					"name_arabic": customer.NameInArabic,
+				},
+			)
+			if err != nil {
+				return nil
+			}
 		}
 	}
 
 	if customer.VATNo != customerOld.VATNo {
-		err = store.UpdateManyByCollectionName(
-			"vendor",
-			bson.M{
-				"name":   customerOld.Name,
-				"vat_no": customerOld.VATNo,
-			},
-			bson.M{
-				"vat_no":           customer.VATNo,
-				"vat_no_in_arabic": customer.VATNoInArabic,
-			},
-		)
-		if err != nil {
-			return nil
-		}
+		if customerOld.VATNo != "" {
+			err = store.UpdateManyByCollectionName(
+				"vendor",
+				bson.M{
+					"name":   customerOld.Name,
+					"vat_no": customerOld.VATNo,
+				},
+				bson.M{
+					"vat_no":           customer.VATNo,
+					"vat_no_in_arabic": customer.VATNoInArabic,
+				},
+			)
+			if err != nil {
+				return nil
+			}
 
-		err = store.UpdateManyByCollectionName(
-			"account",
-			bson.M{
-				"name":   customerOld.Name,
-				"vat_no": customerOld.VATNo,
-			},
-			bson.M{
-				"vat_no":           customer.VATNo,
-				"vat_no_in_arabic": customer.VATNoInArabic,
-			},
-		)
-		if err != nil {
-			return nil
+			err = store.UpdateManyByCollectionName(
+				"account",
+				bson.M{
+					"name":   customerOld.Name,
+					"vat_no": customerOld.VATNo,
+				},
+				bson.M{
+					"vat_no":           customer.VATNo,
+					"vat_no_in_arabic": customer.VATNoInArabic,
+				},
+			)
+			if err != nil {
+				return nil
+			}
+		} else {
+			err = store.UpdateManyByCollectionName(
+				"account",
+				bson.M{"reference_id": customer.ID},
+				bson.M{
+					"vat_no": customer.VATNo,
+				},
+			)
+			if err != nil {
+				return nil
+			}
 		}
-
 	}
 
 	return nil
