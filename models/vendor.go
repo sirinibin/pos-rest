@@ -467,22 +467,55 @@ func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 			return nil
 		}
 
-		/*
-			usedInCollections := []string{
-				"purchase",
+		if vendorOld.VATNo != "" {
+			err = store.UpdateManyByCollectionName(
+				"customer",
+				bson.M{
+					"name":   vendorOld.Name,
+					"vat_no": vendorOld.VATNo,
+				},
+				bson.M{
+					"name":           vendor.Name,
+					"name_in_arabic": vendor.NameInArabic,
+				},
+			)
+			if err != nil {
+				return nil
 			}
+		}
+	}
 
-			for _, collectionName := range usedInCollections {
-				err := UpdateManyByCollectionName(
-					collectionName,
-					bson.M{"vendor_id": vendor.ID},
-					bson.M{"vendor_name": vendor.Name},
-				)
-				if err != nil {
-					return nil
-				}
-			}
-		*/
+	if vendor.VATNo != vendorOld.VATNo {
+		err = store.UpdateManyByCollectionName(
+			"customer",
+			bson.M{
+				"name":   vendorOld.Name,
+				"vat_no": vendorOld.VATNo,
+			},
+			bson.M{
+				"vat_no":           vendor.VATNo,
+				"vat_no_in_arabic": vendor.VATNoInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
+			"account",
+			bson.M{
+				"name":   vendorOld.Name,
+				"vat_no": vendorOld.VATNo,
+			},
+			bson.M{
+				"vat_no":           vendor.VATNo,
+				"vat_no_in_arabic": vendor.VATNoInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
 	}
 
 	return nil

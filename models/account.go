@@ -22,14 +22,14 @@ import (
 type Account struct {
 	ID                   primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
 	StoreID              *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	ReferenceID          *primitive.ObjectID `json:"reference_id,omitempty" bson:"reference_id,omitempty"`
-	ReferenceModel       *string             `bson:"reference_model,omitempty" json:"reference_model,omitempty"`
-	Type                 string              `bson:"type,omitempty" json:"type,omitempty"` //drawing,expense,asset,liability,equity,revenue
-	Number               string              `bson:"number,omitempty" json:"number,omitempty"`
-	Name                 string              `bson:"name,omitempty" json:"name,omitempty"`
-	NameArabic           string              `bson:"name_arabic,omitempty" json:"name_arabic,omitempty"`
-	Phone                *string             `bson:"phone,omitempty" json:"phone,omitempty"`
-	VatNo                *string             `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
+	ReferenceID          *primitive.ObjectID `json:"reference_id" bson:"reference_id"`
+	ReferenceModel       *string             `bson:"reference_model" json:"reference_model"`
+	Type                 string              `bson:"type" json:"type"` //drawing,expense,asset,liability,equity,revenue
+	Number               string              `bson:"number" json:"number"`
+	Name                 string              `bson:"name" json:"name"`
+	NameArabic           string              `bson:"name_arabic" json:"name_arabic"`
+	Phone                *string             `bson:"phone" json:"phone"`
+	VatNo                *string             `bson:"vat_no" json:"vat_no"`
 	Balance              float64             `bson:"balance" json:"balance"`
 	DebitOrCreditBalance string              `bson:"debit_or_credit_balance" json:"debit_or_credit_balance"`
 	DebitTotal           float64             `bson:"debit_total" json:"debit_total"`
