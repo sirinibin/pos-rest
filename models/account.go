@@ -615,12 +615,29 @@ func (store *Store) CreateAccountIfNotExists(
 	}
 	accountNumber := strconv.Itoa(startFrom + int(count))
 
+	nameArabic := ""
+
+	if referenceModel != nil && *referenceModel == "customer" && referenceID != nil {
+		customer, err := store.FindCustomerByID(referenceID, bson.M{"name_in_arabic": 1})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+		nameArabic = customer.NameInArabic
+	} else if referenceModel != nil && *referenceModel == "vendor" && referenceID != nil {
+		vendor, err := store.FindVendorByID(referenceID, bson.M{"name_in_arabic": 1})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+		nameArabic = vendor.NameInArabic
+	}
+
 	now := time.Now()
 	account = &Account{
 		StoreID:        storeID,
 		ReferenceID:    referenceID,
 		ReferenceModel: referenceModel,
 		Name:           name,
+		NameArabic:     nameArabic,
 		Number:         accountNumber,
 		Phone:          phone,
 		VatNo:          vatNo,
