@@ -221,10 +221,14 @@ func (store *Store) SaveCustomerImage(customerID *primitive.ObjectID, filename s
 }
 
 func (customer *Customer) GenerateSearchWords() {
-	cleanedWords := CleanString(customer.Code + "  " + customer.Name + "  " + customer.VATNo + "  " + customer.Phone)
+	cleanedWords := CleanString(customer.Name + "  " + customer.VATNo + "  " + customer.Phone)
 	cleanedWordsArabic := CleanString(customer.NameInArabic + "  " + customer.VATNoInArabic + "  " + customer.PhoneInArabic)
 
 	customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
+
+	cleanedWords = CleanString(customer.Code)
+
+	customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(cleanedWords)...)
 
 	additionalSearchTerms := customer.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
@@ -1640,7 +1644,7 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + keys[0] + "\""}
 		/*
 			criterias.SearchBy["$or"] = []bson.M{
 				{"name": bson.M{"$regex": keys[0], "$options": "i"}},

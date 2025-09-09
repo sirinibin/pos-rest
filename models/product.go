@@ -3588,6 +3588,15 @@ func generatePrefixesSuffixesSubstrings(input string) []string {
 		}
 	}
 
+	runes := []rune(input)
+	length := len(runes)
+
+	// Generate prefixes
+	for i := 1; i <= length; i++ {
+		prefix := string(runes[:i])
+		uniqueSet[prefix] = struct{}{}
+	}
+
 	// Convert map keys to slice, only include cleaned strings with at least 2 letters
 
 	var result []string
