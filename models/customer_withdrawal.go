@@ -1902,8 +1902,9 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 		})
 
 		if payment.Discount > 0 {
+			discountTime := payment.Date.Add(1 * time.Minute)
 			journals = append(journals, Journal{
-				Date:          payment.Date,
+				Date:          &discountTime,
 				AccountID:     cashDiscountReceivedAccount.ID,
 				AccountNumber: cashDiscountReceivedAccount.Number,
 				AccountName:   cashDiscountReceivedAccount.Name,
