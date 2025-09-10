@@ -227,10 +227,14 @@ func (store *Store) SaveVendorImage(vendorID *primitive.ObjectID, filename strin
 }
 
 func (vendor *Vendor) GenerateSearchWords() {
-	cleanedWords := CleanString(vendor.Code + "  " + vendor.Name + "  " + vendor.VATNo + "  " + vendor.Phone)
+	cleanedWords := CleanString(vendor.Name + "  " + vendor.VATNo + "  " + vendor.Phone)
 	cleanedWordsArabic := CleanString(vendor.NameInArabic + "  " + vendor.VATNoInArabic + "  " + vendor.PhoneInArabic)
 
 	vendor.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
+
+	cleanedWords = CleanString(vendor.Code)
+
+	vendor.SearchWords = append(vendor.SearchWords, generatePrefixesSuffixesSubstrings(cleanedWords)...)
 
 	additionalSearchTerms := vendor.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
