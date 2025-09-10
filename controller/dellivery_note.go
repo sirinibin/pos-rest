@@ -123,6 +123,14 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = deliverynote.UpdateForeignLabelFields()
+	if err != nil {
+		response.Status = false
+		response.Errors["foreign_fields"] = "Error updating foreign fields: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = deliverynote.Insert()
 	if err != nil {
 		redisErr := deliverynote.UnMakeRedisCode()
@@ -236,6 +244,14 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = deliverynote.UpdateForeignLabelFields()
+	if err != nil {
+		response.Status = false
+		response.Errors["foreign_fields"] = "Error updating foreign fields: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
