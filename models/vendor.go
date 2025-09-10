@@ -1098,7 +1098,8 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		//criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
+		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + keys[0] + "\""}
 		/*criterias.SearchBy["$or"] = []bson.M{
 			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
 			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
