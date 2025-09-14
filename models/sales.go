@@ -2479,6 +2479,25 @@ func (order *Order) UpdatePayments() error {
 			return err
 		}
 
+		err = payment.HardDelete()
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
+func (salesPayment *SalesPayment) HardDelete() error {
+	log.Print("Deleting sales payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesPayment.StoreID.Hex()).Collection("sales_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"_id": salesPayment.ID,
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
