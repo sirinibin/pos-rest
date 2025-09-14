@@ -334,6 +334,77 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 		if err != nil {
 			return err
 		}
+
+		if payment.ReferenceType == "sales" && payment.ReferenceID != nil {
+			err = payment.HardDeleteSalesPayment()
+			if err != nil {
+				return err
+			}
+
+			order, err := store.FindOrderByID(payment.ReferenceID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			_, err = order.SetPaymentStatus()
+			if err != nil {
+				return err
+			}
+
+			err = order.Update()
+			if err != nil {
+				return err
+			}
+
+			err = order.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = order.DoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = order.SetCustomerSalesStats()
+			if err != nil {
+				return err
+			}
+		}
+
+		err = payment.HardDelete()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (salesReturnPayment *SalesReturnPayment) HardDeleteSalesPayment() error {
+	log.Print("Deleting sales return payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesReturnPayment.StoreID.Hex()).Collection("sales_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"reference_type": "sales_return",
+		"reference_id":   salesReturnPayment.SalesReturnID,
+	})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	return nil
+}
+
+func (salesReturnPayment *SalesReturnPayment) HardDelete() error {
+	log.Print("Deleting sales payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesReturnPayment.StoreID.Hex()).Collection("sales_return_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"_id": salesReturnPayment.ID,
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -1698,7 +1769,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	}
 
 	if scenario == "update" {
-		if totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid)) {
+		if totalPayment > 0 && totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid)) {
 			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
 			return errs
 		}

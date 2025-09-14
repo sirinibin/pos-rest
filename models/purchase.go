@@ -437,6 +437,77 @@ func (model *Purchase) UpdatePayments() error {
 		if err != nil {
 			return err
 		}
+
+		if payment.ReferenceType == "sales" && payment.ReferenceID != nil {
+			err = payment.HardDeleteSalesPayment()
+			if err != nil {
+				return err
+			}
+
+			order, err := store.FindOrderByID(payment.ReferenceID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			_, err = order.SetPaymentStatus()
+			if err != nil {
+				return err
+			}
+
+			err = order.Update()
+			if err != nil {
+				return err
+			}
+
+			err = order.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = order.DoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = order.SetCustomerSalesStats()
+			if err != nil {
+				return err
+			}
+		}
+
+		err = payment.HardDelete()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (purchasePayment *PurchasePayment) HardDeleteSalesPayment() error {
+	log.Print("Deleting sales return payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + purchasePayment.StoreID.Hex()).Collection("sales_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"reference_type": "purchase",
+		"reference_id":   purchasePayment.PurchaseID,
+	})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	return nil
+}
+
+func (purchasePayment *PurchasePayment) HardDelete() error {
+	log.Print("Deleting sales payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + purchasePayment.StoreID.Hex()).Collection("purchase_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"_id": purchasePayment.ID,
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

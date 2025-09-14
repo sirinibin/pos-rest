@@ -1701,12 +1701,13 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return
 	}
 
-	if scenario == "update" {
-		if totalPayment < order.ReturnAmount {
-			errs["total_payment"] = "Total payment amount should not be less than, Total Returned Amount: " + fmt.Sprintf("%.02f", (order.ReturnAmount))
-			return
-		}
-	}
+	/*
+		if scenario == "update" {
+			if totalPayment < order.ReturnAmount {
+				errs["total_payment"] = "Total payment amount should not be less than, Total Returned Amount: " + fmt.Sprintf("%.02f", (order.ReturnAmount))
+				return
+			}
+		}*/
 
 	//validation
 	if customer != nil && customer.CreditLimit > 0 {
@@ -2479,11 +2480,115 @@ func (order *Order) UpdatePayments() error {
 			return err
 		}
 
+		if payment.ReferenceType == "sales_return" && payment.ReferenceID != nil {
+			err = payment.HardDeleteSalesReturnPayment()
+			if err != nil {
+				return err
+			}
+
+			salesReturn, err := store.FindSalesReturnByID(payment.ReferenceID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			_, err = salesReturn.SetPaymentStatus()
+			if err != nil {
+				return err
+			}
+
+			err = salesReturn.Update()
+			if err != nil {
+				return err
+			}
+
+			err = salesReturn.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = salesReturn.DoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = salesReturn.SetCustomerSalesReturnStats()
+			if err != nil {
+				return err
+			}
+		}
+
+		if payment.ReferenceType == "purchase" {
+			err = payment.HardDeletePurchasePayment()
+			if err != nil {
+				return err
+			}
+
+			purchase, err := store.FindPurchaseByID(payment.ReferenceID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			_, err = purchase.SetPaymentStatus()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.Update()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.UndoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.DoAccounting()
+			if err != nil {
+				return err
+			}
+
+			err = purchase.SetVendorPurchaseStats()
+			if err != nil {
+				return err
+			}
+		}
+
 		err = payment.HardDelete()
 		if err != nil {
 			return err
 		}
 
+	}
+
+	return nil
+}
+
+func (salesPayment *SalesPayment) HardDeleteSalesReturnPayment() error {
+	log.Print("Deleting sales return payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesPayment.StoreID.Hex()).Collection("sales_return_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"reference_type": "sales",
+		"reference_id":   salesPayment.OrderID,
+	})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	return nil
+}
+
+func (salesPayment *SalesPayment) HardDeletePurchasePayment() error {
+	log.Print("Deleting purchase payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesPayment.StoreID.Hex()).Collection("purchase_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"reference_type": "sales",
+		"reference_id":   salesPayment.OrderID,
+	})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
 	}
 
 	return nil
