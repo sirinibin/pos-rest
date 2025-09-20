@@ -776,8 +776,8 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
 		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
 		//criterias.Select = map[string]interface{}{}
 		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
@@ -3678,14 +3678,15 @@ func (product *Product) GetAdditionalSearchTerms() []string {
 }
 
 func (product *Product) GeneratePrefixes() {
-	cleanPrefixPartNumber := CleanString(product.PrefixPartNumber)
-	cleanPartNumber := CleanString(product.PartNumber)
-	cleanName := CleanString(product.Name)
+	cleanPrefixPartNumber := CleanString(strings.ToLower(product.PrefixPartNumber))
+	cleanPartNumber := CleanString(strings.ToLower(product.PartNumber))
+	cleanName := CleanString(strings.ToLower(product.Name))
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPartNumber)...)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber)...)
+	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber+"-"+cleanPartNumber)...)
 
 	additionalSearchTerms := product.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
