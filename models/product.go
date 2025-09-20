@@ -3690,19 +3690,19 @@ func (product *Product) GeneratePrefixes() {
 
 	additionalSearchTerms := product.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
-		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(term)...)
+		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(term))...)
 	}
 
 	if cleanName != "" {
-		product.NamePrefixes = append(product.NamePrefixes, string(cleanName[0]))
+		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanName[0])))
 	}
 
 	if cleanPrefixPartNumber != "" {
-		product.NamePrefixes = append(product.NamePrefixes, string(cleanPrefixPartNumber[0]))
+		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPrefixPartNumber[0])))
 	}
 
 	if cleanPartNumber != "" {
-		product.NamePrefixes = append(product.NamePrefixes, string(cleanPartNumber[0]))
+		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPartNumber[0])))
 	}
 
 	//product.NamePrefixes = RemoveDuplicateStrings(product.NamePrefixes)
