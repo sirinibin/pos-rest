@@ -3241,9 +3241,10 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" {
-			continue
-		}
+		/*
+			if store.Code != "MBDIT" && store.Code != "MBDI" {
+				continue
+			}*/
 
 		log.Print("Branch name:" + store.BranchName)
 
