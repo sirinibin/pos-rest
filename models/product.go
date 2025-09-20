@@ -675,7 +675,7 @@ func (store *Store) GetBarTenderProducts(r *http.Request) (products []BarTenderP
 
 func escapeTextSearchInput(input string) string {
 	// Replace hyphens with space to allow tokenization
-	input = strings.ReplaceAll(input, "-", " ")
+	//input = strings.ReplaceAll(input, "-", " ")
 	// Remove other punctuation (optional)
 	input = strings.ReplaceAll(input, `"`, "")
 	input = strings.ReplaceAll(input, `'`, "")
@@ -776,8 +776,9 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+		//log.Print("searchWord" + searchWord)
+		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
 		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
 		//criterias.Select = map[string]interface{}{}
 		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
@@ -3686,7 +3687,7 @@ func (product *Product) GeneratePrefixes() {
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPartNumber)...)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber)...)
-	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber+"-"+cleanPartNumber)...)
+	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber+"-"+cleanPartNumber+" "+cleanName)...)
 
 	additionalSearchTerms := product.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
