@@ -2155,15 +2155,15 @@ func (product *Product) SetAdditionalkeywords() {
 	re := regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
 	keywords := []string{}
 	if containsSpecialChars(product.PrefixPartNumber) {
-		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(product.PrefixPartNumber, "")))
+		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(strings.ToLower(product.PrefixPartNumber), "")))
 	}
 
 	if containsSpecialChars(product.PartNumber) {
-		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(product.PartNumber, "")))
+		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(strings.ToLower(product.PartNumber), "")))
 	}
 
 	if containsSpecialChars(product.Name) {
-		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(product.Name, "")))
+		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(strings.ToLower(product.Name), "")))
 	}
 
 	if containsSpecialChars(product.NameInArabic) {
