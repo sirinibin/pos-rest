@@ -3282,49 +3282,56 @@ func ProcessProducts() error {
 				continue
 			}
 
-			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
+			product.GeneratePrefixes()
+			product.SetSearchLabel(&store.ID)
+			product.SetAdditionalkeywords()
+			product.Update(&store.ID)
 
-			for _, destinationCode := range destinations {
-				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
-				if err != nil && err != mongo.ErrNoDocuments {
-					return err
-				}
+			/*
+				destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
 
-				if destinationStore != nil {
-					if product.BrandID != nil {
-						productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if productBrand != nil {
-							err = productBrand.CopyToStore(&destinationStore.ID)
-							if err != nil {
-								return err
-							}
-						}
-					}
-
-					if len(product.CategoryID) > 0 {
-						productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if productCategory != nil {
-							err = productCategory.CopyToStore(&destinationStore.ID)
-							if err != nil {
-								return err
-							}
-						}
-					}
-
-					err = product.CopyToStore(&destinationStore.ID)
-					if err != nil {
+				for _, destinationCode := range destinations {
+					destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+					if err != nil && err != mongo.ErrNoDocuments {
 						return err
 					}
+
+					if destinationStore != nil {
+						if product.BrandID != nil {
+							productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
+							if err != nil && err != mongo.ErrNoDocuments {
+								return err
+							}
+
+							if productBrand != nil {
+								err = productBrand.CopyToStore(&destinationStore.ID)
+								if err != nil {
+									return err
+								}
+							}
+						}
+
+						if len(product.CategoryID) > 0 {
+							productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
+							if err != nil && err != mongo.ErrNoDocuments {
+								return err
+							}
+
+							if productCategory != nil {
+								err = productCategory.CopyToStore(&destinationStore.ID)
+								if err != nil {
+									return err
+								}
+							}
+						}
+
+						err = product.CopyToStore(&destinationStore.ID)
+						if err != nil {
+							return err
+						}
+					}
 				}
-			}
+			*/
 
 			/*
 				product.SetStock()
@@ -3423,67 +3430,57 @@ func ProcessProducts() error {
 			*/
 
 			/*
-				product.GeneratePrefixes()
-				product.SetSearchLabel(&store.ID)
-				product.SetAdditionalkeywords()
-				err = product.Update(&store.ID)
-				if err != nil {
-					log.Print("Store ID:" + store.ID.Hex())
-					log.Print("Part No.:" + product.PartNumber)
-					log.Print("Product ID:" + product.ID.Hex())
-					continue
-					//return err
-				}*/
 
-			/*
-				if !isValidUTF8(product.Name) {
-					log.Print("Name:" + product.Name)
-					log.Print(product.Name)
-					log.Print(product.ID)
-					log.Print(product.PartNumber)
-					log.Print("Invalid UTF-8 detected in product name")
-					//log.Fatal("Invalid UTF-8 detected in product name")
-				}
 
-				if !isValidUTF8(product.NameInArabic) {
-					log.Print("Name in Arabic:" + product.NameInArabic)
-					log.Print(product.NameInArabic)
-					log.Print(product.ID)
-					log.Print(product.PartNumber)
-					log.Print("Invalid UTF-8 detected in product arabic name")
-					//log.Fatal("Invalid UTF-8 detected in product name")
-				}
-				//log.Print(product.NamePrefixes)
-				//log.Print(product.NameInArabicPrefixes)
-
-				for _, word := range product.NamePrefixes {
-					if word == "" {
-						log.Fatal("Empty prefix found")
-					}
-
-					if !isValidUTF8(word) {
-						log.Print("Word:" + word)
+				/*
+					if !isValidUTF8(product.Name) {
+						log.Print("Name:" + product.Name)
 						log.Print(product.Name)
 						log.Print(product.ID)
 						log.Print(product.PartNumber)
 						log.Print("Invalid UTF-8 detected in product name")
 						//log.Fatal("Invalid UTF-8 detected in product name")
 					}
-				}
 
-				for _, word := range product.NameInArabicPrefixes {
-					if word == "" {
-						log.Fatal("Empty prefix found")
-					}
-
-					if !isValidUTF8(word) {
-						log.Print("Word:" + word)
-						log.Print(product.Name)
+					if !isValidUTF8(product.NameInArabic) {
+						log.Print("Name in Arabic:" + product.NameInArabic)
+						log.Print(product.NameInArabic)
 						log.Print(product.ID)
-						log.Print("Invalid UTF-8 detected in product name in arabic")
-						//log.Fatal("Invalid UTF-8 detected in product name in arabic")
+						log.Print(product.PartNumber)
+						log.Print("Invalid UTF-8 detected in product arabic name")
+						//log.Fatal("Invalid UTF-8 detected in product name")
 					}
-				}*/
+					//log.Print(product.NamePrefixes)
+					//log.Print(product.NameInArabicPrefixes)
+
+					for _, word := range product.NamePrefixes {
+						if word == "" {
+							log.Fatal("Empty prefix found")
+						}
+
+						if !isValidUTF8(word) {
+							log.Print("Word:" + word)
+							log.Print(product.Name)
+							log.Print(product.ID)
+							log.Print(product.PartNumber)
+							log.Print("Invalid UTF-8 detected in product name")
+							//log.Fatal("Invalid UTF-8 detected in product name")
+						}
+					}
+
+					for _, word := range product.NameInArabicPrefixes {
+						if word == "" {
+							log.Fatal("Empty prefix found")
+						}
+
+						if !isValidUTF8(word) {
+							log.Print("Word:" + word)
+							log.Print(product.Name)
+							log.Print(product.ID)
+							log.Print("Invalid UTF-8 detected in product name in arabic")
+							//log.Fatal("Invalid UTF-8 detected in product name in arabic")
+						}
+					}*/
 			//}
 
 			//product.TrimSpaceFromFields()
