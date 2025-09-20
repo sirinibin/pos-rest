@@ -221,7 +221,7 @@ func (store *Store) SaveCustomerImage(customerID *primitive.ObjectID, filename s
 }
 
 func (customer *Customer) GenerateSearchWords() {
-	cleanedWords := CleanString(customer.Name + "  " + customer.VATNo + "  " + customer.Phone)
+	cleanedWords := CleanString(strings.ToLower(customer.Name + "  " + customer.VATNo + "  " + customer.Phone))
 	cleanedWordsArabic := CleanString(customer.NameInArabic + "  " + customer.VATNoInArabic + "  " + customer.PhoneInArabic)
 
 	customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
@@ -236,11 +236,11 @@ func (customer *Customer) GenerateSearchWords() {
 	}
 
 	if customer.Code != "" {
-		customer.SearchWords = append(customer.SearchWords, string(customer.Code[0]))
+		customer.SearchWords = append(customer.SearchWords, strings.ToLower(string(customer.Code[0])))
 	}
 
 	if !govalidator.IsNull(customer.Name) {
-		customer.SearchWords = append(customer.SearchWords, string(customer.Name[0]))
+		customer.SearchWords = append(customer.SearchWords, strings.ToLower(string(customer.Name[0])))
 	}
 
 	if !govalidator.IsNull(customer.VATNo) {
@@ -261,16 +261,16 @@ func (customer *Customer) GetAdditionalSearchTerms() []string {
 	searchTerm := []string{}
 
 	if containsSpecialChars(customer.Name) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(customer.Name, ""))
+		searchTerm = append(searchTerm, re.ReplaceAllString(strings.ToLower(customer.Name), ""))
 
 	}
 	if containsSpecialChars(customer.Code) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(customer.Code, ""))
+		searchTerm = append(searchTerm, re.ReplaceAllString(strings.ToLower(customer.Code), ""))
 
 	}
 
 	if customer.CountryName != "" {
-		searchTerm = append(searchTerm, re.ReplaceAllString(customer.CountryName, ""))
+		searchTerm = append(searchTerm, re.ReplaceAllString(strings.ToLower(customer.CountryName), ""))
 	}
 
 	return searchTerm
@@ -1644,7 +1644,9 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + keys[0] + "\""}
+		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + keys[0] + "\""}
+		searchWord := strings.ToLower(keys[0])
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		/*
 			criterias.SearchBy["$or"] = []bson.M{
 				{"name": bson.M{"$regex": keys[0], "$options": "i"}},
