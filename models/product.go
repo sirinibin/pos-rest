@@ -3807,17 +3807,21 @@ func GenerateSearchTokens(input string) []string {
 
 	// Add full phrase
 	tokenSet[clean] = struct{}{}
+	var sepReplacer = regexp.MustCompile(`[-./\[\]*",()_+#|\\]`)
 
+	newWords := words
 	// Add single words
 	for _, w := range words {
 		tokenSet[w] = struct{}{}
 		// Add hyphen-joined phrase if input contains hyphens
-		for _, sep := range []string{"-", ".", "/", "[", "]", "*", "\"", ",", "(", ")", "_", "+", "#", "|", "\\"} {
-			if strings.Contains(w, sep) {
-				tokenSet[strings.ReplaceAll(w, sep, " ")] = struct{}{}
-			}
+		normalized := sepReplacer.ReplaceAllString(w, " ")
+		if normalized != w {
+			tokenSet[normalized] = struct{}{}
+			newWords = append(newWords, strings.Fields(normalized)...)
 		}
 	}
+
+	words = newWords
 
 	// Add all consecutive n-grams (2 to len(words))
 	for n := 2; n <= len(words); n++ {
