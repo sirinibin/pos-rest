@@ -221,10 +221,22 @@ func (store *Store) SaveCustomerImage(customerID *primitive.ObjectID, filename s
 }
 
 func (customer *Customer) GenerateSearchWords() {
-	cleanedWords := CleanString(strings.ToLower(customer.Name + "  " + customer.VATNo + "  " + customer.Phone))
-	cleanedWordsArabic := CleanString(customer.NameInArabic + "  " + customer.VATNoInArabic + "  " + customer.PhoneInArabic)
+	//cleanedWords := CleanString(strings.ToLower(customer.Name + "  " + customer.VATNo + "  " + customer.Phone))
+	//cleanedWordsArabic := CleanString(customer.NameInArabic + "  " + customer.VATNoInArabic + "  " + customer.PhoneInArabic)
 
-	customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
+	customer.SearchWords = GenerateSearchTokens(strings.ToLower(customer.Name))
+	if customer.Name != "" {
+		customer.SearchWords = append(customer.SearchWords, strings.ToLower(string(customer.Name[0])))
+	}
+	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.Code))...)
+	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.VATNo))...)
+	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.Phone))...)
+
+	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.NameInArabic))...)
+	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.VATNoInArabic))...)
+	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.PhoneInArabic))...)
+
+	//customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
 
 	/*
 		allCombinations := GetAllWordCombinations(customer.Name)
@@ -232,33 +244,17 @@ func (customer *Customer) GenerateSearchWords() {
 			customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
 		}*/
 
-	cleanedWords = CleanString(customer.Code)
+	//cleanedWords = CleanString(customer.Code)
 
-	customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(cleanedWords)...)
+	//customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(cleanedWords)...)
 
 	additionalSearchTerms := customer.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
-		customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(term)...)
+		customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(term)...)
 	}
 
-	if customer.Code != "" {
-		customer.SearchWords = append(customer.SearchWords, strings.ToLower(string(customer.Code[0])))
-	}
-
-	if !govalidator.IsNull(customer.Name) {
-		customer.SearchWords = append(customer.SearchWords, strings.ToLower(string(customer.Name[0])))
-	}
-
-	if !govalidator.IsNull(customer.VATNo) {
-		customer.SearchWords = append(customer.SearchWords, string(customer.VATNo[0]))
-	}
-
-	if !govalidator.IsNull(customer.Phone) {
-		customer.SearchWords = append(customer.SearchWords, string(customer.Phone[0]))
-	}
-
-	if cleanedWordsArabic != "" {
-		customer.SearchWordsInArabic = generatePrefixesSuffixesSubstrings(cleanedWordsArabic)
+	if customer.NameInArabic != "" {
+		customer.SearchWordsInArabic = GenerateSearchTokens(customer.NameInArabic)
 	}
 }
 

@@ -3822,10 +3822,9 @@ func (product *Product) GeneratePrefixes() {
 		product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(term))...)
 	}
 
-	/*
-		if cleanName != "" {
-			product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanName[0])))
-		}*/
+	if product.Name != "" {
+		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(product.Name[0])))
+	}
 
 	/*
 		if cleanPrefixPartNumber != "" {
