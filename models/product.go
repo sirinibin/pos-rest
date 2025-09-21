@@ -3557,37 +3557,38 @@ func removeInvalidChars(input string) string {
 
 func generatePrefixesSuffixesSubstrings(input string) []string {
 	uniqueSet := make(map[string]struct{})
-	words := strings.Fields(input)
+	/*
+		words := strings.Fields(input)
 
-	for _, word := range words {
-		word = CleanString(removeSpecialCharacter(word))
-		if word == "" {
-			continue
-		}
-
-		runes := []rune(word)
-		length := len(runes)
-
-		// Generate prefixes
-		for i := 1; i <= length; i++ {
-			prefix := string(runes[:i])
-			uniqueSet[prefix] = struct{}{}
-		}
-
-		// Generate suffixes
-		for i := 0; i < length; i++ {
-			suffix := string(runes[i:])
-			uniqueSet[suffix] = struct{}{}
-		}
-
-		// Generate all substrings
-		for start := 0; start < length; start++ {
-			for end := start + 1; end <= length; end++ {
-				substring := string(runes[start:end])
-				uniqueSet[substring] = struct{}{}
+		for _, word := range words {
+			word = CleanString(removeSpecialCharacter(word))
+			if word == "" {
+				continue
 			}
-		}
-	}
+
+			runes := []rune(word)
+			length := len(runes)
+
+			// Generate prefixes
+			for i := 1; i <= length; i++ {
+				prefix := string(runes[:i])
+				uniqueSet[prefix] = struct{}{}
+			}
+
+			// Generate suffixes
+			for i := 0; i < length; i++ {
+				suffix := string(runes[i:])
+				uniqueSet[suffix] = struct{}{}
+			}
+
+			// Generate all substrings
+			for start := 0; start < length; start++ {
+				for end := start + 1; end <= length; end++ {
+					substring := string(runes[start:end])
+					uniqueSet[substring] = struct{}{}
+				}
+			}
+		}*/
 
 	runes := []rune(input)
 	length := len(runes)
@@ -3738,11 +3739,10 @@ func (product *Product) GeneratePrefixes() {
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
 
-	/*
-		allCombinations := GetAllWordCombinations(cleanName)
-		for _, combination := range allCombinations {
-			product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
-		}*/
+	allCombinations := GetAllWordCombinations(cleanName)
+	for _, combination := range allCombinations {
+		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
+	}
 
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPartNumber)...)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber)...)
