@@ -3286,10 +3286,30 @@ func ProcessProducts() error {
 				continue
 			}
 
+			//log.Print("Part No.:" + product.PartNumber)
+			//log.Print("Product Name:" + product.Name)
+
 			product.GeneratePrefixes()
+			//log.Print("GNERATED PREFIXES")
 			product.SetSearchLabel(&store.ID)
+			//log.Print("Search label set")
 			product.SetAdditionalkeywords()
-			product.Update(&store.ID)
+			//log.Print("Additional keywords set")
+			err = product.Update(&store.ID)
+			if err != nil {
+				/*
+					log.Print("SKIPPING:")
+					log.Print("Store ID:" + store.ID.Hex())
+					log.Print("Part No.:" + product.PartNumber)
+					log.Print("Product Name:" + product.Name)
+					log.Print("err:" + err.Error())
+				*/
+				continue
+			}
+			/*log.Print("Updated")
+
+			log.Print("Part No.:" + product.PartNumber)
+			log.Print("Product Name:" + product.Name)*/
 
 			/*
 				destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
@@ -3643,7 +3663,7 @@ func containsSpecialChars(s string) bool {
 func (product *Product) GetAdditionalSearchTerms() []string {
 	searchTerm := []string{}
 
-	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	//re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	/*	searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
 		if product.PrefixPartNumber != "" {
 			searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
@@ -3652,21 +3672,22 @@ func (product *Product) GetAdditionalSearchTerms() []string {
 		searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
 	*/
 
-	if containsSpecialChars(product.Name) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
-	}
+	/*
+		if containsSpecialChars(product.Name) {
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.Name, ""))
+		}
 
-	if containsSpecialChars(product.NameInArabic) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(product.NameInArabic, ""))
-	}
+		if containsSpecialChars(product.NameInArabic) {
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.NameInArabic, ""))
+		}
 
-	if containsSpecialChars(product.PrefixPartNumber) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
-	}
+		if containsSpecialChars(product.PrefixPartNumber) {
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber, ""))
+		}
 
-	if containsSpecialChars(product.PartNumber) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
-	}
+		if containsSpecialChars(product.PartNumber) {
+			searchTerm = append(searchTerm, re.ReplaceAllString(product.PartNumber, ""))
+		}*/
 
 	/*if containsSpecialChars(product.PrefixPartNumber + product.PartNumber) {
 		searchTerm = append(searchTerm, re.ReplaceAllString(product.PrefixPartNumber+product.PartNumber, ""))
@@ -3689,38 +3710,40 @@ func (product *Product) GetAdditionalSearchTerms() []string {
 
 // Returns all unique word combinations (not just pairs) from a sentence,
 // excluding prefixes, suffixes, and consecutive n-grams.
+// Limits max combination length to avoid timeouts.
 func GetAllWordCombinations(sentence string) []string {
 	words := strings.Fields(sentence)
-	result := make(map[string]struct{})
 	n := len(words)
+	maxLen := 4 // Change this to increase/decrease max combination length
 
-	// For each word, generate all combinations with other words (order preserved, not just consecutive)
+	result := make(map[string]struct{})
+
+	// For each start word
 	for i := 0; i < n; i++ {
-		// For each possible combination length (2 to n)
-		for l := 2; l <= n; l++ {
-			// Collect all combinations of length l that include words[i]
-			indices := make([]int, n)
-			for k := range indices {
-				indices[k] = k
-			}
-			comb := make([]string, 0, l)
-			comb = append(comb, words[i])
-			// Generate combinations by picking l-1 other words (not i)
-			var helper func(start, left int, current []string)
-			helper = func(start, left int, current []string) {
-				if left == 0 {
-					phrase := strings.Join(current, " ")
+		// For each possible combination length (2 to maxLen)
+		for l := 2; l <= maxLen && l <= n; l++ {
+			// Use a slice to hold indices of the combination
+			indices := make([]int, l)
+			indices[0] = i
+			// Generate combinations by picking l-1 other words after i
+			var helper func(pos, start int)
+			helper = func(pos, start int) {
+				if pos == l {
+					// Build phrase from indices
+					phrase := ""
+					for _, idx := range indices {
+						phrase += words[idx] + " "
+					}
+					phrase = strings.TrimSpace(phrase)
 					result[phrase] = struct{}{}
 					return
 				}
 				for j := start; j < n; j++ {
-					if j == i {
-						continue
-					}
-					helper(j+1, left-1, append(current, words[j]))
+					indices[pos] = j
+					helper(pos+1, j+1)
 				}
 			}
-			helper(0, l-1, comb)
+			helper(1, i+1)
 		}
 	}
 
@@ -3732,27 +3755,69 @@ func GetAllWordCombinations(sentence string) []string {
 	return out
 }
 
+func GenerateSearchTokens(input string) []string {
+	// Clean and split input
+	clean := strings.ToLower(CleanStringPreserveSpace(input))
+	words := strings.Fields(clean)
+	tokenSet := make(map[string]struct{})
+
+	// Add single words
+	for _, w := range words {
+		tokenSet[w] = struct{}{}
+	}
+
+	// Add all unique word pairs (unordered)
+	for i := 0; i < len(words); i++ {
+		for j := 0; j < len(words); j++ {
+			if i != j {
+				tokenSet[words[i]+" "+words[j]] = struct{}{}
+			}
+		}
+	}
+
+	// Add cleaned substrings (optional, for more partial matches)
+	for _, w := range words {
+		runes := []rune(w)
+		for start := 0; start < len(runes); start++ {
+			for end := start + 2; end <= len(runes); end++ {
+				sub := string(runes[start:end])
+				tokenSet[sub] = struct{}{}
+			}
+		}
+	}
+
+	// Convert set to slice
+	tokens := make([]string, 0, len(tokenSet))
+	for t := range tokenSet {
+		tokens = append(tokens, t)
+	}
+	return tokens
+}
+
 func (product *Product) GeneratePrefixes() {
 	cleanPrefixPartNumber := CleanString(strings.ToLower(product.PrefixPartNumber))
 	cleanPartNumber := CleanString(strings.ToLower(product.PartNumber))
 	cleanName := CleanString(strings.ToLower(product.Name))
 	cleanNameArabic := CleanString(product.NameInArabic)
 
-	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
+	//product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
 
+	product.NamePrefixes = GenerateSearchTokens(cleanName)
+
+	//product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanName)...)
 	/*
 		allCombinations := GetAllWordCombinations(cleanName)
 		for _, combination := range allCombinations {
 			product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
 		}*/
 
-	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPartNumber)...)
-	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber)...)
-	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber+"-"+cleanPartNumber+" "+cleanName)...)
+	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanPartNumber)...)
+	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanPrefixPartNumber)...)
+	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanPrefixPartNumber+"-"+cleanPartNumber)...)
 
 	additionalSearchTerms := product.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
-		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(term))...)
+		product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(term))...)
 	}
 
 	if cleanName != "" {
@@ -3770,7 +3835,7 @@ func (product *Product) GeneratePrefixes() {
 	//product.NamePrefixes = RemoveDuplicateStrings(product.NamePrefixes)
 
 	if cleanNameArabic != "" {
-		product.NameInArabicPrefixes = generatePrefixesSuffixesSubstrings(cleanNameArabic)
+		product.NameInArabicPrefixes = GenerateSearchTokens(cleanNameArabic)
 	}
 }
 
