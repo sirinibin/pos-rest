@@ -2184,7 +2184,9 @@ func CleanStringPreserveSpace(s string) string {
 	prevSpace := false
 
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) ||
+			r == '-' || r == '"' || r == '/' || r == '\\' ||
+			r == '[' || r == ']' || r == '(' || r == ')' {
 			b.WriteRune(r)
 			prevSpace = false
 		} else if unicode.IsSpace(r) {
@@ -3795,14 +3797,14 @@ func GenerateSearchTokens(input string) []string {
 }
 
 func (product *Product) GeneratePrefixes() {
-	cleanPrefixPartNumber := CleanString(strings.ToLower(product.PrefixPartNumber))
-	cleanPartNumber := CleanString(strings.ToLower(product.PartNumber))
-	cleanName := CleanString(strings.ToLower(product.Name))
-	cleanNameArabic := CleanString(product.NameInArabic)
+	//cleanPrefixPartNumber := CleanString(strings.ToLower(product.PrefixPartNumber))
+	//cleanPartNumber := CleanString(strings.ToLower(product.PartNumber))
+	//cleanName := CleanString(strings.ToLower(product.Name))
+	//cleanNameArabic := CleanString(product.NameInArabic)
 
 	//product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
 
-	product.NamePrefixes = GenerateSearchTokens(cleanName)
+	product.NamePrefixes = GenerateSearchTokens(strings.ToLower(product.Name))
 
 	//product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanName)...)
 	/*
@@ -3811,31 +3813,33 @@ func (product *Product) GeneratePrefixes() {
 			product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
 		}*/
 
-	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanPartNumber)...)
-	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanPrefixPartNumber)...)
-	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanPrefixPartNumber+"-"+cleanPartNumber)...)
+	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(product.PartNumber))...)
+	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(product.PrefixPartNumber))...)
+	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(product.PrefixPartNumber+"-"+product.PartNumber))...)
 
 	additionalSearchTerms := product.GetAdditionalSearchTerms()
 	for _, term := range additionalSearchTerms {
 		product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(term))...)
 	}
 
-	if cleanName != "" {
-		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanName[0])))
-	}
+	/*
+		if cleanName != "" {
+			product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanName[0])))
+		}*/
 
-	if cleanPrefixPartNumber != "" {
-		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPrefixPartNumber[0])))
-	}
+	/*
+		if cleanPrefixPartNumber != "" {
+			product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPrefixPartNumber[0])))
+		}
 
-	if cleanPartNumber != "" {
-		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPartNumber[0])))
-	}
+		if cleanPartNumber != "" {
+			product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPartNumber[0])))
+		}*/
 
 	//product.NamePrefixes = RemoveDuplicateStrings(product.NamePrefixes)
 
-	if cleanNameArabic != "" {
-		product.NameInArabicPrefixes = GenerateSearchTokens(cleanNameArabic)
+	if product.NameInArabic != "" {
+		product.NameInArabicPrefixes = GenerateSearchTokens(product.NameInArabic)
 	}
 }
 
