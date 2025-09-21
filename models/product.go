@@ -3600,10 +3600,11 @@ func generatePrefixesSuffixesSubstrings(input string) []string {
 	}
 
 	// Generate suffixes
-	for i := 1; i <= length; i++ {
-		suffix := string(runes[i-1:])
-		uniqueSet[suffix] = struct{}{}
-	}
+	/*
+		for i := 1; i <= length; i++ {
+			suffix := string(runes[i-1:])
+			uniqueSet[suffix] = struct{}{}
+		}*/
 
 	// Convert map keys to slice, only include cleaned strings with at least 2 letters
 
