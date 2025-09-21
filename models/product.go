@@ -2186,7 +2186,7 @@ func CleanStringPreserveSpace(s string) string {
 	for _, r := range s {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) ||
 			r == '-' || r == '"' || r == '/' || r == '\\' ||
-			r == '[' || r == ']' || r == '(' || r == ')' {
+			r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == ',' {
 			b.WriteRune(r)
 			prevSpace = false
 		} else if unicode.IsSpace(r) {
