@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -755,10 +756,11 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	}
 
 	textSearching := false
+	searchWord := ""
 	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
-		searchWord := strings.ToLower(keys[0])
+		searchWord = strings.ToLower(keys[0])
 		//searchWord = escapeTextSearchInput(searchWord)
 		//log.Print("|" + searchWord + "|")
 
@@ -2148,6 +2150,8 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		products = append(products, product)
 	} //end for loop
+
+	//If search input is given then rank the products based on search input
 
 	return products, criterias, nil
 
@@ -3757,15 +3761,64 @@ func GetAllWordCombinations(sentence string) []string {
 	return out
 }
 
+func RankProductsBySearchTokens(products []Product, searchTokens []string) []Product {
+	type rankedProduct struct {
+		Product Product
+		Score   int
+	}
+
+	var ranked []rankedProduct
+	tokenSet := make(map[string]struct{})
+	for _, t := range searchTokens {
+		tokenSet[t] = struct{}{}
+	}
+
+	for _, p := range products {
+		score := 0
+		for _, token := range p.NamePrefixes {
+			if _, ok := tokenSet[token]; ok {
+				score++
+			}
+		}
+		// Boost for exact phrase match
+		if _, ok := tokenSet[strings.ToLower(p.Name)]; ok {
+			score += 5
+		}
+		ranked = append(ranked, rankedProduct{Product: p, Score: score})
+	}
+
+	// Sort by score descending
+	sort.Slice(ranked, func(i, j int) bool {
+		return ranked[i].Score > ranked[j].Score
+	})
+
+	// Extract sorted products
+	sortedProducts := make([]Product, len(ranked))
+	for i, rp := range ranked {
+		sortedProducts[i] = rp.Product
+	}
+	return sortedProducts
+}
+
 func GenerateSearchTokens(input string) []string {
-	// Clean and split input
 	clean := strings.ToLower(CleanStringPreserveSpace(input))
 	words := strings.Fields(clean)
 	tokenSet := make(map[string]struct{})
 
+	// Add full phrase
+	tokenSet[clean] = struct{}{}
+
 	// Add single words
 	for _, w := range words {
 		tokenSet[w] = struct{}{}
+	}
+
+	// Add all consecutive n-grams (2 to len(words))
+	for n := 2; n <= len(words); n++ {
+		for i := 0; i <= len(words)-n; i++ {
+			ngram := strings.Join(words[i:i+n], " ")
+			tokenSet[ngram] = struct{}{}
+		}
 	}
 
 	// Add all unique word pairs (unordered)
@@ -3777,7 +3830,7 @@ func GenerateSearchTokens(input string) []string {
 		}
 	}
 
-	// Add cleaned substrings (optional, for more partial matches)
+	// Add cleaned substrings (length ≥ 2)
 	for _, w := range words {
 		runes := []rune(w)
 		for start := 0; start < len(runes); start++ {
