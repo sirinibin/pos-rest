@@ -762,19 +762,19 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = escapeTextSearchInput(searchWord)
 		//log.Print("|" + searchWord + "|")
 
-		searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
+		/*searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
 		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
 		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
 		searchWord = strings.Replace(searchWord, "{", `\{`, -1)
-		searchWord = strings.Replace(searchWord, "}", `\}`, -1)
-		searchWord = strings.Replace(searchWord, "[", `\[`, -1)
-		searchWord = strings.Replace(searchWord, "]", `\]`, -1)
-		searchWord = strings.Replace(searchWord, `*`, `\*`, -1)
+		searchWord = strings.Replace(searchWord, "}", `\}`, -1)*/
+		//searchWord = strings.Replace(searchWord, "[", `\[`, -1)
+		//searchWord = strings.Replace(searchWord, "]", `\]`, -1)
+		/*searchWord = strings.Replace(searchWord, `*`, `\*`, -1)
 
 		searchWord = strings.Replace(searchWord, "_", `\_`, -1)
 		searchWord = strings.Replace(searchWord, "+", `\\+`, -1)
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
-		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
+		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)*/
 
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		//log.Print("searchWord" + searchWord)
@@ -2186,7 +2186,7 @@ func CleanStringPreserveSpace(s string) string {
 	for _, r := range s {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) ||
 			r == '-' || r == '"' || r == '/' || r == '\\' ||
-			r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == ',' {
+			r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == ',' || r == '*' || r == '+' || r == '#' || r == '_' || r == '|' {
 			b.WriteRune(r)
 			prevSpace = false
 		} else if unicode.IsSpace(r) {
