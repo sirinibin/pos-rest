@@ -677,9 +677,9 @@ func escapeTextSearchInput(input string) string {
 	// Replace hyphens with space to allow tokenization
 	//input = strings.ReplaceAll(input, "-", " ")
 	// Remove other punctuation (optional)
-	input = strings.ReplaceAll(input, `"`, "")
-	input = strings.ReplaceAll(input, `'`, "")
-	input = strings.ReplaceAll(input, "\\", "")
+	//input = strings.ReplaceAll(input, `"`, "")
+	//input = strings.ReplaceAll(input, `'`, "")
+	//input = strings.ReplaceAll(input, "\\", "")
 	// Trim extra spaces
 	input = strings.Join(strings.Fields(input), " ")
 	return input
@@ -776,9 +776,10 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
 		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
 
-		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		//log.Print("searchWord" + searchWord)
-		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+
 		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
 		//criterias.Select = map[string]interface{}{}
 		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
@@ -3597,6 +3598,12 @@ func generatePrefixesSuffixesSubstrings(input string) []string {
 		uniqueSet[prefix] = struct{}{}
 	}
 
+	// Generate suffixes
+	for i := 1; i <= length; i++ {
+		suffix := string(runes[i-1:])
+		uniqueSet[suffix] = struct{}{}
+	}
+
 	// Convert map keys to slice, only include cleaned strings with at least 2 letters
 
 	var result []string
@@ -3678,6 +3685,51 @@ func (product *Product) GetAdditionalSearchTerms() []string {
 	return searchTerm
 }
 
+// Returns all unique word combinations (not just pairs) from a sentence,
+// excluding prefixes, suffixes, and consecutive n-grams.
+func GetAllWordCombinations(sentence string) []string {
+	words := strings.Fields(sentence)
+	result := make(map[string]struct{})
+	n := len(words)
+
+	// For each word, generate all combinations with other words (order preserved, not just consecutive)
+	for i := 0; i < n; i++ {
+		// For each possible combination length (2 to n)
+		for l := 2; l <= n; l++ {
+			// Collect all combinations of length l that include words[i]
+			indices := make([]int, n)
+			for k := range indices {
+				indices[k] = k
+			}
+			comb := make([]string, 0, l)
+			comb = append(comb, words[i])
+			// Generate combinations by picking l-1 other words (not i)
+			var helper func(start, left int, current []string)
+			helper = func(start, left int, current []string) {
+				if left == 0 {
+					phrase := strings.Join(current, " ")
+					result[phrase] = struct{}{}
+					return
+				}
+				for j := start; j < n; j++ {
+					if j == i {
+						continue
+					}
+					helper(j+1, left-1, append(current, words[j]))
+				}
+			}
+			helper(0, l-1, comb)
+		}
+	}
+
+	// Convert map to slice
+	out := make([]string, 0, len(result))
+	for k := range result {
+		out = append(out, k)
+	}
+	return out
+}
+
 func (product *Product) GeneratePrefixes() {
 	cleanPrefixPartNumber := CleanString(strings.ToLower(product.PrefixPartNumber))
 	cleanPartNumber := CleanString(strings.ToLower(product.PartNumber))
@@ -3685,6 +3737,12 @@ func (product *Product) GeneratePrefixes() {
 	cleanNameArabic := CleanString(product.NameInArabic)
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
+
+	allCombinations := GetAllWordCombinations(cleanName)
+	for _, combination := range allCombinations {
+		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
+	}
+
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPartNumber)...)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber)...)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber+"-"+cleanPartNumber+" "+cleanName)...)
