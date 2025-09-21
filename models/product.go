@@ -3557,8 +3557,7 @@ func removeInvalidChars(input string) string {
 
 func generatePrefixesSuffixesSubstrings(input string) []string {
 	uniqueSet := make(map[string]struct{})
-	/*words := strings.Fields(input)
-
+	words := strings.Fields(input)
 
 	for _, word := range words {
 		word = CleanString(removeSpecialCharacter(word))
@@ -3588,7 +3587,7 @@ func generatePrefixesSuffixesSubstrings(input string) []string {
 				uniqueSet[substring] = struct{}{}
 			}
 		}
-	}*/
+	}
 
 	runes := []rune(input)
 	length := len(runes)
