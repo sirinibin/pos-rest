@@ -3811,6 +3811,12 @@ func GenerateSearchTokens(input string) []string {
 	// Add single words
 	for _, w := range words {
 		tokenSet[w] = struct{}{}
+		// Add hyphen-joined phrase if input contains hyphens
+		for _, sep := range []string{"-", ".", "/", "[", "]", "*", "\"", ",", "(", ")", "_", "+", "#", "|", "\\"} {
+			if strings.Contains(w, sep) {
+				tokenSet[strings.ReplaceAll(w, sep, " ")] = struct{}{}
+			}
+		}
 	}
 
 	// Add all consecutive n-grams (2 to len(words))
