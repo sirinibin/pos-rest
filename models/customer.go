@@ -226,10 +226,11 @@ func (customer *Customer) GenerateSearchWords() {
 
 	customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
 
-	allCombinations := GetAllWordCombinations(customer.Name)
-	for _, combination := range allCombinations {
-		customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
-	}
+	/*
+		allCombinations := GetAllWordCombinations(customer.Name)
+		for _, combination := range allCombinations {
+			customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
+		}*/
 
 	cleanedWords = CleanString(customer.Code)
 

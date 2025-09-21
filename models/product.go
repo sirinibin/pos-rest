@@ -3739,10 +3739,11 @@ func (product *Product) GeneratePrefixes() {
 
 	product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
 
-	allCombinations := GetAllWordCombinations(cleanName)
-	for _, combination := range allCombinations {
-		product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
-	}
+	/*
+		allCombinations := GetAllWordCombinations(cleanName)
+		for _, combination := range allCombinations {
+			product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
+		}*/
 
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPartNumber)...)
 	product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(cleanPrefixPartNumber)...)
