@@ -3835,67 +3835,63 @@ func GenerateSearchTokens(input string) []string {
 		}
 	}
 
-	/*
-		// Add all unique word pairs (unordered)
-		for i := 0; i < len(words); i++ {
-			for j := 0; j < len(words); j++ {
-				if i != j {
-					tokenSet[words[i]+" "+words[j]] = struct{}{}
-				}
-			}
-		}*/
-
-	// Add all unordered word combinations (permutations) for length 2 up to maxLen
-	maxCombinations := 1000
-	count := 0
-	maxLen := 10 // Set a reasonable max length for performance
-
-	var permute func([]string, int)
-	permute = func(arr []string, l int) {
-		if count >= maxCombinations {
-			return
-		}
-		if l == 1 {
-			phrase := strings.Join(arr, " ")
-			tokenSet[phrase] = struct{}{}
-			/*normalized := sepReplacer.ReplaceAllString(phrase, " ")
-			if normalized != phrase {
-				tokenSet[normalized] = struct{}{}
-			}*/
-			count++
-			return
-		}
-		for i := 0; i < l; i++ {
-			permute(arr, l-1)
-			if l%2 == 1 {
-				arr[0], arr[l-1] = arr[l-1], arr[0]
-			} else {
-				arr[i], arr[l-1] = arr[l-1], arr[i]
+	// Add all unique word pairs (unordered)
+	for i := 0; i < len(words); i++ {
+		for j := 0; j < len(words); j++ {
+			if i != j {
+				tokenSet[words[i]+" "+words[j]] = struct{}{}
 			}
 		}
 	}
 
-	for l := 2; l <= len(words) && l <= maxLen; l++ {
-		comb := make([]string, l)
-		var combine func(int, int)
-		combine = func(start, depth int) {
-			if depth == l {
-				permute(comb, l)
+	/*
+		// Add all unordered word combinations (permutations) for length 2 up to maxLen
+		maxCombinations := 1000
+		count := 0
+		maxLen := 10 // Set a reasonable max length for performance
+
+		var permute func([]string, int)
+		permute = func(arr []string, l int) {
+			if count >= maxCombinations {
 				return
 			}
-			for i := start; i < len(words); i++ {
-				comb[depth] = words[i]
-				combine(i+1, depth+1)
-				if count >= maxCombinations {
-					return
+			if l == 1 {
+				phrase := strings.Join(arr, " ")
+				tokenSet[phrase] = struct{}{}
+				count++
+				return
+			}
+			for i := 0; i < l; i++ {
+				permute(arr, l-1)
+				if l%2 == 1 {
+					arr[0], arr[l-1] = arr[l-1], arr[0]
+				} else {
+					arr[i], arr[l-1] = arr[l-1], arr[i]
 				}
 			}
 		}
-		combine(0, 0)
-		if count >= maxCombinations {
-			break
-		}
-	}
+
+		for l := 2; l <= len(words) && l <= maxLen; l++ {
+			comb := make([]string, l)
+			var combine func(int, int)
+			combine = func(start, depth int) {
+				if depth == l {
+					permute(comb, l)
+					return
+				}
+				for i := start; i < len(words); i++ {
+					comb[depth] = words[i]
+					combine(i+1, depth+1)
+					if count >= maxCombinations {
+						return
+					}
+				}
+			}
+			combine(0, 0)
+			if count >= maxCombinations {
+				break
+			}
+		}*/
 
 	// Add cleaned substrings (length ≥ 2)
 	for _, w := range words {
