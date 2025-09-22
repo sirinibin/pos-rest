@@ -2188,8 +2188,9 @@ func CleanStringPreserveSpace(s string) string {
 	prevSpace := false
 
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '"' || r == '/' || r == '\\' ||
-			r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == '*' || r == '+' || r == '#' || r == '_' || r == '|' {
+		/*if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '"' || r == '/' || r == '\\' ||
+		r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == '*' || r == '+' || r == '#' || r == '_' || r == '|' {*/
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 			prevSpace = false
 		} else if unicode.IsSpace(r) {
@@ -2198,12 +2199,12 @@ func CleanStringPreserveSpace(s string) string {
 				prevSpace = true
 			}
 			// else skip multiple spaces
-		} else {
+		} /* else {
 			if !prevSpace {
 				b.WriteRune(' ')
 				prevSpace = true
 			}
-		}
+		}*/
 		// skip all other characters (punctuation, symbols, etc.)
 	}
 
@@ -3811,18 +3812,22 @@ func GenerateSearchTokens(input string) []string {
 
 	// Add full phrase
 	tokenSet[clean] = struct{}{}
-	var sepReplacer = regexp.MustCompile(`[-./\[\]*",()_+#|\\]`)
+	//var sepReplacer = regexp.MustCompile(`[-./\[\]*",()_+#|\\]`)
 
 	newWords := words
 	// Add single words
 	for _, w := range words {
+		if w == "" {
+			continue
+		}
 		tokenSet[w] = struct{}{}
 		// Add hyphen-joined phrase if input contains hyphens
-		normalized := sepReplacer.ReplaceAllString(w, " ")
-		if normalized != w {
-			tokenSet[normalized] = struct{}{}
-			newWords = append(newWords, strings.Fields(normalized)...)
-		}
+		/*
+			normalized := sepReplacer.ReplaceAllString(w, " ")
+			if normalized != w {
+				tokenSet[normalized] = struct{}{}
+				newWords = append(newWords, strings.Fields(normalized)...)
+			}*/
 	}
 
 	words = newWords
@@ -3831,6 +3836,9 @@ func GenerateSearchTokens(input string) []string {
 	for n := 2; n <= len(words); n++ {
 		for i := 0; i <= len(words)-n; i++ {
 			ngram := strings.Join(words[i:i+n], " ")
+			if ngram == "" {
+				continue
+			}
 			tokenSet[ngram] = struct{}{}
 		}
 	}
@@ -3899,6 +3907,9 @@ func GenerateSearchTokens(input string) []string {
 		for start := 0; start < len(runes); start++ {
 			for end := start + 2; end <= len(runes); end++ {
 				sub := string(runes[start:end])
+				if sub == "" {
+					continue
+				}
 				tokenSet[sub] = struct{}{}
 			}
 		}
