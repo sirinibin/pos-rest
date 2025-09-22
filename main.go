@@ -447,8 +447,9 @@ func cronJobsEveryHour() error {
 	if err != nil {
 		log.Print(err)
 	}
-
 	/*
+
+
 
 
 		err := models.ProcessCustomers()

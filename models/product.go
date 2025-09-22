@@ -2188,9 +2188,8 @@ func CleanStringPreserveSpace(s string) string {
 	prevSpace := false
 
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) ||
-			r == '-' || r == '"' || r == '/' || r == '\\' ||
-			r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == ',' || r == '*' || r == '+' || r == '#' || r == '_' || r == '|' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '"' || r == '/' || r == '\\' ||
+			r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == '*' || r == '+' || r == '#' || r == '_' || r == '|' {
 			b.WriteRune(r)
 			prevSpace = false
 		} else if unicode.IsSpace(r) {
@@ -2199,6 +2198,11 @@ func CleanStringPreserveSpace(s string) string {
 				prevSpace = true
 			}
 			// else skip multiple spaces
+		} else {
+			if !prevSpace {
+				b.WriteRune(' ')
+				prevSpace = true
+			}
 		}
 		// skip all other characters (punctuation, symbols, etc.)
 	}
@@ -3844,7 +3848,7 @@ func GenerateSearchTokens(input string) []string {
 	// Add all unordered word combinations (permutations) for length 2 up to maxLen
 	maxCombinations := 1000
 	count := 0
-	maxLen := 10 // Set a reasonable max length for performance
+	maxLen := 15 // Set a reasonable max length for performance
 
 	var permute func([]string, int)
 	permute = func(arr []string, l int) {
