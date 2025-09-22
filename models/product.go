@@ -2188,7 +2188,7 @@ func CleanStringPreserveSpace(s string) string {
 	prevSpace := false
 
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '"' || r == '/' || r == '\\' ||
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '"' || r == '/' || r == '\\' ||
 			r == '[' || r == ']' || r == '(' || r == ')' || r == '.' || r == '*' || r == '+' || r == '#' || r == '_' || r == '|' {
 			b.WriteRune(r)
 			prevSpace = false
@@ -3848,7 +3848,7 @@ func GenerateSearchTokens(input string) []string {
 	// Add all unordered word combinations (permutations) for length 2 up to maxLen
 	maxCombinations := 1000
 	count := 0
-	maxLen := 15 // Set a reasonable max length for performance
+	maxLen := 10 // Set a reasonable max length for performance
 
 	var permute func([]string, int)
 	permute = func(arr []string, l int) {
@@ -3858,6 +3858,10 @@ func GenerateSearchTokens(input string) []string {
 		if l == 1 {
 			phrase := strings.Join(arr, " ")
 			tokenSet[phrase] = struct{}{}
+			/*normalized := sepReplacer.ReplaceAllString(phrase, " ")
+			if normalized != phrase {
+				tokenSet[normalized] = struct{}{}
+			}*/
 			count++
 			return
 		}
