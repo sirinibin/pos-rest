@@ -3130,14 +3130,16 @@ func (product *Product) IsPartNumberExists() (exists bool, err error) {
 
 	if product.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"part_number": product.PartNumber,
-			"store_id":    product.StoreID,
+			"prefix_part_number": product.PrefixPartNumber,
+			"part_number":        product.PartNumber,
+			"store_id":           product.StoreID,
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"part_number": product.PartNumber,
-			"store_id":    product.StoreID,
-			"_id":         bson.M{"$ne": product.ID},
+			"prefix_part_number": product.PrefixPartNumber,
+			"part_number":        product.PartNumber,
+			"store_id":           product.StoreID,
+			"_id":                bson.M{"$ne": product.ID},
 		})
 	}
 
