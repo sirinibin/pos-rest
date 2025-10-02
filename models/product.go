@@ -676,11 +676,11 @@ func (store *Store) GetBarTenderProducts(r *http.Request) (products []BarTenderP
 
 func escapeTextSearchInput(input string) string {
 	// Replace hyphens with space to allow tokenization
-	//input = strings.ReplaceAll(input, "-", " ")
+	input = strings.ReplaceAll(input, "-", " ")
 	// Remove other punctuation (optional)
-	//input = strings.ReplaceAll(input, `"`, "")
-	//input = strings.ReplaceAll(input, `'`, "")
-	//input = strings.ReplaceAll(input, "\\", "")
+	input = strings.ReplaceAll(input, `"`, "")
+	input = strings.ReplaceAll(input, `'`, "")
+	input = strings.ReplaceAll(input, "\\", "")
 	// Trim extra spaces
 	input = strings.Join(strings.Fields(input), " ")
 	return input
@@ -761,14 +761,16 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		searchWord = strings.ToLower(keys[0])
-		//searchWord = escapeTextSearchInput(searchWord)
+		searchWord = escapeTextSearchInput(searchWord)
 		//log.Print("|" + searchWord + "|")
 
-		/*searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
-		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
-		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
-		searchWord = strings.Replace(searchWord, "{", `\{`, -1)
-		searchWord = strings.Replace(searchWord, "}", `\}`, -1)*/
+		//searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
+		//searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
+		/*
+			searchWord = strings.Replace(searchWord, "(", `\(`, -1)
+			searchWord = strings.Replace(searchWord, ")", `\)`, -1)
+			searchWord = strings.Replace(searchWord, "{", `\{`, -1)
+			searchWord = strings.Replace(searchWord, "}", `\}`, -1)*/
 		//searchWord = strings.Replace(searchWord, "[", `\[`, -1)
 		//searchWord = strings.Replace(searchWord, "]", `\]`, -1)
 		/*searchWord = strings.Replace(searchWord, `*`, `\*`, -1)
