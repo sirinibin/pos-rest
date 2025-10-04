@@ -3259,10 +3259,9 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		/*
-			if store.Code != "MBDIT" && store.Code != "MBDI" {
-				continue
-			}*/
+		if store.Code != "MBDIT" && store.Code != "MBDI" {
+			continue
+		}
 
 		log.Print("Branch name:" + store.BranchName)
 
@@ -3304,7 +3303,7 @@ func ProcessProducts() error {
 			//log.Print("Part No.:" + product.PartNumber)
 			//log.Print("Product Name:" + product.Name)
 
-			product.GeneratePrefixes()
+			/*product.GeneratePrefixes()
 			//log.Print("GNERATED PREFIXES")
 			product.SetSearchLabel(&store.ID)
 			//log.Print("Search label set")
@@ -3318,59 +3317,57 @@ func ProcessProducts() error {
 					log.Print("Part No.:" + product.PartNumber)
 					log.Print("Product Name:" + product.Name)
 					log.Print("err:" + err.Error())
-				*/
-				continue
-			}
+			*/
+			/*		continue
+					}*/
 			/*log.Print("Updated")
 
 			log.Print("Part No.:" + product.PartNumber)
 			log.Print("Product Name:" + product.Name)*/
 
-			/*
-				destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
+			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
 
-				for _, destinationCode := range destinations {
-					destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
-					if err != nil && err != mongo.ErrNoDocuments {
-						return err
-					}
+			for _, destinationCode := range destinations {
+				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
 
-					if destinationStore != nil {
-						if product.BrandID != nil {
-							productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
-							if err != nil && err != mongo.ErrNoDocuments {
-								return err
-							}
-
-							if productBrand != nil {
-								err = productBrand.CopyToStore(&destinationStore.ID)
-								if err != nil {
-									return err
-								}
-							}
-						}
-
-						if len(product.CategoryID) > 0 {
-							productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
-							if err != nil && err != mongo.ErrNoDocuments {
-								return err
-							}
-
-							if productCategory != nil {
-								err = productCategory.CopyToStore(&destinationStore.ID)
-								if err != nil {
-									return err
-								}
-							}
-						}
-
-						err = product.CopyToStore(&destinationStore.ID)
-						if err != nil {
+				if destinationStore != nil {
+					if product.BrandID != nil {
+						productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
+						if err != nil && err != mongo.ErrNoDocuments {
 							return err
 						}
+
+						if productBrand != nil {
+							err = productBrand.CopyToStore(&destinationStore.ID)
+							if err != nil {
+								return err
+							}
+						}
+					}
+
+					if len(product.CategoryID) > 0 {
+						productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
+						if err != nil && err != mongo.ErrNoDocuments {
+							return err
+						}
+
+						if productCategory != nil {
+							err = productCategory.CopyToStore(&destinationStore.ID)
+							if err != nil {
+								return err
+							}
+						}
+					}
+
+					err = product.CopyToStore(&destinationStore.ID)
+					if err != nil {
+						return err
 					}
 				}
-			*/
+			}
 
 			/*
 				product.SetStock()

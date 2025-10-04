@@ -2410,9 +2410,9 @@ func ProcessCustomers() error {
 	}
 
 	for _, store := range stores {
-		/*if store.Code != "MBDIT" && store.Code != "MBDI" {
+		if store.Code != "MBDIT" && store.Code != "MBDI" {
 			continue
-		}*/
+		}
 
 		log.Print("Branch name:" + store.BranchName)
 
@@ -2451,30 +2451,27 @@ func ProcessCustomers() error {
 				continue
 			}
 
-			customer.GenerateSearchWords()
+			/*customer.GenerateSearchWords()
 			customer.SetAdditionalkeywords()
 			customer.SetSearchLabel()
-			customer.Update()
+			customer.Update()*/
 
-			/*
+			// move customers from one store to another
+			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
 
-				  move customers from one store to another
-					destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
+			for _, destinationCode := range destinations {
+				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
 
-					for _, destinationCode := range destinations {
-						destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if destinationStore != nil {
-							err = customer.CopyToStore(&destinationStore.ID)
-							if err != nil {
-								return err
-							}
-						}
+				if destinationStore != nil {
+					err = customer.CopyToStore(&destinationStore.ID)
+					if err != nil {
+						return err
 					}
-			*/
+				}
+			}
 
 			/*
 				customer.GenerateSearchWords()

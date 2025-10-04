@@ -1872,9 +1872,9 @@ func ProcessVendors() error {
 	}
 
 	for _, store := range stores {
-		/*if store.Code != "MBDIT" && store.Code != "MBDI" {
+		if store.Code != "MBDIT" && store.Code != "MBDI" {
 			continue
-		}*/
+		}
 
 		log.Print("Branch name:" + store.BranchName)
 
@@ -1914,29 +1914,26 @@ func ProcessVendors() error {
 				continue
 			}
 
-			vendor.GenerateSearchWords()
+			/*vendor.GenerateSearchWords()
 			vendor.SetSearchLabel()
 			vendor.SetAdditionalkeywords()
-			vendor.Update()
+			vendor.Update()*/
 
-			/*
+			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
 
-				destinations := []string{"MDNA-SIMULATION", "MDNA", "t1"}
+			for _, destinationCode := range destinations {
+				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
 
-				for _, destinationCode := range destinations {
-					destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
-					if err != nil && err != mongo.ErrNoDocuments {
+				if destinationStore != nil {
+					err = vendor.CopyToStore(&destinationStore.ID)
+					if err != nil {
 						return err
 					}
-
-					if destinationStore != nil {
-						err = vendor.CopyToStore(&destinationStore.ID)
-						if err != nil {
-							return err
-						}
-					}
 				}
-			*/
+			}
 
 			/*
 				vendor.GenerateSearchWords()
