@@ -51,76 +51,78 @@ type OrderProduct struct {
 
 // Order : Order structure
 type Order struct {
-	ID                     primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Date                   *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr                string              `json:"date_str,omitempty" bson:"-"`
-	InvoiceCountValue      int64               `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
-	Code                   string              `bson:"code,omitempty" json:"code,omitempty"`
-	UUID                   string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
-	Hash                   string              `bson:"hash,omitempty" json:"hash,omitempty"`
-	PrevHash               string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
-	StoreID                *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID             *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
-	Store                  *Store              `json:"store,omitempty"`
-	Customer               *Customer           `json:"customer" bson:"-"`
-	Products               []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
-	DeliveredBy            *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	DeliveredByUser        *User               `json:"delivered_by_user,omitempty"`
-	VatPercent             *float64            `bson:"vat_percent" json:"vat_percent"`
-	Discount               float64             `bson:"discount" json:"discount"`
-	DiscountWithVAT        float64             `bson:"discount_with_vat" json:"discount_with_vat"`
-	DiscountPercentWithVAT float64             `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
-	DiscountPercent        float64             `bson:"discount_percent" json:"discount_percent"`
-	ReturnDiscount         float64             `bson:"return_discount" json:"return_discount"`
-	ReturnDiscountWithVAT  float64             `bson:"return_discount_with_vat" json:"return_discount_vat"`
-	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
-	ShippingOrHandlingFees float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
-	TotalQuantity          float64             `bson:"total_quantity" json:"total_quantity"`
-	VatPrice               float64             `bson:"vat_price" json:"vat_price"`
-	Total                  float64             `bson:"total" json:"total"`
-	TotalWithVAT           float64             `bson:"total_with_vat" json:"total_with_vat"`
-	NetTotal               float64             `bson:"net_total" json:"net_total"`
-	ActualVatPrice         float64             `bson:"actual_vat_price" json:"actual_vat_price"`
-	ActualTotal            float64             `bson:"actual_total" json:"actual_total"`
-	ActualTotalWithVAT     float64             `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
-	ActualNetTotal         float64             `bson:"actual_net_total" json:"actual_net_total"`
-	RoundingAmount         float64             `bson:"rounding_amount" json:"rounding_amount"`
-	AutoRoundingAmount     bool                `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
-	CashDiscount           float64             `bson:"cash_discount" json:"cash_discount"`
-	ReturnCashDiscount     float64             `bson:"return_cash_discount" json:"return_cash_discount"`
-	TotalPaymentReceived   float64             `bson:"total_payment_received" json:"total_payment_received"`
-	BalanceAmount          float64             `bson:"balance_amount" json:"balance_amount"`
-	Payments               []SalesPayment      `bson:"payments" json:"payments"`
-	PaymentsInput          []SalesPayment      `bson:"-" json:"payments_input"`
-	PaymentsCount          int64               `bson:"payments_count" json:"payments_count"`
-	PaymentStatus          string              `bson:"payment_status" json:"payment_status"`
-	PaymentMethods         []string            `json:"payment_methods" bson:"payment_methods"`
-	Profit                 float64             `bson:"profit" json:"profit"`
-	NetProfit              float64             `bson:"net_profit" json:"net_profit"`
-	Loss                   float64             `bson:"loss" json:"loss"`
-	NetLoss                float64             `bson:"net_loss" json:"net_loss"`
-	ReturnCount            int64               `bson:"return_count" json:"return_count"`
-	ReturnAmount           float64             `bson:"return_amount" json:"return_amount"`
-	CreatedAt              *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt              *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy              *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy              *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser          *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser          *User               `json:"updated_by_user,omitempty"`
-	DeliveredByName        string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CustomerName           string              `json:"customer_name" bson:"customer_name"`
-	CustomerNameArabic     string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
-	StoreName              string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName          string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName          string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	Zatca                  ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	Remarks                string              `bson:"remarks" json:"remarks"`
-	Phone                  string              `bson:"phone" json:"phone"`
-	VatNo                  string              `bson:"vat_no" json:"vat_no"`
-	Address                string              `bson:"address" json:"address"`
-	EnableReportToZatca    bool                `json:"enable_report_to_zatca" bson:"-"`
-	QuotationID            *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
-	QuotationCode          *string             `json:"quotation_code" bson:"quotation_code"`
+	ID                      primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Date                    *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                 string              `json:"date_str,omitempty" bson:"-"`
+	InvoiceCountValue       int64               `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
+	Code                    string              `bson:"code,omitempty" json:"code,omitempty"`
+	UUID                    string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
+	Hash                    string              `bson:"hash,omitempty" json:"hash,omitempty"`
+	PrevHash                string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
+	StoreID                 *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID              *primitive.ObjectID `json:"customer_id" bson:"customer_id"`
+	Store                   *Store              `json:"store,omitempty"`
+	Customer                *Customer           `json:"customer" bson:"-"`
+	Products                []OrderProduct      `bson:"products,omitempty" json:"products,omitempty"`
+	DeliveredBy             *primitive.ObjectID `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	DeliveredByUser         *User               `json:"delivered_by_user,omitempty"`
+	VatPercent              *float64            `bson:"vat_percent" json:"vat_percent"`
+	Discount                float64             `bson:"discount" json:"discount"`
+	DiscountWithVAT         float64             `bson:"discount_with_vat" json:"discount_with_vat"`
+	DiscountPercentWithVAT  float64             `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
+	DiscountPercent         float64             `bson:"discount_percent" json:"discount_percent"`
+	ReturnDiscount          float64             `bson:"return_discount" json:"return_discount"`
+	ReturnDiscountWithVAT   float64             `bson:"return_discount_with_vat" json:"return_discount_vat"`
+	Status                  string              `bson:"status,omitempty" json:"status,omitempty"`
+	ShippingOrHandlingFees  float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
+	TotalQuantity           float64             `bson:"total_quantity" json:"total_quantity"`
+	VatPrice                float64             `bson:"vat_price" json:"vat_price"`
+	Total                   float64             `bson:"total" json:"total"`
+	TotalWithVAT            float64             `bson:"total_with_vat" json:"total_with_vat"`
+	NetTotal                float64             `bson:"net_total" json:"net_total"`
+	ActualVatPrice          float64             `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal             float64             `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT      float64             `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
+	ActualNetTotal          float64             `bson:"actual_net_total" json:"actual_net_total"`
+	RoundingAmount          float64             `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount      bool                `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
+	CashDiscount            float64             `bson:"cash_discount" json:"cash_discount"`
+	ReturnCashDiscount      float64             `bson:"return_cash_discount" json:"return_cash_discount"`
+	TotalPaymentReceived    float64             `bson:"total_payment_received" json:"total_payment_received"`
+	BalanceAmount           float64             `bson:"balance_amount" json:"balance_amount"`
+	Payments                []SalesPayment      `bson:"payments" json:"payments"`
+	PaymentsInput           []SalesPayment      `bson:"-" json:"payments_input"`
+	PaymentsCount           int64               `bson:"payments_count" json:"payments_count"`
+	PaymentStatus           string              `bson:"payment_status" json:"payment_status"`
+	PaymentMethods          []string            `json:"payment_methods" bson:"payment_methods"`
+	Profit                  float64             `bson:"profit" json:"profit"`
+	NetProfit               float64             `bson:"net_profit" json:"net_profit"`
+	Loss                    float64             `bson:"loss" json:"loss"`
+	NetLoss                 float64             `bson:"net_loss" json:"net_loss"`
+	ReturnCount             int64               `bson:"return_count" json:"return_count"`
+	ReturnAmount            float64             `bson:"return_amount" json:"return_amount"`
+	CreatedAt               *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt               *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy               *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy               *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser           *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser           *User               `json:"updated_by_user,omitempty"`
+	DeliveredByName         string              `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CustomerName            string              `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic      string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
+	StoreName               string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName           string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName           string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	Zatca                   ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	Remarks                 string              `bson:"remarks" json:"remarks"`
+	Phone                   string              `bson:"phone" json:"phone"`
+	VatNo                   string              `bson:"vat_no" json:"vat_no"`
+	Address                 string              `bson:"address" json:"address"`
+	EnableReportToZatca     bool                `json:"enable_report_to_zatca" bson:"-"`
+	QuotationID             *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
+	QuotationCode           *string             `json:"quotation_code" bson:"quotation_code"`
+	Commission              float64             `bson:"commission" json:"commission"`
+	CommissionPaymentMethod string              `bson:"commission_payment_method" json:"commission_payment_method"`
 }
 
 type ZatcaReporting struct {
@@ -841,6 +843,9 @@ type SalesStats struct {
 	ReturnAmount           float64             `json:"return_amount" bson:"return_amount"`
 	PurchaseSales          float64             `json:"purchase_sales" bson:"purchase_sales"`
 	SalesReturnSales       float64             `json:"sales_return_sales" bson:"sales_return_sales"`
+	Commission             float64             `json:"commission" bson:"commission"`
+	CommissionPaidByCash   float64             `json:"commission_paid_by_cash" bson:"commission_paid_by_cash"`
+	CommissionPaidByBank   float64             `json:"commission_paid_by_bank" bson:"commission_paid_by_bank"`
 }
 
 func (store *Store) GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
@@ -854,13 +859,35 @@ func (store *Store) GetSalesStats(filter map[string]interface{}) (stats SalesSta
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":                    nil,
-				"net_total":              bson.M{"$sum": "$net_total"},
-				"net_profit":             bson.M{"$sum": "$net_profit"},
-				"net_loss":               bson.M{"$sum": "$net_loss"},
-				"vat_price":              bson.M{"$sum": "$vat_price"},
-				"discount":               bson.M{"$sum": "$discount"},
-				"cash_discount":          bson.M{"$sum": "$cash_discount"},
+				"_id":           nil,
+				"net_total":     bson.M{"$sum": "$net_total"},
+				"net_profit":    bson.M{"$sum": "$net_profit"},
+				"net_loss":      bson.M{"$sum": "$net_loss"},
+				"vat_price":     bson.M{"$sum": "$vat_price"},
+				"discount":      bson.M{"$sum": "$discount"},
+				"cash_discount": bson.M{"$sum": "$cash_discount"},
+				"commission":    bson.M{"$sum": "$commission"},
+				"commission_paid_by_cash": bson.M{
+					"$sum": bson.M{
+						"$cond": []interface{}{
+							bson.M{"$eq": []interface{}{"$commission_payment_method", "cash"}},
+							"$commission",
+							0,
+						},
+					},
+				},
+				"commission_paid_by_bank": bson.M{
+					"$sum": bson.M{
+						"$cond": []interface{}{
+							bson.M{"$in": []interface{}{
+								"$commission_payment_method",
+								[]interface{}{"debit_card", "credit_card", "bank_card", "bank_transfer", "bank_cheque"},
+							}},
+							"$commission",
+							0,
+						},
+					},
+				},
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
 				"return_count":           bson.M{"$sum": "$return_count"},
 				"return_amount":          bson.M{"$sum": "$return_amount"},
@@ -1224,6 +1251,31 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 			criterias.SearchBy["cash_discount"] = bson.M{operator: value}
 		} else {
 			criterias.SearchBy["cash_discount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[commission_payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethodList := strings.Split(keys[0], ",")
+		if len(paymentMethodList) > 0 {
+			criterias.SearchBy["commission_payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[commission]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return orders, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["commission"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["commission"] = value
 		}
 	}
 
@@ -1610,6 +1662,12 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			errs["date_str"] = "Invalid date format"
 		}
 		order.Date = &date
+	}
+
+	if order.Commission > 0 {
+		if govalidator.IsNull(order.CommissionPaymentMethod) {
+			errs["commission_payment_method"] = "Commission payment method is required"
+		}
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(order.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(order.Phone)) {
@@ -4394,6 +4452,11 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
+	commissionAllowedAccount, err := store.CreateAccountIfNotExists(order.StoreID, nil, nil, "Commission allowed", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	journals := []Journal{}
 
 	var firstPaymentDate *time.Time
@@ -4483,6 +4546,42 @@ func (order *Order) CreateLedger() (ledger *Ledger, err error) {
 		totalSalesPaidAmount = float64(0.00)
 		extraSalesAmountPaid = float64(0.00)
 
+	}
+
+	if order.Commission > 0 {
+		var commissionPaidAt time.Time
+		if len(order.Payments) > 0 {
+			commissionPaidAt = order.Payments[len(order.Payments)-1].Date.Add(1 * time.Minute)
+		} else if len(order.Payments) == 0 {
+			commissionPaidAt = order.Date.Add(1 * time.Minute)
+
+		}
+		journals = append(journals, Journal{
+			Date:          &commissionPaidAt,
+			AccountID:     commissionAllowedAccount.ID,
+			AccountNumber: commissionAllowedAccount.Number,
+			AccountName:   commissionAllowedAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         order.Commission,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+		var commissionSpendingAccount *Account
+		if order.CommissionPaymentMethod == "cash" {
+			commissionSpendingAccount = cashAccount
+		} else if slices.Contains(BANK_PAYMENT_METHODS, order.CommissionPaymentMethod) {
+			commissionSpendingAccount = bankAccount
+		}
+		journals = append(journals, Journal{
+			Date:          &commissionPaidAt,
+			AccountID:     commissionSpendingAccount.ID,
+			AccountNumber: commissionSpendingAccount.Number,
+			AccountName:   commissionSpendingAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        order.Commission,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
 	}
 
 	ledger = &Ledger{

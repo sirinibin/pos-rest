@@ -81,6 +81,9 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	response.Meta["vat_price"] = salesStats.VatPrice
 	response.Meta["discount"] = salesStats.Discount
 	response.Meta["cash_discount"] = salesStats.CashDiscount
+	response.Meta["commission"] = salesStats.Commission
+	response.Meta["commission_paid_by_bank"] = salesStats.CommissionPaidByBank
+	response.Meta["commission_paid_by_cash"] = salesStats.CommissionPaidByCash
 	response.Meta["shipping_handling_fees"] = salesStats.ShippingOrHandlingFees
 	response.Meta["paid_sales"] = salesStats.PaidSales
 	response.Meta["unpaid_sales"] = salesStats.UnPaidSales

@@ -127,6 +127,8 @@ type Quotation struct {
 	ReportedToZatca          bool                `bson:"reported_to_zatca" json:"reported_to_zatca"`
 	ReportedToZatcaAt        *time.Time          `bson:"reported_to_zatca_at" json:"reported_to_zatca_at"`
 	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
+	Commission               float64             `bson:"commission" json:"commission"`
+	CommissionPaymentMethod  string              `bson:"commission_payment_method" json:"commission_payment_method"`
 }
 
 func (store *Store) IfStore2QuotationSalesShouldAffectTheStock(refDate *time.Time) bool {
@@ -1812,6 +1814,12 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["date_str"] = "Invalid date format"
 		}
 		quotation.Date = &date
+	}
+
+	if quotation.Commission > 0 {
+		if govalidator.IsNull(quotation.CommissionPaymentMethod) {
+			errs["commission_payment_method"] = "Commission payment method is required"
+		}
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(quotation.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(quotation.Phone)) {

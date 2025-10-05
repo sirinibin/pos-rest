@@ -666,6 +666,8 @@ func (store *Store) CreateAccountIfNotExists(
 		account.Type = "drawing"
 	} else if referenceModel != nil && *referenceModel == "expense_category" {
 		account.Type = "expense"
+	} else if referenceModel == nil && (name == "COMMISSION ALLOWED") {
+		account.Type = "expense"
 	}
 
 	//account = &accountModel

@@ -78,6 +78,9 @@ func ListSalesReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["vat_price"] = salesReturnStats.VatPrice
 	response.Meta["discount"] = salesReturnStats.Discount
 	response.Meta["cash_discount"] = salesReturnStats.CashDiscount
+	response.Meta["commission"] = salesReturnStats.Commission
+	response.Meta["commission_paid_by_bank"] = salesReturnStats.CommissionPaidByBank
+	response.Meta["commission_paid_by_cash"] = salesReturnStats.CommissionPaidByCash
 	response.Meta["paid_sales_return"] = salesReturnStats.PaidSalesReturn
 	response.Meta["unpaid_sales_return"] = salesReturnStats.UnPaidSalesReturn
 	response.Meta["cash_sales_return"] = salesReturnStats.CashSalesReturn

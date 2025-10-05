@@ -102,27 +102,29 @@ type SalesReturn struct {
 	CreatedByUser *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 	//ReceivedByName   string               `json:"received_by_name,omitempty" bson:"received_by_name,omitempty"`
-	CustomerName        string               `json:"customer_name" bson:"customer_name"`
-	CustomerNameArabic  string               `json:"customer_name_arabic" bson:"customer_name_arabic"`
-	StoreName           string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName       string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName       string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName       string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Profit              float64              `bson:"profit" json:"profit"`
-	NetProfit           float64              `bson:"net_profit" json:"net_profit"`
-	Loss                float64              `bson:"loss" json:"loss"`
-	NetLoss             float64              `bson:"net_loss" json:"net_loss"`
-	TotalPaymentPaid    float64              `bson:"total_payment_paid" json:"total_payment_paid"`
-	BalanceAmount       float64              `bson:"balance_amount" json:"balance_amount"`
-	Payments            []SalesReturnPayment `bson:"payments" json:"payments"`
-	PaymentsInput       []SalesReturnPayment `bson:"-" json:"payments_input"`
-	PaymentsCount       int64                `bson:"payments_count" json:"payments_count"`
-	Zatca               ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	Remarks             string               `bson:"remarks" json:"remarks"`
-	Phone               string               `bson:"phone" json:"phone"`
-	VatNo               string               `bson:"vat_no" json:"vat_no"`
-	Address             string               `bson:"address" json:"address"`
-	EnableReportToZatca bool                 `json:"enable_report_to_zatca" bson:"-"`
+	CustomerName            string               `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic      string               `json:"customer_name_arabic" bson:"customer_name_arabic"`
+	StoreName               string               `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName           string               `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName           string               `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName           string               `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Profit                  float64              `bson:"profit" json:"profit"`
+	NetProfit               float64              `bson:"net_profit" json:"net_profit"`
+	Loss                    float64              `bson:"loss" json:"loss"`
+	NetLoss                 float64              `bson:"net_loss" json:"net_loss"`
+	TotalPaymentPaid        float64              `bson:"total_payment_paid" json:"total_payment_paid"`
+	BalanceAmount           float64              `bson:"balance_amount" json:"balance_amount"`
+	Payments                []SalesReturnPayment `bson:"payments" json:"payments"`
+	PaymentsInput           []SalesReturnPayment `bson:"-" json:"payments_input"`
+	PaymentsCount           int64                `bson:"payments_count" json:"payments_count"`
+	Zatca                   ZatcaReporting       `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	Remarks                 string               `bson:"remarks" json:"remarks"`
+	Phone                   string               `bson:"phone" json:"phone"`
+	VatNo                   string               `bson:"vat_no" json:"vat_no"`
+	Address                 string               `bson:"address" json:"address"`
+	EnableReportToZatca     bool                 `json:"enable_report_to_zatca" bson:"-"`
+	Commission              float64              `bson:"commission" json:"commission"`
+	CommissionPaymentMethod string               `bson:"commission_payment_method" json:"commission_payment_method"`
 }
 
 func (model *SalesReturn) SetPostBalances() error {
@@ -466,6 +468,9 @@ type SalesReturnStats struct {
 	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
 	SalesReturnCount       int64               `json:"sales_return_count" bson:"sales_return_count"`
 	SalesSalesReturn       float64             `json:"sales_sales_return" bson:"sales_sales_return"`
+	Commission             float64             `json:"commission" bson:"commission"`
+	CommissionPaidByCash   float64             `json:"commission_paid_by_cash" bson:"commission_paid_by_cash"`
+	CommissionPaidByBank   float64             `json:"commission_paid_by_bank" bson:"commission_paid_by_bank"`
 }
 
 func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
@@ -479,11 +484,33 @@ func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats Sa
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":                    nil,
-				"net_total":              bson.M{"$sum": "$net_total"},
-				"vat_price":              bson.M{"$sum": "$vat_price"},
-				"discount":               bson.M{"$sum": "$discount"},
-				"cash_discount":          bson.M{"$sum": "$cash_discount"},
+				"_id":           nil,
+				"net_total":     bson.M{"$sum": "$net_total"},
+				"vat_price":     bson.M{"$sum": "$vat_price"},
+				"discount":      bson.M{"$sum": "$discount"},
+				"cash_discount": bson.M{"$sum": "$cash_discount"},
+				"commission":    bson.M{"$sum": "$commission"},
+				"commission_paid_by_cash": bson.M{
+					"$sum": bson.M{
+						"$cond": []interface{}{
+							bson.M{"$eq": []interface{}{"$commission_payment_method", "cash"}},
+							"$commission",
+							0,
+						},
+					},
+				},
+				"commission_paid_by_bank": bson.M{
+					"$sum": bson.M{
+						"$cond": []interface{}{
+							bson.M{"$in": []interface{}{
+								"$commission_payment_method",
+								[]interface{}{"debit_card", "credit_card", "bank_card", "bank_transfer", "bank_cheque"},
+							}},
+							"$commission",
+							0,
+						},
+					},
+				},
 				"net_profit":             bson.M{"$sum": "$net_profit"},
 				"net_loss":               bson.M{"$sum": "$net_loss"},
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
@@ -589,6 +616,7 @@ func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats Sa
 		stats.NetProfit = RoundFloat(stats.NetProfit, 2)
 		stats.NetLoss = RoundFloat(stats.NetLoss, 2)
 		stats.CashDiscount = RoundFloat(stats.CashDiscount, 2)
+		stats.Commission = RoundFloat(stats.Commission, 2)
 	}
 	return stats, nil
 }
@@ -1192,6 +1220,31 @@ func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (s
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[commission_payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethodList := strings.Split(keys[0], ",")
+		if len(paymentMethodList) > 0 {
+			criterias.SearchBy["commission_payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[commission]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["commission"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["commission"] = value
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[discount]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -1494,6 +1547,12 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	if salesreturn.Discount < 0 {
 		errs["discount"] = "Cash discount should not be < 0"
+	}
+
+	if salesreturn.Commission > 0 {
+		if govalidator.IsNull(salesreturn.CommissionPaymentMethod) {
+			errs["commission_payment_method"] = "Commission payment method is required"
+		}
 	}
 
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
@@ -4080,6 +4139,11 @@ func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
+	commissionAllowedAccount, err := store.CreateAccountIfNotExists(salesReturn.StoreID, nil, nil, "Commission allowed", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	journals := []Journal{}
 
 	var firstPaymentDate *time.Time
@@ -4169,6 +4233,45 @@ func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
 		totalSalesReturnPaidAmount = float64(0.00)
 		extraSalesReturnAmountPaid = float64(0.00)
 
+	}
+
+	if salesReturn.Commission > 0 {
+		var commissionPaidAt time.Time
+		if len(salesReturn.Payments) > 0 {
+			commissionPaidAt = salesReturn.Payments[len(salesReturn.Payments)-1].Date.Add(1 * time.Minute)
+		} else if len(salesReturn.Payments) == 0 {
+			commissionPaidAt = salesReturn.Date.Add(1 * time.Minute)
+
+		}
+
+		var commissionReceivingAccount *Account
+		if salesReturn.CommissionPaymentMethod == "cash" {
+			commissionReceivingAccount = cashAccount
+		} else if slices.Contains(BANK_PAYMENT_METHODS, salesReturn.CommissionPaymentMethod) {
+			commissionReceivingAccount = bankAccount
+		}
+
+		journals = append(journals, Journal{
+			Date:          &commissionPaidAt,
+			AccountID:     commissionReceivingAccount.ID,
+			AccountNumber: commissionReceivingAccount.Number,
+			AccountName:   commissionReceivingAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         salesReturn.Commission,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
+
+		journals = append(journals, Journal{
+			Date:          &commissionPaidAt,
+			AccountID:     commissionAllowedAccount.ID,
+			AccountNumber: commissionAllowedAccount.Number,
+			AccountName:   commissionAllowedAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        salesReturn.Commission,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		})
 	}
 
 	ledger = &Ledger{

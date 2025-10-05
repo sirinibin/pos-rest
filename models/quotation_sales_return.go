@@ -103,27 +103,29 @@ type QuotationSalesReturn struct {
 	CreatedByUser *User               `json:"created_by_user,omitempty"`
 	UpdatedByUser *User               `json:"updated_by_user,omitempty"`
 	//ReceivedByName   string               `json:"received_by_name,omitempty" bson:"received_by_name,omitempty"`
-	CustomerName        string                        `json:"customer_name" bson:"customer_name"`
-	CustomerNameArabic  string                        `json:"customer_name_arabic" bson:"customer_name_arabic"`
-	StoreName           string                        `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	CreatedByName       string                        `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName       string                        `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName       string                        `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Profit              float64                       `bson:"profit" json:"profit"`
-	NetProfit           float64                       `bson:"net_profit" json:"net_profit"`
-	Loss                float64                       `bson:"loss" json:"loss"`
-	NetLoss             float64                       `bson:"net_loss" json:"net_loss"`
-	TotalPaymentPaid    float64                       `bson:"total_payment_paid" json:"total_payment_paid"`
-	BalanceAmount       float64                       `bson:"balance_amount" json:"balance_amount"`
-	Payments            []QuotationSalesReturnPayment `bson:"payments" json:"payments"`
-	PaymentsInput       []QuotationSalesReturnPayment `bson:"-" json:"payments_input"`
-	PaymentsCount       int64                         `bson:"payments_count" json:"payments_count"`
-	Zatca               ZatcaReporting                `bson:"zatca,omitempty" json:"zatca,omitempty"`
-	Remarks             string                        `bson:"remarks" json:"remarks"`
-	Phone               string                        `bson:"phone" json:"phone"`
-	VatNo               string                        `bson:"vat_no" json:"vat_no"`
-	Address             string                        `bson:"address" json:"address"`
-	EnableReportToZatca bool                          `json:"enable_report_to_zatca" bson:"-"`
+	CustomerName            string                        `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic      string                        `json:"customer_name_arabic" bson:"customer_name_arabic"`
+	StoreName               string                        `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	CreatedByName           string                        `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName           string                        `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName           string                        `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	Profit                  float64                       `bson:"profit" json:"profit"`
+	NetProfit               float64                       `bson:"net_profit" json:"net_profit"`
+	Loss                    float64                       `bson:"loss" json:"loss"`
+	NetLoss                 float64                       `bson:"net_loss" json:"net_loss"`
+	TotalPaymentPaid        float64                       `bson:"total_payment_paid" json:"total_payment_paid"`
+	BalanceAmount           float64                       `bson:"balance_amount" json:"balance_amount"`
+	Payments                []QuotationSalesReturnPayment `bson:"payments" json:"payments"`
+	PaymentsInput           []QuotationSalesReturnPayment `bson:"-" json:"payments_input"`
+	PaymentsCount           int64                         `bson:"payments_count" json:"payments_count"`
+	Zatca                   ZatcaReporting                `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	Remarks                 string                        `bson:"remarks" json:"remarks"`
+	Phone                   string                        `bson:"phone" json:"phone"`
+	VatNo                   string                        `bson:"vat_no" json:"vat_no"`
+	Address                 string                        `bson:"address" json:"address"`
+	EnableReportToZatca     bool                          `json:"enable_report_to_zatca" bson:"-"`
+	Commission              float64                       `bson:"commission" json:"commission"`
+	CommissionPaymentMethod string                        `bson:"commission_payment_method" json:"commission_payment_method"`
 }
 
 func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() error {
@@ -1803,6 +1805,12 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 			errs["date_str"] = "Invalid date format"
 		}
 		quotationsalesreturn.Date = &date
+	}
+
+	if quotationsalesreturn.Commission > 0 {
+		if govalidator.IsNull(quotationsalesreturn.CommissionPaymentMethod) {
+			errs["commission_payment_method"] = "Commission payment method is required"
+		}
 	}
 
 	totalPayment := float64(0.00)
