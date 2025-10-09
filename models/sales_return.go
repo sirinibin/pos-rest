@@ -2139,7 +2139,7 @@ func (salesReturn *SalesReturn) CalculateSalesReturnProfit() error {
 
 	}
 	salesReturn.Profit = totalProfit
-	salesReturn.NetProfit = (totalProfit - salesReturn.CashDiscount) - salesReturn.Discount
+	salesReturn.NetProfit = (totalProfit - salesReturn.Commission - salesReturn.CashDiscount) - salesReturn.Discount
 	salesReturn.Loss = totalLoss
 	salesReturn.NetLoss = totalLoss
 	if salesReturn.NetProfit < 0 {

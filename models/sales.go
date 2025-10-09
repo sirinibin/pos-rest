@@ -2330,7 +2330,7 @@ func (order *Order) CalculateOrderProfit() error {
 	}
 	order.Profit = totalProfit
 	//order.NetProfit = RoundFloat(((totalProfit - order.CashDiscount) - order.Discount), 2)
-	order.NetProfit = (totalProfit - order.CashDiscount) - order.Discount
+	order.NetProfit = (totalProfit - order.Commission - order.CashDiscount) - order.Discount
 	order.Loss = totalLoss
 	order.NetLoss = totalLoss
 	if order.NetProfit < 0 {
