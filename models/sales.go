@@ -113,7 +113,7 @@ type Order struct {
 	StoreName               string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	CreatedByName           string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName           string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	Zatca                   ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	Zatca                   ZatcaReporting      `bson:"zatca" json:"zatca"`
 	Remarks                 string              `bson:"remarks" json:"remarks"`
 	Phone                   string              `bson:"phone" json:"phone"`
 	VatNo                   string              `bson:"vat_no" json:"vat_no"`

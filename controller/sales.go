@@ -217,6 +217,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	order.UUID = uuid.New().String()
+	order.Zatca = models.ZatcaReporting{}
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && order.EnableReportToZatca {
 		err = order.ReportToZatca()
