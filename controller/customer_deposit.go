@@ -205,6 +205,9 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 
 	go customerdeposit.SetPostBalances()
 
+	store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+	store.NotifyUsers("receivable_updated")
+
 	response.Status = true
 	response.Result = customerdeposit
 
@@ -414,6 +417,9 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go customerdeposit.SetPostBalances()
+
+	store, _ = models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+	store.NotifyUsers("receivable_updated")
 
 	response.Status = true
 	response.Result = customerdeposit

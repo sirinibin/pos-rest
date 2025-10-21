@@ -204,6 +204,8 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go customerwithdrawal.SetPostBalances()
+	store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	store.NotifyUsers("payable_updated")
 
 	response.Status = true
 	response.Result = customerwithdrawal
@@ -414,6 +416,9 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go customerwithdrawal.SetPostBalances()
+
+	store, _ = models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	store.NotifyUsers("payable_updated")
 
 	response.Status = true
 	response.Result = customerwithdrawal

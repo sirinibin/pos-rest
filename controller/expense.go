@@ -160,6 +160,9 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 
 	go expense.SetPostBalances()
 
+	store, _ := models.FindStoreByID(expense.StoreID, bson.M{})
+	store.NotifyUsers("expense_updated")
+
 	response.Status = true
 	response.Result = expense
 
@@ -282,6 +285,9 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go expense.SetPostBalances()
+
+	store, _ = models.FindStoreByID(expense.StoreID, bson.M{})
+	store.NotifyUsers("expense_updated")
 
 	expense, err = store.FindExpenseByID(&expense.ID, bson.M{})
 	if err != nil {
