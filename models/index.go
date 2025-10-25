@@ -56,6 +56,8 @@ func (store *Store) CreateAllIndexes() error {
 		bson.E{Key: "code", Value: "text"},
 		bson.E{Key: "phone", Value: "text"},
 		bson.E{Key: "phone_in_arabic", Value: "text"},
+		bson.E{Key: "phone2", Value: "text"},
+		bson.E{Key: "phone2_in_arabic", Value: "text"},
 		bson.E{Key: "vat_no", Value: "text"},
 		bson.E{Key: "vat_no_in_arabic", Value: "text"},
 		bson.E{Key: "email", Value: "text"},

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/pos-rest/models"
@@ -284,6 +285,10 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 			if customer != nil {
 				customer.SetCreditBalance()
 			}
+			if !govalidator.IsNull(order.Phone) {
+				customer.Phone = order.Phone
+				customer.Update()
+			}
 		}
 		store.NotifyUsers("sales_updated")
 	}()
@@ -494,6 +499,10 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 			customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
 			if customer != nil {
 				customer.SetCreditBalance()
+				if !govalidator.IsNull(order.Phone) {
+					customer.Phone = order.Phone
+					customer.Update()
+				}
 			}
 		}
 

@@ -76,14 +76,14 @@ type Customer struct {
 	SearchWords                []string                 `bson:"search_words,omitempty" json:"search_words,omitempty"`
 	SearchWordsInArabic        []string                 `bson:"search_words_in_arabic,omitempty" json:"search_words_in_arabic,omitempty"`
 	AdditionalKeywords         []string                 `bson:"additional_keywords" json:"additional_keywords"`
-	VATNo                      string                   `bson:"vat_no,omitempty" json:"vat_no,omitempty"`
-	VATNoInArabic              string                   `bson:"vat_no_in_arabic,omitempty" json:"vat_no_in_arabic,omitempty"`
-	Phone                      string                   `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic              string                   `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	VATNo                      string                   `bson:"vat_no" json:"vat_no"`
+	VATNoInArabic              string                   `bson:"vat_no_in_arabic" json:"vat_no_in_arabic"`
+	Phone                      string                   `bson:"phone" json:"phone"`
+	PhoneInArabic              string                   `bson:"phone_in_arabic" json:"phone_in_arabic"`
 	Phone2                     string                   `bson:"phone2" json:"phone2"`
 	Phone2InArabic             string                   `bson:"phone2_in_arabic" json:"phone2_in_arabic"`
-	Title                      string                   `bson:"title,omitempty" json:"title,omitempty"`
-	TitleInArabic              string                   `bson:"title_in_arabic,omitempty" json:"title_in_arabic,omitempty"`
+	Title                      string                   `bson:"title" json:"title"`
+	TitleInArabic              string                   `bson:"title_in_arabic" json:"title_in_arabic"`
 	Email                      string                   `bson:"email,omitempty" json:"email,omitempty"`
 	Address                    string                   `bson:"address,omitempty" json:"address,omitempty"`
 	AddressInArabic            string                   `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
