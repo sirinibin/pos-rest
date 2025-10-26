@@ -2418,7 +2418,7 @@ func (store *Store) FindPurchaseByID(
 }
 
 func (purchase *Purchase) IsVendorInvoiceNumberExists() (bool, error) {
-	if purchase.VendorID == nil || purchase.VendorID.IsZero() {
+	if purchase.VendorID == nil || purchase.VendorID.IsZero() || govalidator.IsNull(purchase.VendorInvoiceNumber) {
 		return false, nil
 	}
 
