@@ -1604,6 +1604,13 @@ func (purchase *Purchase) Validate(
 		return
 	}
 
+	vendorInvoiceNumberExists, err := purchase.IsVendorInvoiceNumberExists()
+	if err != nil {
+		errs["vendor_invoice_no"] = "Error checking vendor invoice no. existence"
+	} else if vendorInvoiceNumberExists {
+		errs["vendor_invoice_no"] = "Vendor invoice no. already exists for this vendor"
+	}
+
 	totalPayment := float64(0.00)
 	for _, payment := range purchase.PaymentsInput {
 		if payment.Amount > 0 {
@@ -2408,6 +2415,34 @@ func (store *Store) FindPurchaseByID(
 		}*/
 
 	return purchase, err
+}
+
+func (purchase *Purchase) IsVendorInvoiceNumberExists() (bool, error) {
+	if purchase.VendorID == nil || purchase.VendorID.IsZero() {
+		return false, nil
+	}
+
+	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	criteria := bson.M{
+		"vendor_invoice_no": purchase.VendorInvoiceNumber,
+		"vendor_id":         purchase.VendorID,
+		"store_id":          purchase.StoreID,
+		"_id":               bson.M{"$ne": purchase.ID},
+	}
+
+	if purchase.ID.IsZero() {
+		delete(criteria, "_id")
+	}
+
+	count, err := collection.CountDocuments(ctx, criteria)
+	if err != nil && err != mongo.ErrNoDocuments {
+		return false, err
+	}
+
+	return (count > 0), nil
 }
 
 func (store *Store) IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err error) {
