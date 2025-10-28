@@ -10,6 +10,7 @@ import (
 	"github.com/sirinibin/pos-rest/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ListExpense : handler for GET /expense
@@ -119,10 +120,31 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 	expense.CreatedAt = &now
 	expense.UpdatedAt = &now
 
+	store, err := models.FindStoreByID(expense.StoreID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if expense.VendorID != nil && !expense.VendorID.IsZero() {
+		expense.VatPercent = &store.VatPercent
+		expense.VatPrice = models.RoundTo2Decimals(expense.Amount * (*expense.VatPercent / 100))
+	}
+
 	// Validate data
 	if errs := expense.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = expense.CreateNewVendorFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_vendor_from_name"] = "error creating new vendor from name: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -160,7 +182,6 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 
 	go expense.SetPostBalances()
 
-	store, _ := models.FindStoreByID(expense.StoreID, bson.M{})
 	store.NotifyUsers("expense_updated")
 
 	response.Status = true
@@ -238,10 +259,23 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	expense.UpdatedAt = &now
 
+	if expense.VendorID != nil && !expense.VendorID.IsZero() {
+		expense.VatPercent = &store.VatPercent
+		expense.VatPrice = models.RoundTo2Decimals(expense.Amount * (*expense.VatPercent / 100))
+	}
+
 	// Validate data
 	if errs := expense.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = expense.CreateNewVendorFromName()
+	if err != nil {
+		response.Status = false
+		response.Errors["new_vendor_from_name"] = "error creating new vendor from name: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -347,6 +381,19 @@ func ViewExpense(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to view:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if expense.VendorID != nil && !expense.VendorID.IsZero() {
+		vendor, err := store.FindVendorByID(expense.VendorID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			w.WriteHeader(http.StatusBadRequest)
+			response.Status = false
+			response.Errors["view"] = "error fetching vendor:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		vendor.SetSearchLabel()
+		expense.Vendor = vendor
 	}
 
 	response.Status = true

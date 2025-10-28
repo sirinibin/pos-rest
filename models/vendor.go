@@ -373,8 +373,19 @@ func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 	}
 
 	if vendor.Name != vendorOld.Name || vendor.NameInArabic != vendorOld.NameInArabic {
-
 		err := store.UpdateManyByCollectionName(
+			"expense",
+			bson.M{"vendor_id": vendor.ID},
+			bson.M{
+				"vendor_name":        vendor.Name,
+				"vendor_name_arabic": vendor.NameInArabic,
+			},
+		)
+		if err != nil {
+			return nil
+		}
+
+		err = store.UpdateManyByCollectionName(
 			"purchase",
 			bson.M{"vendor_id": vendor.ID},
 			bson.M{

@@ -1348,8 +1348,6 @@ func (store *Store) SearchPurchase(w http.ResponseWriter, r *http.Request) (purc
 		if err != nil {
 			return purchases, criterias, err
 		}
-		log.Print("value:")
-		log.Print(value)
 
 		if operator != "" {
 			criterias.SearchBy["vat_price"] = bson.M{operator: float64(value)}

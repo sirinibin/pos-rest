@@ -26,7 +26,7 @@ type Expense struct {
 	ID                  primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	Code                string                `bson:"code,omitempty" json:"code,omitempty"`
 	Amount              float64               `bson:"amount" json:"amount"`
-	Description         string                `bson:"description,omitempty" json:"description,omitempty"`
+	Description         string                `bson:"description" json:"description"`
 	Date                *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr             string                `json:"date_str,omitempty" bson:"-"`
 	PaymentMethod       string                `json:"payment_method" bson:"payment_method"`
@@ -47,12 +47,18 @@ type Expense struct {
 	CreatedByName       string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName       string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	DeletedByName       string                `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	Deleted             bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy           *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser       *User                 `json:"deleted_by_user,omitempty"`
-	DeletedAt           *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	Deleted             bool                  `bson:"deleted" json:"deleted"`
+	DeletedBy           *primitive.ObjectID   `json:"deleted_by" bson:"deleted_by"`
+	DeletedByUser       *User                 `json:"deleted_by_user" bson:"deleted_by_user"`
+	DeletedAt           *time.Time            `bson:"deleted_at" json:"deleted_at"`
 	VendorID            *primitive.ObjectID   `json:"vendor_id" bson:"vendor_id"`
+	Vendor              *Vendor               `json:"vendor,omitempty" bson:"-"`
 	VendorInvoiceNumber string                `bson:"vendor_invoice_no" json:"vendor_invoice_no"`
+	Taxable             bool                  `bson:"taxable" json:"taxable"`
+	VatPercent          *float64              `bson:"vat_percent" json:"vat_percent"`
+	VatPrice            float64               `bson:"vat_price" json:"vat_price"`
+	VendorName          string                `json:"vendor_name" bson:"vendor_name"`
+	VendorNameArabic    string                `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
 }
 
 func (expense *Expense) AttributesValueChangeEvent(expenseOld *Expense) error {
@@ -140,6 +146,18 @@ func (expense *Expense) UpdateForeignLabelFields() error {
 		expense.StoreCode = store.Code
 	}
 
+	if expense.VendorID != nil && !expense.VendorID.IsZero() {
+		vendor, err := store.FindVendorByID(expense.VendorID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1})
+		if err != nil {
+			return err
+		}
+		expense.VendorName = vendor.Name
+		expense.VendorNameArabic = vendor.NameInArabic
+	} else {
+		expense.VendorName = ""
+		expense.VendorNameArabic = ""
+	}
+
 	return nil
 }
 
@@ -217,6 +235,58 @@ func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expen
 			criterias.SearchBy["amount"] = float64(value)
 		}
 
+	}
+
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_method"] = bson.M{"$in": paymentMethods}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[vendor_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		vendorIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range vendorIds {
+			vendorID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return expenses, criterias, err
+			}
+			objecIds = append(objecIds, vendorID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["vendor_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[vat_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return expenses, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["vat_price"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["vat_price"] = float64(value)
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[vendor_invoice_no]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["vendor_invoice_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["search[description]"]
@@ -619,6 +689,18 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 		}
 	}
 
+	var vendor *Vendor
+	if expense.VendorID != nil && !expense.VendorID.IsZero() {
+		vendor, err = store.FindVendorByID(expense.VendorID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			errs["vendor_id"] = "error finding vendor"
+		}
+	}
+
+	if vendor == nil && govalidator.IsNull(expense.VendorName) {
+		expense.VendorID = nil
+	}
+
 	if len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 	}
@@ -676,6 +758,53 @@ func (store *Store) FindLastExpenseByStoreID(
 	}
 
 	return expense, err
+}
+
+func (expense *Expense) CreateNewVendorFromName() error {
+	store, err := FindStoreByID(expense.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	vendor, err := store.FindVendorByID(expense.VendorID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendor != nil || govalidator.IsNull(expense.VendorName) {
+		return nil
+	}
+
+	now := time.Now()
+	newVendor := Vendor{
+		Name:      expense.VendorName,
+		CreatedBy: expense.CreatedBy,
+		UpdatedBy: expense.CreatedBy,
+		CreatedAt: &now,
+		UpdatedAt: &now,
+		StoreID:   expense.StoreID,
+	}
+
+	err = newVendor.MakeCode()
+	if err != nil {
+		return err
+	}
+
+	newVendor.GenerateSearchWords()
+	newVendor.SetSearchLabel()
+	newVendor.SetAdditionalkeywords()
+
+	err = newVendor.Insert()
+	if err != nil {
+		return err
+	}
+	err = newVendor.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	expense.VendorID = &newVendor.ID
+	return nil
 }
 
 func (expense *Expense) MakeRedisCode() error {
