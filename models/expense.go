@@ -164,6 +164,9 @@ func (expense *Expense) UpdateForeignLabelFields() error {
 type ExpenseStats struct {
 	ID    *primitive.ObjectID `json:"id" bson:"_id"`
 	Total float64             `json:"total" bson:"total"`
+	Cash  float64             `json:"cash" bson:"cash"`
+	Bank  float64             `json:"bank" bson:"bank"`
+	Vat   float64             `json:"vat" bson:"vat"`
 }
 
 func (store *Store) GetExpenseStats(filter map[string]interface{}) (stats ExpenseStats, err error) {
@@ -179,6 +182,24 @@ func (store *Store) GetExpenseStats(filter map[string]interface{}) (stats Expens
 			"$group": bson.M{
 				"_id":   nil,
 				"total": bson.M{"$sum": "$amount"},
+				"cash": bson.M{"$sum": bson.M{
+					"$cond": bson.A{
+						bson.M{"$eq": bson.A{"$payment_method", "cash"}},
+						"$amount",
+						0,
+					},
+				}},
+				"bank": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$in": []interface{}{
+							"$payment_method",
+							[]interface{}{"debit_card", "credit_card", "bank_card", "bank_transfer", "bank_cheque"},
+						}},
+						"$amount",
+						0,
+					},
+				}},
+				"vat": bson.M{"$sum": "$vat_price"},
 			},
 		},
 	}
