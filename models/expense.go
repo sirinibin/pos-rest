@@ -526,6 +526,7 @@ func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expen
 	createdByUserSelectFields := map[string]interface{}{}
 	updatedByUserSelectFields := map[string]interface{}{}
 	deletedByUserSelectFields := map[string]interface{}{}
+	vendorSelectFields := map[string]interface{}{}
 
 	keys, ok = r.URL.Query()["select"]
 	if ok && len(keys[0]) >= 1 {
@@ -546,6 +547,10 @@ func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expen
 
 		if _, ok := criterias.Select["deleted_by_user.id"]; ok {
 			deletedByUserSelectFields = ParseRelationalSelectString(keys[0], "deleted_by_user")
+		}
+
+		if _, ok := criterias.Select["vendor.id"]; ok {
+			vendorSelectFields = ParseRelationalSelectString(keys[0], "vendor")
 		}
 
 	}
@@ -583,6 +588,10 @@ func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expen
 				category, _ := store.FindExpenseCategoryByID(categoryID, categorySelectFields)
 				expense.Category = append(expense.Category, category)
 			}
+		}
+
+		if _, ok := criterias.Select["vendor.id"]; ok {
+			expense.Vendor, _ = store.FindVendorByID(expense.VendorID, vendorSelectFields)
 		}
 
 		if _, ok := criterias.Select["created_by_user.id"]; ok {

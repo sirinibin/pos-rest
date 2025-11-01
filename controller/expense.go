@@ -135,6 +135,9 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 		expense.VatPercent = &store.VatPercent
 		baseAmount := models.RoundTo2Decimals(expense.Amount / (1 + (*expense.VatPercent / 100)))
 		expense.VatPrice = models.RoundTo2Decimals(baseAmount * (*expense.VatPercent / 100))
+	} else {
+		expense.VatPercent = nil
+		expense.VatPrice = 0
 	}
 
 	// Validate data
@@ -267,6 +270,9 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		expense.VatPercent = &store.VatPercent
 		baseAmount := models.RoundTo2Decimals(expense.Amount / (1 + (*expense.VatPercent / 100)))
 		expense.VatPrice = models.RoundTo2Decimals(baseAmount * (*expense.VatPercent / 100))
+	} else {
+		expense.VatPercent = nil
+		expense.VatPrice = 0
 	}
 
 	// Validate data
