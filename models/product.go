@@ -47,11 +47,11 @@ type ProductStore struct {
 	WholesaleUnitProfitPerc      float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
 	SalesCount                   int64              `bson:"sales_count" json:"sales_count"`
 	SalesQuantity                float64            `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
-	Sales                        float64            `bson:"sales,omitempty" json:"sales,omitempty"`
+	Sales                        float64            `bson:"sales" json:"sales"`
 	SalesReturnCount             int64              `bson:"sales_return_count" json:"sales_return_count"`
 	SalesReturnQuantity          float64            `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
-	SalesReturn                  float64            `bson:"sales_return,omitempty" json:"sales_return,omitempty"`
-	SalesProfit                  float64            `bson:"sales_profit,omitempty" json:"sales_profit,omitempty"`
+	SalesReturn                  float64            `bson:"sales_return" json:"sales_return"`
+	SalesProfit                  float64            `bson:"sales_profit" json:"sales_profit"`
 	SalesLoss                    float64            `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
 	QuotationSalesCount          int64              `bson:"quotation_sales_count" json:"quotation_sales_count"`
 	QuotationSalesQuantity       float64            `bson:"quotation_sales_quantity,omitempty" json:"quotation_sales_quantity,omitempty"`
@@ -172,14 +172,6 @@ type SetProduct struct {
 	PurchasePricePercent     float64             `bson:"purchase_price_percent" json:"purchase_price_percent"`
 }
 
-type ProductStats struct {
-	ID                  *primitive.ObjectID `json:"id" bson:"_id"`
-	Stock               float64             `json:"stock" bson:"stock"`
-	RetailStockValue    float64             `json:"retail_stock_value" bson:"retail_stock_value"`
-	WholesaleStockValue float64             `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
-	PurchaseStockValue  float64             `json:"purchase_stock_value" bson:"purchase_stock_value"`
-}
-
 func (product *Product) FindSetTotal() {
 	total := float64(0.00)
 	totalWithVAT := float64(0.00)
@@ -233,6 +225,18 @@ func (store *Store) SaveProductImage(productID *primitive.ObjectID, filename str
 	}
 
 	return nil
+}
+
+type ProductStats struct {
+	ID                  *primitive.ObjectID `json:"id" bson:"_id"`
+	Stock               float64             `json:"stock" bson:"stock"`
+	RetailStockValue    float64             `json:"retail_stock_value" bson:"retail_stock_value"`
+	WholesaleStockValue float64             `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
+	PurchaseStockValue  float64             `json:"purchase_stock_value" bson:"purchase_stock_value"`
+	Sales               float64             `json:"sales" bson:"sales"`
+	SalesProfit         float64             `json:"sales_profit" bson:"sales_profit"`
+	SalesReturn         float64             `json:"sales_return" bson:"sales_return"`
+	SalesReturnProfit   float64             `json:"sales_return_profit" bson:"sales_return_profit"`
 }
 
 func (store *Store) GetProductStats(
@@ -297,6 +301,26 @@ func (store *Store) GetProductStats(
 		bson.M{
 			"$group": bson.M{
 				"_id": nil,
+				"sales": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales", 0}},
+					"$product_stores." + storeID.Hex() + ".sales",
+					0,
+				}}},
+				"sales_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales_profit", 0}},
+					"$product_stores." + storeID.Hex() + ".sales_profit",
+					0,
+				}}},
+				"sales_return": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales_return", 0}},
+					"$product_stores." + storeID.Hex() + ".sales_return",
+					0,
+				}}},
+				"sales_return_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales_return_profit", 0}},
+					"$product_stores." + storeID.Hex() + ".sales_return_profit",
+					0,
+				}}},
 				"stock": bson.M{"$sum": bson.M{"$cond": []interface{}{
 					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
 					"$product_stores." + storeID.Hex() + ".stock",
@@ -440,6 +464,10 @@ func (store *Store) GetProductStats(
 		stats.RetailStockValue = RoundFloat(stats.RetailStockValue, 2)
 		stats.WholesaleStockValue = RoundFloat(stats.WholesaleStockValue, 2)
 		stats.PurchaseStockValue = RoundFloat(stats.PurchaseStockValue, 2)
+		stats.Sales = RoundFloat(stats.Sales, 2)
+		stats.SalesProfit = RoundFloat(stats.SalesProfit, 2)
+		stats.SalesReturn = RoundFloat(stats.SalesReturn, 2)
+		stats.SalesReturnProfit = RoundFloat(stats.SalesReturnProfit, 2)
 	}
 	return stats, nil
 }

@@ -136,6 +136,11 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 	response.Meta["wholesale_stock_value"] = productStats.WholesaleStockValue
 	response.Meta["purchase_stock_value"] = productStats.PurchaseStockValue
 
+	response.Meta["sales"] = productStats.Sales
+	response.Meta["sales_profit"] = productStats.SalesProfit
+	response.Meta["sales_return"] = productStats.SalesReturn
+	response.Meta["sales_return_profit"] = productStats.SalesReturnProfit
+
 	if len(products) == 0 {
 		response.Result = []interface{}{}
 	} else {
