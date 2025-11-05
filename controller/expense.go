@@ -76,6 +76,7 @@ func ListExpense(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total"] = expenseStats.Total
 	response.Meta["bank"] = expenseStats.Bank
 	response.Meta["cash"] = expenseStats.Cash
+	response.Meta["purchase_fund"] = expenseStats.PurchaseFund
 	response.Meta["vat"] = expenseStats.Vat
 
 	if len(expenses) == 0 {
