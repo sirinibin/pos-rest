@@ -1033,7 +1033,7 @@ func (order *Order) CreateProductsHistory() error {
 	}
 
 	collection := db.GetDB("store_" + order.StoreID.Hex()).Collection("product_history")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
 	for _, orderProduct := range order.Products {
@@ -1160,7 +1160,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 	}
 
 	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("product_history")
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
 	for _, salesReturnProduct := range salesReturn.Products {
@@ -1291,7 +1291,7 @@ func (purchase *Purchase) CreateProductsHistory() error {
 	}
 
 	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("product_history")
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
 	for _, purchaseProduct := range purchase.Products {
@@ -1416,7 +1416,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 	}
 
 	collection := db.GetDB("store_" + purchaseReturn.StoreID.Hex()).Collection("product_history")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
@@ -1541,7 +1541,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 	}
 
 	collection := db.GetDB("store_" + deliverynote.StoreID.Hex()).Collection("product_history")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
 	for _, deliverynoteProduct := range deliverynote.Products {
@@ -1650,7 +1650,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 	}
 
 	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("product_history")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
 	for _, quotationProduct := range quotation.Products {
@@ -1795,7 +1795,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 	}
 
 	collection := db.GetDB("store_" + quotationsalesReturn.StoreID.Hex()).Collection("product_history")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
 	for _, quotationsalesReturnProduct := range quotationsalesReturn.Products {
