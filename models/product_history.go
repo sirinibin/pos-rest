@@ -13,6 +13,7 @@ import (
 	"github.com/sirinibin/pos-rest/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -1169,12 +1170,12 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 
 		product, err := store.FindProductByID(&salesReturnProduct.ProductID, bson.M{})
 		if err != nil {
-			return err
+			return errors.New("Product not found for sales return product id:" + salesReturnProduct.ProductID.Hex())
 		}
 
 		stock, err := product.GetProductQuantityBeforeOrEqualTo(salesReturn.Date)
 		if err != nil {
-			return err
+			return errors.New("Error getting product quantity for sales return:" + err.Error())
 		}
 
 		history := ProductHistory{
@@ -1211,7 +1212,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 
 		_, err = collection.InsertOne(ctx, &history)
 		if err != nil {
-			return err
+			return errors.New("Error inserting product history:" + err.Error())
 		}
 
 		go product.AdjustStockInHistoryAfter(history.Date)
@@ -1225,7 +1226,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 
 				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(salesReturn.Date)
 				if err != nil {
-					return err
+					return errors.New("error GetProductQuantityBeforeOrEqualTo:" + err.Error())
 				}
 
 				history := ProductHistory{
@@ -1931,7 +1932,11 @@ func (store *Store) IsHistoryExistsByReferenceID(ID *primitive.ObjectID) (exists
 		"reference_id": ID,
 	})
 
-	return (count > 0), err
+	if err != nil && err != mongo.ErrNoDocuments {
+		return (count > 0), err
+	}
+
+	return (count > 0), nil
 }
 
 func (store *Store) GetHistoriesCountByProductID(productID *primitive.ObjectID) (count int64, err error) {

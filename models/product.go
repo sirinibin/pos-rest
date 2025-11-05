@@ -4252,7 +4252,7 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 
 	cur, err := collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return 0, err
+		return 0, errors.New("error aggr. decoding product qty in purchase history:" + err.Error())
 	}
 
 	defer cur.Close(ctx)
@@ -4260,7 +4260,7 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 	if cur.Next(ctx) {
 		err := cur.Decode(&stats)
 		if err != nil {
-			return 0, err
+			return 0, errors.New("error decoding product qty in purchase history:" + err.Error())
 		}
 	}
 

@@ -528,10 +528,23 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		go purchase.SetPostBalances()
 	}
 
-	go func() {
-		purchase.ClearProductsHistory()
-		purchase.CreateProductsHistory()
-	}()
+	err = purchase.ClearProductsHistory()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["clearing_purchase_history"] = "Unable to clear purchase history:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchase.CreateProductsHistory()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["creating_purchase_history"] = "Unable to create purchase history:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	store.NotifyUsers("purchase_updated")
 	response.Status = true
