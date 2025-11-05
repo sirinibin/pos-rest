@@ -1584,11 +1584,18 @@ func (expense *Expense) CreateLedger() (ledger *Ledger, err error) {
 		return nil, err
 	}
 
+	purchaseFundAccount, err := store.CreateAccountIfNotExists(expense.StoreID, nil, nil, "Purchase Fund", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	journals := []Journal{}
 
 	payingAccount := Account{}
 	if expense.PaymentMethod == "cash" {
 		payingAccount = *cashAccount
+	} else if expense.PaymentMethod == "purchase_fund" {
+		payingAccount = *purchaseFundAccount
 	} else if slices.Contains(BANK_PAYMENT_METHODS, expense.PaymentMethod) {
 		payingAccount = *bankAccount
 	}
