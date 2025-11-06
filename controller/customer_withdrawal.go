@@ -55,17 +55,25 @@ func ListCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerwithdrawalStats, err := store.GetCustomerWithdrawalStats(criterias.SearchBy)
-	if err != nil {
-		response.Status = false
-		response.Errors["total"] = "Unable to find total amount of customerwithdrawals:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	var customerwithdrawalStats models.CustomerWithdrawalStats
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			customerwithdrawalStats, err = store.GetCustomerWithdrawalStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["total"] = "Unable to find total amount of customerwithdrawals:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
 	}
 
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total"] = customerwithdrawalStats.Total
+	response.Meta["bank"] = customerwithdrawalStats.Bank
+	response.Meta["cash"] = customerwithdrawalStats.Cash
 
 	if len(customerwithdrawals) == 0 {
 		response.Result = []interface{}{}

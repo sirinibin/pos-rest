@@ -446,6 +446,8 @@ func (customerwithdrawal *CustomerWithdrawal) UpdateForeignLabelFields() error {
 type CustomerWithdrawalStats struct {
 	ID    *primitive.ObjectID `json:"id" bson:"_id"`
 	Total float64             `json:"total" bson:"total"`
+	Cash  float64             `json:"cash" bson:"cash"`
+	Bank  float64             `json:"bank" bson:"bank"`
 }
 
 func (store *Store) GetCustomerWithdrawalStats(filter map[string]interface{}) (stats CustomerWithdrawalStats, err error) {
@@ -461,6 +463,56 @@ func (store *Store) GetCustomerWithdrawalStats(filter map[string]interface{}) (s
 			"$group": bson.M{
 				"_id":   nil,
 				"total": bson.M{"$sum": "$net_total"},
+				"cash": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$and": []interface{}{
+									bson.M{"$eq": []interface{}{"$$payment.method", "cash"}},
+									bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
+				"bank": bson.M{"$sum": bson.M{"$sum": bson.M{
+					"$map": bson.M{
+						"input": "$payments",
+						"as":    "payment",
+						"in": bson.M{
+							"$cond": []interface{}{
+								bson.M{"$or": []interface{}{
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "debit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "credit_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_card"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_transfer"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+									bson.M{"$and": []interface{}{
+										bson.M{"$eq": []interface{}{"$$payment.method", "bank_cheque"}},
+										bson.M{"$gt": []interface{}{"$$payment.amount", 0}},
+									}},
+								}},
+								"$$payment.amount",
+								0,
+							},
+						},
+					},
+				}}},
 			},
 		},
 	}

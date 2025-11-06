@@ -55,17 +55,26 @@ func ListCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customerdepositStats, err := store.GetCustomerDepositStats(criterias.SearchBy)
-	if err != nil {
-		response.Status = false
-		response.Errors["total"] = "Unable to find total amount of customerdeposits:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	var customerdepositStats models.CustomerDepositStats
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			customerdepositStats, err = store.GetCustomerDepositStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["total"] = "Unable to find total amount of customerdeposits:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
 	}
 
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total"] = customerdepositStats.Total
+	response.Meta["bank"] = customerdepositStats.Bank
+	response.Meta["cash"] = customerdepositStats.Cash
+	response.Meta["purchase_fund"] = customerdepositStats.PurchaseFund
 
 	if len(customerdeposits) == 0 {
 		response.Result = []interface{}{}
