@@ -1903,6 +1903,11 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 		return ledgers, err
 	}
 
+	purchaseFundAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Purchase Fund", nil, nil)
+	if err != nil {
+		return ledgers, err
+	}
+
 	cashDiscountAllowedAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash discount allowed", nil, nil)
 	if err != nil {
 		return nil, err
@@ -1914,6 +1919,8 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 		receivingAccount := Account{}
 		if payment.Method == "cash" {
 			receivingAccount = *cashAccount
+		} else if payment.Method == "purchase_fund" {
+			receivingAccount = *purchaseFundAccount
 		} else if slices.Contains(BANK_PAYMENT_METHODS, payment.Method) {
 			receivingAccount = *bankAccount
 		}
