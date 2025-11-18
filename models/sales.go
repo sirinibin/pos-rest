@@ -14,7 +14,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
-	"github.com/sirinibin/pos-rest/db"
+	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -23,23 +23,27 @@ import (
 )
 
 type OrderProduct struct {
-	ProductID                  primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name                       string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic               string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode                   string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PrefixPartNumber           string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber                 string             `bson:"part_number,omitempty" json:"part_number,omitempty"`
-	Quantity                   float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	QuantityReturned           float64            `json:"quantity_returned" bson:"quantity_returned"`
-	UnitPrice                  float64            `bson:"unit_price" json:"unit_price"`
-	UnitPriceWithVAT           float64            `bson:"unit_price_with_vat" json:"unit_price_with_vat"`
-	PurchaseUnitPrice          float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
-	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
-	Unit                       string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitDiscount               float64            `bson:"unit_discount" json:"unit_discount"`
-	UnitDiscountWithVAT        float64            `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
-	UnitDiscountPercent        float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
-	UnitDiscountPercentWithVAT float64            `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
+	ProductID                  primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	WarehouseID                *primitive.ObjectID `json:"warehouse_id,omitempty" bson:"warehouse_id,omitempty"`
+	WarehouseName              string              `json:"warehouse_name,omitempty" bson:"warehouse_name,omitempty"`
+	WarehouseCode              string              `json:"warehouse_code,omitempty" bson:"warehouse_code,omitempty"`
+	Rack                       string              `json:"rack,omitempty" bson:"rack,omitempty"`
+	Name                       string              `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic               string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode                   string              `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber           string              `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber                 string              `bson:"part_number,omitempty" json:"part_number,omitempty"`
+	Quantity                   float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	QuantityReturned           float64             `json:"quantity_returned" bson:"quantity_returned"`
+	UnitPrice                  float64             `bson:"unit_price" json:"unit_price"`
+	UnitPriceWithVAT           float64             `bson:"unit_price_with_vat" json:"unit_price_with_vat"`
+	PurchaseUnitPrice          float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPriceWithVAT   float64             `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
+	Unit                       string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitDiscount               float64             `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountWithVAT        float64             `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
+	UnitDiscountPercent        float64             `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	UnitDiscountPercentWithVAT float64             `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
 	/*LineTotal                  float64            `bson:"line_total" json:"line_total"`
 	LineTotalWithVAT           float64            `bson:"line_total_with_vat" json:"line_total_with_vat"`
 	ActualLineTotal            float64            `bson:"actual_line_total" json:"actual_line_total"`
@@ -1799,9 +1803,9 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			order.PaymentsInput[index].Date = &date
 			payment.Date = &date
 
-			if order.Date != nil && IsAfter(order.Date, order.PaymentsInput[index].Date) {
+			/*if order.Date != nil && IsAfter(order.Date, order.PaymentsInput[index].Date) {
 				errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to order date time"
-			}
+			}*/
 		}
 
 		if payment.Amount == 0 {

@@ -1,4 +1,4 @@
-module github.com/sirinibin/pos-rest
+module github.com/sirinibin/startpos/backend
 
 go 1.23.0
 
@@ -26,6 +26,7 @@ require (
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/image v0.18.0
 	golang.org/x/oauth2 v0.30.0
+	golang.org/x/text v0.28.0
 	google.golang.org/api v0.247.0
 )
 
@@ -71,7 +72,6 @@ require (
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/term v0.34.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 	google.golang.org/grpc v1.74.2 // indirect
 	google.golang.org/protobuf v1.36.7 // indirect

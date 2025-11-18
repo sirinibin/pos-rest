@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/sirinibin/pos-rest/models"
-	"github.com/sirinibin/pos-rest/utils"
+	"github.com/sirinibin/startpos/backend/models"
+	"github.com/sirinibin/startpos/backend/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )

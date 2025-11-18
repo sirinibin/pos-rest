@@ -14,7 +14,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
-	"github.com/sirinibin/pos-rest/db"
+	"github.com/sirinibin/startpos/backend/db"
 	"github.com/xuri/excelize/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"

@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"cloud.google.com/go/translate"
-	"github.com/sirinibin/pos-rest/env"
-	"github.com/sirinibin/pos-rest/models"
+	"github.com/sirinibin/startpos/backend/env"
+	"github.com/sirinibin/startpos/backend/models"
 	"golang.org/x/text/language"
 	"google.golang.org/api/option"
 )

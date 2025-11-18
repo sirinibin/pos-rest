@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/startpos/backend/env"
 	"github.com/twinj/uuid"
 )
 

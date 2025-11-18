@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sirinibin/pos-rest/models"
-	"github.com/sirinibin/pos-rest/utils"
+	"github.com/sirinibin/startpos/backend/models"
+	"github.com/sirinibin/startpos/backend/utils"
 )
 
 // Accesstoken : handler for POST /accesstoken

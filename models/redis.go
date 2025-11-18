@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sirinibin/pos-rest/db"
+	"github.com/sirinibin/startpos/backend/db"
 )
 
 func (token *Token) SaveToRedis() error {

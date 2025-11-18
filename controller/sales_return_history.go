@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sirinibin/pos-rest/models"
+	"github.com/sirinibin/startpos/backend/models"
 )
 
 // List : handler for GET /sales-return/history/<id>

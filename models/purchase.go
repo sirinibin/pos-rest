@@ -13,7 +13,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
-	"github.com/sirinibin/pos-rest/db"
+	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -22,29 +22,33 @@ import (
 )
 
 type PurchaseProduct struct {
-	ProductID                  primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name                       string             `bson:"name" json:"name"`
-	NameInArabic               string             `bson:"name_in_arabic" json:"name_in_arabic"`
-	ItemCode                   string             `bson:"item_code" json:"item_code"`
-	PrefixPartNumber           string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber                 string             `bson:"part_number" json:"part_number"`
-	Quantity                   float64            `json:"quantity" bson:"quantity"`
-	QuantityReturned           float64            `json:"quantity_returned" bson:"quantity_returned"`
-	Unit                       string             `bson:"unit" json:"unit"`
-	PurchaseUnitPrice          float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
-	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
-	RetailUnitPrice            float64            `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
-	RetailUnitPriceWithVAT     float64            `bson:"retail_unit_price_with_vat,omitempty" json:"retail_unit_price_with_vat,omitempty"`
-	WholesaleUnitPrice         float64            `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
-	WholesaleUnitPriceWithVAT  float64            `bson:"wholesale_unit_price_with_vat,omitempty" json:"wholesale_unit_price_with_vat,omitempty"`
-	UnitDiscount               float64            `bson:"unit_discount" json:"unit_discount"`
-	UnitDiscountWithVAT        float64            `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
-	UnitDiscountPercent        float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
-	UnitDiscountPercentWithVAT float64            `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
-	ExpectedRetailProfit       float64            `bson:"retail_profit" json:"retail_profit"`
-	ExpectedWholesaleProfit    float64            `bson:"wholesale_profit" json:"wholesale_profit"`
-	ExpectedWholesaleLoss      float64            `bson:"wholesale_loss" json:"wholesale_loss"`
-	ExpectedRetailLoss         float64            `bson:"retail_loss" json:"retail_loss"`
+	ProductID                  primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	WarehouseID                *primitive.ObjectID `json:"warehouse_id,omitempty" bson:"warehouse_id,omitempty"`
+	WarehouseName              string              `json:"warehouse_name,omitempty" bson:"warehouse_name,omitempty"`
+	WarehouseCode              string              `json:"warehouse_code,omitempty" bson:"warehouse_code,omitempty"`
+	Rack                       string              `json:"rack,omitempty" bson:"rack,omitempty"`
+	Name                       string              `bson:"name" json:"name"`
+	NameInArabic               string              `bson:"name_in_arabic" json:"name_in_arabic"`
+	ItemCode                   string              `bson:"item_code" json:"item_code"`
+	PrefixPartNumber           string              `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber                 string              `bson:"part_number" json:"part_number"`
+	Quantity                   float64             `json:"quantity" bson:"quantity"`
+	QuantityReturned           float64             `json:"quantity_returned" bson:"quantity_returned"`
+	Unit                       string              `bson:"unit" json:"unit"`
+	PurchaseUnitPrice          float64             `bson:"purchase_unit_price" json:"purchase_unit_price"`
+	PurchaseUnitPriceWithVAT   float64             `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
+	RetailUnitPrice            float64             `bson:"retail_unit_price,omitempty" json:"retail_unit_price,omitempty"`
+	RetailUnitPriceWithVAT     float64             `bson:"retail_unit_price_with_vat,omitempty" json:"retail_unit_price_with_vat,omitempty"`
+	WholesaleUnitPrice         float64             `bson:"wholesale_unit_price,omitempty" json:"wholesale_unit_price,omitempty"`
+	WholesaleUnitPriceWithVAT  float64             `bson:"wholesale_unit_price_with_vat,omitempty" json:"wholesale_unit_price_with_vat,omitempty"`
+	UnitDiscount               float64             `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountWithVAT        float64             `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
+	UnitDiscountPercent        float64             `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	UnitDiscountPercentWithVAT float64             `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
+	ExpectedRetailProfit       float64             `bson:"retail_profit" json:"retail_profit"`
+	ExpectedWholesaleProfit    float64             `bson:"wholesale_profit" json:"wholesale_profit"`
+	ExpectedWholesaleLoss      float64             `bson:"wholesale_loss" json:"wholesale_loss"`
+	ExpectedRetailLoss         float64             `bson:"retail_loss" json:"retail_loss"`
 }
 
 // Purchase : Purchase structure
@@ -1648,9 +1652,10 @@ func (purchase *Purchase) Validate(
 			purchase.PaymentsInput[index].Date = &date
 			payment.Date = &date
 
-			if purchase.Date != nil && IsAfter(purchase.Date, purchase.PaymentsInput[index].Date) {
-				errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to purchase date time"
-			}
+			/*
+				if purchase.Date != nil && IsAfter(purchase.Date, purchase.PaymentsInput[index].Date) {
+					errs["payment_date_"+strconv.Itoa(index)] = "Payment date time should be greater than or equal to purchase date time"
+				}*/
 		}
 
 		if payment.Amount == 0 {

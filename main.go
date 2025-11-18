@@ -12,9 +12,9 @@ import (
 	socketio "github.com/googollee/go-socket.io"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
-	"github.com/sirinibin/pos-rest/controller"
-	"github.com/sirinibin/pos-rest/db"
-	"github.com/sirinibin/pos-rest/env"
+	"github.com/sirinibin/startpos/backend/controller"
+	"github.com/sirinibin/startpos/backend/db"
+	"github.com/sirinibin/startpos/backend/env"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -63,6 +63,14 @@ func main() {
 	router.HandleFunc("/v1/store/{id}", controller.ViewStore).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.UpdateStore).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
+
+	//Warehouse
+	router.HandleFunc("/v1/warehouse", controller.CreateWarehouse).Methods("POST")
+	router.HandleFunc("/v1/warehouse", controller.ListWarehouse).Methods("GET")
+	router.HandleFunc("/v1/warehouse/{id}", controller.ViewWarehouse).Methods("GET")
+	router.HandleFunc("/v1/warehouse/code/{code}", controller.ViewWarehouseByCode).Methods("GET")
+	router.HandleFunc("/v1/warehouse/{id}", controller.UpdateWarehouse).Methods("PUT")
+	router.HandleFunc("/v1/warehouse/{id}", controller.DeleteWarehouse).Methods("DELETE")
 
 	//Customer
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")

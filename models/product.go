@@ -18,7 +18,7 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/schollz/progressbar/v3"
-	"github.com/sirinibin/pos-rest/db"
+	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -38,6 +38,7 @@ type ProductStore struct {
 	RetailUnitPriceWithVAT       float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
 	IsUnitPriceWithVAT           bool               `bson:"with_vat" json:"with_vat"`
 	Stock                        float64            `bson:"stock" json:"stock"`
+	WarehouseStocks              map[string]float64 `bson:"warehouse_stocks,omitempty" json:"warehouse_stocks,omitempty"`
 	StocksAdded                  float64            `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
 	StocksRemoved                float64            `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
 	StockAdjustments             []StockAdjustment  `bson:"stock_adjustments" json:"stock_adjustments"`

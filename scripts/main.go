@@ -19,7 +19,7 @@ import (
 	"github.com/boombuler/barcode/code128"
 	"github.com/hennedo/escpos"
 	"github.com/jung-kurt/gofpdf"
-	"github.com/sirinibin/pos-rest/models"
+	"github.com/sirinibin/startpos/backend/models"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
@@ -413,7 +413,7 @@ func GeneratePDF() error {
 	//pdf.AddUTF8Font("HAFS Regular", "U", "./KFGQPC-Uthmanic-Script-HAFS-Regular.otf")
 	//pdf.Font
 
-	//pdf.AddFont("tajawal", "", "/home/sirin/go/src/github.com/sirinibin/pos-rest/scripts/Tajawal-Regular.ttf")
+	//pdf.AddFont("tajawal", "", "/home/sirin/go/src/github.com/sirinibin/startpos/backend/scripts/Tajawal-Regular.ttf")
 
 	pdf.SetTextColor(0, 0, 0)
 	//black color
