@@ -64,14 +64,6 @@ func main() {
 	router.HandleFunc("/v1/store/{id}", controller.UpdateStore).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
 
-	//Warehouse
-	router.HandleFunc("/v1/warehouse", controller.CreateWarehouse).Methods("POST")
-	router.HandleFunc("/v1/warehouse", controller.ListWarehouse).Methods("GET")
-	router.HandleFunc("/v1/warehouse/{id}", controller.ViewWarehouse).Methods("GET")
-	router.HandleFunc("/v1/warehouse/code/{code}", controller.ViewWarehouseByCode).Methods("GET")
-	router.HandleFunc("/v1/warehouse/{id}", controller.UpdateWarehouse).Methods("PUT")
-	router.HandleFunc("/v1/warehouse/{id}", controller.DeleteWarehouse).Methods("DELETE")
-
 	//Customer
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")
 	router.HandleFunc("/v1/customer", controller.ListCustomer).Methods("GET")
