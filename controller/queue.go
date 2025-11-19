@@ -96,6 +96,7 @@ var (
 	storePurchaseReturnQueues       = make(map[string]*SafeQueue)
 	storeQuotationQueues            = make(map[string]*SafeQueue)
 	storeQuotationSalesReturnQueues = make(map[string]*SafeQueue)
+	zatcaQueue                      = NewSafeQueue()
 	queueMu                         sync.Mutex
 )
 
@@ -147,6 +148,9 @@ func GetOrCreateQueue(storeID string, modelName string) *SafeQueue {
 			storeQuotationSalesReturnQueues[storeID] = q
 		}
 		return q
+	} else if modelName == "zatca" {
+		// Return the single global ZATCA queue, ignoring storeID
+		return zatcaQueue
 	}
 
 	return nil

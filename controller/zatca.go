@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os/exec"
@@ -206,9 +205,6 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Print("pythonResponse:")
-	log.Print(pythonResponse)
-
 	if pythonResponse.Error != "" {
 		//log.Print(pythonResponse.Error)
 		response.Status = false
@@ -371,14 +367,22 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		}*/
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		//Zatca Queue
+		zatcaQueue := GetOrCreateQueue("", "zatca")
+		zatcaQueueToken := generateQueueToken()
+		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
+		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+
 		err = order.ReportToZatca()
 		if err != nil {
+			zatcaQueue.Pop()
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+		zatcaQueue.Pop()
 
 		err = order.Update()
 		if err != nil {
@@ -481,7 +485,6 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
 		var lastSalesReturn *models.SalesReturn
-
 		lastSalesReturn, err = salesReturn.FindPreviousSalesReturn(bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments && err != mongo.ErrNilDocument {
 			response.Status = false
@@ -501,14 +504,22 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		//Zatca Queue
+		zatcaQueue := GetOrCreateQueue("", "zatca")
+		zatcaQueueToken := generateQueueToken()
+		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
+		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+
 		err = salesReturn.ReportToZatca()
 		if err != nil {
+			zatcaQueue.Pop()
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+		zatcaQueue.Pop()
 
 		err = salesReturn.Update()
 		if err != nil {

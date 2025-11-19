@@ -221,9 +221,16 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.Zatca = models.ZatcaReporting{}
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && order.EnableReportToZatca {
+		//Zatca Queue
+		zatcaQueue := GetOrCreateQueue("", "zatca")
+		zatcaQueueToken := generateQueueToken()
+		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
+		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+
 		err = order.ReportToZatca()
 		if err != nil {
 			queue.Pop()
+			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 			log.Print("reporting failed")
 			redisErr := order.UnMakeRedisCode()
@@ -241,6 +248,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	err = order.Insert()
 	if err != nil {
 		queue.Pop()
+		zatcaQueue.Pop()
 		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		redisErr := order.UnMakeRedisCode()
 		if redisErr != nil {
@@ -256,6 +264,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	queue.Pop()
+	zatcaQueue.Pop()
 	CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 
 	order.AddPayments()
