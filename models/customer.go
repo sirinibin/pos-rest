@@ -638,28 +638,6 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 	return nil
 }
 
-func (store *Store) UpdateManyByCollectionName(
-	collectionName string,
-	filter bson.M,
-	updateValues bson.M,
-) error {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	updateOptions := options.Update()
-	defer cancel()
-
-	_, err := collection.UpdateMany(
-		ctx,
-		filter,
-		bson.M{"$set": updateValues},
-		updateOptions,
-	)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (customer *Customer) UpdateForeignLabelFields() error {
 
 	if customer.CreatedBy != nil {
