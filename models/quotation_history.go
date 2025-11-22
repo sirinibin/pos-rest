@@ -47,6 +47,8 @@ type ProductQuotationHistory struct {
 	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	Type               string              `bson:"type" json:"type"`
 	PaymentStatus      string              `bson:"payment_status" json:"payment_status"`
+	WarehouseID        *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
+	WarehouseCode      *string             `json:"warehouse_code" bson:"warehouse_code"`
 }
 
 type QuotationHistoryStats struct {
@@ -428,6 +430,11 @@ func (store *Store) SearchQuotationHistory(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[warehouse_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["warehouse_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[profit]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -631,6 +638,8 @@ func (quotation *Quotation) CreateProductsQuotationHistory() error {
 			UpdatedAt:          quotation.UpdatedAt,
 			Type:               quotation.Type,
 			PaymentStatus:      quotation.PaymentStatus,
+			WarehouseID:        quotationProduct.WarehouseID,
+			WarehouseCode:      quotationProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(quotationProduct.UnitPrice)
@@ -680,6 +689,8 @@ func (quotation *Quotation) CreateProductsQuotationHistory() error {
 					DiscountPercent:    quotationProduct.UnitDiscountPercent,
 					CreatedAt:          quotation.CreatedAt,
 					UpdatedAt:          quotation.UpdatedAt,
+					WarehouseID:        quotationProduct.WarehouseID,
+					WarehouseCode:      quotationProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo8Decimals(quotationProduct.UnitPrice * (setProduct.RetailPricePercent / 100))

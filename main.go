@@ -32,7 +32,6 @@ func main() {
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
 	if err != nil {
-		log.Print(err)
 		return
 	}
 	httpsPort = httpsPort + 1

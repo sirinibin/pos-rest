@@ -44,6 +44,8 @@ type ProductPurchaseReturnHistory struct {
 	Vendor             *Vendor             `json:"vendor,omitempty"`
 	CreatedAt          *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	WarehouseID        *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
+	WarehouseCode      *string             `json:"warehouse_code" bson:"warehouse_code"`
 }
 
 type PurchaseReturnHistoryStats struct {
@@ -391,6 +393,11 @@ func (store *Store) SearchPurchaseReturnHistory(w http.ResponseWriter, r *http.R
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[warehouse_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["warehouse_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[vendor_id]"]
 	if ok && len(keys[0]) >= 1 {
 
@@ -575,6 +582,8 @@ func (purchaseReturn *PurchaseReturn) CreateProductsPurchaseReturnHistory() erro
 			DiscountPercent:    purchaseReturnProduct.UnitDiscountPercent,
 			CreatedAt:          purchaseReturn.CreatedAt,
 			UpdatedAt:          purchaseReturn.UpdatedAt,
+			WarehouseID:        purchaseReturnProduct.WarehouseID,
+			WarehouseCode:      purchaseReturnProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice)
@@ -622,6 +631,8 @@ func (purchaseReturn *PurchaseReturn) CreateProductsPurchaseReturnHistory() erro
 					DiscountPercent:    purchaseReturnProduct.UnitDiscountPercent,
 					CreatedAt:          purchaseReturn.CreatedAt,
 					UpdatedAt:          purchaseReturn.UpdatedAt,
+					WarehouseID:        purchaseReturnProduct.WarehouseID,
+					WarehouseCode:      purchaseReturnProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo8Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100))

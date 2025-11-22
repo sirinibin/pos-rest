@@ -44,7 +44,6 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 	client, err := translate.NewClient(ctx, option.WithCredentialsFile(env.Getenv("GOOGLE_APPLICATION_CREDENTIALS", "/home/ubuntu/google-account.json")))
 	if err != nil {
 		http.Error(w, "Failed to create Google Translate client", http.StatusInternalServerError)
-		log.Print("Error creating client: ", err)
 		return
 	}
 	defer client.Close()

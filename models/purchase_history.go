@@ -46,6 +46,8 @@ type ProductPurchaseHistory struct {
 	Vendor           *Vendor             `json:"vendor,omitempty"`
 	CreatedAt        *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt        *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	WarehouseID      *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
+	WarehouseCode    *string             `json:"warehouse_code" bson:"warehouse_code"`
 }
 
 type PurchaseHistoryStats struct {
@@ -372,6 +374,11 @@ func (store *Store) SearchPurchaseHistory(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[warehouse_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["warehouse_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[net_price]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -588,6 +595,8 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 			DiscountPercent: purchaseProduct.UnitDiscountPercent,
 			CreatedAt:       purchase.CreatedAt,
 			UpdatedAt:       purchase.UpdatedAt,
+			WarehouseID:     purchaseProduct.WarehouseID,
+			WarehouseCode:   purchaseProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(purchaseProduct.PurchaseUnitPrice)
@@ -640,6 +649,8 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 					DiscountPercent: purchaseProduct.UnitDiscountPercent,
 					CreatedAt:       purchase.CreatedAt,
 					UpdatedAt:       purchase.UpdatedAt,
+					WarehouseID:     purchaseProduct.WarehouseID,
+					WarehouseCode:   purchaseProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo8Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100))

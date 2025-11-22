@@ -47,6 +47,8 @@ type ProductQuotationSalesReturnHistory struct {
 	Customer                 *Customer           `json:"customer,omitempty"`
 	CreatedAt                *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt                *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	WarehouseID              *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
+	WarehouseCode            *string             `json:"warehouse_code" bson:"warehouse_code"`
 }
 
 type QuotationSalesReturnHistoryStats struct {
@@ -436,6 +438,11 @@ func (store *Store) SearchQuotationSalesReturnHistory(w http.ResponseWriter, r *
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[warehouse_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["warehouse_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
 	keys, ok = r.URL.Query()["search[customer_id]"]
 	if ok && len(keys[0]) >= 1 {
 
@@ -621,6 +628,8 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 			DiscountPercent:          quotationsalesReturnProduct.UnitDiscountPercent,
 			CreatedAt:                quotationsalesReturn.CreatedAt,
 			UpdatedAt:                quotationsalesReturn.UpdatedAt,
+			WarehouseID:              quotationsalesReturnProduct.WarehouseID,
+			WarehouseCode:            quotationsalesReturnProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(quotationsalesReturnProduct.UnitPrice)
@@ -671,6 +680,8 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 					DiscountPercent:          quotationsalesReturnProduct.UnitDiscountPercent,
 					CreatedAt:                quotationsalesReturn.CreatedAt,
 					UpdatedAt:                quotationsalesReturn.UpdatedAt,
+					WarehouseID:              quotationsalesReturnProduct.WarehouseID,
+					WarehouseCode:            quotationsalesReturnProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo8Decimals(quotationsalesReturnProduct.UnitPrice * (setProduct.RetailPricePercent / 100))

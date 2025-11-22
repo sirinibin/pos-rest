@@ -23,10 +23,8 @@ import (
 
 type PurchaseProduct struct {
 	ProductID                  primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	WarehouseID                *primitive.ObjectID `json:"warehouse_id,omitempty" bson:"warehouse_id,omitempty"`
-	WarehouseName              string              `json:"warehouse_name,omitempty" bson:"warehouse_name,omitempty"`
-	WarehouseCode              string              `json:"warehouse_code,omitempty" bson:"warehouse_code,omitempty"`
-	Rack                       string              `json:"rack,omitempty" bson:"rack,omitempty"`
+	WarehouseID                *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
+	WarehouseCode              *string             `json:"warehouse_code" bson:"warehouse_code"`
 	Name                       string              `bson:"name" json:"name"`
 	NameInArabic               string              `bson:"name_in_arabic" json:"name_in_arabic"`
 	ItemCode                   string              `bson:"item_code" json:"item_code"`

@@ -38,7 +38,7 @@ type ProductStore struct {
 	RetailUnitPriceWithVAT       float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
 	IsUnitPriceWithVAT           bool               `bson:"with_vat" json:"with_vat"`
 	Stock                        float64            `bson:"stock" json:"stock"`
-	WarehouseStocks              map[string]float64 `bson:"warehouse_stocks,omitempty" json:"warehouse_stocks,omitempty"`
+	WarehouseStocks              map[string]float64 `bson:"warehouse_stocks" json:"warehouse_stocks"`
 	StocksAdded                  float64            `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
 	StocksRemoved                float64            `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
 	StockAdjustments             []StockAdjustment  `bson:"stock_adjustments" json:"stock_adjustments"`
@@ -3292,8 +3292,6 @@ func ProcessProducts() error {
 			continue
 		}
 
-		log.Print("Branch name:" + store.BranchName)
-
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
 			return err
@@ -4139,7 +4137,152 @@ func (product *Product) SetStock() error {
 		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
 	}
 
+	err = product.SetWarehouseStock()
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func (product *Product) SetWarehouseStock() error {
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	warehouses, err := store.GetAllWarehouses()
+	if err != nil {
+		return err
+	}
+
+	totalWarehouseStock := float64(0)
+
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
+		productStoreTemp.WarehouseStocks = map[string]float64{}
+		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
+	}
+
+	for _, warehouse := range warehouses {
+		salesQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales", &warehouse.ID)
+		if err != nil {
+			return err
+		}
+
+		salesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales_return", &warehouse.ID)
+		if err != nil {
+			return err
+		}
+
+		purchaseQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase", &warehouse.ID)
+		if err != nil {
+			return err
+		}
+
+		purchaseReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase_return", &warehouse.ID)
+		if err != nil {
+			return err
+		}
+
+		quotationSalesQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales", &warehouse.ID)
+		if err != nil {
+			return err
+		}
+
+		quotationSalesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales_return", &warehouse.ID)
+		if err != nil {
+			return err
+		}
+
+		if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
+			newStock := float64(0)
+			newStock += purchaseQuantity
+			newStock -= purchaseReturnQuantity
+
+			newStock -= salesQuantity
+			newStock += salesReturnQuantity
+
+			if store.Settings.UpdateProductStockOnQuotationSales {
+				newStock -= quotationSalesQuantity
+				newStock += quotationSalesReturnQuantity
+			}
+
+			productStoreTemp.WarehouseStocks[warehouse.Code] = RoundTo8Decimals(newStock)
+			totalWarehouseStock += RoundTo8Decimals(newStock)
+
+			product.ProductStores[product.StoreID.Hex()] = productStoreTemp
+		}
+	}
+
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
+		productStoreTemp.WarehouseStocks["main_store"] = RoundTo8Decimals(productStoreTemp.Stock - totalWarehouseStock)
+		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
+	}
+
+	return nil
+}
+
+type WarehouseProductStats struct {
+	Quantity float64 `json:"quantity" bson:"quantity"`
+}
+
+func (product *Product) GetProductQuantityByTypeWarehouseID(typeStr string, warehouseID *primitive.ObjectID) (float64, error) {
+	collectionName := ""
+	if typeStr == "sales" {
+		collectionName = "product_sales_history"
+	} else if typeStr == "sales_return" {
+		collectionName = "product_sales_return_history"
+	} else if typeStr == "purchase" {
+		collectionName = "product_purchase_history"
+	} else if typeStr == "purchase_return" {
+		collectionName = "product_purchase_return_history"
+	} else if typeStr == "quotation_sales" {
+		collectionName = "product_quotation_history"
+	} else if typeStr == "quotation_sales_return" {
+		collectionName = "product_quotation_return_history"
+	}
+
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats WarehouseProductStats
+
+	filter := map[string]interface{}{
+		"product_id":   product.ID,
+		"warehouse_id": warehouseID,
+	}
+
+	if warehouseID == nil {
+		filter["warehouse_id"] = bson.M{"$eq": nil}
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":      nil,
+				"quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats.Quantity, err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats.Quantity, err
+		}
+	}
+
+	return stats.Quantity, nil
 }
 
 type ProductQtyStats struct {
