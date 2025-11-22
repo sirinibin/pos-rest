@@ -52,6 +52,8 @@ type ProductHistory struct {
 	Vendor             *Vendor             `json:"vendor,omitempty" bson:"-"`
 	CreatedAt          *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	WarehouseID        *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
+	WarehouseCode      *string             `json:"warehouse_code" bson:"warehouse_code"`
 }
 
 type HistoryStats struct {
@@ -1067,6 +1069,8 @@ func (order *Order) CreateProductsHistory() error {
 			DiscountPercent:    orderProduct.UnitDiscountPercent,
 			CreatedAt:          order.CreatedAt,
 			UpdatedAt:          order.UpdatedAt,
+			WarehouseID:        orderProduct.WarehouseID,
+			WarehouseCode:      orderProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(orderProduct.UnitPrice)
@@ -1119,6 +1123,8 @@ func (order *Order) CreateProductsHistory() error {
 					DiscountPercent:    orderProduct.UnitDiscountPercent,
 					CreatedAt:          order.CreatedAt,
 					UpdatedAt:          order.UpdatedAt,
+					WarehouseID:        orderProduct.WarehouseID,
+					WarehouseCode:      orderProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(orderProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
@@ -1197,6 +1203,8 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 			DiscountPercent:    salesReturnProduct.UnitDiscountPercent,
 			CreatedAt:          salesReturn.CreatedAt,
 			UpdatedAt:          salesReturn.UpdatedAt,
+			WarehouseID:        salesReturnProduct.WarehouseID,
+			WarehouseCode:      salesReturnProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(salesReturnProduct.UnitPrice)
@@ -1249,6 +1257,8 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 					DiscountPercent:    salesReturnProduct.UnitDiscountPercent,
 					CreatedAt:          salesReturn.CreatedAt,
 					UpdatedAt:          salesReturn.UpdatedAt,
+					WarehouseID:        salesReturnProduct.WarehouseID,
+					WarehouseCode:      salesReturnProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(salesReturnProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
@@ -1325,6 +1335,8 @@ func (purchase *Purchase) CreateProductsHistory() error {
 			DiscountPercent:  purchaseProduct.UnitDiscountPercent,
 			CreatedAt:        purchase.CreatedAt,
 			UpdatedAt:        purchase.UpdatedAt,
+			WarehouseID:      purchaseProduct.WarehouseID,
+			WarehouseCode:    purchaseProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice)
@@ -1376,6 +1388,8 @@ func (purchase *Purchase) CreateProductsHistory() error {
 					DiscountPercent:  purchaseProduct.UnitDiscountPercent,
 					CreatedAt:        purchase.CreatedAt,
 					UpdatedAt:        purchase.UpdatedAt,
+					WarehouseID:      purchaseProduct.WarehouseID,
+					WarehouseCode:    purchaseProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100))
@@ -1453,6 +1467,8 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 			DiscountPercent:  purchaseReturnProduct.UnitDiscountPercent,
 			CreatedAt:        purchaseReturn.CreatedAt,
 			UpdatedAt:        purchaseReturn.UpdatedAt,
+			WarehouseID:      purchaseReturnProduct.WarehouseID,
+			WarehouseCode:    purchaseReturnProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice)
@@ -1502,6 +1518,8 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 					DiscountPercent:  purchaseReturnProduct.UnitDiscountPercent,
 					CreatedAt:        purchaseReturn.CreatedAt,
 					UpdatedAt:        purchaseReturn.UpdatedAt,
+					WarehouseID:      purchaseReturnProduct.WarehouseID,
+					WarehouseCode:    purchaseReturnProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice * (setProduct.PurchasePricePercent / 100))
@@ -1672,6 +1690,9 @@ func (quotation *Quotation) CreateProductsHistory() error {
 					stock -= quotationProduct.Quantity
 				}
 			}
+		} else {
+			quotationProduct.WarehouseCode = nil
+			quotationProduct.WarehouseID = nil
 		}
 
 		history := ProductHistory{
@@ -1693,6 +1714,8 @@ func (quotation *Quotation) CreateProductsHistory() error {
 			DiscountPercent:    quotationProduct.UnitDiscountPercent,
 			CreatedAt:          quotation.CreatedAt,
 			UpdatedAt:          quotation.UpdatedAt,
+			WarehouseID:        quotationProduct.WarehouseID,
+			WarehouseCode:      quotationProduct.WarehouseCode,
 		}
 
 		history.UnitPrice = RoundTo2Decimals(quotationProduct.UnitPrice)
@@ -1753,6 +1776,8 @@ func (quotation *Quotation) CreateProductsHistory() error {
 					DiscountPercent:    quotationProduct.UnitDiscountPercent,
 					CreatedAt:          quotation.CreatedAt,
 					UpdatedAt:          quotation.UpdatedAt,
+					WarehouseID:        quotationProduct.WarehouseID,
+					WarehouseCode:      quotationProduct.WarehouseCode,
 				}
 
 				history.UnitPrice = RoundTo2Decimals(quotationProduct.UnitPrice * (setProduct.RetailPricePercent / 100))

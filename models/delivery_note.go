@@ -19,18 +19,15 @@ import (
 )
 
 type DeliveryNoteProduct struct {
-	ProductID        primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	WarehouseID      *primitive.ObjectID `json:"warehouse_id,omitempty" bson:"warehouse_id,omitempty"`
-	WarehouseName    string              `json:"warehouse_name,omitempty" bson:"warehouse_name,omitempty"`
-	WarehouseCode    string              `json:"warehouse_code,omitempty" bson:"warehouse_code,omitempty"`
-	Rack             string              `json:"rack,omitempty" bson:"rack,omitempty"`
-	Name             string              `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic     string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode         string              `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PrefixPartNumber string              `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber       string              `bson:"part_number" json:"part_number"`
-	Quantity         float64             `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit             string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	ProductID        primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Rack             string             `json:"rack,omitempty" bson:"rack,omitempty"`
+	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber string             `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber       string             `bson:"part_number" json:"part_number"`
+	Quantity         float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
 }
 
 // DeliveryNote : DeliveryNote structure
