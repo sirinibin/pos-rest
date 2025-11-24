@@ -906,6 +906,8 @@ func (product *Product) CreateStockAdjustmentHistory() error {
 			Stock:         newStock,
 			Quantity:      stockAdjustment.Quantity,
 			Unit:          product.Unit,
+			WarehouseID:   stockAdjustment.WarehouseID,
+			WarehouseCode: stockAdjustment.WarehouseCode,
 			CreatedAt:     stockAdjustment.CreatedAt,
 			UpdatedAt:     stockAdjustment.CreatedAt,
 		}

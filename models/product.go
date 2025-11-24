@@ -80,11 +80,13 @@ type ProductStore struct {
 }
 
 type StockAdjustment struct {
-	Date      *time.Time `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr   string     `json:"date_str,omitempty" bson:"-"`
-	Type      string     `bson:"type" json:"type"` // added|removed
-	Quantity  float64    `bson:"quantity" json:"quantity"`
-	CreatedAt *time.Time `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	Date          *time.Time          `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr       string              `json:"date_str,omitempty" bson:"-"`
+	Type          string              `bson:"type" json:"type"` // added|removed
+	Quantity      float64             `bson:"quantity" json:"quantity"`
+	WarehouseID   *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
+	WarehouseCode *string             `json:"warehouse_code" bson:"warehouse_code"`
+	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 }
 
 type AdditionalStock struct {
@@ -4130,8 +4132,24 @@ func (product *Product) SetStock() error {
 			}
 		}
 
-		newStock += productStoreTemp.StocksAdded
-		newStock -= productStoreTemp.StocksRemoved
+		//newStock += productStoreTemp.StocksAdded
+		//newStock -= productStoreTemp.StocksRemoved
+
+		for _, stockAdjustment := range productStoreTemp.StockAdjustments {
+			if stockAdjustment.Type == "adding" {
+				newStock += stockAdjustment.Quantity
+			} else if stockAdjustment.Type == "removing" {
+				newStock -= stockAdjustment.Quantity
+			}
+			/*
+				if stockAdjustment.WarehouseID == nil || stockAdjustment.WarehouseID.IsZero() {
+					if stockAdjustment.Type == "adding" {
+						newStock += stockAdjustment.Quantity
+					} else if stockAdjustment.Type == "removing" {
+						newStock -= stockAdjustment.Quantity
+					}
+				}*/
+		}
 
 		productStoreTemp.Stock = RoundTo4Decimals(newStock)
 		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
@@ -4163,6 +4181,10 @@ func (product *Product) SetWarehouseStock() error {
 	}
 
 	for _, warehouse := range warehouses {
+		if warehouse.Code == "" {
+			continue
+		}
+
 		salesQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales", &warehouse.ID)
 		if err != nil {
 			return err
@@ -4206,12 +4228,31 @@ func (product *Product) SetWarehouseStock() error {
 				newStock += quotationSalesReturnQuantity
 			}
 
+			for _, stockAdjustment := range productStoreTemp.StockAdjustments {
+				if stockAdjustment.WarehouseID != nil &&
+					!stockAdjustment.WarehouseID.IsZero() &&
+					*stockAdjustment.WarehouseCode == warehouse.Code {
+					//log.Print("OK:" + warehouse.Code + ",stockAdjustment.Type:" + stockAdjustment.Type)
+					//log.Print(stockAdjustment.Quantity)
+					if stockAdjustment.Type == "adding" {
+						newStock += stockAdjustment.Quantity
+					} else if stockAdjustment.Type == "removing" {
+						newStock -= stockAdjustment.Quantity
+					}
+				}
+			}
+
+			//log.Print("Warehouse:" + warehouse.Code)
+			//log.Print(newStock)
+
 			productStoreTemp.WarehouseStocks[warehouse.Code] = RoundTo8Decimals(newStock)
 			totalWarehouseStock += RoundTo8Decimals(newStock)
 
 			product.ProductStores[product.StoreID.Hex()] = productStoreTemp
 		}
 	}
+
+	//log.Print("totalWarehouseStock:" + fmt.Sprintf("%f", totalWarehouseStock))
 
 	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		productStoreTemp.WarehouseStocks["main_store"] = RoundTo8Decimals(productStoreTemp.Stock - totalWarehouseStock)
