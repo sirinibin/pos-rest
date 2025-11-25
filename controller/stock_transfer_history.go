@@ -1,0 +1,72 @@
+package controller
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/sirinibin/startpos/backend/models"
+)
+
+// List : handler for GET /stocktransfer/history/<id>
+func ListStockTransferHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	histories, criterias, err := store.SearchStockTransferHistory(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find stocktransfer history:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_stocktransfer_history")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of stocktransfers:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	stocktransferHistoryStats, err := store.GetStockTransferHistoryStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_stocktransfer"] = "Unable to find total amount of stocktransfer:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["total_stocktransfer_amount"] = stocktransferHistoryStats.TotalStockTransferAmount
+	response.Meta["total_stocktransfer_quantity"] = stocktransferHistoryStats.TotalStockTransferQuantity
+
+	if len(histories) == 0 {
+		response.Result = []interface{}{}
+	} else {
+		response.Result = histories
+	}
+
+	json.NewEncoder(w).Encode(response)
+
+}
