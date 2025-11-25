@@ -77,6 +77,9 @@ type ProductStore struct {
 	Quotation                    float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
 	DeliveryNoteCount            int64              `bson:"delivery_note_count" json:"delivery_note_count"`
 	DeliveryNoteQuantity         float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
+	StockTransferAmount          float64            `bson:"stocktransfer_amount" json:"stocktransfer_amount"`
+	StockTransferCount           int64              `bson:"stocktransfer_count" json:"stocktransfer_count"`
+	StockTransferQuantity        float64            `bson:"stocktransfer_quantity" json:"stocktransfer_quantity"`
 }
 
 type StockAdjustment struct {
@@ -3290,9 +3293,10 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" {
-			continue
-		}
+		/*
+			if store.Code != "MBDIT" && store.Code != "MBDI" {
+				continue
+			}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
@@ -3328,6 +3332,8 @@ func ProcessProducts() error {
 			if product.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+			product.SetStock()
+			product.Update(&store.ID)
 
 			//log.Print("Part No.:" + product.PartNumber)
 			//log.Print("Product Name:" + product.Name)
@@ -3354,49 +3360,50 @@ func ProcessProducts() error {
 			log.Print("Part No.:" + product.PartNumber)
 			log.Print("Product Name:" + product.Name)*/
 
-			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
+			/*
+				destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
 
-			for _, destinationCode := range destinations {
-				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
-				if err != nil && err != mongo.ErrNoDocuments {
-					return err
-				}
-
-				if destinationStore != nil {
-					if product.BrandID != nil {
-						productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if productBrand != nil {
-							err = productBrand.CopyToStore(&destinationStore.ID)
-							if err != nil {
-								return err
-							}
-						}
-					}
-
-					if len(product.CategoryID) > 0 {
-						productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
-						if err != nil && err != mongo.ErrNoDocuments {
-							return err
-						}
-
-						if productCategory != nil {
-							err = productCategory.CopyToStore(&destinationStore.ID)
-							if err != nil {
-								return err
-							}
-						}
-					}
-
-					err = product.CopyToStore(&destinationStore.ID)
-					if err != nil {
+				for _, destinationCode := range destinations {
+					destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+					if err != nil && err != mongo.ErrNoDocuments {
 						return err
 					}
-				}
-			}
+
+					if destinationStore != nil {
+						if product.BrandID != nil {
+							productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
+							if err != nil && err != mongo.ErrNoDocuments {
+								return err
+							}
+
+							if productBrand != nil {
+								err = productBrand.CopyToStore(&destinationStore.ID)
+								if err != nil {
+									return err
+								}
+							}
+						}
+
+						if len(product.CategoryID) > 0 {
+							productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
+							if err != nil && err != mongo.ErrNoDocuments {
+								return err
+							}
+
+							if productCategory != nil {
+								err = productCategory.CopyToStore(&destinationStore.ID)
+								if err != nil {
+									return err
+								}
+							}
+						}
+
+						err = product.CopyToStore(&destinationStore.ID)
+						if err != nil {
+							return err
+						}
+					}
+				}*/
 
 			/*
 				product.SetStock()
@@ -4185,6 +4192,16 @@ func (product *Product) SetWarehouseStock() error {
 			continue
 		}
 
+		sentQuantity, err := product.GetProductQuantityByTypeByWarehouseID("sent", warehouse.ID)
+		if err != nil {
+			return err
+		}
+
+		receivedQuantity, err := product.GetProductQuantityByTypeByWarehouseID("received", warehouse.ID)
+		if err != nil {
+			return err
+		}
+
 		salesQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales", &warehouse.ID)
 		if err != nil {
 			return err
@@ -4241,6 +4258,9 @@ func (product *Product) SetWarehouseStock() error {
 					}
 				}
 			}
+
+			newStock -= sentQuantity
+			newStock += receivedQuantity
 
 			//log.Print("Warehouse:" + warehouse.Code)
 			//log.Print(newStock)
@@ -4328,6 +4348,53 @@ func (product *Product) GetProductQuantityByTypeWarehouseID(typeStr string, ware
 
 type ProductQtyStats struct {
 	Quantity float64 `json:"quantity" bson:"quantity"`
+}
+
+func (product *Product) GetProductQuantityByTypeByWarehouseID(typeStr string, warehouseID primitive.ObjectID) (float64, error) {
+	collectionName := "product_transfer_history"
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats WarehouseProductStats
+
+	filter := map[string]interface{}{
+		"product_id": product.ID,
+	}
+
+	if typeStr == "sent" {
+		filter["from_warehouse_id"] = warehouseID
+	} else if typeStr == "received" {
+		filter["to_warehouse_id"] = warehouseID
+	}
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":      nil,
+				"quantity": bson.M{"$sum": "$quantity"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats.Quantity, err
+	}
+
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats.Quantity, err
+		}
+	}
+
+	return stats.Quantity, nil
 }
 
 func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (float64, error) {

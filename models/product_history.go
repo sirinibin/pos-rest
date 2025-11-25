@@ -32,6 +32,10 @@ type ProductHistory struct {
 	VendorID           *primitive.ObjectID `json:"vendor_id,omitempty" bson:"vendor_id,omitempty"`
 	VendorName         string              `json:"vendor_name,omitempty" bson:"vendor_name,omitempty"`
 	VendorNameArabic   string              `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
+	FromWarehouseID    *primitive.ObjectID `json:"from_warehouse_id" bson:"from_warehouse_id"`
+	FromWarehouseCode  *string             `json:"from_warehouse_code" bson:"from_warehouse_code"`
+	ToWarehouseID      *primitive.ObjectID `json:"to_warehouse_id" bson:"to_warehouse_id"`
+	ToWarehouseCode    *string             `json:"to_warehouse_code" bson:"to_warehouse_code"`
 	Stock              float64             `json:"stock" bson:"stock"`
 	Quantity           float64             `json:"quantity" bson:"quantity"`
 	PurchaseUnitPrice  float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
@@ -789,6 +793,16 @@ func (model *Product) ClearStockAdjustmentHistory() error {
 	return nil
 }
 
+func (model *StockTransfer) ClearProductsHistory() error {
+	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_history")
+	ctx := context.Background()
+	_, err := collection.DeleteMany(ctx, bson.M{"reference_id": model.ID})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (model *Order) ClearProductsHistory() error {
 	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_history")
 	ctx := context.Background()
@@ -1018,6 +1032,129 @@ func (product *Product) GetHistoriesAfter(after *time.Time) (models []ProductHis
 	} //end for loop
 
 	return models, nil
+}
+
+func (stockTransfer *StockTransfer) CreateProductsHistory() error {
+	store, err := FindStoreByID(stockTransfer.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+	//log.Printf("Creating  history of order id:%s", order.Code)
+	exists, err := store.IsHistoryExistsByReferenceID(&stockTransfer.ID)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	collection := db.GetDB("store_" + stockTransfer.StoreID.Hex()).Collection("product_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
+	defer cancel()
+
+	for _, stockTransferProduct := range stockTransfer.Products {
+		product, err := store.FindProductByID(&stockTransferProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(stockTransfer.Date)
+		if err != nil {
+			return err
+		}
+
+		history := ProductHistory{
+			Date:              stockTransfer.Date,
+			StoreID:           stockTransfer.StoreID,
+			ProductID:         stockTransferProduct.ProductID,
+			ReferenceType:     "stock_transfer",
+			ReferenceID:       &stockTransfer.ID,
+			ReferenceCode:     stockTransfer.Code,
+			FromWarehouseID:   stockTransfer.FromWarehouseID,
+			FromWarehouseCode: stockTransfer.FromWarehouseCode,
+			ToWarehouseID:     stockTransfer.ToWarehouseID,
+			ToWarehouseCode:   stockTransfer.ToWarehouseCode,
+			Stock:             stock,
+			Quantity:          stockTransferProduct.Quantity,
+			PurchaseUnitPrice: stockTransferProduct.PurchaseUnitPrice,
+			Unit:              stockTransferProduct.Unit,
+			UnitDiscount:      stockTransferProduct.UnitDiscount,
+			Discount:          (stockTransferProduct.UnitDiscount * stockTransferProduct.Quantity),
+			DiscountPercent:   stockTransferProduct.UnitDiscountPercent,
+			CreatedAt:         stockTransfer.CreatedAt,
+			UpdatedAt:         stockTransfer.UpdatedAt,
+		}
+
+		history.UnitPrice = RoundTo2Decimals(stockTransferProduct.UnitPrice)
+		history.UnitPriceWithVAT = RoundTo2Decimals(stockTransferProduct.UnitPriceWithVAT)
+		history.Price = RoundTo2Decimals(((stockTransferProduct.UnitPrice - stockTransferProduct.UnitDiscount) * stockTransferProduct.Quantity))
+
+		history.VatPercent = RoundTo2Decimals(*stockTransfer.VatPercent)
+		history.VatPrice = RoundTo2Decimals((history.Price * (history.VatPercent / 100)))
+		history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
+		history.ID = primitive.NewObjectID()
+
+		_, err = collection.InsertOne(ctx, &history)
+		if err != nil {
+			return err
+		}
+
+		go product.AdjustStockInHistoryAfter(history.Date)
+
+		if len(product.Set.Products) > 0 {
+			for _, setProduct := range product.Set.Products {
+				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
+				if err != nil {
+					return err
+				}
+
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(stockTransfer.Date)
+				if err != nil {
+					return err
+				}
+
+				history := ProductHistory{
+					Date:              stockTransfer.Date,
+					StoreID:           stockTransfer.StoreID,
+					ProductID:         *setProduct.ProductID,
+					FromWarehouseID:   stockTransfer.FromWarehouseID,
+					FromWarehouseCode: stockTransfer.FromWarehouseCode,
+					ToWarehouseID:     stockTransfer.ToWarehouseID,
+					ToWarehouseCode:   stockTransfer.ToWarehouseCode,
+					ReferenceType:     "stock_transfer",
+					ReferenceID:       &stockTransfer.ID,
+					ReferenceCode:     stockTransfer.Code,
+					Stock:             stock,
+					Quantity:          RoundTo2Decimals(stockTransferProduct.Quantity * setProduct.Quantity),
+					PurchaseUnitPrice: RoundTo2Decimals(stockTransferProduct.PurchaseUnitPrice * (setProduct.PurchasePricePercent / 100)),
+					Unit:              setProductObj.Unit,
+					UnitDiscount:      RoundTo2Decimals(stockTransferProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)),
+					Discount:          RoundTo2Decimals((stockTransferProduct.UnitDiscount * (setProduct.RetailPricePercent / 100)) * RoundTo2Decimals(stockTransferProduct.Quantity*setProduct.Quantity)),
+					DiscountPercent:   stockTransferProduct.UnitDiscountPercent,
+					CreatedAt:         stockTransfer.CreatedAt,
+					UpdatedAt:         stockTransfer.UpdatedAt,
+				}
+
+				history.UnitPrice = RoundTo2Decimals(stockTransferProduct.UnitPrice * (setProduct.RetailPricePercent / 100))
+				history.UnitPriceWithVAT = RoundTo2Decimals(stockTransferProduct.UnitPriceWithVAT * (setProduct.RetailPricePercent / 100))
+				history.Price = RoundTo2Decimals((history.UnitPrice - history.UnitDiscount) * history.Quantity)
+
+				history.VatPercent = RoundTo2Decimals(*stockTransfer.VatPercent)
+				history.VatPrice = RoundTo2Decimals(history.Price * (history.VatPercent / 100))
+				history.NetPrice = RoundTo2Decimals((history.Price + history.VatPrice))
+				history.ID = primitive.NewObjectID()
+
+				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				go setProductObj.AdjustStockInHistoryAfter(history.Date)
+			}
+		}
+	}
+	return nil
 }
 
 func (order *Order) CreateProductsHistory() error {

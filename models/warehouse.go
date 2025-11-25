@@ -19,35 +19,41 @@ import (
 
 // Warehouse : Warehouse structure
 type Warehouse struct {
-	ID              primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name            string              `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic    string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	Code            string              `bson:"code" json:"code"`
-	Email           string              `bson:"email,omitempty" json:"email,omitempty"`
-	Phone           string              `bson:"phone,omitempty" json:"phone,omitempty"`
-	PhoneInArabic   string              `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
-	Address         string              `bson:"address,omitempty" json:"address,omitempty"`
-	AddressInArabic string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
-	ZipCode         string              `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
-	ZipCodeInArabic string              `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
-	CountryName     string              `bson:"country_name" json:"country_name"`
-	CountryCode     string              `bson:"country_code" json:"country_code"`
-	NationalAddress NationalAddress     `bson:"national_address,omitempty" json:"national_address,omitempty"`
-	Deleted         bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	DeletedBy       *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
-	DeletedByUser   *User               `json:"deleted_by_user,omitempty"`
-	DeletedAt       *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	CreatedAt       *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt       *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy       *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy       *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	CreatedByUser   *User               `json:"created_by_user,omitempty"`
-	UpdatedByUser   *User               `json:"updated_by_user,omitempty"`
-	CreatedByName   string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName   string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
-	DeletedByName   string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
-	StoreID         *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	Store           *Store              `json:"store,omitempty"`
+	ID                            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	Name                          string              `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic                  string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	Code                          string              `bson:"code" json:"code"`
+	Email                         string              `bson:"email,omitempty" json:"email,omitempty"`
+	Phone                         string              `bson:"phone,omitempty" json:"phone,omitempty"`
+	PhoneInArabic                 string              `bson:"phone_in_arabic,omitempty" json:"phone_in_arabic,omitempty"`
+	Address                       string              `bson:"address,omitempty" json:"address,omitempty"`
+	AddressInArabic               string              `bson:"address_in_arabic,omitempty" json:"address_in_arabic,omitempty"`
+	ZipCode                       string              `bson:"zipcode,omitempty" json:"zipcode,omitempty"`
+	ZipCodeInArabic               string              `bson:"zipcode_in_arabic,omitempty" json:"zipcode_in_arabic,omitempty"`
+	CountryName                   string              `bson:"country_name" json:"country_name"`
+	CountryCode                   string              `bson:"country_code" json:"country_code"`
+	NationalAddress               NationalAddress     `bson:"national_address,omitempty" json:"national_address,omitempty"`
+	Deleted                       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
+	DeletedBy                     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	DeletedByUser                 *User               `json:"deleted_by_user,omitempty"`
+	DeletedAt                     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	CreatedAt                     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt                     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy                     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy                     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByUser                 *User               `json:"created_by_user,omitempty"`
+	UpdatedByUser                 *User               `json:"updated_by_user,omitempty"`
+	CreatedByName                 string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName                 string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	DeletedByName                 string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
+	StoreID                       *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	Store                         *Store              `json:"store,omitempty"`
+	StockTransferSentCount        int64               `bson:"stock_transfer_sent_count" json:"stock_transfer_sent_count"`
+	StockTransferSentAmount       float64             `bson:"stock_transfer_sent_amount" json:"stock_transfer_sent_amount"`
+	StockTransferSentQuantity     float64             `bson:"stock_transfer_sent_quantity" json:"stock_transfer_sent_quantity"`
+	StockTransferReceivedCount    int64               `bson:"stock_transfer_received_count" json:"stock_transfer_received_count"`
+	StockTransferReceivedAmount   float64             `bson:"stock_transfer_received_amount" json:"stock_transfer_received_amount"`
+	StockTransferReceivedQuantity float64             `bson:"stock_transfer_received_quantity" json:"stock_transfer_received_quantity"`
 }
 
 /*

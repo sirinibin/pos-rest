@@ -201,6 +201,19 @@ func main() {
 	router.HandleFunc("/v1/delivery-note/{id}", controller.ViewDeliveryNote).Methods("GET")
 	router.HandleFunc("/v1/delivery-note/{id}", controller.UpdateDeliveryNote).Methods("PUT")
 
+	//StockTransfer
+	router.HandleFunc("/v1/stock-transfer", controller.CreateStockTransfer).Methods("POST")
+	router.HandleFunc("/v1/stock-transfer/calculate-net-total", controller.CalculateStockTransferNetTotal).Methods("POST")
+	router.HandleFunc("/v1/stock-transfer/{id}", controller.UpdateStockTransfer).Methods("PUT")
+	router.HandleFunc("/v1/stock-transfer", controller.ListStockTransfer).Methods("GET")
+	router.HandleFunc("/v1/stock-transfer/{id}", controller.ViewStockTransfer).Methods("GET")
+	router.HandleFunc("/v1/previous-stock-transfer/{id}", controller.ViewPreviousStockTransfer).Methods("GET")
+	router.HandleFunc("/v1/next-stock-transfer/{id}", controller.ViewNextStockTransfer).Methods("GET")
+	router.HandleFunc("/v1/last-stock-transfer", controller.ViewLastStockTransfer).Methods("GET")
+
+	//Stock Transfer History
+	router.HandleFunc("/v1/stock-transfer/history", controller.ListStockTransferHistory).Methods("GET")
+
 	//Order
 	router.HandleFunc("/v1/order", controller.CreateOrder).Methods("POST")
 	router.HandleFunc("/v1/order/calculate-net-total", controller.CalculateSalesNetTotal).Methods("POST")
@@ -454,15 +467,15 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 
-		err = models.ProcessCustomers()
-		if err != nil {
-			log.Print(err)
-		}
+			err = models.ProcessCustomers()
+			if err != nil {
+				log.Print(err)
+			}
 
-		err = models.ProcessVendors()
-		if err != nil {
-			log.Print(err)
-		}*/
+			err = models.ProcessVendors()
+			if err != nil {
+				log.Print(err)
+			}*/
 
 	/*
 

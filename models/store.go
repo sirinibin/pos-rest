@@ -80,6 +80,7 @@ type Store struct {
 	CustomerWithdrawalSerialNumber         SerialNumber          `bson:"customer_withdrawal_serial_number" json:"customer_withdrawal_serial_number"`
 	CapitalDepositSerialNumber             SerialNumber          `bson:"capital_deposit_serial_number" json:"capital_deposit_serial_number"`
 	DividentSerialNumber                   SerialNumber          `bson:"divident_serial_number" json:"divident_serial_number"`
+	StockTransferSerialNumber              SerialNumber          `bson:"stock_transfer_serial_number" json:"stock_transfer_serial_number"`
 	ShowAddressInInvoiceFooter             bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
 	DefaultQuotationValidityDays           *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
 	DefaultQuotationDeliveryDays           *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
@@ -119,6 +120,7 @@ type StoreSettings struct {
 	DisablePurchasesOnAccounts             bool            `bson:"disable_purchases_on_accounts" json:"disable_purchases_on_accounts"`
 	Invoice                                InvoiceSettings `bson:"invoice" json:"invoice"`
 	EnableAutoTranslationToArabic          bool            `bson:"enable_auto_translation_to_arabic" json:"enable_auto_translation_to_arabic"`
+	EnableWarehouseModule                  bool            `bson:"enable_warehouse_module" json:"enable_warehouse_module"`
 }
 
 type InvoiceSettings struct {
@@ -131,6 +133,7 @@ type InvoiceSettings struct {
 	DeliveryNoteTitle    string               `bson:"delivery_note_title" json:"delivery_note_title"`
 	PayableTitle         string               `bson:"payable_title" json:"payable_title"`
 	ReceivableTitle      string               `bson:"receivabale_title" json:"receivable_title"`
+	StockTransferTitle   string               `bson:"stock_transfer_title" json:"stock_transfer_title"`
 }
 
 type PhaseInvoiceSettings struct {
