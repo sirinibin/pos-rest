@@ -4262,9 +4262,6 @@ func (product *Product) SetWarehouseStock() error {
 			newStock -= sentQuantity
 			newStock += receivedQuantity
 
-			//log.Print("Warehouse:" + warehouse.Code)
-			//log.Print(newStock)
-
 			productStoreTemp.WarehouseStocks[warehouse.Code] = RoundTo8Decimals(newStock)
 			totalWarehouseStock += RoundTo8Decimals(newStock)
 
@@ -4351,7 +4348,7 @@ type ProductQtyStats struct {
 }
 
 func (product *Product) GetProductQuantityByTypeByWarehouseID(typeStr string, warehouseID primitive.ObjectID) (float64, error) {
-	collectionName := "product_transfer_history"
+	collectionName := "product_stocktransfer_history"
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
