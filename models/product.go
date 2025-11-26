@@ -3293,11 +3293,9 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		/*
-			if store.Code != "MBDIT" && store.Code != "MBDI" {
-				continue
-			}*/
-
+		if store.Code != "MBDIT" && store.Code != "MBDI" {
+			continue
+		}
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
 		if err != nil {
 			return err
@@ -3333,6 +3331,7 @@ func ProcessProducts() error {
 				continue
 			}
 			product.SetStock()
+			product.AllowDuplicates = true
 			product.Update(&store.ID)
 
 			//log.Print("Part No.:" + product.PartNumber)
