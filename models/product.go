@@ -3319,7 +3319,7 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" {
+		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
 		}
 		totalCount, err := store.GetTotalCount(bson.M{}, "product")
