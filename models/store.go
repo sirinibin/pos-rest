@@ -1664,7 +1664,7 @@ func (store *Store) ImportProductCategoriesFromExcel(filename string) {
 
 						product.GeneratePrefixes()
 						product.SetAdditionalkeywords()
-						product.SetSearchLabel(&store.ID)
+
 
 						err = product.SetStock()
 						if err != nil {
@@ -1812,7 +1812,6 @@ func (store *Store) ImportProductsFromExcel(filename string) {
 
 			product.GeneratePrefixes()
 			product.SetAdditionalkeywords()
-			product.SetSearchLabel(&store.ID)
 
 			err = product.SetStock()
 			if err != nil {
@@ -1937,7 +1936,6 @@ func (store *Store) UpdateProductStockFromExcel(filename string) {
 
 			product.GeneratePrefixes()
 			product.SetAdditionalkeywords()
-			product.SetSearchLabel(&store.ID)
 
 			err = product.SetStock()
 			if err != nil {

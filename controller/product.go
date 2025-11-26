@@ -259,7 +259,6 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 
 	product.SetStock()
 	product.SetAdditionalkeywords()
-	product.SetSearchLabel(&store.ID)
 
 	err = product.Insert()
 	if err != nil {
@@ -414,7 +413,6 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
 	product.SetStock()
 	product.SetAdditionalkeywords()
-	product.SetSearchLabel(&store.ID)
 
 	err = product.Update(nil)
 	if err != nil {

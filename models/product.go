@@ -2247,7 +2247,7 @@ func CleanStringPreserveSpace(s string) string {
 	return strings.TrimSpace(b.String())
 }
 
-func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
+func (product *Product) SetSearchLabel() {
 	product.SearchLabel = ""
 	if product.PrefixPartNumber != "" && product.PartNumber != "" {
 		product.SearchLabel = "#" + product.PrefixPartNumber + " - " + product.PartNumber + " - "
@@ -2263,11 +2263,38 @@ func (product *Product) SetSearchLabel(storeID *primitive.ObjectID) {
 		product.SearchLabel += " - " + product.NameInArabic
 	}
 
-	_, ok := product.ProductStores[storeID.Hex()]
+	_, ok := product.ProductStores[product.StoreID.Hex()]
 	if ok {
-		product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].Stock) + " " + product.Unit
-		if product.ProductStores[storeID.Hex()].RetailUnitPrice != 0 {
-			product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[storeID.Hex()].RetailUnitPrice)
+		stockStr := ""
+		stockCount := 1
+		for warehouseCode, warehouseStock := range product.ProductStores[product.StoreID.Hex()].WarehouseStocks {
+			if stockCount == 1 {
+				stockStr = "("
+			}
+			warehouseCodeStr := ""
+			warehouseCodeStr = warehouseCode
+			if warehouseCode == "main_store" {
+				warehouseCodeStr = "Main Store"
+			}
+
+			stockStr += warehouseCodeStr + ": " + fmt.Sprintf("%.2f", warehouseStock)
+
+			if product.Unit != "" {
+				stockStr += " " + product.Unit
+			}
+
+			if stockCount < len(product.ProductStores[product.StoreID.Hex()].WarehouseStocks) {
+				stockStr += ", "
+			} else {
+				stockStr += ")"
+			}
+
+			stockCount++
+		}
+
+		product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[product.StoreID.Hex()].Stock) + " " + product.Unit + " " + stockStr
+		if product.ProductStores[product.StoreID.Hex()].RetailUnitPrice != 0 {
+			product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[product.StoreID.Hex()].RetailUnitPrice)
 		}
 	}
 
@@ -2834,7 +2861,6 @@ func (product *Product) CopyToStore(storeID *primitive.ObjectID) (err error) {
 	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
 	product.SetStock()
 	product.SetAdditionalkeywords()
-	product.SetSearchLabel(&store.ID)
 	product.ClearStockAdjustmentHistory()
 
 	err = product.Update(storeID)
@@ -3339,7 +3365,6 @@ func ProcessProducts() error {
 
 			/*product.GeneratePrefixes()
 			//log.Print("GNERATED PREFIXES")
-			product.SetSearchLabel(&store.ID)
 			//log.Print("Search label set")
 			product.SetAdditionalkeywords()
 			//log.Print("Additional keywords set")
@@ -4165,6 +4190,9 @@ func (product *Product) SetStock() error {
 	if err != nil {
 		return err
 	}
+
+	product.SetSearchLabel()
+
 	return nil
 }
 
