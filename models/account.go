@@ -584,7 +584,7 @@ func (store *Store) CreateAccountIfNotExists(
 	phone *string,
 	vatNo *string,
 ) (account *Account, err error) {
-	name = strings.ToUpper(name)
+	name = strings.ToUpper(strings.TrimSpace(name))
 	if vatNo != nil && !govalidator.IsNull(strings.TrimSpace(*vatNo)) {
 		account, err = store.FindAccountByVatNoByName(*vatNo, name, storeID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
