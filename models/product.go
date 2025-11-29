@@ -1032,9 +1032,9 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		if !govalidator.IsNull(warehouseCode) {
 			if operator != "" {
-				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+keys[0]] = bson.M{operator: stockValue}
+				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+warehouseCode] = bson.M{operator: stockValue}
 			} else {
-				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+keys[0]] = stockValue
+				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+warehouseCode] = stockValue
 			}
 		} else {
 			if operator != "" {
