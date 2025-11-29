@@ -3065,8 +3065,9 @@ func ProcessSalesReturns() error {
 
 			salesReturn.ClearProductsHistory()
 			salesReturn.ClearProductsSalesReturnHistory()
-			salesReturn.CreateProductsHistory()
+
 			salesReturn.CreateProductsSalesReturnHistory()
+			salesReturn.CreateProductsHistory()
 			salesReturn.SetProductsSalesReturnStats()
 			salesReturn.Update()
 

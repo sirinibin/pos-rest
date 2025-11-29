@@ -2432,8 +2432,9 @@ func ProcessQuotations() error {
 
 			quotation.ClearProductsHistory()
 			quotation.ClearProductsQuotationHistory()
-			quotation.CreateProductsHistory()
+
 			quotation.CreateProductsQuotationHistory()
+			quotation.CreateProductsHistory()
 			quotation.SetProductsQuotationSalesStats()
 			quotation.Update()
 

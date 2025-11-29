@@ -2926,8 +2926,9 @@ func ProcessQuotationSalesReturns() error {
 
 			quotationsalesReturn.ClearProductsHistory()
 			quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
-			quotationsalesReturn.CreateProductsHistory()
+
 			quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
+			quotationsalesReturn.CreateProductsHistory()
 			quotationsalesReturn.SetProductsQuotationSalesReturnStats()
 			quotationsalesReturn.Update()
 

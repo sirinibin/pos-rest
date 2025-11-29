@@ -2356,8 +2356,9 @@ func ProcessPurchaseReturns() error {
 
 			model.ClearProductsHistory()
 			model.ClearProductsPurchaseReturnHistory()
-			model.CreateProductsHistory()
+
 			model.CreateProductsPurchaseReturnHistory()
+			model.CreateProductsHistory()
 			model.SetProductsPurchaseReturnStats()
 			model.Update()
 

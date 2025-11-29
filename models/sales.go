@@ -3402,6 +3402,7 @@ func ProcessSales() error {
 
 			order.ClearProductsHistory()
 			order.ClearProductsSalesHistory()
+
 			order.CreateProductsSalesHistory()
 			order.CreateProductsHistory()
 			order.SetProductsSalesStats()

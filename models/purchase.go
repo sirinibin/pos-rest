@@ -2509,8 +2509,9 @@ func ProcessPurchases() error {
 
 			purchase.ClearProductsHistory()
 			purchase.ClearProductsPurchaseHistory()
-			purchase.CreateProductsHistory()
+
 			purchase.CreateProductsPurchaseHistory()
+			purchase.CreateProductsHistory()
 			purchase.SetProductsPurchaseStats()
 			purchase.Update()
 
