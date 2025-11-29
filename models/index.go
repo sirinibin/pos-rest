@@ -315,12 +315,6 @@ func (store *Store) CreateAllIndexes() error {
 	// Add these inside func (store *Store) CreateAllIndexes():
 
 	// product_history collection indexes
-	fields = bson.M{"store_id": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
 	fields = bson.M{"product_id": 1}
 	err = store.CreateIndex("product_history", fields, false, false, "")
 	if err != nil {
@@ -379,12 +373,6 @@ func (store *Store) CreateAllIndexes() error {
 	// Add these inside func (store *Store) CreateAllIndexes():
 
 	// product_sales_history collection indexes
-	fields = bson.M{"store_id": 1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
 	fields = bson.M{"product_id": 1}
 	err = store.CreateIndex("product_sales_history", fields, false, false, "")
 	if err != nil {
@@ -526,27 +514,387 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	return nil
-}
+	// Add these inside func (store *Store) CreateAllIndexes():
 
-func (store *Store) CreateTextIndex(collectionName string, fields bson.D, indexName string) error {
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// product_quotation_sales_return_history collection indexes
 
-	indexModel := mongo.IndexModel{
-		Keys:    fields,
-		Options: options.Index().SetName(indexName).SetUnique(false).SetDefaultLanguage("none"),
-	}
-
-	createdIndexName, err := collection.Indexes().CreateOne(ctx, indexModel)
+	fields = bson.M{"product_id": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
 	if err != nil {
-		log.Printf("Failed to create text index: %v", err)
 		return err
 	}
 
-	fmt.Println("Created text index:", createdIndexName)
+	fields = bson.M{"customer_id": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"quotation_id": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"quotation_code": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"quotation_sales_return_id": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"quotation_sales_return_code": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_id": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_code": 1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	// Add these inside func (store *Store) CreateAllIndexes():
+
+	// product_quotation_history collection indexes
+	fields = bson.M{"product_id": 1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"customer_id": 1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"quotation_id": 1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"quotation_code": 1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_id": 1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_code": 1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"updated_at": -1}
+	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	// Add these inside func (store *Store) CreateAllIndexes():
+
+	// product_purchase_return_history collection indexes
+	fields = bson.M{"product_id": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"vendor_id": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"purchase_return_id": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"purchase_return_code": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"purchase_id": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"purchase_code": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_id": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_code": 1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"updated_at": -1}
+	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	// Add these inside func (store *Store) CreateAllIndexes():
+
+	// product_purchase_history collection indexes
+	fields = bson.M{"product_id": 1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"vendor_id": 1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"purchase_id": 1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"purchase_code": 1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_id": 1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_code": 1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"updated_at": -1}
+	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	// Add these inside func (store *Store) CreateAllIndexes():
+
+	// product_sales_return_history collection indexes
+	fields = bson.M{"store_id": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"product_id": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"customer_id": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"order_id": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"order_code": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"sales_return_id": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"sales_return_code": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_id": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"warehouse_code": 1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"updated_at": -1}
+	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (store *Store) RemoveAllIndexes() {
+	log.Print("Removing all indexes")
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("order")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("purchase")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("posting")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("ledger")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_quotation_sales_return_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_quotation_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_return_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_purchase_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_return_history")
+	collection.Indexes().DropAll(context.Background())
+
 }
 
 // CreateIndex - creates an index for a specific field in a collection
@@ -594,44 +942,22 @@ func (store *Store) CreateIndex(collectionName string, fields bson.M, unique boo
 	return nil
 }
 
-func (store *Store) RemoveAllIndexes() {
-	log.Print("Removing all indexes")
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
-	collection.Indexes().DropAll(context.Background())
+func (store *Store) CreateTextIndex(collectionName string, fields bson.D, indexName string) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("customer")
-	collection.Indexes().DropAll(context.Background())
+	indexModel := mongo.IndexModel{
+		Keys:    fields,
+		Options: options.Index().SetName(indexName).SetUnique(false).SetDefaultLanguage("none"),
+	}
 
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
-	collection.Indexes().DropAll(context.Background())
+	createdIndexName, err := collection.Indexes().CreateOne(ctx, indexModel)
+	if err != nil {
+		log.Printf("Failed to create text index: %v", err)
+		return err
+	}
 
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("order")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("purchase")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_history")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("posting")
-	collection.Indexes().DropAll(context.Background())
-
-	collection = db.GetDB("store_" + store.ID.Hex()).Collection("ledger")
-	collection.Indexes().DropAll(context.Background())
+	fmt.Println("Created text index:", createdIndexName)
+	return nil
 }

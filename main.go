@@ -28,7 +28,7 @@ func main() {
 	db.Client("")
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
-	//go models.SetIndexes()
+	go models.SetIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -462,7 +462,7 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	err := models.ProcessSales()
+	/*err := models.ProcessSales()
 	if err != nil {
 		log.Print(err)
 	}
@@ -490,7 +490,7 @@ func cronJobsEveryHour() error {
 	err = models.ProcessQuotationSalesReturns()
 	if err != nil {
 		log.Print(err)
-	}
+	}*/
 	/*
 		err := models.ProcessProducts()
 		if err != nil {
