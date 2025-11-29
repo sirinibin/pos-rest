@@ -578,6 +578,14 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 	defer cancel()
 
 	for _, purchaseProduct := range purchase.Products {
+		warehouseCode := ""
+		if purchaseProduct.WarehouseCode != nil {
+			warehouseCode = *purchaseProduct.WarehouseCode
+		}
+
+		if warehouseCode == "" {
+			warehouseCode = "main_store"
+		}
 
 		history := ProductPurchaseHistory{
 			Date:            purchase.Date,
@@ -596,7 +604,7 @@ func (purchase *Purchase) CreateProductsPurchaseHistory() error {
 			CreatedAt:       purchase.CreatedAt,
 			UpdatedAt:       purchase.UpdatedAt,
 			WarehouseID:     purchaseProduct.WarehouseID,
-			WarehouseCode:   purchaseProduct.WarehouseCode,
+			WarehouseCode:   &warehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(purchaseProduct.PurchaseUnitPrice)

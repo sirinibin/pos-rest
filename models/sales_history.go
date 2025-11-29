@@ -581,6 +581,14 @@ func (order *Order) CreateProductsSalesHistory() error {
 	defer cancel()
 
 	for _, orderProduct := range order.Products {
+		warehouseCode := ""
+		if orderProduct.WarehouseCode != nil {
+			warehouseCode = *orderProduct.WarehouseCode
+		}
+		if warehouseCode == "" {
+			warehouseCode = "main_store"
+		}
+
 		history := ProductSalesHistory{
 			Date:               order.Date,
 			StoreID:            order.StoreID,
@@ -600,7 +608,7 @@ func (order *Order) CreateProductsSalesHistory() error {
 			CreatedAt:          order.CreatedAt,
 			UpdatedAt:          order.UpdatedAt,
 			WarehouseID:        orderProduct.WarehouseID,
-			WarehouseCode:      orderProduct.WarehouseCode,
+			WarehouseCode:      &warehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(orderProduct.UnitPrice)

@@ -564,6 +564,15 @@ func (purchaseReturn *PurchaseReturn) CreateProductsPurchaseReturnHistory() erro
 			continue
 		}
 
+		warehouseCode := ""
+		if purchaseReturnProduct.WarehouseCode != nil {
+			warehouseCode = *purchaseReturnProduct.WarehouseCode
+		}
+
+		if warehouseCode == "" {
+			warehouseCode = "main_store"
+		}
+
 		history := ProductPurchaseReturnHistory{
 			Date:               purchaseReturn.Date,
 			StoreID:            purchaseReturn.StoreID,
@@ -583,7 +592,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsPurchaseReturnHistory() erro
 			CreatedAt:          purchaseReturn.CreatedAt,
 			UpdatedAt:          purchaseReturn.UpdatedAt,
 			WarehouseID:        purchaseReturnProduct.WarehouseID,
-			WarehouseCode:      purchaseReturnProduct.WarehouseCode,
+			WarehouseCode:      &warehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(purchaseReturnProduct.PurchaseReturnUnitPrice)

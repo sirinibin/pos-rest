@@ -2390,6 +2390,10 @@ func ProcessQuotations() error {
 	}
 
 	for _, store := range stores {
+		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+			continue
+		}
+
 		totalCount, err := store.GetTotalCount(bson.M{}, "quotation")
 		if err != nil {
 			return err
@@ -2426,11 +2430,19 @@ func ProcessQuotations() error {
 				continue
 			}
 
-			quotation.UpdateForeignLabelFields()
 			quotation.ClearProductsHistory()
 			quotation.ClearProductsQuotationHistory()
 			quotation.CreateProductsHistory()
 			quotation.CreateProductsQuotationHistory()
+			quotation.SetProductsQuotationSalesStats()
+
+			/*
+				quotation.UpdateForeignLabelFields()
+				quotation.ClearProductsHistory()
+				quotation.ClearProductsQuotationHistory()
+				quotation.CreateProductsHistory()
+				quotation.CreateProductsQuotationHistory()
+			*/
 
 			/*
 
@@ -2625,17 +2637,30 @@ type ProductQuotationSalesStats struct {
 	QuotationSalesCount    int64   `json:"quotation_sales_count" bson:"quotation_sales_count"`
 	QuotationSalesQuantity float64 `json:"quotation_sales_quantity" bson:"quotation_sales_quantity"`
 	QuotationSales         float64 `json:"quotation_sales" bson:"quotation_sales"`
+	QuotationSalesProfit   float64 `json:"quotation_sales_profit" bson:"quotation_sales_profit"`
+	QuotationSalesLoss     float64 `json:"quotation_sales_loss" bson:"quotation_sales_loss"`
+
+	WarehouseQuotationSalesCount    int64   `json:"warehouse_quotation_sales_count" bson:"warehouse_quotation_sales_count"`
+	WarehouseQuotationSalesQuantity float64 `json:"warehouse_quotation_sales_quantity" bson:"warehouse_quotation_sales_quantity"`
+	WarehouseQuotationSales         float64 `json:"warehouse_quotation_sales" bson:"warehouse_quotation_sales"`
+	WarehouseQuotationSalesProfit   float64 `json:"warehouse_quotation_sales_profit" bson:"warehouse_quotation_sales_profit"`
+	WarehouseQuotationSalesLoss     float64 `json:"warehouse_quotation_sales_loss" bson:"warehouse_quotation_sales_loss"`
 }
 
-func (product *Product) SetProductQuotationSalesStatsByStoreID(storeID primitive.ObjectID) error {
+func (product *Product) SetProductQuotationSalesStats(warehouseCode *string) error {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_quotation_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if warehouseCode == nil || *warehouseCode == "" {
+		defaultWarehouse := "main_store"
+		warehouseCode = &defaultWarehouse
+	}
+
 	var stats ProductQuotationSalesStats
 
 	filter := map[string]interface{}{
-		"store_id":   storeID,
+		"store_id":   product.StoreID,
 		"product_id": product.ID,
 		"type":       "invoice",
 	}
@@ -2650,6 +2675,43 @@ func (product *Product) SetProductQuotationSalesStatsByStoreID(storeID primitive
 				"quotation_sales_count":    bson.M{"$sum": 1},
 				"quotation_sales_quantity": bson.M{"$sum": "$quantity"},
 				"quotation_sales":          bson.M{"$sum": "$net_price"},
+				"quotation_sales_profit":   bson.M{"$sum": "$profit"},
+				"quotation_sales_loss":     bson.M{"$sum": "$loss"},
+				"warehouse_quotation_sales_count": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						1,
+						0,
+					},
+				}},
+				"warehouse_quotation_sales_quantity": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$quantity",
+						0,
+					},
+				}},
+				"warehouse_quotation_sales": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$net_price",
+						0,
+					},
+				}},
+				"warehouse_quotation_sales_profit": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$profit",
+						0,
+					},
+				}},
+				"warehouse_quotation_sales_loss": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$loss",
+						0,
+					},
+				}},
 			},
 		},
 	}
@@ -2670,11 +2732,31 @@ func (product *Product) SetProductQuotationSalesStatsByStoreID(storeID primitive
 		stats.QuotationSales = RoundFloat(stats.QuotationSales, 2)
 	}
 
-	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		productStoreTemp.QuotationSalesCount = stats.QuotationSalesCount
 		productStoreTemp.QuotationSalesQuantity = stats.QuotationSalesQuantity
 		productStoreTemp.QuotationSales = stats.QuotationSales
-		product.ProductStores[storeID.Hex()] = productStoreTemp
+		productStoreTemp.QuotationSalesProfit = stats.QuotationSalesProfit
+		productStoreTemp.QuotationSalesLoss = stats.QuotationSalesLoss
+
+		if productStoreTemp.ProductWarehouses == nil {
+			productStoreTemp.ProductWarehouses = make(map[string]ProductWarehouse)
+		}
+
+		if _, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; !ok {
+			productStoreTemp.ProductWarehouses[*warehouseCode] = ProductWarehouse{}
+		}
+
+		if productWarehouseTemp, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; ok {
+			productWarehouseTemp.QuotationSalesCount = stats.WarehouseQuotationSalesCount
+			productWarehouseTemp.QuotationSalesQuantity = stats.WarehouseQuotationSalesQuantity
+			productWarehouseTemp.QuotationSales = stats.WarehouseQuotationSales
+			productWarehouseTemp.QuotationSalesProfit = stats.WarehouseQuotationSalesProfit
+			productWarehouseTemp.QuotationSalesLoss = stats.WarehouseQuotationSalesLoss
+			productStoreTemp.ProductWarehouses[*warehouseCode] = productWarehouseTemp
+		}
+
+		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
 	}
 
 	return nil
@@ -2692,7 +2774,7 @@ func (quotation *Quotation) SetProductsQuotationSalesStats() error {
 			return err
 		}
 
-		err = product.SetProductQuotationSalesStatsByStoreID(*quotation.StoreID)
+		err = product.SetProductQuotationSalesStats(quotationProduct.WarehouseCode)
 		if err != nil {
 			return err
 		}
@@ -2709,7 +2791,7 @@ func (quotation *Quotation) SetProductsQuotationSalesStats() error {
 					return err
 				}
 
-				err = setProductObj.SetProductQuotationSalesStatsByStoreID(store.ID)
+				err = setProductObj.SetProductQuotationSalesStats(quotationProduct.WarehouseCode)
 				if err != nil {
 					return err
 				}

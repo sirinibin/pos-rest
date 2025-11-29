@@ -609,6 +609,15 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 			continue
 		}
 
+		warehouseCode := ""
+		if quotationsalesReturnProduct.WarehouseCode != nil {
+			warehouseCode = *quotationsalesReturnProduct.WarehouseCode
+		}
+
+		if warehouseCode == "" {
+			warehouseCode = "main_store"
+		}
+
 		history := ProductQuotationSalesReturnHistory{
 			Date:                     quotationsalesReturn.Date,
 			StoreID:                  quotationsalesReturn.StoreID,
@@ -629,7 +638,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsQuotationSalesRe
 			CreatedAt:                quotationsalesReturn.CreatedAt,
 			UpdatedAt:                quotationsalesReturn.UpdatedAt,
 			WarehouseID:              quotationsalesReturnProduct.WarehouseID,
-			WarehouseCode:            quotationsalesReturnProduct.WarehouseCode,
+			WarehouseCode:            &warehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(quotationsalesReturnProduct.UnitPrice)

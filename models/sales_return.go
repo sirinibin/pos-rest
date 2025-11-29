@@ -1762,18 +1762,21 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["unit_discount_"+strconv.Itoa(index)] = "Unit discount should not be greater than unit price"
 		}
 
-		for _, orderProduct := range order.Products {
-			if orderProduct.ProductID == salesReturnProduct.ProductID {
+		//for _, orderProduct := range order.Products {
+		//for i := 0; i < len(order.Products); i++ {
+		for i := len(order.Products) - 1; i >= 0; i-- {
+			if order.Products[i].ProductID == salesReturnProduct.ProductID {
 				//soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
 				maxAllowedQuantity := 0.00
 				if scenario == "update" {
-					maxAllowedQuantity = orderProduct.Quantity - (orderProduct.QuantityReturned - oldSalesReturn.Products[index].Quantity)
+					maxAllowedQuantity = order.Products[i].Quantity - (order.Products[i].QuantityReturned - oldSalesReturn.Products[index].Quantity)
 				} else {
-					maxAllowedQuantity = orderProduct.Quantity - orderProduct.QuantityReturned
+					maxAllowedQuantity = order.Products[i].Quantity - order.Products[i].QuantityReturned
+					//log.Print(orderProduct.QuantityReturned)
 				}
 
 				if salesReturnProduct.Quantity > maxAllowedQuantity {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + orderProduct.Unit
+					//errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + order.Products[i].Unit
 				}
 				/*
 					soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
@@ -1783,6 +1786,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 						errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + orderProduct.Unit
 					}
 				*/
+				break
 			}
 		}
 
@@ -1885,10 +1889,12 @@ func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct(salesReturn
 				continue
 			}
 
-			for index2, orderProduct := range order.Products {
-				if orderProduct.ProductID == salesReturnProduct.ProductID {
-					if order.Products[index2].QuantityReturned > 0 {
-						order.Products[index2].QuantityReturned -= salesReturnProduct.Quantity
+			//for index2, orderProduct := range order.Products {
+			for i := len(order.Products) - 1; i >= 0; i-- {
+				if order.Products[i].ProductID == salesReturnProduct.ProductID {
+					if order.Products[i].QuantityReturned > 0 {
+						order.Products[i].QuantityReturned -= salesReturnProduct.Quantity
+						break
 					}
 				}
 			}
@@ -1900,9 +1906,12 @@ func (salesreturn *SalesReturn) UpdateReturnedQuantityInOrderProduct(salesReturn
 			continue
 		}
 
-		for index2, orderProduct := range order.Products {
-			if orderProduct.ProductID == salesReturnProduct.ProductID {
-				order.Products[index2].QuantityReturned += salesReturnProduct.Quantity
+		//for index2, orderProduct := range order.Products {
+
+		for i := len(order.Products) - 1; i >= 0; i-- {
+			if order.Products[i].ProductID == salesReturnProduct.ProductID {
+				order.Products[i].QuantityReturned += salesReturnProduct.Quantity
+				break
 			}
 		}
 	}
@@ -3004,10 +3013,9 @@ func ProcessSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		/*
-			if store.Code != "GUOJ" {
-				break
-			}*/
+		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+			continue
+		}
 
 		totalCount, err := store.GetTotalCount(bson.M{
 			"store_id": store.ID,
@@ -3055,6 +3063,12 @@ func ProcessSalesReturns() error {
 				continue
 			}
 
+			salesReturn.ClearProductsHistory()
+			salesReturn.ClearProductsSalesReturnHistory()
+			salesReturn.CreateProductsHistory()
+			salesReturn.CreateProductsSalesReturnHistory()
+			salesReturn.SetProductsSalesReturnStats()
+
 			/*
 				salesReturn.UpdateForeignLabelFields()
 				salesReturn.ClearProductsHistory()
@@ -3063,14 +3077,15 @@ func ProcessSalesReturns() error {
 				salesReturn.CreateProductsSalesReturnHistory()
 			*/
 
-			salesReturn.UndoAccounting()
-			salesReturn.DoAccounting()
-			if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+			/*
+				salesReturn.UndoAccounting()
+				salesReturn.DoAccounting()
+				if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
 			//salesReturn.ClearProductsHistory()
 			//salesReturn.CreateProductsHistory()
@@ -3322,17 +3337,28 @@ type ProductSalesReturnStats struct {
 	SalesReturn         float64 `json:"sales_return" bson:"sales_return"`
 	SalesReturnProfit   float64 `json:"sales_return_profit" bson:"sales_return_profit"`
 	SalesReturnLoss     float64 `json:"sales_return_loss" bson:"sales_return_loss"`
+
+	WarehouseSalesReturnCount    int64   `json:"warehouse_sales_return_count" bson:"warehouse_sales_return_count"`
+	WarehouseSalesReturnQuantity float64 `json:"warehouse_sales_return_quantity" bson:"warehouse_sales_return_quantity"`
+	WarehouseSalesReturn         float64 `json:"warehouse_sales_return" bson:"warehouse_sales_return"`
+	WarehouseSalesReturnProfit   float64 `json:"warehouse_sales_return_profit" bson:"warehouse_sales_return_profit"`
+	WarehouseSalesReturnLoss     float64 `json:"warehouse_sales_return_loss" bson:"warehouse_sales_return_loss"`
 }
 
-func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.ObjectID) error {
+func (product *Product) SetProductSalesReturnStats(warehouseCode *string) error {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_sales_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if warehouseCode == nil || *warehouseCode == "" {
+		defaultWarehouse := "main_store"
+		warehouseCode = &defaultWarehouse
+	}
+
 	var stats ProductSalesReturnStats
 
 	filter := map[string]interface{}{
-		"store_id":   storeID,
+		"store_id":   product.StoreID,
 		"product_id": product.ID,
 	}
 
@@ -3348,6 +3374,41 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 				"sales_return":          bson.M{"$sum": "$net_price"},
 				"sales_return_profit":   bson.M{"$sum": "$profit"},
 				"sales_return_loss":     bson.M{"$sum": "$loss"},
+				"warehouse_sales_return_count": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						1,
+						0,
+					},
+				}},
+				"warehouse_sales_return_quantity": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$quantity",
+						0,
+					},
+				}},
+				"warehouse_sales_return": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$net_price",
+						0,
+					},
+				}},
+				"warehouse_sales_return_profit": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$profit",
+						0,
+					},
+				}},
+				"warehouse_sales_return_loss": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$loss",
+						0,
+					},
+				}},
 			},
 		},
 	}
@@ -3370,31 +3431,32 @@ func (product *Product) SetProductSalesReturnStatsByStoreID(storeID primitive.Ob
 		stats.SalesReturnLoss = RoundFloat(stats.SalesReturnLoss, 2)
 	}
 
-	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		productStoreTemp.SalesReturnCount = stats.SalesReturnCount
 		productStoreTemp.SalesReturnQuantity = stats.SalesReturnQuantity
 		productStoreTemp.SalesReturn = stats.SalesReturn
 		productStoreTemp.SalesReturnProfit = stats.SalesReturnProfit
 		productStoreTemp.SalesReturnLoss = stats.SalesReturnLoss
-		product.ProductStores[storeID.Hex()] = productStoreTemp
-	}
 
-	/*
-		for storeIndex, store := range product.ProductStores {
-			if store.StoreID.Hex() == storeID.Hex() {
-				product.Stores[storeIndex].SalesReturnCount = stats.SalesReturnCount
-				product.Stores[storeIndex].SalesReturnQuantity = stats.SalesReturnQuantity
-				product.Stores[storeIndex].SalesReturn = stats.SalesReturn
-				product.Stores[storeIndex].SalesReturnProfit = stats.SalesReturnProfit
-				product.Stores[storeIndex].SalesReturnLoss = stats.SalesReturnLoss
-				err = product.Update()
-				if err != nil {
-					return err
-				}
-				break
-			}
+		if productStoreTemp.ProductWarehouses == nil {
+			productStoreTemp.ProductWarehouses = make(map[string]ProductWarehouse)
 		}
-	*/
+
+		if _, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; !ok {
+			productStoreTemp.ProductWarehouses[*warehouseCode] = ProductWarehouse{}
+		}
+
+		if productWarehouseTemp, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; ok {
+			productWarehouseTemp.SalesReturnCount = stats.WarehouseSalesReturnCount
+			productWarehouseTemp.SalesReturnQuantity = stats.WarehouseSalesReturnQuantity
+			productWarehouseTemp.SalesReturn = stats.WarehouseSalesReturn
+			productWarehouseTemp.SalesReturnProfit = stats.WarehouseSalesReturnProfit
+			productWarehouseTemp.SalesReturnLoss = stats.WarehouseSalesReturnLoss
+			productStoreTemp.ProductWarehouses[*warehouseCode] = productWarehouseTemp
+		}
+
+		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
+	}
 
 	return nil
 }
@@ -3461,7 +3523,7 @@ func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
 			return err
 		}
 
-		err = product.SetProductSalesReturnStatsByStoreID(*salesReturn.StoreID)
+		err = product.SetProductSalesReturnStats(salesReturnProduct.WarehouseCode)
 		if err != nil {
 			return err
 		}
@@ -3478,7 +3540,7 @@ func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
 					return err
 				}
 
-				err = setProductObj.SetProductSalesReturnStatsByStoreID(store.ID)
+				err = setProductObj.SetProductSalesReturnStats(salesReturnProduct.WarehouseCode)
 				if err != nil {
 					return err
 				}

@@ -2468,6 +2468,10 @@ func ProcessPurchases() error {
 	}
 
 	for _, store := range stores {
+		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+			continue
+		}
+
 		totalCount, err := store.GetTotalCount(bson.M{}, "purchase")
 		if err != nil {
 			return err
@@ -2503,6 +2507,12 @@ func ProcessPurchases() error {
 				continue
 			}
 
+			purchase.ClearProductsHistory()
+			purchase.ClearProductsPurchaseHistory()
+			purchase.CreateProductsHistory()
+			purchase.CreateProductsPurchaseHistory()
+			purchase.SetProductsPurchaseStats()
+
 			/*
 				purchase.UpdateForeignLabelFields()
 				purchase.ClearProductsHistory()
@@ -2510,18 +2520,18 @@ func ProcessPurchases() error {
 				purchase.CreateProductsHistory()
 				purchase.CreateProductsPurchaseHistory()
 			*/
-
-			purchase.UndoAccounting()
-			if !store.Settings.DisablePurchasesOnAccounts {
-				purchase.DoAccounting()
-			}
-
-			if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
-				vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
-				if vendor != nil {
-					vendor.SetCreditBalance()
+			/*
+				purchase.UndoAccounting()
+				if !store.Settings.DisablePurchasesOnAccounts {
+					purchase.DoAccounting()
 				}
-			}
+
+				if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+					vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
+				}*/
 
 			//purchase.ClearProductsHistory()
 			//	purchase.CreateProductsHistory()
@@ -2649,20 +2659,28 @@ func (model *Purchase) ClearPayments() error {
 }
 
 type ProductPurchaseStats struct {
-	PurchaseCount    int64   `json:"purchase_count" bson:"purchase_count"`
-	PurchaseQuantity float64 `json:"purchase_quantity" bson:"purchase_quantity"`
-	Purchase         float64 `json:"purchase" bson:"purchase"`
+	PurchaseCount             int64   `json:"purchase_count" bson:"purchase_count"`
+	PurchaseQuantity          float64 `json:"purchase_quantity" bson:"purchase_quantity"`
+	Purchase                  float64 `json:"purchase" bson:"purchase"`
+	WarehousePurchaseCount    int64   `json:"warehouse_purchase_count" bson:"warehouse_purchase_count"`
+	WarehousePurchaseQuantity float64 `json:"warehouse_purchase_quantity" bson:"warehouse_purchase_quantity"`
+	WarehousePurchase         float64 `json:"warehouse_purchase" bson:"warehouse_purchase"`
 }
 
-func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.ObjectID) error {
+func (product *Product) SetProductPurchaseStats(warehouseCode *string) error {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_purchase_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if warehouseCode == nil || *warehouseCode == "" {
+		defaultWarehouse := "main_store"
+		warehouseCode = &defaultWarehouse
+	}
+
 	var stats ProductPurchaseStats
 
 	filter := map[string]interface{}{
-		"store_id":   storeID,
+		"store_id":   product.StoreID,
 		"product_id": product.ID,
 	}
 
@@ -2676,6 +2694,27 @@ func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.Objec
 				"purchase_count":    bson.M{"$sum": 1},
 				"purchase_quantity": bson.M{"$sum": "$quantity"},
 				"purchase":          bson.M{"$sum": "$net_price"},
+				"warehouse_purchase_count": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						1,
+						0,
+					},
+				}},
+				"warehouse_purchase_quantity": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$quantity",
+						0,
+					},
+				}},
+				"warehouse_purchase": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$net_price",
+						0,
+					},
+				}},
 			},
 		},
 	}
@@ -2696,27 +2735,28 @@ func (product *Product) SetProductPurchaseStatsByStoreID(storeID primitive.Objec
 		stats.Purchase = RoundFloat(stats.Purchase, 2)
 	}
 
-	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		productStoreTemp.PurchaseCount = stats.PurchaseCount
 		productStoreTemp.PurchaseQuantity = stats.PurchaseQuantity
 		productStoreTemp.Purchase = stats.Purchase
-		product.ProductStores[storeID.Hex()] = productStoreTemp
-	}
 
-	/*
-		for storeIndex, store := range product.Stores {
-			if store.StoreID.Hex() == storeID.Hex() {
-				product.Stores[storeIndex].PurchaseCount = stats.PurchaseCount
-				product.Stores[storeIndex].PurchaseQuantity = stats.PurchaseQuantity
-				product.Stores[storeIndex].Purchase = stats.Purchase
-				err = product.Update()
-				if err != nil {
-					return err
-				}
-				break
-			}
+		if productStoreTemp.ProductWarehouses == nil {
+			productStoreTemp.ProductWarehouses = make(map[string]ProductWarehouse)
 		}
-	*/
+
+		if _, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; !ok {
+			productStoreTemp.ProductWarehouses[*warehouseCode] = ProductWarehouse{}
+		}
+
+		if productWarehouseTemp, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; ok {
+			productWarehouseTemp.PurchaseCount = stats.WarehousePurchaseCount
+			productWarehouseTemp.PurchaseQuantity = stats.WarehousePurchaseQuantity
+			productWarehouseTemp.Purchase = stats.WarehousePurchase
+			productStoreTemp.ProductWarehouses[*warehouseCode] = productWarehouseTemp
+		}
+
+		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
+	}
 
 	return nil
 }
@@ -2781,7 +2821,7 @@ func (purchase *Purchase) SetProductsPurchaseStats() error {
 			return err
 		}
 
-		err = product.SetProductPurchaseStatsByStoreID(*purchase.StoreID)
+		err = product.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
 		if err != nil {
 			return err
 		}
@@ -2798,7 +2838,7 @@ func (purchase *Purchase) SetProductsPurchaseStats() error {
 					return err
 				}
 
-				err = setProductObj.SetProductPurchaseStatsByStoreID(store.ID)
+				err = setProductObj.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
 				if err != nil {
 					return err
 				}

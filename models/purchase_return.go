@@ -1589,19 +1589,21 @@ func (purchasereturn *PurchaseReturn) Validate(
 			errs["unit_discount_"+strconv.Itoa(index)] = "Unit discount should not be greater than unit price"
 		}
 
-		for _, purchaseProduct := range purchase.Products {
-			if purchaseProduct.ProductID == purchaseReturnProduct.ProductID {
+		//for _, purchaseProduct := range purchase.Products {
+		for i := len(purchase.Products) - 1; i >= 0; i-- {
+			if purchase.Products[i].ProductID == purchaseReturnProduct.ProductID {
 
 				maxAllowedQuantity := 0.00
 				if scenario == "update" {
-					maxAllowedQuantity = purchaseProduct.Quantity - (purchaseProduct.QuantityReturned - oldPurchaseReturn.Products[index].Quantity)
+					maxAllowedQuantity = purchase.Products[i].Quantity - (purchase.Products[i].QuantityReturned - oldPurchaseReturn.Products[index].Quantity)
 				} else {
-					maxAllowedQuantity = purchaseProduct.Quantity - purchaseProduct.QuantityReturned
+					maxAllowedQuantity = purchase.Products[i].Quantity - purchase.Products[i].QuantityReturned
 				}
 
 				if purchaseReturnProduct.Quantity > maxAllowedQuantity {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchaseProduct.Unit
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchase.Products[i].Unit
 				}
+				break
 				/*
 					purchasedQty := 0.0
 
@@ -2313,6 +2315,10 @@ func ProcessPurchaseReturns() error {
 	}
 
 	for _, store := range stores {
+		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+			continue
+		}
+
 		totalCount, err := store.GetTotalCount(bson.M{}, "purchasereturn")
 		if err != nil {
 			return err
@@ -2347,6 +2353,12 @@ func ProcessPurchaseReturns() error {
 			if model.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+
+			model.ClearProductsHistory()
+			model.ClearProductsPurchaseReturnHistory()
+			model.CreateProductsHistory()
+			model.CreateProductsPurchaseReturnHistory()
+			model.SetProductsPurchaseReturnStats()
 
 			/*
 				model.UpdateForeignLabelFields()
@@ -2599,20 +2611,28 @@ func (model *PurchaseReturn) ClearPayments() error {
 }
 
 type ProductPurchaseReturnStats struct {
-	PurchaseReturnCount    int64   `json:"purchase_return_count" bson:"purchase_return_count"`
-	PurchaseReturnQuantity float64 `json:"purchase_return_quantity" bson:"purchase_return_quantity"`
-	PurchaseReturn         float64 `json:"purchase_return" bson:"purchase_return"`
+	PurchaseReturnCount             int64   `json:"purchase_return_count" bson:"purchase_return_count"`
+	PurchaseReturnQuantity          float64 `json:"purchase_return_quantity" bson:"purchase_return_quantity"`
+	PurchaseReturn                  float64 `json:"purchase_return" bson:"purchase_return"`
+	WarehousePurchaseReturnCount    int64   `json:"warehouse_purchase_return_count" bson:"warehouse_purchase_return_count"`
+	WarehousePurchaseReturnQuantity float64 `json:"warehouse_purchase_return_quantity" bson:"warehouse_purchase_return_quantity"`
+	WarehousePurchaseReturn         float64 `json:"warehouse_purchase_return" bson:"warehouse_purchase_return"`
 }
 
-func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive.ObjectID) error {
+func (product *Product) SetProductPurchaseReturnStats(warehouseCode *string) error {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_purchase_return_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if warehouseCode == nil || *warehouseCode == "" {
+		defaultWarehouse := "main_store"
+		warehouseCode = &defaultWarehouse
+	}
+
 	var stats ProductPurchaseReturnStats
 
 	filter := map[string]interface{}{
-		"store_id":   storeID,
+		"store_id":   product.StoreID,
 		"product_id": product.ID,
 	}
 
@@ -2626,6 +2646,27 @@ func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive
 				"purchase_return_count":    bson.M{"$sum": 1},
 				"purchase_return_quantity": bson.M{"$sum": "$quantity"},
 				"purchase_return":          bson.M{"$sum": "$net_price"},
+				"warehouse_purchase_return_count": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						1,
+						0,
+					},
+				}},
+				"warehouse_purchase_return_quantity": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$quantity",
+						0,
+					},
+				}},
+				"warehouse_purchase_return": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$net_price",
+						0,
+					},
+				}},
 			},
 		},
 	}
@@ -2647,11 +2688,27 @@ func (product *Product) SetProductPurchaseReturnStatsByStoreID(storeID primitive
 	}
 
 	for storeIndex, store := range product.ProductStores {
-		if store.StoreID.Hex() == storeID.Hex() {
+		if store.StoreID.Hex() == product.StoreID.Hex() {
 			if productStoreTemp, ok := product.ProductStores[storeIndex]; ok {
 				productStoreTemp.PurchaseReturnCount = stats.PurchaseReturnCount
 				productStoreTemp.PurchaseReturnQuantity = stats.PurchaseReturnQuantity
 				productStoreTemp.PurchaseReturn = stats.PurchaseReturn
+
+				if productStoreTemp.ProductWarehouses == nil {
+					productStoreTemp.ProductWarehouses = make(map[string]ProductWarehouse)
+				}
+
+				if _, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; !ok {
+					productStoreTemp.ProductWarehouses[*warehouseCode] = ProductWarehouse{}
+				}
+
+				if productWarehouseTemp, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; ok {
+					productWarehouseTemp.PurchaseReturnCount = stats.WarehousePurchaseReturnCount
+					productWarehouseTemp.PurchaseReturnQuantity = stats.WarehousePurchaseReturnQuantity
+					productWarehouseTemp.PurchaseReturn = stats.WarehousePurchaseReturn
+					productStoreTemp.ProductWarehouses[*warehouseCode] = productWarehouseTemp
+				}
+
 				product.ProductStores[storeIndex] = productStoreTemp
 			}
 			//product.Stores[storeIndex].PurchaseReturnCount = stats.PurchaseReturnCount
@@ -2727,7 +2784,7 @@ func (purchaseReturn *PurchaseReturn) SetProductsPurchaseReturnStats() error {
 			return err
 		}
 
-		err = product.SetProductPurchaseReturnStatsByStoreID(*purchaseReturn.StoreID)
+		err = product.SetProductPurchaseReturnStats(purchaseReturnProduct.WarehouseCode)
 		if err != nil {
 			return err
 		}
@@ -2744,7 +2801,7 @@ func (purchaseReturn *PurchaseReturn) SetProductsPurchaseReturnStats() error {
 					return err
 				}
 
-				err = setProductObj.SetProductPurchaseReturnStatsByStoreID(store.ID)
+				err = setProductObj.SetProductPurchaseReturnStats(purchaseReturnProduct.WarehouseCode)
 				if err != nil {
 					return err
 				}

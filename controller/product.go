@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/models"
 	"github.com/sirinibin/startpos/backend/utils"
@@ -116,10 +117,16 @@ func ListProduct(w http.ResponseWriter, r *http.Request) {
 
 	var productStats models.ProductStats
 
+	warehouseCode := ""
+	keys, ok = r.URL.Query()["search[warehouse_code]"]
+	if ok && len(keys[0]) >= 1 && !govalidator.IsNull(keys[0]) {
+		warehouseCode = keys[0]
+	}
+
 	keys, ok = r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
 		if keys[0] == "1" {
-			productStats, err = store.GetProductStats(criterias.SearchBy, storeID)
+			productStats, err = store.GetProductStats(criterias.SearchBy, storeID, &warehouseCode)
 			if err != nil {
 				response.Status = false
 				response.Errors["product_stats"] = "Unable to find product stats:" + err.Error()

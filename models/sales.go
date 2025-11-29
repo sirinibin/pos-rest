@@ -1914,7 +1914,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 		if scenario == "update" {
 			if product.Quantity < product.QuantityReturned {
-				errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be less than the returned quantity: " + fmt.Sprintf("%.02f", product.QuantityReturned)
+				//errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be less than the returned quantity: " + fmt.Sprintf("%.02f", product.QuantityReturned)
 			}
 		}
 
@@ -3339,7 +3339,7 @@ func GetDecimalPoints(num float64) int {
 	return 0
 }
 
-func ProcessOrders() error {
+func ProcessSales() error {
 	log.Print("Processing sales")
 	stores, err := GetAllStores()
 	if err != nil {
@@ -3347,10 +3347,9 @@ func ProcessOrders() error {
 	}
 
 	for _, store := range stores {
-		/*
-			if store.Code != "GUOJ" {
-				break
-			}*/
+		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+			continue
+		}
 
 		totalCount, err := store.GetTotalCount(bson.M{
 			"store_id": store.ID,
@@ -3409,17 +3408,21 @@ func ProcessOrders() error {
 				order.CreateProductsSalesHistory()
 			*/
 
-			order.UndoAccounting()
-			order.DoAccounting()
-			if order.CustomerID != nil && !order.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+			/*
+				order.UndoAccounting()
+				order.DoAccounting()
+				if order.CustomerID != nil && !order.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
-			//order.ClearProductsHistory()
-			//order.CreateProductsHistory()
+			order.ClearProductsHistory()
+			order.ClearProductsSalesHistory()
+			order.CreateProductsSalesHistory()
+			order.CreateProductsHistory()
+			order.SetProductsSalesStats()
 			/*
 				if store.Code == "MBDI" || store.Code == "LGK" {
 					order.ClearProductsSalesHistory()
@@ -3542,24 +3545,36 @@ func ProcessOrders() error {
 }
 
 type ProductSalesStats struct {
-	SalesCount    int64   `json:"sales_count" bson:"sales_count"`
-	SalesQuantity float64 `json:"sales_quantity" bson:"sales_quantity"`
-	Sales         float64 `json:"sales" bson:"sales"`
-	SalesProfit   float64 `json:"sales_profit" bson:"sales_profit"`
-	SalesLoss     float64 `json:"sales_loss" bson:"sales_loss"`
+	SalesCount             int64   `json:"sales_count" bson:"sales_count"`
+	SalesQuantity          float64 `json:"sales_quantity" bson:"sales_quantity"`
+	Sales                  float64 `json:"sales" bson:"sales"`
+	SalesProfit            float64 `json:"sales_profit" bson:"sales_profit"`
+	SalesLoss              float64 `json:"sales_loss" bson:"sales_loss"`
+	WarehouseSalesCount    int64   `json:"warehouse_sales_count" bson:"warehouse_sales_count"`
+	WarehouseSalesQuantity float64 `json:"warehouse_sales_quantity" bson:"warehouse_sales_quantity"`
+	WarehouseSales         float64 `json:"warehouse_sales" bson:"warehouse_sales"`
+	WarehouseSalesProfit   float64 `json:"warehouse_sales_profit" bson:"warehouse_sales_profit"`
+	WarehouseSalesLoss     float64 `json:"warehouse_sales_loss" bson:"warehouse_sales_loss"`
 }
 
-func (product *Product) SetProductSalesStatsByStoreID(storeID primitive.ObjectID) error {
+func (product *Product) SetProductSalesStats(warehouseCode *string) error {
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_sales_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if warehouseCode == nil || *warehouseCode == "" {
+		defaultWarehouse := "main_store"
+		warehouseCode = &defaultWarehouse
+	}
+
 	var stats ProductSalesStats
 
 	filter := map[string]interface{}{
-		"store_id":   storeID,
+		"store_id":   product.StoreID,
 		"product_id": product.ID,
 	}
+
+	// In func (product *Product) SetProductSalesStats(warehouseCode *string), update pipeline as below:
 
 	pipeline := []bson.M{
 		bson.M{
@@ -3573,6 +3588,41 @@ func (product *Product) SetProductSalesStatsByStoreID(storeID primitive.ObjectID
 				"sales":          bson.M{"$sum": "$net_price"},
 				"sales_profit":   bson.M{"$sum": "$profit"},
 				"sales_loss":     bson.M{"$sum": "$loss"},
+				"warehouse_sales_count": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						1,
+						0,
+					},
+				}},
+				"warehouse_sales_quantity": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$quantity",
+						0,
+					},
+				}},
+				"warehouse_sales": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$net_price",
+						0,
+					},
+				}},
+				"warehouse_sales_profit": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$profit",
+						0,
+					},
+				}},
+				"warehouse_sales_loss": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$warehouse_code", *warehouseCode}},
+						"$loss",
+						0,
+					},
+				}},
 			},
 		},
 	}
@@ -3594,30 +3644,32 @@ func (product *Product) SetProductSalesStatsByStoreID(storeID primitive.ObjectID
 		stats.SalesLoss = RoundFloat(stats.SalesLoss, 2)
 	}
 
-	/*
-		for storeIndex, store := range product.Stores {
-			if store.StoreID.Hex() == storeID.Hex() {
-				product.Stores[storeIndex].SalesCount = stats.SalesCount
-				product.Stores[storeIndex].SalesQuantity = stats.SalesQuantity
-				product.Stores[storeIndex].Sales = stats.Sales
-				product.Stores[storeIndex].SalesProfit = stats.SalesProfit
-				product.Stores[storeIndex].SalesLoss = stats.SalesLoss
-				err = product.Update()
-				if err != nil {
-					return err
-				}
-				break
-			}
-		}
-	*/
-
-	if productStoreTemp, ok := product.ProductStores[storeID.Hex()]; ok {
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		productStoreTemp.SalesCount = stats.SalesCount
 		productStoreTemp.SalesQuantity = stats.SalesQuantity
 		productStoreTemp.Sales = stats.Sales
 		productStoreTemp.SalesProfit = stats.SalesProfit
 		productStoreTemp.SalesLoss = stats.SalesLoss
-		product.ProductStores[storeID.Hex()] = productStoreTemp
+
+		if productStoreTemp.ProductWarehouses == nil {
+			productStoreTemp.ProductWarehouses = make(map[string]ProductWarehouse)
+		}
+
+		if _, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; !ok {
+			productStoreTemp.ProductWarehouses[*warehouseCode] = ProductWarehouse{}
+		}
+
+		if productWarehouseTemp, ok := productStoreTemp.ProductWarehouses[*warehouseCode]; ok {
+			productWarehouseTemp.SalesCount = stats.WarehouseSalesCount
+			productWarehouseTemp.SalesQuantity = stats.WarehouseSalesQuantity
+			productWarehouseTemp.Sales = stats.WarehouseSales
+			productWarehouseTemp.SalesProfit = stats.WarehouseSalesProfit
+			productWarehouseTemp.SalesLoss = stats.WarehouseSalesLoss
+			productStoreTemp.ProductWarehouses[*warehouseCode] = productWarehouseTemp
+		}
+
+		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
+
 	}
 
 	return nil
@@ -3681,13 +3733,15 @@ func (order *Order) SetProductsSalesStats() error {
 			return err
 		}
 
-		err = product.SetProductSalesStatsByStoreID(*order.StoreID)
+		err = product.SetProductSalesStats(orderProduct.WarehouseCode)
 		if err != nil {
+			log.Print("Error setting product sales stats: " + err.Error())
 			return err
 		}
 
 		err = product.Update(nil)
 		if err != nil {
+			log.Print("Error updating: " + err.Error())
 			return err
 		}
 
@@ -3698,7 +3752,7 @@ func (order *Order) SetProductsSalesStats() error {
 					return err
 				}
 
-				err = setProductObj.SetProductSalesStatsByStoreID(store.ID)
+				err = setProductObj.SetProductSalesStats(orderProduct.WarehouseCode)
 				if err != nil {
 					return err
 				}

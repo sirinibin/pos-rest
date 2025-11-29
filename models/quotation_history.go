@@ -619,6 +619,15 @@ func (quotation *Quotation) CreateProductsQuotationHistory() error {
 	defer cancel()
 
 	for _, quotationProduct := range quotation.Products {
+		warehouseCode := ""
+		if quotationProduct.WarehouseCode != nil {
+			warehouseCode = *quotationProduct.WarehouseCode
+		}
+
+		if warehouseCode == "" {
+			warehouseCode = "main_store"
+		}
+
 		history := ProductQuotationHistory{
 			Date:               quotation.Date,
 			StoreID:            quotation.StoreID,
@@ -639,7 +648,7 @@ func (quotation *Quotation) CreateProductsQuotationHistory() error {
 			Type:               quotation.Type,
 			PaymentStatus:      quotation.PaymentStatus,
 			WarehouseID:        quotationProduct.WarehouseID,
-			WarehouseCode:      quotationProduct.WarehouseCode,
+			WarehouseCode:      &warehouseCode,
 		}
 
 		history.UnitPrice = RoundTo8Decimals(quotationProduct.UnitPrice)

@@ -26,60 +26,91 @@ import (
 )
 
 type ProductStore struct {
-	StoreID                      primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	StoreName                    string             `bson:"store_name,omitempty" json:"store_name,omitempty"`
-	StoreNameInArabic            string             `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
-	PurchaseUnitPrice            float64            `bson:"purchase_unit_price" json:"purchase_unit_price"`
-	PurchaseUnitPriceWithVAT     float64            `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
-	PurchaseUnitPriceSecret      string             `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
-	WholesaleUnitPrice           float64            `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
-	WholesaleUnitPriceWithVAT    float64            `bson:"wholesale_unit_price_with_vat" json:"wholesale_unit_price_with_vat"`
-	RetailUnitPrice              float64            `bson:"retail_unit_price" json:"retail_unit_price"`
-	RetailUnitPriceWithVAT       float64            `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
-	IsUnitPriceWithVAT           bool               `bson:"with_vat" json:"with_vat"`
-	Stock                        float64            `bson:"stock" json:"stock"`
-	WarehouseStocks              map[string]float64 `bson:"warehouse_stocks" json:"warehouse_stocks"`
-	StocksAdded                  float64            `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
-	StocksRemoved                float64            `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
-	StockAdjustments             []StockAdjustment  `bson:"stock_adjustments" json:"stock_adjustments"`
-	RetailUnitProfit             float64            `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
-	RetailUnitProfitPerc         float64            `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
-	WholesaleUnitProfit          float64            `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
-	WholesaleUnitProfitPerc      float64            `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
-	SalesCount                   int64              `bson:"sales_count" json:"sales_count"`
-	SalesQuantity                float64            `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
-	Sales                        float64            `bson:"sales" json:"sales"`
-	SalesReturnCount             int64              `bson:"sales_return_count" json:"sales_return_count"`
-	SalesReturnQuantity          float64            `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
-	SalesReturn                  float64            `bson:"sales_return" json:"sales_return"`
-	SalesProfit                  float64            `bson:"sales_profit" json:"sales_profit"`
-	SalesLoss                    float64            `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
-	QuotationSalesCount          int64              `bson:"quotation_sales_count" json:"quotation_sales_count"`
-	QuotationSalesQuantity       float64            `bson:"quotation_sales_quantity,omitempty" json:"quotation_sales_quantity,omitempty"`
-	QuotationSales               float64            `bson:"quotation_sales,omitempty" json:"quotation_sales,omitempty"`
-	QuotationSalesProfit         float64            `bson:"quotation_sales_profit,omitempty" json:"quotation_sales_profit,omitempty"`
-	QuotationSalesLoss           float64            `bson:"quotation_sales_loss,omitempty" json:"quotation_sales_loss,omitempty"`
-	QuotationSalesReturnCount    int64              `bson:"quotation_sales_return_count" json:"quotation_sales_return_count"`
-	QuotationSalesReturnQuantity float64            `bson:"quotation_sales_return_quantity,omitempty" json:"quotation_sales_return_quantity,omitempty"`
-	QuotationSalesReturn         float64            `bson:"quotation_sales_return,omitempty" json:"quotation_sales_return,omitempty"`
-	QuotationSalesReturnProfit   float64            `bson:"quotation_sales_return_profit,omitempty" json:"quotation_sales_return_profit,omitempty"`
-	QuotationSalesReturnLoss     float64            `bson:"quotation_sales_return_loss,omitempty" json:"quotation_sales_return_loss,omitempty"`
-	PurchaseCount                int64              `bson:"purchase_count" json:"purchase_count"`
-	PurchaseQuantity             float64            `bson:"purchase_quantity,omitempty" json:"purchase_quantity,omitempty"`
-	Purchase                     float64            `bson:"purchase,omitempty" json:"purchase,omitempty"`
-	PurchaseReturnCount          int64              `bson:"purchase_return_count" json:"purchase_return_count"`
-	PurchaseReturnQuantity       float64            `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity,omitempty"`
-	PurchaseReturn               float64            `bson:"purchase_return,omitempty" json:"purchase_return,omitempty"`
-	SalesReturnProfit            float64            `bson:"sales_return_profit,omitempty" json:"sales_return_profit,omitempty"`
-	SalesReturnLoss              float64            `bson:"sales_return_loss,omitempty" json:"sales_return_loss,omitempty"`
-	QuotationCount               int64              `bson:"quotation_count" json:"quotation_count"`
-	QuotationQuantity            float64            `bson:"quotation_quantity,omitempty" json:"quotation_quantity,omitempty"`
-	Quotation                    float64            `bson:"quotation,omitempty" json:"quotation,omitempty"`
-	DeliveryNoteCount            int64              `bson:"delivery_note_count" json:"delivery_note_count"`
-	DeliveryNoteQuantity         float64            `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
-	StockTransferAmount          float64            `bson:"stocktransfer_amount" json:"stocktransfer_amount"`
-	StockTransferCount           int64              `bson:"stocktransfer_count" json:"stocktransfer_count"`
-	StockTransferQuantity        float64            `bson:"stocktransfer_quantity" json:"stocktransfer_quantity"`
+	StoreID                      primitive.ObjectID          `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	StoreName                    string                      `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic            string                      `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
+	PurchaseUnitPrice            float64                     `bson:"purchase_unit_price" json:"purchase_unit_price"`
+	PurchaseUnitPriceWithVAT     float64                     `bson:"purchase_unit_price_with_vat" json:"purchase_unit_price_with_vat"`
+	PurchaseUnitPriceSecret      string                      `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
+	WholesaleUnitPrice           float64                     `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
+	WholesaleUnitPriceWithVAT    float64                     `bson:"wholesale_unit_price_with_vat" json:"wholesale_unit_price_with_vat"`
+	RetailUnitPrice              float64                     `bson:"retail_unit_price" json:"retail_unit_price"`
+	RetailUnitPriceWithVAT       float64                     `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
+	IsUnitPriceWithVAT           bool                        `bson:"with_vat" json:"with_vat"`
+	Stock                        float64                     `bson:"stock" json:"stock"`
+	WarehouseStocks              map[string]float64          `bson:"warehouse_stocks" json:"warehouse_stocks"`
+	ProductWarehouses            map[string]ProductWarehouse `bson:"product_warehouses" json:"product_warehouses"`
+	StocksAdded                  float64                     `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
+	StocksRemoved                float64                     `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
+	StockAdjustments             []StockAdjustment           `bson:"stock_adjustments" json:"stock_adjustments"`
+	RetailUnitProfit             float64                     `bson:"retail_unit_profit,omitempty" json:"retail_unit_profit,omitempty"`
+	RetailUnitProfitPerc         float64                     `bson:"retail_unit_profit_perc,omitempty" json:"retail_unit_profit_perc,omitempty"`
+	WholesaleUnitProfit          float64                     `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
+	WholesaleUnitProfitPerc      float64                     `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
+	SalesCount                   int64                       `bson:"sales_count" json:"sales_count"`
+	SalesQuantity                float64                     `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
+	Sales                        float64                     `bson:"sales" json:"sales"`
+	SalesReturnCount             int64                       `bson:"sales_return_count" json:"sales_return_count"`
+	SalesReturnQuantity          float64                     `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
+	SalesReturn                  float64                     `bson:"sales_return" json:"sales_return"`
+	SalesProfit                  float64                     `bson:"sales_profit" json:"sales_profit"`
+	SalesLoss                    float64                     `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
+	QuotationSalesCount          int64                       `bson:"quotation_sales_count" json:"quotation_sales_count"`
+	QuotationSalesQuantity       float64                     `bson:"quotation_sales_quantity,omitempty" json:"quotation_sales_quantity,omitempty"`
+	QuotationSales               float64                     `bson:"quotation_sales,omitempty" json:"quotation_sales,omitempty"`
+	QuotationSalesProfit         float64                     `bson:"quotation_sales_profit,omitempty" json:"quotation_sales_profit,omitempty"`
+	QuotationSalesLoss           float64                     `bson:"quotation_sales_loss,omitempty" json:"quotation_sales_loss,omitempty"`
+	QuotationSalesReturnCount    int64                       `bson:"quotation_sales_return_count" json:"quotation_sales_return_count"`
+	QuotationSalesReturnQuantity float64                     `bson:"quotation_sales_return_quantity,omitempty" json:"quotation_sales_return_quantity,omitempty"`
+	QuotationSalesReturn         float64                     `bson:"quotation_sales_return,omitempty" json:"quotation_sales_return,omitempty"`
+	QuotationSalesReturnProfit   float64                     `bson:"quotation_sales_return_profit,omitempty" json:"quotation_sales_return_profit,omitempty"`
+	QuotationSalesReturnLoss     float64                     `bson:"quotation_sales_return_loss,omitempty" json:"quotation_sales_return_loss,omitempty"`
+	PurchaseCount                int64                       `bson:"purchase_count" json:"purchase_count"`
+	PurchaseQuantity             float64                     `bson:"purchase_quantity,omitempty" json:"purchase_quantity,omitempty"`
+	Purchase                     float64                     `bson:"purchase,omitempty" json:"purchase,omitempty"`
+	PurchaseReturnCount          int64                       `bson:"purchase_return_count" json:"purchase_return_count"`
+	PurchaseReturnQuantity       float64                     `bson:"purchase_return_quantity,omitempty" json:"purchase_return_quantity,omitempty"`
+	PurchaseReturn               float64                     `bson:"purchase_return,omitempty" json:"purchase_return,omitempty"`
+	SalesReturnProfit            float64                     `bson:"sales_return_profit,omitempty" json:"sales_return_profit,omitempty"`
+	SalesReturnLoss              float64                     `bson:"sales_return_loss,omitempty" json:"sales_return_loss,omitempty"`
+	QuotationCount               int64                       `bson:"quotation_count" json:"quotation_count"`
+	QuotationQuantity            float64                     `bson:"quotation_quantity,omitempty" json:"quotation_quantity,omitempty"`
+	Quotation                    float64                     `bson:"quotation,omitempty" json:"quotation,omitempty"`
+	DeliveryNoteCount            int64                       `bson:"delivery_note_count" json:"delivery_note_count"`
+	DeliveryNoteQuantity         float64                     `bson:"delivery_note_quantity,omitempty" json:"delivery_note_quantity,omitempty"`
+	StockTransferAmount          float64                     `bson:"stocktransfer_amount" json:"stocktransfer_amount"`
+	StockTransferCount           int64                       `bson:"stocktransfer_count" json:"stocktransfer_count"`
+	StockTransferQuantity        float64                     `bson:"stocktransfer_quantity" json:"stocktransfer_quantity"`
+}
+
+type ProductWarehouse struct {
+	Stock                        float64 `bson:"stock" json:"stock"`
+	SalesCount                   int64   `bson:"sales_count" json:"sales_count"`
+	SalesQuantity                float64 `bson:"sales_quantity" json:"sales_quantity"`
+	Sales                        float64 `bson:"sales" json:"sales"`
+	SalesProfit                  float64 `bson:"sales_profit" json:"sales_profit"`
+	SalesLoss                    float64 `bson:"sales_loss" json:"sales_loss"`
+	SalesReturnCount             int64   `bson:"sales_return_count" json:"sales_return_count"`
+	SalesReturnQuantity          float64 `bson:"sales_return_quantity" json:"sales_return_quantity"`
+	SalesReturn                  float64 `bson:"sales_return" json:"sales_return"`
+	SalesReturnProfit            float64 `bson:"sales_return_profit" json:"sales_return_profit"`
+	SalesReturnLoss              float64 `bson:"sales_return_loss" json:"sales_return_loss"`
+	PurchaseCount                int64   `bson:"purchase_count" json:"purchase_count"`
+	PurchaseQuantity             float64 `bson:"purchase_quantity" json:"purchase_quantity"`
+	Purchase                     float64 `bson:"purchase" json:"purchase"`
+	PurchaseReturnCount          int64   `bson:"purchase_return_count" json:"purchase_return_count"`
+	PurchaseReturnQuantity       float64 `bson:"purchase_return_quantity" json:"purchase_return_quantity"`
+	PurchaseReturn               float64 `bson:"purchase_return" json:"purchase_return"`
+	QuotationSalesCount          int64   `bson:"quotation_sales_count" json:"quotation_sales_count"`
+	QuotationSalesQuantity       float64 `bson:"quotation_sales_quantity" json:"quotation_sales_quantity"`
+	QuotationSales               float64 `bson:"quotation_sales" json:"quotation_sales"`
+	QuotationSalesProfit         float64 `bson:"quotation_sales_profit" json:"quotation_sales_profit"`
+	QuotationSalesLoss           float64 `bson:"quotation_sales_loss" json:"quotation_sales_loss"`
+	QuotationSalesReturnCount    int64   `bson:"quotation_sales_return_count" json:"quotation_sales_return_count"`
+	QuotationSalesReturnQuantity float64 `bson:"quotation_sales_return_quantity" json:"quotation_sales_return_quantity"`
+	QuotationSalesReturn         float64 `bson:"quotation_sales_return" json:"quotation_sales_return"`
+	QuotationSalesReturnProfit   float64 `bson:"quotation_sales_return_profit" json:"quotation_sales_return_profit"`
+	QuotationSalesReturnLoss     float64 `bson:"quotation_sales_return_loss" json:"quotation_sales_return_loss"`
 }
 
 type StockAdjustment struct {
@@ -248,57 +279,31 @@ type ProductStats struct {
 func (store *Store) GetProductStats(
 	filter map[string]interface{},
 	storeID primitive.ObjectID,
+	warehouseCode *string,
 ) (stats ProductStats, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	//stock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
-	//retailStockvalue_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
-	//retailStockValueStock_StoreCond := []interface{}{"$$store.store_id", "$$store.store_id"}
+	var stockField string
+	var salesField string
+	var salesProfitField string
+	var salesReturnField string
+	var salesReturnProfitField string
 
-	if !storeID.IsZero() {
-		/*stock_StoreCond = []interface{}{
-			"$$store.store_id", storeID,
-		}
-
-		retailStockvalue_StoreCond = []interface{}{
-			"$$store.store_id", storeID,
-		}
-		*/
-
-		/*
-			retailStockValueStock_StoreCond = []interface{}{
-				"$$store.store_id", storeID,
-			}
-		*/
-
+	if warehouseCode != nil && *warehouseCode != "" {
+		stockField = "$product_stores." + storeID.Hex() + ".warehouse_stocks." + *warehouseCode
+		salesField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales"
+		salesProfitField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales_profit"
+		salesReturnField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales_return"
+		salesReturnProfitField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales_return_profit"
+	} else {
+		stockField = "$product_stores." + storeID.Hex() + ".stock"
+		salesField = "$product_stores." + storeID.Hex() + ".sales"
+		salesProfitField = "$product_stores." + storeID.Hex() + ".sales_profit"
+		salesReturnField = "$product_stores." + storeID.Hex() + ".sales_return"
+		salesReturnProfitField = "$product_stores." + storeID.Hex() + ".sales_return_profit"
 	}
-	/*
-		bson.M{"$sum": bson.M{"$sum": bson.M{
-											"$map": bson.M{
-												"input": "$stock",
-												"as":    "stockItem",
-												"in": bson.M{
-													"$cond": []interface{}{
-														bson.M{"$and": []interface{}{
-															bson.M{"$eq": retailStockValueStock_StoreCond},
-															bson.M{"$gt": []interface{}{"$$stockItem.stock", 0}},
-														}},
-														"$$stockItem.stock",
-														0,
-													},
-												},
-											},
-										}}},
-
-										 bson.M{"$cond":bson.M{
-					[]interface{}{
-						bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
-						"$product_stores." + storeID.Hex() + ".stock",
-						0,
-					}},
-	*/
 
 	pipeline := []bson.M{
 		bson.M{
@@ -308,149 +313,54 @@ func (store *Store) GetProductStats(
 			"$group": bson.M{
 				"_id": nil,
 				"sales": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales", 0}},
-					"$product_stores." + storeID.Hex() + ".sales",
+					bson.M{"$gt": []interface{}{salesField, 0}},
+					salesField,
 					0,
 				}}},
 				"sales_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales_profit", 0}},
-					"$product_stores." + storeID.Hex() + ".sales_profit",
+					bson.M{"$gt": []interface{}{salesProfitField, 0}},
+					salesProfitField,
 					0,
 				}}},
 				"sales_return": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales_return", 0}},
-					"$product_stores." + storeID.Hex() + ".sales_return",
+					bson.M{"$gt": []interface{}{salesReturnField, 0}},
+					salesReturnField,
 					0,
 				}}},
 				"sales_return_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".sales_return_profit", 0}},
-					"$product_stores." + storeID.Hex() + ".sales_return_profit",
+					bson.M{"$gt": []interface{}{salesReturnProfitField, 0}},
+					salesReturnProfitField,
 					0,
 				}}},
 				"stock": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
-					"$product_stores." + storeID.Hex() + ".stock",
+					bson.M{"$ne": []interface{}{stockField, nil}},
+					stockField,
 					0,
 				}}},
 				"retail_stock_value": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+					bson.M{"$ne": []interface{}{stockField, nil}},
 					bson.M{"$multiply": []interface{}{
-						"$product_stores." + storeID.Hex() + ".stock",
+						stockField,
 						"$product_stores." + storeID.Hex() + ".retail_unit_price",
 					}},
 					0,
 				}}},
 				"wholesale_stock_value": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+					bson.M{"$ne": []interface{}{stockField, nil}},
 					bson.M{"$multiply": []interface{}{
-						"$product_stores." + storeID.Hex() + ".stock",
+						stockField,
 						"$product_stores." + storeID.Hex() + ".wholesale_unit_price",
 					}},
 					0,
 				}}},
 				"purchase_stock_value": bson.M{"$sum": bson.M{"$cond": []interface{}{
-					bson.M{"$gt": []interface{}{"$product_stores." + storeID.Hex() + ".stock", 0}},
+					bson.M{"$ne": []interface{}{stockField, nil}},
 					bson.M{"$multiply": []interface{}{
-						"$product_stores." + storeID.Hex() + ".stock",
+						stockField,
 						"$product_stores." + storeID.Hex() + ".purchase_unit_price",
 					}},
 					0,
 				}}},
-				/*"stock": bson.M{"$sum": bson.M{
-				"input": "$product_stores." + storeID.Hex(),
-				"as":    "store",
-				"in": bson.M{
-					"$cond": []interface{}{
-						bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-						"$$store.stock",
-						0,
-					},
-				}}},
-				*/
-				//"stock": bson.M{"$sum": "$product_stores." + storeID.Hex() + ".stock"},
-				/*"retail_stock_value": bson.M{"$sum": bson.M{"$multiply": []interface{}{
-					"$product_stores." + storeID.Hex() + ".stock",
-					"$product_stores." + storeID.Hex() + ".retail_unit_price",
-				}}},*/
-
-				//"retail_stock_value": bson.M{"$sum": "$product_stores." + storeID.Hex() + ".stock*$product_stores." + storeID.Hex() + ".retail_unit_price"},
-				/*
-					"stock": bson.M{"$sum": bson.M{"$sum": bson.M{
-						"$map": bson.M{
-							"input": "$product_stores",
-							"as":    "store",
-							"in": bson.M{
-								"$cond": []interface{}{
-									bson.M{"$and": []interface{}{
-										bson.M{"$eq": stock_StoreCond},
-										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-									}},
-									"$$store.stock",
-									0,
-								},
-							},
-						},
-					}}},
-				*/
-				/*
-					"retail_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
-						"$map": bson.M{
-							"input": "$product_stores",
-							"as":    "store",
-							"in": bson.M{
-								"$cond": []interface{}{
-									bson.M{"$and": []interface{}{
-										bson.M{"$eq": retailStockvalue_StoreCond},
-										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-									}},
-									bson.M{"$multiply": []interface{}{
-										"$$store.retail_unit_price",
-										"$$store.stock",
-									}},
-									0,
-								},
-							},
-						},
-					}}},
-					"wholesale_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
-						"$map": bson.M{
-							"input": "$product_stores",
-							"as":    "store",
-							"in": bson.M{
-								"$cond": []interface{}{
-									bson.M{"$and": []interface{}{
-										bson.M{"$eq": retailStockvalue_StoreCond},
-										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-									}},
-									bson.M{"$multiply": []interface{}{
-										"$$store.wholesale_unit_price",
-										"$$store.stock",
-									}},
-									0,
-								},
-							},
-						},
-					}}},
-					"purchase_stock_value": bson.M{"$sum": bson.M{"$sum": bson.M{
-						"$map": bson.M{
-							"input": "$product_stores",
-							"as":    "store",
-							"in": bson.M{
-								"$cond": []interface{}{
-									bson.M{"$and": []interface{}{
-										bson.M{"$eq": retailStockvalue_StoreCond},
-										bson.M{"$gt": []interface{}{"$$store.stock", 0}},
-									}},
-									bson.M{"$multiply": []interface{}{
-										"$$store.purchase_unit_price",
-										"$$store.stock",
-									}},
-									0,
-								},
-							},
-						},
-					}}},
-				*/
 			},
 		},
 	}
@@ -1105,6 +1015,11 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		//criterias.SearchBy["stores"] = element
 	}
 
+	warehouseCode := ""
+	keys, ok = r.URL.Query()["search[warehouse_code]"]
+	if ok && len(keys[0]) >= 1 && !govalidator.IsNull(keys[0]) {
+		warehouseCode = keys[0]
+	}
 	keys, ok = r.URL.Query()["search[stock]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
@@ -1115,43 +1030,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		/*
-			stockElement := bson.M{"$elemMatch": bson.M{}}
-
+		if !govalidator.IsNull(warehouseCode) {
 			if operator != "" {
-				if !storeID.IsZero() {
-					stockElement["$elemMatch"] = bson.M{
-						"stock": bson.M{
-							operator: stockValue,
-						},
-						"store_id": storeID,
-					}
-				} else {
-					stockElement["$elemMatch"] = bson.M{
-						"stock": bson.M{
-							operator: stockValue,
-						},
-					}
-				}
-
+				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+keys[0]] = bson.M{operator: stockValue}
 			} else {
-				if !storeID.IsZero() {
-					stockElement["$elemMatch"] = bson.M{
-						"stock":    stockValue,
-						"store_id": storeID,
-					}
-				} else {
-					stockElement["$elemMatch"] = bson.M{
-						"stock": stockValue,
-					}
-				}
+				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+keys[0]] = stockValue
 			}
-		*/
-
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = bson.M{operator: stockValue}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = stockValue
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = bson.M{operator: stockValue}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = stockValue
+			}
 		}
 
 		//criterias.SearchBy["stores"] = stockElement
@@ -1168,11 +1058,20 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_count"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = value
+			}
 		}
+
 		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_count", operator, &storeID, value)
 	}
 
@@ -1186,10 +1085,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_quantity"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_quantity", operator, &storeID, value)
 	}
@@ -1204,10 +1111,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales", operator, &storeID, value)
 	}
@@ -1222,10 +1137,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_profit"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_profit", operator, &storeID, value)
 	}
@@ -1240,10 +1163,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_loss"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_loss", operator, &storeID, value)
 	}
@@ -1259,10 +1190,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_count"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetIntSearchElement("sales_return_count", operator, &storeID, value)
 	}
@@ -1277,10 +1216,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_quantity"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_quantity", operator, &storeID, value)
 	}
@@ -1295,10 +1242,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return", operator, &storeID, value)
 	}
@@ -1313,10 +1268,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_profit"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
 	}
@@ -1331,10 +1294,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_loss"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
 	}
@@ -1351,10 +1322,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_count"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
 	}
@@ -1369,10 +1348,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_quantity"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_quantity", operator, &storeID, value)
 	}
@@ -1387,10 +1374,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase", operator, &storeID, value)
 	}
@@ -1407,10 +1402,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_count"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
 	}
@@ -1425,10 +1428,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_quantity"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_quantity", operator, &storeID, value)
 	}
@@ -1443,10 +1454,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return", operator, &storeID, value)
 	}
@@ -1462,10 +1481,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_count"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = value
+			}
 		}
 		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
 	}
@@ -1480,10 +1507,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = value
+			}
 		}
 	}
 
@@ -1497,10 +1532,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_quantity"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = value
+			}
 		}
 	}
 
@@ -1514,10 +1557,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_count"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = value
+			}
 		}
 	}
 
@@ -1531,10 +1582,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = value
+			}
 		}
 	}
 
@@ -1548,10 +1607,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_quantity"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = value
+			}
 		}
 	}
 
@@ -1565,10 +1632,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_count"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = value
+			}
 		}
 	}
 
@@ -1582,14 +1657,22 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = value
+			}
 		}
 	}
 
-	keys, ok = r.URL.Query()["search[quotation_sales_quantity]"]
+	keys, ok = r.URL.Query()["search[quotation_sales_return_quantity]"]
 	if ok && len(keys[0]) >= 1 {
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
@@ -1599,10 +1682,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			return products, criterias, err
 		}
 
-		if operator != "" {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = bson.M{operator: value}
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_quantity"] = value
+			}
 		} else {
-			criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = value
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_quantity"] = value
+			}
 		}
 	}
 
