@@ -263,6 +263,69 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	// product_history
+	fields = bson.M{"product_id": 1}
+	err = store.CreateIndex("product_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"reference_id": 1}
+	err = store.CreateIndex("product_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("product_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	// product_sales_history
+	fields = bson.M{"product_id": 1}
+	err = store.CreateIndex("product_sales_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"order_id": 1}
+	err = store.CreateIndex("product_sales_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("product_sales_history", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	// Add these inside func (store *Store) CreateAllIndexes():
+
+	// posting
+	fields = bson.M{"account_id": 1}
+	err = store.CreateIndex("posting", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"reference_id": 1}
+	err = store.CreateIndex("posting", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"date": -1}
+	err = store.CreateIndex("posting", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"store_id": 1}
+	err = store.CreateIndex("posting", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+	fields = bson.M{"account_number": 1}
+	err = store.CreateIndex("posting", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -358,5 +421,14 @@ func (store *Store) RemoveAllIndexes() {
 	collection.Indexes().DropAll(context.Background())
 
 	collection = db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("product_sales_history")
+	collection.Indexes().DropAll(context.Background())
+
+	collection = db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	collection.Indexes().DropAll(context.Background())
 }
