@@ -2435,6 +2435,7 @@ func ProcessQuotations() error {
 			quotation.CreateProductsHistory()
 			quotation.CreateProductsQuotationHistory()
 			quotation.SetProductsQuotationSalesStats()
+			quotation.Update()
 
 			/*
 				quotation.UpdateForeignLabelFields()

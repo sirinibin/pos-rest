@@ -2929,6 +2929,7 @@ func ProcessQuotationSalesReturns() error {
 			quotationsalesReturn.CreateProductsHistory()
 			quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
 			quotationsalesReturn.SetProductsQuotationSalesReturnStats()
+			quotationsalesReturn.Update()
 
 			/*
 				quotationsalesReturn.UpdateForeignLabelFields()

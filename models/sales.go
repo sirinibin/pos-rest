@@ -3400,6 +3400,13 @@ func ProcessSales() error {
 				continue
 			}
 
+			order.ClearProductsHistory()
+			order.ClearProductsSalesHistory()
+			order.CreateProductsSalesHistory()
+			order.CreateProductsHistory()
+			order.SetProductsSalesStats()
+			order.Update()
+
 			/*
 				order.UpdateForeignLabelFields()
 				order.ClearProductsHistory()
@@ -3418,11 +3425,6 @@ func ProcessSales() error {
 					}
 				}*/
 
-			order.ClearProductsHistory()
-			order.ClearProductsSalesHistory()
-			order.CreateProductsSalesHistory()
-			order.CreateProductsHistory()
-			order.SetProductsSalesStats()
 			/*
 				if store.Code == "MBDI" || store.Code == "LGK" {
 					order.ClearProductsSalesHistory()

@@ -2512,6 +2512,7 @@ func ProcessPurchases() error {
 			purchase.CreateProductsHistory()
 			purchase.CreateProductsPurchaseHistory()
 			purchase.SetProductsPurchaseStats()
+			purchase.Update()
 
 			/*
 				purchase.UpdateForeignLabelFields()

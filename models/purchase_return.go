@@ -2359,6 +2359,7 @@ func ProcessPurchaseReturns() error {
 			model.CreateProductsHistory()
 			model.CreateProductsPurchaseReturnHistory()
 			model.SetProductsPurchaseReturnStats()
+			model.Update()
 
 			/*
 				model.UpdateForeignLabelFields()

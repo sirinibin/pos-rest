@@ -3068,6 +3068,7 @@ func ProcessSalesReturns() error {
 			salesReturn.CreateProductsHistory()
 			salesReturn.CreateProductsSalesReturnHistory()
 			salesReturn.SetProductsSalesReturnStats()
+			salesReturn.Update()
 
 			/*
 				salesReturn.UpdateForeignLabelFields()
