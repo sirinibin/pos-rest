@@ -1053,19 +1053,25 @@ func (stockTransfer *StockTransfer) CreateProductsHistory() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	productCount := make(map[primitive.ObjectID]int)
 	for _, stockTransferProduct := range stockTransfer.Products {
+		productCount[stockTransferProduct.ProductID]++
+		updatedDate := *stockTransfer.Date
+		if productCount[stockTransferProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[stockTransferProduct.ProductID]-1) * time.Second)
+		}
 		product, err := store.FindProductByID(&stockTransferProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(stockTransfer.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return err
 		}
 
 		history := ProductHistory{
-			Date:              stockTransfer.Date,
+			Date:              &updatedDate,
 			StoreID:           stockTransfer.StoreID,
 			ProductID:         stockTransferProduct.ProductID,
 			ReferenceType:     "stock_transfer",
@@ -1109,13 +1115,13 @@ func (stockTransfer *StockTransfer) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(stockTransfer.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return err
 				}
 
 				history := ProductHistory{
-					Date:              stockTransfer.Date,
+					Date:              &updatedDate,
 					StoreID:           stockTransfer.StoreID,
 					ProductID:         *setProduct.ProductID,
 					FromWarehouseID:   stockTransfer.FromWarehouseID,
@@ -1177,19 +1183,28 @@ func (order *Order) CreateProductsHistory() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	// Track duplicate product occurrences
+	productCount := make(map[primitive.ObjectID]int)
 	for _, orderProduct := range order.Products {
+		productCount[orderProduct.ProductID]++
+		// Add 1 second for each duplicate occurrence after the first
+		updatedDate := *order.Date
+		if productCount[orderProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[orderProduct.ProductID]-1) * time.Second)
+		}
+
 		product, err := store.FindProductByID(&orderProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(order.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return err
 		}
 
 		history := ProductHistory{
-			Date:               order.Date,
+			Date:               &updatedDate,
 			StoreID:            order.StoreID,
 			StoreName:          order.StoreName,
 			ProductID:          orderProduct.ProductID,
@@ -1237,13 +1252,13 @@ func (order *Order) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(order.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return err
 				}
 
 				history := ProductHistory{
-					Date:               order.Date,
+					Date:               &updatedDate,
 					StoreID:            order.StoreID,
 					StoreName:          order.StoreName,
 					ProductID:          *setProduct.ProductID,
@@ -1308,7 +1323,13 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	productCount := make(map[primitive.ObjectID]int)
 	for _, salesReturnProduct := range salesReturn.Products {
+		productCount[salesReturnProduct.ProductID]++
+		updatedDate := *salesReturn.Date
+		if productCount[salesReturnProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[salesReturnProduct.ProductID]-1) * time.Second)
+		}
 		if !salesReturnProduct.Selected {
 			continue
 		}
@@ -1318,13 +1339,13 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 			return errors.New("Product not found for sales return product id:" + salesReturnProduct.ProductID.Hex())
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(salesReturn.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return errors.New("Error getting product quantity for sales return:" + err.Error())
 		}
 
 		history := ProductHistory{
-			Date:               salesReturn.Date,
+			Date:               &updatedDate,
 			StoreID:            salesReturn.StoreID,
 			StoreName:          salesReturn.StoreName,
 			ProductID:          salesReturnProduct.ProductID,
@@ -1371,13 +1392,13 @@ func (salesReturn *SalesReturn) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(salesReturn.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return errors.New("error GetProductQuantityBeforeOrEqualTo:" + err.Error())
 				}
 
 				history := ProductHistory{
-					Date:               salesReturn.Date,
+					Date:               &updatedDate,
 					StoreID:            salesReturn.StoreID,
 					StoreName:          salesReturn.StoreName,
 					ProductID:          *setProduct.ProductID,
@@ -1443,20 +1464,26 @@ func (purchase *Purchase) CreateProductsHistory() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	productCount := make(map[primitive.ObjectID]int)
 	for _, purchaseProduct := range purchase.Products {
+		productCount[purchaseProduct.ProductID]++
+		updatedDate := *purchase.Date
+		if productCount[purchaseProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[purchaseProduct.ProductID]-1) * time.Second)
+		}
 
 		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(purchase.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return err
 		}
 
 		history := ProductHistory{
-			Date:             purchase.Date,
+			Date:             &updatedDate,
 			StoreID:          purchase.StoreID,
 			StoreName:        purchase.StoreName,
 			ProductID:        purchaseProduct.ProductID,
@@ -1502,13 +1529,13 @@ func (purchase *Purchase) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(purchase.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return err
 				}
 
 				history := ProductHistory{
-					Date:             purchase.Date,
+					Date:             &updatedDate,
 					StoreID:          purchase.StoreID,
 					StoreName:        purchase.StoreName,
 					ProductID:        *setProduct.ProductID,
@@ -1572,7 +1599,13 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	productCount := make(map[primitive.ObjectID]int)
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
+		productCount[purchaseReturnProduct.ProductID]++
+		updatedDate := *purchaseReturn.Date
+		if productCount[purchaseReturnProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[purchaseReturnProduct.ProductID]-1) * time.Second)
+		}
 		if !purchaseReturnProduct.Selected {
 			continue
 		}
@@ -1582,13 +1615,13 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(purchaseReturn.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return err
 		}
 
 		history := ProductHistory{
-			Date:             purchaseReturn.Date,
+			Date:             &updatedDate,
 			StoreID:          purchaseReturn.StoreID,
 			StoreName:        purchaseReturn.StoreName,
 			ProductID:        purchaseReturnProduct.ProductID,
@@ -1632,13 +1665,13 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(purchaseReturn.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return err
 				}
 
 				history := ProductHistory{
-					Date:             purchaseReturn.Date,
+					Date:             &updatedDate,
 					StoreID:          purchaseReturn.StoreID,
 					StoreName:        purchaseReturn.StoreName,
 					ProductID:        *setProduct.ProductID,
@@ -1701,19 +1734,25 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	productCount := make(map[primitive.ObjectID]int)
 	for _, deliverynoteProduct := range deliverynote.Products {
+		productCount[deliverynoteProduct.ProductID]++
+		updatedDate := *deliverynote.Date
+		if productCount[deliverynoteProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[deliverynoteProduct.ProductID]-1) * time.Second)
+		}
 		product, err := store.FindProductByID(&deliverynoteProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(deliverynote.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return err
 		}
 
 		history := ProductHistory{
-			Date:               deliverynote.Date,
+			Date:               &updatedDate,
 			StoreID:            deliverynote.StoreID,
 			StoreName:          deliverynote.StoreName,
 			ProductID:          deliverynoteProduct.ProductID,
@@ -1746,13 +1785,13 @@ func (deliverynote *DeliveryNote) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(deliverynote.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return err
 				}
 
 				history := ProductHistory{
-					Date:               deliverynote.Date,
+					Date:               &updatedDate,
 					StoreID:            deliverynote.StoreID,
 					StoreName:          deliverynote.StoreName,
 					ProductID:          *setProduct.ProductID,
@@ -1810,13 +1849,19 @@ func (quotation *Quotation) CreateProductsHistory() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	productCount := make(map[primitive.ObjectID]int)
 	for _, quotationProduct := range quotation.Products {
+		productCount[quotationProduct.ProductID]++
+		updatedDate := *quotation.Date
+		if productCount[quotationProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[quotationProduct.ProductID]-1) * time.Second)
+		}
 		product, err := store.FindProductByID(&quotationProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(quotation.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -1835,7 +1880,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 		}
 
 		history := ProductHistory{
-			Date:               quotation.Date,
+			Date:               &updatedDate,
 			StoreID:            quotation.StoreID,
 			StoreName:          quotation.StoreName,
 			ProductID:          quotationProduct.ProductID,
@@ -1882,7 +1927,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(quotation.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -1896,7 +1941,7 @@ func (quotation *Quotation) CreateProductsHistory() error {
 				}
 
 				history := ProductHistory{
-					Date:               quotation.Date,
+					Date:               &updatedDate,
 					StoreID:            quotation.StoreID,
 					StoreName:          quotation.StoreName,
 					ProductID:          *setProduct.ProductID,
@@ -1962,7 +2007,13 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Second)
 	defer cancel()
 
+	productCount := make(map[primitive.ObjectID]int)
 	for _, quotationsalesReturnProduct := range quotationsalesReturn.Products {
+		productCount[quotationsalesReturnProduct.ProductID]++
+		updatedDate := *quotationsalesReturn.Date
+		if productCount[quotationsalesReturnProduct.ProductID] > 1 {
+			updatedDate = updatedDate.Add(time.Duration(productCount[quotationsalesReturnProduct.ProductID]-1) * time.Second)
+		}
 		if !quotationsalesReturnProduct.Selected {
 			continue
 		}
@@ -1972,7 +2023,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(quotationsalesReturn.Date)
+		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -1984,7 +2035,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 		}
 
 		history := ProductHistory{
-			Date:               quotationsalesReturn.Date,
+			Date:               &updatedDate,
 			StoreID:            quotationsalesReturn.StoreID,
 			StoreName:          quotationsalesReturn.StoreName,
 			ProductID:          quotationsalesReturnProduct.ProductID,
@@ -2029,7 +2080,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(quotationsalesReturn.Date)
+				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -2041,7 +2092,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory() error 
 				}
 
 				history := ProductHistory{
-					Date:               quotationsalesReturn.Date,
+					Date:               &updatedDate,
 					StoreID:            quotationsalesReturn.StoreID,
 					StoreName:          quotationsalesReturn.StoreName,
 					ProductID:          *setProduct.ProductID,

@@ -3013,7 +3013,7 @@ func ProcessSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
 		}
 
@@ -3064,12 +3064,13 @@ func ProcessSalesReturns() error {
 			}
 
 			salesReturn.ClearProductsHistory()
-			salesReturn.ClearProductsSalesReturnHistory()
+			salesReturn.CreateProductsHistory()
+
+			/*salesReturn.ClearProductsSalesReturnHistory()
 
 			salesReturn.CreateProductsSalesReturnHistory()
-			salesReturn.CreateProductsHistory()
 			salesReturn.SetProductsSalesReturnStats()
-			salesReturn.Update()
+			salesReturn.Update()*/
 
 			/*
 				salesReturn.UpdateForeignLabelFields()

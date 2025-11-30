@@ -2468,7 +2468,7 @@ func ProcessPurchases() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
 		}
 
@@ -2508,12 +2508,15 @@ func ProcessPurchases() error {
 			}
 
 			purchase.ClearProductsHistory()
-			purchase.ClearProductsPurchaseHistory()
-
-			purchase.CreateProductsPurchaseHistory()
 			purchase.CreateProductsHistory()
-			purchase.SetProductsPurchaseStats()
-			purchase.Update()
+
+			/*
+				purchase.ClearProductsPurchaseHistory()
+
+				purchase.CreateProductsPurchaseHistory()
+				purchase.CreateProductsHistory()
+				purchase.SetProductsPurchaseStats()
+				purchase.Update()*/
 
 			/*
 				purchase.UpdateForeignLabelFields()

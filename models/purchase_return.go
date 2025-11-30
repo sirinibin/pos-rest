@@ -1601,7 +1601,7 @@ func (purchasereturn *PurchaseReturn) Validate(
 				}
 
 				if purchaseReturnProduct.Quantity > maxAllowedQuantity {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchase.Products[i].Unit
+					//errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchase.Products[i].Unit
 				}
 				break
 				/*
@@ -2315,7 +2315,7 @@ func ProcessPurchaseReturns() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
 		}
 
@@ -2355,12 +2355,14 @@ func ProcessPurchaseReturns() error {
 			}
 
 			model.ClearProductsHistory()
-			model.ClearProductsPurchaseReturnHistory()
-
-			model.CreateProductsPurchaseReturnHistory()
 			model.CreateProductsHistory()
-			model.SetProductsPurchaseReturnStats()
-			model.Update()
+			/*
+				model.ClearProductsPurchaseReturnHistory()
+
+				model.CreateProductsPurchaseReturnHistory()
+				model.CreateProductsHistory()
+				model.SetProductsPurchaseReturnStats()
+				model.Update()*/
 
 			/*
 				model.UpdateForeignLabelFields()

@@ -2390,7 +2390,7 @@ func ProcessQuotations() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
 		}
 
@@ -2431,12 +2431,14 @@ func ProcessQuotations() error {
 			}
 
 			quotation.ClearProductsHistory()
-			quotation.ClearProductsQuotationHistory()
-
-			quotation.CreateProductsQuotationHistory()
 			quotation.CreateProductsHistory()
-			quotation.SetProductsQuotationSalesStats()
-			quotation.Update()
+			/*
+				quotation.ClearProductsQuotationHistory()
+
+				quotation.CreateProductsQuotationHistory()
+				quotation.CreateProductsHistory()
+				quotation.SetProductsQuotationSalesStats()
+				quotation.Update()*/
 
 			/*
 				quotation.UpdateForeignLabelFields()
