@@ -2355,12 +2355,12 @@ func ProcessPurchaseReturns() error {
 			}
 
 			model.ClearProductsHistory()
-			model.CreateProductsHistory()
+			model.CreateProductsHistory(false)
 			/*
 				model.ClearProductsPurchaseReturnHistory()
 
 				model.CreateProductsPurchaseReturnHistory()
-				model.CreateProductsHistory()
+				model.CreateProductsHistory(false)
 				model.SetProductsPurchaseReturnStats()
 				model.Update()*/
 
@@ -2368,7 +2368,7 @@ func ProcessPurchaseReturns() error {
 				model.UpdateForeignLabelFields()
 				model.ClearProductsHistory()
 				model.ClearProductsPurchaseReturnHistory()
-				model.CreateProductsHistory()
+				model.CreateProductsHistory(false)
 				model.CreateProductsPurchaseReturnHistory()
 			*/
 

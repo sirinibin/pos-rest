@@ -851,6 +851,10 @@ func ProcessDeliveryNotes() error {
 	}
 
 	for _, store := range stores {
+		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+			continue
+		}
+
 		collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
 		ctx := context.Background()
 		findOptions := options.Find()
@@ -876,11 +880,13 @@ func ProcessDeliveryNotes() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			deliverynote.UpdateForeignLabelFields()
+			//deliverynote.UpdateForeignLabelFields()
 			deliverynote.ClearProductsHistory()
-			deliverynote.ClearProductsDeliveryNoteHistory()
-			deliverynote.CreateProductsHistory()
-			deliverynote.CreateProductsDeliveryNoteHistory()
+			deliverynote.CreateProductsHistory(false)
+
+			//deliverynote.ClearProductsDeliveryNoteHistory()
+
+			//deliverynote.CreateProductsDeliveryNoteHistory()
 
 			/*
 				err = deliverynote.ClearProductsDeliveryNoteHistory()

@@ -3064,7 +3064,7 @@ func ProcessSalesReturns() error {
 			}
 
 			salesReturn.ClearProductsHistory()
-			salesReturn.CreateProductsHistory()
+			salesReturn.CreateProductsHistory(false)
 
 			/*salesReturn.ClearProductsSalesReturnHistory()
 
@@ -3076,7 +3076,7 @@ func ProcessSalesReturns() error {
 				salesReturn.UpdateForeignLabelFields()
 				salesReturn.ClearProductsHistory()
 				salesReturn.ClearProductsSalesReturnHistory()
-				salesReturn.CreateProductsHistory()
+				salesReturn.CreateProductsHistory(false)
 				salesReturn.CreateProductsSalesReturnHistory()
 			*/
 

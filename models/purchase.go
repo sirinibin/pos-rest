@@ -2508,13 +2508,13 @@ func ProcessPurchases() error {
 			}
 
 			purchase.ClearProductsHistory()
-			purchase.CreateProductsHistory()
+			purchase.CreateProductsHistory(false)
 
 			/*
 				purchase.ClearProductsPurchaseHistory()
 
 				purchase.CreateProductsPurchaseHistory()
-				purchase.CreateProductsHistory()
+				purchase.CreateProductsHistory(false)
 				purchase.SetProductsPurchaseStats()
 				purchase.Update()*/
 
@@ -2522,7 +2522,7 @@ func ProcessPurchases() error {
 				purchase.UpdateForeignLabelFields()
 				purchase.ClearProductsHistory()
 				purchase.ClearProductsPurchaseHistory()
-				purchase.CreateProductsHistory()
+				purchase.CreateProductsHistory(false)
 				purchase.CreateProductsPurchaseHistory()
 			*/
 			/*

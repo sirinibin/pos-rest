@@ -2431,12 +2431,12 @@ func ProcessQuotations() error {
 			}
 
 			quotation.ClearProductsHistory()
-			quotation.CreateProductsHistory()
+			quotation.CreateProductsHistory(false)
 			/*
 				quotation.ClearProductsQuotationHistory()
 
 				quotation.CreateProductsQuotationHistory()
-				quotation.CreateProductsHistory()
+				quotation.CreateProductsHistory(false)
 				quotation.SetProductsQuotationSalesStats()
 				quotation.Update()*/
 
@@ -2444,7 +2444,7 @@ func ProcessQuotations() error {
 				quotation.UpdateForeignLabelFields()
 				quotation.ClearProductsHistory()
 				quotation.ClearProductsQuotationHistory()
-				quotation.CreateProductsHistory()
+				quotation.CreateProductsHistory(false)
 				quotation.CreateProductsQuotationHistory()
 			*/
 

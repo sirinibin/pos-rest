@@ -292,7 +292,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	go quotationsalesreturn.SetPostBalances()
 
-	go quotationsalesreturn.CreateProductsHistory()
+	go quotationsalesreturn.CreateProductsHistory(true)
 
 	store.NotifyUsers("quotationsales_return_updated")
 
@@ -526,7 +526,7 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		quotationsalesreturn.ClearProductsHistory()
-		quotationsalesreturn.CreateProductsHistory()
+		quotationsalesreturn.CreateProductsHistory(true)
 	}()
 
 	store.NotifyUsers("quotationsales_return_updated")

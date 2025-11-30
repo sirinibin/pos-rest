@@ -287,7 +287,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		order.SetProductsSalesStats()
 		order.SetCustomerSalesStats()
 		order.DoAccounting()
-		go order.CreateProductsHistory()
+		go order.CreateProductsHistory(true)
 		go order.SetPostBalances()
 		if order.CustomerID != nil && !order.CustomerID.IsZero() {
 			customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
@@ -501,7 +501,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		order.UndoAccounting()
 		order.DoAccounting()
 		order.ClearProductsHistory()
-		order.CreateProductsHistory()
+		order.CreateProductsHistory(true)
 
 		go order.SetPostBalances()
 		if order.CustomerID != nil && !order.CustomerID.IsZero() {

@@ -3401,7 +3401,7 @@ func ProcessSales() error {
 			}
 
 			order.ClearProductsHistory()
-			order.CreateProductsSalesHistory()
+			order.CreateProductsHistory(false)
 			//order.ClearProductsSalesHistory()
 			//order.CreateProductsSalesHistory()
 			//order.SetProductsSalesStats()
@@ -3411,7 +3411,7 @@ func ProcessSales() error {
 				order.UpdateForeignLabelFields()
 				order.ClearProductsHistory()
 				order.ClearProductsSalesHistory()
-				order.CreateProductsHistory()
+				order.CreateProductsHistory(false)
 				order.CreateProductsSalesHistory()
 			*/
 

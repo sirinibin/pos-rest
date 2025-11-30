@@ -491,6 +491,11 @@ func cronJobsEveryHour() error {
 	if err != nil {
 		log.Print(err)
 	}
+
+	err = models.ProcessDeliveryNotes()
+	if err != nil {
+		log.Print(err)
+	}
 	/*
 		err := models.ProcessProducts()
 		if err != nil {
