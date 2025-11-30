@@ -436,14 +436,21 @@ func (quotation *Quotation) CreateNewCustomerFromName() error {
 	if err != nil {
 		return err
 	}
+
+	newCustomer.GenerateSearchWords()
+	newCustomer.SetSearchLabel()
+	newCustomer.SetAdditionalkeywords()
+
 	err = newCustomer.Insert()
 	if err != nil {
 		return err
 	}
+
 	err = newCustomer.UpdateForeignLabelFields()
 	if err != nil {
 		return err
 	}
+
 	quotation.CustomerID = &newCustomer.ID
 	return nil
 }

@@ -2388,7 +2388,7 @@ func ProcessCustomers() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" {
+		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" {
 			continue
 		}
 
@@ -2429,40 +2429,43 @@ func ProcessCustomers() error {
 				continue
 			}
 
+			customer.GenerateSearchWords()
+			customer.SetSearchLabel()
+			customer.SetAdditionalkeywords()
+			err = customer.Update()
+			if err != nil {
+				log.Print("Store ID:" + store.ID.Hex())
+				log.Print("Customer Code.:" + customer.Code)
+				log.Print("Customer ID:" + customer.ID.Hex())
+				continue
+				//return err
+			}
+
 			/*customer.GenerateSearchWords()
 			customer.SetAdditionalkeywords()
 			customer.SetSearchLabel()
 			customer.Update()*/
 
 			// move customers from one store to another
-			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
+			/*
+				destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
 
-			for _, destinationCode := range destinations {
-				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
-				if err != nil && err != mongo.ErrNoDocuments {
-					return err
-				}
-
-				if destinationStore != nil {
-					err = customer.CopyToStore(&destinationStore.ID)
-					if err != nil {
+				for _, destinationCode := range destinations {
+					destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+					if err != nil && err != mongo.ErrNoDocuments {
 						return err
 					}
-				}
-			}
 
+					if destinationStore != nil {
+						err = customer.CopyToStore(&destinationStore.ID)
+						if err != nil {
+							return err
+						}
+					}
+				}
+			*/
 			/*
-				customer.GenerateSearchWords()
-				customer.SetSearchLabel()
-				customer.SetAdditionalkeywords()
-				err = customer.Update()
-				if err != nil {
-					log.Print("Store ID:" + store.ID.Hex())
-					log.Print("Customer Code.:" + customer.Code)
-					log.Print("Customer ID:" + customer.ID.Hex())
-					continue
-					//return err
-				}*/
+			 */
 
 			/*customer.Name = strings.ToUpper(customer.Name)
 			customer.Update()
