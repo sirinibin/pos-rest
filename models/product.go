@@ -3460,41 +3460,43 @@ func ProcessProducts() error {
 				continue
 			}*/
 
-			now := time.Now()
-			storeStr := "main_store"
+			/*
+				now := time.Now()
+				storeStr := "main_store"
 
-			productStore, ok := product.ProductStores[store.ID.Hex()]
-			if ok {
-				mainStoreStock, ok := product.ProductStores[store.ID.Hex()].WarehouseStocks["main_store"]
-				if !ok {
-					mainStoreStock = product.ProductStores[store.ID.Hex()].Stock
+				productStore, ok := product.ProductStores[store.ID.Hex()]
+				if ok {
+					mainStoreStock, ok := product.ProductStores[store.ID.Hex()].WarehouseStocks["main_store"]
+					if !ok {
+						mainStoreStock = product.ProductStores[store.ID.Hex()].Stock
+					}
+
+					if mainStoreStock > 0 {
+						productStore.StockAdjustments = append(productStore.StockAdjustments, StockAdjustment{
+							Date:          &now,
+							Quantity:      mainStoreStock,
+							Type:          "removing",
+							CreatedAt:     &now,
+							WarehouseCode: &storeStr,
+						})
+					} else if mainStoreStock < 0 {
+						productStore.StockAdjustments = append(productStore.StockAdjustments, StockAdjustment{
+							Date:          &now,
+							Quantity:      mainStoreStock * (-1),
+							Type:          "adding",
+							CreatedAt:     &now,
+							WarehouseCode: &storeStr,
+						})
+					}
+
+					product.ProductStores[store.ID.Hex()] = productStore
+					product.Update(&store.ID)
+					product.ClearStockAdjustmentHistory()
+					product.CreateStockAdjustmentHistory()
+					product.SetStock()
+					product.Update(&store.ID)
 				}
-
-				if mainStoreStock > 0 {
-					productStore.StockAdjustments = append(productStore.StockAdjustments, StockAdjustment{
-						Date:          &now,
-						Quantity:      mainStoreStock,
-						Type:          "removing",
-						CreatedAt:     &now,
-						WarehouseCode: &storeStr,
-					})
-				} else if mainStoreStock < 0 {
-					productStore.StockAdjustments = append(productStore.StockAdjustments, StockAdjustment{
-						Date:          &now,
-						Quantity:      mainStoreStock * (-1),
-						Type:          "adding",
-						CreatedAt:     &now,
-						WarehouseCode: &storeStr,
-					})
-				}
-
-				product.ProductStores[store.ID.Hex()] = productStore
-				product.Update(&store.ID)
-				product.ClearStockAdjustmentHistory()
-				product.CreateStockAdjustmentHistory()
-				product.SetStock()
-				product.Update(&store.ID)
-			}
+			*/
 
 			/*product.SetStock()
 			product.AllowDuplicates = true
