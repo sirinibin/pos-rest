@@ -2959,15 +2959,16 @@ func ProcessQuotationSalesReturns() error {
 					quotationsalesReturn.Update()
 				}*/
 
-			quotationsalesReturn.UndoAccounting()
-			quotationsalesReturn.DoAccounting()
+			/*
+				quotationsalesReturn.UndoAccounting()
+				quotationsalesReturn.DoAccounting()
 
-			if quotationsalesReturn.CustomerID != nil && !quotationsalesReturn.CustomerID.IsZero() {
-				customer, _ := store.FindCustomerByID(quotationsalesReturn.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+				if quotationsalesReturn.CustomerID != nil && !quotationsalesReturn.CustomerID.IsZero() {
+					customer, _ := store.FindCustomerByID(quotationsalesReturn.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
 			/*
 				quotation, _ := store.FindQuotationByID(quotationsalesReturn.QuotationID, bson.M{})

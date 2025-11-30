@@ -2372,17 +2372,18 @@ func ProcessPurchaseReturns() error {
 				model.CreateProductsPurchaseReturnHistory()
 			*/
 
-			model.UndoAccounting()
-			if !store.Settings.DisablePurchasesOnAccounts {
-				model.DoAccounting()
-			}
-
-			if model.VendorID != nil && !model.VendorID.IsZero() {
-				vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
-				if vendor != nil {
-					vendor.SetCreditBalance()
+			/*
+				model.UndoAccounting()
+				if !store.Settings.DisablePurchasesOnAccounts {
+					model.DoAccounting()
 				}
-			}
+
+				if model.VendorID != nil && !model.VendorID.IsZero() {
+					vendor, _ := store.FindVendorByID(model.VendorID, bson.M{})
+					if vendor != nil {
+						vendor.SetCreditBalance()
+					}
+				}*/
 
 			//model.ClearProductsHistory()
 			//model.CreateProductsHistory()

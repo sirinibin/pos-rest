@@ -2464,14 +2464,15 @@ func ProcessQuotations() error {
 					}
 				}*/
 
-			quotation.UndoAccounting()
-			quotation.DoAccounting()
-			if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() && quotation.Type == "invoice" {
-				customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
-				if customer != nil {
-					customer.SetCreditBalance()
-				}
-			}
+			/*
+				quotation.UndoAccounting()
+				quotation.DoAccounting()
+				if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() && quotation.Type == "invoice" {
+					customer, _ := store.FindCustomerByID(quotation.CustomerID, bson.M{})
+					if customer != nil {
+						customer.SetCreditBalance()
+					}
+				}*/
 
 			/*
 				if quotation.Type != "invoice" {
