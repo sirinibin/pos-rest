@@ -84,6 +84,11 @@ func (deliveryNote *DeliveryNote) CreateNewCustomerFromName() error {
 	if err != nil {
 		return err
 	}
+
+	newCustomer.GenerateSearchWords()
+	newCustomer.SetSearchLabel()
+	newCustomer.SetAdditionalkeywords()
+
 	err = newCustomer.Insert()
 	if err != nil {
 		return err
