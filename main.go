@@ -15,6 +15,7 @@ import (
 	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -461,11 +462,11 @@ func ListAllIndexes(collectionName string) {
 func cronJobsEveryHour() error {
 	log.Print("Cron job is set to run every 8 hours")
 
-	/*err := models.ProcessCustomers()
+	err := models.ProcessProducts()
 	if err != nil {
 		log.Print(err)
 	}
-
+	/*
 		err := models.ProcessSales()
 		if err != nil {
 			log.Print(err)

@@ -3410,10 +3410,16 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		/*if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+			continue
+		}*/
+
+		if store.Code != "MBDI" {
 			continue
 		}
-		totalCount, err := store.GetTotalCount(bson.M{}, "product")
+		totalCount, err := store.GetTotalCount(bson.M{
+			//	"part_number": "8938",
+		}, "product")
 		if err != nil {
 			return err
 		}
@@ -3424,7 +3430,9 @@ func ProcessProducts() error {
 		//findOptions.SetProjection(bson.M{"_id": 1, "name": 1, "part_number": 1, "name_in_arabic": 1, "store_id": 1, "product_stores": 1})
 		findOptions.SetAllowDiskUse(true)
 
-		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		cur, err := collection.Find(ctx, bson.M{
+			//"part_number": "8938",
+		}, findOptions)
 		if err != nil {
 			return errors.New("Error fetching products" + err.Error())
 		}
@@ -3447,9 +3455,50 @@ func ProcessProducts() error {
 			if product.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
-			product.SetStock()
+
+			/*if product.PartNumber != "8938" {
+				continue
+			}*/
+
+			now := time.Now()
+			storeStr := "main_store"
+
+			productStore, ok := product.ProductStores[store.ID.Hex()]
+			if ok {
+				mainStoreStock, ok := product.ProductStores[store.ID.Hex()].WarehouseStocks["main_store"]
+				if !ok {
+					mainStoreStock = product.ProductStores[store.ID.Hex()].Stock
+				}
+
+				if mainStoreStock > 0 {
+					productStore.StockAdjustments = append(productStore.StockAdjustments, StockAdjustment{
+						Date:          &now,
+						Quantity:      mainStoreStock,
+						Type:          "removing",
+						CreatedAt:     &now,
+						WarehouseCode: &storeStr,
+					})
+				} else if mainStoreStock < 0 {
+					productStore.StockAdjustments = append(productStore.StockAdjustments, StockAdjustment{
+						Date:          &now,
+						Quantity:      mainStoreStock * (-1),
+						Type:          "adding",
+						CreatedAt:     &now,
+						WarehouseCode: &storeStr,
+					})
+				}
+
+				product.ProductStores[store.ID.Hex()] = productStore
+				product.Update(&store.ID)
+				product.ClearStockAdjustmentHistory()
+				product.CreateStockAdjustmentHistory()
+				product.SetStock()
+				product.Update(&store.ID)
+			}
+
+			/*product.SetStock()
 			product.AllowDuplicates = true
-			product.Update(&store.ID)
+			product.Update(&store.ID)*/
 
 			//log.Print("Part No.:" + product.PartNumber)
 			//log.Print("Product Name:" + product.Name)
