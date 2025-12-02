@@ -3414,7 +3414,7 @@ func ProcessProducts() error {
 			continue
 		}*/
 
-		if store.Code != "MBDI" {
+		if store.Code != "LGK" && store.Code != "LGK-SIMULATION" {
 			continue
 		}
 		totalCount, err := store.GetTotalCount(bson.M{
@@ -3455,6 +3455,10 @@ func ProcessProducts() error {
 			if product.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+
+			product.SetStock()
+			product.AllowDuplicates = true
+			product.Update(&store.ID)
 
 			/*if product.PartNumber != "8938" {
 				continue
@@ -3497,10 +3501,6 @@ func ProcessProducts() error {
 					product.Update(&store.ID)
 				}
 			*/
-
-			/*product.SetStock()
-			product.AllowDuplicates = true
-			product.Update(&store.ID)*/
 
 			//log.Print("Part No.:" + product.PartNumber)
 			//log.Print("Product Name:" + product.Name)
