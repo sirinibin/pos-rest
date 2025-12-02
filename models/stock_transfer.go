@@ -1369,8 +1369,17 @@ func ProcessStockTransfers() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			stocktransfer.Code = "ST-20251202-001" // For testing purpose only, remove this line in production
-			stocktransfer.Update()
+			/*
+				if stocktransfer.Code == "ST-20251201-001" {
+					stocktransfer.Code = "ST-20251202-001" // For testing purpose only, remove this line in production
+				} else if stocktransfer.Code == "ST-20251202-001" {
+					stocktransfer.Code = "ST-20251202-002" // For testing purpose only, remove this line in production
+				} else if stocktransfer.Code == "ST-20251202-002" {
+					stocktransfer.Code = "ST-20251202-003" // For testing purpose only, remove this line in production
+				}
+
+				stocktransfer.Update()
+			*/
 
 			bar.Add(1)
 		}
