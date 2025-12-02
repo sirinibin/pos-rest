@@ -1320,10 +1320,10 @@ func ProcessStockTransfers() error {
 	}
 
 	for _, store := range stores {
-		/*
-			if store.Code != "GUOJ" {
-				break
-			}*/
+
+		if store.Code != "LGK" {
+			break
+		}
 
 		totalCount, err := store.GetTotalCount(bson.M{
 			"store_id": store.ID,
@@ -1373,6 +1373,9 @@ func ProcessStockTransfers() error {
 			if stocktransfer.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+
+			stocktransfer.Code = "ST-20251201-0001" // For testing purpose only, remove this line in production
+			stocktransfer.Update()
 
 			bar.Add(1)
 		}
