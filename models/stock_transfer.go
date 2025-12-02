@@ -1320,13 +1320,12 @@ func ProcessStockTransfers() error {
 	}
 
 	for _, store := range stores {
-
 		if store.Code != "LGK" {
-			break
+			continue
 		}
 
 		totalCount, err := store.GetTotalCount(bson.M{
-			"store_id": store.ID,
+			//"store_id": store.ID,
 			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
@@ -1345,7 +1344,7 @@ func ProcessStockTransfers() error {
 		//	criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
 		//"zatca.compliance_check_failed_count": bson.M{"$lt": 1},
 		cur, err := collection.Find(ctx, bson.M{
-			"store_id": store.ID,
+			//	"store_id": store.ID,
 			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
@@ -1370,11 +1369,7 @@ func ProcessStockTransfers() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if stocktransfer.StoreID.Hex() != store.ID.Hex() {
-				continue
-			}
-
-			stocktransfer.Code = "ST-20251201-0001" // For testing purpose only, remove this line in production
+			stocktransfer.Code = "ST-20251201-001" // For testing purpose only, remove this line in production
 			stocktransfer.Update()
 
 			bar.Add(1)
