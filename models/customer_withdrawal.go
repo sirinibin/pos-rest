@@ -60,6 +60,8 @@ type CustomerWithdrawal struct {
 	DeletedByUser      *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt          *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 	Payments           []PayablePayment    `bson:"payments" json:"payments"`
+	Total              float64             `bson:"total" json:"total"`
+	TotalDiscount      float64             `bson:"total_discount" json:"total_discount"`
 	NetTotal           float64             `bson:"net_total" json:"net_total"`
 	PaymentMethods     []string            `json:"payment_methods" bson:"payment_methods"`
 }
@@ -359,22 +361,24 @@ func (customerwithdrawal *CustomerWithdrawal) ClosePurchasePayments() error {
 }
 
 func (customerwithdrawal *CustomerWithdrawal) FindNetTotal() {
-	netTotal := float64(0.00)
+	total := float64(0.00)
+	totalDiscount := float64(0.00)
 	paymentMethods := []string{}
 
 	for _, payment := range customerwithdrawal.Payments {
-		amount := payment.Amount
+		total += payment.Amount
 		if payment.Discount > 0 {
-			amount -= payment.Discount
+			totalDiscount += payment.Discount
 		}
-
-		netTotal += amount
 
 		if !slices.Contains(paymentMethods, payment.Method) {
 			paymentMethods = append(paymentMethods, payment.Method)
 		}
 	}
-	customerwithdrawal.NetTotal = RoundTo2Decimals(netTotal)
+
+	customerwithdrawal.Total = RoundTo2Decimals(total)
+	customerwithdrawal.TotalDiscount = RoundTo2Decimals(totalDiscount)
+	customerwithdrawal.NetTotal = RoundTo2Decimals(total - totalDiscount)
 	customerwithdrawal.PaymentMethods = paymentMethods
 }
 
@@ -1679,28 +1683,32 @@ func ProcessCustomerWithdrawals() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			customerwithdrawal.UndoAccounting()
-			customerwithdrawal.DoAccounting()
+			customerwithdrawal.FindNetTotal()
+			customerwithdrawal.Update()
 
-			if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
-				store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
-				if store != nil {
-					customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
-					if customer != nil {
-						customer.SetCreditBalance()
+			/*
+				customerwithdrawal.UndoAccounting()
+				customerwithdrawal.DoAccounting()
+
+				if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
+					store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+					if store != nil {
+						customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{})
+						if customer != nil {
+							customer.SetCreditBalance()
+						}
 					}
 				}
-			}
 
-			if customerwithdrawal.VendorID != nil && !customerwithdrawal.VendorID.IsZero() {
-				store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
-				if store != nil {
-					vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
-					if vendor != nil {
-						vendor.SetCreditBalance()
+				if customerwithdrawal.VendorID != nil && !customerwithdrawal.VendorID.IsZero() {
+					store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+					if store != nil {
+						vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
+						if vendor != nil {
+							vendor.SetCreditBalance()
+						}
 					}
-				}
-			}
+				}*/
 
 			/*
 				customerwithdrawal.CloseSalesReturnPayments()

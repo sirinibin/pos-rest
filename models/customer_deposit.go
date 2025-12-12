@@ -61,6 +61,8 @@ type CustomerDeposit struct {
 	DeletedByUser      *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt          *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 	Payments           []ReceivablePayment `bson:"payments" json:"payments"`
+	Total              float64             `bson:"total" json:"total"`
+	TotalDiscount      float64             `bson:"total_discount" json:"total_discount"`
 	NetTotal           float64             `bson:"net_total" json:"net_total"`
 	PaymentMethods     []string            `json:"payment_methods" bson:"payment_methods"`
 }
@@ -360,22 +362,24 @@ func (customerdeposit *CustomerDeposit) CloseQuotationSalesPayments() error {
 }
 
 func (customerdeposit *CustomerDeposit) FindNetTotal() {
-	netTotal := float64(0.00)
+	total := float64(0.00)
+	totalDiscount := float64(0.00)
 	paymentMethods := []string{}
 
 	for _, payment := range customerdeposit.Payments {
-		amount := payment.Amount
+		total += payment.Amount
 		if payment.Discount > 0 {
-			amount -= payment.Discount
+			totalDiscount += payment.Discount
 		}
-
-		netTotal += amount
 
 		if !slices.Contains(paymentMethods, payment.Method) {
 			paymentMethods = append(paymentMethods, payment.Method)
 		}
 	}
-	customerdeposit.NetTotal = RoundTo2Decimals(netTotal)
+
+	customerdeposit.Total = RoundTo2Decimals(total)
+	customerdeposit.TotalDiscount = RoundTo2Decimals(totalDiscount)
+	customerdeposit.NetTotal = RoundTo2Decimals(total - totalDiscount)
 	customerdeposit.PaymentMethods = paymentMethods
 }
 
@@ -1725,28 +1729,33 @@ func ProcessCustomerDeposits() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			customerdeposit.UndoAccounting()
-			customerdeposit.DoAccounting()
+			customerdeposit.FindNetTotal()
+			customerdeposit.Update()
 
-			if customerdeposit.CustomerID != nil && !customerdeposit.CustomerID.IsZero() {
-				store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
-				if store != nil {
-					customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
-					if customer != nil {
-						customer.SetCreditBalance()
+			/*
+				customerdeposit.UndoAccounting()
+				customerdeposit.DoAccounting()
+
+				if customerdeposit.CustomerID != nil && !customerdeposit.CustomerID.IsZero() {
+					store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+					if store != nil {
+						customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{})
+						if customer != nil {
+							customer.SetCreditBalance()
+						}
 					}
 				}
-			}
 
-			if customerdeposit.VendorID != nil && !customerdeposit.VendorID.IsZero() {
-				store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
-				if store != nil {
-					vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{})
-					if vendor != nil {
-						vendor.SetCreditBalance()
+				if customerdeposit.VendorID != nil && !customerdeposit.VendorID.IsZero() {
+					store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+					if store != nil {
+						vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{})
+						if vendor != nil {
+							vendor.SetCreditBalance()
+						}
 					}
 				}
-			}
+			*/
 
 			/*
 				customerdeposit.CloseSalesPayments()
