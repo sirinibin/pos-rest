@@ -2280,6 +2280,40 @@ func (store *Store) ProcessHistory() error {
 	return nil
 }
 
+func (product *Product) GetHistory() (history []ProductHistory, err error) {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_history")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+
+	cur, err := collection.Find(ctx, bson.M{
+		"product_id": product.ID,
+	}, findOptions)
+	if err != nil {
+		return history, errors.New("Error fetching quotations:" + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for i := 0; cur != nil && cur.Next(ctx); i++ {
+		err := cur.Err()
+		if err != nil {
+			return history, errors.New("Cursor error:" + err.Error())
+		}
+		model := ProductHistory{}
+		err = cur.Decode(&model)
+		if err != nil {
+			return history, errors.New("Cursor decode error:" + err.Error())
+		}
+
+		history = append(history, model)
+	}
+
+	return history, nil
+}
+
 func (model *ProductHistory) Update() error {
 	collection := db.GetDB("store_" + model.StoreID.Hex()).Collection("product_history")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

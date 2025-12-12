@@ -3149,6 +3149,34 @@ func (store *Store) FindOrderByID(
 	return order, err
 }
 
+func FindOrderByID(
+	ID *primitive.ObjectID,
+	storeID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (order *Order, err error) {
+
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("order")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"_id":      ID,
+			"store_id": storeID,
+		}, findOneOptions).
+		Decode(&order)
+	if err != nil {
+		return nil, err
+	}
+
+	return order, err
+}
+
 func (store *Store) FindOrderByCode(
 	Code string,
 	selectFields map[string]interface{},

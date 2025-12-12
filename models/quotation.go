@@ -2376,6 +2376,33 @@ func (store *Store) FindQuotationByID(
 	return quotation, err
 }
 
+func FindQuotationByID(
+	ID *primitive.ObjectID,
+	StoreID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (quotation *Quotation, err error) {
+	collection := db.GetDB("store_" + StoreID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"_id":      ID,
+			"store_id": StoreID,
+		}, findOneOptions).
+		Decode(&quotation)
+	if err != nil {
+		return nil, err
+	}
+
+	return quotation, err
+}
+
 func (store *Store) IsQuotationExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

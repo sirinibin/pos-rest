@@ -2979,6 +2979,33 @@ func (store *Store) FindSalesReturnByID(
 	return salesreturn, err
 }
 
+func FindSalesReturnByID(
+	ID *primitive.ObjectID,
+	StoreID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (salesreturn *SalesReturn, err error) {
+	collection := db.GetDB("store_" + StoreID.Hex()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"_id":      ID,
+			"store_id": StoreID,
+		}, findOneOptions).
+		Decode(&salesreturn)
+	if err != nil {
+		return nil, err
+	}
+
+	return salesreturn, err
+}
+
 func (store *Store) IsSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

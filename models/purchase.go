@@ -2418,6 +2418,33 @@ func (store *Store) FindPurchaseByID(
 	return purchase, err
 }
 
+func FindPurchaseByID(
+	ID *primitive.ObjectID,
+	StoreID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (purchase *Purchase, err error) {
+	collection := db.GetDB("store_" + StoreID.Hex()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"_id":      ID,
+			"store_id": StoreID,
+		}, findOneOptions).
+		Decode(&purchase)
+	if err != nil {
+		return nil, err
+	}
+
+	return purchase, err
+}
+
 func (purchase *Purchase) IsVendorInvoiceNumberExists() (bool, error) {
 	if purchase.VendorID == nil || purchase.VendorID.IsZero() || govalidator.IsNull(purchase.VendorInvoiceNumber) {
 		return false, nil

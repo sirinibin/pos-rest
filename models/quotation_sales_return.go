@@ -2840,6 +2840,33 @@ func (store *Store) FindQuotationSalesReturnByID(
 	return quotationsalesreturn, err
 }
 
+func FindQuotationSalesReturnByID(
+	ID *primitive.ObjectID,
+	StoreID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (quotationsalesreturn *QuotationSalesReturn, err error) {
+	collection := db.GetDB("store_" + StoreID.Hex()).Collection("quotation_sales_return")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"_id":      ID,
+			"store_id": StoreID,
+		}, findOneOptions).
+		Decode(&quotationsalesreturn)
+	if err != nil {
+		return nil, err
+	}
+
+	return quotationsalesreturn, err
+}
+
 func (store *Store) IsQuotationSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("quotation_sales_return")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -2294,6 +2294,33 @@ func (store *Store) FindPurchaseReturnByID(
 	return purchasereturn, err
 }
 
+func FindPurchaseReturnByID(
+	ID *primitive.ObjectID,
+	StoreID *primitive.ObjectID,
+	selectFields map[string]interface{},
+) (purchasereturn *PurchaseReturn, err error) {
+	collection := db.GetDB("store_" + StoreID.Hex()).Collection("purchasereturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx,
+		bson.M{
+			"_id":      ID,
+			"store_id": StoreID,
+		}, findOneOptions).
+		Decode(&purchasereturn)
+	if err != nil {
+		return nil, err
+	}
+
+	return purchasereturn, err
+}
+
 func (store *Store) IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("purchasereturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

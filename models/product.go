@@ -416,10 +416,260 @@ func (product *Product) getPurchaseUnitPriceSecretByStoreID(storeID primitive.Ob
 
 func (product *Product) AttributesValueChangeEvent(productOld *Product) error {
 
-	if product.Name != productOld.Name {
+	go func() {
+		if product.Name != productOld.Name {
+			product.ReflectNameChangeEvent()
+		}
+
+		if product.NameInArabic != productOld.NameInArabic {
+			product.ReflectNameChangeEvent()
+		}
+
+		if product.PartNumber != productOld.PartNumber {
+			product.ReflectPartNumberChangeEvent()
+		}
+
+	}()
+
+	return nil
+}
+
+func (product *Product) ReflectPartNumberChangeEvent() error {
+	histories, err := product.GetHistory()
+	if err != nil {
+		return err
+	}
+
+	for _, history := range histories {
+		if history.ReferenceID != nil && history.ReferenceType == "sales" {
+			order, err := FindOrderByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			if order.Zatca.ReportingPassed {
+				continue
+			}
+
+			for i, orderProduct := range order.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					order.Products[i].PartNumber = product.PartNumber
+				}
+			}
+
+			err = order.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "sales_return" {
+			salesReturn, err := FindSalesReturnByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			if salesReturn.Zatca.ReportingPassed {
+				continue
+			}
+
+			for i, orderProduct := range salesReturn.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					salesReturn.Products[i].PartNumber = product.PartNumber
+				}
+			}
+
+			err = salesReturn.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "purchase" {
+			purchase, err := FindPurchaseByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range purchase.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					purchase.Products[i].PartNumber = product.PartNumber
+				}
+			}
+
+			err = purchase.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "purchase_return" {
+			purchaseRerturn, err := FindPurchaseReturnByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range purchaseRerturn.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					purchaseRerturn.Products[i].PartNumber = product.PartNumber
+				}
+			}
+
+			err = purchaseRerturn.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && (history.ReferenceType == "quotation_sales" || history.ReferenceType == "quotation") {
+			quotationSale, err := FindQuotationByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range quotationSale.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					quotationSale.Products[i].PartNumber = product.PartNumber
+				}
+			}
+
+			err = quotationSale.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "quotation_sales_return" {
+			quotationSalesReturn, err := FindQuotationSalesReturnByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range quotationSalesReturn.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					quotationSalesReturn.Products[i].PartNumber = product.PartNumber
+				}
+			}
+
+			err = quotationSalesReturn.Update()
+			if err != nil {
+				return err
+			}
+		}
 
 	}
-	if product.NameInArabic != productOld.NameInArabic {
+
+	return nil
+}
+
+func (product *Product) ReflectNameChangeEvent() error {
+	histories, err := product.GetHistory()
+	if err != nil {
+		return err
+	}
+
+	for _, history := range histories {
+		if history.ReferenceID != nil && history.ReferenceType == "sales" {
+			order, err := FindOrderByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			if order.Zatca.ReportingPassed {
+				continue
+			}
+
+			for i, orderProduct := range order.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					order.Products[i].Name = product.Name
+					order.Products[i].NameInArabic = product.NameInArabic
+				}
+			}
+
+			err = order.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "sales_return" {
+			salesReturn, err := FindSalesReturnByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			if salesReturn.Zatca.ReportingPassed {
+				continue
+			}
+
+			for i, orderProduct := range salesReturn.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					salesReturn.Products[i].Name = product.Name
+					salesReturn.Products[i].NameInArabic = product.NameInArabic
+				}
+			}
+
+			err = salesReturn.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "purchase" {
+			purchase, err := FindPurchaseByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range purchase.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					purchase.Products[i].Name = product.Name
+					purchase.Products[i].NameInArabic = product.NameInArabic
+				}
+			}
+
+			err = purchase.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "purchase_return" {
+			purchaseRerturn, err := FindPurchaseReturnByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range purchaseRerturn.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					purchaseRerturn.Products[i].Name = product.Name
+					purchaseRerturn.Products[i].NameInArabic = product.NameInArabic
+				}
+			}
+
+			err = purchaseRerturn.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && (history.ReferenceType == "quotation_sales" || history.ReferenceType == "quotation") {
+			quotationSale, err := FindQuotationByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range quotationSale.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					quotationSale.Products[i].Name = product.Name
+					quotationSale.Products[i].NameInArabic = product.NameInArabic
+				}
+			}
+
+			err = quotationSale.Update()
+			if err != nil {
+				return err
+			}
+		} else if history.ReferenceID != nil && history.ReferenceType == "quotation_sales_return" {
+			quotationSalesReturn, err := FindQuotationSalesReturnByID(history.ReferenceID, product.StoreID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			for i, orderProduct := range quotationSalesReturn.Products {
+				if orderProduct.ProductID.Hex() == product.ID.Hex() {
+					quotationSalesReturn.Products[i].Name = product.Name
+					quotationSalesReturn.Products[i].NameInArabic = product.NameInArabic
+				}
+			}
+
+			err = quotationSalesReturn.Update()
+			if err != nil {
+				return err
+			}
+		}
 
 	}
 

@@ -432,18 +432,17 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	product.ReflectValidPurchaseUnitPrice()
-	/*
-		err = product.AttributesValueChangeEvent(productOld)
-		if err != nil {
-			response.Status = false
-			response.Errors = make(map[string]string)
-			response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
 
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	*/
+	err = product.AttributesValueChangeEvent(productOld)
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["attributes_value_change"] = "Unable to update:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	//UnLink products
 	for _, linkedProductID := range productOld.LinkedProductIDs {
