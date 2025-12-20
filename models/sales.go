@@ -37,7 +37,7 @@ type OrderProduct struct {
 	UnitPriceWithVAT           float64             `bson:"unit_price_with_vat" json:"unit_price_with_vat"`
 	PurchaseUnitPrice          float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	PurchaseUnitPriceWithVAT   float64             `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
-	Unit                       string              `bson:"unit,omitempty" json:"unit,omitempty"`
+	Unit                       string              `bson:"unit" json:"unit"`
 	UnitDiscount               float64             `bson:"unit_discount" json:"unit_discount"`
 	UnitDiscountWithVAT        float64             `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
 	UnitDiscountPercent        float64             `bson:"unit_discount_percent" json:"unit_discount_percent"`
