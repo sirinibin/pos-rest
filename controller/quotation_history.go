@@ -62,6 +62,7 @@ func ListQuotationHistory(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total_profit"] = quotationHistoryStats.TotalProfit
 	response.Meta["total_loss"] = quotationHistoryStats.TotalLoss
 	response.Meta["total_vat"] = quotationHistoryStats.TotalVat
+	response.Meta["total_quantity"] = quotationHistoryStats.TotalQuantity
 
 	if len(histories) == 0 {
 		response.Result = []interface{}{}

@@ -57,6 +57,7 @@ type SalesReturnHistoryStats struct {
 	TotalProfit      float64             `json:"total_profit" bson:"total_profit"`
 	TotalLoss        float64             `json:"total_loss" bson:"total_loss"`
 	TotalVatReturn   float64             `json:"total_vat_return" bson:"total_vat_return"`
+	TotalQuantity    float64             `json:"total_quantity" bson:"total_quantity"`
 }
 
 func (store *Store) GetSalesReturnHistoryStats(filter map[string]interface{}) (stats SalesReturnHistoryStats, err error) {
@@ -77,6 +78,7 @@ func (store *Store) GetSalesReturnHistoryStats(filter map[string]interface{}) (s
 				"total_profit":       bson.M{"$sum": "$profit"},
 				"total_loss":         bson.M{"$sum": "$loss"},
 				"total_vat_return":   bson.M{"$sum": "$vat_price"},
+				"total_quantity":     bson.M{"$sum": "$quantity"},
 			},
 		},
 	}

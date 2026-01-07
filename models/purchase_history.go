@@ -58,6 +58,7 @@ type PurchaseHistoryStats struct {
 	TotalRetailLoss      float64             `json:"total_retail_loss" bson:"total_retail_loss"`
 	TotalWholesaleLoss   float64             `json:"total_wholesale_loss" bson:"total_wholesale_loss"`
 	TotalVat             float64             `json:"total_vat" bson:"total_vat"`
+	TotalQuantity        float64             `json:"total_quantity" bson:"total_quantity"`
 }
 
 func (store *Store) GetPurchaseHistoryStats(filter map[string]interface{}) (stats PurchaseHistoryStats, err error) {
@@ -78,6 +79,7 @@ func (store *Store) GetPurchaseHistoryStats(filter map[string]interface{}) (stat
 				"total_retail_loss":      bson.M{"$sum": "$retail_loss"},
 				"total_wholesale_loss":   bson.M{"$sum": "$wholesale_loss"},
 				"total_vat":              bson.M{"$sum": "$vat_price"},
+				"total_quantity":         bson.M{"$sum": "$quantity"},
 			},
 		},
 	}

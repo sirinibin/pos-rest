@@ -52,6 +52,7 @@ type PurchaseReturnHistoryStats struct {
 	ID                  *primitive.ObjectID `json:"id" bson:"_id"`
 	TotalPurchaseReturn float64             `json:"total_purchase_return" bson:"total_purchase_return"`
 	TotalVatReturn      float64             `json:"total_vat_return" bson:"total_vat_return"`
+	TotalQuantity       float64             `json:"total_quantity" bson:"total_quantity"`
 }
 
 func (store *Store) GetPurchaseReturnHistoryStats(filter map[string]interface{}) (stats PurchaseReturnHistoryStats, err error) {
@@ -68,6 +69,7 @@ func (store *Store) GetPurchaseReturnHistoryStats(filter map[string]interface{})
 				"_id":                   nil,
 				"total_purchase_return": bson.M{"$sum": "$net_price"},
 				"total_vat_return":      bson.M{"$sum": "$vat_price"},
+				"total_quantity":        bson.M{"$sum": "$quantity"},
 			},
 		},
 	}

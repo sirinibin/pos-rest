@@ -57,6 +57,7 @@ type QuotationHistoryStats struct {
 	TotalProfit    float64             `json:"total_profit" bson:"total_profit"`
 	TotalLoss      float64             `json:"total_loss" bson:"total_loss"`
 	TotalVat       float64             `json:"total_vat" bson:"total_vat"`
+	TotalQuantity  float64             `json:"total_quantity" bson:"total_quantity"`
 }
 
 func (store *Store) GetQuotationHistoryStats(filter map[string]interface{}) (stats QuotationHistoryStats, err error) {
@@ -75,6 +76,7 @@ func (store *Store) GetQuotationHistoryStats(filter map[string]interface{}) (sta
 				"total_profit":    bson.M{"$sum": "$profit"},
 				"total_loss":      bson.M{"$sum": "$loss"},
 				"total_vat":       bson.M{"$sum": "$vat_price"},
+				"total_quantity":  bson.M{"$sum": "$quantity"},
 			},
 		},
 	}

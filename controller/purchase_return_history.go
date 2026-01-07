@@ -60,6 +60,7 @@ func ListPurchaseReturnHistory(w http.ResponseWriter, r *http.Request) {
 
 	response.Meta["total_purchase_return"] = purchaseReturnHistoryStats.TotalPurchaseReturn
 	response.Meta["total_vat_return"] = purchaseReturnHistoryStats.TotalVatReturn
+	response.Meta["total_quantity"] = purchaseReturnHistoryStats.TotalQuantity
 
 	if len(histories) == 0 {
 		response.Result = []interface{}{}

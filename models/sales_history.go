@@ -50,11 +50,12 @@ type ProductSalesHistory struct {
 }
 
 type SalesHistoryStats struct {
-	ID          *primitive.ObjectID `json:"id" bson:"_id"`
-	TotalSales  float64             `json:"total_sales" bson:"total_sales"`
-	TotalProfit float64             `json:"total_profit" bson:"total_profit"`
-	TotalLoss   float64             `json:"total_loss" bson:"total_loss"`
-	TotalVat    float64             `json:"total_vat" bson:"total_vat"`
+	ID            *primitive.ObjectID `json:"id" bson:"_id"`
+	TotalSales    float64             `json:"total_sales" bson:"total_sales"`
+	TotalProfit   float64             `json:"total_profit" bson:"total_profit"`
+	TotalLoss     float64             `json:"total_loss" bson:"total_loss"`
+	TotalVat      float64             `json:"total_vat" bson:"total_vat"`
+	TotalQuantity float64             `json:"total_quantity" bson:"total_quantity"`
 }
 
 func (store *Store) GetSalesHistoryStats(filter map[string]interface{}) (stats SalesHistoryStats, err error) {
@@ -68,11 +69,12 @@ func (store *Store) GetSalesHistoryStats(filter map[string]interface{}) (stats S
 		},
 		bson.M{
 			"$group": bson.M{
-				"_id":          nil,
-				"total_sales":  bson.M{"$sum": "$net_price"},
-				"total_profit": bson.M{"$sum": "$profit"},
-				"total_loss":   bson.M{"$sum": "$loss"},
-				"total_vat":    bson.M{"$sum": "$vat_price"},
+				"_id":            nil,
+				"total_sales":    bson.M{"$sum": "$net_price"},
+				"total_profit":   bson.M{"$sum": "$profit"},
+				"total_loss":     bson.M{"$sum": "$loss"},
+				"total_vat":      bson.M{"$sum": "$vat_price"},
+				"total_quantity": bson.M{"$sum": "$quantity"},
 			},
 		},
 	}

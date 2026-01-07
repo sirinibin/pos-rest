@@ -62,6 +62,7 @@ func ListSalesReturnHistory(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total_profit"] = salesReturnHistoryStats.TotalProfit
 	response.Meta["total_loss"] = salesReturnHistoryStats.TotalLoss
 	response.Meta["total_vat_return"] = salesReturnHistoryStats.TotalVatReturn
+	response.Meta["total_quantity"] = salesReturnHistoryStats.TotalQuantity
 
 	if len(histories) == 0 {
 		response.Result = []interface{}{}
