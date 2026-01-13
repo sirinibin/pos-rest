@@ -298,18 +298,7 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = stocktransferOld.SetProductsStock()
-	if err != nil && err != mongo.ErrNoDocuments {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["setting_products_stock"] = "Unable to set products stock:" + err.Error()
-
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	err = stocktransfer.SetProductsStock()
+	/*err = stocktransfer.SetProductsStock()
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -318,12 +307,17 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
-	}
+	}*/
 
 	go func() {
 		stocktransfer.ClearProductsStockTransferHistory()
 		stocktransfer.CreateProductsStockTransferHistory()
 		stocktransfer.SetProductsStock()
+
+		//stocktransferOld.ClearProductsStockTransferHistory()
+		//stocktransferOld.CreateProductsStockTransferHistory()
+		stocktransferOld.SetProductsStock()
+
 		stocktransfer.SetProductsStockTransferStats()
 		stocktransferOld.SetProductsStockTransferStats()
 		stocktransfer.SetWarehouseStockTransferStats()
