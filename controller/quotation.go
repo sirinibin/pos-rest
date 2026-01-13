@@ -546,6 +546,17 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = quotationOld.SetProductsStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["stock"] = "Unable to update stock:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	/*
 		err = quotation.AttributesValueChangeEvent(quotationOld)
 		if err != nil {

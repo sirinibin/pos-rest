@@ -459,27 +459,28 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	order.SetPaymentStatus()
 	order.Update()
 
-	err = orderOld.SetProductsStock()
-	if err != nil && err != mongo.ErrNoDocuments {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
+	/*
+		err = orderOld.SetProductsStock()
+		if err != nil && err != mongo.ErrNoDocuments {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
 
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 
-	err = order.SetProductsStock()
-	if err != nil {
-		response.Status = false
-		response.Errors = make(map[string]string)
-		response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
+		err = order.SetProductsStock()
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["remove_stock"] = "Unable to remove stock:" + err.Error()
 
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}*/
 
 	err = order.ClosePurchasePayment()
 	if err != nil {
@@ -495,6 +496,8 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		order.ClearProductsSalesHistory()
 		order.CreateProductsSalesHistory()
 		order.SetProductsStock()
+		orderOld.SetProductsStock()
+
 		order.SetProductsSalesStats()
 		orderOld.SetProductsSalesStats()
 		order.SetCustomerSalesStats()
