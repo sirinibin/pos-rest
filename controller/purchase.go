@@ -270,7 +270,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	purchase.SetVendorPurchaseStats()
 
-	if !store.Settings.DisablePurchasesOnAccounts {
+	if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
 		err = purchase.DoAccounting()
 		if err != nil {
 			response.Status = false
@@ -283,13 +283,13 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
 		if vendor != nil {
-			if !store.Settings.DisablePurchasesOnAccounts {
+			if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
 				vendor.SetCreditBalance()
 			}
 		}
 	}
 
-	if !store.Settings.DisablePurchasesOnAccounts {
+	if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
 		go purchase.SetPostBalances()
 	}
 
@@ -486,7 +486,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !store.Settings.DisablePurchasesOnAccounts {
+	if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
 		err = purchase.DoAccounting()
 		if err != nil {
 			response.Status = false
@@ -507,7 +507,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchase.VendorID, bson.M{})
 		if vendor != nil {
-			if !store.Settings.DisablePurchasesOnAccounts {
+			if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
 				vendor.SetCreditBalance()
 			}
 		}
@@ -516,7 +516,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	if purchaseOld.VendorID != nil && !purchaseOld.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchaseOld.VendorID, bson.M{})
 		if vendor != nil {
-			if !store.Settings.DisablePurchasesOnAccounts {
+			if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
 				vendor.SetCreditBalance()
 			}
 			purchaseOld.SetVendorPurchaseStats()
@@ -524,7 +524,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		purchaseOld.SetProductsPurchaseStats()
 	}
 
-	if !store.Settings.DisablePurchasesOnAccounts {
+	if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
 		go purchase.SetPostBalances()
 	}
 

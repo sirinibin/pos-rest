@@ -131,6 +131,7 @@ type Purchase struct {
 	Phone             string              `bson:"phone" json:"phone"`
 	VatNo             string              `bson:"vat_no" json:"vat_no"`
 	Address           string              `bson:"address" json:"address"`
+	EnableOnAccounts  bool                `bson:"enable_on_accounts" json:"enable_on_accounts"`
 }
 
 func (model *Purchase) SetPostBalances() error {
