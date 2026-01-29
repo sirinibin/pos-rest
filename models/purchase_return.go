@@ -1131,14 +1131,19 @@ func (store *Store) SearchPurchaseReturn(w http.ResponseWriter, r *http.Request)
 
 		vendorIds := strings.Split(keys[0], ",")
 
-		objecIds := []primitive.ObjectID{}
+		objecIds := []*primitive.ObjectID{}
 
 		for _, id := range vendorIds {
+			if id == "unknown_vendor" || id == "" {
+				objecIds = append(objecIds, nil)
+				continue
+			}
+
 			vendorID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
 				return purchasereturns, criterias, err
 			}
-			objecIds = append(objecIds, vendorID)
+			objecIds = append(objecIds, &vendorID)
 		}
 
 		if len(objecIds) > 0 {

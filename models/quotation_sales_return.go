@@ -1568,14 +1568,19 @@ func (store *Store) SearchQuotationSalesReturn(w http.ResponseWriter, r *http.Re
 
 		customerIds := strings.Split(keys[0], ",")
 
-		objecIds := []primitive.ObjectID{}
+		objecIds := []*primitive.ObjectID{}
 
 		for _, id := range customerIds {
+			if id == "unknown_customer" || id == "" {
+				objecIds = append(objecIds, nil)
+				continue
+			}
+
 			customerID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
 				return quotationsalesreturns, criterias, err
 			}
-			objecIds = append(objecIds, customerID)
+			objecIds = append(objecIds, &customerID)
 		}
 
 		if len(objecIds) > 0 {

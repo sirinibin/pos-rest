@@ -1365,14 +1365,19 @@ func (store *Store) SearchPurchase(w http.ResponseWriter, r *http.Request) (purc
 
 		vendorIds := strings.Split(keys[0], ",")
 
-		objecIds := []primitive.ObjectID{}
+		objecIds := []*primitive.ObjectID{}
 
 		for _, id := range vendorIds {
+			if id == "unknown_vendor" || id == "" {
+				objecIds = append(objecIds, nil)
+				continue
+			}
+
 			vendorID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
 				return purchases, criterias, err
 			}
-			objecIds = append(objecIds, vendorID)
+			objecIds = append(objecIds, &vendorID)
 		}
 
 		if len(objecIds) > 0 {
