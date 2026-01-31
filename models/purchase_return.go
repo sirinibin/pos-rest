@@ -2449,6 +2449,8 @@ func ProcessPurchaseReturns() error {
 					model.VendorName = vendor.Name
 					model.VendorNameArabic = vendor.NameInArabic
 					model.Update()
+					model.UndoAccounting()
+					model.DoAccounting()
 				}
 			}
 

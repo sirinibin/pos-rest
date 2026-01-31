@@ -2604,6 +2604,8 @@ func ProcessPurchases() error {
 					purchase.VendorName = vendor.Name
 					purchase.VendorNameArabic = vendor.NameInArabic
 					purchase.Update()
+					purchase.UndoAccounting()
+					purchase.DoAccounting()
 				}
 			}
 
