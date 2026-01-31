@@ -1833,6 +1833,7 @@ func (store *Store) FindVendorByName(
 		bson.M{
 			"name":     Name,
 			"store_id": store.ID,
+			"deleted":  bson.M{"$ne": true},
 		}, findOneOptions).
 		Decode(&vendor)
 	if err != nil {

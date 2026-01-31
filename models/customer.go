@@ -2478,6 +2478,7 @@ func (store *Store) FindCustomerByName(
 		bson.M{
 			"name":     Name,
 			"store_id": store.ID,
+			"deleted":  bson.M{"$ne": true},
 		}, findOneOptions).
 		Decode(&customer)
 	if err != nil {

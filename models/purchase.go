@@ -2597,6 +2597,16 @@ func ProcessPurchases() error {
 				continue
 			}
 
+			if purchase.VendorName == "UNKNOWN" {
+				vendor, _ := store.FindVendorByName("UNKNOWN", bson.M{})
+				if vendor != nil {
+					purchase.VendorID = &vendor.ID
+					purchase.VendorName = vendor.Name
+					purchase.VendorNameArabic = vendor.NameInArabic
+					purchase.Update()
+				}
+			}
+
 			/*if purchase.VendorID == nil || purchase.VendorID.IsZero() {
 				purchase.SetUnKnownVendorIfNoVendorSelected()
 
@@ -2613,7 +2623,7 @@ func ProcessPurchases() error {
 				purchase.SetVendorPurchaseStats()
 			}*/
 
-			purchase.SetVendorPurchaseStats()
+			//purchase.SetVendorPurchaseStats()
 
 			//purchase.ClearProductsHistory()
 			//purchase.CreateProductsHistory(false)

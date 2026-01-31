@@ -2442,6 +2442,16 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
+			if model.VendorName == "UNKNOWN" {
+				vendor, _ := store.FindVendorByName("UNKNOWN", bson.M{})
+				if vendor != nil {
+					model.VendorID = &vendor.ID
+					model.VendorName = vendor.Name
+					model.VendorNameArabic = vendor.NameInArabic
+					model.Update()
+				}
+			}
+
 			/*if model.VendorID == nil || model.VendorID.IsZero() {
 				model.SetUnKnownVendorIfNoVendorSelected()
 
@@ -2458,7 +2468,7 @@ func ProcessPurchaseReturns() error {
 				model.SetVendorPurchaseReturnStats()
 			}*/
 
-			model.SetVendorPurchaseReturnStats()
+			//model.SetVendorPurchaseReturnStats()
 
 			//model.ClearProductsHistory()
 			//model.CreateProductsHistory(false)
