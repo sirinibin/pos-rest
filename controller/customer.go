@@ -56,6 +56,77 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var customerStats models.CustomerStats
+
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			customerStats, err = store.GetCustomerStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["credit_balance"] = customerStats.CreditBalance
+
+	//Sales
+	response.Meta["sales"] = customerStats.SalesAmount
+	response.Meta["sales_paid"] = customerStats.SalesPaidAmount
+	response.Meta["sales_credit_balance"] = customerStats.SalesBalanceAmount
+	response.Meta["sales_count"] = customerStats.SalesCount
+	response.Meta["sales_paid_count"] = customerStats.SalesPaidCount
+	response.Meta["sales_paid_partially_count"] = customerStats.SalesPaidPartiallyCount
+	response.Meta["sales_unpaid_count"] = customerStats.SalesNotPaidCount
+	response.Meta["sales_profit"] = customerStats.SalesProfit
+	response.Meta["sales_loss"] = customerStats.SalesLoss
+
+	//Sales return
+	response.Meta["sales_return"] = customerStats.SalesReturnAmount
+	response.Meta["sales_return_paid"] = customerStats.SalesReturnPaidAmount
+	response.Meta["sales_return_credit_balance"] = customerStats.SalesReturnBalanceAmount
+	response.Meta["sales_return_count"] = customerStats.SalesReturnCount
+	response.Meta["sales_return_paid_count"] = customerStats.SalesReturnPaidCount
+	response.Meta["sales_return_paid_partially_count"] = customerStats.SalesReturnPaidPartiallyCount
+	response.Meta["sales_return_unpaid_count"] = customerStats.SalesReturnNotPaidCount
+	response.Meta["sales_return_profit"] = customerStats.SalesReturnProfit
+	response.Meta["sales_return_loss"] = customerStats.SalesReturnLoss
+
+	//Quotation
+	response.Meta["quotation"] = customerStats.QuotationAmount
+	response.Meta["quotation_count"] = customerStats.QuotationCount
+	response.Meta["quotation_profit"] = customerStats.QuotationProfit
+	response.Meta["quotation_loss"] = customerStats.QuotationLoss
+
+	//Qtn Sales
+	response.Meta["quotation_sales"] = customerStats.QuotationInvoiceAmount
+	response.Meta["quotation_sales_paid"] = customerStats.QuotationInvoicePaidAmount
+	response.Meta["quotation_sales_credit_balance"] = customerStats.QuotationInvoiceBalanceAmount
+	response.Meta["quotation_sales_count"] = customerStats.QuotationInvoiceCount
+	response.Meta["quotation_sales_paid_count"] = customerStats.QuotationInvoicePaidCount
+	response.Meta["quotation_sales_paid_partially_count"] = customerStats.QuotationInvoicePaidPartiallyCount
+	response.Meta["quotation_sales_unpaid_count"] = customerStats.QuotationInvoiceNotPaidCount
+	response.Meta["quotation_sales_profit"] = customerStats.QuotationInvoiceProfit
+	response.Meta["quotation_sales_loss"] = customerStats.QuotationInvoiceLoss
+
+	//Qtn Sales Return
+	response.Meta["quotation_sales_return"] = customerStats.QuotationSalesReturnAmount
+	response.Meta["quotation_sales_return_paid"] = customerStats.QuotationSalesReturnPaidAmount
+	response.Meta["quotation_sales_return_credit_balance"] = customerStats.QuotationSalesReturnBalanceAmount
+	response.Meta["quotation_sales_return_count"] = customerStats.QuotationSalesReturnCount
+	response.Meta["quotation_sales_return_paid_count"] = customerStats.QuotationSalesReturnPaidCount
+	response.Meta["quotation_sales_return_paid_partially_count"] = customerStats.QuotationSalesReturnPaidPartiallyCount
+	response.Meta["quotation_sales_return_unpaid_count"] = customerStats.QuotationSalesReturnNotPaidCount
+	response.Meta["quotation_sales_return_profit"] = customerStats.QuotationSalesReturnProfit
+	response.Meta["quotation_sales_return_loss"] = customerStats.QuotationSalesReturnLoss
+
+	response.Meta["delivery_note_count"] = customerStats.DeliveryNoteCount
+
 	if len(Customers) == 0 {
 		response.Result = []interface{}{}
 	} else {

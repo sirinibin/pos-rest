@@ -118,6 +118,297 @@ type Customer struct {
 	Images                     []string                 `bson:"images,omitempty" json:"images,omitempty"`
 }
 
+type CustomerStats struct {
+	ID                                     *primitive.ObjectID `json:"id" bson:"_id"`
+	CreditBalance                          float64             `json:"credit_balance" bson:"credit_balance"`
+	SalesCount                             int64               `bson:"sales_count" json:"sales_count"`
+	SalesAmount                            float64             `bson:"sales_amount" json:"sales_amount"`
+	SalesPaidAmount                        float64             `bson:"sales_paid_amount" json:"sales_paid_amount"`
+	SalesBalanceAmount                     float64             `bson:"sales_balance_amount" json:"sales_balance_amount"`
+	SalesProfit                            float64             `bson:"sales_profit" json:"sales_profit"`
+	SalesLoss                              float64             `bson:"sales_loss" json:"sales_loss"`
+	SalesPaidCount                         int64               `bson:"sales_paid_count" json:"sales_paid_count"`
+	SalesNotPaidCount                      int64               `bson:"sales_not_paid_count" json:"sales_not_paid_count"`
+	SalesPaidPartiallyCount                int64               `bson:"sales_paid_partially_count" json:"sales_paid_partially_count"`
+	SalesReturnCount                       int64               `bson:"sales_return_count" json:"sales_return_count"`
+	SalesReturnAmount                      float64             `bson:"sales_return_amount" json:"sales_return_amount"`
+	SalesReturnPaidAmount                  float64             `bson:"sales_return_paid_amount" json:"sales_return_paid_amount"`
+	SalesReturnBalanceAmount               float64             `bson:"sales_return_balance_amount" json:"sales_return_balance_amount"`
+	SalesReturnProfit                      float64             `bson:"sales_return_profit" json:"sales_return_profit"`
+	SalesReturnLoss                        float64             `bson:"sales_return_loss" json:"sales_return_loss"`
+	SalesReturnPaidCount                   int64               `bson:"sales_return_paid_count" json:"sales_return_paid_count"`
+	SalesReturnNotPaidCount                int64               `bson:"sales_return_not_paid_count" json:"sales_return_not_paid_count"`
+	SalesReturnPaidPartiallyCount          int64               `bson:"sales_return_paid_partially_count" json:"sales_return_paid_partially_count"`
+	QuotationSalesReturnCount              int64               `bson:"quotation_sales_return_count" json:"quotation_sales_return_count"`
+	QuotationSalesReturnAmount             float64             `bson:"quotation_sales_return_amount" json:"quotation_sales_return_amount"`
+	QuotationSalesReturnPaidAmount         float64             `bson:"quotation_sales_return_paid_amount" json:"quotation_sales_return_paid_amount"`
+	QuotationSalesReturnBalanceAmount      float64             `bson:"quotation_sales_return_balance_amount" json:"quotation_sales_return_balance_amount"`
+	QuotationSalesReturnProfit             float64             `bson:"quotation_sales_return_profit" json:"quotation_sales_return_profit"`
+	QuotationSalesReturnLoss               float64             `bson:"quotation_sales_return_loss" json:"quotation_sales_return_loss"`
+	QuotationSalesReturnPaidCount          int64               `bson:"quotation_sales_return_paid_count" json:"quotation_sales_return_paid_count"`
+	QuotationSalesReturnNotPaidCount       int64               `bson:"quotation_sales_return_not_paid_count" json:"quotation_sales_return_not_paid_count"`
+	QuotationSalesReturnPaidPartiallyCount int64               `bson:"quotation_sales_return_paid_partially_count" json:"quotation_sales_return_paid_partially_count"`
+	QuotationCount                         int64               `bson:"quotation_count" json:"quotation_count"`
+	QuotationAmount                        float64             `bson:"quotation_amount" json:"quotation_amount"`
+	QuotationProfit                        float64             `bson:"quotation_profit" json:"quotation_profit"`
+	QuotationLoss                          float64             `bson:"quotation_loss" json:"quotation_loss"`
+	QuotationInvoiceCount                  int64               `bson:"quotation_invoice_count" json:"quotation_invoice_count"`
+	QuotationInvoiceAmount                 float64             `bson:"quotation_invoice_amount" json:"quotation_invoice_amount"`
+	QuotationInvoiceProfit                 float64             `bson:"quotation_invoice_profit" json:"quotation_invoice_profit"`
+	QuotationInvoiceLoss                   float64             `bson:"quotation_invoice_loss" json:"quotation_invoice_loss"`
+	QuotationInvoiceNotPaidCount           int64               `bson:"quotation_invoice_not_paid_count" json:"quotation_invoice_not_paid_count"`
+	QuotationInvoicePaidPartiallyCount     int64               `bson:"quotation_invoice_paid_partially_count" json:"quotation_invoice_paid_partially_count"`
+	QuotationInvoiceBalanceAmount          float64             `bson:"quotation_invoice_balance_amount" json:"quotation_invoice_balance_amount"`
+	QuotationInvoicePaidCount              int64               `bson:"quotation_invoice_paid_count" json:"quotation_invoice_paid_count"`
+	QuotationInvoicePaidAmount             float64             `bson:"quotation_invoice_paid_amount" json:"quotation_invoice_paid_amount"`
+	DeliveryNoteCount                      int64               `bson:"delivery_note_count" json:"delivery_note_count"`
+}
+
+func (store *Store) GetCustomerStats(
+	filter map[string]interface{},
+) (stats CustomerStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":            nil,
+				"credit_balance": bson.M{"$sum": "$credit_balance"},
+				//Sales
+				"sales_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_amount", 0}},
+					"$stores." + store.ID.Hex() + ".sales_amount",
+					0,
+				}}},
+				"sales_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_count",
+					0,
+				}}},
+				"sales_paid_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_paid_amount", 0}},
+					"$stores." + store.ID.Hex() + ".sales_paid_amount",
+					0,
+				}}},
+				"sales_balance_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_balance_amount", 0}},
+					"$stores." + store.ID.Hex() + ".sales_balance_amount",
+					0,
+				}}},
+				"sales_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_paid_count",
+					0,
+				}}},
+				"sales_not_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_not_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_not_paid_count",
+					0,
+				}}},
+				"sales_paid_partially_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_paid_partially_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_paid_partially_count",
+					0,
+				}}},
+				"sales_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_profit", 0}},
+					"$stores." + store.ID.Hex() + ".sales_profit",
+					0,
+				}}},
+				"sales_loss": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_loss", 0}},
+					"$stores." + store.ID.Hex() + ".sales_loss",
+					0,
+				}}},
+				//Sales Return
+				"sales_return_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_amount", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_amount",
+					0,
+				}}},
+				"sales_return_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_count",
+					0,
+				}}},
+				"sales_return_paid_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_paid_amount", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_paid_amount",
+					0,
+				}}},
+				"sales_return_balance_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_balance_amount", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_balance_amount",
+					0,
+				}}},
+				"sales_return_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_paid_count",
+					0,
+				}}},
+				"sales_return_not_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_not_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_not_paid_count",
+					0,
+				}}},
+				"sales_return_paid_partially_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_paid_partially_count", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_paid_partially_count",
+					0,
+				}}},
+				"sales_return_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_profit", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_profit",
+					0,
+				}}},
+				"sales_return_loss": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".sales_return_loss", 0}},
+					"$stores." + store.ID.Hex() + ".sales_return_loss",
+					0,
+				}}},
+				//Quotation
+				"quotation_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_amount", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_amount",
+					0,
+				}}},
+				"quotation_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_count",
+					0,
+				}}},
+				"quotation_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_profit", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_profit",
+					0,
+				}}},
+				"quotation_loss": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_loss", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_loss",
+					0,
+				}}},
+				//Quotation Sales
+				"quotation_invoice_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_amount", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_amount",
+					0,
+				}}},
+				"quotation_invoice_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_count",
+					0,
+				}}},
+				"quotation_invoice_paid_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_paid_amount", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_paid_amount",
+					0,
+				}}},
+				"quotation_invoice_balance_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_balance_amount", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_balance_amount",
+					0,
+				}}},
+				"quotation_invoice_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_paid_count",
+					0,
+				}}},
+				"quotation_invoice_not_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_not_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_not_paid_count",
+					0,
+				}}},
+				"quotation_invoice_paid_partially_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_paid_partially_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_paid_partially_count",
+					0,
+				}}},
+				"quotation_invoice_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_profit", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_profit",
+					0,
+				}}},
+				"quotation_invoice_loss": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_invoice_loss", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_invoice_loss",
+					0,
+				}}},
+				//Quotation Sales Return
+				"quotation_sales_return_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_amount", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_amount",
+					0,
+				}}},
+				"quotation_sales_return_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_count",
+					0,
+				}}},
+				"quotation_sales_return_paid_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_paid_amount", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_paid_amount",
+					0,
+				}}},
+				"quotation_sales_return_balance_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_balance_amount", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_balance_amount",
+					0,
+				}}},
+				"quotation_sales_return_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_paid_count",
+					0,
+				}}},
+				"quotation_sales_return_not_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_not_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_not_paid_count",
+					0,
+				}}},
+				"quotation_sales_return_paid_partially_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_paid_partially_count", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_paid_partially_count",
+					0,
+				}}},
+				"quotation_sales_return_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_profit", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_profit",
+					0,
+				}}},
+				"quotation_sales_return_loss": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".quotation_sales_return_loss", 0}},
+					"$stores." + store.ID.Hex() + ".quotation_sales_return_loss",
+					0,
+				}}},
+				//Delivery Notes
+				"delivery_note_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".delivery_note_count", 0}},
+					"$stores." + store.ID.Hex() + ".delivery_note_count",
+					0,
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+	}
+	return stats, nil
+}
+
 func (customer *Customer) InitStore() (err error) {
 	_, ok := customer.Stores[customer.StoreID.Hex()]
 	if ok {
