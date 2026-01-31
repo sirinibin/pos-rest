@@ -2010,11 +2010,11 @@ func ProcessVendors() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "MBDI" {
+		/*if store.Code != "MBDIT" && store.Code != "MBDI" {
 			continue
-		}
+		}*/
 
-		log.Print("Branch name:" + store.BranchName)
+		//log.Print("Branch name:" + store.BranchName)
 
 		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "vendor")
 		if err != nil {
@@ -2051,13 +2051,15 @@ func ProcessVendors() error {
 			if vendor.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
+			vendor.SetVendorPurchaseStatsByStoreID(store.ID)
+			vendor.SetVendorPurchaseReturnStatsByStoreID(store.ID)
 
 			/*vendor.GenerateSearchWords()
 			vendor.SetSearchLabel()
 			vendor.SetAdditionalkeywords()
 			vendor.Update()*/
 
-			destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
+			/*destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
 
 			for _, destinationCode := range destinations {
 				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
@@ -2071,7 +2073,7 @@ func ProcessVendors() error {
 						return err
 					}
 				}
-			}
+			}*/
 
 			/*
 				vendor.GenerateSearchWords()

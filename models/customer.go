@@ -2679,11 +2679,11 @@ func ProcessCustomers() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" {
+		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" {
 			continue
-		}
+		}*/
 
-		log.Print("Branch name:" + store.BranchName)
+		//log.Print("Branch name:" + store.BranchName)
 
 		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customer")
 		if err != nil {
@@ -2720,7 +2720,14 @@ func ProcessCustomers() error {
 				continue
 			}
 
-			customer.GenerateSearchWords()
+			customer.SetCustomerSalesStatsByStoreID(store.ID)
+			customer.SetCustomerSalesReturnStatsByStoreID(store.ID)
+			customer.SetCustomerQuotationStatsByStoreID(store.ID)
+			customer.SetCustomerQuotationInvoiceStatsByStoreID(store.ID)
+			customer.SetCustomerQuotationSalesReturnStatsByStoreID(store.ID)
+			customer.SetCustomerDeliveryNoteStatsByStoreID(store.ID)
+
+			/*customer.GenerateSearchWords()
 			customer.SetSearchLabel()
 			customer.SetAdditionalkeywords()
 			err = customer.Update()
@@ -2730,7 +2737,7 @@ func ProcessCustomers() error {
 				log.Print("Customer ID:" + customer.ID.Hex())
 				continue
 				//return err
-			}
+			}*/
 
 			/*customer.GenerateSearchWords()
 			customer.SetAdditionalkeywords()
