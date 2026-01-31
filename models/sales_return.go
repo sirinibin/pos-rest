@@ -3036,6 +3036,62 @@ func (salesreturn *SalesReturn) HardDelete() (err error) {
 	return nil
 }
 
+func (salesReturn *SalesReturn) SetUnKnownCustomerIfNoCustomerSelected() error {
+	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if salesReturn.CustomerID != nil && !salesReturn.CustomerID.IsZero() {
+		return nil
+	}
+
+	customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer == nil {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:         "UNKNOWN",
+			NameInArabic: "مجهول",
+			CreatedBy:    salesReturn.CreatedBy,
+			UpdatedBy:    salesReturn.CreatedBy,
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+			StoreID:      salesReturn.StoreID,
+		}
+
+		err = newCustomer.MakeCode()
+		if err != nil {
+			return err
+		}
+
+		newCustomer.GenerateSearchWords()
+		newCustomer.SetSearchLabel()
+		newCustomer.SetAdditionalkeywords()
+
+		err = newCustomer.Insert()
+		if err != nil {
+			return err
+		}
+
+		err = newCustomer.UpdateForeignLabelFields()
+		if err != nil {
+			return err
+		}
+
+		customer = &newCustomer
+
+	}
+
+	salesReturn.CustomerID = &customer.ID
+	salesReturn.CustomerName = customer.Name
+
+	return nil
+}
+
 func ProcessSalesReturns() error {
 	log.Print("Processing sales returns")
 
@@ -3045,9 +3101,9 @@ func ProcessSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
-		}
+		}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{
 			"store_id": store.ID,
@@ -3095,8 +3151,24 @@ func ProcessSalesReturns() error {
 				continue
 			}
 
-			salesReturn.ClearProductsHistory()
-			salesReturn.CreateProductsHistory(false)
+			//salesReturn.ClearProductsHistory()
+			//salesReturn.CreateProductsHistory(false)
+
+			if salesReturn.CustomerID == nil || salesReturn.CustomerID.IsZero() {
+				salesReturn.SetUnKnownCustomerIfNoCustomerSelected()
+
+				salesReturn.Update()
+
+				salesReturn.ClearProductsHistory()
+				salesReturn.CreateProductsHistory(false)
+				salesReturn.ClearProductsSalesReturnHistory()
+				salesReturn.CreateProductsSalesReturnHistory()
+
+				salesReturn.UndoAccounting()
+				salesReturn.DoAccounting()
+
+				salesReturn.SetCustomerSalesReturnStats()
+			}
 
 			/*salesReturn.ClearProductsSalesReturnHistory()
 

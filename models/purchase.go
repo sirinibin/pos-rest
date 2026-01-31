@@ -2492,6 +2492,62 @@ func (store *Store) IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err e
 	return (count > 0), err
 }
 
+func (purchase *Purchase) SetUnKnownVendorIfNoCustomerSelected() error {
+	store, err := FindStoreByID(purchase.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if purchase.VendorID != nil && !purchase.VendorID.IsZero() {
+		return nil
+	}
+
+	vendor, err := store.FindVendorByName("UNKNOWN", bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendor == nil {
+		now := time.Now()
+		newVendor := Vendor{
+			Name:         "UNKNOWN",
+			NameInArabic: "مجهول",
+			CreatedBy:    purchase.CreatedBy,
+			UpdatedBy:    purchase.CreatedBy,
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+			StoreID:      purchase.StoreID,
+		}
+
+		err = newVendor.MakeCode()
+		if err != nil {
+			return err
+		}
+
+		newVendor.GenerateSearchWords()
+		newVendor.SetSearchLabel()
+		newVendor.SetAdditionalkeywords()
+
+		err = newVendor.Insert()
+		if err != nil {
+			return err
+		}
+
+		err = newVendor.UpdateForeignLabelFields()
+		if err != nil {
+			return err
+		}
+
+		vendor = &newVendor
+
+	}
+
+	purchase.VendorID = &vendor.ID
+	purchase.VendorName = vendor.Name
+
+	return nil
+}
+
 func ProcessPurchases() error {
 	log.Print("Processing purchases")
 
@@ -2501,9 +2557,9 @@ func ProcessPurchases() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
-		}
+		}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "purchase")
 		if err != nil {
@@ -2540,8 +2596,24 @@ func ProcessPurchases() error {
 				continue
 			}
 
-			purchase.ClearProductsHistory()
-			purchase.CreateProductsHistory(false)
+			if purchase.VendorID == nil || purchase.VendorID.IsZero() {
+				purchase.SetUnKnownVendorIfNoCustomerSelected()
+
+				purchase.Update()
+
+				purchase.ClearProductsHistory()
+				purchase.CreateProductsHistory(false)
+
+				purchase.ClearProductsPurchaseHistory()
+				purchase.CreateProductsPurchaseHistory()
+				purchase.UndoAccounting()
+				purchase.DoAccounting()
+
+				purchase.SetVendorPurchaseStats()
+			}
+
+			//purchase.ClearProductsHistory()
+			//purchase.CreateProductsHistory(false)
 
 			/*
 				purchase.ClearProductsPurchaseHistory()

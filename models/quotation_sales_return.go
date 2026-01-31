@@ -2897,6 +2897,61 @@ func (quotationsalesreturn *QuotationSalesReturn) HardDelete() (err error) {
 	return nil
 }
 
+func (quotationSale *QuotationSalesReturn) SetUnKnownCustomerIfNoCustomerSelected() error {
+	store, err := FindStoreByID(quotationSale.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if quotationSale.CustomerID != nil && !quotationSale.CustomerID.IsZero() {
+		return nil
+	}
+
+	customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer == nil {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:         "UNKNOWN",
+			NameInArabic: "مجهول",
+			CreatedBy:    quotationSale.CreatedBy,
+			UpdatedBy:    quotationSale.CreatedBy,
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+			StoreID:      quotationSale.StoreID,
+		}
+
+		err = newCustomer.MakeCode()
+		if err != nil {
+			return err
+		}
+
+		newCustomer.GenerateSearchWords()
+		newCustomer.SetSearchLabel()
+		newCustomer.SetAdditionalkeywords()
+
+		err = newCustomer.Insert()
+		if err != nil {
+			return err
+		}
+
+		err = newCustomer.UpdateForeignLabelFields()
+		if err != nil {
+			return err
+		}
+
+		customer = &newCustomer
+	}
+
+	quotationSale.CustomerID = &customer.ID
+	quotationSale.CustomerName = customer.Name
+
+	return nil
+}
+
 func ProcessQuotationSalesReturns() error {
 	log.Print("Processing quotationsales returns")
 
@@ -2906,9 +2961,9 @@ func ProcessQuotationSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
-		}
+		}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{
 			"store_id": store.ID,
@@ -2956,8 +3011,25 @@ func ProcessQuotationSalesReturns() error {
 				continue
 			}
 
-			quotationsalesReturn.ClearProductsHistory()
-			quotationsalesReturn.CreateProductsHistory(false)
+			if quotationsalesReturn.CustomerID == nil || quotationsalesReturn.CustomerID.IsZero() {
+				quotationsalesReturn.SetUnKnownCustomerIfNoCustomerSelected()
+
+				quotationsalesReturn.Update()
+
+				quotationsalesReturn.ClearProductsHistory()
+				quotationsalesReturn.CreateProductsHistory(false)
+
+				quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
+				quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
+
+				quotationsalesReturn.UndoAccounting()
+				quotationsalesReturn.DoAccounting()
+
+				quotationsalesReturn.SetCustomerQuotationSalesReturnStats()
+			}
+
+			//quotationsalesReturn.ClearProductsHistory()
+			//quotationsalesReturn.CreateProductsHistory(false)
 			/*
 				quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
 

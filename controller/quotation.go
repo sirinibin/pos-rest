@@ -179,6 +179,17 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = quotation.SetUnKnownCustomerIfNoCustomerSelected()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+
+		response.Status = false
+		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = quotation.LinkOrUnLinkSales(nil)
 	if err != nil {
 		queue.Pop()
@@ -454,6 +465,14 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = quotation.SetUnKnownCustomerIfNoCustomerSelected()
+	if err != nil {
+		response.Status = false
+		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

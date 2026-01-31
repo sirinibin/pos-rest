@@ -1599,14 +1599,19 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 
 		customerIds := strings.Split(keys[0], ",")
 
-		objecIds := []primitive.ObjectID{}
+		objecIds := []*primitive.ObjectID{}
 
 		for _, id := range customerIds {
+			if id == "unknown_customer" || id == "" {
+				objecIds = append(objecIds, nil)
+				continue
+			}
+
 			customerID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
 				return quotations, criterias, err
 			}
-			objecIds = append(objecIds, customerID)
+			objecIds = append(objecIds, &customerID)
 		}
 
 		if len(objecIds) > 0 {
@@ -2416,6 +2421,62 @@ func (store *Store) IsQuotationExists(ID *primitive.ObjectID) (exists bool, err 
 	return (count > 0), err
 }
 
+func (quotation *Quotation) SetUnKnownCustomerIfNoCustomerSelected() error {
+	store, err := FindStoreByID(quotation.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if quotation.CustomerID != nil && !quotation.CustomerID.IsZero() {
+		return nil
+	}
+
+	customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer == nil {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:         "UNKNOWN",
+			NameInArabic: "مجهول",
+			CreatedBy:    quotation.CreatedBy,
+			UpdatedBy:    quotation.CreatedBy,
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+			StoreID:      quotation.StoreID,
+		}
+
+		err = newCustomer.MakeCode()
+		if err != nil {
+			return err
+		}
+
+		newCustomer.GenerateSearchWords()
+		newCustomer.SetSearchLabel()
+		newCustomer.SetAdditionalkeywords()
+
+		err = newCustomer.Insert()
+		if err != nil {
+			return err
+		}
+
+		err = newCustomer.UpdateForeignLabelFields()
+		if err != nil {
+			return err
+		}
+
+		customer = &newCustomer
+
+	}
+
+	quotation.CustomerID = &customer.ID
+	quotation.CustomerName = customer.Name
+
+	return nil
+}
+
 func ProcessQuotations() error {
 	log.Print("Processing quotations")
 	stores, err := GetAllStores()
@@ -2424,9 +2485,9 @@ func ProcessQuotations() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
-		}
+		}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "quotation")
 		if err != nil {
@@ -2464,8 +2525,25 @@ func ProcessQuotations() error {
 				continue
 			}
 
-			quotation.ClearProductsHistory()
-			quotation.CreateProductsHistory(false)
+			if quotation.CustomerID == nil || quotation.CustomerID.IsZero() {
+				quotation.SetUnKnownCustomerIfNoCustomerSelected()
+
+				quotation.Update()
+
+				quotation.ClearProductsHistory()
+				quotation.CreateProductsHistory(false)
+
+				quotation.ClearProductsQuotationHistory()
+				quotation.CreateProductsQuotationHistory()
+
+				quotation.UndoAccounting()
+				quotation.DoAccounting()
+
+				quotation.SetCustomerQuotationStats()
+			}
+
+			//quotation.ClearProductsHistory()
+			//quotation.CreateProductsHistory(false)
 			/*
 				quotation.ClearProductsQuotationHistory()
 

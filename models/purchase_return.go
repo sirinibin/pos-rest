@@ -2339,6 +2339,61 @@ func (store *Store) IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool,
 	return (count > 0), err
 }
 
+func (purchaseReturn *PurchaseReturn) SetUnKnownVendorIfNoCustomerSelected() error {
+	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if purchaseReturn.VendorID != nil && !purchaseReturn.VendorID.IsZero() {
+		return nil
+	}
+
+	vendor, err := store.FindVendorByName("UNKNOWN", bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if vendor == nil {
+		now := time.Now()
+		newVendor := Vendor{
+			Name:         "UNKNOWN",
+			NameInArabic: "مجهول",
+			CreatedBy:    purchaseReturn.CreatedBy,
+			UpdatedBy:    purchaseReturn.CreatedBy,
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+			StoreID:      purchaseReturn.StoreID,
+		}
+
+		err = newVendor.MakeCode()
+		if err != nil {
+			return err
+		}
+
+		newVendor.GenerateSearchWords()
+		newVendor.SetSearchLabel()
+		newVendor.SetAdditionalkeywords()
+
+		err = newVendor.Insert()
+		if err != nil {
+			return err
+		}
+
+		err = newVendor.UpdateForeignLabelFields()
+		if err != nil {
+			return err
+		}
+		vendor = &newVendor
+
+	}
+
+	purchaseReturn.VendorID = &vendor.ID
+	purchaseReturn.VendorName = vendor.Name
+
+	return nil
+}
+
 func ProcessPurchaseReturns() error {
 	log.Print("Processing purchase returns")
 	stores, err := GetAllStores()
@@ -2347,9 +2402,9 @@ func ProcessPurchaseReturns() error {
 	}
 
 	for _, store := range stores {
-		if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
 			continue
-		}
+		}*/
 
 		totalCount, err := store.GetTotalCount(bson.M{}, "purchasereturn")
 		if err != nil {
@@ -2386,8 +2441,24 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
-			model.ClearProductsHistory()
-			model.CreateProductsHistory(false)
+			if model.VendorID == nil || model.VendorID.IsZero() {
+				model.SetUnKnownVendorIfNoCustomerSelected()
+
+				model.Update()
+
+				model.ClearProductsHistory()
+				model.CreateProductsHistory(false)
+
+				model.ClearProductsPurchaseReturnHistory()
+				model.CreateProductsPurchaseReturnHistory()
+				model.UndoAccounting()
+				model.DoAccounting()
+
+				model.SetVendorPurchaseReturnStats()
+			}
+
+			//model.ClearProductsHistory()
+			//model.CreateProductsHistory(false)
 			/*
 				model.ClearProductsPurchaseReturnHistory()
 

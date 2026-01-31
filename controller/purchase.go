@@ -175,6 +175,14 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = purchase.SetUnKnownVendorIfNoCustomerSelected()
+	if err != nil {
+		response.Status = false
+		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	purchase.FindTotalQuantity()
 	err = purchase.UpdateForeignLabelFields()
 	if err != nil {
@@ -388,6 +396,14 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["new_vendor_from_name"] = "error creating new vendor from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = purchase.SetUnKnownVendorIfNoCustomerSelected()
+	if err != nil {
+		response.Status = false
+		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

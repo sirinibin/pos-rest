@@ -185,6 +185,16 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = order.SetUnKnownCustomerIfNoCustomerSelected()
+	if err != nil {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+		response.Status = false
+		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	order.FindTotalQuantity()
 
 	err = order.UpdateForeignLabelFields()
@@ -402,6 +412,14 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = order.SetUnKnownCustomerIfNoCustomerSelected()
+	if err != nil {
+		response.Status = false
+		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
