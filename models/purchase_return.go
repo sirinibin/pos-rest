@@ -2442,7 +2442,7 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
-			if model.VendorName == "UNKNOWN" {
+			/*if model.VendorName == "UNKNOWN" {
 				vendor, _ := store.FindVendorByName("UNKNOWN", bson.M{})
 				if vendor != nil {
 					model.VendorID = &vendor.ID
@@ -2452,7 +2452,7 @@ func ProcessPurchaseReturns() error {
 					model.UndoAccounting()
 					model.DoAccounting()
 				}
-			}
+			}*/
 
 			/*if model.VendorID == nil || model.VendorID.IsZero() {
 				model.SetUnKnownVendorIfNoVendorSelected()

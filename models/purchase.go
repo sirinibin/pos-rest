@@ -2597,7 +2597,7 @@ func ProcessPurchases() error {
 				continue
 			}
 
-			if purchase.VendorName == "UNKNOWN" {
+			/*if purchase.VendorName == "UNKNOWN" {
 				vendor, _ := store.FindVendorByName("UNKNOWN", bson.M{})
 				if vendor != nil {
 					purchase.VendorID = &vendor.ID
@@ -2607,7 +2607,7 @@ func ProcessPurchases() error {
 					purchase.UndoAccounting()
 					purchase.DoAccounting()
 				}
-			}
+			}*/
 
 			/*if purchase.VendorID == nil || purchase.VendorID.IsZero() {
 				purchase.SetUnKnownVendorIfNoVendorSelected()
