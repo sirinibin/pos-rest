@@ -3088,6 +3088,7 @@ func (salesReturn *SalesReturn) SetUnKnownCustomerIfNoCustomerSelected() error {
 
 	salesReturn.CustomerID = &customer.ID
 	salesReturn.CustomerName = customer.Name
+	salesReturn.CustomerNameArabic = customer.NameInArabic
 
 	return nil
 }
@@ -3154,7 +3155,7 @@ func ProcessSalesReturns() error {
 			//salesReturn.ClearProductsHistory()
 			//salesReturn.CreateProductsHistory(false)
 
-			if salesReturn.CustomerID == nil || salesReturn.CustomerID.IsZero() {
+			/*if salesReturn.CustomerID == nil || salesReturn.CustomerID.IsZero() {
 				salesReturn.SetUnKnownCustomerIfNoCustomerSelected()
 
 				salesReturn.Update()
@@ -3168,7 +3169,8 @@ func ProcessSalesReturns() error {
 				salesReturn.DoAccounting()
 
 				salesReturn.SetCustomerSalesReturnStats()
-			}
+			}*/
+			salesReturn.SetCustomerSalesReturnStats()
 
 			/*salesReturn.ClearProductsSalesReturnHistory()
 

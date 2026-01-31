@@ -2948,6 +2948,7 @@ func (quotationSale *QuotationSalesReturn) SetUnKnownCustomerIfNoCustomerSelecte
 
 	quotationSale.CustomerID = &customer.ID
 	quotationSale.CustomerName = customer.Name
+	quotationSale.CustomerNameArabic = customer.NameInArabic
 
 	return nil
 }
@@ -3011,7 +3012,7 @@ func ProcessQuotationSalesReturns() error {
 				continue
 			}
 
-			if quotationsalesReturn.CustomerID == nil || quotationsalesReturn.CustomerID.IsZero() {
+			/*if quotationsalesReturn.CustomerID == nil || quotationsalesReturn.CustomerID.IsZero() {
 				quotationsalesReturn.SetUnKnownCustomerIfNoCustomerSelected()
 
 				quotationsalesReturn.Update()
@@ -3026,7 +3027,9 @@ func ProcessQuotationSalesReturns() error {
 				quotationsalesReturn.DoAccounting()
 
 				quotationsalesReturn.SetCustomerQuotationSalesReturnStats()
-			}
+			}*/
+
+			quotationsalesReturn.SetCustomerQuotationSalesReturnStats()
 
 			//quotationsalesReturn.ClearProductsHistory()
 			//quotationsalesReturn.CreateProductsHistory(false)

@@ -175,7 +175,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchase.SetUnKnownVendorIfNoCustomerSelected()
+	err = purchase.SetUnKnownVendorIfNoVendorSelected()
 	if err != nil {
 		response.Status = false
 		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
@@ -400,7 +400,7 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = purchase.SetUnKnownVendorIfNoCustomerSelected()
+	err = purchase.SetUnKnownVendorIfNoVendorSelected()
 	if err != nil {
 		response.Status = false
 		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()

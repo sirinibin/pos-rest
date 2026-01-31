@@ -2492,7 +2492,7 @@ func (store *Store) IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err e
 	return (count > 0), err
 }
 
-func (purchase *Purchase) SetUnKnownVendorIfNoCustomerSelected() error {
+func (purchase *Purchase) SetUnKnownVendorIfNoVendorSelected() error {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -2544,6 +2544,7 @@ func (purchase *Purchase) SetUnKnownVendorIfNoCustomerSelected() error {
 
 	purchase.VendorID = &vendor.ID
 	purchase.VendorName = vendor.Name
+	purchase.VendorNameArabic = vendor.NameInArabic
 
 	return nil
 }
@@ -2596,8 +2597,8 @@ func ProcessPurchases() error {
 				continue
 			}
 
-			if purchase.VendorID == nil || purchase.VendorID.IsZero() {
-				purchase.SetUnKnownVendorIfNoCustomerSelected()
+			/*if purchase.VendorID == nil || purchase.VendorID.IsZero() {
+				purchase.SetUnKnownVendorIfNoVendorSelected()
 
 				purchase.Update()
 
@@ -2610,7 +2611,9 @@ func ProcessPurchases() error {
 				purchase.DoAccounting()
 
 				purchase.SetVendorPurchaseStats()
-			}
+			}*/
+
+			purchase.SetVendorPurchaseStats()
 
 			//purchase.ClearProductsHistory()
 			//purchase.CreateProductsHistory(false)

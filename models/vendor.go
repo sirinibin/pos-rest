@@ -99,6 +99,133 @@ type Vendor struct {
 	Sponsor                    string                 `bson:"sponsor" json:"sponsor"`
 }
 
+type VendorStats struct {
+	ID            *primitive.ObjectID `json:"id" bson:"_id"`
+	CreditBalance float64             `json:"credit_balance" bson:"credit_balance"`
+	//Purchase
+	PurchaseCount              int64   `bson:"purchase_count" json:"purchase_count"`
+	PurchaseAmount             float64 `bson:"purchase_amount" json:"purchase_amount"`
+	PurchasePaidAmount         float64 `bson:"purchase_paid_amount" json:"purchase_paid_amount"`
+	PurchaseBalanceAmount      float64 `bson:"purchase_balance_amount" json:"purchase_balance_amount"`
+	PurchasePaidCount          int64   `bson:"purchase_paid_count" json:"purchase_paid_count"`
+	PurchaseNotPaidCount       int64   `bson:"purchase_not_paid_count" json:"purchase_not_paid_count"`
+	PurchasePaidPartiallyCount int64   `bson:"purchase_paid_partially_count" json:"purchase_paid_partially_count"`
+	//Purchase Return
+	PurchaseReturnCount              int64   `bson:"purchase_return_count" json:"purchase_return_count"`
+	PurchaseReturnAmount             float64 `bson:"purchase_return_amount" json:"purchase_return_amount"`
+	PurchaseReturnPaidAmount         float64 `bson:"purchase_return_paid_amount" json:"purchase_return_paid_amount"`
+	PurchaseReturnBalanceAmount      float64 `bson:"purchase_return_balance_amount" json:"purchase_return_balance_amount"`
+	PurchaseReturnPaidCount          int64   `bson:"purchase_return_paid_count" json:"purchase_return_paid_count"`
+	PurchaseReturnNotPaidCount       int64   `bson:"purchase_return_not_paid_count" json:"purchase_return_not_paid_count"`
+	PurchaseReturnPaidPartiallyCount int64   `bson:"purchase_return_paid_partially_count" json:"purchase_return_paid_partially_count"`
+}
+
+func (store *Store) GetVendorStats(
+	filter map[string]interface{},
+) (stats VendorStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("vendor")
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		bson.M{
+			"$match": filter,
+		},
+		bson.M{
+			"$group": bson.M{
+				"_id":            nil,
+				"credit_balance": bson.M{"$sum": "$credit_balance"},
+				//Purchase
+				"purchase_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_amount", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_amount",
+					0,
+				}}},
+				"purchase_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_count",
+					0,
+				}}},
+				"purchase_paid_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_paid_amount", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_paid_amount",
+					0,
+				}}},
+				"purchase_balance_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_balance_amount", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_balance_amount",
+					0,
+				}}},
+				"purchase_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_paid_count",
+					0,
+				}}},
+				"purchase_not_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_not_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_not_paid_count",
+					0,
+				}}},
+				"purchase_paid_partially_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_paid_partially_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_paid_partially_count",
+					0,
+				}}},
+				//Purchase Return
+				"purchase_return_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_return_amount", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_return_amount",
+					0,
+				}}},
+				"purchase_return_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_return_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_return_count",
+					0,
+				}}},
+				"purchase_return_paid_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_return_paid_amount", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_return_paid_amount",
+					0,
+				}}},
+				"purchase_return_balance_amount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_return_balance_amount", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_return_balance_amount",
+					0,
+				}}},
+				"purchase_return_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_return_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_return_paid_count",
+					0,
+				}}},
+				"purchase_return_not_paid_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_return_not_paid_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_return_not_paid_count",
+					0,
+				}}},
+				"purchase_return_paid_partially_count": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{"$stores." + store.ID.Hex() + ".purchase_return_paid_partially_count", 0}},
+					"$stores." + store.ID.Hex() + ".purchase_return_paid_partially_count",
+					0,
+				}}},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+	}
+	return stats, nil
+}
+
 func (store *Store) FindVendorByCode(
 	Code string,
 	selectFields map[string]interface{},

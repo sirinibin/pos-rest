@@ -2067,6 +2067,7 @@ func (order *Order) SetUnKnownCustomerIfNoCustomerSelected() error {
 
 	order.CustomerID = &customer.ID
 	order.CustomerName = customer.Name
+	order.CustomerNameArabic = customer.NameInArabic
 
 	return nil
 }
@@ -3489,7 +3490,7 @@ func ProcessSales() error {
 				continue
 			}
 
-			if order.CustomerID == nil || order.CustomerID.IsZero() {
+			/*if order.CustomerID == nil || order.CustomerID.IsZero() {
 				order.SetUnKnownCustomerIfNoCustomerSelected()
 
 				order.Update()
@@ -3503,7 +3504,8 @@ func ProcessSales() error {
 				order.DoAccounting()
 
 				order.SetCustomerSalesStats()
-			}
+			}*/
+			order.SetCustomerSalesStats()
 
 			//order.ClearProductsHistory()
 			//order.CreateProductsHistory(false)

@@ -58,6 +58,43 @@ func ListVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var vendorStats models.VendorStats
+
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] == "1" {
+			vendorStats, err = store.GetVendorStats(criterias.SearchBy)
+			if err != nil {
+				response.Status = false
+				response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+		}
+	}
+
+	response.Meta = map[string]interface{}{}
+
+	response.Meta["credit_balance"] = vendorStats.CreditBalance
+
+	//Purchase
+	response.Meta["purchase"] = vendorStats.PurchaseAmount
+	response.Meta["purchase_paid"] = vendorStats.PurchasePaidAmount
+	response.Meta["purchase_credit_balance"] = vendorStats.PurchaseBalanceAmount
+	response.Meta["purchase_count"] = vendorStats.PurchaseCount
+	response.Meta["purchase_paid_count"] = vendorStats.PurchasePaidCount
+	response.Meta["purchase_paid_partially_count"] = vendorStats.PurchasePaidPartiallyCount
+	response.Meta["sales_unpaid_count"] = vendorStats.PurchaseNotPaidCount
+
+	//Purchase return
+	response.Meta["purchase_return"] = vendorStats.PurchaseReturnAmount
+	response.Meta["purchase_return_paid"] = vendorStats.PurchaseReturnPaidAmount
+	response.Meta["purchase_return_credit_balance"] = vendorStats.PurchaseReturnBalanceAmount
+	response.Meta["purchase_return_count"] = vendorStats.PurchaseReturnCount
+	response.Meta["purchase_return_paid_count"] = vendorStats.PurchaseReturnPaidCount
+	response.Meta["purchase_return_paid_partially_count"] = vendorStats.PurchaseReturnPaidPartiallyCount
+	response.Meta["purchase_return_unpaid_count"] = vendorStats.PurchaseReturnNotPaidCount
+
 	if len(vendors) == 0 {
 		response.Result = []interface{}{}
 	} else {

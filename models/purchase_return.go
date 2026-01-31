@@ -2339,7 +2339,7 @@ func (store *Store) IsPurchaseReturnExists(ID *primitive.ObjectID) (exists bool,
 	return (count > 0), err
 }
 
-func (purchaseReturn *PurchaseReturn) SetUnKnownVendorIfNoCustomerSelected() error {
+func (purchaseReturn *PurchaseReturn) SetUnKnownVendorIfNoVendorSelected() error {
 	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -2390,6 +2390,7 @@ func (purchaseReturn *PurchaseReturn) SetUnKnownVendorIfNoCustomerSelected() err
 
 	purchaseReturn.VendorID = &vendor.ID
 	purchaseReturn.VendorName = vendor.Name
+	purchaseReturn.VendorNameArabic = vendor.NameInArabic
 
 	return nil
 }
@@ -2441,8 +2442,8 @@ func ProcessPurchaseReturns() error {
 				continue
 			}
 
-			if model.VendorID == nil || model.VendorID.IsZero() {
-				model.SetUnKnownVendorIfNoCustomerSelected()
+			/*if model.VendorID == nil || model.VendorID.IsZero() {
+				model.SetUnKnownVendorIfNoVendorSelected()
 
 				model.Update()
 
@@ -2455,7 +2456,9 @@ func ProcessPurchaseReturns() error {
 				model.DoAccounting()
 
 				model.SetVendorPurchaseReturnStats()
-			}
+			}*/
+
+			model.SetVendorPurchaseReturnStats()
 
 			//model.ClearProductsHistory()
 			//model.CreateProductsHistory(false)
