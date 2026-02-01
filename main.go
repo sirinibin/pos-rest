@@ -15,7 +15,6 @@ import (
 	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
-	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -470,16 +469,16 @@ func cronJobsEveryHour() error {
 	if err != nil {
 		log.Print(err)
 	}*/
+	/*
+		err := models.ProcessCustomers()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err := models.ProcessCustomers()
-	if err != nil {
-		log.Print(err)
-	}
-
-	err = models.ProcessVendors()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessVendors()
+		if err != nil {
+			log.Print(err)
+		}*/
 
 	/*
 		err := models.ProcessSales()
