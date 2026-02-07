@@ -1650,7 +1650,6 @@ func ProcessCustomerWithdrawals() error {
 		return err
 	}
 	for _, store := range stores {
-		log.Print("Store: " + store.Name)
 		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customerwithdrawal")
 		if err != nil {
 			return err
@@ -1683,8 +1682,11 @@ func ProcessCustomerWithdrawals() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			customerwithdrawal.FindNetTotal()
-			customerwithdrawal.Update()
+			customerwithdrawal.UndoAccounting()
+			customerwithdrawal.DoAccounting()
+
+			//customerwithdrawal.FindNetTotal()
+			//customerwithdrawal.Update()
 
 			/*
 				customerwithdrawal.UndoAccounting()
