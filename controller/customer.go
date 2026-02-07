@@ -12,6 +12,7 @@ import (
 	"github.com/sirinibin/startpos/backend/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ListCustomer : handler for GET /customer
@@ -521,4 +522,88 @@ func RestoreCustomer(w http.ResponseWriter, r *http.Request) {
 	response.Result = "Restored successfully"
 
 	json.NewEncoder(w).Encode(response)
+}
+
+func ViewCustomerByVatNoByName(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vatNo := ""
+	name := ""
+
+	keys, ok := r.URL.Query()["vat_no"]
+	if ok && len(keys[0]) >= 1 {
+		vatNo = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["name"]
+	if ok && len(keys[0]) >= 1 {
+		name = keys[0]
+	}
+
+	var customer *models.Customer
+
+	selectFields := map[string]interface{}{}
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		selectFields = models.ParseSelectString(keys[0])
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	customer, err = store.FindCustomerByNameByVatNo(name, vatNo, selectFields)
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if customer.VATNo != "" {
+		account, err := store.FindAccountByVatNo(customer.VATNo, &store.ID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			response.Status = false
+			response.Errors["account"] = "error finding account:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		if account != nil {
+			customer.CreditBalance = account.Balance
+		} else {
+			account, err = store.FindAccountByPhoneByName(customer.Phone, customer.Name, &store.ID, bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				response.Status = false
+				response.Errors["account"] = "error finding account:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			if account != nil {
+				customer.CreditBalance = account.Balance
+			}
+		}
+
+	}
+
+	response.Status = true
+	response.Result = customer
+
+	json.NewEncoder(w).Encode(response)
+
 }

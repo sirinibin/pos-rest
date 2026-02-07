@@ -79,6 +79,7 @@ func main() {
 	router.HandleFunc("/v1/customer/restore/{id}", controller.RestoreCustomer).Methods("POST")
 	router.HandleFunc("/v1/customer/upload-image", controller.UploadCustomerImage).Methods("POST")
 	router.HandleFunc("/v1/customer/delete-image", controller.DeleteCustomerImage).Methods("POST")
+	router.HandleFunc("/v1/customer/vat_no/name", controller.ViewCustomerByVatNoByName).Methods("GET")
 
 	//Product
 	router.HandleFunc("/v1/product", controller.CreateProduct).Methods("POST")
