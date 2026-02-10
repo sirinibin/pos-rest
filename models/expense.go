@@ -364,6 +364,26 @@ func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expen
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[exclude_category_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		categoryIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range categoryIds {
+			categoryID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return expenses, criterias, err
+			}
+			objecIds = append(objecIds, categoryID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["category_id"] = bson.M{"$nin": objecIds}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[created_by]"]
 	if ok && len(keys[0]) >= 1 {
 
