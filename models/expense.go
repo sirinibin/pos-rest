@@ -275,6 +275,15 @@ func (store *Store) SearchExpense(w http.ResponseWriter, r *http.Request) (expen
 		}
 	}
 
+	keys, ok = r.URL.Query()["search[exclude_payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_method"] = bson.M{"$nin": paymentMethods}
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[vendor_id]"]
 	if ok && len(keys[0]) >= 1 {
 
