@@ -636,11 +636,11 @@ func (quotation *Quotation) SetPaymentStatus() (models []QuotationPayment, err e
 	quotation.Payments = models
 	quotation.PaymentsCount = int64(len(models))
 
-	if RoundTo2Decimals((quotation.NetTotal - quotation.CashDiscount)) <= totalPaymentReceived {
+	if RoundTo2Decimals((quotation.NetTotal - quotation.CashDiscount)) <= RoundTo2Decimals(totalPaymentReceived) {
 		quotation.PaymentStatus = "paid"
-	} else if totalPaymentReceived > 0 {
+	} else if RoundTo2Decimals(totalPaymentReceived) > 0 {
 		quotation.PaymentStatus = "paid_partially"
-	} else if totalPaymentReceived <= 0 {
+	} else if RoundTo2Decimals(totalPaymentReceived) <= 0 {
 		quotation.PaymentStatus = "not_paid"
 	}
 

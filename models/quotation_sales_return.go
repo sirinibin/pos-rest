@@ -3206,11 +3206,11 @@ func (quotationsalesReturn *QuotationSalesReturn) SetPaymentStatus() (payments [
 	quotationsalesReturn.Payments = payments
 	quotationsalesReturn.PaymentsCount = int64(len(payments))
 
-	if ToFixed((quotationsalesReturn.NetTotal-quotationsalesReturn.CashDiscount), 2) <= ToFixed(totalPaymentPaid, 2) {
+	if RoundTo2Decimals((quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount)) <= RoundTo2Decimals(totalPaymentPaid) {
 		quotationsalesReturn.PaymentStatus = "paid"
-	} else if ToFixed(totalPaymentPaid, 2) > 0 {
+	} else if RoundTo2Decimals(totalPaymentPaid) > 0 {
 		quotationsalesReturn.PaymentStatus = "paid_partially"
-	} else if ToFixed(totalPaymentPaid, 2) <= 0 {
+	} else if RoundTo2Decimals(totalPaymentPaid) <= 0 {
 		quotationsalesReturn.PaymentStatus = "not_paid"
 	}
 

@@ -3344,11 +3344,11 @@ func (salesReturn *SalesReturn) SetPaymentStatus() (payments []SalesReturnPaymen
 	salesReturn.Payments = payments
 	salesReturn.PaymentsCount = int64(len(payments))
 
-	if RoundTo2Decimals((salesReturn.NetTotal - salesReturn.CashDiscount)) <= totalPaymentPaid {
+	if RoundTo2Decimals((salesReturn.NetTotal - salesReturn.CashDiscount)) <= RoundTo2Decimals(totalPaymentPaid) {
 		salesReturn.PaymentStatus = "paid"
-	} else if totalPaymentPaid > 0 {
+	} else if RoundTo2Decimals(totalPaymentPaid) > 0 {
 		salesReturn.PaymentStatus = "paid_partially"
-	} else if totalPaymentPaid <= 0 {
+	} else if RoundTo2Decimals(totalPaymentPaid) <= 0 {
 		salesReturn.PaymentStatus = "not_paid"
 	}
 

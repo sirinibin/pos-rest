@@ -2750,11 +2750,11 @@ func (model *Purchase) SetPaymentStatus() (payments []PurchasePayment, err error
 	model.Payments = payments
 	model.PaymentsCount = int64(len(payments))
 
-	if RoundTo2Decimals((model.NetTotal - model.CashDiscount)) <= totalPaymentPaid {
+	if RoundTo2Decimals((model.NetTotal - model.CashDiscount)) <= RoundTo2Decimals(totalPaymentPaid) {
 		model.PaymentStatus = "paid"
-	} else if totalPaymentPaid > 0 {
+	} else if RoundTo2Decimals(totalPaymentPaid) > 0 {
 		model.PaymentStatus = "paid_partially"
-	} else if totalPaymentPaid <= 0 {
+	} else if RoundTo2Decimals(totalPaymentPaid) <= 0 {
 		model.PaymentStatus = "not_paid"
 	}
 

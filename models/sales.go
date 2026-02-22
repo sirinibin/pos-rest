@@ -2822,11 +2822,11 @@ func (order *Order) SetPaymentStatus() (models []SalesPayment, err error) {
 	order.Payments = models //updating payments
 	order.PaymentsCount = int64(len(models))
 
-	if RoundTo2Decimals((order.NetTotal - order.CashDiscount)) <= totalPaymentReceived {
+	if RoundTo2Decimals((order.NetTotal - order.CashDiscount)) <= RoundTo2Decimals(totalPaymentReceived) {
 		order.PaymentStatus = "paid"
-	} else if totalPaymentReceived > 0 {
+	} else if RoundTo2Decimals(totalPaymentReceived) > 0 {
 		order.PaymentStatus = "paid_partially"
-	} else if totalPaymentReceived <= 0 {
+	} else if RoundTo2Decimals(totalPaymentReceived) <= 0 {
 		order.PaymentStatus = "not_paid"
 	}
 
