@@ -18,7 +18,7 @@ class CsrGenerator:
         self.asn_template = self.get_asn_template()
         self.environment_type = environment_type
         self.fatoora_cli_simulation = "ZatcaPython/utilities/fatoora-cli-simulation/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
-        self.fatoora_cli = "ZatcaPython/utilities/fatoora-cli/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
+        #self.fatoora_cli = "ZatcaPython/utilities/fatoora-cli/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
 
     def get_asn_template(self):
         if self.environment_type == 'NonProduction':
@@ -58,7 +58,6 @@ class CsrGenerator:
                 f.write(f"csr.industry.business.category={self.config.get('csr.industry.business.category','')}\n")
 
             # Build command
-            if self.environment_type in ["NonProduction", "Simulation", "Production"]:
                 cmd = [
                     "java", "-jar", self.fatoora_cli_simulation,
                     "-csr",
@@ -67,15 +66,7 @@ class CsrGenerator:
                     "-generatedCsr", csr_file,
                     "-pem"
                 ]
-            else:
-                cmd = [
-                    "java", "-jar", self.fatoora_cli,
-                    "-csr",
-                    "-csrConfig", csr_config_file,
-                    "-privateKey", private_key_file,
-                    "-generatedCsr", csr_file,
-                    "-pem"
-                ]
+
 
             # Add sandbox flag for NonProduction or Simulation
             if self.environment_type in ["Simulation"]:
