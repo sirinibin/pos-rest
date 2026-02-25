@@ -1783,14 +1783,14 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 				if salesReturnProduct.Quantity > maxAllowedQuantity {
 					//errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + order.Products[i].Unit
 				}
-				/*
-					soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
-					if soldQty == 0 {
-						errs["quantity_"+strconv.Itoa(index)] = "Already returned all sold quantities"
-					} else if salesReturnProduct.Quantity > float64(soldQty) {
-						errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + orderProduct.Unit
-					}
-				*/
+
+				soldQty := RoundFloat((order.Products[i].Quantity - order.Products[i].QuantityReturned), 2)
+				if soldQty == 0 {
+					errs["quantity_"+strconv.Itoa(index)] = "Already returned all sold quantities"
+				} else if salesReturnProduct.Quantity > float64(soldQty) {
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + order.Products[i].Unit
+				}
+
 				break
 			}
 		}
