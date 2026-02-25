@@ -12,7 +12,7 @@ import tempfile
 import subprocess
 
 class CsrGenerator:
-    def __init__(self, config, environment_type,dirPrefix):
+    def __init__(self, config, environment_type):
         self.config = config
         self.environment_type = environment_type
         self.asn_template = self.get_asn_template()
@@ -58,7 +58,7 @@ class CsrGenerator:
                 f.write(f"csr.industry.business.category={self.config.get('csr.industry.business.category','')}\n")
 
             # Build command
-            if self.environment_type in ["NonProduction", "Simulation"]:
+            if self.environment_type in ["NonProduction", "Simulation", "Production"]:
                 cmd = [
                     "java", "-jar", self.fatoora_cli_simulation,
                     "-csr",
