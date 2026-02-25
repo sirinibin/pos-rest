@@ -460,6 +460,7 @@ func ListAllIndexes(collectionName string) {
 }
 
 func cronJobsEveryHour() error {
+	//Testing
 	log.Print("Cron job is set to run every 8 hours")
 	/*
 		err := models.ProcessCustomerWithdrawals()
