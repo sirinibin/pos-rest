@@ -850,7 +850,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	if !store.ID.IsZero() && oldStore != nil && !govalidator.IsNull(oldStore.Zatca.Env) {
+	/*if !store.ID.IsZero() && oldStore != nil && !govalidator.IsNull(oldStore.Zatca.Env) {
 		if store.Zatca.Env != oldStore.Zatca.Env {
 			salesCount, err := oldStore.GetCountByCollection("order")
 			if err != nil {
@@ -861,7 +861,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				errs["zatca_env"] = "You cannot change this as you have already created " + strconv.FormatInt(salesCount, 10) + " sales"
 			}
 		}
-	}
+	}*/
 
 	if !store.ID.IsZero() && oldStore != nil {
 		/*
