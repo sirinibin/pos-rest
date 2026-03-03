@@ -37,6 +37,7 @@ type ProductHistory struct {
 	ToWarehouseID      *primitive.ObjectID `json:"to_warehouse_id" bson:"to_warehouse_id"`
 	ToWarehouseCode    *string             `json:"to_warehouse_code" bson:"to_warehouse_code"`
 	Stock              float64             `json:"stock" bson:"stock"`
+	WarehouseStocks    map[string]float64  `bson:"warehouse_stocks" json:"warehouse_stocks"`
 	Quantity           float64             `json:"quantity" bson:"quantity"`
 	PurchaseUnitPrice  float64             `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
 	UnitPrice          float64             `bson:"unit_price,omitempty" json:"unit_price,omitempty"`
@@ -933,6 +934,17 @@ func (product *Product) CreateStockAdjustmentHistory() error {
 			return err
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		go product.AdjustStockInHistoryAfter(history.Date)
 	}
 	return nil
@@ -1106,6 +1118,17 @@ func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool)
 			return err
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -1154,6 +1177,17 @@ func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool)
 				history.ID = primitive.NewObjectID()
 
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -1247,6 +1281,17 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool) error {
 			return err
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -1299,6 +1344,17 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool) error {
 				history.ID = primitive.NewObjectID()
 
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -1391,6 +1447,17 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool) err
 			return errors.New("Error inserting product history:" + err.Error())
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -1443,6 +1510,17 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool) err
 				history.ID = primitive.NewObjectID()
 
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -1532,6 +1610,17 @@ func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool) error {
 			return err
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -1582,6 +1671,17 @@ func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool) error {
 				history.ID = primitive.NewObjectID()
 
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -1672,6 +1772,18 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks boo
 		if err != nil {
 			return err
 		}
+
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -1722,6 +1834,17 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks boo
 				history.ID = primitive.NewObjectID()
 
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -1796,6 +1919,17 @@ func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool) e
 			return err
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -1833,6 +1967,17 @@ func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool) e
 
 				history.ID = primitive.NewObjectID()
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -1942,6 +2087,17 @@ func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool) error {
 			return err
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -2002,6 +2158,17 @@ func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool) error {
 				history.ID = primitive.NewObjectID()
 
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -2099,6 +2266,17 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNe
 			return err
 		}
 
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+
+		err = history.Update()
+		if err != nil {
+			return err
+		}
+
 		if updateNextStocks {
 			go product.AdjustStockInHistoryAfter(history.Date)
 		}
@@ -2155,6 +2333,17 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNe
 				history.ID = primitive.NewObjectID()
 
 				_, err = collection.InsertOne(ctx, &history)
+				if err != nil {
+					return err
+				}
+
+				afterOneSec := history.Date.Add(1 * time.Second)
+				history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+				if err != nil {
+					return err
+				}
+
+				err = history.Update()
 				if err != nil {
 					return err
 				}
@@ -2230,50 +2419,78 @@ func (store *Store) GetHistoriesByProductID(productID *primitive.ObjectID) (mode
 	return models, nil
 }
 
-func (store *Store) ProcessHistory() error {
-	log.Print("Processing  history")
-	totalCount, err := store.GetTotalCount(bson.M{}, "product_history")
+func ProcessProductHistory() error {
+	log.Print("Processing product history")
+	stores, err := GetAllStores()
 	if err != nil {
 		return err
 	}
 
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_history")
-	ctx := context.Background()
-	findOptions := options.Find()
-	findOptions.SetNoCursorTimeout(true)
-	findOptions.SetAllowDiskUse(true)
-
-	cur, err := collection.Find(ctx, bson.M{}, findOptions)
-	if err != nil {
-		return errors.New("Error fetching quotations:" + err.Error())
-	}
-	if cur != nil {
-		defer cur.Close(ctx)
-	}
-
-	bar := progressbar.Default(totalCount)
-	for i := 0; cur != nil && cur.Next(ctx); i++ {
-		err := cur.Err()
-		if err != nil {
-			return errors.New("Cursor error:" + err.Error())
+	for _, store := range stores {
+		if store.Name != "New1" {
+			//continue
 		}
-		model := ProductHistory{}
-		err = cur.Decode(&model)
+
+		totalCount, err := store.GetTotalCount(bson.M{}, "product_history")
 		if err != nil {
-			return errors.New("Cursor decode error:" + err.Error())
+			return err
 		}
-		/*
-				order, err := FindOrderByID(model.OrderID, map[string]interface{}{})
-				if err != nil {
-					return errors.New("Error finding order:" + err.Error())
-				}
-				model.Date = order.Date
-			err = model.Update()
+
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("product_history")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetAllowDiskUse(true)
+		findOptions.SetSort(bson.M{"date": 1})
+
+		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching quotations:" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for i := 0; cur != nil && cur.Next(ctx); i++ {
+			err := cur.Err()
 			if err != nil {
-				return errors.New("Error updating history:" + err.Error())
+				return errors.New("Cursor error:" + err.Error())
 			}
-		*/
-		bar.Add(1)
+			history := ProductHistory{}
+			err = cur.Decode(&history)
+			if err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			product, err := store.FindProductByID(&history.ProductID, bson.M{})
+			if err != nil {
+				return errors.New("Error finding product:" + err.Error())
+			}
+
+			afterOneSec := history.Date.Add(1 * time.Second)
+			history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+			if err != nil {
+				return err
+			}
+
+			err = history.Update()
+			if err != nil {
+				return err
+			}
+			/*
+					order, err := FindOrderByID(model.OrderID, map[string]interface{}{})
+					if err != nil {
+						return errors.New("Error finding order:" + err.Error())
+					}
+					model.Date = order.Date
+				err = model.Update()
+				if err != nil {
+					return errors.New("Error updating history:" + err.Error())
+				}
+			*/
+			bar.Add(1)
+		}
 	}
 
 	log.Print(" DONE!")

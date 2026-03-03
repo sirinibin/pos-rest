@@ -4486,6 +4486,127 @@ func (product *Product) SetStock() error {
 	return nil
 }
 
+func (product *Product) GetWarehouseStocksBefore(before *time.Time) (warehouseStocks map[string]float64, err error) {
+	warehouseStocks = map[string]float64{}
+	store, err := FindStoreByID(product.StoreID, bson.M{})
+	if err != nil {
+		return warehouseStocks, err
+	}
+
+	warehouses, err := store.GetAllWarehouses()
+	if err != nil {
+		return warehouseStocks, err
+	}
+
+	totalWarehouseStock := float64(0)
+
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
+		productStoreTemp.WarehouseStocks = map[string]float64{}
+		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
+	}
+
+	for _, warehouse := range warehouses {
+		if warehouse.Code == "" {
+			continue
+		}
+
+		sentQuantity, err := product.GetProductQuantityByTypeByWarehouseID("sent", warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		receivedQuantity, err := product.GetProductQuantityByTypeByWarehouseID("received", warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		//log.Print("warehouse:" + warehouse.Code)
+		//log.Print("receivedQuantity:")
+		//log.Print(receivedQuantity)
+
+		salesQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales", &warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		salesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales_return", &warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		purchaseQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase", &warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		purchaseReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase_return", &warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		quotationSalesQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales", &warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		quotationSalesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales_return", &warehouse.ID, before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+
+		if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
+			newStock := float64(0)
+			newStock += purchaseQuantity
+			newStock -= purchaseReturnQuantity
+
+			newStock -= salesQuantity
+			newStock += salesReturnQuantity
+
+			if store.Settings.UpdateProductStockOnQuotationSales {
+				newStock -= quotationSalesQuantity
+				newStock += quotationSalesReturnQuantity
+			}
+
+			for _, stockAdjustment := range productStoreTemp.StockAdjustments {
+				if !stockAdjustment.Date.Before(*before) {
+					continue
+				}
+
+				if stockAdjustment.WarehouseID != nil &&
+					!stockAdjustment.WarehouseID.IsZero() &&
+					*stockAdjustment.WarehouseCode == warehouse.Code {
+					//log.Print("OK:" + warehouse.Code + ",stockAdjustment.Type:" + stockAdjustment.Type)
+					//log.Print(stockAdjustment.Quantity)
+					if stockAdjustment.Type == "adding" {
+						newStock += stockAdjustment.Quantity
+					} else if stockAdjustment.Type == "removing" {
+						newStock -= stockAdjustment.Quantity
+					}
+				}
+			}
+
+			newStock -= sentQuantity
+			newStock += receivedQuantity
+
+			warehouseStocks[warehouse.Code] = RoundTo8Decimals(newStock)
+			totalWarehouseStock += RoundTo8Decimals(newStock)
+		}
+
+	}
+
+	//log.Print("totalWarehouseStock:" + fmt.Sprintf("%f", totalWarehouseStock))
+
+	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
+		productStoreTemp.Stock, err = product.GetProductQuantityBeforeOrEqualTo(before)
+		if err != nil {
+			return warehouseStocks, err
+		}
+		warehouseStocks["main_store"] = RoundTo8Decimals(productStoreTemp.Stock - totalWarehouseStock)
+	}
+
+	return warehouseStocks, nil
+}
+
 func (product *Product) SetWarehouseStock() error {
 	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
@@ -4509,42 +4630,42 @@ func (product *Product) SetWarehouseStock() error {
 			continue
 		}
 
-		sentQuantity, err := product.GetProductQuantityByTypeByWarehouseID("sent", warehouse.ID)
+		sentQuantity, err := product.GetProductQuantityByTypeByWarehouseID("sent", warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
 
-		receivedQuantity, err := product.GetProductQuantityByTypeByWarehouseID("received", warehouse.ID)
+		receivedQuantity, err := product.GetProductQuantityByTypeByWarehouseID("received", warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
 
-		salesQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales", &warehouse.ID)
+		salesQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales", &warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
 
-		salesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales_return", &warehouse.ID)
+		salesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("sales_return", &warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
 
-		purchaseQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase", &warehouse.ID)
+		purchaseQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase", &warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
 
-		purchaseReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase_return", &warehouse.ID)
+		purchaseReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("purchase_return", &warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
 
-		quotationSalesQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales", &warehouse.ID)
+		quotationSalesQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales", &warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
 
-		quotationSalesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales_return", &warehouse.ID)
+		quotationSalesReturnQuantity, err := product.GetProductQuantityByTypeWarehouseID("quotation_sales_return", &warehouse.ID, nil)
 		if err != nil {
 			return err
 		}
@@ -4600,7 +4721,12 @@ type WarehouseProductStats struct {
 	Quantity float64 `json:"quantity" bson:"quantity"`
 }
 
-func (product *Product) GetProductQuantityByTypeWarehouseID(typeStr string, warehouseID *primitive.ObjectID) (float64, error) {
+func (product *Product) GetProductQuantityByTypeWarehouseID(typeStr string, warehouseID *primitive.ObjectID, before *time.Time) (float64, error) {
+	store, err := FindStoreByID(product.StoreID, bson.M{"code": 1})
+	if err != nil {
+		return 0, err
+	}
+
 	collectionName := ""
 	if typeStr == "sales" {
 		collectionName = "product_sales_history"
@@ -4627,18 +4753,49 @@ func (product *Product) GetProductQuantityByTypeWarehouseID(typeStr string, ware
 		"warehouse_id": warehouseID,
 	}
 
+	if before != nil {
+		filter["date"] = bson.M{"$lt": before}
+	}
+
+	MBDICutoffDate := time.Date(2025, 7, 28, 0, 0, 0, 0, time.UTC)
+
+	/*if store.Code == "MDBI" && typeStr == "quotation_sales" && typeStr == "quotation_sales_return" {
+		filter["date"] = bson.M{"$lt": MBDICutoffDate}
+	}*/
+
 	if warehouseID == nil {
 		filter["warehouse_id"] = bson.M{"$eq": nil}
+	}
+
+	effectiveQuantityExpr := bson.M{
+		"$cond": bson.M{
+			"if": bson.M{
+				"$and": []interface{}{
+					bson.M{"$eq": []interface{}{store.Code, "MBDI"}},
+					bson.M{"$or": []bson.M{
+						{"reference_type": "quotation_invoice"},
+						{"reference_type": "quotation_sales_return"},
+					}},
+					bson.M{"$lt": []interface{}{"$date", MBDICutoffDate}},
+				},
+			},
+			"then": 0,
+			"else": bson.M{"$sum": "$quantity"},
+		},
 	}
 
 	pipeline := []bson.M{
 		bson.M{
 			"$match": filter,
 		},
+		{"$project": bson.M{
+			"effective_quantity": effectiveQuantityExpr,
+		}},
 		bson.M{
 			"$group": bson.M{
-				"_id":      nil,
-				"quantity": bson.M{"$sum": "$quantity"},
+				"_id": nil,
+				//"quantity": bson.M{"$sum": "$quantity"},
+				"quantity": bson.M{"$sum": "$effective_quantity"},
 			},
 		},
 	}
@@ -4664,7 +4821,7 @@ type ProductQtyStats struct {
 	Quantity float64 `json:"quantity" bson:"quantity"`
 }
 
-func (product *Product) GetProductQuantityByTypeByWarehouseID(typeStr string, warehouseID primitive.ObjectID) (float64, error) {
+func (product *Product) GetProductQuantityByTypeByWarehouseID(typeStr string, warehouseID primitive.ObjectID, before *time.Time) (float64, error) {
 	collectionName := "product_stocktransfer_history"
 	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -4674,6 +4831,10 @@ func (product *Product) GetProductQuantityByTypeByWarehouseID(typeStr string, wa
 
 	filter := map[string]interface{}{
 		"product_id": product.ID,
+	}
+
+	if before != nil {
+		filter["date"] = bson.M{"$lt": before}
 	}
 
 	if typeStr == "sent" {
