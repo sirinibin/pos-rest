@@ -105,6 +105,91 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// SalesSummary : handler for GET /sales/summary
+func SalesSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildSalesCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find orders:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "order")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of orders:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var salesStats models.SalesStats
+
+	salesStats, err = store.GetSalesStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = salesStats
+	json.NewEncoder(w).Encode(response)
+
+	/*
+		response.Meta = map[string]interface{}{}
+
+		response.Meta["total_sales"] = salesStats.NetTotal
+		response.Meta["net_profit"] = salesStats.NetProfit
+		response.Meta["net_loss"] = salesStats.NetLoss
+		response.Meta["vat_price"] = salesStats.VatPrice
+		response.Meta["discount"] = salesStats.Discount
+		response.Meta["cash_discount"] = salesStats.CashDiscount
+		response.Meta["commission"] = salesStats.Commission
+		response.Meta["commission_paid_by_bank"] = salesStats.CommissionPaidByBank
+		response.Meta["commission_paid_by_cash"] = salesStats.CommissionPaidByCash
+		response.Meta["shipping_handling_fees"] = salesStats.ShippingOrHandlingFees
+		response.Meta["paid_sales"] = salesStats.PaidSales
+		response.Meta["unpaid_sales"] = salesStats.UnPaidSales
+		response.Meta["cash_sales"] = salesStats.CashSales
+		response.Meta["bank_account_sales"] = salesStats.BankAccountSales
+		response.Meta["return_count"] = salesStats.ReturnCount
+		response.Meta["return_amount"] = salesStats.ReturnAmount
+		response.Meta["purchase_sales"] = salesStats.PurchaseSales
+		response.Meta["sales_return_sales"] = salesStats.SalesReturnSales
+
+		if len(orders) == 0 {
+			response.Result = []interface{}{}
+		} else {
+			response.Result = orders
+		}*/
+
+}
+
 // CreateOrder : handler for POST /order
 func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

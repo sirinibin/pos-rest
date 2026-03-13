@@ -215,7 +215,7 @@ func main() {
 	//Stock Transfer History
 	router.HandleFunc("/v1/stock-transfer/history", controller.ListStockTransferHistory).Methods("GET")
 
-	//Order
+	//Order or sales
 	router.HandleFunc("/v1/order", controller.CreateOrder).Methods("POST")
 	router.HandleFunc("/v1/order/calculate-net-total", controller.CalculateSalesNetTotal).Methods("POST")
 	router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
@@ -224,6 +224,7 @@ func main() {
 	router.HandleFunc("/v1/previous-order/{id}", controller.ViewPreviousOrder).Methods("GET")
 	router.HandleFunc("/v1/next-order/{id}", controller.ViewNextOrder).Methods("GET")
 	router.HandleFunc("/v1/last-order", controller.ViewLastOrder).Methods("GET")
+	router.HandleFunc("/v1/sales/summary", controller.SalesSummary).Methods("GET")
 
 	//SalesHistory
 	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")

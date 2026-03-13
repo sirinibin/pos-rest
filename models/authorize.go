@@ -99,7 +99,7 @@ func (auth *AuthorizeRequest) Authenticate() (errs map[string]string) {
 			errs["password"] = "E-mail or Password is wrong"
 		}
 
-		if user.Deleted {
+		if user != nil && user.Deleted {
 			errs["password"] = "E-mail or Password is wrong"
 		}
 	}

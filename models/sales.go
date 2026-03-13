@@ -829,25 +829,25 @@ func (order *Order) FindTotalQuantity() {
 }
 
 type SalesStats struct {
-	ID                     *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal               float64             `json:"net_total" bson:"net_total"`
-	NetProfit              float64             `json:"net_profit" bson:"net_profit"`
-	NetLoss                float64             `json:"net_loss" bson:"net_loss"`
-	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
-	Discount               float64             `json:"discount" bson:"discount"`
-	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
-	PaidSales              float64             `json:"paid_sales" bson:"paid_sales"`
-	UnPaidSales            float64             `json:"unpaid_sales" bson:"unpaid_sales"`
-	CashSales              float64             `json:"cash_sales" bson:"cash_sales"`
-	BankAccountSales       float64             `json:"bank_account_sales" bson:"bank_account_sales"`
-	CashDiscount           float64             `json:"cash_discount" bson:"cash_discount"`
-	ReturnCount            int64               `json:"return_count" bson:"return_count"`
-	ReturnAmount           float64             `json:"return_amount" bson:"return_amount"`
-	PurchaseSales          float64             `json:"purchase_sales" bson:"purchase_sales"`
-	SalesReturnSales       float64             `json:"sales_return_sales" bson:"sales_return_sales"`
-	Commission             float64             `json:"commission" bson:"commission"`
-	CommissionPaidByCash   float64             `json:"commission_paid_by_cash" bson:"commission_paid_by_cash"`
-	CommissionPaidByBank   float64             `json:"commission_paid_by_bank" bson:"commission_paid_by_bank"`
+	//ID                     *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal               float64 `json:"net_total" bson:"net_total"`
+	NetProfit              float64 `json:"net_profit" bson:"net_profit"`
+	NetLoss                float64 `json:"net_loss" bson:"net_loss"`
+	VatPrice               float64 `json:"vat_price" bson:"vat_price"`
+	Discount               float64 `json:"discount" bson:"discount"`
+	ShippingOrHandlingFees float64 `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	PaidSales              float64 `json:"paid_sales" bson:"paid_sales"`
+	UnPaidSales            float64 `json:"unpaid_sales" bson:"unpaid_sales"`
+	CashSales              float64 `json:"cash_sales" bson:"cash_sales"`
+	BankAccountSales       float64 `json:"bank_account_sales" bson:"bank_account_sales"`
+	CashDiscount           float64 `json:"cash_discount" bson:"cash_discount"`
+	ReturnCount            int64   `json:"return_count" bson:"return_count"`
+	ReturnAmount           float64 `json:"return_amount" bson:"return_amount"`
+	PurchaseSales          float64 `json:"purchase_sales" bson:"purchase_sales"`
+	SalesReturnSales       float64 `json:"sales_return_sales" bson:"sales_return_sales"`
+	Commission             float64 `json:"commission" bson:"commission"`
+	CommissionPaidByCash   float64 `json:"commission_paid_by_cash" bson:"commission_paid_by_cash"`
+	CommissionPaidByBank   float64 `json:"commission_paid_by_bank" bson:"commission_paid_by_bank"`
 }
 
 func (store *Store) GetSalesStats(filter map[string]interface{}) (stats SalesStats, err error) {
@@ -1638,6 +1638,492 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 	} //end for loop
 
 	return orders, criterias, nil
+}
+
+func (store *Store) BuildSalesCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
+	criterias = SearchCriterias{
+		Page:   1,
+		Size:   10,
+		SortBy: map[string]interface{}{},
+	}
+
+	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+
+	timeZoneOffset := 0.0
+	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[zatca.reporting_passed]"]
+	if ok && len(keys[0]) >= 1 {
+		value := keys[0]
+
+		if value == "reported" {
+			criterias.SearchBy["zatca.reporting_passed"] = true //ok
+		} else if value == "reporting_failed" {
+			//criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": false}
+		} else if value == "not_reported" { //ok
+			criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$eq": nil}
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": nil}
+		} else if value == "compliance_passed" {
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": true}
+		} else if value == "compliance_failed" {
+			criterias.SearchBy["zatca.compliance_passed"] = bson.M{"$eq": false} //pl
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	keys, ok = r.URL.Query()["search[code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[net_total]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_total"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["net_total"] = value
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[cash_discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["cash_discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["cash_discount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[commission_payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethodList := strings.Split(keys[0], ",")
+		if len(paymentMethodList) > 0 {
+			criterias.SearchBy["commission_payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[commission]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["commission"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["commission"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["discount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[total_payment_received]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["total_payment_received"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["total_payment_received"] = value
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[balance_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["balance_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["balance_amount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payments_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["payments_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["payments_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_amount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[net_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_profit"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_profit"] = float64(value)
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["loss"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["loss"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[net_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_loss"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_loss"] = float64(value)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[customer_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		customerIds := strings.Split(keys[0], ",")
+
+		objecIds := []*primitive.ObjectID{}
+
+		for _, id := range customerIds {
+			if id == "unknown_customer" || id == "" {
+				objecIds = append(objecIds, nil)
+				continue
+			}
+
+			customerID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return criterias, err
+			}
+			objecIds = append(objecIds, &customerID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_by]"]
+	if ok && len(keys[0]) >= 1 {
+
+		userIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range userIds {
+			userID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return criterias, err
+			}
+			objecIds = append(objecIds, userID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[status]"]
+	if ok && len(keys[0]) >= 1 {
+		statusList := strings.Split(keys[0], ",")
+		if len(statusList) > 0 {
+			criterias.SearchBy["status"] = bson.M{"$in": statusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_status]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentStatusList := strings.Split(keys[0], ",")
+		if len(paymentStatusList) > 0 {
+			criterias.SearchBy["payment_status"] = bson.M{"$in": paymentStatusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethodList := strings.Split(keys[0], ",")
+		if len(paymentMethodList) > 0 {
+			criterias.SearchBy["payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[delivered_by]"]
+	if ok && len(keys[0]) >= 1 {
+		deliveredByID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return criterias, err
+		}
+		criterias.SearchBy["delivered_by"] = deliveredByID
+	}
+
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return criterias, err
+		}
+		criterias.SearchBy["store_id"] = storeID
+	}
+
+	keys, ok = r.URL.Query()["limit"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Size, _ = strconv.Atoi(keys[0])
+	}
+	keys, ok = r.URL.Query()["page"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Page, _ = strconv.Atoi(keys[0])
+	}
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SortBy = GetSortByFields(keys[0])
+	}
+
+	keys, ok = r.URL.Query()["select"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Select = ParseSelectString(keys[0])
+	}
+
+	return criterias, nil
 }
 
 func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldOrder *Order) (errs map[string]string) {
