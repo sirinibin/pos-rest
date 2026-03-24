@@ -284,7 +284,10 @@ func UpdateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go capital.SetPostBalances()
+	go func() {
+		capital.SetPostBalances()
+		capitalOld.SetPostBalances()
+	}()
 
 	response.Status = true
 	response.Result = capital

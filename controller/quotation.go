@@ -371,7 +371,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go quotation.SetPostBalances()
-	go quotation.CreateProductsHistory(true)
+	go quotation.CreateProductsHistory(true, nil)
 
 	response.Status = true
 	response.Result = quotation
@@ -681,10 +681,13 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		quotation.ClearProductsHistory()
-		quotation.CreateProductsHistory(true)
+		quotation.CreateProductsHistory(true, quotationOld)
 	}()
 
-	go quotation.SetPostBalances()
+	go func() {
+		quotation.SetPostBalances()
+		quotationOld.SetPostBalances()
+	}()
 
 	/*go func() {
 		quotation.ClearProductsHistory()

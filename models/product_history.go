@@ -1046,7 +1046,7 @@ func (product *Product) GetHistoriesAfter(after *time.Time) (models []ProductHis
 	return models, nil
 }
 
-func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool) error {
+func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool, stockTransferOld *StockTransfer) error {
 	store, err := FindStoreByID(stockTransfer.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1130,7 +1130,12 @@ func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool)
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if stockTransferOld != nil {
+					product.AdjustStockInHistoryAfter(stockTransferOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -1193,7 +1198,12 @@ func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool)
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if stockTransferOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(stockTransferOld.Date)
+						}
+					}()
 				}
 			}
 		}
@@ -1201,7 +1211,7 @@ func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool)
 	return nil
 }
 
-func (order *Order) CreateProductsHistory(updateNextStocks bool) error {
+func (order *Order) CreateProductsHistory(updateNextStocks bool, orderOld *Order) error {
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1293,7 +1303,12 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool) error {
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if orderOld != nil {
+					product.AdjustStockInHistoryAfter(orderOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -1360,7 +1375,12 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool) error {
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if orderOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(orderOld.Date)
+						}
+					}()
 				}
 			}
 		}
@@ -1368,7 +1388,7 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool) error {
 	return nil
 }
 
-func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool) error {
+func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool, salesReturnOld *SalesReturn) error {
 	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1459,7 +1479,12 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool) err
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if salesReturnOld != nil {
+					product.AdjustStockInHistoryAfter(salesReturnOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -1526,7 +1551,12 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool) err
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if salesReturnOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(salesReturnOld.Date)
+						}
+					}()
 				}
 			}
 		}
@@ -1535,7 +1565,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool) err
 	return nil
 }
 
-func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool) error {
+func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool, purchaseOld *Purchase) error {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1622,7 +1652,12 @@ func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool) error {
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if purchaseOld != nil {
+					product.AdjustStockInHistoryAfter(purchaseOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -1687,7 +1722,12 @@ func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool) error {
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if purchaseOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(purchaseOld.Date)
+						}
+					}()
 				}
 			}
 		}
@@ -1696,7 +1736,7 @@ func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool) error {
 	return nil
 }
 
-func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks bool) error {
+func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks bool, purchaseReturnOld *PurchaseReturn) error {
 	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1785,7 +1825,12 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks boo
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if purchaseReturnOld != nil {
+					product.AdjustStockInHistoryAfter(purchaseReturnOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -1850,7 +1895,12 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks boo
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if purchaseReturnOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(purchaseReturnOld.Date)
+						}
+					}()
 				}
 			}
 		}
@@ -1858,7 +1908,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks boo
 	return nil
 }
 
-func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool) error {
+func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool, deliverynoteOld *DeliveryNote) error {
 	store, err := FindStoreByID(deliverynote.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -1931,7 +1981,12 @@ func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool) e
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if deliverynoteOld != nil {
+					product.AdjustStockInHistoryAfter(deliverynoteOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -1983,7 +2038,12 @@ func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool) e
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if deliverynoteOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(deliverynoteOld.Date)
+						}
+					}()
 				}
 			}
 		}
@@ -1992,7 +2052,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool) e
 	return nil
 }
 
-func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool) error {
+func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool, quotationOld *Quotation) error {
 	store, err := FindStoreByID(quotation.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -2099,7 +2159,12 @@ func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool) error {
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if quotationOld != nil {
+					product.AdjustStockInHistoryAfter(quotationOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -2174,7 +2239,12 @@ func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool) error {
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if quotationOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(quotationOld.Date)
+						}
+					}()
 				}
 			}
 		}
@@ -2183,7 +2253,7 @@ func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool) error {
 	return nil
 }
 
-func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNextStocks bool) error {
+func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNextStocks bool, quotationsalesReturnOld *QuotationSalesReturn) error {
 	store, err := FindStoreByID(quotationsalesReturn.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -2278,7 +2348,12 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNe
 		}
 
 		if updateNextStocks {
-			go product.AdjustStockInHistoryAfter(history.Date)
+			go func() {
+				product.AdjustStockInHistoryAfter(history.Date)
+				if quotationsalesReturnOld != nil {
+					product.AdjustStockInHistoryAfter(quotationsalesReturnOld.Date)
+				}
+			}()
 		}
 
 		if len(product.Set.Products) > 0 {
@@ -2349,7 +2424,12 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNe
 				}
 
 				if updateNextStocks {
-					go setProductObj.AdjustStockInHistoryAfter(history.Date)
+					go func() {
+						setProductObj.AdjustStockInHistoryAfter(history.Date)
+						if quotationsalesReturnOld != nil {
+							setProductObj.AdjustStockInHistoryAfter(quotationsalesReturnOld.Date)
+						}
+					}()
 				}
 			}
 		}

@@ -307,7 +307,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	go salesreturn.SetPostBalances()
 
-	go salesreturn.CreateProductsHistory(true)
+	go salesreturn.CreateProductsHistory(true, nil)
 
 	store.NotifyUsers("sales_return_updated")
 
@@ -552,11 +552,14 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	go salesreturn.SetProductsSalesReturnStats()
 	go salesreturnOld.SetProductsSalesReturnStats()
 
-	go salesreturn.SetPostBalances()
+	go func() {
+		salesreturn.SetPostBalances()
+		salesreturnOld.SetPostBalances()
+	}()
 
 	go func() {
 		salesreturn.ClearProductsHistory()
-		salesreturn.CreateProductsHistory(true)
+		salesreturn.CreateProductsHistory(true, salesreturnOld)
 	}()
 
 	store.NotifyUsers("sales_return_updated")

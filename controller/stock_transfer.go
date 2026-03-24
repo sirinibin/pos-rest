@@ -184,7 +184,7 @@ func CreateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		stocktransfer.SetProductsStock()
 		stocktransfer.SetProductsStockTransferStats()
 		stocktransfer.SetWarehouseStockTransferStats()
-		go stocktransfer.CreateProductsHistory(true)
+		go stocktransfer.CreateProductsHistory(true, nil)
 		store.NotifyUsers("stocktransfer_updated")
 	}()
 
@@ -322,7 +322,7 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		stocktransferOld.SetProductsStockTransferStats()
 		stocktransfer.SetWarehouseStockTransferStats()
 		stocktransfer.ClearProductsHistory()
-		stocktransfer.CreateProductsHistory(true)
+		stocktransfer.CreateProductsHistory(true, stocktransferOld)
 		store.NotifyUsers("stocktransfer_updated")
 	}()
 

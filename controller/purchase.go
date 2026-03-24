@@ -301,7 +301,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		go purchase.SetPostBalances()
 	}
 
-	go purchase.CreateProductsHistory(true)
+	go purchase.CreateProductsHistory(true, nil)
 
 	store.NotifyUsers("purchase_updated")
 	response.Status = true
@@ -541,12 +541,15 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
-		go purchase.SetPostBalances()
+		go func() {
+			purchase.SetPostBalances()
+			purchaseOld.SetPostBalances()
+		}()
 	}
 
 	go func() {
 		purchase.ClearProductsHistory()
-		purchase.CreateProductsHistory(true)
+		purchase.CreateProductsHistory(true, purchaseOld)
 	}()
 
 	store.NotifyUsers("purchase_updated")

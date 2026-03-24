@@ -425,7 +425,10 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go customerdeposit.SetPostBalances()
+	go func() {
+		customerdeposit.SetPostBalances()
+		customerdepositOld.SetPostBalances()
+	}()
 
 	store, _ = models.FindStoreByID(customerdeposit.StoreID, bson.M{})
 	store.NotifyUsers("receivable_updated")

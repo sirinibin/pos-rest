@@ -152,7 +152,7 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	go deliverynote.SetProductsDeliveryNoteStats()
 	go deliverynote.SetCustomerDeliveryNoteStats()
 
-	go deliverynote.CreateProductsHistory(true)
+	go deliverynote.CreateProductsHistory(true, nil)
 
 	response.Status = true
 	response.Result = deliverynote
@@ -278,7 +278,7 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		deliverynote.ClearProductsHistory()
-		deliverynote.CreateProductsHistory(true)
+		deliverynote.CreateProductsHistory(true, deliverynoteOld)
 	}()
 
 	deliverynote, err = store.FindDeliveryNoteByID(&deliverynote.ID, bson.M{})

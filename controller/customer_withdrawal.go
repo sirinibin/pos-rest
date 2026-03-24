@@ -423,7 +423,10 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go customerwithdrawal.SetPostBalances()
+	go func() {
+		customerwithdrawal.SetPostBalances()
+		customerwithdrawalOld.SetPostBalances()
+	}()
 
 	store, _ = models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
 	store.NotifyUsers("payable_updated")

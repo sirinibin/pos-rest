@@ -886,8 +886,8 @@ func ProcessDeliveryNotes() error {
 			}
 
 			//deliverynote.UpdateForeignLabelFields()
-			deliverynote.ClearProductsHistory()
-			deliverynote.CreateProductsHistory(false)
+			//deliverynote.ClearProductsHistory()
+			//deliverynote.CreateProductsHistory(false,nil)
 
 			//deliverynote.ClearProductsDeliveryNoteHistory()
 
