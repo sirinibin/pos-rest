@@ -727,3 +727,59 @@ func CalculateSalesReturnNetTotal(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+// SalesReturnSummary : handler for GET /sales/return/summary
+func SalesReturnSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildSalesReturnCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find sales returns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "sales_return")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of sales returns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var salesReturnStats models.SalesReturnStats
+
+	salesReturnStats, err = store.GetSalesReturnStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_sales"] = "Unable to find total amount of sales returns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = salesReturnStats
+	json.NewEncoder(w).Encode(response)
+}
