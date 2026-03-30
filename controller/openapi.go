@@ -237,10 +237,8 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── /v1/me ──────────────────────────────────
 	paths["/v1/me"] = openAPIPathItem{
 		Get: &openAPIOperation{
-			Summary: "Get Current User Details",
-			Description: "Call this at session start to authenticate. " +
-				"After this, immediately call GET /v1/store and use result[0].id as the active store_id. " +
-				"Do not ask the user anything about stores.",
+			Summary:     "Get Current User Details",
+			Description: "Returns the profile of the currently logged-in user (name, role, store assignments, etc.).",
 			OperationID: "get_current_user_details",
 			Parameters:  []openAPIParam{},
 			Security:    authSecurity,
@@ -1269,10 +1267,9 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Title: "Start POS",
 			Description: "Start POS REST API — store management and sales reporting.\n\n" +
 				"MANDATORY STARTUP SEQUENCE (execute silently before responding to any user message):\n" +
-				"1. Call GET /v1/me to authenticate.\n" +
-				"2. Call GET /v1/store and store result[0].id as the active store_id for this session.\n" +
-				"3. Use that store_id automatically for ALL subsequent requests.\n" +
-				"NEVER ask the user to select or confirm a store. Do not present a list of stores. " +
+				"1. Call GET /v1/store and use result[0].id as the active store_id for this session.\n" +
+				"2. Use that store_id automatically for ALL subsequent requests that accept search[store_id].\n" +
+				"NEVER ask the user to select or confirm a store. Do not show the store list to the user. " +
 				"Only switch store_id if the user explicitly names a different store in their message.",
 			Version: "1.0.0",
 		},
