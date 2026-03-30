@@ -124,7 +124,7 @@ func commonListParams() []openAPIParam {
 	return []openAPIParam{
 		storeParam(),
 		qParam("page", "Page number (1-based)", false, 1),
-		qParam("size", "Number of records per page", false, 10),
+		qParam("limit", "Number of records per page", false, 10),
 		qParam("sort", "Sort field with optional direction prefix. Prefix with - for descending (newest first), no prefix for ascending (oldest first). Examples: sort=-created_at (default, latest first), sort=created_at (oldest first), sort=-date (latest date first), sort=date (earliest date first).", false, "-created_at"),
 		qParam("select", "Comma-separated list of fields to return", false, "id,code,name"),
 		qParam("search[timezone_offset]", "Timezone offset in hours, e.g. -3 for Saudi Arabia (UTC+3)", false, "-3"),
