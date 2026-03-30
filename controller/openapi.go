@@ -116,8 +116,8 @@ func qParam(name, description string, required bool, example interface{}) openAP
 // Common query params shared by most list endpoints
 func storeParam() openAPIParam {
 	return qParam("search[store_id]",
-		"Filter by store. Use the store_id obtained from GET /v1/store result[0].id at session start. Never ask the user to choose a store.",
-		false, "61cf42e580e87d715a4cb9e6")
+		"Filter by store. Use the store_id obtained from GET /v1/store/list result[0].id at session start. Never ask the user to choose a store.",
+		false, nil)
 }
 
 func commonListParams() []openAPIParam {
@@ -327,14 +327,18 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		qParam("search[email]", "Filter by email (partial match, case-insensitive)", false, nil),
 	}
 	paths["/v1/store"] = openAPIPathItem{
+		Get:  listOp("store", "List / Search Stores", storeListParams...),
+		Post: createOp("store", "Create a new Store"),
+	}
+	paths["/v1/store/list"] = openAPIPathItem{
 		Get: func() *openAPIOperation {
-			op := listOp("store", "List / Search Stores", storeListParams...)
-			op.Description = "Call this immediately after GET /v1/me at session start. " +
-				"Silently store result[0].id as the active store_id for all subsequent requests. " +
-				"Do NOT show the store list to the user and do NOT ask them to choose a store."
+			op := listOp("store_list", "List Stores (slim)", storeListParams...)
+			op.Description = "Call this at session start. " +
+				"Returns id, name, name_in_arabic, code, branch_name, vat_no only. " +
+				"Silently use result[0].id as the active store_id for all subsequent requests. " +
+				"Do NOT show this list to the user and do NOT ask them to choose a store."
 			return op
 		}(),
-		Post: createOp("store", "Create a new Store"),
 	}
 	paths["/v1/store/{id}"] = openAPIPathItem{
 		Get:    viewOp("store", "View Store by ID"),
@@ -801,14 +805,14 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	paths["/v1/sales/summary"] = openAPIPathItem{
 		Get: &openAPIOperation{
 			Summary:     "Get Sales Summary / Statistics",
-			Description: "Returns aggregated sales stats: net total, profit, VAT, discounts, paid/unpaid, cash/bank. Always pass the store_id obtained from GET /v1/store result[0].id at session start. Never ask the user to choose a store.",
+			Description: "Returns aggregated sales stats: net total, profit, VAT, discounts, paid/unpaid, cash/bank. Always pass the store_id obtained from GET /v1/store/list result[0].id at session start. Never ask the user to choose a store.",
 			OperationID: "get_sales_summary",
 			Parameters: []openAPIParam{
 				{
 					Name:        "search[store_id]",
 					In:          "query",
 					Required:    false,
-					Description: "Store ID. Use result[0].id from GET /v1/store obtained at session start. Never ask the user to choose a store.",
+					Description: "Store ID. Use result[0].id from GET /v1/store/list obtained at session start. Never ask the user to choose a store.",
 					Schema:      map[string]interface{}{"type": "string"},
 				},
 				qParam("search[timezone_offset]", "Timezone offset. e.g. -3 for Saudi Arabia (UTC+3). Compute via JS: parseFloat(new Date().getTimezoneOffset()/60)", false, "-3"),
@@ -1267,7 +1271,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Title: "Start POS",
 			Description: "Start POS REST API — store management and sales reporting.\n\n" +
 				"MANDATORY STARTUP SEQUENCE (execute silently before responding to any user message):\n" +
-				"1. Call GET /v1/store and use result[0].id as the active store_id for this session.\n" +
+				"1. Call GET /v1/store/list and use result[0].id as the active store_id for this session.\n" +
 				"2. Use that store_id automatically for ALL subsequent requests that accept search[store_id].\n" +
 				"NEVER ask the user to select or confirm a store. Do not show the store list to the user. " +
 				"Only switch store_id if the user explicitly names a different store in their message.",
@@ -1345,7 +1349,7 @@ func buildFocusedSpec(baseURL string) openAPISpec {
 
 	allowedPaths := []string{
 		"/v1/me",
-		"/v1/store",
+		"/v1/store/list",
 		"/v1/sales/summary",
 		"/v1/order",
 		"/v1/order/{id}",
@@ -1467,7 +1471,7 @@ func itoa(n int) string {
 // Only read-only GET endpoints most useful for a sales/reporting assistant.
 var chatGPTAllowedPaths = []string{
 	"/v1/me",
-	"/v1/store",
+	"/v1/store/list",
 	"/v1/sales/summary",
 	"/v1/order",
 	"/v1/order/{id}",

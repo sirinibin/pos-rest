@@ -41,6 +41,9 @@ func main() {
 	//API Info
 	router.HandleFunc("/v1/info", controller.APIInfo).Methods("GET")
 
+	//OpenAPI Spec
+	router.HandleFunc("/v1/openapi.json", controller.ServeOpenAPISpec).Methods("GET")
+
 	// Register a new user account
 	router.HandleFunc("/v1/register", controller.Register).Methods("POST")
 
@@ -59,6 +62,7 @@ func main() {
 	//Store
 	router.HandleFunc("/v1/store", controller.CreateStore).Methods("POST")
 	router.HandleFunc("/v1/store", controller.ListStore).Methods("GET")
+	router.HandleFunc("/v1/store/list", controller.ListStoreList).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.ViewStore).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.UpdateStore).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
@@ -104,6 +108,7 @@ func main() {
 	router.HandleFunc("/v1/expense/code/{code}", controller.ViewExpenseByCode).Methods("GET")
 	router.HandleFunc("/v1/expense/{id}", controller.UpdateExpense).Methods("PUT")
 	router.HandleFunc("/v1/expense/{id}", controller.DeleteExpense).Methods("DELETE")
+	//router.HandleFunc("/v1/expense/summary", controller.ExpenseSummary).Methods("GET")
 
 	//CustomeDeposit
 	router.HandleFunc("/v1/customer-deposit", controller.CreateCustomerDeposit).Methods("POST")
@@ -192,6 +197,7 @@ func main() {
 	router.HandleFunc("/v1/quotation/{id}", controller.ViewQuotation).Methods("GET")
 	router.HandleFunc("/v1/quotation/{id}", controller.UpdateQuotation).Methods("PUT")
 	router.HandleFunc("/v1/quotation/{id}", controller.DeleteQuotation).Methods("DELETE")
+	//router.HandleFunc("/v1/quotation/summary", controller.QuotationSummary).Methods("GET")
 
 	//DeliveryHistory
 	router.HandleFunc("/v1/delivery-note/history", controller.ListDeliveryNoteHistory).Methods("GET")
@@ -201,6 +207,7 @@ func main() {
 	router.HandleFunc("/v1/delivery-note", controller.ListDeliveryNote).Methods("GET")
 	router.HandleFunc("/v1/delivery-note/{id}", controller.ViewDeliveryNote).Methods("GET")
 	router.HandleFunc("/v1/delivery-note/{id}", controller.UpdateDeliveryNote).Methods("PUT")
+	//	router.HandleFunc("/v1/delivery-note/summary", controller.DeliveryNoteSummary).Methods("GET")
 
 	//StockTransfer
 	router.HandleFunc("/v1/stock-transfer", controller.CreateStockTransfer).Methods("POST")
@@ -245,6 +252,7 @@ func main() {
 	router.HandleFunc("/v1/sales-return/calculate-net-total", controller.CalculateSalesReturnNetTotal).Methods("POST")
 	router.HandleFunc("/v1/sales-return/{id}", controller.UpdateSalesReturn).Methods("PUT")
 	router.HandleFunc("/v1/sales-return", controller.ListSalesReturn).Methods("GET")
+	router.HandleFunc("/v1/sales-return/summary", controller.SalesReturnSummary).Methods("GET")
 	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
 
 	//QuotationSalesReturn
@@ -253,6 +261,7 @@ func main() {
 	router.HandleFunc("/v1/quotation-sales-return/{id}", controller.UpdateQuotationSalesReturn).Methods("PUT")
 	router.HandleFunc("/v1/quotation-sales-return", controller.ListQuotationSalesReturn).Methods("GET")
 	router.HandleFunc("/v1/quotation-sales-return/{id}", controller.ViewQuotationSalesReturn).Methods("GET")
+	//router.HandleFunc("/v1/quotation-sales-return/summary", controller.QuotationSalesReturnSummary).Methods("GET")
 	/*
 		router.HandleFunc("/v1/order/{id}", controller.UpdateOrder).Methods("PUT")
 		router.HandleFunc("/v1/order/{id}", controller.DeleteOrder).Methods("DELETE")
@@ -276,6 +285,7 @@ func main() {
 	router.HandleFunc("/v1/purchase/{id}", controller.ViewPurchase).Methods("GET")
 	router.HandleFunc("/v1/purchase/{id}", controller.UpdatePurchase).Methods("PUT")
 	router.HandleFunc("/v1/purchase/{id}", controller.DeletePurchase).Methods("DELETE")
+	//router.HandleFunc("/v1/purchase/summary", controller.PurchaseSummary).Methods("GET")
 
 	//PurchaseCashDiscount
 	router.HandleFunc("/v1/purchase-cash-discount", controller.CreatePurchaseCashDiscount).Methods("POST")
@@ -290,7 +300,7 @@ func main() {
 	router.HandleFunc("/v1/purchase-return/{id}", controller.ViewPurchaseReturn).Methods("GET")
 	router.HandleFunc("/v1/purchase-return/{id}", controller.UpdatePurchaseReturn).Methods("PUT")
 	router.HandleFunc("/v1/purchase-return/{id}", controller.DeletePurchaseReturn).Methods("DELETE")
-
+	//router.HandleFunc("/v1/purchase-return/summary", controller.PurchaseReturnSummary).Methods("GET")
 	//SalesCashDiscount
 	router.HandleFunc("/v1/sales-cash-discount", controller.CreateSalesCashDiscount).Methods("POST")
 	router.HandleFunc("/v1/sales-cash-discount", controller.ListSalesCashDiscount).Methods("GET")

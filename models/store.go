@@ -96,6 +96,16 @@ type Store struct {
 	Settings                               StoreSettings         `bson:"settings" json:"settings"`
 }
 
+// StoreList is a slim projection of Store returned by GET /v1/store/list.
+type StoreList struct {
+	ID           primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Name         string             `json:"name,omitempty" bson:"name,omitempty"`
+	NameInArabic string             `json:"name_in_arabic,omitempty" bson:"name_in_arabic,omitempty"`
+	Code         string             `json:"code" bson:"code"`
+	BranchName   string             `json:"branch_name" bson:"branch_name"`
+	VATNo        string             `json:"vat_no" bson:"vat_no"`
+}
+
 type StoreSettings struct {
 	ShowAddressInInvoiceFooter             bool            `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
 	DefaultQuotationValidityDays           *int64          `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`

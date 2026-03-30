@@ -57,6 +57,60 @@ func ListStore(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// ListStoreList : handler for GET /v1/store/list
+// Returns a slim projection: id, name, name_in_arabic, code, branch_name, vat_no
+func ListStoreList(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	stores, criterias, err := models.SearchStore(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find stores:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+	response.TotalCount, err = models.GetTotalCount(criterias.SearchBy, "store")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of stores:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if len(stores) == 0 {
+		response.Result = []interface{}{}
+	} else {
+		slim := make([]models.StoreList, len(stores))
+		for i, s := range stores {
+			slim[i] = models.StoreList{
+				ID:           s.ID,
+				Name:         s.Name,
+				NameInArabic: s.NameInArabic,
+				Code:         s.Code,
+				BranchName:   s.BranchName,
+				VATNo:        s.VATNo,
+			}
+		}
+		response.Result = slim
+	}
+
+	json.NewEncoder(w).Encode(response)
+}
+
 // CreateStore : handler for POST /store
 func CreateStore(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
