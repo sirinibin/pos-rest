@@ -116,8 +116,8 @@ func qParam(name, description string, required bool, example interface{}) openAP
 // Common query params shared by most list endpoints
 func storeParam() openAPIParam {
 	return qParam("search[store_id]",
-		"Filter by store. Use the store_id obtained from GET /v1/store/list result[0].id at session start. Never ask the user to choose a store.",
-		false, nil)
+		"REQUIRED. Use the store_id obtained from GET /v1/store/list result[0].id at session start. Always pass this — many fields (stock, prices) are stored per-store and will return wrong results without it.",
+		true, nil)
 }
 
 func commonListParams() []openAPIParam {
@@ -402,26 +402,44 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	paths["/v1/product"] = openAPIPathItem{
 		Get: listOp("product", "List / Search Products",
 			searchNameParam(), searchCodeParam(),
-			qParam("search[search_text]", "General text search across name/code/barcode", false, nil),
+			qParam("search[search_text]", "General text search across name/code/barcode/item_code", false, nil),
 			qParam("search[item_code]", "Filter by item code (exact)", false, nil),
 			qParam("search[bar_code]", "Filter by barcode value", false, nil),
 			qParam("search[ean_12]", "Filter by EAN-12 barcode", false, nil),
 			qParam("search[part_number]", "Filter by part number", false, nil),
 			qParam("search[category_id]", "Filter by product category ID", false, nil),
 			qParam("search[brand_id]", "Filter by product brand ID", false, nil),
-			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
-			qParam("search[stock]", "Filter by stock quantity", false, nil),
+			qParam("search[warehouse_code]", "Filter by warehouse code (requires search[store_id])", false, nil),
+			qParam("search[stock]", "Filter by stock quantity (requires search[store_id]). Supports operators: >10, <5, =0", false, nil),
 			qParam("search[rack]", "Filter by rack/shelf location", false, nil),
-			qParam("search[retail_unit_price]", "Filter by retail unit price", false, nil),
-			qParam("search[wholesale_unit_price]", "Filter by wholesale unit price", false, nil),
-			qParam("search[is_set]", "Filter set products (1=yes)", false, nil),
+			qParam("search[retail_unit_price]", "Filter by retail unit price (requires search[store_id])", false, nil),
+			qParam("search[wholesale_unit_price]", "Filter by wholesale unit price (requires search[store_id])", false, nil),
+			qParam("search[retail_unit_profit]", "Filter by retail unit profit (requires search[store_id])", false, nil),
+			qParam("search[wholesale_unit_profit]", "Filter by wholesale unit profit (requires search[store_id])", false, nil),
+			qParam("search[purchase_unit_price]", "Filter by purchase unit price", false, nil),
+			qParam("search[sales_count]", "Filter by number of times sold (requires search[store_id])", false, nil),
+			qParam("search[sales_quantity]", "Filter by total quantity sold (requires search[store_id])", false, nil),
+			qParam("search[purchase_count]", "Filter by number of purchases", false, nil),
+			qParam("search[purchase_quantity]", "Filter by total quantity purchased", false, nil),
+			qParam("search[is_set]", "Filter set/bundle products: 1=sets only, 0=non-sets", false, nil),
 			qParam("search[deleted]", "Pass 1 to include deleted records", false, nil),
-			qParam("search[stats]", "Pass 1 to include stock stats in response", false, nil),
+			qParam("search[ids]", "Filter by comma-separated list of product IDs", false, nil),
+			qParam("search[stats]", "Pass 1 to include per-store stock/sales stats in response (requires search[store_id])", false, nil),
 		),
 		Post: createOp("product", "Create Product"),
 	}
 	paths["/v1/product/{id}"] = openAPIPathItem{
-		Get:    viewOp("product", "View Product"),
+		Get: &openAPIOperation{
+			Summary:     "View Product by ID",
+			OperationID: "view_product",
+			Parameters: []openAPIParam{
+				idPathParam(),
+				storeParam(),
+				qParam("search[warehouse_code]", "Return stock for a specific warehouse (requires search[store_id])", false, nil),
+			},
+			Security:  authSecurity,
+			Responses: okResp(),
+		},
 		Put:    updateOp("product", "Update Product"),
 		Delete: deleteOp("product", "Delete Product"),
 	}
@@ -429,27 +447,38 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		Get: &openAPIOperation{
 			Summary:     "View Product by item code",
 			OperationID: "view_product_by_code",
-			Parameters:  []openAPIParam{pathParam("code", "Product item code")},
-			Security:    authSecurity,
-			Responses:   okResp(),
+			Parameters: []openAPIParam{
+				pathParam("code", "Product item code"),
+				storeParam(),
+				qParam("search[warehouse_code]", "Return stock for a specific warehouse", false, nil),
+			},
+			Security:  authSecurity,
+			Responses: okResp(),
 		},
 	}
 	paths["/v1/product/barcode/{barcode}"] = openAPIPathItem{
 		Get: &openAPIOperation{
 			Summary:     "View Product by barcode",
 			OperationID: "view_product_by_barcode",
-			Parameters:  []openAPIParam{pathParam("barcode", "Product barcode")},
-			Security:    authSecurity,
-			Responses:   okResp(),
+			Parameters: []openAPIParam{
+				pathParam("barcode", "Product barcode"),
+				storeParam(),
+				qParam("search[warehouse_code]", "Return stock for a specific warehouse", false, nil),
+			},
+			Security:  authSecurity,
+			Responses: okResp(),
 		},
 	}
 	paths["/v1/product/history/{id}"] = openAPIPathItem{
 		Get: &openAPIOperation{
 			Summary:     "List Product change history",
 			OperationID: "list_product_history",
-			Parameters:  []openAPIParam{pathParam("id", "Product ID")},
-			Security:    authSecurity,
-			Responses:   okResp(),
+			Parameters: []openAPIParam{
+				pathParam("id", "Product ID"),
+				storeParam(),
+			},
+			Security:  authSecurity,
+			Responses: okResp(),
 		},
 	}
 	paths["/v1/product/restore/{id}"] = openAPIPathItem{
