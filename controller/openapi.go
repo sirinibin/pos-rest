@@ -126,7 +126,7 @@ func commonListParams() []openAPIParam {
 		qParam("page", "Page number (1-based)", false, 1),
 		qParam("limit", "Number of records per page", false, 10),
 		qParam("sort", "Sort field with optional direction prefix. Prefix with - for descending (newest first), no prefix for ascending (oldest first). Examples: sort=-created_at (default, latest first), sort=created_at (oldest first), sort=-date (latest date first), sort=date (earliest date first).", false, "-created_at"),
-		qParam("select", "Comma-separated list of fields to return", false, "id,code,name"),
+		qParam("select", "Comma-separated list of fields to include in the response. Omit to return all fields. See each endpoint description for the list of available fields.", false, "id,code,name"),
 		qParam("search[timezone_offset]", "Timezone offset in hours, e.g. -3 for Saudi Arabia (UTC+3)", false, "-3"),
 		qParam("search[date_str]", "Single date filter. Format: Jan 02 2006", false, "Mar 29 2026"),
 		qParam("search[from_date]", "Start of date range. Format: Jan 02 2006", false, nil),
@@ -178,6 +178,18 @@ func listOp(resource, summary string, extra ...openAPIParam) *openAPIOperation {
 		Security:    authSecurity,
 		Responses:   okResp(),
 	}
+}
+
+// listOpDesc is like listOp but adds a description visible in the spec (use for field lists, operator notes, etc.).
+func listOpDesc(resource, summary, description string, extra ...openAPIParam) *openAPIOperation {
+	op := listOp(resource, summary, extra...)
+	op.Description = description
+	return op
+}
+
+// numParam builds a numeric filter query param that documents > < = comparison operator support.
+func numParam(name, description string) openAPIParam {
+	return qParam(name, description+". Supports comparison operators: prefix with > (greater than), < (less than), or = (exact). Examples: >100, <50, =0", false, nil)
 }
 
 // createOp builds a POST create operation.
@@ -359,14 +371,15 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Customer ─────────────────────────────────
 	paths["/v1/customer"] = openAPIPathItem{
-		Get: listOp("customer", "List / Search Customers",
+		Get: listOpDesc("customer", "List / Search Customers",
+			"Available select fields: id,name,name_in_arabic,code,phone,phone2,vat_no,credit_balance,credit_limit,sales_count,sales_amount,sales_balance_amount,sales_not_paid_count,remarks,deleted. Numeric filter params support > < = operators.",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[email]", "Filter by email", false, nil),
 			qParam("search[phone]", "Filter by phone", false, nil),
 			qParam("search[vat_no]", "Filter by VAT number", false, nil),
 			qParam("search[query]", "General text search across name/code/email/phone", false, nil),
-			qParam("search[credit_balance]", "Filter by credit balance amount", false, nil),
-			qParam("search[credit_limit]", "Filter by credit limit", false, nil),
+			numParam("search[credit_balance]", "Filter by credit balance amount"),
+			numParam("search[credit_limit]", "Filter by credit limit"),
 			qParam("search[deleted]", "Pass 1 to include deleted records", false, nil),
 		),
 		Post: createOp("customer", "Create Customer"),
@@ -400,7 +413,8 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Product ──────────────────────────────────
 	paths["/v1/product"] = openAPIPathItem{
-		Get: listOp("product", "List / Search Products",
+		Get: listOpDesc("product", "List / Search Products",
+			"Available select fields: id,name,name_in_arabic,code,barcode,ean_12,part_number,category_id,category_name,brand_id,brand_name,unit,rack,stock,retail_unit_price,wholesale_unit_price,purchase_unit_price,retail_unit_profit,wholesale_unit_profit,sales_count,sales_quantity,purchase_count,purchase_quantity,is_set,deleted,product_warehouses,warehouse_stocks,images. Numeric filter params support > < = operators (e.g. search[stock]=>10).",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[search_text]", "General text search across name/code/barcode/item_code", false, nil),
 			qParam("search[item_code]", "Filter by item code (exact)", false, nil),
@@ -410,17 +424,17 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			qParam("search[category_id]", "Filter by product category ID", false, nil),
 			qParam("search[brand_id]", "Filter by product brand ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code (requires search[store_id])", false, nil),
-			qParam("search[stock]", "Filter by stock quantity (requires search[store_id]). Supports operators: >10, <5, =0", false, nil),
+			numParam("search[stock]", "Filter by stock quantity (requires search[store_id])"),
 			qParam("search[rack]", "Filter by rack/shelf location", false, nil),
-			qParam("search[retail_unit_price]", "Filter by retail unit price (requires search[store_id])", false, nil),
-			qParam("search[wholesale_unit_price]", "Filter by wholesale unit price (requires search[store_id])", false, nil),
-			qParam("search[retail_unit_profit]", "Filter by retail unit profit (requires search[store_id])", false, nil),
-			qParam("search[wholesale_unit_profit]", "Filter by wholesale unit profit (requires search[store_id])", false, nil),
-			qParam("search[purchase_unit_price]", "Filter by purchase unit price", false, nil),
-			qParam("search[sales_count]", "Filter by number of times sold (requires search[store_id])", false, nil),
-			qParam("search[sales_quantity]", "Filter by total quantity sold (requires search[store_id])", false, nil),
-			qParam("search[purchase_count]", "Filter by number of purchases", false, nil),
-			qParam("search[purchase_quantity]", "Filter by total quantity purchased", false, nil),
+			numParam("search[retail_unit_price]", "Filter by retail unit price (requires search[store_id])"),
+			numParam("search[wholesale_unit_price]", "Filter by wholesale unit price (requires search[store_id])"),
+			numParam("search[retail_unit_profit]", "Filter by retail unit profit (requires search[store_id])"),
+			numParam("search[wholesale_unit_profit]", "Filter by wholesale unit profit (requires search[store_id])"),
+			numParam("search[purchase_unit_price]", "Filter by purchase unit price"),
+			numParam("search[sales_count]", "Filter by number of times sold (requires search[store_id])"),
+			numParam("search[sales_quantity]", "Filter by total quantity sold (requires search[store_id])"),
+			numParam("search[purchase_count]", "Filter by number of purchases"),
+			numParam("search[purchase_quantity]", "Filter by total quantity purchased"),
 			qParam("search[is_set]", "Filter set/bundle products: 1=sets only, 0=non-sets", false, nil),
 			qParam("search[deleted]", "Pass 1 to include deleted records", false, nil),
 			qParam("search[ids]", "Filter by comma-separated list of product IDs", false, nil),
@@ -670,7 +684,8 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Quotation ────────────────────────────────
 	paths["/v1/quotation"] = openAPIPathItem{
-		Get: listOp("quotation", "List / Search Quotations",
+		Get: listOpDesc("quotation", "List / Search Quotations",
+			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,type,profit,loss,invoice_count,invoice_net_total,remarks,created_at. Numeric filter params support > < = operators.",
 			searchCodeParam(),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[status]", "Filter by status", false, nil),
@@ -779,18 +794,19 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Sales (Orders) ───────────────────────────
 	paths["/v1/order"] = openAPIPathItem{
-		Get: listOp("order", "List / Search Sales Orders",
+		Get: listOpDesc("order", "List / Search Sales Orders",
+			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,cash_sales,bank_account_sales,return_count,return_amount,remarks,created_at. Numeric filter params support > < = operators (e.g. search[net_total]=>1000).",
 			searchCodeParam(),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
 			qParam("search[payment_method]", "Filter by payment method: cash, bank_account", false, nil),
 			qParam("search[payment_methods]", "Filter by multiple payment methods (comma-separated)", false, nil),
 			qParam("search[status]", "Filter by order status", false, nil),
-			qParam("search[net_total]", "Filter by net total amount", false, nil),
-			qParam("search[balance_amount]", "Filter by outstanding balance", false, nil),
-			qParam("search[discount]", "Filter by discount amount", false, nil),
-			qParam("search[return_count]", "Filter by number of returns", false, nil),
-			qParam("search[return_amount]", "Filter by return amount", false, nil),
+			numParam("search[net_total]", "Filter by net total amount"),
+			numParam("search[balance_amount]", "Filter by outstanding balance"),
+			numParam("search[discount]", "Filter by discount amount"),
+			numParam("search[return_count]", "Filter by number of returns"),
+			numParam("search[return_amount]", "Filter by return amount"),
 			qParam("search[delivered_by]", "Filter by delivered-by user ID", false, nil),
 			qParam("search[stats]", "Pass 1 to include sales stats in response", false, nil),
 			qParam("search[zatca.reporting_passed]", "ZATCA status: reported, reporting_failed, not_reported, compliance_passed, compliance_failed", false, nil),
@@ -908,7 +924,8 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Sales Return ─────────────────────────────
 	paths["/v1/sales-return"] = openAPIPathItem{
-		Get: listOp("sales_return", "List / Search Sales Returns",
+		Get: listOpDesc("sales_return", "List / Search Sales Returns",
+			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,cash_sales_return,bank_account_sales_return,remarks,created_at. Numeric filter params support > < = operators.",
 			searchCodeParam(),
 			qParam("search[order_id]", "Filter by original sales order ID", false, nil),
 			qParam("search[order_code]", "Filter by original sales order code", false, nil),
@@ -916,9 +933,9 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
 			qParam("search[payment_methods]", "Filter by payment methods (comma-separated)", false, nil),
 			qParam("search[status]", "Filter by return status", false, nil),
-			qParam("search[net_total]", "Filter by net total amount", false, nil),
-			qParam("search[balance_amount]", "Filter by outstanding balance", false, nil),
-			qParam("search[discount]", "Filter by discount amount", false, nil),
+			numParam("search[net_total]", "Filter by net total amount"),
+			numParam("search[balance_amount]", "Filter by outstanding balance"),
+			numParam("search[discount]", "Filter by discount amount"),
 			qParam("search[received_by]", "Filter by received-by user ID", false, nil),
 			qParam("search[zatca.reporting_passed]", "ZATCA reporting status filter", false, nil),
 		),
@@ -956,7 +973,8 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Quotation Sales Return ────────────────────
 	paths["/v1/quotation-sales-return"] = openAPIPathItem{
-		Get: listOp("quotation_sales_return", "List / Search Quotation Sales Returns",
+		Get: listOpDesc("quotation_sales_return", "List / Search Quotation Sales Returns",
+			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,created_at. Numeric filter params support > < = operators.",
 			searchCodeParam(),
 			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
 			qParam("search[quotation_code]", "Filter by quotation code", false, nil),
@@ -964,9 +982,9 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
 			qParam("search[payment_methods]", "Filter by payment methods (comma-separated)", false, nil),
 			qParam("search[status]", "Filter by return status", false, nil),
-			qParam("search[net_total]", "Filter by net total amount", false, nil),
-			qParam("search[balance_amount]", "Filter by outstanding balance", false, nil),
-			qParam("search[discount]", "Filter by discount amount", false, nil),
+			numParam("search[net_total]", "Filter by net total amount"),
+			numParam("search[balance_amount]", "Filter by outstanding balance"),
+			numParam("search[discount]", "Filter by discount amount"),
 			qParam("search[zatca.reporting_passed]", "ZATCA reporting status filter", false, nil),
 		),
 		Post: createOp("quotation_sales_return", "Create Quotation Sales Return"),
@@ -987,14 +1005,15 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Vendor ───────────────────────────────────
 	paths["/v1/vendor"] = openAPIPathItem{
-		Get: listOp("vendor", "List / Search Vendors",
+		Get: listOpDesc("vendor", "List / Search Vendors",
+			"Available select fields: id,name,name_in_arabic,code,phone,phone2,email,vat_no,credit_balance,credit_limit,purchase_count,purchase_amount,purchase_balance_amount,purchase_not_paid_count,deleted. Numeric filter params support > < = operators.",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[email]", "Filter by email", false, nil),
 			qParam("search[phone]", "Filter by phone", false, nil),
 			qParam("search[vat_no]", "Filter by VAT number", false, nil),
 			qParam("search[query]", "General text search across name/code/email/phone", false, nil),
-			qParam("search[credit_balance]", "Filter by credit balance amount", false, nil),
-			qParam("search[credit_limit]", "Filter by credit limit", false, nil),
+			numParam("search[credit_balance]", "Filter by credit balance amount"),
+			numParam("search[credit_limit]", "Filter by credit limit"),
 			qParam("search[deleted]", "Pass 1 to include deleted records", false, nil),
 		),
 		Post: createOp("vendor", "Create Vendor"),
@@ -1025,16 +1044,17 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Purchase ─────────────────────────────────
 	paths["/v1/purchase"] = openAPIPathItem{
-		Get: listOp("purchase", "List / Search Purchases",
+		Get: listOpDesc("purchase", "List / Search Purchases",
+			"Available select fields: id,code,date,vendor_id,vendor_name,vendor_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,purchase_quantity,remarks,created_at. Numeric filter params support > < = operators.",
 			searchCodeParam(),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[vendor_invoice_no]", "Filter by vendor invoice number", false, nil),
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
 			qParam("search[payment_methods]", "Filter by payment methods (comma-separated)", false, nil),
 			qParam("search[status]", "Filter by purchase status", false, nil),
-			qParam("search[net_total]", "Filter by net total amount", false, nil),
-			qParam("search[balance_amount]", "Filter by outstanding balance", false, nil),
-			qParam("search[discount]", "Filter by discount amount", false, nil),
+			numParam("search[net_total]", "Filter by net total amount"),
+			numParam("search[balance_amount]", "Filter by outstanding balance"),
+			numParam("search[discount]", "Filter by discount amount"),
 			qParam("search[delivered_by]", "Filter by delivered-by user ID", false, nil),
 			qParam("search[stats]", "Pass 1 to include purchase stats in response", false, nil),
 		),
@@ -1069,7 +1089,8 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Purchase Return ──────────────────────────
 	paths["/v1/purchase-return"] = openAPIPathItem{
-		Get: listOp("purchase_return", "List / Search Purchase Returns",
+		Get: listOpDesc("purchase_return", "List / Search Purchase Returns",
+			"Available select fields: id,code,date,vendor_id,vendor_name,vendor_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,purchase_return_quantity,remarks,created_at. Numeric filter params support > < = operators.",
 			searchCodeParam(),
 			qParam("search[purchase_id]", "Filter by original purchase ID", false, nil),
 			qParam("search[purchase_code]", "Filter by original purchase code", false, nil),
@@ -1078,9 +1099,9 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
 			qParam("search[payment_methods]", "Filter by payment methods (comma-separated)", false, nil),
 			qParam("search[status]", "Filter by return status", false, nil),
-			qParam("search[net_total]", "Filter by net total amount", false, nil),
-			qParam("search[balance_amount]", "Filter by outstanding balance", false, nil),
-			qParam("search[discount]", "Filter by discount amount", false, nil),
+			numParam("search[net_total]", "Filter by net total amount"),
+			numParam("search[balance_amount]", "Filter by outstanding balance"),
+			numParam("search[discount]", "Filter by discount amount"),
 		),
 		Post: createOp("purchase_return", "Create Purchase Return"),
 	}
@@ -1233,11 +1254,12 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Accounts ──────────────────────────────────
 	paths["/v1/account"] = openAPIPathItem{
-		Get: listOp("account", "List Accounts",
+		Get: listOpDesc("account", "List Accounts",
+			"Available select fields: id,name,name_arabic,number,type,balance,open,reference_id,reference_model,debit_total,credit_total. Numeric filter (balance) supports > < = operators.",
 			searchNameParam(),
 			qParam("search[type]", "Filter by account type (e.g. asset, liability, equity, income, expense)", false, nil),
 			qParam("search[number]", "Filter by account number", false, nil),
-			qParam("search[balance]", "Filter by balance amount", false, nil),
+			numParam("search[balance]", "Filter by balance amount"),
 			qParam("search[open]", "Filter open accounts (1=yes)", false, nil),
 			qParam("search[reference_code]", "Filter by reference code", false, nil),
 			qParam("search[reference_model]", "Filter by reference model type", false, nil),
@@ -1256,14 +1278,15 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Postings ─────────────────────────────────
 	paths["/v1/posting"] = openAPIPathItem{
-		Get: listOp("posting", "List Postings",
+		Get: listOpDesc("posting", "List Postings",
+			"Available select fields: id,date,reference_code,reference_id,reference_model,debit,credit,balance,debit_total,credit_total. Numeric filter params (debit, credit, balance) support > < = operators.",
 			qParam("search[account_id]", "Filter by account ID", false, nil),
 			qParam("search[account_name]", "Filter by account name", false, nil),
 			qParam("search[account_number]", "Filter by account number", false, nil),
 			qParam("search[debit_account_id]", "Filter by debit account ID", false, nil),
 			qParam("search[credit_account_id]", "Filter by credit account ID", false, nil),
-			qParam("search[debit]", "Filter by debit amount", false, nil),
-			qParam("search[credit]", "Filter by credit amount", false, nil),
+			numParam("search[debit]", "Filter by debit amount"),
+			numParam("search[credit]", "Filter by credit amount"),
 			qParam("search[reference_code]", "Filter by reference code", false, nil),
 			qParam("search[reference_id]", "Filter by reference document ID", false, nil),
 			qParam("search[reference_model]", "Filter by reference model type (e.g. order, purchase)", false, nil),
