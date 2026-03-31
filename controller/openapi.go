@@ -3445,7 +3445,10 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 				"1. Call GET /v1/store/list and use result[0].id as the active store_id for this session.\n" +
 				"2. Use that store_id automatically for ALL subsequent requests that accept search[store_id].\n" +
 				"NEVER ask the user to select or confirm a store. Do not show the store list to the user. " +
-				"Only switch store_id if the user explicitly names a different store in their message.",
+				"Only switch store_id if the user explicitly names a different store in their message.\n\n" +
+				"FOR ALL LIST ENDPOINTS: the response contains result.meta with aggregated totals " +
+				"(net_total, profit, VAT, paid, unpaid, balance, etc.) across ALL matching records, " +
+				"not just the current page. Always use result.meta for any summary or totals request.",
 			Version: "1.0.0",
 		},
 		Servers: []openAPIServer{
@@ -3549,22 +3552,22 @@ func buildFocusedSpec(baseURL string) openAPISpec {
 		//"/v1/quotation/history/summary",
 		// Quotation Sales Return
 		"/v1/quotation-sales-return",
-		"/v1/quotation-sales-return/summary",
+		//"/v1/quotation-sales-return/summary",
 		"/v1/quotation-sales-return/history",
-		"/v1/quotation-sales-return/history/summary",
+		//"/v1/quotation-sales-return/history/summary",
 		// Products
 		"/v1/product",
-		"/v1/product/summary",
+		//"/v1/product/summary",
 		"/v1/product/history/{id}",
-		"/v1/product/history/summary/{id}",
+		//"/v1/product/history/summary/{id}",
 		// Customers & Vendors
 		"/v1/customer",
-		"/v1/customer/summary",
+		//"/v1/customer/summary",
 		"/v1/vendor",
-		"/v1/vendor/summary",
+		//"/v1/vendor/summary",
 		// Expense
 		"/v1/expense",
-		"/v1/expense/summary",
+		//"/v1/expense/summary",
 		// Accounting
 		"/v1/account",
 		"/v1/posting",
