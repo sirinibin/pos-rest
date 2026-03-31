@@ -398,6 +398,15 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Responses:   okResp(),
 		},
 	}
+	paths["/v1/customer/summary"] = openAPIPathItem{
+		Get: listOp("customer_summary", "Get Customer Summary",
+			searchNameParam(), searchCodeParam(),
+			qParam("search[email]", "Filter by email", false, nil),
+			qParam("search[phone]", "Filter by phone", false, nil),
+			qParam("search[vat_no]", "Filter by VAT number", false, nil),
+			qParam("search[deleted]", "Pass 1 to include deleted records", false, nil),
+		),
+	}
 	paths["/v1/customer/vat_no/name"] = openAPIPathItem{
 		Get: &openAPIOperation{
 			Summary:     "Find Customer by VAT number or name",
@@ -569,6 +578,14 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Summary: "View Expense by code", OperationID: "view_expense_by_code",
 			Parameters: []openAPIParam{pathParam("code", "Expense code")}, Security: authSecurity, Responses: okResp(),
 		},
+	}
+	paths["/v1/expense/summary"] = openAPIPathItem{
+		Get: listOp("expense_summary", "Get Expense Summary",
+			searchCodeParam(),
+			qParam("search[category_id]", "Filter by expense category ID", false, nil),
+			qParam("search[payment_method]", "Filter by payment method", false, nil),
+			qParam("search[created_by]", "Filter by creator user ID", false, nil),
+		),
 	}
 
 	// ── Customer Deposit ─────────────────────────
@@ -1112,6 +1129,15 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Parameters: []openAPIParam{pathParam("id", "Vendor ID to restore")}, Security: authSecurity, Responses: okResp(),
 		},
 	}
+	paths["/v1/vendor/summary"] = openAPIPathItem{
+		Get: listOp("vendor_summary", "Get Vendor Summary",
+			searchNameParam(), searchCodeParam(),
+			qParam("search[email]", "Filter by email", false, nil),
+			qParam("search[phone]", "Filter by phone", false, nil),
+			qParam("search[vat_no]", "Filter by VAT number", false, nil),
+			qParam("search[deleted]", "Pass 1 to include deleted records", false, nil),
+		),
+	}
 	paths["/v1/vendor/vat_no/name"] = openAPIPathItem{
 		Get: &openAPIOperation{
 			Summary:     "Find Vendor by VAT number or name",
@@ -1563,7 +1589,12 @@ func buildFocusedSpec(baseURL string) openAPISpec {
 		"/v1/product/history/summary/{id}",
 		// Customers & Vendors
 		"/v1/customer",
+		"/v1/customer/summary",
 		"/v1/vendor",
+		"/v1/vendor/summary",
+		// Expense
+		"/v1/expense",
+		"/v1/expense/summary",
 		// Accounting
 		"/v1/account",
 		"/v1/posting",
