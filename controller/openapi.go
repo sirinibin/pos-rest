@@ -414,7 +414,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Product ──────────────────────────────────
 	paths["/v1/product"] = openAPIPathItem{
 		Get: listOpDesc("product", "List / Search Products",
-			"Available select fields: id,name,name_in_arabic,code,barcode,ean_12,part_number,category_id,category_name,brand_id,brand_name,unit,rack,stock,retail_unit_price,wholesale_unit_price,purchase_unit_price,retail_unit_profit,wholesale_unit_profit,sales_count,sales_quantity,purchase_count,purchase_quantity,is_set,deleted,product_warehouses,warehouse_stocks,images. Numeric filter params support > < = operators (e.g. search[stock]=>10).",
+			"Fields: id,name,code,barcode,stock,retail_unit_price,wholesale_unit_price,purchase_unit_price,retail_unit_profit,wholesale_unit_profit,sales_count,purchase_count,is_set,deleted,images. Numeric params support > < = (e.g. search[stock]=>10).",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[search_text]", "General text search across name/code/barcode/item_code", false, nil),
 			qParam("search[item_code]", "Filter by item code (exact)", false, nil),
@@ -795,7 +795,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Sales (Orders) ───────────────────────────
 	paths["/v1/order"] = openAPIPathItem{
 		Get: listOpDesc("order", "List / Search Sales Orders",
-			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,cash_sales,bank_account_sales,return_count,return_amount,remarks,created_at. Numeric filter params support > < = operators (e.g. search[net_total]=>1000).",
+			"Fields: id,code,date,customer_name,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,cash_sales,bank_account_sales,return_count,return_amount,created_at. Numeric params support > < = (e.g. search[net_total]=>1000).",
 			searchCodeParam(),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
