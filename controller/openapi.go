@@ -424,7 +424,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Customer ─────────────────────────────────
 	paths["/v1/customer"] = openAPIPathItem{
 		Get: withExample(listOpDesc("customer", "List / Search Customers",
-			"Available select fields: id,name,name_in_arabic,code,phone,phone2,vat_no,credit_balance,credit_limit,sales_count,sales_amount,sales_balance_amount,sales_not_paid_count,remarks,deleted. Numeric filter params support > < = operators. The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by name, code, phone, vat_no, deleted. Supports numeric comparison (> < =) on credit_balance, credit_limit, sales_count, sales_amount. Response includes a meta object with aggregated totals across all matching records.",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[email]", "Filter by email", false, nil),
 			qParam("search[phone]", "Filter by phone", false, nil),
@@ -601,7 +601,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Product ──────────────────────────────────
 	paths["/v1/product"] = openAPIPathItem{
 		Get: withExample(listOpDesc("product", "List / Search Products",
-			"Fields: id,name,code,barcode,stock,retail_unit_price,wholesale_unit_price,purchase_unit_price,retail_unit_profit,wholesale_unit_profit,sales_count,purchase_count,is_set,deleted,images. Numeric params support > < = (e.g. search[stock]=>10). The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by name, code, barcode, category_id, deleted. Supports numeric comparison (> < =) on stock, retail_unit_price, wholesale_unit_price, profit. Response includes a meta object with aggregated totals across all matching records.",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[search_text]", "General text search across name/code/barcode/item_code", false, nil),
 			qParam("search[item_code]", "Filter by item code (exact)", false, nil),
@@ -1182,7 +1182,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Quotation ────────────────────────────────
 	paths["/v1/quotation"] = openAPIPathItem{
 		Get: withExample(listOpDesc("quotation", "List / Search Quotations",
-			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,type,profit,loss,invoice_count,invoice_net_total,remarks,created_at. Numeric filter params support > < = operators. The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by date, customer_id, type (quotation or invoice), status. Supports numeric comparison (> < =) on net_total, profit. Response includes a meta object with aggregated totals across all matching records.",
 			searchCodeParam(),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[status]", "Filter by status", false, nil),
@@ -1625,7 +1625,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Sales (Orders) ───────────────────────────
 	paths["/v1/order"] = openAPIPathItem{
 		Get: withExample(listOpDesc("order", "List / Search Sales Orders",
-			"Fields: id,code,date,customer_name,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,cash_sales,bank_account_sales,return_count,return_amount,created_at. Numeric params support > < = (e.g. search[net_total]=>1000). The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by date, customer_id, payment_status, payment_methods, status. Supports numeric comparison (> < =) on net_total, balance_amount, profit. Response includes a meta object with aggregated totals across all matching records.",
 			searchCodeParam(),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
@@ -2006,7 +2006,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Sales Return ─────────────────────────────────────────────
 	paths["/v1/sales-return"] = openAPIPathItem{
 		Get: withExample(listOpDesc("sales_return", "List / Search Sales Returns",
-			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,cash_sales_return,bank_account_sales_return,remarks,created_at. Numeric filter params support > < = operators. The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by date, customer_id, order_id, payment_status. Supports numeric comparison (> < =) on net_total, balance_amount, profit. Response includes a meta object with aggregated totals across all matching records.",
 			searchCodeParam(),
 			qParam("search[order_id]", "Filter by original sales order ID", false, nil),
 			qParam("search[order_code]", "Filter by original sales order code", false, nil),
@@ -2258,7 +2258,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Quotation Sales Return ────────────────────────────────────────────
 	paths["/v1/quotation-sales-return"] = openAPIPathItem{
 		Get: withExample(listOpDesc("quotation_sales_return", "List / Search Quotation Sales Returns",
-			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,created_at. Numeric filter params support > < = operators. The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by date, customer_id, quotation_id, payment_status. Supports numeric comparison (> < =) on net_total, balance_amount, profit. Response includes a meta object with aggregated totals across all matching records.",
 			searchCodeParam(),
 			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
 			qParam("search[quotation_code]", "Filter by quotation code", false, nil),
@@ -2507,7 +2507,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Vendor ─────────────────────────────────────────────
 	paths["/v1/vendor"] = openAPIPathItem{
 		Get: withExample(listOpDesc("vendor", "List / Search Vendors",
-			"Available select fields: id,name,name_in_arabic,code,phone,phone2,email,vat_no,credit_balance,credit_limit,purchase_count,purchase_amount,purchase_balance_amount,purchase_not_paid_count,deleted. Numeric filter params support > < = operators. The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by name, code, phone, vat_no, deleted. Supports numeric comparison (> < =) on credit_balance, purchase_count, purchase_amount. Response includes a meta object with aggregated totals across all matching records.",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[email]", "Filter by email", false, nil),
 			qParam("search[phone]", "Filter by phone", false, nil),
@@ -2645,7 +2645,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Purchase ─────────────────────────────────
 	paths["/v1/purchase"] = openAPIPathItem{
 		Get: withExample(listOpDesc("purchase", "List / Search Purchases",
-			"Available select fields: id,code,date,vendor_id,vendor_name,vendor_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,purchase_quantity,remarks,created_at. Numeric filter params support > < = operators. The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by date, vendor_id, payment_status. Supports numeric comparison (> < =) on net_total, balance_amount. Response includes a meta object with aggregated totals across all matching records.",
 			searchCodeParam(),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[vendor_invoice_no]", "Filter by vendor invoice number", false, nil),
@@ -2958,7 +2958,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	// ── Purchase Return ────────────────────────────────────────────
 	paths["/v1/purchase-return"] = openAPIPathItem{
 		Get: withExample(listOpDesc("purchase_return", "List / Search Purchase Returns",
-			"Available select fields: id,code,date,vendor_id,vendor_name,vendor_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,purchase_return_quantity,remarks,created_at. Numeric filter params support > < = operators. The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
+			"Filter by date, vendor_id, purchase_id, payment_status. Supports numeric comparison (> < =) on net_total, balance_amount. Response includes a meta object with aggregated totals across all matching records.",
 			searchCodeParam(),
 			qParam("search[purchase_id]", "Filter by original purchase ID", false, nil),
 			qParam("search[purchase_code]", "Filter by original purchase code", false, nil),
