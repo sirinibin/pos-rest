@@ -73,7 +73,8 @@ type openAPIRequestBody struct {
 }
 
 type openAPIMediaType struct {
-	Schema map[string]interface{} `json:"schema"`
+	Schema  map[string]interface{} `json:"schema,omitempty"`
+	Example interface{}            `json:"example,omitempty"`
 }
 
 type openAPIResponse struct {
@@ -162,6 +163,25 @@ func okResp() map[string]openAPIResponse {
 		"500": {Description: "Server error"},
 	}
 }
+
+// okRespWithExample returns a 200/401/500 response map with a sample response body.
+func okRespWithExample(example interface{}) map[string]openAPIResponse {
+	return map[string]openAPIResponse{
+		"200": {Description: "Success", Content: map[string]openAPIMediaType{
+			"application/json": {Example: example},
+		}},
+		"401": {Description: "Unauthorized — invalid or missing access token"},
+		"500": {Description: "Server error"},
+	}
+}
+
+// withExample wraps any operation and attaches a sample 200 response body example.
+func withExample(op *openAPIOperation, example interface{}) *openAPIOperation {
+	op.Responses = okRespWithExample(example)
+	return op
+}
+
+
 
 // ──────────────────────────────────────────────
 // CRUD builder helpers
@@ -253,34 +273,28 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			OperationID: "get_current_user_details",
 			Parameters:  []openAPIParam{},
 			Security:    authSecurity,
-			Responses: map[string]openAPIResponse{
-				"200": {
-					Description: "Authenticated user profile",
-					Content: map[string]openAPIMediaType{
-						"application/json": {
-							Schema: map[string]interface{}{
-								"type": "object",
-								"properties": map[string]interface{}{
-									"result": map[string]interface{}{
-										"type": "object",
-										"properties": map[string]interface{}{
-											"role": map[string]interface{}{
-												"type":        "string",
-												"description": "User role: Admin or Staff",
-											},
-											"store_ids": map[string]interface{}{
-												"type":  "array",
-												"items": map[string]interface{}{"type": "string"},
-											},
-										},
-									},
-								},
-							},
-						},
+			Responses: okRespWithExample(map[string]interface{}{
+				"status": true,
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"id": "61fe8ce6a31c68a2a0ce3a28",
+					"name": "Sirin k",
+					"email": "sirinibin2006@gmail.com",
+					"mob": "9633977699",
+					"admin": true,
+					"role": "Admin",
+					"online": true,
+					"store_ids": []interface{}{
+						"67fea10a97457210a52a5eab",
 					},
+					"store_names": []interface{}{
+						"MAABDI Trading Est - Jouhara",
+					},
+					"connected_computers": 2,
+					"created_at": "2022-02-05T14:42:46.087Z",
+					"updated_at": "2025-04-15T18:16:09.768Z",
 				},
-				"401": {Description: "Unauthorized"},
-			},
+			}),
 		},
 	}
 
@@ -348,6 +362,44 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 				"Returns id, name, name_in_arabic, code, branch_name, vat_no only. " +
 				"Silently use result[0].id as the active store_id for all subsequent requests. " +
 				"Do NOT show this list to the user and do NOT ask them to choose a store."
+			op.Responses = okRespWithExample(map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 2,
+					"select": map[string]interface{}{
+						"id": 1,
+						"name": 1,
+						"code": 1,
+						"branch_name": 1,
+						"vat_no": 1,
+						"country_code": 1,
+						"country_name": 1,
+					},
+					"search_by": map[string]interface{}{
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+					},
+				},
+				"total_count": 16,
+				"result": []interface{}{
+					map[string]interface{}{
+						"id": "61fe9179a31c68a2a0ce3a2b",
+						"name": "GULF UNION OZONE",
+						"code": "GUOJ",
+						"branch_name": "UMLUJ",
+						"vat_no": "399999999900003",
+					},
+					map[string]interface{}{
+						"id": "65d079eee327423a24deb105",
+						"name": "Store2",
+						"code": "Str2",
+						"branch_name": "",
+						"vat_no": "123",
+					},
+				},
+			})
 			return op
 		}(),
 	}
@@ -422,7 +474,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Product ──────────────────────────────────
 	paths["/v1/product"] = openAPIPathItem{
-		Get: listOpDesc("product", "List / Search Products",
+		Get: withExample(listOpDesc("product", "List / Search Products",
 			"Fields: id,name,code,barcode,stock,retail_unit_price,wholesale_unit_price,purchase_unit_price,retail_unit_profit,wholesale_unit_profit,sales_count,purchase_count,is_set,deleted,images. Numeric params support > < = (e.g. search[stock]=>10).",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[search_text]", "General text search across name/code/barcode/item_code", false, nil),
@@ -449,8 +501,101 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			qParam("search[ids]", "Filter by comma-separated list of product IDs", false, nil),
 			qParam("search[stats]", "Pass 1 to include per-store stock/sales stats in response (requires search[store_id])", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"select": map[string]interface{}{
+						"id": 1,
+						"name": 1,
+						"item_code": 1,
+						"unit": 1,
+						"product_stores": 1,
+						"deleted": 1,
+					},
+					"search_by": map[string]interface{}{
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+					},
+				},
+				"total_count": 2503,
+				"result": []interface{}{
+					map[string]interface{}{
+						"id": "684064ac42999a68cb049541",
+						"name": "PIPE 27NO. (13MM) 5/8 USA-27",
+						"name_in_arabic": "لي بارد",
+						"item_code": "00121/DA8504",
+						"ean_12": "100000000002",
+						"part_number": "00121/DA8504/SUC 6241",
+						"unit": "Meter(s)",
+						"product_stores": map[string]interface{}{
+							"680f6c53e32076f2003a8934": map[string]interface{}{
+								"purchase_unit_price": 10,
+								"retail_unit_price": 200,
+								"retail_unit_price_with_vat": 230,
+								"stock": -1,
+								"sales_count": 1,
+								"sales": 230,
+								"sales_profit": 190,
+							},
+						},
+						"images": []interface{}{},
+						"deleted": false,
+						"is_set": true,
+						"category_name": []interface{}{},
+					},
+				},
+				"meta": map[string]interface{}{
+					"purchase": 0,
+					"purchase_return": 0,
+					"purchase_stock_value": 0,
+					"retail_stock_value": 0,
+					"sales": 0,
+					"sales_profit": 0,
+					"sales_return": 0,
+					"sales_return_profit": 0,
+					"stock": 0,
+					"wholesale_stock_value": 0,
+				},
+			}),
 		Post: createOp("product", "Create Product"),
 	}
+	paths["/v1/product/summary"] = openAPIPathItem{
+		Get: withExample(listOp("product_summary", "Get Product Summary",
+			searchNameParam(), searchCodeParam(),
+			qParam("search[category_id]", "Filter by category ID", false, nil),
+			qParam("search[store_id]", "Filter by store ID", false, nil),
+			qParam("search[deleted]", "Pass 1 to include deleted", false, nil),
+		), map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+					},
+				},
+				"total_count": 2503,
+				"result": map[string]interface{}{
+					"id": nil,
+					"stock": -13,
+					"retail_stock_value": -192,
+					"wholesale_stock_value": -202,
+					"purchase_stock_value": -11,
+					"sales": 1791.11,
+					"sales_profit": 1179.53,
+					"sales_return": 23,
+					"sales_return_profit": 13,
+					"purchase": 316.25,
+					"purchase_return": 0,
+				},
+			}),
+	}
+
 	paths["/v1/product/{id}"] = openAPIPathItem{
 		Get: &openAPIOperation{
 			Summary:     "View Product by ID",
@@ -501,9 +646,128 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 				storeParam(),
 			},
 			Security:  authSecurity,
-			Responses: okResp(),
+			Responses: okRespWithExample(map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 1,
+				"result": []interface{}{
+					map[string]interface{}{
+						"id": "69cc2916924653819c67a82d",
+						"date": "2026-03-31T20:05:35.072Z",
+						"store_id": "680f6c53e32076f2003a8934",
+						"product_id": "684064ac42999a68cb049541",
+						"reference_type": "sales",
+						"reference_id": "69cc2916924653819c67a81f",
+						"reference_code": "S-INV-20260331-005",
+						"stock": -1,
+						"quantity": 1,
+						"purchase_unit_price": 10,
+						"unit_price": 200,
+						"unit": "Meter(s)",
+						"price": 200,
+						"net_price": 230,
+						"profit": 190,
+						"loss": 0,
+						"vat_percent": 15,
+						"vat_price": 30,
+						"unit_price_with_vat": 230,
+						"created_at": "2026-03-31T20:05:42.114Z",
+					},
+				},
+				"meta": map[string]interface{}{
+					"total_sales": 230,
+					"total_sales_profit": 190,
+					"total_sales_loss": 0,
+					"total_sales_vat": 30,
+					"total_purchase": 0,
+					"total_purchase_profit": 0,
+					"total_purchase_loss": 0,
+					"total_purchase_vat": 0,
+					"total_purchase_return": 0,
+					"total_purchase_return_profit": 0,
+					"total_purchase_return_loss": 0,
+					"total_purchase_return_vat": 0,
+					"total_sales_return": 0,
+					"total_sales_return_profit": 0,
+					"total_sales_return_loss": 0,
+					"total_sales_return_vat": 0,
+					"total_quotation": 0,
+					"total_quotation_profit": 0,
+					"total_quotation_loss": 0,
+					"total_quotation_vat": 0,
+					"total_delivery_note_quantity": 0,
+				},
+			}),
 		},
 	}
+	paths["/v1/product/history/summary/{id}"] = openAPIPathItem{
+		Get: &openAPIOperation{
+			Summary:     "Get Product History Summary",
+			OperationID: "get_product_history_summary",
+			Parameters: []openAPIParam{
+				pathParam("id", "Product ID"),
+				storeParam(),
+			},
+			Security:  authSecurity,
+			Responses: okRespWithExample(map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 1,
+				"result": map[string]interface{}{
+					"total_sales": 230,
+					"total_sales_profit": 190,
+					"total_sales_loss": 0,
+					"total_sales_vat": 30,
+					"total_sale_return": 0,
+					"total_sales_return_profit": 0,
+					"total_sales_return_loss": 0,
+					"total_sales_return_vat": 0,
+					"total_purchase": 0,
+					"total_purchase_profit": 0,
+					"total_purchase_loss": 0,
+					"total_purchase_vat": 0,
+					"total_purchase_return": 0,
+					"total_purchase_return_profit": 0,
+					"total_purchase_return_loss": 0,
+					"total_purchase_return_vat": 0,
+					"total_quotation": 0,
+					"total_quotation_profit": 0,
+					"total_quotation_loss": 0,
+					"total_quotation_vat": 0,
+					"total_quotation_sales": 0,
+					"total_quotation_sales_profit": 0,
+					"total_quotation_sales_loss": 0,
+					"total_quotation_sales_vat": 0,
+					"total_quotation_sales_return": 0,
+					"total_quotation_sales_return_profit": 0,
+					"total_quotation_sales_return_loss": 0,
+					"total_quotation_sales_return_vat": 0,
+					"total_delivery_note_quantity": 0,
+				},
+			}),
+		},
+	}
+
 	paths["/v1/product/restore/{id}"] = openAPIPathItem{
 		Post: &openAPIOperation{
 			Summary:     "Restore deleted Product",
@@ -733,7 +997,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		},
 	}
 	paths["/v1/quotation/summary"] = openAPIPathItem{
-		Get: listOp("quotation_summary", "Get Quotation Summary",
+		Get: withExample(listOp("quotation_summary", "Get Quotation Summary",
 			searchCodeParam(),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[type]", "Filter by quotation type", false, nil),
@@ -742,15 +1006,66 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			numParam("search[net_total]", "Filter by net total"),
 			numParam("search[discount]", "Filter by discount"),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"date": map[string]interface{}{
+							"$gte": "2026-02-28T21:00:00Z",
+							"$lte": "2026-03-11T20:59:59Z",
+						},
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"net_total": 0,
+					"net_profit": 0,
+					"loss": 0,
+				},
+			}),
 	}
 	paths["/v1/quotation/sales/summary"] = openAPIPathItem{
-		Get: listOp("quotation_sales_summary", "Get Quotation Sales Summary",
+		Get: withExample(listOp("quotation_sales_summary", "Get Quotation Sales Summary",
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[type]", "Filter by quotation type", false, nil),
 			qParam("search[payment_status]", "Filter by payment status", false, nil),
 			qParam("search[status]", "Filter by status", false, nil),
 			searchCodeParam(),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+				},
+				"total_count": 3,
+				"result": map[string]interface{}{
+					"invoice_net_total": 34.5,
+					"invoice_net_profit": 23,
+					"invoice_net_loss": 0,
+					"invoice_vat_price": 0,
+					"invoice_discount": 0,
+					"invoice_hipping_handling_fees": 0,
+					"invoice_paid_sales": 34.5,
+					"invoice_unpaid_sales": 0,
+					"invoice_cash_sales": 0,
+					"invoice_bank_account_sales": 34.5,
+					"invoice_cash_discount": 0,
+					"invoice_sales_return_sales": 0,
+				},
+			}),
 	}
 	paths["/v1/quotation/history"] = openAPIPathItem{
 		Get: listOp("quotation_history", "List Quotation History",
@@ -768,12 +1083,34 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		),
 	}
 	paths["/v1/quotation/history/summary"] = openAPIPathItem{
-		Get: listOp("quotation_history_summary", "Get Quotation History Summary",
+		Get: withExample(listOp("quotation_history_summary", "Get Quotation History Summary",
 			qParam("search[product_id]", "REQUIRED — Product ID to get history summary for", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[type]", "Filter by quotation type", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"total_quotation": 0,
+					"total_profit": 0,
+					"total_loss": 0,
+					"total_vat": 0,
+					"total_quantity": 0,
+				},
+			}),
 	}
 
 	// ── Delivery Note ────────────────────────────────────────────
@@ -914,46 +1251,48 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 				qParam("search[zatca.reporting_passed]", "ZATCA status filter", false, nil),
 			},
 			Security: authSecurity,
-			Responses: map[string]openAPIResponse{
-				"200": {
-					Description: "Sales statistics",
-					Content: map[string]openAPIMediaType{
-						"application/json": {
-							Schema: map[string]interface{}{
-								"type": "object",
-								"properties": map[string]interface{}{
-									"status": map[string]interface{}{"type": "boolean"},
-									"result": map[string]interface{}{
-										"type": "object",
-										"properties": map[string]interface{}{
-											"net_total":              map[string]interface{}{"type": "number"},
-											"net_profit":             map[string]interface{}{"type": "number"},
-											"net_loss":               map[string]interface{}{"type": "number"},
-											"vat_price":              map[string]interface{}{"type": "number"},
-											"discount":               map[string]interface{}{"type": "number"},
-											"cash_discount":          map[string]interface{}{"type": "number"},
-											"paid_sales":             map[string]interface{}{"type": "number"},
-											"unpaid_sales":           map[string]interface{}{"type": "number"},
-											"cash_sales":             map[string]interface{}{"type": "number"},
-											"bank_account_sales":     map[string]interface{}{"type": "number"},
-											"return_count":           map[string]interface{}{"type": "integer"},
-											"return_amount":          map[string]interface{}{"type": "number"},
-											"commission":             map[string]interface{}{"type": "number"},
-											"shipping_handling_fees": map[string]interface{}{"type": "number"},
-										},
-									},
-									"total_count": map[string]interface{}{"type": "integer"},
-								},
-							},
+			Responses: okRespWithExample(map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"date": map[string]interface{}{
+							"$gte": "2026-02-28T21:00:00Z",
+							"$lte": "2026-03-11T20:59:59Z",
 						},
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+						"store_id": "680f6c53e32076f2003a8934",
 					},
 				},
-				"401": {Description: "Unauthorized"},
-			},
+				"total_count": 4,
+				"result": map[string]interface{}{
+					"net_total": 1240.85,
+					"net_profit": 976.52,
+					"net_loss": 0,
+					"vat_price": 161.85,
+					"discount": 0,
+					"shipping_handling_fees": 0,
+					"paid_sales": 1167.25,
+					"unpaid_sales": 73.6,
+					"cash_sales": 14,
+					"bank_account_sales": 1153.25,
+					"cash_discount": 0,
+					"return_count": 0,
+					"return_amount": 0,
+					"purchase_sales": 0,
+					"sales_return_sales": 0,
+					"commission": 0,
+					"commission_paid_by_cash": 0,
+					"commission_paid_by_bank": 0,
+				},
+			}),
 		},
 	}
 	paths["/v1/sales/history"] = openAPIPathItem{
-		Get: listOp("sales_history", "List Sales History",
+		Get: withExample(listOp("sales_history", "List Sales History",
 			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[order_id]", "Filter by sales order ID", false, nil),
@@ -968,14 +1307,83 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			qParam("search[profit]", "Filter by profit", false, nil),
 			qParam("search[loss]", "Filter by loss", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 1,
+				"result": []interface{}{
+					map[string]interface{}{
+						"id": "69cc2916924653819c67a821",
+						"date": "2026-03-31T20:05:35.072Z",
+						"store_id": "680f6c53e32076f2003a8934",
+						"store_name": "Ghali Jabr Musleh Noimi Al-Ma'bady Trading Establishment",
+						"product_id": "684064ac42999a68cb049541",
+						"order_id": "69cc2916924653819c67a81f",
+						"order_code": "S-INV-20260331-005",
+						"quantity": 1,
+						"purchase_unit_price": 10,
+						"unit_price": 200,
+						"unit": "Meter(s)",
+						"discount": 0,
+						"discount_percent": 0,
+						"price": 200,
+						"net_price": 230,
+						"profit": 190,
+						"loss": 0,
+						"vat_percent": 15,
+						"vat_price": 30,
+						"unit_price_with_vat": 230,
+						"created_at": "2026-03-31T20:05:42.114Z",
+					},
+				},
+				"meta": map[string]interface{}{
+					"total_loss": 0,
+					"total_profit": 190,
+					"total_quantity": 1,
+					"total_sales": 230,
+					"total_vat": 30,
+				},
+			}),
 	}
 	paths["/v1/sales/history/summary"] = openAPIPathItem{
-		Get: listOp("sales_history_summary", "Get Sales History Summary",
+		Get: withExample(listOp("sales_history_summary", "Get Sales History Summary",
 			qParam("search[product_id]", "REQUIRED — Product ID to get sales history summary for", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[order_id]", "Filter by order ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 1,
+				"result": map[string]interface{}{
+					"total_sales": 230,
+					"total_profit": 190,
+					"total_loss": 0,
+					"total_vat": 30,
+					"total_quantity": 1,
+				},
+			}),
 	}
 
 	// ── Sales Return ─────────────────────────────────────────────
@@ -1008,10 +1416,46 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		},
 	}
 	paths["/v1/sales-return/summary"] = openAPIPathItem{
-		Get: listOp("sales_return_summary", "Get Sales Return Summary"),
+		Get: withExample(listOp("sales_return_summary", "Get Sales Return Summary"),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"date": map[string]interface{}{
+							"$gte": "2026-02-28T21:00:00Z",
+							"$lte": "2026-03-11T20:59:59Z",
+						},
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"net_total": 0,
+					"vat_price": 0,
+					"discount": 0,
+					"cash_discount": 0,
+					"net_profit": 0,
+					"net_loss": 0,
+					"paid_sales_return": 0,
+					"unpaid_sales_return": 0,
+					"cash_sales_return": 0,
+					"bank_account_sales_return": 0,
+					"shipping_handling_fees": 0,
+					"sales_return_count": 0,
+					"sales_sales_return": 0,
+					"commission": 0,
+					"commission_paid_by_cash": 0,
+					"commission_paid_by_bank": 0,
+				},
+			}),
 	}
 	paths["/v1/sales-return/history"] = openAPIPathItem{
-		Get: listOp("sales_return_history", "List Sales Return History",
+		Get: withExample(listOp("sales_return_history", "List Sales Return History",
 			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[sales_return_id]", "Filter by sales return ID", false, nil),
@@ -1028,14 +1472,59 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			qParam("search[profit]", "Filter by profit", false, nil),
 			qParam("search[loss]", "Filter by loss", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 0,
+				"result": []interface{}{},
+				"meta": map[string]interface{}{
+					"total_loss": 0,
+					"total_profit": 0,
+					"total_quantity": 0,
+					"total_sales_return": 0,
+					"total_vat_return": 0,
+				},
+			}),
 	}
 	paths["/v1/sales-return/history/summary"] = openAPIPathItem{
-		Get: listOp("sales_return_history_summary", "Get Sales Return History Summary",
+		Get: withExample(listOp("sales_return_history_summary", "Get Sales Return History Summary",
 			qParam("search[product_id]", "REQUIRED — Product ID to get sales return history summary for", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[order_id]", "Filter by order ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"total_sales_return": 0,
+					"total_profit": 0,
+					"total_loss": 0,
+					"total_vat_return": 0,
+					"total_quantity": 0,
+				},
+			}),
 	}
 
 	// ── Quotation Sales Return ────────────────────────────────────────────
@@ -1067,7 +1556,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		},
 	}
 	paths["/v1/quotation-sales-return/summary"] = openAPIPathItem{
-		Get: listOp("quotation_sales_return_summary", "Get Quotation Sales Return Summary",
+		Get: withExample(listOp("quotation_sales_return_summary", "Get Quotation Sales Return Summary",
 			searchCodeParam(),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
@@ -1076,6 +1565,39 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			numParam("search[net_total]", "Filter by net total"),
 			numParam("search[discount]", "Filter by discount"),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"date": map[string]interface{}{
+							"$gte": "2026-02-28T21:00:00Z",
+							"$lte": "2026-03-11T20:59:59Z",
+						},
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"net_total": 0,
+					"vat_price": 0,
+					"discount": 0,
+					"cash_discount": 0,
+					"net_profit": 0,
+					"net_loss": 0,
+					"paid_quotation_sales_return": 0,
+					"unpaid_quotation_sales_return": 0,
+					"cash_quotation_sales_return": 0,
+					"bank_account_quotation_sales_return": 0,
+					"shipping_handling_fees": 0,
+					"quotation_sales_return_count": 0,
+					"quotation_sales_quotation_sales_return": 0,
+				},
+			}),
 	}
 	paths["/v1/quotation-sales-return/history"] = openAPIPathItem{
 		Get: listOp("quotation_sales_return_history", "List Quotation Sales Return History",
@@ -1181,7 +1703,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		},
 	}
 	paths["/v1/purchase/summary"] = openAPIPathItem{
-		Get: listOp("purchase_summary", "Get Purchase Summary",
+		Get: withExample(listOp("purchase_summary", "Get Purchase Summary",
 			searchCodeParam(),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
@@ -1190,6 +1712,41 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			numParam("search[balance_amount]", "Filter by balance amount"),
 			numParam("search[discount]", "Filter by discount"),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"date": map[string]interface{}{
+							"$gte": "2026-02-28T21:00:00Z",
+							"$lte": "2026-03-11T20:59:59Z",
+						},
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"net_total": 0,
+					"vat_price": 0,
+					"discount": 0,
+					"cash_discount": 0,
+					"shipping_handling_fees": 0,
+					"net_retail_net_profit": 0,
+					"net_wholesale_profit": 0,
+					"paid_purchase": 0,
+					"unpaid_purchase": 0,
+					"cash_purchase": 0,
+					"bank_account_purchase": 0,
+					"return_count": 0,
+					"return_amount": 0,
+					"sales_purchase": 0,
+					"purchase_return_purchase": 0,
+				},
+			}),
 	}
 	paths["/v1/purchase/history"] = openAPIPathItem{
 		Get: listOp("purchase_history", "List Purchase History",
@@ -1208,12 +1765,36 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		),
 	}
 	paths["/v1/purchase/history/summary"] = openAPIPathItem{
-		Get: listOp("purchase_history_summary", "Get Purchase History Summary",
+		Get: withExample(listOp("purchase_history_summary", "Get Purchase History Summary",
 			qParam("search[product_id]", "REQUIRED — Product ID to get purchase history summary for", true, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_id]", "Filter by purchase ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"total_purchase": 0,
+					"total_retail_profit": 0,
+					"total_wholesale_profit": 0,
+					"total_retail_loss": 0,
+					"total_wholesale_loss": 0,
+					"total_vat": 0,
+					"total_quantity": 0,
+				},
+			}),
 	}
 
 	// ── Purchase Return ────────────────────────────────────────────
@@ -1246,7 +1827,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		},
 	}
 	paths["/v1/purchase-return/summary"] = openAPIPathItem{
-		Get: listOp("purchase_return_summary", "Get Purchase Return Summary",
+		Get: withExample(listOp("purchase_return_summary", "Get Purchase Return Summary",
 			searchCodeParam(),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_id]", "Filter by original purchase ID", false, nil),
@@ -1256,6 +1837,37 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			numParam("search[balance_amount]", "Filter by balance amount"),
 			numParam("search[discount]", "Filter by discount"),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"date": map[string]interface{}{
+							"$gte": "2026-02-28T21:00:00Z",
+							"$lte": "2026-03-11T20:59:59Z",
+						},
+						"deleted": map[string]interface{}{
+							"$ne": true,
+						},
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"net_total": 0,
+					"vat_price": 0,
+					"discount": 0,
+					"cash_discount": 0,
+					"paid_purchase_return": 0,
+					"purchase_return_count": 0,
+					"unpaid_purchase_return": 0,
+					"cash_purchase_return": 0,
+					"bank_account_purchase_return": 0,
+					"shipping_handling_fees": 0,
+					"purchase_purchase_return": 0,
+				},
+			}),
 	}
 	paths["/v1/purchase-return/history"] = openAPIPathItem{
 		Get: listOp("purchase_return_history", "List Purchase Return History",
@@ -1276,12 +1888,32 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		),
 	}
 	paths["/v1/purchase-return/history/summary"] = openAPIPathItem{
-		Get: listOp("purchase_return_history_summary", "Get Purchase Return History Summary",
+		Get: withExample(listOp("purchase_return_history_summary", "Get Purchase Return History Summary",
 			qParam("search[product_id]", "REQUIRED — Product ID to get purchase return history summary for", true, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_return_id]", "Filter by purchase return ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
+			map[string]interface{}{
+				"status": true,
+				"criterias": map[string]interface{}{
+					"page": 1,
+					"size": 10,
+					"search_by": map[string]interface{}{
+						"product_id": "684064ac42999a68cb049541",
+						"store_id": "680f6c53e32076f2003a8934",
+					},
+					"sort_by": map[string]interface{}{
+						"created_at": -1,
+					},
+				},
+				"total_count": 0,
+				"result": map[string]interface{}{
+					"total_purchase_return": 0,
+					"total_vat_return": 0,
+					"total_quantity": 0,
+				},
+			}),
 	}
 
 	// ── Purchase Cash Discount ────────────────────────────────────────────
