@@ -692,7 +692,6 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 		Get: withExample(listOp("product_summary", "Get Product Summary",
 			searchNameParam(), searchCodeParam(),
 			qParam("search[category_id]", "Filter by category ID", false, nil),
-			qParam("search[store_id]", "Filter by store ID", false, nil),
 			qParam("search[deleted]", "Pass 1 to include deleted", false, nil),
 		), map[string]interface{}{
 				"status": true,
@@ -3524,30 +3523,30 @@ func buildFocusedSpec(baseURL string) openAPISpec {
 		"/v1/me",
 		"/v1/store/list",
 		// Sales
-		"/v1/sales/summary",
+		//"/v1/sales/summary",
 		"/v1/order",
 		"/v1/sales/history",
-		"/v1/sales/history/summary",
+		//"/v1/sales/history/summary",
 		// Sales Return
 		"/v1/sales-return",
 		"/v1/sales-return/history",
-		"/v1/sales-return/history/summary",
+		//"/v1/sales-return/history/summary",
 		// Purchase
 		"/v1/purchase",
-		"/v1/purchase/summary",
+		//"/v1/purchase/summary",
 		"/v1/purchase/history",
-		"/v1/purchase/history/summary",
+		//"/v1/purchase/history/summary",
 		// Purchase Return
 		"/v1/purchase-return",
-		"/v1/purchase-return/summary",
+		//"/v1/purchase-return/summary",
 		"/v1/purchase-return/history",
-		"/v1/purchase-return/history/summary",
+		//"/v1/purchase-return/history/summary",
 		// Quotation
 		"/v1/quotation",
-		"/v1/quotation/summary",
-		"/v1/quotation/sales/summary",
+		//"/v1/quotation/summary",
+		//"/v1/quotation/sales/summary",
 		"/v1/quotation/history",
-		"/v1/quotation/history/summary",
+		//"/v1/quotation/history/summary",
 		// Quotation Sales Return
 		"/v1/quotation-sales-return",
 		"/v1/quotation-sales-return/summary",
