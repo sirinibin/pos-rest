@@ -715,23 +715,51 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Responses:   okResp(),
 		},
 	}
+	paths["/v1/quotation/summary"] = openAPIPathItem{
+		Get: listOp("quotation_summary", "Get Quotation Summary",
+			searchCodeParam(),
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[type]", "Filter by quotation type", false, nil),
+			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
+			qParam("search[status]", "Filter by status", false, nil),
+			numParam("search[net_total]", "Filter by net total"),
+			numParam("search[discount]", "Filter by discount"),
+		),
+	}
+	paths["/v1/quotation/sales/summary"] = openAPIPathItem{
+		Get: listOp("quotation_sales_summary", "Get Quotation Sales Summary",
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[type]", "Filter by quotation type", false, nil),
+			qParam("search[payment_status]", "Filter by payment status", false, nil),
+			qParam("search[status]", "Filter by status", false, nil),
+			searchCodeParam(),
+		),
+	}
 	paths["/v1/quotation/history"] = openAPIPathItem{
 		Get: listOp("quotation_history", "List Quotation History",
-			qParam("search[product_id]", "Filter by product ID", false, nil),
+			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
 			qParam("search[quotation_code]", "Filter by quotation code", false, nil),
 			qParam("search[type]", "Filter by quotation type", false, nil),
 			qParam("search[payment_status]", "Filter by payment status", false, nil),
-			qParam("search[quantity]", "Filter by quantity", false, nil),
-			qParam("search[price]", "Filter by price", false, nil),
+			numParam("search[quantity]", "Filter by quantity"),
+			numParam("search[price]", "Filter by price"),
 			qParam("search[unit_price]", "Filter by unit price", false, nil),
 			qParam("search[vat_price]", "Filter by VAT amount", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
 	}
+	paths["/v1/quotation/history/summary"] = openAPIPathItem{
+		Get: listOp("quotation_history_summary", "Get Quotation History Summary",
+			qParam("search[product_id]", "REQUIRED — Product ID to get history summary for", true, nil),
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[type]", "Filter by quotation type", false, nil),
+			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
+		),
+	}
 
-	// ── Delivery Note ────────────────────────────
+	// ── Delivery Note ────────────────────────────────────────────
 	paths["/v1/delivery-note"] = openAPIPathItem{
 		Get: listOp("delivery_note", "List / Search Delivery Notes",
 			searchCodeParam(),
@@ -909,20 +937,31 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/sales/history"] = openAPIPathItem{
 		Get: listOp("sales_history", "List Sales History",
-			qParam("search[product_id]", "Filter by product ID", false, nil),
+			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[order_id]", "Filter by sales order ID", false, nil),
 			qParam("search[order_code]", "Filter by sales order code", false, nil),
-			qParam("search[quantity]", "Filter by quantity", false, nil),
-			qParam("search[price]", "Filter by price", false, nil),
+			numParam("search[quantity]", "Filter by quantity"),
+			numParam("search[price]", "Filter by price"),
 			qParam("search[unit_price]", "Filter by unit price", false, nil),
 			qParam("search[vat_price]", "Filter by VAT amount", false, nil),
-			qParam("search[discount]", "Filter by discount", false, nil),
+			numParam("search[discount]", "Filter by discount"),
+			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
+			qParam("search[customer_name]", "Filter by customer name", false, nil),
+			qParam("search[profit]", "Filter by profit", false, nil),
+			qParam("search[loss]", "Filter by loss", false, nil),
+		),
+	}
+	paths["/v1/sales/history/summary"] = openAPIPathItem{
+		Get: listOp("sales_history_summary", "Get Sales History Summary",
+			qParam("search[product_id]", "REQUIRED — Product ID to get sales history summary for", true, nil),
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[order_id]", "Filter by order ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
 	}
 
-	// ── Sales Return ─────────────────────────────
+	// ── Sales Return ─────────────────────────────────────────────
 	paths["/v1/sales-return"] = openAPIPathItem{
 		Get: listOpDesc("sales_return", "List / Search Sales Returns",
 			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,cash_sales_return,bank_account_sales_return,remarks,created_at. Numeric filter params support > < = operators.",
@@ -956,22 +995,33 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/sales-return/history"] = openAPIPathItem{
 		Get: listOp("sales_return_history", "List Sales Return History",
-			qParam("search[product_id]", "Filter by product ID", false, nil),
+			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[sales_return_id]", "Filter by sales return ID", false, nil),
 			qParam("search[sales_return_code]", "Filter by sales return code", false, nil),
 			qParam("search[order_id]", "Filter by related sales order ID", false, nil),
 			qParam("search[order_code]", "Filter by related sales order code", false, nil),
-			qParam("search[quantity]", "Filter by quantity", false, nil),
-			qParam("search[price]", "Filter by price", false, nil),
+			numParam("search[quantity]", "Filter by quantity"),
+			numParam("search[price]", "Filter by price"),
 			qParam("search[unit_price]", "Filter by unit price", false, nil),
 			qParam("search[vat_price]", "Filter by VAT amount", false, nil),
-			qParam("search[discount]", "Filter by discount", false, nil),
+			numParam("search[discount]", "Filter by discount"),
+			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
+			qParam("search[customer_name]", "Filter by customer name", false, nil),
+			qParam("search[profit]", "Filter by profit", false, nil),
+			qParam("search[loss]", "Filter by loss", false, nil),
+		),
+	}
+	paths["/v1/sales-return/history/summary"] = openAPIPathItem{
+		Get: listOp("sales_return_history_summary", "Get Sales Return History Summary",
+			qParam("search[product_id]", "REQUIRED — Product ID to get sales return history summary for", true, nil),
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[order_id]", "Filter by order ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
 	}
 
-	// ── Quotation Sales Return ────────────────────
+	// ── Quotation Sales Return ────────────────────────────────────────────
 	paths["/v1/quotation-sales-return"] = openAPIPathItem{
 		Get: listOpDesc("quotation_sales_return", "List / Search Quotation Sales Returns",
 			"Available select fields: id,code,date,customer_id,customer_name,customer_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,profit,loss,created_at. Numeric filter params support > < = operators.",
@@ -999,11 +1049,44 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Parameters: []openAPIParam{}, RequestBody: jsonBody(), Security: authSecurity, Responses: okResp(),
 		},
 	}
+	paths["/v1/quotation-sales-return/summary"] = openAPIPathItem{
+		Get: listOp("quotation_sales_return_summary", "Get Quotation Sales Return Summary",
+			searchCodeParam(),
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
+			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
+			qParam("search[status]", "Filter by status", false, nil),
+			numParam("search[net_total]", "Filter by net total"),
+			numParam("search[discount]", "Filter by discount"),
+		),
+	}
 	paths["/v1/quotation-sales-return/history"] = openAPIPathItem{
-		Get: listOp("quotation_sales_return_history", "List Quotation Sales Return History"),
+		Get: listOp("quotation_sales_return_history", "List Quotation Sales Return History",
+			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[quotation_sales_return_id]", "Filter by quotation sales return ID", false, nil),
+			qParam("search[quotation_sales_return_code]", "Filter by quotation sales return code", false, nil),
+			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
+			qParam("search[quotation_code]", "Filter by quotation code", false, nil),
+			numParam("search[quantity]", "Filter by quantity"),
+			numParam("search[price]", "Filter by price"),
+			qParam("search[unit_price]", "Filter by unit price", false, nil),
+			qParam("search[vat_price]", "Filter by VAT amount", false, nil),
+			numParam("search[discount]", "Filter by discount"),
+			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
+			qParam("search[customer_name]", "Filter by customer name", false, nil),
+		),
+	}
+	paths["/v1/quotation-sales-return/history/summary"] = openAPIPathItem{
+		Get: listOp("quotation_sales_return_history_summary", "Get Quotation Sales Return History Summary",
+			qParam("search[product_id]", "REQUIRED — Product ID to get quotation sales return history summary for", true, nil),
+			qParam("search[customer_id]", "Filter by customer ID", false, nil),
+			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
+			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
+		),
 	}
 
-	// ── Vendor ───────────────────────────────────
+	// ── Vendor ─────────────────────────────────────────────
 	paths["/v1/vendor"] = openAPIPathItem{
 		Get: listOpDesc("vendor", "List / Search Vendors",
 			"Available select fields: id,name,name_in_arabic,code,phone,phone2,email,vat_no,credit_balance,credit_limit,purchase_count,purchase_amount,purchase_balance_amount,purchase_not_paid_count,deleted. Numeric filter params support > < = operators.",
@@ -1071,23 +1154,43 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Parameters: []openAPIParam{}, RequestBody: jsonBody(), Security: authSecurity, Responses: okResp(),
 		},
 	}
+	paths["/v1/purchase/summary"] = openAPIPathItem{
+		Get: listOp("purchase_summary", "Get Purchase Summary",
+			searchCodeParam(),
+			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
+			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
+			qParam("search[status]", "Filter by status", false, nil),
+			numParam("search[net_total]", "Filter by net total"),
+			numParam("search[balance_amount]", "Filter by balance amount"),
+			numParam("search[discount]", "Filter by discount"),
+		),
+	}
 	paths["/v1/purchase/history"] = openAPIPathItem{
 		Get: listOp("purchase_history", "List Purchase History",
-			qParam("search[product_id]", "Filter by product ID", false, nil),
+			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_id]", "Filter by purchase ID", false, nil),
 			qParam("search[purchase_code]", "Filter by purchase code", false, nil),
-			qParam("search[quantity]", "Filter by quantity", false, nil),
-			qParam("search[price]", "Filter by price", false, nil),
+			numParam("search[quantity]", "Filter by quantity"),
+			numParam("search[price]", "Filter by price"),
 			qParam("search[unit_price]", "Filter by unit price", false, nil),
 			qParam("search[net_price]", "Filter by net price", false, nil),
 			qParam("search[vat_price]", "Filter by VAT amount", false, nil),
-			qParam("search[discount]", "Filter by discount", false, nil),
+			numParam("search[discount]", "Filter by discount"),
+			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
+			qParam("search[vendor_name]", "Filter by vendor name", false, nil),
+		),
+	}
+	paths["/v1/purchase/history/summary"] = openAPIPathItem{
+		Get: listOp("purchase_history_summary", "Get Purchase History Summary",
+			qParam("search[product_id]", "REQUIRED — Product ID to get purchase history summary for", true, nil),
+			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
+			qParam("search[purchase_id]", "Filter by purchase ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
 	}
 
-	// ── Purchase Return ──────────────────────────
+	// ── Purchase Return ────────────────────────────────────────────
 	paths["/v1/purchase-return"] = openAPIPathItem{
 		Get: listOpDesc("purchase_return", "List / Search Purchase Returns",
 			"Available select fields: id,code,date,vendor_id,vendor_name,vendor_name_arabic,net_total,total_with_vat,vat_price,discount,payment_status,payment_methods,balance_amount,purchase_return_quantity,remarks,created_at. Numeric filter params support > < = operators.",
@@ -1116,25 +1219,46 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 			Parameters: []openAPIParam{}, RequestBody: jsonBody(), Security: authSecurity, Responses: okResp(),
 		},
 	}
+	paths["/v1/purchase-return/summary"] = openAPIPathItem{
+		Get: listOp("purchase_return_summary", "Get Purchase Return Summary",
+			searchCodeParam(),
+			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
+			qParam("search[purchase_id]", "Filter by original purchase ID", false, nil),
+			qParam("search[payment_status]", "Filter by payment status: paid, not_paid, paid_partially", false, nil),
+			qParam("search[status]", "Filter by status", false, nil),
+			numParam("search[net_total]", "Filter by net total"),
+			numParam("search[balance_amount]", "Filter by balance amount"),
+			numParam("search[discount]", "Filter by discount"),
+		),
+	}
 	paths["/v1/purchase-return/history"] = openAPIPathItem{
 		Get: listOp("purchase_return_history", "List Purchase Return History",
-			qParam("search[product_id]", "Filter by product ID", false, nil),
+			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_return_id]", "Filter by purchase return ID", false, nil),
 			qParam("search[purchase_return_code]", "Filter by purchase return code", false, nil),
 			qParam("search[purchase_id]", "Filter by original purchase ID", false, nil),
 			qParam("search[purchase_code]", "Filter by original purchase code", false, nil),
-			qParam("search[quantity]", "Filter by quantity", false, nil),
-			qParam("search[price]", "Filter by price", false, nil),
+			numParam("search[quantity]", "Filter by quantity"),
+			numParam("search[price]", "Filter by price"),
 			qParam("search[unit_price]", "Filter by unit price", false, nil),
 			qParam("search[net_price]", "Filter by net price", false, nil),
 			qParam("search[vat_price]", "Filter by VAT amount", false, nil),
-			qParam("search[discount]", "Filter by discount", false, nil),
+			numParam("search[discount]", "Filter by discount"),
+			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
+			qParam("search[vendor_name]", "Filter by vendor name", false, nil),
+		),
+	}
+	paths["/v1/purchase-return/history/summary"] = openAPIPathItem{
+		Get: listOp("purchase_return_history_summary", "Get Purchase Return History Summary",
+			qParam("search[product_id]", "REQUIRED — Product ID to get purchase return history summary for", true, nil),
+			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
+			qParam("search[purchase_return_id]", "Filter by purchase return ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
 		),
 	}
 
-	// ── Purchase Cash Discount ───────────────────
+	// ── Purchase Cash Discount ────────────────────────────────────────────
 	paths["/v1/purchase-cash-discount"] = openAPIPathItem{
 		Get:  listOp("purchase_cash_discount", "List / Search Purchase Cash Discounts", searchCodeParam()),
 		Post: createOp("purchase_cash_discount", "Create Purchase Cash Discount"),
@@ -1399,38 +1523,49 @@ func buildFocusedSpec(baseURL string) openAPISpec {
 	full := buildOpenAPISpec(baseURL)
 
 	allowedPaths := []string{
+		// Core
 		"/v1/me",
 		"/v1/store/list",
+		// Sales
 		"/v1/sales/summary",
 		"/v1/order",
-		"/v1/order/{id}",
+		"/v1/sales/history",
+		"/v1/sales/history/summary",
+		// Sales Return
 		"/v1/sales-return",
-		"/v1/sales-return/{id}",
+		"/v1/sales-return/history",
+		"/v1/sales-return/history/summary",
+		// Purchase
 		"/v1/purchase",
-		"/v1/purchase/{id}",
+		"/v1/purchase/summary",
+		"/v1/purchase/history",
+		"/v1/purchase/history/summary",
+		// Purchase Return
 		"/v1/purchase-return",
-		"/v1/purchase-return/{id}",
+		"/v1/purchase-return/summary",
+		"/v1/purchase-return/history",
+		"/v1/purchase-return/history/summary",
+		// Quotation
 		"/v1/quotation",
-		"/v1/quotation/{id}",
+		"/v1/quotation/summary",
+		"/v1/quotation/sales/summary",
 		"/v1/quotation/history",
-		"/v1/customer",
-		"/v1/vendor",
+		"/v1/quotation/history/summary",
+		// Quotation Sales Return
 		"/v1/quotation-sales-return",
-		"/v1/quotation-sales-return/{id}",
+		"/v1/quotation-sales-return/summary",
+		"/v1/quotation-sales-return/history",
+		"/v1/quotation-sales-return/history/summary",
 		// Products
 		"/v1/product",
-		"/v1/product/{id}",
-		"/v1/product/code/{code}",
-		"/v1/product/barcode/{barcode}",
+		"/v1/product/summary",
 		"/v1/product/history/{id}",
-		// Product transaction histories (filter by product_id in query)
-		"/v1/sales/history",
-		"/v1/sales-return/history",
-		"/v1/purchase/history",
-		"/v1/purchase-return/history",
+		"/v1/product/history/summary/{id}",
+		// Customers & Vendors
+		"/v1/customer",
+		"/v1/vendor",
 		// Accounting
 		"/v1/account",
-		"/v1/account/{id}",
 		"/v1/posting",
 	}
 
