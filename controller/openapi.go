@@ -950,7 +950,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 
 	// ── Expense ───────────────────────────────────
 	paths["/v1/expense"] = openAPIPathItem{
-		Get: withExample(listOp("expense", "List / Search Expenses",
+		Get: withExample(listOpDesc("expense", "List / Search Expenses", "The response includes a meta object with aggregated totals (e.g. total amount, paid, unpaid, VAT, profit/loss) across all matching records — not just the current page.",
 			searchCodeParam(),
 			qParam("search[category_id]", "Filter by expense category ID", false, nil),
 			qParam("search[amount]", "Filter by amount", false, nil),
