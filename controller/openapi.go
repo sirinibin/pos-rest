@@ -1435,7 +1435,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/quotation/history"] = openAPIPathItem{
 		Get: withExample(listOp("quotation_history", "List Quotation History",
-			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
+			qParam("search[product_id]", "Product ID to filter history by", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
 			qParam("search[quotation_code]", "Filter by quotation code", false, nil),
@@ -1532,7 +1532,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/quotation/history/summary"] = openAPIPathItem{
 		Get: withExample(listOp("quotation_history_summary", "Get Quotation History Summary",
-			qParam("search[product_id]", "REQUIRED — Product ID to get history summary for", true, nil),
+			qParam("search[product_id]", "Product ID to get history summary for", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[type]", "Filter by quotation type", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
@@ -1910,7 +1910,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/sales/history"] = openAPIPathItem{
 		Get: withExample(listOp("sales_history", "List Sales History",
-			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
+			qParam("search[product_id]", "Product ID to filter history by", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[order_id]", "Filter by sales order ID", false, nil),
 			qParam("search[order_code]", "Filter by sales order code", false, nil),
@@ -1974,7 +1974,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/sales/history/summary"] = openAPIPathItem{
 		Get: withExample(listOp("sales_history_summary", "Get Sales History Summary",
-			qParam("search[product_id]", "REQUIRED — Product ID to get sales history summary for", true, nil),
+			qParam("search[product_id]", "Product ID to get sales history summary for", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[order_id]", "Filter by order ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
@@ -2184,7 +2184,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/sales-return/history"] = openAPIPathItem{
 		Get: withExample(listOp("sales_return_history", "List Sales Return History",
-			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
+			qParam("search[product_id]", "Product ID to filter history by", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[sales_return_id]", "Filter by sales return ID", false, nil),
 			qParam("search[sales_return_code]", "Filter by sales return code", false, nil),
@@ -2226,7 +2226,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/sales-return/history/summary"] = openAPIPathItem{
 		Get: withExample(listOp("sales_return_history_summary", "Get Sales Return History Summary",
-			qParam("search[product_id]", "REQUIRED — Product ID to get sales return history summary for", true, nil),
+			qParam("search[product_id]", "Product ID to get sales return history summary for", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[order_id]", "Filter by order ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
@@ -2480,7 +2480,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/quotation-sales-return/history"] = openAPIPathItem{
 		Get: listOp("quotation_sales_return_history", "List Quotation Sales Return History",
-			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
+			qParam("search[product_id]", "Product ID to filter history by", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[quotation_sales_return_id]", "Filter by quotation sales return ID", false, nil),
 			qParam("search[quotation_sales_return_code]", "Filter by quotation sales return code", false, nil),
@@ -2497,7 +2497,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/quotation-sales-return/history/summary"] = openAPIPathItem{
 		Get: listOp("quotation_sales_return_history_summary", "Get Quotation Sales Return History Summary",
-			qParam("search[product_id]", "REQUIRED — Product ID to get quotation sales return history summary for", true, nil),
+			qParam("search[product_id]", "Product ID to get quotation sales return history summary for", false, nil),
 			qParam("search[customer_id]", "Filter by customer ID", false, nil),
 			qParam("search[quotation_id]", "Filter by quotation ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
@@ -2852,7 +2852,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/purchase/history"] = openAPIPathItem{
 		Get: withExample(listOp("purchase_history", "List Purchase History",
-			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
+			qParam("search[product_id]", "Product ID to filter history by", false, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_id]", "Filter by purchase ID", false, nil),
 			qParam("search[purchase_code]", "Filter by purchase code", false, nil),
@@ -2924,7 +2924,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/purchase/history/summary"] = openAPIPathItem{
 		Get: withExample(listOp("purchase_history_summary", "Get Purchase History Summary",
-			qParam("search[product_id]", "REQUIRED — Product ID to get purchase history summary for", true, nil),
+			qParam("search[product_id]", "Product ID to get purchase history summary for", false, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_id]", "Filter by purchase ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
@@ -3159,7 +3159,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/purchase-return/history"] = openAPIPathItem{
 		Get: withExample(listOp("purchase_return_history", "List Purchase Return History",
-			qParam("search[product_id]", "REQUIRED — Product ID to filter history by", true, nil),
+			qParam("search[product_id]", "Product ID to filter history by", false, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_return_id]", "Filter by purchase return ID", false, nil),
 			qParam("search[purchase_return_code]", "Filter by purchase return code", false, nil),
@@ -3227,7 +3227,7 @@ func buildOpenAPISpec(baseURL string) openAPISpec {
 	}
 	paths["/v1/purchase-return/history/summary"] = openAPIPathItem{
 		Get: withExample(listOp("purchase_return_history_summary", "Get Purchase Return History Summary",
-			qParam("search[product_id]", "REQUIRED — Product ID to get purchase return history summary for", true, nil),
+			qParam("search[product_id]", "Product ID to get purchase return history summary for", false, nil),
 			qParam("search[vendor_id]", "Filter by vendor ID", false, nil),
 			qParam("search[purchase_return_id]", "Filter by purchase return ID", false, nil),
 			qParam("search[warehouse_code]", "Filter by warehouse code", false, nil),
