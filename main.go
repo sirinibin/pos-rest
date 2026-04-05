@@ -75,6 +75,7 @@ func main() {
 	router.HandleFunc("/v1/warehouse/{id}", controller.DeleteWarehouse).Methods("DELETE")
 
 	//Customer
+	router.HandleFunc("/v1/customer/summary", controller.CustomerSummary).Methods("GET")
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")
 	router.HandleFunc("/v1/customer", controller.ListCustomer).Methods("GET")
 	router.HandleFunc("/v1/customer/{id}", controller.ViewCustomer).Methods("GET")
@@ -86,6 +87,7 @@ func main() {
 	router.HandleFunc("/v1/customer/vat_no/name", controller.ViewCustomerByVatNoByName).Methods("GET")
 
 	//Product
+	router.HandleFunc("/v1/product/summary", controller.ProductSummary).Methods("GET")
 	router.HandleFunc("/v1/product", controller.CreateProduct).Methods("POST")
 	router.HandleFunc("/v1/product", controller.ListProduct).Methods("GET")
 	router.HandleFunc("/v1/product/json", controller.ListProductJson).Methods("GET")
@@ -99,9 +101,11 @@ func main() {
 	router.HandleFunc("/v1/product/delete-image", controller.DeleteProductImage).Methods("POST")
 
 	//ProductHistory
+	router.HandleFunc("/v1/product/history/summary/{id}", controller.ProductHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/product/history/{id}", controller.ListProductHistory).Methods("GET")
 
 	//Expense
+	router.HandleFunc("/v1/expense/summary", controller.ExpenseSummary).Methods("GET")
 	router.HandleFunc("/v1/expense", controller.CreateExpense).Methods("POST")
 	router.HandleFunc("/v1/expense", controller.ListExpense).Methods("GET")
 	router.HandleFunc("/v1/expense/{id}", controller.ViewExpense).Methods("GET")
@@ -188,9 +192,12 @@ func main() {
 	router.HandleFunc("/v1/signature/{id}", controller.DeleteSignature).Methods("DELETE")
 
 	//QuotationHistory
+	router.HandleFunc("/v1/quotation/history/summary", controller.QuotationHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/quotation/history", controller.ListQuotationHistory).Methods("GET")
 
 	//Quotation
+	router.HandleFunc("/v1/quotation/sales/summary", controller.QuotationSalesSummary).Methods("GET")
+	router.HandleFunc("/v1/quotation/summary", controller.QuotationSummary).Methods("GET")
 	router.HandleFunc("/v1/quotation", controller.CreateQuotation).Methods("POST")
 	router.HandleFunc("/v1/quotation/calculate-net-total", controller.CalculateQuotationNetTotal).Methods("POST")
 	router.HandleFunc("/v1/quotation", controller.ListQuotation).Methods("GET")
@@ -234,15 +241,20 @@ func main() {
 	router.HandleFunc("/v1/sales/summary", controller.SalesSummary).Methods("GET")
 
 	//SalesHistory
+	router.HandleFunc("/v1/sales/history/summary", controller.SalesHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/sales/history", controller.ListSalesHistory).Methods("GET")
 	//SalesReturnHistory
+	router.HandleFunc("/v1/sales-return/history/summary", controller.SalesReturnHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/sales-return/history", controller.ListSalesReturnHistory).Methods("GET")
 	//QuotationSalesReturnHistory
+	router.HandleFunc("/v1/quotation-sales-return/history/summary", controller.QuotationSalesReturnHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/quotation-sales-return/history", controller.ListQuotationSalesReturnHistory).Methods("GET")
 
 	//PurchaseHistory
+	router.HandleFunc("/v1/purchase/history/summary", controller.PurchaseHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/purchase/history", controller.ListPurchaseHistory).Methods("GET")
 	//PurchaseReturnHistory
+	router.HandleFunc("/v1/purchase-return/history/summary", controller.PurchaseReturnHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/purchase-return/history", controller.ListPurchaseReturnHistory).Methods("GET")
 	//upload image
 	router.HandleFunc("/v1/purchase/upload/image", controller.ParsePurchaseBill).Methods("POST")
@@ -256,6 +268,7 @@ func main() {
 	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
 
 	//QuotationSalesReturn
+	router.HandleFunc("/v1/quotation-sales-return/summary", controller.QuotationSalesReturnSummary).Methods("GET")
 	router.HandleFunc("/v1/quotation-sales-return", controller.CreateQuotationSalesReturn).Methods("POST")
 	router.HandleFunc("/v1/quotation-sales-return/calculate-net-total", controller.CalculateQuotationSalesReturnNetTotal).Methods("POST")
 	router.HandleFunc("/v1/quotation-sales-return/{id}", controller.UpdateQuotationSalesReturn).Methods("PUT")
@@ -268,6 +281,7 @@ func main() {
 	*/
 
 	//Vendor
+	router.HandleFunc("/v1/vendor/summary", controller.VendorSummary).Methods("GET")
 	router.HandleFunc("/v1/vendor", controller.CreateVendor).Methods("POST")
 	router.HandleFunc("/v1/vendor", controller.ListVendor).Methods("GET")
 	router.HandleFunc("/v1/vendor/{id}", controller.ViewVendor).Methods("GET")
@@ -279,6 +293,7 @@ func main() {
 	router.HandleFunc("/v1/vendor/delete-image", controller.DeleteVendorImage).Methods("POST")
 
 	//Purchase
+	router.HandleFunc("/v1/purchase/summary", controller.PurchaseSummary).Methods("GET")
 	router.HandleFunc("/v1/purchase", controller.CreatePurchase).Methods("POST")
 	router.HandleFunc("/v1/purchase/calculate-net-total", controller.CalculatePurchaseNetTotal).Methods("POST")
 	router.HandleFunc("/v1/purchase", controller.ListPurchase).Methods("GET")
@@ -294,6 +309,7 @@ func main() {
 	router.HandleFunc("/v1/purchase-cash-discount/{id}", controller.UpdatePurchaseCashDiscount).Methods("PUT")
 
 	//Purchase Return
+	router.HandleFunc("/v1/purchase-return/summary", controller.PurchaseReturnSummary).Methods("GET")
 	router.HandleFunc("/v1/purchase-return", controller.CreatePurchaseReturn).Methods("POST")
 	router.HandleFunc("/v1/purchase-return/calculate-net-total", controller.CalculatePurchaseReturnNetTotal).Methods("POST")
 	router.HandleFunc("/v1/purchase-return", controller.ListPurchaseReturn).Methods("GET")

@@ -699,3 +699,61 @@ func CalculateQuotationSalesReturnNetTotal(w http.ResponseWriter, r *http.Reques
 
 	json.NewEncoder(w).Encode(response)
 }
+
+
+
+// QuotationSalesReturnSummary : handler for GET /quotation-sales-return/summary
+func QuotationSalesReturnSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildQuotationSalesReturnCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find QuotationSalesReturns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "quotation_sales_return")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of QuotationSalesReturn:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var quotationSalesReturnStats models.QuotationSalesReturnStats
+
+	quotationSalesReturnStats, err = store.GetQuotationSalesReturnStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_quotation_sales_return"] = "Unable to find total amount of QuotationSalesReturn:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = quotationSalesReturnStats
+	json.NewEncoder(w).Encode(response)
+}

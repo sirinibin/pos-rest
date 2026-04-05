@@ -683,14 +683,14 @@ func (store *Store) UpdateQuotationProfit() error {
 }
 
 type QuotationStats struct {
-	ID        *primitive.ObjectID `json:"id" bson:"_id"`
+	//ID        *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal  float64             `json:"net_total" bson:"net_total"`
 	NetProfit float64             `json:"net_profit" bson:"net_profit"`
 	Loss      float64             `json:"loss" bson:"loss"`
 }
 
 type QuotationInvoiceStats struct {
-	ID                            *primitive.ObjectID `json:"id" bson:"_id"`
+	//ID                            *primitive.ObjectID `json:"id" bson:"_id"`
 	InvoiceNetTotal               float64             `json:"invoice_net_total" bson:"invoice_net_total"`
 	InvoiceNetProfit              float64             `json:"invoice_net_profit" bson:"invoice_net_profit"`
 	InvoiceNetLoss                float64             `json:"invoice_net_loss" bson:"invoice_net_loss"`
@@ -4030,4 +4030,358 @@ func (quotation *Quotation) DeletePaymentsByReceivablePaymentID(receivablePaymen
 		return err
 	}
 	return nil
+}
+
+
+
+func (store *Store) BuildQuotationCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
+
+	criterias = SearchCriterias{
+		Page:   1,
+		Size:   10,
+		SortBy: map[string]interface{}{},
+	}
+
+	criterias.SearchBy = make(map[string]interface{})
+
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+
+	timeZoneOffset := 0.0
+	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_count"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[return_amount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["return_amount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["return_amount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[date_str]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	var startDate time.Time
+	var endDate time.Time
+
+	keys, ok = r.URL.Query()["search[from_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[to_date]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy["date"] = bson.M{"$lte": endDate}
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["discount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[cash_discount]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["cash_discount"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["cash_discount"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return criterias, err
+		}
+		criterias.SearchBy["store_id"] = storeID
+	}
+
+	keys, ok = r.URL.Query()["search[code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[order_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["order_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[reported_to_zatca]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["reported_to_zatca"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["reported_to_zatca"] = bson.M{"$ne": true}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[net_total]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["net_total"] = bson.M{operator: float64(value)}
+		} else {
+			criterias.SearchBy["net_total"] = float64(value)
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[customer_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		customerIds := strings.Split(keys[0], ",")
+
+		objecIds := []*primitive.ObjectID{}
+
+		for _, id := range customerIds {
+			customerID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return criterias, err
+			}
+			objecIds = append(objecIds, &customerID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_by]"]
+	if ok && len(keys[0]) >= 1 {
+
+		userIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range userIds {
+			userID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return criterias, err
+			}
+			objecIds = append(objecIds, userID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[type]"]
+	if ok && len(keys[0]) >= 1 {
+		if keys[0] != "" {
+			criterias.SearchBy["type"] = keys[0]
+		}
+	}
+
+	/*
+		keys, ok = r.URL.Query()["search[payment_status]"]
+		if ok && len(keys[0]) >= 1 {
+			if keys[0] != "" {
+				criterias.SearchBy["payment_status"] = keys[0]
+			}
+		}*/
+
+	keys, ok = r.URL.Query()["search[payment_status]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentStatusList := strings.Split(keys[0], ",")
+		if len(paymentStatusList) > 0 {
+			criterias.SearchBy["payment_status"] = bson.M{"$in": paymentStatusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethodList := strings.Split(keys[0], ",")
+		if len(paymentMethodList) > 0 {
+			criterias.SearchBy["payment_method"] = bson.M{"$in": paymentMethodList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[payment_methods]"]
+	if ok && len(keys[0]) >= 1 {
+		paymentMethods := strings.Split(keys[0], ",")
+		if len(paymentMethods) > 0 {
+			criterias.SearchBy["payment_methods"] = bson.M{"$in": paymentMethods}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[status]"]
+	if ok && len(keys[0]) >= 1 {
+		statusList := strings.Split(keys[0], ",")
+		if len(statusList) > 0 {
+			criterias.SearchBy["status"] = bson.M{"$in": statusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[delivered_by]"]
+	if ok && len(keys[0]) >= 1 {
+		deliveredByID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return criterias, err
+		}
+		criterias.SearchBy["delivered_by"] = deliveredByID
+	}
+
+	return criterias, nil
 }

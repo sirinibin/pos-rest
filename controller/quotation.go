@@ -850,3 +850,120 @@ func CalculateQuotationNetTotal(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+
+
+
+// QuotationSummary : handler for GET /quotation/summary
+func QuotationSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildQuotationCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find quotations:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "quotation")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of quotations:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var quotationStats models.QuotationStats
+
+	quotationStats, err = store.GetQuotationStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_quotations"] = "Unable to find total amount of quotations:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = quotationStats
+	json.NewEncoder(w).Encode(response)
+}
+
+
+
+// QuotationSalesSummary : handler for GET /quotation/sales/summary
+func QuotationSalesSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildQuotationCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find quotations:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "quotation")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of quotations:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var quotationInvoiceStats models.QuotationInvoiceStats
+
+	quotationInvoiceStats, err = store.GetQuotationInvoiceStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_quotations"] = "Unable to find total amount of quotation sales:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = quotationInvoiceStats
+	json.NewEncoder(w).Encode(response)
+}

@@ -71,5 +71,60 @@ func ListQuotationHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
 
+// QuotationHistorySummary : handler for GET v1/quotation/history/summary
+func QuotationHistorySummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildQuotationHistoryCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find product quotation histories:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_quotation_history")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of product histories:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var productQuotationHistoryStats models.QuotationHistoryStats
+
+	productQuotationHistoryStats, err = store.GetQuotationHistoryStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_quotation_history"] = "Unable to find total amount of quotation:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = productQuotationHistoryStats
+	json.NewEncoder(w).Encode(response)
 }

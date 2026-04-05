@@ -265,7 +265,7 @@ func (store *Store) SaveProductImage(productID *primitive.ObjectID, filename str
 }
 
 type ProductStats struct {
-	ID                  *primitive.ObjectID `json:"id" bson:"_id"`
+	//ID                  *primitive.ObjectID `json:"id" bson:"_id"`
 	Stock               float64             `json:"stock" bson:"stock"`
 	RetailStockValue    float64             `json:"retail_stock_value" bson:"retail_stock_value"`
 	WholesaleStockValue float64             `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
@@ -274,6 +274,8 @@ type ProductStats struct {
 	SalesProfit         float64             `json:"sales_profit" bson:"sales_profit"`
 	SalesReturn         float64             `json:"sales_return" bson:"sales_return"`
 	SalesReturnProfit   float64             `json:"sales_return_profit" bson:"sales_return_profit"`
+	Purchase            float64             `json:"purchase" bson:"purchase"`
+	PurchaseReturn      float64             `json:"purchase_return" bson:"purchase_return"`
 }
 
 func (store *Store) GetProductStats(
@@ -286,23 +288,35 @@ func (store *Store) GetProductStats(
 	defer cancel()
 
 	var stockField string
+	//sales
 	var salesField string
 	var salesProfitField string
 	var salesReturnField string
 	var salesReturnProfitField string
+    //Purchase
+	var purchaseField string
+	var purchaseReturnField string
 
 	if warehouseCode != nil && *warehouseCode != "" {
 		stockField = "$product_stores." + storeID.Hex() + ".warehouse_stocks." + *warehouseCode
+		//sales
 		salesField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales"
 		salesProfitField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales_profit"
 		salesReturnField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales_return"
 		salesReturnProfitField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".sales_return_profit"
+		//Purchase
+		purchaseField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".purchase"
+		purchaseReturnField = "$product_stores." + storeID.Hex() + ".product_warehouses." + *warehouseCode + ".purchase_return"
 	} else {
 		stockField = "$product_stores." + storeID.Hex() + ".stock"
+		//sales
 		salesField = "$product_stores." + storeID.Hex() + ".sales"
 		salesProfitField = "$product_stores." + storeID.Hex() + ".sales_profit"
 		salesReturnField = "$product_stores." + storeID.Hex() + ".sales_return"
 		salesReturnProfitField = "$product_stores." + storeID.Hex() + ".sales_return_profit"
+		//Purchase
+		purchaseField = "$product_stores." + storeID.Hex() + ".purchase"
+		purchaseReturnField = "$product_stores." + storeID.Hex() + ".purchase_return"
 	}
 
 	pipeline := []bson.M{
@@ -312,6 +326,7 @@ func (store *Store) GetProductStats(
 		bson.M{
 			"$group": bson.M{
 				"_id": nil,
+				//sales
 				"sales": bson.M{"$sum": bson.M{"$cond": []interface{}{
 					bson.M{"$gt": []interface{}{salesField, 0}},
 					salesField,
@@ -330,6 +345,17 @@ func (store *Store) GetProductStats(
 				"sales_return_profit": bson.M{"$sum": bson.M{"$cond": []interface{}{
 					bson.M{"$gt": []interface{}{salesReturnProfitField, 0}},
 					salesReturnProfitField,
+					0,
+				}}},
+				//Purchase
+				"purchase": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{purchaseField, 0}},
+					purchaseField,
+					0,
+				}}},
+				"purchase_return": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$gt": []interface{}{purchaseReturnField, 0}},
+					purchaseReturnField,
 					0,
 				}}},
 				"stock": bson.M{"$sum": bson.M{"$cond": []interface{}{
@@ -4992,4 +5018,1205 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 	}
 
 	return stats.Quantity, nil
+}
+
+
+
+func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
+
+	criterias = SearchCriterias{
+		Page:   1,
+		Size:   10,
+		SortBy: map[string]interface{}{},
+	}
+
+	criterias.SearchBy = make(map[string]interface{})
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+
+	timeZoneOffset := 0.0
+	keys, ok := r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
+			timeZoneOffset = s
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[is_set]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["is_set"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["is_set"] = bson.M{"$ne": true}
+		}
+	}
+
+	var storeID primitive.ObjectID
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeID, err = primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return criterias, err
+		}
+		/*
+			store, err := FindStoreByID(&storeID, bson.M{})
+			if err != nil {
+				return products, criterias, err
+			}
+
+			if len(store.UseProductsFromStoreID) > 0 {
+				criterias.SearchBy["$or"] = []bson.M{
+					{"store_id": storeID},
+					{"store_id": bson.M{"$in": store.UseProductsFromStoreID}},
+				}
+			} else {
+				criterias.SearchBy["store_id"] = storeID
+			}*/
+	}
+	
+	searchWord := ""
+	keys, ok = r.URL.Query()["search[search_text]"]
+	if ok && len(keys[0]) >= 1 {
+		searchWord = strings.ToLower(keys[0])
+		searchWord = escapeTextSearchInput(searchWord)
+
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+	}
+	sortFieldName := ""
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
+		sortFieldName = keys[0]
+		criterias.SortBy = GetSortByFields(keys[0])
+	}
+
+	if sortFieldName != "" {
+		if strings.HasPrefix(sortFieldName, "-") {
+			sortFieldName = strings.TrimPrefix(sortFieldName, "-")
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[name]"]
+	if ok && len(keys[0]) >= 1 {
+		//textSearching = true
+		searchWord := strings.Replace(keys[0], "\\", `\\`, -1)
+		searchWord = strings.Replace(searchWord, "(", `\(`, -1)
+		searchWord = strings.Replace(searchWord, ")", `\)`, -1)
+		searchWord = strings.Replace(searchWord, "{", `\{`, -1)
+		searchWord = strings.Replace(searchWord, "}", `\}`, -1)
+		searchWord = strings.Replace(searchWord, "[", `\[`, -1)
+		searchWord = strings.Replace(searchWord, "]", `\]`, -1)
+		searchWord = strings.Replace(searchWord, `*`, `\*`, -1)
+
+		searchWord = strings.Replace(searchWord, "_", `\_`, -1)
+		searchWord = strings.Replace(searchWord, "+", `\\+`, -1)
+		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
+		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
+
+		criterias.SearchBy["$or"] = []bson.M{
+			{"name": bson.M{"$regex": searchWord, "$options": "i"}},
+			{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
+		}
+		criterias.SortBy = bson.M{"name": 1}
+	}
+
+	keys, ok = r.URL.Query()["search[part_number]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["$or"] = []bson.M{
+			{"prefix_part_number": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"part_number": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[retail_unit_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[retail_unit_profit_perc]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit_perc"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_profit_perc"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[wholesale_unit_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[wholesale_unit_profit_perc]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit_perc"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_profit_perc"] = value
+		}
+	}
+
+	warehouseCode := ""
+	keys, ok = r.URL.Query()["search[warehouse_code]"]
+	if ok && len(keys[0]) >= 1 && !govalidator.IsNull(keys[0]) {
+		warehouseCode = keys[0]
+	}
+	keys, ok = r.URL.Query()["search[stock]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		stockValue, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+warehouseCode] = bson.M{operator: stockValue}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks."+warehouseCode] = stockValue
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = bson.M{operator: stockValue}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = stockValue
+			}
+		}
+	}
+
+	//sales
+	keys, ok = r.URL.Query()["search[sales_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_count"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_count"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[sales_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_quantity"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_quantity"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[sales]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[sales_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_profit"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_profit"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[sales_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_loss"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_loss"] = value
+			}
+		}
+	}
+
+	// Sales return
+	keys, ok = r.URL.Query()["search[sales_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_count"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_count"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_quantity"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_quantity"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_quantity", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_profit]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_profit"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_profit"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_profit", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[sales_return_loss]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".sales_return_loss"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".sales_return_loss"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("sales_return_loss", operator, &storeID, value)
+	}
+
+	//purchase
+
+	keys, ok = r.URL.Query()["search[purchase_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_count"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_count"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_quantity"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_quantity"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_quantity", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase", operator, &storeID, value)
+	}
+
+	// purchase return
+
+	keys, ok = r.URL.Query()["search[purchase_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_count"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_count"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("purchase_return_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return_quantity"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return_quantity"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return_quantity", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_return]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".purchase_return"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_return"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("purchase_return", operator, &storeID, value)
+	}
+
+	//Quotation
+	keys, ok = r.URL.Query()["search[quotation_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_count"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_count"] = value
+			}
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("quotation_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[quotation]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_quantity"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_quantity"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_count"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_count"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_quantity"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_quantity"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_count"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_count"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return"] = value
+			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_sales_return_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if !govalidator.IsNull(warehouseCode) {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".product_warehouses."+warehouseCode+".quotation_sales_return_quantity"] = value
+			}
+		} else {
+			if operator != "" {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_quantity"] = bson.M{operator: value}
+			} else {
+				criterias.SearchBy["product_stores."+storeID.Hex()+".quotation_sales_return_quantity"] = value
+			}
+		}
+	}
+
+	//Delivery note
+	keys, ok = r.URL.Query()["search[delivery_note_count]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_count"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_count"] = value
+		}
+		//criterias.SearchBy["stores"] = GetIntSearchElement("delivery_note_count", operator, &storeID, value)
+	}
+
+	keys, ok = r.URL.Query()["search[delivery_note_quantity]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_quantity"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".delivery_note_quantity"] = value
+		}
+		//criterias.SearchBy["stores"] = GetFloatSearchElement("delivery_note_quantity", operator, &storeID, value)
+	}
+
+	//-end
+	keys, ok = r.URL.Query()["search[retail_unit_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_price"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".retail_unit_price"] = value
+		}
+
+	}
+
+	keys, ok = r.URL.Query()["search[wholesale_unit_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return  criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_price"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".wholesale_unit_price"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[purchase_unit_price]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_unit_price"] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".purchase_unit_price"] = value
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[rack]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["rack"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[item_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["item_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[bar_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["bar_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[ean_12]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["$or"] = []bson.M{
+			{"ean_12": keys[0]},
+			{"bar_code": keys[0]},
+		}
+	}
+
+	//
+	keys, ok = r.URL.Query()["search[linked_products_of_product_id]"]
+	if ok && len(keys[0]) >= 1 {
+		productID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return  criterias, err
+		}
+		product, err := store.FindProductByID(&productID, bson.M{})
+		if err != nil {
+			return  criterias, err
+		}
+
+		criterias.SearchBy["_id"] = bson.M{"$in": product.LinkedProductIDs}
+	}
+
+	keys, ok = r.URL.Query()["search[quotation_products_of_quotation_id]"]
+	if ok && len(keys[0]) >= 1 {
+		quotationID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return  criterias, err
+		}
+		quotation, err := store.FindQuotationByID(&quotationID, bson.M{})
+		if err != nil {
+			return  criterias, err
+		}
+
+		ids := []*primitive.ObjectID{}
+		for i, _ := range quotation.Products {
+			ids = append(ids, &quotation.Products[i].ProductID)
+		}
+		criterias.SearchBy["_id"] = bson.M{"$in": ids}
+	}
+
+	keys, ok = r.URL.Query()["search[delivery_note_products_of_delivery_note_id]"]
+	if ok && len(keys[0]) >= 1 {
+		deliveryNoteID, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return  criterias, err
+		}
+		deliveryNote, err := store.FindDeliveryNoteByID(&deliveryNoteID, bson.M{})
+		if err != nil {
+			return  criterias, err
+		}
+
+		ids := []*primitive.ObjectID{}
+		for i, _ := range deliveryNote.Products {
+			ids = append(ids, &deliveryNote.Products[i].ProductID)
+		}
+		criterias.SearchBy["_id"] = bson.M{"$in": ids}
+	}
+
+	keys, ok = r.URL.Query()["search[ids]"]
+	if ok && len(keys[0]) >= 1 {
+		Ids := strings.Split(keys[0], ",")
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range Ids {
+			ID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return  criterias, err
+			}
+			objecIds = append(objecIds, ID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[category_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		categoryIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range categoryIds {
+			categoryID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return  criterias, err
+			}
+			objecIds = append(objecIds, categoryID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["category_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[country_name]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["country_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[country_code]"]
+	if ok && len(keys[0]) >= 1 {
+		countryCodes := strings.Split(keys[0], ",")
+		if len(countryCodes) > 0 {
+			criterias.SearchBy["country_code"] = bson.M{"$in": countryCodes}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[brand_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		brandIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range brandIds {
+			brandID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return  criterias, err
+			}
+			objecIds = append(objecIds, brandID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["brand_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[product_id]"]
+	if ok && len(keys[0]) >= 1 {
+
+		productIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range productIds {
+			productID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return  criterias, err
+			}
+			objecIds = append(objecIds, productID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_by]"]
+	if ok && len(keys[0]) >= 1 {
+
+		userIds := strings.Split(keys[0], ",")
+
+		objecIds := []primitive.ObjectID{}
+
+		for _, id := range userIds {
+			userID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return  criterias, err
+			}
+			objecIds = append(objecIds, userID)
+		}
+
+		if len(objecIds) > 0 {
+			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	var createdAtStartDate time.Time
+	var createdAtEndDate time.Time
+
+	keys, ok = r.URL.Query()["search[created_at]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		startDate, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return  criterias, err
+		}
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+
+		endDate := startDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_from]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtStartDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return  criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[created_at_to]"]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		createdAtEndDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return  criterias, err
+		}
+
+		if timeZoneOffset != 0 {
+			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
+		}
+
+		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
+		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
+	} else if !createdAtStartDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
+	} else if !createdAtEndDate.IsZero() {
+		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	return  criterias, nil
+
 }

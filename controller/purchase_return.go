@@ -651,3 +651,61 @@ func CalculatePurchaseReturnNetTotal(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+
+
+// PurchaseReturnSummary : handler for GET /purchase-return/summary
+func PurchaseReturnSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildPurchaseReturnCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find purchase returns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "purchase_return")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of purchase returns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var purchaseReturnStats models.PurchaseReturnStats
+
+	purchaseReturnStats, err = store.GetPurchaseReturnStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_purchase_returns"] = "Unable to find total amount of purchase returns:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = purchaseReturnStats
+	json.NewEncoder(w).Encode(response)
+}

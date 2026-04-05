@@ -456,7 +456,7 @@ func (salesReturn *SalesReturn) RemoveInvoiceFromCustomerPayablePayment(salesRet
 
 // DiskQuotaUsageResult payload for disk quota usage
 type SalesReturnStats struct {
-	ID                     *primitive.ObjectID `json:"id" bson:"_id"`
+	//ID                     *primitive.ObjectID `json:"id" bson:"_id"`
 	NetTotal               float64             `json:"net_total" bson:"net_total"`
 	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
 	Discount               float64             `json:"discount" bson:"discount"`

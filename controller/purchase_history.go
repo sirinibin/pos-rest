@@ -76,3 +76,59 @@ func ListPurchaseHistory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 
 }
+
+// PurchaseHistorySummary : handler for GET v1/purchase/history/summary
+func PurchaseHistorySummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildPurchaseHistoryCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find product purchase histories:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_purchase_history")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of product purchase histories:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var purchaseHistoryStats models.PurchaseHistoryStats
+
+	purchaseHistoryStats, err = store.GetPurchaseHistoryStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_product_purchase_histories"] = "Unable to find total amount of product purchase histories:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = purchaseHistoryStats
+	json.NewEncoder(w).Encode(response)
+}

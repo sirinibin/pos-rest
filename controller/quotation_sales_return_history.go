@@ -71,5 +71,60 @@ func ListQuotationSalesReturnHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
 
+// QuotationSalesReturnHistorySummary : handler for GET v1/quotation_sales_return/history/summary
+func QuotationSalesReturnHistorySummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id(parsing 2):" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	criterias, err := store.BuildQuotationSalesReturnHistoryCriterias(w, r)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find product quotation histories:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.TotalCount, err = store.GetTotalCount(criterias.SearchBy, "product_quotation_sales_return_history")
+	if err != nil {
+		response.Status = false
+		response.Errors["total_count"] = "Unable to find total count of product quotation sales return histories:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Criterias = criterias
+
+	var productQuotationSalesReturnHistoryStats models.QuotationSalesReturnHistoryStats
+
+	productQuotationSalesReturnHistoryStats, err = store.GetQuotationSalesReturnHistoryStats(criterias.SearchBy)
+	if err != nil {
+		response.Status = false
+		response.Errors["total_quotation_sales_return"] = "Unable to find total amount of quotation sales return:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Result = productQuotationSalesReturnHistoryStats
+	json.NewEncoder(w).Encode(response)
 }
