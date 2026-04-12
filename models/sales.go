@@ -2195,7 +2195,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	if scenario == "update" {
+	/*if scenario == "update" {
 		salesReturns, err := order.GetSalesReturns()
 		if err != nil {
 			errs["sales_returns"] = "erro fetching sales returns: " + err.Error()
@@ -2218,7 +2218,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 				return
 			}
 		}
-	}
+	}*/
 
 	if customer != nil && customer.VATNo != "" && store.Zatca.Phase == "2" {
 		customerErrorMessages := []string{}
