@@ -238,14 +238,6 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	// Validate data
 	order.FindNetTotal()
 
-	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		response.Status = false
-		response.Errors = errs
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
 	if order.EnableReportToZatca && !IsConnectedToInternet() {
 		response.Status = false
 		response.Errors["reporting_to_zatca"] = "not connected to internet"
@@ -259,6 +251,14 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+
+	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors = errs
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	err = order.CreateNewCustomerFromName()
 	if err != nil {

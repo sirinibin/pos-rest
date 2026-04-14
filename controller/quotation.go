@@ -151,6 +151,12 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	quotation.UpdatedAt = &now
 	quotation.FindNetTotal()
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "quotation")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	// Validate data
 	if errs := quotation.Validate(w, r, "create"); len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -160,12 +166,6 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	//Queue
-	queue := GetOrCreateQueue(store.ID.Hex(), "quotation")
-	queueToken := generateQueueToken()
-	queue.Enqueue(Request{Token: queueToken})
-	queue.WaitUntilMyTurn(queueToken)
 
 	err = quotation.CreateNewCustomerFromName()
 	if err != nil {
@@ -851,9 +851,6 @@ func CalculateQuotationNetTotal(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-
-
-
 // QuotationSummary : handler for GET /quotation/summary
 func QuotationSummary(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -909,8 +906,6 @@ func QuotationSummary(w http.ResponseWriter, r *http.Request) {
 	response.Result = quotationStats
 	json.NewEncoder(w).Encode(response)
 }
-
-
 
 // QuotationSalesSummary : handler for GET /quotation/sales/summary
 func QuotationSalesSummary(w http.ResponseWriter, r *http.Request) {

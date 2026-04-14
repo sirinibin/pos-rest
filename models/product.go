@@ -48,10 +48,10 @@ type ProductStore struct {
 	WholesaleUnitProfit          float64                     `bson:"wholesale_unit_profit,omitempty" json:"wholesale_unit_profit,omitempty"`
 	WholesaleUnitProfitPerc      float64                     `bson:"wholesale_unit_profit_perc,omitempty" json:"wholesale_unit_profit_perc,omitempty"`
 	SalesCount                   int64                       `bson:"sales_count" json:"sales_count"`
-	SalesQuantity                float64                     `bson:"sales_quantity,omitempty" json:"sales_quantity,omitempty"`
+	SalesQuantity                float64                     `bson:"sales_quantity" json:"sales_quantity"`
 	Sales                        float64                     `bson:"sales" json:"sales"`
 	SalesReturnCount             int64                       `bson:"sales_return_count" json:"sales_return_count"`
-	SalesReturnQuantity          float64                     `bson:"sales_return_quantity,omitempty" json:"sales_return_quantity,omitempty"`
+	SalesReturnQuantity          float64                     `bson:"sales_return_quantity" json:"sales_return_quantity"`
 	SalesReturn                  float64                     `bson:"sales_return" json:"sales_return"`
 	SalesProfit                  float64                     `bson:"sales_profit" json:"sales_profit"`
 	SalesLoss                    float64                     `bson:"sales_loss,omitempty" json:"sales_loss,omitempty"`
@@ -266,16 +266,16 @@ func (store *Store) SaveProductImage(productID *primitive.ObjectID, filename str
 
 type ProductStats struct {
 	//ID                  *primitive.ObjectID `json:"id" bson:"_id"`
-	Stock               float64             `json:"stock" bson:"stock"`
-	RetailStockValue    float64             `json:"retail_stock_value" bson:"retail_stock_value"`
-	WholesaleStockValue float64             `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
-	PurchaseStockValue  float64             `json:"purchase_stock_value" bson:"purchase_stock_value"`
-	Sales               float64             `json:"sales" bson:"sales"`
-	SalesProfit         float64             `json:"sales_profit" bson:"sales_profit"`
-	SalesReturn         float64             `json:"sales_return" bson:"sales_return"`
-	SalesReturnProfit   float64             `json:"sales_return_profit" bson:"sales_return_profit"`
-	Purchase            float64             `json:"purchase" bson:"purchase"`
-	PurchaseReturn      float64             `json:"purchase_return" bson:"purchase_return"`
+	Stock               float64 `json:"stock" bson:"stock"`
+	RetailStockValue    float64 `json:"retail_stock_value" bson:"retail_stock_value"`
+	WholesaleStockValue float64 `json:"wholesale_stock_value" bson:"wholesale_stock_value"`
+	PurchaseStockValue  float64 `json:"purchase_stock_value" bson:"purchase_stock_value"`
+	Sales               float64 `json:"sales" bson:"sales"`
+	SalesProfit         float64 `json:"sales_profit" bson:"sales_profit"`
+	SalesReturn         float64 `json:"sales_return" bson:"sales_return"`
+	SalesReturnProfit   float64 `json:"sales_return_profit" bson:"sales_return_profit"`
+	Purchase            float64 `json:"purchase" bson:"purchase"`
+	PurchaseReturn      float64 `json:"purchase_return" bson:"purchase_return"`
 }
 
 func (store *Store) GetProductStats(
@@ -293,7 +293,7 @@ func (store *Store) GetProductStats(
 	var salesProfitField string
 	var salesReturnField string
 	var salesReturnProfitField string
-    //Purchase
+	//Purchase
 	var purchaseField string
 	var purchaseReturnField string
 
@@ -5020,8 +5020,6 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 	return stats.Quantity, nil
 }
 
-
-
 func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
@@ -5090,7 +5088,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 				criterias.SearchBy["store_id"] = storeID
 			}*/
 	}
-	
+
 	searchWord := ""
 	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
@@ -5326,7 +5324,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5351,7 +5349,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5377,7 +5375,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5428,7 +5426,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5454,7 +5452,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5480,7 +5478,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5508,7 +5506,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5534,7 +5532,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5560,7 +5558,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5614,7 +5612,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5667,7 +5665,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5693,7 +5691,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5718,7 +5716,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5743,7 +5741,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5768,7 +5766,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5818,7 +5816,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5843,7 +5841,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5868,7 +5866,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if !govalidator.IsNull(warehouseCode) {
@@ -5894,7 +5892,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -5912,7 +5910,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -5949,7 +5947,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -6004,11 +6002,11 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	if ok && len(keys[0]) >= 1 {
 		productID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 		product, err := store.FindProductByID(&productID, bson.M{})
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		criterias.SearchBy["_id"] = bson.M{"$in": product.LinkedProductIDs}
@@ -6018,11 +6016,11 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	if ok && len(keys[0]) >= 1 {
 		quotationID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 		quotation, err := store.FindQuotationByID(&quotationID, bson.M{})
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		ids := []*primitive.ObjectID{}
@@ -6036,11 +6034,11 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	if ok && len(keys[0]) >= 1 {
 		deliveryNoteID, err := primitive.ObjectIDFromHex(keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 		deliveryNote, err := store.FindDeliveryNoteByID(&deliveryNoteID, bson.M{})
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		ids := []*primitive.ObjectID{}
@@ -6058,7 +6056,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		for _, id := range Ids {
 			ID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return  criterias, err
+				return criterias, err
 			}
 			objecIds = append(objecIds, ID)
 		}
@@ -6078,7 +6076,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		for _, id := range categoryIds {
 			categoryID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return  criterias, err
+				return criterias, err
 			}
 			objecIds = append(objecIds, categoryID)
 		}
@@ -6111,7 +6109,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		for _, id := range brandIds {
 			brandID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return  criterias, err
+				return criterias, err
 			}
 			objecIds = append(objecIds, brandID)
 		}
@@ -6131,7 +6129,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		for _, id := range productIds {
 			productID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return  criterias, err
+				return criterias, err
 			}
 			objecIds = append(objecIds, productID)
 		}
@@ -6151,7 +6149,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		for _, id := range userIds {
 			userID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return  criterias, err
+				return criterias, err
 			}
 			objecIds = append(objecIds, userID)
 		}
@@ -6169,7 +6167,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
@@ -6185,7 +6183,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		const shortForm = "Jan 02 2006"
 		createdAtStartDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -6198,7 +6196,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		const shortForm = "Jan 02 2006"
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -6217,6 +6215,6 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
 	}
 
-	return  criterias, nil
+	return criterias, nil
 
 }

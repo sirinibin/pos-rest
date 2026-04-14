@@ -71,32 +71,32 @@ type SalesReturn struct {
 	//ReceivedBySignature     *Signature           `json:"received_by_signature,omitempty"`
 	//SignatureDate     *time.Time           `bson:"signature_date,omitempty" json:"signature_date,omitempty"`
 	//SignatureDateStr  string               `json:"signature_date_str,omitempty"`
-	ShippingOrHandlingFees float64  `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
-	VatPercent             *float64 `bson:"vat_percent" json:"vat_percent"`
-	Discount               float64  `bson:"discount" json:"discount"`
-	DiscountPercent        float64  `bson:"discount_percent" json:"discount_percent"`
-	DiscountWithVAT        float64  `bson:"discount_with_vat" json:"discount_with_vat"`
-	DiscountPercentWithVAT float64  `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
-	Status                 string   `bson:"status,omitempty" json:"status,omitempty"`
-	StockAdded             bool     `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
-	TotalQuantity          float64  `bson:"total_quantity" json:"total_quantity"`
-	VatPrice               float64  `bson:"vat_price" json:"vat_price"`
-	Total                  float64  `bson:"total" json:"total"`
-	TotalWithVAT           float64  `bson:"total_with_vat" json:"total_with_vat"`
-	ActualVatPrice         float64  `bson:"actual_vat_price" json:"actual_vat_price"`
-	ActualTotal            float64  `bson:"actual_total" json:"actual_total"`
-	ActualTotalWithVAT     float64  `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
-	RoundingAmount         float64  `bson:"rounding_amount" json:"rounding_amount"`
-	AutoRoundingAmount     bool     `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
-	NetTotal               float64  `bson:"net_total" json:"net_total"`
-	ActualNetTotal         float64  `bson:"actual_net_total" json:"actual_net_total"`
-	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
-	PaymentMethods         []string `json:"payment_methods" bson:"payment_methods"`
-	PaymentStatus          string   `bson:"payment_status" json:"payment_status"`
-	//Deleted           bool                 `bson:"deleted,omitempty" json:"deleted,omitempty"`
-	//DeletedBy         *primitive.ObjectID  `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
+	ShippingOrHandlingFees float64             `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
+	VatPercent             *float64            `bson:"vat_percent" json:"vat_percent"`
+	Discount               float64             `bson:"discount" json:"discount"`
+	DiscountPercent        float64             `bson:"discount_percent" json:"discount_percent"`
+	DiscountWithVAT        float64             `bson:"discount_with_vat" json:"discount_with_vat"`
+	DiscountPercentWithVAT float64             `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
+	Status                 string              `bson:"status,omitempty" json:"status,omitempty"`
+	StockAdded             bool                `bson:"stock_added,omitempty" json:"stock_added,omitempty"`
+	TotalQuantity          float64             `bson:"total_quantity" json:"total_quantity"`
+	VatPrice               float64             `bson:"vat_price" json:"vat_price"`
+	Total                  float64             `bson:"total" json:"total"`
+	TotalWithVAT           float64             `bson:"total_with_vat" json:"total_with_vat"`
+	ActualVatPrice         float64             `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal            float64             `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT     float64             `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
+	RoundingAmount         float64             `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount     bool                `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
+	NetTotal               float64             `bson:"net_total" json:"net_total"`
+	ActualNetTotal         float64             `bson:"actual_net_total" json:"actual_net_total"`
+	CashDiscount           float64             `bson:"cash_discount" json:"cash_discount"`
+	PaymentMethods         []string            `json:"payment_methods" bson:"payment_methods"`
+	PaymentStatus          string              `bson:"payment_status" json:"payment_status"`
+	Deleted                bool                `bson:"deleted" json:"deleted"`
+	DeletedBy              *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	//DeletedByUser     *User                `json:"deleted_by_user,omitempty"`
-	//DeletedAt         *time.Time           `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	DeletedAt     *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt     *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
@@ -254,6 +254,21 @@ func (salesReturn *SalesReturn) AddPayments() error {
 	return nil
 }
 
+func (salesReturnPayment *SalesReturnPayment) HardDeleteSalesPayment() error {
+	log.Print("Deleting sales return payment")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesReturnPayment.StoreID.Hex()).Collection("sales_payment")
+	_, err := collection.DeleteOne(ctx, bson.M{
+		"reference_type": "sales_return",
+		"reference_id":   salesReturnPayment.SalesReturnID,
+	})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	return nil
+}
+
 func (salesReturn *SalesReturn) UpdatePayments() error {
 	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 	if err != nil {
@@ -385,13 +400,50 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 	return nil
 }
 
-func (salesReturnPayment *SalesReturnPayment) HardDeleteSalesPayment() error {
-	log.Print("Deleting sales return payment")
+func (salesReturn *SalesReturn) HardDeleteSalesReturnPayments() error {
+	//log.Print("Deleting sales return payments")
 	ctx := context.Background()
-	collection := db.GetDB("store_" + salesReturnPayment.StoreID.Hex()).Collection("sales_payment")
-	_, err := collection.DeleteOne(ctx, bson.M{
-		"reference_type": "sales_return",
-		"reference_id":   salesReturnPayment.SalesReturnID,
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
+	_, err := collection.DeleteMany(ctx, bson.M{
+		"sales_return_id": salesReturn.ID,
+	})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	return nil
+}
+
+func (salesReturn *SalesReturn) SoftDeleteSalesReturnPayments() error {
+	//log.Print("Deleting sales return payments")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
+	_, err := collection.UpdateMany(ctx, bson.M{
+		"sales_return_id": salesReturn.ID,
+	}, bson.M{
+		"$set": bson.M{
+			"deleted":    true,
+			"deleted_at": time.Now(),
+		},
+	})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	return nil
+}
+
+func (salesReturn *SalesReturn) SoftUndeleteSalesReturnPayments() error {
+	//log.Print("Undeleting sales return payments")
+	ctx := context.Background()
+	collection := db.GetDB("store_" + salesReturn.StoreID.Hex()).Collection("sales_return_payment")
+	_, err := collection.UpdateMany(ctx, bson.M{
+		"sales_return_id": salesReturn.ID,
+	}, bson.M{
+		"$set": bson.M{
+			"deleted":    false,
+			"deleted_at": nil,
+		},
 	})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
@@ -457,22 +509,22 @@ func (salesReturn *SalesReturn) RemoveInvoiceFromCustomerPayablePayment(salesRet
 // DiskQuotaUsageResult payload for disk quota usage
 type SalesReturnStats struct {
 	//ID                     *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal               float64             `json:"net_total" bson:"net_total"`
-	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
-	Discount               float64             `json:"discount" bson:"discount"`
-	CashDiscount           float64             `json:"cash_discount" bson:"cash_discount"`
-	NetProfit              float64             `json:"net_profit" bson:"net_profit"`
-	NetLoss                float64             `json:"net_loss" bson:"net_loss"`
-	PaidSalesReturn        float64             `json:"paid_sales_return" bson:"paid_sales_return"`
-	UnPaidSalesReturn      float64             `json:"unpaid_sales_return" bson:"unpaid_sales_return"`
-	CashSalesReturn        float64             `json:"cash_sales_return" bson:"cash_sales_return"`
-	BankAccountSalesReturn float64             `json:"bank_account_sales_return" bson:"bank_account_sales_return"`
-	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
-	SalesReturnCount       int64               `json:"sales_return_count" bson:"sales_return_count"`
-	SalesSalesReturn       float64             `json:"sales_sales_return" bson:"sales_sales_return"`
-	Commission             float64             `json:"commission" bson:"commission"`
-	CommissionPaidByCash   float64             `json:"commission_paid_by_cash" bson:"commission_paid_by_cash"`
-	CommissionPaidByBank   float64             `json:"commission_paid_by_bank" bson:"commission_paid_by_bank"`
+	NetTotal               float64 `json:"net_total" bson:"net_total"`
+	VatPrice               float64 `json:"vat_price" bson:"vat_price"`
+	Discount               float64 `json:"discount" bson:"discount"`
+	CashDiscount           float64 `json:"cash_discount" bson:"cash_discount"`
+	NetProfit              float64 `json:"net_profit" bson:"net_profit"`
+	NetLoss                float64 `json:"net_loss" bson:"net_loss"`
+	PaidSalesReturn        float64 `json:"paid_sales_return" bson:"paid_sales_return"`
+	UnPaidSalesReturn      float64 `json:"unpaid_sales_return" bson:"unpaid_sales_return"`
+	CashSalesReturn        float64 `json:"cash_sales_return" bson:"cash_sales_return"`
+	BankAccountSalesReturn float64 `json:"bank_account_sales_return" bson:"bank_account_sales_return"`
+	ShippingOrHandlingFees float64 `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	SalesReturnCount       int64   `json:"sales_return_count" bson:"sales_return_count"`
+	SalesSalesReturn       float64 `json:"sales_sales_return" bson:"sales_sales_return"`
+	Commission             float64 `json:"commission" bson:"commission"`
+	CommissionPaidByCash   float64 `json:"commission_paid_by_cash" bson:"commission_paid_by_cash"`
+	CommissionPaidByBank   float64 `json:"commission_paid_by_bank" bson:"commission_paid_by_bank"`
 }
 
 func (store *Store) GetSalesReturnStats(filter map[string]interface{}) (stats SalesReturnStats, err error) {
@@ -964,6 +1016,18 @@ func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (s
 		paymentStatusList := strings.Split(keys[0], ",")
 		if len(paymentStatusList) > 0 {
 			criterias.SearchBy["payment_status"] = bson.M{"$in": paymentStatusList}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return salesreturns, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
 		}
 	}
 
@@ -1656,7 +1720,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		}
 
 		if salesreturn.DiscountWithVAT > maxDiscountAllowed {
-			errs["discount_with_vat"] = "Discount shoul not be greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
+			errs["discount_with_vat"] = "Discount should not be greater than " + fmt.Sprintf("%.2f", (maxDiscountAllowed))
 		}
 
 		if salesreturn.NetTotal > 0 && salesreturn.CashDiscount >= salesreturn.NetTotal {
@@ -2197,7 +2261,8 @@ func (salesReturn *SalesReturn) MakeRedisCode() error {
 		return err
 	}
 	if exists == 0 {
-		count, err := store.GetCountByCollection("salesreturn")
+		//count, err := store.GetCountByCollection("salesreturn")
+		count, err := store.GetCountByCollectionByDeletedIncluded("salesreturn")
 		if err != nil {
 			return err
 		}
@@ -2450,10 +2515,12 @@ func (salesReturn *SalesReturn) UpdateOrderReturnDiscount(salesReturnOld *SalesR
 
 	if salesReturnOld != nil {
 		order.ReturnDiscount -= salesReturnOld.Discount
+		order.ReturnDiscountWithVAT -= salesReturnOld.DiscountWithVAT
 	}
 
 	order.ReturnDiscount += salesReturn.Discount
 	order.ReturnDiscountWithVAT += salesReturn.DiscountWithVAT
+
 	return order.Update()
 }
 
@@ -2899,7 +2966,18 @@ func (salesreturn *SalesReturn) Update() error {
 	return nil
 }
 
+// Soft delete - set deleted to true and update deleted_by and deleted_at fields. Also undo accounting and update order return count and discount
 func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err error) {
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{}) // Check if store exists
+	if err != nil {
+		return err
+	}
+
+	order, err := FindOrderByID(salesreturn.OrderID, salesreturn.StoreID, nil)
+	if err != nil {
+		return err
+	}
+
 	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	updateOptions := options.Update()
@@ -2911,16 +2989,14 @@ func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err 
 		return err
 	}
 
-	/*
-		userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
-		if err != nil {
-			return err
-		}
-			salesreturn.Deleted = true
-			salesreturn.DeletedBy = &userID
-			now := time.Now()
-			salesreturn.DeletedAt = &now
-	*/
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		return err
+	}
+	salesreturn.Deleted = true
+	salesreturn.DeletedBy = &userID
+	now := time.Now()
+	salesreturn.DeletedAt = &now
 
 	_, err = collection.UpdateOne(
 		ctx,
@@ -2931,6 +3007,236 @@ func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err 
 	if err != nil {
 		return err
 	}
+
+	err = salesreturn.SoftDeleteSalesReturnPayments()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
+	//UpdateOrderReturnDiscount
+	order.ReturnDiscount -= salesreturn.Discount
+	order.ReturnDiscountWithVAT -= salesreturn.DiscountWithVAT
+	//UpdateOrderReturnCashDiscount
+	order.ReturnCashDiscount -= salesreturn.CashDiscount
+
+	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+
+	err = salesreturn.ClearProductsHistory()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.ClearProductsSalesReturnHistory()
+	if err != nil {
+		return err
+	}
+
+	//UpdateReturnedQuantityInOrderProduct
+	for _, salesReturnProduct := range salesreturn.Products {
+		if !salesReturnProduct.Selected {
+			continue
+		}
+
+		product, err := store.FindProductByID(&salesReturnProduct.ProductID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		go func() {
+			product.AdjustStockInHistoryAfter(salesreturn.Date)
+		}()
+
+		//for index2, orderProduct := range order.Products {
+
+		for i := len(order.Products) - 1; i >= 0; i-- {
+			if order.Products[i].ProductID == salesReturnProduct.ProductID {
+				order.Products[i].QuantityReturned -= salesReturnProduct.Quantity
+				break
+			}
+		}
+	}
+
+	err = order.CalculateOrderProfit()
+	if err != nil {
+		return err
+	}
+
+	stats, err := store.GetSalesReturnPaymentStats(bson.M{"sales_return_id": salesreturn.ID})
+	if err != nil {
+		return err
+	}
+
+	order.ReturnAmount = stats.TotalPayment
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	salesreturn.SetCustomerSalesReturnStats()
+
+	order.SetCustomerSalesStats()
+
+	_, err = salesreturn.UpdateOrderReturnCount()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.SetProductsSalesReturnStats()
+	if err != nil {
+		return err
+	}
+
+	go salesreturn.SetPostBalances()
+
+	store.NotifyUsers("sales_return_updated")
+
+	return nil
+}
+
+// Soft undelete - set deleted to false and update deleted_by and deleted_at fields. Also redo accounting and update order return count and discount
+func (salesreturn *SalesReturn) UndeleteSalesReturn(tokenClaims TokenClaims) (err error) {
+	store, err := FindStoreByID(salesreturn.StoreID, bson.M{}) // Check if store exists
+	if err != nil {
+		return err
+	}
+
+	order, err := FindOrderByID(salesreturn.OrderID, salesreturn.StoreID, nil)
+	if err != nil {
+		return err
+	}
+
+	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(false)
+	defer cancel()
+
+	err = salesreturn.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
+	salesreturn.Deleted = false
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": salesreturn.ID},
+		bson.M{"$set": salesreturn},
+		updateOptions,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.SoftUndeleteSalesReturnPayments()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.DoAccounting()
+	if err != nil {
+		return err
+	}
+
+	//UpdateOrderReturnDiscount
+	order.ReturnDiscount += salesreturn.Discount
+	order.ReturnDiscountWithVAT += salesreturn.DiscountWithVAT
+	//UpdateOrderReturnCashDiscount
+	order.ReturnCashDiscount += salesreturn.CashDiscount
+
+	//order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+
+	err = salesreturn.ClearProductsSalesReturnHistory()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.ClearProductsHistory()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.CreateProductsSalesReturnHistory()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.CreateProductsHistory(true, nil)
+	if err != nil {
+		return err
+	}
+
+	//UpdateReturnedQuantityInOrderProduct
+	for _, salesReturnProduct := range salesreturn.Products {
+		if !salesReturnProduct.Selected {
+			continue
+		}
+
+		/*
+			product, err := store.FindProductByID(&salesReturnProduct.ProductID, bson.M{})
+			if err != nil {
+				return err
+			}
+
+			go func() {
+				product.AdjustStockInHistoryAfter(salesreturn.Date)
+			}()*/
+
+		//for index2, orderProduct := range order.Products {
+
+		for i := len(order.Products) - 1; i >= 0; i-- {
+			if order.Products[i].ProductID == salesReturnProduct.ProductID {
+				order.Products[i].QuantityReturned += salesReturnProduct.Quantity
+				break
+			}
+		}
+	}
+
+	err = order.CalculateOrderProfit()
+	if err != nil {
+		return err
+	}
+
+	stats, err := store.GetSalesReturnPaymentStats(bson.M{"sales_return_id": salesreturn.ID})
+	if err != nil {
+		return err
+	}
+
+	order.ReturnAmount = stats.TotalPayment
+
+	err = order.Update()
+	if err != nil {
+		return err
+	}
+
+	salesreturn.SetCustomerSalesReturnStats()
+
+	order.SetCustomerSalesStats()
+
+	_, err = salesreturn.UpdateOrderReturnCount()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.SetProductsSalesReturnStats()
+	if err != nil {
+		return err
+	}
+
+	go salesreturn.SetPostBalances()
+
+	store.NotifyUsers("sales_return_updated")
 
 	return nil
 }
@@ -3029,6 +3335,16 @@ func (store *Store) IsSalesReturnExists(ID *primitive.ObjectID) (exists bool, er
 }
 
 func (salesreturn *SalesReturn) HardDelete() (err error) {
+	err = salesreturn.HardDeleteSalesReturnPayments()
+	if err != nil {
+		return err
+	}
+
+	err = salesreturn.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
 	collection := db.GetDB("store_" + salesreturn.StoreID.Hex()).Collection("salesreturn")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -3693,6 +4009,7 @@ func (customer *Customer) SetCustomerSalesReturnStatsByStoreID(storeID primitive
 	filter := map[string]interface{}{
 		"store_id":    storeID,
 		"customer_id": customer.ID,
+		"deleted":     bson.M{"$ne": true},
 	}
 
 	pipeline := []bson.M{

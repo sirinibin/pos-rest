@@ -142,14 +142,14 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.UpdatedAt = &now
 	salesreturn.FindNetTotal()
 
-	// Validate data
+	/*// Validate data
 	if errs := salesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
 		return
-	}
+	}*/
 
 	if salesreturn.EnableReportToZatca && !IsConnectedToInternet() {
 		response.Status = false
@@ -164,6 +164,15 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+
+	// Validate data
+	if errs := salesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors = errs
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	salesreturn.FindTotalQuantity()
 	salesreturn.UpdateForeignLabelFields()
@@ -695,6 +704,75 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Result = "Deleted successfully"
+
+	json.NewEncoder(w).Encode(response)
+}
+
+// UndeleteSalesReturn : handler function for POST /v1/salesreturn/<id>/undelete call
+func UndeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	salesreturnID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["quotation_id"] = "Invalid SalesReturn ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	salesreturn, err := store.FindSalesReturnByID(&salesreturnID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = salesreturn.UndeleteSalesReturn(tokenClaims)
+	if err != nil {
+		response.Status = false
+		response.Errors["undelete"] = "Unable to undelete:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = salesreturn.SetProductsStock()
+	if err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["add_stock"] = "Unable to add stock:" + err.Error()
+
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Undeleted successfully"
 
 	json.NewEncoder(w).Encode(response)
 }

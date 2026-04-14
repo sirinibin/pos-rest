@@ -266,6 +266,8 @@ func main() {
 	router.HandleFunc("/v1/sales-return", controller.ListSalesReturn).Methods("GET")
 	router.HandleFunc("/v1/sales-return/summary", controller.SalesReturnSummary).Methods("GET")
 	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
+	router.HandleFunc("/v1/sales-return/{id}", controller.DeleteSalesReturn).Methods("DELETE")
+	router.HandleFunc("/v1/sales-return/restore/{id}", controller.UndeleteSalesReturn).Methods("POST")
 
 	//QuotationSalesReturn
 	router.HandleFunc("/v1/quotation-sales-return/summary", controller.QuotationSalesReturnSummary).Methods("GET")

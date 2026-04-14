@@ -150,6 +150,12 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	purchase.UpdatedAt = &now
 	purchase.FindNetTotal()
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "purchase")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	// Validate data
 	if errs := purchase.Validate(w, r, "create", nil); len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -158,12 +164,6 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	//Queue
-	queue := GetOrCreateQueue(store.ID.Hex(), "purchase")
-	queueToken := generateQueueToken()
-	queue.Enqueue(Request{Token: queueToken})
-	queue.WaitUntilMyTurn(queueToken)
 
 	err = purchase.CreateNewVendorFromName()
 	if err != nil {
@@ -763,8 +763,6 @@ func ParsePurchaseBill(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
-
-
 
 // PurchaseSummary : handler for GET /purchase/summary
 func PurchaseSummary(w http.ResponseWriter, r *http.Request) {

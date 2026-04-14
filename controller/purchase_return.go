@@ -137,6 +137,12 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchasereturn.UpdatedAt = &now
 	purchasereturn.FindNetTotal()
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "purchase_return")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	// Validate data
 	if errs := purchasereturn.Validate(w, r, "create", nil); len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -145,12 +151,6 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	//Queue
-	queue := GetOrCreateQueue(store.ID.Hex(), "purchase_return")
-	queueToken := generateQueueToken()
-	queue.Enqueue(Request{Token: queueToken})
-	queue.WaitUntilMyTurn(queueToken)
 
 	purchasereturn.FindTotalQuantity()
 
@@ -651,8 +651,6 @@ func CalculatePurchaseReturnNetTotal(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
-
-
 
 // PurchaseReturnSummary : handler for GET /purchase-return/summary
 func PurchaseReturnSummary(w http.ResponseWriter, r *http.Request) {

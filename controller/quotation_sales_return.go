@@ -139,6 +139,12 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	quotationsalesreturn.UpdatedAt = &now
 	quotationsalesreturn.FindNetTotal()
 
+	//Queue
+	queue := GetOrCreateQueue(store.ID.Hex(), "quotation_sales_return")
+	queueToken := generateQueueToken()
+	queue.Enqueue(Request{Token: queueToken})
+	queue.WaitUntilMyTurn(queueToken)
+
 	// Validate data
 	if errs := quotationsalesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
@@ -147,12 +153,6 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
-	//Queue
-	queue := GetOrCreateQueue(store.ID.Hex(), "quotation_sales_return")
-	queueToken := generateQueueToken()
-	queue.Enqueue(Request{Token: queueToken})
-	queue.WaitUntilMyTurn(queueToken)
 
 	quotationsalesreturn.FindTotalQuantity()
 	err = quotationsalesreturn.UpdateForeignLabelFields()
@@ -699,8 +699,6 @@ func CalculateQuotationSalesReturnNetTotal(w http.ResponseWriter, r *http.Reques
 
 	json.NewEncoder(w).Encode(response)
 }
-
-
 
 // QuotationSalesReturnSummary : handler for GET /quotation-sales-return/summary
 func QuotationSalesReturnSummary(w http.ResponseWriter, r *http.Request) {
