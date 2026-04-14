@@ -3024,7 +3024,7 @@ func (salesreturn *SalesReturn) DeleteSalesReturn(tokenClaims TokenClaims) (err 
 	//UpdateOrderReturnCashDiscount
 	order.ReturnCashDiscount -= salesreturn.CashDiscount
 
-	order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
+	//order.ReturnAmount, order.ReturnCount, _ = store.GetReturnedAmountByOrderID(order.ID)
 
 	err = salesreturn.ClearProductsHistory()
 	if err != nil {
