@@ -446,6 +446,7 @@ func (store *Store) GetReturnedAmountByOrderID(orderID primitive.ObjectID) (retu
 		bson.M{
 			"$match": map[string]interface{}{
 				"order_id": orderID,
+				"deleted":  bson.M{"$ne": true},
 			},
 		},
 		bson.M{
