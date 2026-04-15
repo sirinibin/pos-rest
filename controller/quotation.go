@@ -159,6 +159,8 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "create"); len(errs) > 0 {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs

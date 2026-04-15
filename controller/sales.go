@@ -253,6 +253,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	queue.WaitUntilMyTurn(queueToken)
 
 	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs

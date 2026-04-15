@@ -167,6 +167,8 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := salesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs

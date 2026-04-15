@@ -158,6 +158,8 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := purchase.Validate(w, r, "create", nil); len(errs) > 0 {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "purchase")
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
