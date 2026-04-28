@@ -483,6 +483,10 @@ func main() {
 	router.HandleFunc("/v1/posting/pdf", controller.PostingPDF).Methods("POST")
 	router.HandleFunc("/v1/posting/print-data/{key}", controller.PostingPrintData).Methods("GET")
 
+	// Report PDF generation via headless Chrome
+	router.HandleFunc("/v1/report/pdf", controller.ReportPDF).Methods("POST")
+	router.HandleFunc("/v1/report/print-data/{key}", controller.ReportPrintData).Methods("GET")
+
 	// Desktop app: serve React build as SPA from STATIC_DIR env var (e.g. ./public)
 	// Must be registered LAST — PathPrefix("/") catches everything else
 	staticDir := env.Getenv("STATIC_DIR", "")
