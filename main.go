@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -16,15 +18,89 @@ import (
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var socketServer *socketio.Server
 
+// spaHandler serves a React single-page application.
+// For assets that exist on disk (JS, CSS, images) it serves the file.
+// For anything else (React routes) it returns index.html.
+type spaHandler struct {
+	staticPath string
+	indexPath  string
+}
+
+func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	filePath := filepath.Join(h.staticPath, filepath.Clean("/"+r.URL.Path))
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		// Not a file → serve index.html for SPA client-side routing
+		// Prevent WKWebView from caching index.html so updated JS chunk hashes
+		// are always picked up after a new build is installed.
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		http.ServeFile(w, r, filepath.Join(h.staticPath, h.indexPath))
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Prevent caching of HTML entry points (index.html, tabs.html, loading.html).
+	// Hashed JS/CSS assets (e.g. main.abc123.chunk.js) are safe to cache long-term.
+	path := r.URL.Path
+	if path == "/" || path == "/index.html" || path == "/tabs.html" || path == "/loading.html" {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+	}
+	http.FileServer(http.Dir(h.staticPath)).ServeHTTP(w, r)
+}
+
+// seedDefaultUser ensures the default admin user exists in the pos.user collection.
+// Safe to call on every startup — it only inserts if the email is not found.
+func seedDefaultUser() {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	count, err := collection.CountDocuments(ctx, bson.M{"email": "sirinibin2006@gmail.com"})
+	if err != nil {
+		log.Printf("[seed] Error checking user: %v", err)
+		return
+	}
+	if count > 0 {
+		log.Println("[seed] Default admin user already exists — skipping.")
+		return
+	}
+
+	createdAt := time.Now()
+	_, err = collection.InsertOne(ctx, bson.M{
+		"_id":        primitive.NewObjectID(),
+		"name":       "Sirin k",
+		"role":       "Admin",
+		"email":      "sirinibin2006@gmail.com",
+		"mob":        "9633977699",
+		"password":   "$2a$10$pyBkYb1seX2Ilq02HXs/z.sclpn89oJms19d30qZbIb5Z3/dEllwy",
+		"admin":      true,
+		"created_at": createdAt,
+		"updated_at": createdAt,
+	})
+	if err != nil {
+		log.Printf("[seed] Failed to insert default user: %v", err)
+		return
+	}
+	log.Println("[seed] Default admin user created: sirinibin2006@gmail.com")
+}
+
 // testing
 func main() {
 	fmt.Println("Start POS Restful API")
 	db.Client("")
+	seedDefaultUser()
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
 	//go models.SetIndexes()
@@ -40,6 +116,12 @@ func main() {
 
 	//API Info
 	router.HandleFunc("/v1/info", controller.APIInfo).Methods("GET")
+
+	// Health check — Redis + MongoDB connection status (no auth required)
+	router.HandleFunc("/v1/health", controller.HealthCheck).Methods("GET")
+
+	// Health check — Redis + MongoDB connectivity, no auth required
+	router.HandleFunc("/v1/health", controller.HealthCheck).Methods("GET")
 
 	//OpenAPI Spec
 	router.HandleFunc("/v1/openapi.json", controller.ServeOpenAPISpec).Methods("GET")
@@ -383,10 +465,31 @@ func main() {
 	router.PathPrefix("/zatca/").Handler(http.StripPrefix("/zatca/", http.FileServer(http.Dir("./zatca/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
+	// API routes that must come BEFORE the SPA catch-all PathPrefix("/")
+	// (gorilla/mux matches routes in registration order)
 	router.HandleFunc("/v1/socket", controller.WebSocketHandler).Methods("GET")
-	//router.HandleFunc("/sockjs-node", controller.WebSocketHandler).Methods("GET")
-
 	router.HandleFunc("/v1/upload-pdf", controller.SavePdf).Methods("POST")
+	router.HandleFunc("/v1/share-pdf", controller.SharePdf).Methods("POST")
+
+	// Invoice PDF generation via headless Chrome
+	router.HandleFunc("/v1/invoice/pdf", controller.InvoicePDF).Methods("POST")
+	router.HandleFunc("/v1/invoice/print-data/{key}", controller.InvoicePrintData).Methods("GET")
+
+	// Receipt (customer deposit/withdrawal) PDF generation via headless Chrome
+	router.HandleFunc("/v1/receipt/pdf", controller.ReceiptPDF).Methods("POST")
+	router.HandleFunc("/v1/receipt/print-data/{key}", controller.ReceiptPrintData).Methods("GET")
+
+	// Posting (balance sheet / journal) PDF generation via headless Chrome
+	router.HandleFunc("/v1/posting/pdf", controller.PostingPDF).Methods("POST")
+	router.HandleFunc("/v1/posting/print-data/{key}", controller.PostingPrintData).Methods("GET")
+
+	// Desktop app: serve React build as SPA from STATIC_DIR env var (e.g. ./public)
+	// Must be registered LAST — PathPrefix("/") catches everything else
+	staticDir := env.Getenv("STATIC_DIR", "")
+	if staticDir != "" {
+		spa := spaHandler{staticPath: staticDir, indexPath: "index.html"}
+		router.PathPrefix("/").Handler(spa)
+	}
 
 	server := socketio.NewServer(nil)
 	if err != nil {

@@ -155,22 +155,27 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	// Create command
 	cmd := exec.Command(pythonBinary, scriptPath)
 
-	// Set up pipes
+	// Set up pipes — keep stdout and stderr separate so stderr noise doesn't corrupt JSON
 	cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin
-	var output bytes.Buffer
-	cmd.Stdout = &output // Capture stdout
-	cmd.Stderr = &output // Capture stderr
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout // Capture stdout (JSON output from Python)
+	cmd.Stderr = &stderr // Capture stderr separately
 
 	// Run the command
 	err = cmd.Run()
 	if err != nil {
-		fmt.Println("Error running Python script:", err)
+		fmt.Println("Error running Python script:", err, "stderr:", stderr.String())
 		response.Status = false
-		// Parse JSON response
+		// Try to parse JSON from stdout first, fall back to stderr
+		jsonBytes := stdout.Bytes()
+		if len(jsonBytes) == 0 {
+			jsonBytes = stderr.Bytes()
+		}
 		var pythonResponse PythonResponse
-		err = json.Unmarshal(output.Bytes(), &pythonResponse)
-		if err != nil {
-			response.Errors["otp"] = "Error parsing error messages from zatca:" + err.Error()
+		parseErr := json.Unmarshal(jsonBytes, &pythonResponse)
+		if parseErr != nil {
+			response.Errors["otp"] = "Error running zatca script: " + err.Error() + " | " + stderr.String()
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return
@@ -188,20 +193,27 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 			err = store.Update()
 			if err != nil {
 				fmt.Println("Error saving store: ", err)
-				return
 			}
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+		// cmd failed but no error field in JSON — return the raw output as error
+		response.Errors["otp"] = "Zatca script failed: " + err.Error() + " output: " + string(jsonBytes)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	// Parse JSON response
+	// Parse JSON response from stdout
 	var pythonResponse PythonResponse
-	err = json.Unmarshal(output.Bytes(), &pythonResponse)
+	err = json.Unmarshal(stdout.Bytes(), &pythonResponse)
 	if err != nil {
-		fmt.Println("Error parsing JSON:", err)
+		fmt.Println("Error parsing JSON:", err, "stdout:", stdout.String(), "stderr:", stderr.String())
+		response.Status = false
+		response.Errors["otp"] = "Error parsing zatca response: " + err.Error() + " | stdout: " + stdout.String()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 

@@ -735,11 +735,8 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 			return errors.New("error marshal payload to compliance check: " + err.Error())
 		}
 
-		pythonBinary := "ZatcaPython/venv/bin/python"
-		scriptPath := "ZatcaPython/compliance_check.py"
-
 		// Create command
-		cmd := exec.Command(pythonBinary, scriptPath)
+		cmd := exec.Command("ZatcaPython/compliance_check")
 
 		// Set up pipes
 		cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin
@@ -823,11 +820,8 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 		return err
 	}
 
-	pythonBinary := "ZatcaPython/venv/bin/python"
-	scriptPath := "ZatcaPython/reporting_and_clearance.py"
-
 	// Create command
-	cmd := exec.Command(pythonBinary, scriptPath)
+	cmd := exec.Command("ZatcaPython/reporting_and_clearance")
 
 	// Set up pipes
 	cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin

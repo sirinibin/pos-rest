@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Invoice</title>
+    <link
+      href="http://localhost:2000/html-templates/bootstrap-5.1.3-dist/css/bootstrap.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700&family=Inter:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 0; background: white; }
+      .page-container {
+        font-family: {{if .FontFamily}}{{.FontFamily}}{{else}}Inter, Arial, sans-serif{{end}};
+        background-color: white;
+        padding-left: 0;
+        padding-right: 0;
+        padding-top: 10px;
+        padding-bottom: 4px;
+        height: 1118px;
+        width: 750px;
+        position: relative;
+        overflow: hidden;
+      }
+      .page-wrapper {
+        position: relative;
+        z-index: 1;
+      }
+      .bg-img {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        top: 0;
+        width: 105%;
+        height: 1118px;
+        max-width: 105%;
+        object-fit: cover;
+        object-position: top center;
+        z-index: 0;
+        pointer-events: none;
+      }
+      table { border-collapse: collapse; }
+      .table-responsive { width: 100%; }
+      .print-label { font-weight: bold; }
+      .border-thin { border: 0.5px solid black; }
+      .border-right-thin { border-right: 0.5px solid black; }
+      .border-bottom-thin { border-bottom: 0.5px solid black; }
+      .border-left-thin { border-left: 0.5px solid black; }
+      .border-top-thin { border-top: 0.5px solid black; }
+      .text-end { text-align: right; }
+      .text-start { text-align: left; }
+      .text-center { text-align: center; }
+      ul.list-unstyled { list-style: none; padding: 0; margin: 0; }
+      @media print {
+        body { margin: 0; }
+        .page-container { page-break-after: always; }
+      }
+    </style>
+  </head>
+  <body>
+    {{range $pageIndex, $page := .Pages}}
+    <div class="page-container" style="margin-top: {{$page.Top}}px">
+      {{if $.InvoiceBackground}}
+      <img
+        class="bg-img"
+        src="{{$.InvoiceBackground}}"
+        alt="Invoice Background"
+      />
+      {{end}}
+      <div class="page-wrapper" style="padding: 0 5px">
+        <!-- STORE HEADER -->
+        {{if and $.ShowStoreHeader (not $.InvoiceBackground)}}
+        <div
+          class="row"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 4px;
+          "
+        >
+          <div style="flex: 1">
+            <ul class="list-unstyled">
+              <li>
+                <h4 style="font-size:{{$.FontStoreName}}; margin:0;">
+                  {{$.Store.Name}}
+                </h4>
+              </li>
+              <li style="font-size:{{$.FontStoreTitle}};">{{$.Store.Title}}</li>
+              <li style="font-size:{{$.FontStoreCR}};">
+                C.R. / {{$.Store.RegistrationNumber}}
+              </li>
+              <li style="font-size:{{$.FontStoreVAT}};">
+                VAT / {{$.Store.VatNo}}
+              </li>
+            </ul>
+          </div>
+          <div style="flex: 0 0 auto; text-align: center">
+            {{if $.Store.Logo}}<img
+              width="70"
+              height="70"
+              src="{{$.Store.Logo}}"
+              alt="Store Logo"
+            />{{end}}
+          </div>
+          <div style="flex: 1; text-align: right">
+            <ul class="list-unstyled">
+              <li>
+                <h4 style="font-size:{{$.FontStoreNameArabic}}; margin:0;">
+                  <strong>{{$.Store.NameInArabic}}</strong>
+                </h4>
+              </li>
+              <li style="font-size:{{$.FontStoreTitleArabic}};">
+                {{$.Store.TitleInArabic}}
+              </li>
+              <li style="font-size:{{$.FontStoreCRArabic}};">
+                {{$.Store.RegistrationNumberInArabic}}
+              </li>
+              <li style="font-size:{{$.FontStoreVATArabic}};">
+                {{$.Store.VatNoInArabic}}
+              </li>
+            </ul>
+          </div>
+        </div>
+        {{end}}
+
+        <!-- INVOICE TITLE -->
+        <div style="margin-top:{{$.MarginTop}}; text-align:center;">
+          <h1
+            style="font-size:{{$.FontInvoiceTitle}}; text-decoration:underline; font-weight:bold;"
+          >
+            {{$.InvoiceTitle}}
+          </h1>
+        </div>
+
+        <!-- DETAILS + QR -->
+        <div
+          style="display:flex; font-size:{{$.FontInvoiceDetails}}; padding:10px; align-items:flex-start;"
+        >
+          <div
+            style="border:0.5px solid black; flex:1; {{if $.QROnRight}}width:74%;{{else}}width:100%;{{end}}"
+          >
+            <!-- Invoice/Quotation No and Date -->
+            {{if $.IsQuotationNotInvoice}}
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Quotation No. | رقم الاقتباس:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">{{$.Model.Code}}</div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Quotation Date | تاريخ الاقتباس:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.FormattedDate}} {{if $.ArabicDate}} |
+                {{$.ArabicDate}}{{end}}
+              </div>
+            </div>
+            {{else if $.IsStockTransfer}}
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Transfer No. | رقم التحويل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">{{$.Model.Code}}</div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Transfer Date | تاريخ النقل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.FormattedDate}} | {{$.ArabicDate}}
+              </div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+              >
+                From Store | من المتجر:
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.Model.FromWarehouseName}}
+              </div>
+            </div>
+            <div style="display: flex">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+              >
+                <b>To Store | للتخزين:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.Model.ToWarehouseCode}}
+              </div>
+            </div>
+            {{else}}
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+              >
+                Invoice No. | رقم الفاتورة:
+              </div>
+              <div style="width: 68%; padding: 3px">{{$.Model.Code}}</div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Invoice Date | تاريخ الفاتورة:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.FormattedDate}} | {{$.ArabicDate}}
+              </div>
+            </div>
+            {{end}}
+
+            <!-- Original Invoice for Returns -->
+            {{if $.OriginalInvoiceCode}}
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Original Invoice No. | رقم الفاتورة الأصلية:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.OriginalInvoiceCode}}
+              </div>
+            </div>
+            {{end}} {{if $.OriginalInvoiceDate}}
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Original Invoice Date | تاريخ الفاتورة الأصلية:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.OriginalInvoiceDate}}
+              </div>
+            </div>
+            {{end}}
+
+            <!-- Customer fields (sales, quotation, delivery_note) -->
+            {{if $.ShowCustomerInfo}}
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Customer Name | اسم العميل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.CustomerName}}{{if $.CustomerNameArabic}}
+                {{$.CustomerNameArabic}}{{end}}
+              </div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Customer ID | معرف العميل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{if $.CustomerCode}}{{$.CustomerCode}}{{else}}N/A{{end}}
+              </div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Customer VAT | ضريبة القيمة المضافة للعملاء:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{if $.CustomerVatNo}}{{$.CustomerVatNo}}{{else}}N/A{{end}}
+              </div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Customer C.R | رقم تسجيل شركة العميل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{if $.CustomerCR}}{{$.CustomerCR}}{{else}}N/A{{end}}
+              </div>
+            </div>
+            <div style="display: flex">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Customer Address | عنوان العميل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px" dir="ltr">
+                {{$.CustomerAddress}}
+              </div>
+            </div>
+            {{end}}
+
+            <!-- Vendor fields (purchase) -->
+            {{if $.ShowVendorInfo}}
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Vendor Name | اسم العميل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{$.VendorName}}{{if $.VendorNameArabic}}
+                {{$.VendorNameArabic}}{{end}}
+              </div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Vendor ID | معرف البائع:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{if $.VendorCode}}{{$.VendorCode}}{{else}}N/A{{end}}
+              </div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Vendor VAT | ضريبة القيمة المضافة للعملاء:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{if $.VendorVatNo}}{{$.VendorVatNo}}{{else}}N/A{{end}}
+              </div>
+            </div>
+            <div style="display: flex; border-bottom: 0.5px solid black">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Vendor C.R | رقم تسجيل الشركة الموردة:</b>
+              </div>
+              <div style="width: 68%; padding: 3px">
+                {{if $.VendorCR}}{{$.VendorCR}}{{else}}N/A{{end}}
+              </div>
+            </div>
+            <div style="display: flex">
+              <div
+                style="
+                  width: 32%;
+                  border-right: 0.5px solid black;
+                  padding: 3px;
+                "
+                class="print-label"
+              >
+                <b>Vendor Address | عنوان العميل:</b>
+              </div>
+              <div style="width: 68%; padding: 3px" dir="ltr">
+                {{$.VendorAddress}}
+              </div>
+            </div>
+            {{end}}
+          </div>
+
+          <!-- QR top-right -->
+          {{if $.QROnRight}}
+          <div style="width: 26%; padding-left: 6px; text-align: center">
+            {{if $.QRImageData}}<img
+              src="{{$.QRImageData}}"
+              style="width:{{$.QRWidth}}; height:{{$.QRHeight}};"
+              alt="QR Code"
+            />{{end}}
+          </div>
+          {{end}}
+        </div>
+
+        <!-- Page count -->
+        {{if $.Model.TotalPages}}
+        <div
+          style="display:flex; justify-content:space-between; font-size:{{$.FontPageCount}};"
+        >
+          <span>Page {{add $pageIndex 1}} of {{$.Model.TotalPages}}</span>
+          <span dir="rtl"
+            >{{$.Model.TotalPagesArabic}} الصفحة {{arabicNum (add $pageIndex
+            1)}} من
+          </span>
+        </div>
+        {{end}}
+
+        <!-- PRODUCTS TABLE -->
+        <div>
+          <table style="border: 0.5px solid black; width: 100%">
+            <tbody style="font-size:{{$.FontTableBody}};">
+              <tr
+                style="border-bottom:0.5px solid black; font-size:{{$.FontTableHead}};"
+              >
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 6%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>رقم</li>
+                    <li>Sn.</li>
+                  </ul>
+                </th>
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 14%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>رقم القطعة</li>
+                    <li>Part No.</li>
+                  </ul>
+                </th>
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 31%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>وصف</li>
+                    <li>Description</li>
+                  </ul>
+                </th>
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 5%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>كمية</li>
+                    <li>Qty</li>
+                  </ul>
+                </th>
+                {{if not $.IsDeliveryNote}}
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 8%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>سعر الوحدة</li>
+                    <li>Unit Price</li>
+                  </ul>
+                </th>
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 7%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>تخفيض</li>
+                    <li>Discount</li>
+                  </ul>
+                </th>
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 11%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    {{if $.Model.HideVAT}}
+                    <li>سعر</li>
+                    <li>Price</li>
+                    {{else}}
+                    <li>السعر بدون ضريبة</li>
+                    <li>Price (without VAT)</li>
+                    {{end}}
+                  </ul>
+                </th>
+                {{if not $.Model.HideVAT}}
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 8%;
+                    border-right: 0.5px solid black;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>ضريبة</li>
+                    <li>VAT({{$.Model.VatPercent}}%)</li>
+                  </ul>
+                </th>
+                <th
+                  class="text-center"
+                  style="
+                    padding: 0;
+                    width: 10%;
+                    border-bottom: 0.5px solid black;
+                  "
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 2px">
+                    <li>السعر مع الضريبة</li>
+                    <li>Price (with VAT)</li>
+                  </ul>
+                </th>
+                {{end}} {{end}}
+              </tr>
+              {{range $i, $product := $page.Products}}
+              <tr style="border-bottom: 0.5px solid black; text-align: center">
+                <td style="padding: 7px; border-right: 0.5px solid black">
+                  {{if $product.PartNumber}}{{add (add $i 1) (mul $pageIndex
+                  $.Model.PageSize)}}{{end}}
+                </td>
+                <td style="border-right: 0.5px solid black">
+                  {{if $product.PrefixPartNumber}}{{$product.PrefixPartNumber}}
+                  - {{end}}{{$product.PartNumber}}
+                </td>
+                <th
+                  dir="ltr"
+                  style="
+                    border-right: 0.5px solid black;
+                    width: 31%;
+                    white-space: normal;
+                    word-break: break-word;
+                  "
+                >
+                  <span dir="ltr"
+                    >{{$product.Name}}{{if $product.NameInArabic}} |
+                    <span dir="rtl">{{$product.NameInArabic}}</span
+                    >{{end}}</span
+                  >
+                </th>
+                <td style="border-right: 0.5px solid black">
+                  {{$product.Quantity}} {{$product.Unit}}
+                </td>
+                {{if not $.IsDeliveryNote}}
+                <td
+                  class="text-end"
+                  style="border-right: 0.5px solid black; padding-right: 3px"
+                >
+                  {{$product.DisplayUnitPrice}}
+                </td>
+                <td
+                  class="text-end"
+                  style="border-right: 0.5px solid black; padding-right: 3px"
+                >
+                  {{$product.TotalDiscount}}
+                </td>
+                <td
+                  class="text-end"
+                  style="border-right: 0.5px solid black; padding-right: 3px"
+                >
+                  {{$product.PriceWithoutVAT}}
+                </td>
+                {{if not $.Model.HideVAT}}
+                <td
+                  class="text-end"
+                  style="border-right: 0.5px solid black; padding-right: 3px"
+                >
+                  {{$product.VATAmount}}
+                </td>
+                <td class="text-end" style="padding-right: 3px">
+                  {{$product.PriceWithVAT}}
+                </td>
+                {{end}} {{end}}
+              </tr>
+              {{end}} {{if and (eq $pageIndex (sub (len $.Pages) 1))
+              $.IsStockTransfer}}
+              <tr>
+                <td></td>
+                <td></td>
+                <th style="border-left: 0.5px solid black; text-align: right">
+                  Total Quantity | <span dir="rtl">الكمية الإجمالية</span>:
+                </th>
+                <td
+                  style="
+                    border-right: 0.5px solid black;
+                    border-left: 0.5px solid black;
+                    font-weight: bold;
+                    background: #f6f6f6;
+                    text-align: center;
+                  "
+                >
+                  {{$.Model.TotalQuantity}}
+                </td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+
+          <!-- TOTALS TABLE -->
+          {{if not $.IsDeliveryNote}}
+          <table style="border: 0.5px solid black; width: 100%">
+            <tbody style="font-size:{{$.FontTableFooter}};">
+              <tr style="border-bottom: 0.5px solid black">
+                {{if $.QROnBottom}}
+                <th
+                  rowspan="8"
+                  style="
+                    width: 20%;
+                    padding: 3px;
+                    border-right: 0.5px solid black;
+                    vertical-align: top;
+                    text-align: center;
+                  "
+                >
+                  {{if $.QRImageData}}<img
+                    src="{{$.QRImageData}}"
+                    style="width:{{$.QRWidth}}; height:{{$.QRHeight}};"
+                    alt="QR Code"
+                  />{{end}}
+                </th>
+                {{end}}
+              </tr>
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  class="text-end print-label"
+                  style="padding: 2px; border-right: 0.5px solid black"
+                >
+                  {{if $.Model.HideVAT}}<b>Total المجموع :</b>{{else}}<b
+                    >Total (without VAT)
+                    <span dir="rtl">الإجمالي (بدون ضريبة القيمة المضافة)</span>
+                    :</b
+                  >{{end}}
+                </th>
+                <td class="text-end" style="padding-right: 3px">
+                  {{$.Model.Total}}
+                </td>
+              </tr>
+              {{if not $.IsStockTransfer}}
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  class="text-end print-label"
+                  style="padding: 2px; border-right: 0.5px solid black"
+                >
+                  Shipping / Handling Fees رسوم الشحن / المناولة :
+                </th>
+                <td class="text-end" style="padding-right: 3px">
+                  {{$.Model.ShippingHandlingFees}}
+                </td>
+              </tr>
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  class="text-end print-label"
+                  style="padding: 2px; border-right: 0.5px solid black"
+                >
+                  Total Discount الخصم الإجمالي :
+                </th>
+                <td class="text-end" style="padding-right: 3px">
+                  {{$.Model.Discount}}
+                </td>
+              </tr>
+              {{end}} {{if not $.Model.HideVAT}}
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  class="text-end print-label"
+                  style="padding: 2px; border-right: 0.5px solid black"
+                >
+                  Total Taxable Amount (without VAT)
+                  <span dir="rtl"
+                    >إجمالي المبلغ الخاضع للضريبة (بدون ضريبة القيمة
+                    المضافة)</span
+                  >
+                  :
+                </th>
+                <td class="text-end" style="padding-right: 3px">
+                  {{$.Model.TaxableAmount}}
+                </td>
+              </tr>
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  class="text-end print-label"
+                  style="padding: 2px; border-right: 0.5px solid black"
+                >
+                  Total VAT {{$.Model.VatPercent}}% إجمالي ضريبة القيمة المضافة
+                  :
+                </th>
+                <td class="text-end" style="padding-right: 3px">
+                  {{$.Model.VatPrice}}
+                </td>
+              </tr>
+              {{end}}
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  class="text-end print-label"
+                  style="
+                    padding: 2px;
+                    width: 70%;
+                    border-right: 0.5px solid black;
+                  "
+                >
+                  Rounding Amount مبلغ التقريب :
+                </th>
+                <td class="text-end" style="width: 10%; padding-right: 3px">
+                  {{if
+                  $.Model.RoundingAmount}}{{$.Model.RoundingAmount}}{{else}}0.00{{end}}
+                </td>
+              </tr>
+              <tr>
+                <th
+                  class="text-end print-label"
+                  style="
+                    padding: 2px;
+                    width: 70%;
+                    border-right: 0.5px solid black;
+                  "
+                >
+                  {{if $.Model.HideVAT}}Net Total
+                  <span dir="rtl">صافي المجموع</span>:{{else}}Net Total (with
+                  VAT)
+                  <span dir="rtl"
+                    >الإجمالي الصافي (مع ضريبة القيمة المضافة)</span
+                  >:{{end}}
+                </th>
+                <td class="text-end" style="width: 10%; padding-right: 3px">
+                  <strong>{{$.Model.NetTotal}}</strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- IN WORDS + REMARKS -->
+          <table style="border: 0.5px solid black; width: 100%">
+            <tbody style="font-size:{{$.FontTableFooter}};">
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  colspan="2"
+                  class="text-end print-label"
+                  style="
+                    padding: 5px;
+                    width: 14.6%;
+                    border-right: 0.5px solid black;
+                  "
+                >
+                  In Words بكلمات:
+                </th>
+                <th
+                  class="text-start"
+                  colspan="7"
+                  style="padding: 5px; width: 85.4%"
+                >
+                  <ul class="list-unstyled" style="margin-bottom: 0">
+                    <li
+                      dir="rtl"
+                      style="
+                        unicode-bidi: isolate;
+                        white-space: normal;
+                        word-break: break-word;
+                        line-height: 1.8;
+                      "
+                    >
+                      {{$.AmountInWordsArabic}}
+                    </li>
+                    <li>{{$.AmountInWordsEnglish}}</li>
+                  </ul>
+                </th>
+              </tr>
+              <tr style="border-bottom: 0.5px solid black">
+                <th
+                  colspan="2"
+                  class="text-end print-label"
+                  style="padding: 5px; border-right: 0.5px solid black"
+                >
+                  Remarks ملاحظات:
+                </th>
+                <td class="text-start" colspan="7" style="padding: 5px">
+                  {{$.Model.Remarks}}
+                </td>
+              </tr>
+
+              <!-- Quotation extra: validity, delivery, bank account -->
+              {{if and $.IsQuotationNotInvoice (eq $pageIndex (sub (len $.Pages)
+              1))}}
+              <tr>
+                <th
+                  colspan="2"
+                  class="text-end print-label"
+                  style="padding: 5px; border-right: 0.5px solid black"
+                >
+                  Validity صحة:
+                </th>
+                <th
+                  colspan="2"
+                  style="
+                    padding: 5px;
+                    border-right: 0.5px solid black;
+                    color: red;
+                  "
+                >
+                  {{$.Model.ValidityDays}} days أيام
+                </th>
+                <th
+                  colspan="2"
+                  class="text-end print-label"
+                  style="padding: 5px; border-right: 0.5px solid black"
+                >
+                  Delivery توصيل:
+                </th>
+                <th colspan="3" style="padding: 5px" dir="ltr">
+                  Within {{$.Model.DeliveryDays}} days from the date of payment
+                  | خلال {{$.Model.DeliveryDays}} أيام من تاريخ الدفع
+                </th>
+              </tr>
+              {{if $.BankAccount.BankName}}
+              <tr>
+                <th colspan="9" style="padding: 0">
+                  <table style="width: 100%; border: 0.5px solid black">
+                    <tbody>
+                      <tr
+                        style="border-bottom:0.5px solid black; font-size:{{$.FontBankAccountHeader}};"
+                      >
+                        <th
+                          colspan="5"
+                          class="text-center print-label"
+                          style="padding: 0"
+                        >
+                          <ul class="list-unstyled" style="height: 15px">
+                            <li>تفاصيل الحساب البنكي</li>
+                            <li>Bank Account details</li>
+                          </ul>
+                        </th>
+                      </tr>
+                      <tr style="border-bottom: 0.5px solid black">
+                        <th
+                          class="text-center print-label"
+                          style="
+                            padding: 0;
+                            width: 5%;
+                            border-right: 0.5px solid black;
+                          "
+                        >
+                          <ul class="list-unstyled">
+                            <li>اسم البنك</li>
+                            <li>Bank Name</li>
+                          </ul>
+                        </th>
+                        <th
+                          class="text-center print-label"
+                          style="
+                            padding: 0;
+                            width: 5%;
+                            border-right: 0.5px solid black;
+                          "
+                        >
+                          <ul class="list-unstyled">
+                            <li>رقم العميل</li>
+                            <li>Customer No.</li>
+                          </ul>
+                        </th>
+                        <th
+                          class="text-center print-label"
+                          style="padding: 0; border-right: 0.5px solid black"
+                        >
+                          <ul class="list-unstyled">
+                            <li>رقم الحساب المصرفي الدولي</li>
+                            <li>IBAN</li>
+                          </ul>
+                        </th>
+                        <th
+                          class="text-center print-label"
+                          style="
+                            padding: 0;
+                            width: 10%;
+                            border-right: 0.5px solid black;
+                          "
+                        >
+                          <ul class="list-unstyled">
+                            <li>إسم الحساب</li>
+                            <li>Account name</li>
+                          </ul>
+                        </th>
+                        <th
+                          class="text-center print-label"
+                          style="
+                            padding: 0;
+                            width: 5%;
+                            border-right: 0.5px solid black;
+                          "
+                        >
+                          <ul class="list-unstyled">
+                            <li>رقم حساب</li>
+                            <li>Account No.</li>
+                          </ul>
+                        </th>
+                      </tr>
+                      <tr>
+                        <td
+                          style="
+                            width: 25%;
+                            border-right: 0.5px solid black;
+                            padding: 10px;
+                          "
+                        >
+                          {{$.BankAccount.BankName}}
+                        </td>
+                        <td
+                          style="
+                            width: 15%;
+                            border-right: 0.5px solid black;
+                            padding: 10px;
+                          "
+                        >
+                          {{$.BankAccount.CustomerNo}}
+                        </td>
+                        <td
+                          style="border-right: 0.5px solid black; padding: 10px"
+                        >
+                          {{$.BankAccount.IBAN}}
+                        </td>
+                        <td
+                          style="
+                            width: 20%;
+                            border-right: 0.5px solid black;
+                            padding: 10px;
+                          "
+                        >
+                          {{$.BankAccount.AccountName}}
+                        </td>
+                        <td style="width: 15%; padding: 10px">
+                          {{$.BankAccount.AccountNo}}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </th>
+              </tr>
+              {{end}} {{end}}
+            </tbody>
+          </table>
+          {{end}}
+
+          <!-- SIGNATURE / DELIVERY FOOTER -->
+          {{if $.ShowReceivedByFooter}}
+          <table style="width:100%; font-size:{{$.FontSignature}};">
+            <thead>
+              <tr>
+                <th
+                  class="text-end print-label"
+                  style="width: 20%; padding: 2px"
+                >
+                  Delivered By سلمت بواسطة:
+                </th>
+                <th style="width: 30%; padding: 2px">
+                  {{$.Model.DeliveredByUserName}}
+                </th>
+                <th
+                  class="text-end print-label"
+                  style="width: 20%; padding: 2px"
+                >
+                  Received By استلمت من قبل:
+                </th>
+                <th style="width: 30%"></th>
+              </tr>
+            </thead>
+          </table>
+          {{end}}
+
+          <!-- FOOTER ADDRESS -->
+          {{if $.ShowFooterAddress}}
+          <div
+            style="display:flex; justify-content:space-between; font-size:{{$.FontFooter}}; height:55px;"
+          >
+            <div style="flex: 0 0 16%; text-align: left"></div>
+            <div style="flex: 0 0 66%; text-align: center">
+              <ul class="list-unstyled text-center" style="margin-bottom: 0">
+                <li><b>{{$.Store.AddressInArabic}}</b></li>
+                <li><strong>{{$.Store.Address}}</strong></li>
+                <li>
+                  هاتف:<b>{{$.Store.PhoneInArabic}}</b>, Phone:<strong
+                    >{{$.Store.Phone}}</strong
+                  >
+                </li>
+                <li>
+                  <strong>الرمز البريدي:</strong>{{$.Store.ZipcodeInArabic}},
+                  <strong>Email:{{$.Store.Email}}</strong>
+                </li>
+              </ul>
+            </div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+    </div>
+    {{end}}
+    <script>
+      document.body.setAttribute("data-print-ready", "true");
+    </script>
+  </body>
+</html>
