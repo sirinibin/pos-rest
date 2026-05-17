@@ -396,6 +396,16 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 				customer.Update()
 			}
 		}
+		// BI: update customer churn/CLV and product velocity/XYZ on order create
+		go func() {
+			if order.CustomerID != nil && !order.CustomerID.IsZero() {
+				models.UpdateCustomerBIOnOrderChange(order.StoreID, order.CustomerID)
+			}
+			for _, p := range order.Products {
+				pid := p.ProductID
+				models.UpdateProductBIOnOrderChange(order.StoreID, &pid)
+			}
+		}()
 		store.NotifyUsers("sales_updated")
 	}()
 
@@ -636,6 +646,21 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 			}
 			orderOld.SetProductsSalesStats()
 		}
+		// BI: update customer churn/CLV and product velocity/XYZ on order update
+		go func() {
+			if order.CustomerID != nil && !order.CustomerID.IsZero() {
+				models.UpdateCustomerBIOnOrderChange(order.StoreID, order.CustomerID)
+			}
+			// Also update old customer if customer was changed on this order
+			if orderOld.CustomerID != nil && !orderOld.CustomerID.IsZero() &&
+				(order.CustomerID == nil || *orderOld.CustomerID != *order.CustomerID) {
+				models.UpdateCustomerBIOnOrderChange(orderOld.StoreID, orderOld.CustomerID)
+			}
+			for _, p := range order.Products {
+				pid := p.ProductID
+				models.UpdateProductBIOnOrderChange(order.StoreID, &pid)
+			}
+		}()
 		store.NotifyUsers("sales_updated")
 	}()
 

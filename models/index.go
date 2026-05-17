@@ -112,6 +112,22 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	fields = bson.M{"created_at": -1}
+	err = store.CreateIndex("customer", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	compoundFields := bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+		bson.E{Key: "created_at", Value: -1},
+	}
+	err = store.CreateCompoundIndex("customer", compoundFields)
+	if err != nil {
+		return err
+	}
+
 	//vendor
 	textFields = bson.D{
 		bson.E{Key: "name", Value: "text"},
@@ -180,6 +196,25 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+	}
+	err = store.CreateCompoundIndex("order", compoundFields)
+	if err != nil {
+		return err
+	}
+
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "zatca.reporting_passed", Value: 1},
+		bson.E{Key: "zatca.reporting_passed_at", Value: -1},
+	}
+	err = store.CreateCompoundIndex("order", compoundFields)
+	if err != nil {
+		return err
+	}
+
 	//salesreturn
 	fields = bson.M{"customer_id": 1}
 	err = store.CreateIndex("salesreturn", fields, false, false, "")
@@ -211,6 +246,15 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+	}
+	err = store.CreateCompoundIndex("salesreturn", compoundFields)
+	if err != nil {
+		return err
+	}
+
 	//purchase
 	fields = bson.M{"vendor_id": 1}
 	err = store.CreateIndex("purchase", fields, false, false, "")
@@ -232,6 +276,15 @@ func (store *Store) CreateAllIndexes() error {
 
 	fields = bson.M{"code": 1}
 	err = store.CreateIndex("purchase", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+	}
+	err = store.CreateCompoundIndex("purchase", compoundFields)
 	if err != nil {
 		return err
 	}
@@ -261,6 +314,15 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+	}
+	err = store.CreateCompoundIndex("purchasereturn", compoundFields)
+	if err != nil {
+		return err
+	}
+
 	//quotation
 	fields = bson.M{"customer_id": 1}
 	err = store.CreateIndex("quotation", fields, false, false, "")
@@ -286,6 +348,15 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+	}
+	err = store.CreateCompoundIndex("quotation", compoundFields)
+	if err != nil {
+		return err
+	}
+
 	//delivery_note
 	fields = bson.M{"customer_id": 1}
 	err = store.CreateIndex("delivery_note", fields, false, false, "")
@@ -307,6 +378,15 @@ func (store *Store) CreateAllIndexes() error {
 
 	fields = bson.M{"code": 1}
 	err = store.CreateIndex("delivery_note", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+	}
+	err = store.CreateCompoundIndex("delivery_note", compoundFields)
 	if err != nil {
 		return err
 	}
@@ -473,6 +553,25 @@ func (store *Store) CreateAllIndexes() error {
 
 	fields = bson.M{"posts.date": -1}
 	err = store.CreateIndex("posting", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	compoundFields = bson.D{
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "deleted", Value: 1},
+	}
+	err = store.CreateCompoundIndex("posting", compoundFields)
+	if err != nil {
+		return err
+	}
+
+	compoundFields = bson.D{
+		bson.E{Key: "account_id", Value: 1},
+		bson.E{Key: "store_id", Value: 1},
+		bson.E{Key: "date", Value: 1},
+	}
+	err = store.CreateCompoundIndex("posting", compoundFields)
 	if err != nil {
 		return err
 	}
@@ -959,5 +1058,27 @@ func (store *Store) CreateTextIndex(collectionName string, fields bson.D, indexN
 	}
 
 	fmt.Println("Created text index:", createdIndexName)
+	return nil
+}
+
+func (store *Store) CreateCompoundIndex(collectionName string, fields bson.D) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
+
+	mod := mongo.IndexModel{
+		Keys:    fields,
+		Options: options.Index(),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	indexName, err := collection.Indexes().CreateOne(ctx, mod)
+	if err != nil {
+		log.Printf("Failed to create compound index for fields:%v, collection: %s", fields, collectionName)
+		fmt.Println(err.Error())
+		return err
+	}
+
+	log.Printf("Created compound index:%s for collection:%s for fields %v", indexName, collectionName, fields)
 	return nil
 }

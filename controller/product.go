@@ -848,3 +848,62 @@ func ProductSummary(w http.ResponseWriter, r *http.Request) {
 	response.Result = productStats
 	json.NewEncoder(w).Encode(response)
 }
+
+// GetProductBiHistory : handler for GET /v1/product/{id}/bi-history
+// Returns velocity trend history and ABC-XYZ classification history for a product.
+func GetProductBiHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	productID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid Product ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	velocityHistory, err := store.GetProductSalesTrendHistory(productID)
+	if err != nil {
+		response.Status = false
+		response.Errors["velocity_history"] = "Unable to fetch velocity history:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	abcXyzHistory, err := store.GetProductAbcXyzHistory(productID)
+	if err != nil {
+		response.Status = false
+		response.Errors["abc_xyz_history"] = "Unable to fetch ABC-XYZ history:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = map[string]interface{}{
+		"velocity_history": velocityHistory,
+		"abc_xyz_history":  abcXyzHistory,
+	}
+	json.NewEncoder(w).Encode(response)
+}

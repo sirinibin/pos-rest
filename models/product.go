@@ -183,6 +183,24 @@ type Product struct {
 	LinkToProductID      *primitive.ObjectID     `json:"link_to_product_id,omitempty" bson:"-"`
 	Set                  ProductSet              `json:"set" bson:"set"`
 	AllowDuplicates      bool                    `bson:"allow_duplicates" json:"allow_duplicates"`
+
+	// BI: Sales Velocity Trend — populated by cron job every 3 hours
+	SalesVelocityTrend       string  `bson:"sales_velocity_trend,omitempty" json:"sales_velocity_trend,omitempty"`
+	SalesVelocityTrendReason string  `bson:"sales_velocity_trend_reason,omitempty" json:"sales_velocity_trend_reason,omitempty"`
+	SlopPercentPerMonth      float64 `bson:"slop_percent_per_month" json:"slop_percent_per_month"`
+	MomentumPercentPer3Month float64 `bson:"momentum_percent_per_3month" json:"momentum_percent_per_3month"`
+	AvgMonthlyQty            float64 `bson:"avg_monthly_qty" json:"avg_monthly_qty"`
+	Recent3MonthQty          float64 `bson:"recent_3month_qty" json:"recent_3month_qty"`
+	Revenue                  float64 `bson:"revenue" json:"revenue"`
+
+	// BI: ABC-XYZ Inventory Classification — populated by cron job every 3 hours
+	Class            string  `bson:"class,omitempty" json:"class,omitempty"`
+	ClassReason      string  `bson:"class_reason,omitempty" json:"class_reason,omitempty"`
+	AbcTier          string  `bson:"abc_tier,omitempty" json:"abc_tier,omitempty"`
+	XyzTier          string  `bson:"xyz_tier,omitempty" json:"xyz_tier,omitempty"`
+	CV               float64 `bson:"cv" json:"cv"`
+	ActiveMonths     int     `bson:"active_months" json:"active_months"`
+	StockingStrategy string  `bson:"stocking_strategy,omitempty" json:"stocking_strategy,omitempty"`
 }
 
 type ProductSet struct {
@@ -2303,6 +2321,41 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
 	} else if !createdAtEndDate.IsZero() {
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	keys, ok = r.URL.Query()["search[sales_velocity_trend]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["sales_velocity_trend"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[sales_velocity_trend_reason]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["sales_velocity_trend_reason"] = bson.M{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[abc_tier]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["abc_tier"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[xyz_tier]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["xyz_tier"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[class]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["class"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[class_reason]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["class_reason"] = bson.M{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[stocking_strategy]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["stocking_strategy"] = bson.M{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["limit"]
@@ -6213,6 +6266,26 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
 	} else if !createdAtEndDate.IsZero() {
 		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	}
+
+	keys, ok = r.URL.Query()["search[sales_velocity_trend]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["sales_velocity_trend"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[abc_tier]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["abc_tier"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[xyz_tier]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["xyz_tier"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[class]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["class"] = keys[0]
 	}
 
 	return criterias, nil

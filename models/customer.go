@@ -116,6 +116,32 @@ type Customer struct {
 	Sponsor                    string                   `bson:"sponsor" json:"sponsor"`
 	UseRemarksInSales          bool                     `bson:"use_remarks_in_sales" json:"use_remarks_in_sales"`
 	Images                     []string                 `bson:"images,omitempty" json:"images,omitempty"`
+
+	// BI: Churn Risk — populated by cron job every 3 hours
+	ChurnRiskTier       string  `bson:"churn_risk_tier,omitempty" json:"churn_risk_tier,omitempty"`
+	ChurnRiskTierReason string  `bson:"churn_risk_tier_reason,omitempty" json:"churn_risk_tier_reason,omitempty"`
+	ChurnPercent        float64 `bson:"churn_percent" json:"churn_percent"`
+	TotalSpend          float64 `bson:"total_spend" json:"total_spend"`
+	DaysSinceLastBuy    int     `bson:"days_since_last_buy" json:"days_since_last_buy"`
+
+	// BI: CLV 12-month prediction — populated by cron job every 3 hours
+	LifetimeValueSegmentFor12Months       string  `bson:"lifetime_value_segment_for_12months,omitempty" json:"lifetime_value_segment_for_12months,omitempty"`
+	LifetimeValueSegmentReasonFor12Months string  `bson:"lifetime_value_segment_reason_for_12months,omitempty" json:"lifetime_value_segment_reason_for_12months,omitempty"`
+	PredictedCLVAmount12Months            float64 `bson:"predicted_clv_amount_12months" json:"predicted_clv_amount_12months"`
+	PredictedPurchasesCountForecast       float64 `bson:"predicted_purchases_count_forecast" json:"predicted_purchases_count_forecast"`
+	PredictedAvgOrderAmount               float64 `bson:"predicted_avg_order_amount" json:"predicted_avg_order_amount"`
+	HistoryOrdersCount                    int     `bson:"history_orders_count" json:"history_orders_count"`
+	HistorySpendAmount                    float64 `bson:"history_spend_amount" json:"history_spend_amount"`
+	TenureDays                            int     `bson:"tenure_days" json:"tenure_days"`
+
+	// BI: Cohort Retention — populated by cron job every 3 hours
+	FirstPurchaseAt  *time.Time `bson:"first_purchase_at,omitempty" json:"first_purchase_at,omitempty"`
+	LastPurchaseAt   *time.Time `bson:"last_purchase_at,omitempty" json:"last_purchase_at,omitempty"`
+	Retention1Month  string     `bson:"retention_1month,omitempty" json:"retention_1month,omitempty"`
+	Retention3Month  string     `bson:"retention_3month,omitempty" json:"retention_3month,omitempty"`
+	Retention6Month  string     `bson:"retention_6month,omitempty" json:"retention_6month,omitempty"`
+	Retention12Month string     `bson:"retention_12month,omitempty" json:"retention_12month,omitempty"`
+	Retention24Month string     `bson:"retention_24month,omitempty" json:"retention_24month,omitempty"`
 }
 
 type CustomerStats struct {
@@ -838,20 +864,20 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 
 		if customerOld.VATNo != "" {
 			/*
-			err = store.UpdateManyByCollectionName(
-				"vendor",
-				bson.M{
-					"name":   customerOld.Name,
-					"vat_no": customerOld.VATNo,
-				},
-				bson.M{
-					"name":           customer.Name,
-					"name_in_arabic": customer.NameInArabic,
-				},
-			)
-			if err != nil {
-				return nil
-			}*/
+				err = store.UpdateManyByCollectionName(
+					"vendor",
+					bson.M{
+						"name":   customerOld.Name,
+						"vat_no": customerOld.VATNo,
+					},
+					bson.M{
+						"name":           customer.Name,
+						"name_in_arabic": customer.NameInArabic,
+					},
+				)
+				if err != nil {
+					return nil
+				}*/
 
 			err = store.UpdateManyByCollectionName(
 				"account",
@@ -1950,6 +1976,23 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		//criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[churn_risk_tier]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["churn_risk_tier"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[lifetime_value_segment_for_12months]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["lifetime_value_segment_for_12months"] = keys[0]
+	}
+
+	for _, retField := range []string{"retention_1month", "retention_3month", "retention_6month", "retention_12month", "retention_24month"} {
+		keys, ok = r.URL.Query()["search["+retField+"]"]
+		if ok && len(keys[0]) >= 1 {
+			criterias.SearchBy[retField] = keys[0]
+		}
+	}
+
 	keys, ok = r.URL.Query()["search[created_by]"]
 	if ok && len(keys[0]) >= 1 {
 
@@ -2910,8 +2953,6 @@ func (customer *Customer) RestoreCustomer(tokenClaims TokenClaims) (err error) {
 	return nil
 }
 
-
-
 func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
 	criterias = SearchCriterias{
 		Page:   1,
@@ -2950,7 +2991,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 	if ok && len(keys[0]) >= 1 {
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if value == 1 {
@@ -2974,7 +3015,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		for _, id := range customerIds {
 			customerID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return  criterias, err
+				return criterias, err
 			}
 			objecIds = append(objecIds, customerID)
 		}
@@ -2992,7 +3033,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3009,7 +3050,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3026,7 +3067,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3062,7 +3103,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3081,7 +3122,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3099,7 +3140,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3117,7 +3158,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3135,7 +3176,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3153,7 +3194,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 		if operator != "" {
 			criterias.SearchBy["stores."+storeID.Hex()+".quotation_invoice_balance_amount"] = bson.M{operator: value}
@@ -3170,7 +3211,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3188,7 +3229,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3207,7 +3248,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3224,7 +3265,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3243,7 +3284,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3261,7 +3302,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3279,7 +3320,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3297,7 +3338,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3315,7 +3356,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3333,7 +3374,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 		if operator != "" {
 			criterias.SearchBy["stores."+storeID.Hex()+".sales_balance_amount"] = bson.M{operator: value}
@@ -3368,7 +3409,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3386,7 +3427,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3405,7 +3446,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3423,7 +3464,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3441,7 +3482,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3459,7 +3500,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3477,7 +3518,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3496,7 +3537,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3514,7 +3555,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3533,7 +3574,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3550,7 +3591,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3567,7 +3608,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3585,7 +3626,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3603,7 +3644,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3621,7 +3662,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3639,7 +3680,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3658,7 +3699,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3676,7 +3717,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3695,7 +3736,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3713,7 +3754,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3731,7 +3772,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3749,7 +3790,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3767,7 +3808,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3785,7 +3826,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3803,7 +3844,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3821,7 +3862,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3839,7 +3880,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 		value, err := strconv.ParseInt(keys[0], 10, 64)
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if operator != "" {
@@ -3909,7 +3950,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		for _, id := range userIds {
 			userID, err := primitive.ObjectIDFromHex(id)
 			if err != nil {
-				return  criterias, err
+				return criterias, err
 			}
 			objecIds = append(objecIds, userID)
 		}
@@ -3927,7 +3968,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		const shortForm = "Jan 02 2006"
 		startDate, err := time.Parse(shortForm, keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
@@ -3943,7 +3984,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		const shortForm = "Jan 02 2006"
 		createdAtStartDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if timeZoneOffset != 0 {
@@ -3956,7 +3997,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		const shortForm = "Jan 02 2006"
 		createdAtEndDate, err = time.Parse(shortForm, keys[0])
 		if err != nil {
-			return  criterias, err
+			return criterias, err
 		}
 
 		if timeZoneOffset != 0 {

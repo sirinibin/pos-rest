@@ -35,14 +35,15 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-
 	Customers, criterias, err := store.SearchCustomer(w, r)
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Unable to find Customers:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -53,6 +54,7 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count of customers:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -66,6 +68,7 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				response.Status = false
 				response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
 				json.NewEncoder(w).Encode(response)
 				return
 			}
@@ -103,7 +106,6 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 	response.Meta["quotation_count"] = customerStats.QuotationCount
 	response.Meta["quotation_profit"] = customerStats.QuotationProfit
 	response.Meta["quotation_loss"] = customerStats.QuotationLoss
-
 	//Qtn Sales
 	response.Meta["quotation_sales"] = customerStats.QuotationInvoiceAmount
 	response.Meta["quotation_sales_paid"] = customerStats.QuotationInvoicePaidAmount
@@ -114,7 +116,6 @@ func ListCustomer(w http.ResponseWriter, r *http.Request) {
 	response.Meta["quotation_sales_unpaid_count"] = customerStats.QuotationInvoiceNotPaidCount
 	response.Meta["quotation_sales_profit"] = customerStats.QuotationInvoiceProfit
 	response.Meta["quotation_sales_loss"] = customerStats.QuotationInvoiceLoss
-
 	//Qtn Sales Return
 	response.Meta["quotation_sales_return"] = customerStats.QuotationSalesReturnAmount
 	response.Meta["quotation_sales_return_paid"] = customerStats.QuotationSalesReturnPaidAmount
@@ -606,6 +607,65 @@ func ViewCustomerByVatNoByName(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 
+}
+
+// GetCustomerHistory : handler for GET /v1/customer/{id}/history
+// Returns churn risk tier history and CLV segment history for a customer.
+func GetCustomerHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	customerID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["customer_id"] = "Invalid Customer ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	churnHistory, err := store.GetCustomerChurnHistory(customerID)
+	if err != nil {
+		response.Status = false
+		response.Errors["churn_history"] = "Unable to fetch churn history:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	clvHistory, err := store.GetCustomerCLVHistory(customerID)
+	if err != nil {
+		response.Status = false
+		response.Errors["clv_history"] = "Unable to fetch CLV history:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = map[string]interface{}{
+		"churn_history": churnHistory,
+		"clv_history":   clvHistory,
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 // CustomerSummary : handler for GET /customer/summary

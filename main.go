@@ -17,6 +17,7 @@ import (
 	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -103,7 +104,7 @@ func main() {
 	seedDefaultUser()
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
-	//go models.SetIndexes()
+	go models.SetIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -160,6 +161,7 @@ func main() {
 	router.HandleFunc("/v1/customer/summary", controller.CustomerSummary).Methods("GET")
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")
 	router.HandleFunc("/v1/customer", controller.ListCustomer).Methods("GET")
+	router.HandleFunc("/v1/customer/{id}/history", controller.GetCustomerHistory).Methods("GET")
 	router.HandleFunc("/v1/customer/{id}", controller.ViewCustomer).Methods("GET")
 	router.HandleFunc("/v1/customer/{id}", controller.UpdateCustomer).Methods("PUT")
 	router.HandleFunc("/v1/customer/{id}", controller.DeleteCustomer).Methods("DELETE")
@@ -185,6 +187,17 @@ func main() {
 	//ProductHistory
 	router.HandleFunc("/v1/product/history/summary/{id}", controller.ProductHistorySummary).Methods("GET")
 	router.HandleFunc("/v1/product/history/{id}", controller.ListProductHistory).Methods("GET")
+	router.HandleFunc("/v1/product/{id}/bi-history", controller.GetProductBiHistory).Methods("GET")
+
+	//BI Analytics
+	router.HandleFunc("/v1/bi/monthly-revenue", controller.GetBIMonthlyRevenue).Methods("GET")
+	router.HandleFunc("/v1/bi/top-products", controller.GetBITopProducts).Methods("GET")
+	router.HandleFunc("/v1/bi/top-customers", controller.GetBITopCustomers).Methods("GET")
+	router.HandleFunc("/v1/bi/expense-summary", controller.GetBIExpenseSummary).Methods("GET")
+	router.HandleFunc("/v1/bi/outstanding", controller.GetBIOutstanding).Methods("GET")
+	router.HandleFunc("/v1/bi/stock-alerts", controller.GetBIStockAlerts).Methods("GET")
+	router.HandleFunc("/v1/bi/vendor-performance", controller.GetBIVendorPerformance).Methods("GET")
+	router.HandleFunc("/v1/bi/quotation-conversion", controller.GetBIQuotationConversion).Methods("GET")
 
 	//Expense
 	router.HandleFunc("/v1/expense/summary", controller.ExpenseSummary).Methods("GET")
@@ -525,8 +538,14 @@ func main() {
 	//http.HandleFunc("/socket.io", server) // WebSocket Endpoint
 	//cronJobsEveryHour()
 	s := gocron.NewScheduler(time.UTC)
-	s.Every(8).Hour().Do(cronJobsEveryHour)
+	s.Every(3).Hour().Do(cronJobsEveryHour)
 	s.StartAsync()
+
+	// One-time historical BI backfill — run at startup when BI_RUN_BACKFILL=true
+
+	//if env.Getenv("BI_RUN_BACKFILL", "false") == "true" {
+	//go models.RunBIBackfillForAllStores()
+	//}
 
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", corsHandler))
@@ -596,8 +615,11 @@ func ListAllIndexes(collectionName string) {
 }
 
 func cronJobsEveryHour() error {
-	//Testing
-	log.Print("Cron job is set to run every 8 hours")
+	//log.Print("[Cron] Running 3-hour cron job")
+	// Run all BI prediction scripts (churn, CLV, cohort, velocity, ABC-XYZ) for every store
+	//go models.RunBIJobForAllStores()
+	// Run Go-native BI incremental aggregation for all stores
+	//go models.RunBIIncrementalUpdateForAllStores()
 
 	/*
 		err := models.ProcessProductHistory()
