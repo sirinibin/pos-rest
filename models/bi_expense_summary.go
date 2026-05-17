@@ -42,8 +42,8 @@ func (store *Store) GetBIExpenseSummary(months int) ([]BIExpenseSummary, error) 
 	defer cancel()
 
 	cutoff := time.Now().AddDate(0, -months, 0)
+	// Collection is store-scoped; no store_id filter to avoid ObjectId/string type mismatch.
 	filter := bson.M{
-		"store_id": store.ID,
 		"$or": bson.A{
 			bson.M{"year": bson.M{"$gt": cutoff.Year()}},
 			bson.M{
@@ -115,8 +115,8 @@ func UpsertBIExpenseSummary(storeID primitive.ObjectID, year, month int) error {
 	var rows []bson.M
 	cur.All(ctx, &rows)
 
-	// Delete existing for this year/month
-	collection.DeleteMany(ctx, bson.M{"store_id": storeID, "year": year, "month": month})
+	// Delete existing for this year/month (no store_id filter — collection is store-scoped)
+	collection.DeleteMany(ctx, bson.M{"year": year, "month": month})
 
 	now := time.Now()
 	for _, row := range rows {

@@ -83,8 +83,9 @@ func (store *Store) GetBIMonthlyRevenue(months int) ([]BIMonthlyRevenue, error) 
 	defer cancel()
 
 	cutoff := time.Now().AddDate(0, -months, 0)
+	// The collection is already scoped to this store's DB, so no store_id filter needed.
+	// (Historical docs may have store_id as string vs ObjectId — year/month range is sufficient.)
 	filter := bson.M{
-		"store_id": store.ID,
 		"$or": bson.A{
 			bson.M{"year": bson.M{"$gt": cutoff.Year()}},
 			bson.M{
@@ -186,9 +187,10 @@ func UpsertBIMonthlyRevenue(storeID primitive.ObjectID, year, month int) error {
 	// Count new customers (first order ever in this month)
 	doc.NewCustomers = countNewCustomers(ctx, storeID, startDate, endDate)
 
+	// Use year+month as upsert key (collection is store-scoped; avoids ObjectId vs string mismatch).
 	upsertOpts := options.Replace().SetUpsert(true)
 	_, err = collection.ReplaceOne(ctx,
-		bson.M{"store_id": storeID, "year": year, "month": month},
+		bson.M{"year": year, "month": month},
 		doc, upsertOpts)
 	return err
 }

@@ -71,8 +71,8 @@ func UpsertBIStockAlerts(storeID primitive.ObjectID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
-	// Clear existing alerts for this store
-	collection.DeleteMany(ctx, bson.M{"store_id": storeID})
+	// Clear all alerts (collection is store-scoped — no store_id filter needed)
+	collection.DeleteMany(ctx, bson.M{})
 
 	productColl := db.GetDB("store_" + storeID.Hex()).Collection("product")
 	salesHistColl := db.GetDB("store_" + storeID.Hex()).Collection("product_sales_history")

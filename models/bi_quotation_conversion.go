@@ -44,8 +44,8 @@ func (store *Store) GetBIQuotationConversion(months int) ([]BIQuotationConversio
 	defer cancel()
 
 	cutoff := time.Now().AddDate(0, -months, 0)
+	// Collection is store-scoped; no store_id filter to avoid ObjectId/string type mismatch.
 	filter := bson.M{
-		"store_id": store.ID,
 		"$or": bson.A{
 			bson.M{"year": bson.M{"$gt": cutoff.Year()}},
 			bson.M{
@@ -161,9 +161,10 @@ func UpsertBIQuotationConversion(storeID primitive.ObjectID, year, month int) er
 		UpdatedAt:           time.Now(),
 	}
 
+	// Use year+month as upsert key (no store_id — collection is store-scoped)
 	upsertOpts := options.Replace().SetUpsert(true)
 	_, err = collection.ReplaceOne(ctx,
-		bson.M{"store_id": storeID, "year": year, "month": month},
+		bson.M{"year": year, "month": month},
 		doc, upsertOpts)
 
 	log.Printf("[BI] quotation_conversion upsert done — period=%s store=%s created=%d converted=%d rate=%.1f%%",

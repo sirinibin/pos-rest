@@ -47,7 +47,8 @@ func (store *Store) GetBITopCustomers(period string, limit int) ([]BITopCustomer
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	filter := bson.M{"store_id": store.ID, "period": period}
+	// Collection is store-scoped; no store_id filter to avoid ObjectId/string type mismatch.
+	filter := bson.M{"period": period}
 	opts := options.Find().
 		SetSort(bson.D{{Key: "rank_by_spend", Value: 1}}).
 		SetLimit(int64(limit))
@@ -112,8 +113,8 @@ func UpsertBITopCustomers(storeID primitive.ObjectID, period string) error {
 	// Build new-customer set (first ever order in period)
 	newCustomers := buildNewCustomerSet(ctx, storeID, period)
 
-	// Delete old records for this period
-	collection.DeleteMany(ctx, bson.M{"store_id": storeID, "period": period})
+	// Delete old records for this period (no store_id filter — collection is store-scoped)
+	collection.DeleteMany(ctx, bson.M{"period": period})
 
 	now := time.Now()
 	for rank, row := range rows {

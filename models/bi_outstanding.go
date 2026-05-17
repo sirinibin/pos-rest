@@ -51,7 +51,8 @@ func (store *Store) GetBIOutstanding(outstandingType string, limit int) (BIOutst
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	filter := bson.M{"store_id": store.ID, "type": outstandingType}
+	// Collection is store-scoped; no store_id filter to avoid ObjectId/string type mismatch.
+	filter := bson.M{"type": outstandingType}
 	opts := options.Find().
 		SetSort(bson.D{{Key: "days_old", Value: -1}}).
 		SetLimit(int64(limit))
@@ -84,8 +85,8 @@ func UpsertBIOutstanding(storeID primitive.ObjectID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	// Clear everything for this store (full refresh)
-	collection.DeleteMany(ctx, bson.M{"store_id": storeID})
+	// Clear everything for this store (full refresh — no store_id filter to clear all docs regardless of type)
+	collection.DeleteMany(ctx, bson.M{})
 
 	now := time.Now()
 
@@ -190,8 +191,8 @@ func UpsertBIOutstanding(storeID primitive.ObjectID) error {
 	}
 
 	// Count AR and AP
-	arCount, _ := collection.CountDocuments(ctx, bson.M{"store_id": storeID, "type": "AR"})
-	apCount, _ := collection.CountDocuments(ctx, bson.M{"store_id": storeID, "type": "AP"})
+	arCount, _ := collection.CountDocuments(ctx, bson.M{"type": "AR"})
+	apCount, _ := collection.CountDocuments(ctx, bson.M{"type": "AP"})
 	log.Printf("[BI] outstanding upsert done — store=%s AR=%d AP=%d", storeID.Hex(), arCount, apCount)
 	return nil
 }

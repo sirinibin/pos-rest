@@ -17,6 +17,7 @@ import (
 	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -103,7 +104,7 @@ func main() {
 	seedDefaultUser()
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
-	//go models.SetIndexes()
+	go models.SetIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -541,6 +542,7 @@ func main() {
 	s.StartAsync()
 
 	// One-time historical BI backfill — run at startup when BI_RUN_BACKFILL=true
+	//go models.RunBIIncrementalUpdateForAllStores()
 
 	//if env.Getenv("BI_RUN_BACKFILL", "false") == "true" {
 	//go models.RunBIBackfillForAllStores()
