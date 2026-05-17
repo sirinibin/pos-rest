@@ -73,6 +73,12 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	fields = bson.M{"deleted": 1}
+	err = store.CreateIndex("product", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
 	//customer
 	textFields = bson.D{
 		bson.E{Key: "name", Value: "text"},
@@ -119,7 +125,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields := bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 		bson.E{Key: "created_at", Value: -1},
 	}
@@ -165,6 +170,15 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	compoundFields = bson.D{
+		bson.E{Key: "deleted", Value: 1},
+		bson.E{Key: "created_at", Value: -1},
+	}
+	err = store.CreateCompoundIndex("vendor", compoundFields)
+	if err != nil {
+		return err
+	}
+
 	//order
 	fields = bson.M{"customer_id": 1}
 	err = store.CreateIndex("order", fields, false, false, "")
@@ -196,8 +210,13 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	fields = bson.M{"payment_status": 1}
+	err = store.CreateIndex("order", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 	}
 	err = store.CreateCompoundIndex("order", compoundFields)
@@ -206,7 +225,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "zatca.reporting_passed", Value: 1},
 		bson.E{Key: "zatca.reporting_passed_at", Value: -1},
 	}
@@ -247,7 +265,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 	}
 	err = store.CreateCompoundIndex("salesreturn", compoundFields)
@@ -281,7 +298,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 	}
 	err = store.CreateCompoundIndex("purchase", compoundFields)
@@ -315,7 +331,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 	}
 	err = store.CreateCompoundIndex("purchasereturn", compoundFields)
@@ -349,7 +364,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 	}
 	err = store.CreateCompoundIndex("quotation", compoundFields)
@@ -383,7 +397,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 	}
 	err = store.CreateCompoundIndex("delivery_note", compoundFields)
@@ -558,7 +571,6 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	compoundFields = bson.D{
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "deleted", Value: 1},
 	}
 	err = store.CreateCompoundIndex("posting", compoundFields)
@@ -568,7 +580,6 @@ func (store *Store) CreateAllIndexes() error {
 
 	compoundFields = bson.D{
 		bson.E{Key: "account_id", Value: 1},
-		bson.E{Key: "store_id", Value: 1},
 		bson.E{Key: "date", Value: 1},
 	}
 	err = store.CreateCompoundIndex("posting", compoundFields)
@@ -608,6 +619,12 @@ func (store *Store) CreateAllIndexes() error {
 	}
 
 	fields = bson.M{"journals.date": -1}
+	err = store.CreateIndex("ledger", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"deleted": 1}
 	err = store.CreateIndex("ledger", fields, false, false, "")
 	if err != nil {
 		return err
@@ -863,12 +880,6 @@ func (store *Store) CreateAllIndexes() error {
 	// Add these inside func (store *Store) CreateAllIndexes():
 
 	// product_sales_return_history collection indexes
-	fields = bson.M{"store_id": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
 	fields = bson.M{"product_id": 1}
 	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
 	if err != nil {
