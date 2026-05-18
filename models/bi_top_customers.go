@@ -36,7 +36,7 @@ type BITopCustomer struct {
 
 // GetBITopCustomers returns top customers ranked by total spend.
 func (store *Store) GetBITopCustomers(period string, limit int) ([]BITopCustomer, error) {
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 || limit > 2000 {
 		limit = 20
 	}
 	if period == "" {
@@ -113,9 +113,7 @@ func UpsertBITopCustomers(storeID primitive.ObjectID, period string) error {
 	// Build new-customer set (first ever order in period)
 	newCustomers := buildNewCustomerSet(ctx, storeID, period)
 
-	// Delete old records for this period (no store_id filter — collection is store-scoped)
-	collection.DeleteMany(ctx, bson.M{"period": period})
-
+	// Upsert each record by (period, customer_id) to avoid duplicates from concurrent refreshes
 	now := time.Now()
 	for rank, row := range rows {
 		customerID, _ := row["_id"].(primitive.ObjectID)
@@ -150,7 +148,8 @@ func UpsertBITopCustomers(storeID primitive.ObjectID, period string) error {
 			RankBySpend:        rank + 1,
 			UpdatedAt:          now,
 		}
-		collection.InsertOne(ctx, doc)
+		upsertFilter := bson.M{"period": period, "customer_id": customerID}
+		collection.ReplaceOne(ctx, upsertFilter, doc, options.Replace().SetUpsert(true))
 	}
 
 	log.Printf("[BI] top_customers upsert done — period=%s store=%s rows=%d", period, storeID.Hex(), len(rows))

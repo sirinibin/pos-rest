@@ -82,15 +82,18 @@ func (store *Store) GetBIMonthlyRevenue(months int) ([]BIMonthlyRevenue, error) 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cutoff := time.Now().AddDate(0, -months, 0)
+	// Cutoff = start of the month that is (months-1) months ago.
+	// e.g. months=6 on May-2026 → cutoff = Dec-2025 start → returns exactly 6 calendar months.
+	now := time.Now()
+	cutoffMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -(months - 1), 0)
 	// The collection is already scoped to this store's DB, so no store_id filter needed.
 	// (Historical docs may have store_id as string vs ObjectId — year/month range is sufficient.)
 	filter := bson.M{
 		"$or": bson.A{
-			bson.M{"year": bson.M{"$gt": cutoff.Year()}},
+			bson.M{"year": bson.M{"$gt": cutoffMonth.Year()}},
 			bson.M{
-				"year":  cutoff.Year(),
-				"month": bson.M{"$gte": int(cutoff.Month())},
+				"year":  cutoffMonth.Year(),
+				"month": bson.M{"$gte": int(cutoffMonth.Month())},
 			},
 		},
 	}

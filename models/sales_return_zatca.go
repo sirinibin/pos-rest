@@ -820,8 +820,12 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 		return err
 	}
 
+	pythonBinary := "ZatcaPython/venv/bin/python"
+	scriptPath := "ZatcaPython/reporting_and_clearance.py"
+	cmd := exec.Command(pythonBinary, scriptPath)
+
 	// Create command
-	cmd := exec.Command("ZatcaPython/reporting_and_clearance")
+	//cmd := exec.Command("ZatcaPython/reporting_and_clearance")
 
 	// Set up pipes
 	cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin

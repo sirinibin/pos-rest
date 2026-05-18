@@ -20,6 +20,7 @@ type BITopProduct struct {
 	StoreID       primitive.ObjectID `json:"store_id" bson:"store_id"`
 	ProductID     primitive.ObjectID `json:"product_id" bson:"product_id"`
 	ProductName   string             `json:"product_name" bson:"product_name"`
+	PartNumber    string             `json:"part_number" bson:"part_number"`
 	ItemCode      string             `json:"item_code" bson:"item_code"`
 	CategoryName  string             `json:"category_name" bson:"category_name"`
 	Period        string             `json:"period" bson:"period"` // "30d" | "90d" | "all"
@@ -93,16 +94,26 @@ func UpsertBITopProducts(storeID primitive.ObjectID, period string) error {
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: match}},
 		{{Key: "$group", Value: bson.M{
-			"_id":          "$product_id",
-			"product_name": bson.M{"$first": "$name"},
-			"item_code":    bson.M{"$first": "$item_code"},
-			"units_sold":   bson.M{"$sum": "$quantity"},
-			"revenue":      bson.M{"$sum": "$net_price"},
-			"profit":       bson.M{"$sum": "$profit"},
-			"order_count":  bson.M{"$sum": 1},
+			"_id":         "$product_id",
+			"units_sold":  bson.M{"$sum": "$quantity"},
+			"revenue":     bson.M{"$sum": "$net_price"},
+			"profit":      bson.M{"$sum": "$profit"},
+			"order_count": bson.M{"$sum": 1},
 		}}},
 		{{Key: "$sort", Value: bson.D{{Key: "revenue", Value: -1}}}},
 		{{Key: "$limit", Value: 200}},
+		{{Key: "$lookup", Value: bson.M{
+			"from":         "product",
+			"localField":   "_id",
+			"foreignField": "_id",
+			"as":           "product_doc",
+		}}},
+		{{Key: "$addFields", Value: bson.M{
+			"product_name":  bson.M{"$ifNull": []interface{}{bson.M{"$arrayElemAt": []interface{}{"$product_doc.name", 0}}, ""}},
+			"part_number":   bson.M{"$ifNull": []interface{}{bson.M{"$arrayElemAt": []interface{}{"$product_doc.part_number", 0}}, ""}},
+			"item_code":     bson.M{"$ifNull": []interface{}{bson.M{"$arrayElemAt": []interface{}{"$product_doc.item_code", 0}}, ""}},
+			"category_name": bson.M{"$ifNull": []interface{}{bson.M{"$arrayElemAt": []interface{}{"$product_doc.category_name", 0}}, ""}},
+		}}},
 	}
 
 	cur, err := salesColl.Aggregate(ctx, pipeline)
@@ -135,6 +146,7 @@ func UpsertBITopProducts(storeID primitive.ObjectID, period string) error {
 			StoreID:       storeID,
 			ProductID:     productID,
 			ProductName:   toString(row["product_name"]),
+			PartNumber:    toString(row["part_number"]),
 			ItemCode:      toString(row["item_code"]),
 			Period:        period,
 			UnitsSold:     toFloat64(row["units_sold"]),

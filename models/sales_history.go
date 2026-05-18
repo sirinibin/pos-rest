@@ -22,6 +22,7 @@ type ProductSalesHistory struct {
 	StoreID            *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
 	ProductID          primitive.ObjectID  `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	ProductName        string              `json:"product_name,omitempty" bson:"-"`
 	CustomerID         *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
 	CustomerName       string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	CustomerNameArabic string              `json:"customer_name_arabic" bson:"customer_name_arabic"`
@@ -527,6 +528,8 @@ func (store *Store) SearchSalesHistory(w http.ResponseWriter, r *http.Request) (
 		defer cur.Close(ctx)
 	}
 
+	productNameCache := map[primitive.ObjectID]string{}
+
 	for i := 0; cur != nil && cur.Next(ctx); i++ {
 		err := cur.Err()
 		if err != nil {
@@ -543,6 +546,16 @@ func (store *Store) SearchSalesHistory(w http.ResponseWriter, r *http.Request) (
 		}
 		if _, ok := criterias.Select["customer.id"]; ok {
 			model.Customer, _ = store.FindCustomerByID(model.CustomerID, customerSelectFields)
+		}
+
+		// Populate product name (cached to avoid N+1 lookups)
+		if name, ok := productNameCache[model.ProductID]; ok {
+			model.ProductName = name
+		} else {
+			if product, err := store.FindProductByID(&model.ProductID, bson.M{"name": 1}); err == nil {
+				model.ProductName = product.Name
+				productNameCache[model.ProductID] = product.Name
+			}
 		}
 
 		models = append(models, model)
