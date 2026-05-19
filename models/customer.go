@@ -1945,7 +1945,8 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 
 		searchWord := strings.ToLower(keys[0])
-		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		/*
 			criterias.SearchBy["$or"] = []bson.M{

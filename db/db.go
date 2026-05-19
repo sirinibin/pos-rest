@@ -147,7 +147,7 @@ func GetMongoClient(dbName string) (*mongo.Client, error) {
 
 // GetPantahubBaseDB : Get Pantahub Base DB
 func GetPosDB() string {
-	return Getenv("MONGO_DB", "pos")
+	return Getenv("MONGO_DB", "pos_test")
 }
 
 func Getenv(key, fallback string) string {
