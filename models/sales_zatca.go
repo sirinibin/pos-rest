@@ -768,7 +768,7 @@ func (order *Order) ReportToZatca() error {
 			return errors.New(errorMessage)
 		}
 
-		log.Printf("[ZATCA reporting] response: %s", output.String())
+		//log.Printf("[ZATCA reporting] response: %s", output.String())
 
 		if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
 			errorMessage := "error reporting: " + reportingResponse.Error
