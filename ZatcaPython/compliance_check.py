@@ -134,10 +134,7 @@ def main():
             
         new_doc = base_document
 
-        basPath = "ZatcaPython/"
-        #basPath = ""
-    
-        json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,basPath)
+        json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key, environment_type)
     
         
         response = api_helper.compliance_checks(cert_info, json_payload)

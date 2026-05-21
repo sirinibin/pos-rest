@@ -67,13 +67,11 @@ class qr_code_generator:
 
     @staticmethod
     def write_length(length):
-        if length <= 0x7F:
-            return bytes([length])
-        length_bytes = []
-        while length > 0:
-            length_bytes.insert(0, length & 0xFF)
-            length >>= 8
-        return bytes([0x80 | len(length_bytes)]) + bytes(length_bytes)
+        # ZATCA QR spec uses simple TLV: single-byte length only.
+        # Values must not exceed 255 bytes.
+        if length > 255:
+            raise ValueError(f"TLV value too long for ZATCA QR: {length} bytes (max 255)")
+        return bytes([length])
 
     @staticmethod
     def write_tag(tag):

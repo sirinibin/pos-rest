@@ -13,7 +13,7 @@ class api_helper:
                 
                 # Check for HTTP errors
                 if response.status_code != 200:
-                    raise Exception(f"HTTP error: {response.status_code} - {response.text}")
+                    raise Exception(f"HTTP error: {response.status_code} - url={url} headers={dict(response.headers)} body={response.text}")
                 
                 return response.text
             

@@ -26,8 +26,8 @@ def main():
        
   
 
-        cert_info = api_helper.load_json_from_file("certificates/certificateInfo.json")
-        xml_template_path = "templates/invoice_S-INV-YUGU-000007.xml"
+        cert_info = api_helper.load_json_from_file("ZatcaPython/certificates/certificateInfo.json")
+        xml_template_path = "ZatcaPython/templates/invoice_S-INV-20260522-037.xml"
 
         #cert_info["ccsid_requestID"] = payloadFromGo["compliance_request_id"]
         #cert_info["ccsid_binarySecurityToken"] =  payloadFromGo["binary_security_token"]
@@ -118,7 +118,7 @@ def main():
             data = {
             "invoice_hash": json_payload["invoiceHash"],
             "compliance_passed": True,
-            "error":   cert_info["error"],
+            "error":   cert_info.get("error", ""),
             }
             print(json.dumps(data))  # Print JSON output
             #print(f"\ninvoice processed successfully\n\n")

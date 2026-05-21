@@ -698,25 +698,25 @@ func (order *Order) ReportToZatca() error {
 	}
 	isSimplified := !customer.IsB2B()
 
-	/*
-		// Create JSON payload
+	// Create JSON payload for reporting/clearance
+	{
 		payload := map[string]interface{}{
-			"env":                   store.Zatca.Env,
-			"private_key":           store.Zatca.PrivateKey,
-			"binary_security_token": store.Zatca.BinarySecurityToken,
-			"secret":                store.Zatca.Secret,
-			"xml_file_path":         "ZatcaPython/templates/invoice_" + order.Code + ".xml",
-			"is_simplified":         isSimplified,
+			"env":                              store.Zatca.Env,
+			"private_key":                      store.Zatca.PrivateKey,
+			"production_binary_security_token": store.Zatca.ProductionBinarySecurityToken,
+			"production_secret":                store.Zatca.ProductionSecret,
+			"xml_file_path":                    "ZatcaPython/templates/invoice_" + order.Code + ".xml",
+			"is_simplified":                    isSimplified,
 		}
 
 		// Convert payload to JSON
 		jsonData, err := json.Marshal(payload)
 		if err != nil {
-			return errors.New("error marshal payload to compliance check: " + err.Error())
+			return err
 		}
 
 		pythonBinary := "ZatcaPython/venv/bin/python"
-		scriptPath := "ZatcaPython/compliance_check.py"
+		scriptPath := "ZatcaPython/reporting_and_clearance.py"
 
 		// Create command
 		cmd := exec.Command(pythonBinary, scriptPath)
@@ -724,30 +724,32 @@ func (order *Order) ReportToZatca() error {
 		// Set up pipes
 		cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin
 		var output bytes.Buffer
-		cmd.Stdout = &output // Capture stdout
-		cmd.Stderr = &output // Capture stderr
+		var stderrOutput bytes.Buffer
+		cmd.Stdout = &output
+		cmd.Stderr = &stderrOutput
 
-		complianceCheckResponse := ZatcaComplianceCheckResponse{}
+		reportingResponse := ZatcaReportingResponse{}
 
 		// Run the command
 		err = cmd.Run()
 		if err != nil {
-			fmt.Println("Error running Python script1:", err)
-			// Parse JSON response
-
-			err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
+			if stderrOutput.Len() > 0 {
+				log.Printf("[ZATCA reporting] Python stderr: %s", stderrOutput.String())
+			}
+			log.Printf("[ZATCA reporting] Python stdout: %s", output.String())
+			err = json.Unmarshal(output.Bytes(), &reportingResponse)
 			if err != nil {
-				errorMessage := "error unmarshaling compliance check response: " + complianceCheckResponse.Error + ", " + err.Error()
-				err = order.RecordZatcaComplianceCheckFailure(errorMessage)
+				errorMessage := "error running reporting script &  unmarshal reporting response : " + err.Error()
+				err = order.RecordZatcaReportingFailure(errorMessage)
 				if err != nil {
 					return err
 				}
 				return errors.New(errorMessage)
 			}
 
-			if complianceCheckResponse.Error != "" {
-				errorMessage := "Compliance check error 1: " + complianceCheckResponse.Error
-				err = order.RecordZatcaComplianceCheckFailure(errorMessage)
+			if reportingResponse.Error != "" {
+				errorMessage := "error running reporting script: " + reportingResponse.Error
+				err = order.RecordZatcaReportingFailure(errorMessage)
 				if err != nil {
 					return err
 				}
@@ -756,74 +758,9 @@ func (order *Order) ReportToZatca() error {
 		}
 
 		// Parse JSON response
-
-		err = json.Unmarshal(output.Bytes(), &complianceCheckResponse)
-		if err != nil {
-			errorMessage := "error unmarshal compliance check response: " + err.Error()
-			err = order.RecordZatcaComplianceCheckFailure(errorMessage)
-			if err != nil {
-				return err
-			}
-			return errors.New(errorMessage)
-		}
-
-		//log.Print("pythonResponse:")
-		//log.Print(pythonResponse)
-
-		if complianceCheckResponse.Error != "" || !complianceCheckResponse.CompliancePassed {
-			errorMessage := "compliance check error 2: " + complianceCheckResponse.Error
-			err = order.RecordZatcaComplianceCheckFailure(errorMessage)
-			if err != nil {
-				return err
-			}
-			return errors.New(errorMessage)
-		}
-
-		if complianceCheckResponse.CompliancePassed {
-			err = order.RecordZatcaComplianceCheckSuccess(complianceCheckResponse)
-			if err != nil {
-				return err
-			}
-		}
-	*/
-
-	//if complianceCheckResponse.CompliancePassed {
-	// Create JSON payload
-	payload := map[string]interface{}{
-		"env":                              store.Zatca.Env,
-		"private_key":                      store.Zatca.PrivateKey,
-		"production_binary_security_token": store.Zatca.ProductionBinarySecurityToken,
-		"production_secret":                store.Zatca.ProductionSecret,
-		"xml_file_path":                    "ZatcaPython/templates/invoice_" + order.Code + ".xml",
-		"is_simplified":                    isSimplified,
-	}
-
-	// Convert payload to JSON
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	pythonBinary := "ZatcaPython/venv/bin/python"
-	scriptPath := "ZatcaPython/reporting_and_clearance.py"
-
-	// Create command
-	cmd := exec.Command(pythonBinary, scriptPath)
-
-	// Set up pipes
-	cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin
-	var output bytes.Buffer
-	cmd.Stdout = &output // Capture stdout
-	cmd.Stderr = &output // Capture stderr
-
-	reportingResponse := ZatcaReportingResponse{}
-
-	// Run the command
-	err = cmd.Run()
-	if err != nil {
 		err = json.Unmarshal(output.Bytes(), &reportingResponse)
 		if err != nil {
-			errorMessage := "error running reporting script &  unmarshal reporting response : " + err.Error()
+			errorMessage := "error unmarshal reporting response: " + err.Error()
 			err = order.RecordZatcaReportingFailure(errorMessage)
 			if err != nil {
 				return err
@@ -831,47 +768,28 @@ func (order *Order) ReportToZatca() error {
 			return errors.New(errorMessage)
 		}
 
-		if reportingResponse.Error != "" {
-			errorMessage := "error running reporting script: " + reportingResponse.Error
+		log.Printf("[ZATCA reporting] response: %s", output.String())
+
+		if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
+			errorMessage := "error reporting: " + reportingResponse.Error
 			err = order.RecordZatcaReportingFailure(errorMessage)
 			if err != nil {
 				return err
 			}
 			return errors.New(errorMessage)
 		}
-	}
 
-	// Parse JSON response
-	err = json.Unmarshal(output.Bytes(), &reportingResponse)
-	if err != nil {
-		errorMessage := "error unmarshal reporting response: " + err.Error()
-		err = order.RecordZatcaReportingFailure(errorMessage)
+		err = order.RecordZatcaReportingSuccess(reportingResponse)
 		if err != nil {
 			return err
 		}
-		return errors.New(errorMessage)
-	}
 
-	if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
-		errorMessage := "error reporting: " + reportingResponse.Error
-		err = order.RecordZatcaReportingFailure(errorMessage)
+		err = order.SaveClearedInvoiceData(reportingResponse)
 		if err != nil {
 			return err
 		}
-		return errors.New(errorMessage)
-	}
 
-	err = order.RecordZatcaReportingSuccess(reportingResponse)
-	if err != nil {
-		return err
 	}
-
-	err = order.SaveClearedInvoiceData(reportingResponse)
-	if err != nil {
-		return err
-	}
-
-	//}
 
 	return nil
 }

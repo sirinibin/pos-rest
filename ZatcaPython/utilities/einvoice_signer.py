@@ -272,8 +272,9 @@ class einvoice_signer:
                 "-sign",
                 "-invoice", os.path.abspath(xml_file_path),
                 "-signedInvoice", os.path.abspath(signed_file_path),
-                env_flag,
             ]
+            if env_flag:
+                cmd.append(env_flag)
 
             
             result = {}
@@ -312,8 +313,9 @@ class einvoice_signer:
                 "-invoice", signed_file_path,
                 "-invoiceRequest",
                 "-apiRequest", request_file_path,
-                env_flag
             ]
+            if env_flag:
+                invoice_request_command.append(env_flag)
             #print("Executing Fatoora invoice request command:", " ".join(invoice_request_command))
             subprocess.run(invoice_request_command, check=True,capture_output=True, text=True)
 
