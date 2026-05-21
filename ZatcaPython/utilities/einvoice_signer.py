@@ -279,8 +279,10 @@ class einvoice_signer:
             
             result = {}
 
+            saudi_env = {**os.environ, "TZ": "Asia/Riyadh"}
+
             try:
-                result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                result = subprocess.run(cmd, check=True, capture_output=True, text=True, env=saudi_env)
                 '''
                 error_data = {
                         "error":f"Command error: {result.stderr}, out: {result.stdout}, pk:{private_key_file_path}",
@@ -317,7 +319,7 @@ class einvoice_signer:
             if env_flag:
                 invoice_request_command.append(env_flag)
             #print("Executing Fatoora invoice request command:", " ".join(invoice_request_command))
-            subprocess.run(invoice_request_command, check=True,capture_output=True, text=True)
+            subprocess.run(invoice_request_command, check=True, capture_output=True, text=True, env=saudi_env)
 
             if not os.path.exists(request_file_path):
                 error_data = {
