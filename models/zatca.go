@@ -5,6 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+	"fmt"
+	"strconv"
+	"strings"
 )
 
 type ComplianceCheck struct {
@@ -111,6 +114,17 @@ type MonetaryAmount struct {
 	//XMLName    xml.Name `xml:",any"`
 	Value      float64 `xml:",chardata"`       // The amount value
 	CurrencyID string  `xml:"currencyID,attr"` // currencyID attribute
+}
+
+func (m MonetaryAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: m.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", m.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
 }
 
 type Note struct {
@@ -258,6 +272,17 @@ type RoundingAmount struct {
 	CurrencyID string   `xml:"currencyID,attr"` // currencyID attribute
 }
 
+func (r RoundingAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: r.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", r.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
+}
+
 type TaxSubtotal struct {
 	TaxableAmount TaxableAmount `xml:"cbc:TaxableAmount"`
 	TaxAmount     TaxAmount     `xml:"cbc:TaxAmount"`
@@ -269,11 +294,33 @@ type TaxableAmount struct {
 	CurrencyID string  `xml:"currencyID,attr"` // currencyID attribute
 }
 
+func (t TaxableAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: t.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", t.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
+}
+
 // TaxAmount represents the <cbc:TaxAmount> element with currencyID attribute
 type TaxAmount struct {
 	XMLName    xml.Name `xml:"cbc:TaxAmount"`
 	Value      float64  `xml:",chardata"`       // The text content inside the tag (tax amount)
 	CurrencyID string   `xml:"currencyID,attr"` // currencyID attribute
+}
+
+func (t TaxAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: t.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", t.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
 }
 
 // Invoice Line
@@ -295,6 +342,17 @@ type InvoicedQuantity struct {
 type LineAmount struct {
 	CurrencyID string  `xml:"currencyID,attr"`
 	Value      float64 `xml:",chardata"`
+}
+
+func (l LineAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: l.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", l.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
 }
 
 // Price represents the <cac:Price> element
@@ -321,6 +379,17 @@ type BaseAmount struct {
 	Value      float64  `xml:",chardata"`
 }
 
+func (b BaseAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: b.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(formatAmount(b.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
+}
+
 // BaseQuantity represents the <cbc:BaseQuantity> element (BT-149)
 type BaseQuantity struct {
 	UnitCode string  `xml:"unitCode,attr"`
@@ -334,11 +403,33 @@ type PriceAmount struct {
 	Value      float64  `xml:",chardata"`
 }
 
+func (p PriceAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: p.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(formatAmount(p.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
+}
+
 // Amount represents the <cbc:Amount> element with currency attribute
 type Amount struct {
 	XMLName    xml.Name `xml:"cbc:Amount"`
 	CurrencyID string   `xml:"currencyID,attr"`
 	Value      float64  `xml:",chardata"`
+}
+
+func (a Amount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "currencyID"}, Value: a.CurrencyID}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", a.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
 }
 
 type Item struct {
@@ -353,6 +444,17 @@ type ClassifiedTaxCategory struct {
 	ID        string    `xml:"cbc:ID"`
 	Percent   float64   `xml:"cbc:Percent"`
 	TaxScheme TaxScheme `xml:"cac:TaxScheme"`
+}
+
+// formatAmount formats a float64 with at least 2 decimal places, preserving more if present.
+func formatAmount(v float64) string {
+	s := strconv.FormatFloat(v, 'f', -1, 64)
+	if dot := strings.Index(s, "."); dot == -1 {
+		return s + ".00"
+	} else if len(s)-dot-1 == 1 {
+		return s + "0"
+	}
+	return s
 }
 
 // Function to generate SHA256 hash in Base64
