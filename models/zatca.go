@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -121,7 +120,7 @@ func (m MonetaryAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", m.Value))); err != nil {
+	if err := e.EncodeToken(xml.CharData(formatAmount(m.Value))); err != nil {
 		return err
 	}
 	return e.EncodeToken(start.End())
@@ -277,7 +276,7 @@ func (r RoundingAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", r.Value))); err != nil {
+	if err := e.EncodeToken(xml.CharData(formatAmount(r.Value))); err != nil {
 		return err
 	}
 	return e.EncodeToken(start.End())
@@ -299,7 +298,7 @@ func (t TaxableAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", t.Value))); err != nil {
+	if err := e.EncodeToken(xml.CharData(formatAmount(t.Value))); err != nil {
 		return err
 	}
 	return e.EncodeToken(start.End())
@@ -317,7 +316,7 @@ func (t TaxAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", t.Value))); err != nil {
+	if err := e.EncodeToken(xml.CharData(formatAmount(t.Value))); err != nil {
 		return err
 	}
 	return e.EncodeToken(start.End())
@@ -349,7 +348,7 @@ func (l LineAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", l.Value))); err != nil {
+	if err := e.EncodeToken(xml.CharData(formatAmount(l.Value))); err != nil {
 		return err
 	}
 	return e.EncodeToken(start.End())
@@ -426,7 +425,7 @@ func (a Amount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
-	if err := e.EncodeToken(xml.CharData(fmt.Sprintf("%.2f", a.Value))); err != nil {
+	if err := e.EncodeToken(xml.CharData(formatAmount(a.Value))); err != nil {
 		return err
 	}
 	return e.EncodeToken(start.End())
