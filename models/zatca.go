@@ -225,10 +225,10 @@ type Amount struct {
 
 // TaxCategory represents the <cac:TaxCategory> element
 type TaxCategory struct {
-	XMLName   xml.Name  `xml:"cac:TaxCategory"`
-	ID        IDField   `xml:"cbc:ID"`
-	Percent   float64   `xml:"cbc:Percent"`
-	TaxScheme TaxScheme `xml:"cac:TaxScheme"`
+	XMLName   xml.Name   `xml:"cac:TaxCategory"`
+	ID        IDField    `xml:"cbc:ID"`
+	Percent   TaxPercent `xml:"cbc:Percent"`
+	TaxScheme TaxScheme  `xml:"cac:TaxScheme"`
 }
 
 /*
@@ -338,6 +338,17 @@ type InvoicedQuantity struct {
 	Value    float64 `xml:",chardata"`
 }
 
+func (q InvoicedQuantity) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "unitCode"}, Value: q.UnitCode}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(formatAmount(q.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
+}
+
 type LineAmount struct {
 	CurrencyID string  `xml:"currencyID,attr"`
 	Value      float64 `xml:",chardata"`
@@ -395,6 +406,17 @@ type BaseQuantity struct {
 	Value    float64 `xml:",chardata"`
 }
 
+func (b BaseQuantity) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Attr = []xml.Attr{{Name: xml.Name{Local: "unitCode"}, Value: b.UnitCode}}
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(formatAmount(b.Value))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
+}
+
 // PriceAmount represents the <cbc:PriceAmount> element with currency attribute
 type PriceAmount struct {
 	XMLName    xml.Name `xml:"cbc:PriceAmount"`
@@ -439,16 +461,38 @@ type Item struct {
 
 // ClassifiedTaxCategory represents the <cac:ClassifiedTaxCategory> element
 type ClassifiedTaxCategory struct {
-	XMLName   xml.Name  `xml:"cac:ClassifiedTaxCategory"`
-	ID        string    `xml:"cbc:ID"`
-	Percent   float64   `xml:"cbc:Percent"`
-	TaxScheme TaxScheme `xml:"cac:TaxScheme"`
+	XMLName   xml.Name   `xml:"cac:ClassifiedTaxCategory"`
+	ID        string     `xml:"cbc:ID"`
+	Percent   TaxPercent `xml:"cbc:Percent"`
+	TaxScheme TaxScheme  `xml:"cac:TaxScheme"`
 }
 
+// TaxPercent is used for cbc:Percent and formats the value with at least 2 decimal places.
+type TaxPercent float64
+
+func (p TaxPercent) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if err := e.EncodeToken(start); err != nil {
+		return err
+	}
+	if err := e.EncodeToken(xml.CharData(formatAmount(float64(p)))); err != nil {
+		return err
+	}
+	return e.EncodeToken(start.End())
+}
+
+// zatcaRawWholeAmounts, when true, suppresses the ".00" suffix for whole-number
+// amounts during XML marshaling (e.g. outputs "50" instead of "50.00").
+// Set this before xml.MarshalIndent and reset to false immediately after.
+var zatcaRawWholeAmounts bool
+
 // formatAmount formats a float64 with at least 2 decimal places, preserving more if present.
+// If zatcaRawWholeAmounts is true, whole-number values are returned without trailing decimals.
 func formatAmount(v float64) string {
 	s := strconv.FormatFloat(v, 'f', -1, 64)
 	if dot := strings.Index(s, "."); dot == -1 {
+		if zatcaRawWholeAmounts {
+			return s
+		}
 		return s + ".00"
 	} else if len(s)-dot-1 == 1 {
 		return s + "0"

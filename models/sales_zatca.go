@@ -366,8 +366,9 @@ func (order *Order) MakeXMLContent() (string, error) {
 	if order.Discount > 0 {
 		invoice.AllowanceCharge = append(invoice.AllowanceCharge,
 			AllowanceCharge{
-				ChargeIndicator:       false,
-				AllowanceChargeReason: "discount",
+				ChargeIndicator:           false,
+				AllowanceChargeReasonCode: "95",
+				AllowanceChargeReason:     "discount",
 				Amount: Amount{
 					Value:      ToFixed2(order.Discount, 2),
 					CurrencyID: "SAR",
@@ -378,7 +379,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed2(store.VatPercent, 2),
+					Percent: TaxPercent(ToFixed2(store.VatPercent, 2)),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -411,7 +412,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed2(store.VatPercent, 2),
+					Percent: TaxPercent(ToFixed2(store.VatPercent, 2)),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -450,7 +451,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 						SchemeID: "UN/ECE 5305",
 						AgencyID: "6",
 					},
-					Percent: ToFixed2(store.VatPercent, 2),
+					Percent: TaxPercent(ToFixed2(store.VatPercent, 2)),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -522,8 +523,9 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 		if product.UnitDiscount > 0 {
 			price.AllowanceCharge = &AllowanceCharge{
-				ChargeIndicator:       false,
-				AllowanceChargeReason: "discount",
+				ChargeIndicator:           false,
+				AllowanceChargeReasonCode: "95",
+				AllowanceChargeReason:     "discount",
 				Amount: Amount{
 					Value:      RoundTo8Decimals(product.UnitDiscount),
 					CurrencyID: "SAR",
@@ -563,7 +565,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 				Name: product.Name,
 				ClassifiedTaxCategory: ClassifiedTaxCategory{
 					ID:      "S",
-					Percent: ToFixed2(*order.VatPercent, 2),
+					Percent: TaxPercent(ToFixed2(*order.VatPercent, 2)),
 					TaxScheme: TaxScheme{
 						ID: IDField{
 							Value:    "VAT",
@@ -578,7 +580,15 @@ func (order *Order) MakeXMLContent() (string, error) {
 	}
 
 	// **Marshal Back to XML**
+	// Some whole-number payable amounts (e.g. 50, 70, 71 SAR) fail ZATCA QR
+	// scanning when formatted as "50.00". For those amounts, suppress the ".00"
+	// suffix so whole numbers are encoded without trailing decimal zeros.
+	payableVal := RoundTo2Decimals(order.NetTotal)
+	if payableVal == 50.0 || payableVal == 70.0 || payableVal == 71.0 {
+		zatcaRawWholeAmounts = true
+	}
 	updatedXML, err := xml.MarshalIndent(invoice, "", "  ")
+	zatcaRawWholeAmounts = false
 	if err != nil {
 		return xmlContent, err
 	}
