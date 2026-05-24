@@ -132,6 +132,7 @@ type StoreSettings struct {
 	EnableAutoTranslationToArabic          bool            `bson:"enable_auto_translation_to_arabic" json:"enable_auto_translation_to_arabic"`
 	EnableWarehouseModule                  bool            `bson:"enable_warehouse_module" json:"enable_warehouse_module"`
 	ShowCurrencySymbol                     bool            `bson:"show_currency_symbol" json:"show_currency_symbol"`
+	AddPriceDetailsInDeliveryNote          bool            `bson:"add_price_details_in_delivery_note" json:"add_price_details_in_delivery_note,omitempty"`
 }
 
 type InvoiceSettings struct {

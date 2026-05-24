@@ -28,30 +28,39 @@ type DeliveryNoteProduct struct {
 	PartNumber       string             `bson:"part_number" json:"part_number"`
 	Quantity         float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
 	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitPrice        float64            `bson:"unit_price" json:"unit_price"`
+	UnitDiscount     float64            `bson:"unit_discount" json:"unit_discount"`
 }
 
 // DeliveryNote : DeliveryNote structure
 type DeliveryNote struct {
-	ID                 primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	Code               string                `bson:"code,omitempty" json:"code,omitempty"`
-	Date               *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
-	DateStr            string                `json:"date_str,omitempty" bson:"-"`
-	StoreID            *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
-	CustomerID         *primitive.ObjectID   `json:"customer_id" bson:"customer_id"`
-	Customer           *Customer             `json:"customer"  bson:"-" `
-	CustomerName       string                `json:"customer_name" bson:"customer_name"`
-	CustomerNameArabic string                `json:"customer_name_arabic" bson:"customer_name_arabic"`
-	Products           []DeliveryNoteProduct `bson:"products,omitempty" json:"products,omitempty"`
-	Remarks            string                `bson:"remarks" json:"remarks"`
-	DeliveredBy        *primitive.ObjectID   `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
-	CreatedAt          *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
-	UpdatedAt          *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
-	CreatedBy          *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	UpdatedBy          *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
-	StoreName          string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
-	DeliveredByName    string                `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
-	CreatedByName      string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
-	UpdatedByName      string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	ID                     primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	Code                   string                `bson:"code,omitempty" json:"code,omitempty"`
+	Date                   *time.Time            `bson:"date,omitempty" json:"date,omitempty"`
+	DateStr                string                `json:"date_str,omitempty" bson:"-"`
+	StoreID                *primitive.ObjectID   `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	CustomerID             *primitive.ObjectID   `json:"customer_id" bson:"customer_id"`
+	Customer               *Customer             `json:"customer"  bson:"-" `
+	CustomerName           string                `json:"customer_name" bson:"customer_name"`
+	CustomerNameArabic     string                `json:"customer_name_arabic" bson:"customer_name_arabic"`
+	Products               []DeliveryNoteProduct `bson:"products,omitempty" json:"products,omitempty"`
+	Remarks                string                `bson:"remarks" json:"remarks"`
+	VatPercent             *float64              `bson:"vat_percent" json:"vat_percent"`
+	Discount               float64               `bson:"discount" json:"discount"`
+	DiscountPercent        float64               `bson:"discount_percent" json:"discount_percent"`
+	ShippingOrHandlingFees float64               `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
+	VatPrice               float64               `bson:"vat_price" json:"vat_price"`
+	Total                  float64               `bson:"total" json:"total"`
+	NetTotal               float64               `bson:"net_total" json:"net_total"`
+	DeliveredBy            *primitive.ObjectID   `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
+	CreatedAt              *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
+	UpdatedAt              *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+	CreatedBy              *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	UpdatedBy              *primitive.ObjectID   `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	StoreName              string                `json:"store_name,omitempty" bson:"store_name,omitempty"`
+	DeliveredByName        string                `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
+	CreatedByName          string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName          string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 }
 
 func (deliveryNote *DeliveryNote) CreateNewCustomerFromName() error {
