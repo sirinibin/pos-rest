@@ -49,11 +49,12 @@ func Client(dbName string) *mongo.Client {
 		if dbName == "" {
 			clientInstance = Connect(GetPosDB())
 		} else {
-			connection, exists := connections[dbName]
-			if !exists {
-				connection.Client = Connect(dbName)
-				connection.LastUsed = time.Now()
+			newClient := Connect(dbName)
+			connections[dbName] = &StoreConnection{
+				Client:   newClient,
+				LastUsed: time.Now(),
 			}
+			clientInstance = newClient
 		}
 	})
 
