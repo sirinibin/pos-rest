@@ -251,9 +251,18 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	deliverynote.UpdatedAt = &now
 
-	// If notify_at is being set to a future time, reset notified so the cron fires again
-	if deliverynote.NotifyAt != nil && deliverynote.NotifyAt.After(now) {
+	// If notify_at is being set to a NEW future time (i.e. the user changed it),
+	// reset notified so the scheduler fires again. Preserve notified if notify_at
+	// didn't change (protects against a frontend race condition where the form
+	// submits with a default future notify_at before the existing value loads).
+	notifyAtChanged := deliverynoteOld.NotifyAt == nil && deliverynote.NotifyAt != nil ||
+		deliverynoteOld.NotifyAt != nil && deliverynote.NotifyAt != nil &&
+			!deliverynoteOld.NotifyAt.Equal(*deliverynote.NotifyAt)
+	if deliverynote.NotifyAt != nil && deliverynote.NotifyAt.After(now) && notifyAtChanged {
 		deliverynote.Notified = false
+	} else {
+		// notify_at unchanged or in the past — preserve the notified flag from DB
+		deliverynote.Notified = deliverynoteOld.Notified
 	}
 
 	// Validate data
