@@ -8,6 +8,8 @@ ZatcaPython/*.xml
 ZatcaPython/*.jar
 ZatcaPython/*.py
 ZatcaPython/utilities/__pycache__/
-ZatcaPython/utilities/fatoora-cli-simulation-dotnet/Data/
-ZatcaPython/utilities/fatoora-cli-simulation-dotnet/Lib/
+ZatcaPython/utilities/fatoora-cli-simulation/
+ZatcaPython/utilities/fatoora-cli-simulation-dotnet/
+ZatcaPython/utilities/fatoora-cli-simulation_new/
+ZatcaPython/utilities/fatoora-cli/
 ZatcaPython/repaired.pdf
