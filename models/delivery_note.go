@@ -19,17 +19,23 @@ import (
 )
 
 type DeliveryNoteProduct struct {
-	ProductID        primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Rack             string             `json:"rack,omitempty" bson:"rack,omitempty"`
-	Name             string             `bson:"name,omitempty" json:"name,omitempty"`
-	NameInArabic     string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
-	ItemCode         string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
-	PrefixPartNumber string             `bson:"prefix_part_number" json:"prefix_part_number"`
-	PartNumber       string             `bson:"part_number" json:"part_number"`
-	Quantity         float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
-	Unit             string             `bson:"unit,omitempty" json:"unit,omitempty"`
-	UnitPrice        float64            `bson:"unit_price" json:"unit_price"`
-	UnitDiscount     float64            `bson:"unit_discount" json:"unit_discount"`
+	ProductID                  primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	Rack                       string             `json:"rack,omitempty" bson:"rack,omitempty"`
+	Name                       string             `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic               string             `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	ItemCode                   string             `bson:"item_code,omitempty" json:"item_code,omitempty"`
+	PrefixPartNumber           string             `bson:"prefix_part_number" json:"prefix_part_number"`
+	PartNumber                 string             `bson:"part_number" json:"part_number"`
+	Quantity                   float64            `json:"quantity,omitempty" bson:"quantity,omitempty"`
+	Unit                       string             `bson:"unit,omitempty" json:"unit,omitempty"`
+	UnitPrice                  float64            `bson:"unit_price" json:"unit_price"`
+	UnitPriceWithVAT           float64            `bson:"unit_price_with_vat" json:"unit_price_with_vat"`
+	PurchaseUnitPrice          float64            `bson:"purchase_unit_price,omitempty" json:"purchase_unit_price,omitempty"`
+	PurchaseUnitPriceWithVAT   float64            `bson:"purchase_unit_price_with_vat,omitempty" json:"purchase_unit_price_with_vat,omitempty"`
+	UnitDiscount               float64            `bson:"unit_discount" json:"unit_discount"`
+	UnitDiscountWithVAT        float64            `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
+	UnitDiscountPercent        float64            `bson:"unit_discount_percent" json:"unit_discount_percent"`
+	UnitDiscountPercentWithVAT float64            `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
 }
 
 // DeliveryNote : DeliveryNote structure
@@ -47,11 +53,20 @@ type DeliveryNote struct {
 	Remarks                string                `bson:"remarks" json:"remarks"`
 	VatPercent             *float64              `bson:"vat_percent" json:"vat_percent"`
 	Discount               float64               `bson:"discount" json:"discount"`
+	DiscountWithVAT        float64               `bson:"discount_with_vat" json:"discount_with_vat"`
 	DiscountPercent        float64               `bson:"discount_percent" json:"discount_percent"`
+	DiscountPercentWithVAT float64               `bson:"discount_percent_with_vat" json:"discount_percent_with_vat"`
 	ShippingOrHandlingFees float64               `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	VatPrice               float64               `bson:"vat_price" json:"vat_price"`
 	Total                  float64               `bson:"total" json:"total"`
+	TotalWithVAT           float64               `bson:"total_with_vat" json:"total_with_vat"`
 	NetTotal               float64               `bson:"net_total" json:"net_total"`
+	ActualVatPrice         float64               `bson:"actual_vat_price" json:"actual_vat_price"`
+	ActualTotal            float64               `bson:"actual_total" json:"actual_total"`
+	ActualTotalWithVAT     float64               `bson:"actual_total_with_vat" json:"actual_total_with_vat"`
+	ActualNetTotal         float64               `bson:"actual_net_total" json:"actual_net_total"`
+	RoundingAmount         float64               `bson:"rounding_amount" json:"rounding_amount"`
+	AutoRoundingAmount     bool                  `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
 	DeliveredBy            *primitive.ObjectID   `json:"delivered_by,omitempty" bson:"delivered_by,omitempty"`
 	CreatedAt              *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt              *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
@@ -1137,4 +1152,88 @@ func (deliveryNote *DeliveryNote) SetCustomerDeliveryNoteStats() error {
 	}
 
 	return nil
+}
+
+func (dn *DeliveryNote) FindNetTotal() {
+	if dn.VatPercent == nil {
+		vatPct := float64(0)
+		dn.VatPercent = &vatPct
+	}
+	dn.ShippingOrHandlingFees = RoundTo2Decimals(dn.ShippingOrHandlingFees)
+	dn.Discount = RoundTo2Decimals(dn.Discount)
+
+	dn.FindTotal()
+
+	baseTotal := dn.Total + dn.ShippingOrHandlingFees - dn.Discount
+	baseTotal = RoundTo2Decimals(baseTotal)
+
+	dn.VatPrice = RoundTo2Decimals(baseTotal * (*dn.VatPercent / 100))
+	dn.NetTotal = RoundTo2Decimals(baseTotal + dn.VatPrice)
+
+	// Actual
+	actualBaseTotal := dn.ActualTotal + dn.ShippingOrHandlingFees - dn.Discount
+	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
+	dn.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*dn.VatPercent / 100))
+	dn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + dn.ActualVatPrice)
+
+	if dn.AutoRoundingAmount {
+		dn.RoundingAmount = RoundTo2Decimals(dn.ActualNetTotal - dn.NetTotal)
+	}
+
+	dn.NetTotal = RoundTo2Decimals(dn.NetTotal + dn.RoundingAmount)
+
+	dn.CalculateDiscountPercentage()
+}
+
+func (dn *DeliveryNote) FindTotal() {
+	total := float64(0.0)
+	totalWithVAT := float64(0.0)
+	actualTotal := float64(0.0)
+	actualTotalWithVAT := float64(0.0)
+
+	for i, product := range dn.Products {
+		total += (product.Quantity * (dn.Products[i].UnitPrice - dn.Products[i].UnitDiscount))
+		total = RoundTo2Decimals(total)
+
+		totalWithVAT += (product.Quantity * (dn.Products[i].UnitPriceWithVAT - dn.Products[i].UnitDiscountWithVAT))
+		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+
+		actualTotal += (product.Quantity * (dn.Products[i].UnitPrice - dn.Products[i].UnitDiscount))
+		actualTotal = RoundTo8Decimals(actualTotal)
+
+		actualTotalWithVAT += (product.Quantity * (dn.Products[i].UnitPriceWithVAT - dn.Products[i].UnitDiscountWithVAT))
+		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
+	}
+
+	dn.Total = total
+	dn.TotalWithVAT = totalWithVAT
+	dn.ActualTotal = actualTotal
+	dn.ActualTotalWithVAT = actualTotalWithVAT
+}
+
+func (dn *DeliveryNote) CalculateDiscountPercentage() {
+	if dn.Discount <= 0 {
+		dn.DiscountPercent = 0.00
+		dn.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	baseBeforeDiscount := dn.NetTotal + dn.Discount
+	if baseBeforeDiscount == 0 {
+		dn.DiscountPercent = 0.00
+		dn.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	percentage := (dn.Discount / baseBeforeDiscount) * 100
+	dn.DiscountPercent = RoundTo2Decimals(percentage)
+
+	baseBeforeDiscountWithVAT := dn.NetTotal + dn.DiscountWithVAT
+	if baseBeforeDiscountWithVAT == 0 {
+		dn.DiscountPercentWithVAT = 0.00
+		return
+	}
+
+	percentage = (dn.DiscountWithVAT / baseBeforeDiscountWithVAT) * 100
+	dn.DiscountPercentWithVAT = RoundTo2Decimals(percentage)
 }

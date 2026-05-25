@@ -304,11 +304,11 @@ func main() {
 	router.HandleFunc("/v1/delivery-note/history", controller.ListDeliveryNoteHistory).Methods("GET")
 
 	//DeliveryNote
+	router.HandleFunc("/v1/delivery-note/calculate-net-total", controller.CalculateDeliveryNoteNetTotal).Methods("POST")
 	router.HandleFunc("/v1/delivery-note", controller.CreateDeliveryNote).Methods("POST")
 	router.HandleFunc("/v1/delivery-note", controller.ListDeliveryNote).Methods("GET")
 	router.HandleFunc("/v1/delivery-note/{id}", controller.ViewDeliveryNote).Methods("GET")
 	router.HandleFunc("/v1/delivery-note/{id}", controller.UpdateDeliveryNote).Methods("PUT")
-	//	router.HandleFunc("/v1/delivery-note/summary", controller.DeliveryNoteSummary).Methods("GET")
 
 	//StockTransfer
 	router.HandleFunc("/v1/stock-transfer", controller.CreateStockTransfer).Methods("POST")

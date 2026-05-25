@@ -354,3 +354,30 @@ func ViewDeliveryNote(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 }
+
+func CalculateDeliveryNoteNetTotal(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var deliveryNote *models.DeliveryNote
+	if !utils.Decode(w, r, &deliveryNote) {
+		return
+	}
+
+	deliveryNote.FindNetTotal()
+
+	response.Status = true
+	response.Result = deliveryNote
+
+	json.NewEncoder(w).Encode(response)
+}
