@@ -123,6 +123,7 @@ type Order struct {
 	EnableReportToZatca     bool                `json:"enable_report_to_zatca" bson:"-"`
 	QuotationID             *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
 	QuotationCode           *string             `json:"quotation_code" bson:"quotation_code"`
+	DeliveryNoteID          *primitive.ObjectID `json:"delivery_note_id" bson:"delivery_note_id"`
 	Commission              float64             `bson:"commission" json:"commission"`
 	CommissionPaymentMethod string              `bson:"commission_payment_method" json:"commission_payment_method"`
 }
@@ -367,6 +368,42 @@ func (order *Order) LinkQuotation() error {
 		err = quotation.Update()
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (order *Order) LinkDeliveryNote() error {
+	store, _ := FindStoreByID(order.StoreID, bson.M{})
+
+	if order.DeliveryNoteID != nil && !order.DeliveryNoteID.IsZero() {
+		deliverynote, err := store.FindDeliveryNoteByID(order.DeliveryNoteID, bson.M{})
+		if err != nil {
+			return err
+		}
+
+		deliverynote.OrderID = &order.ID
+		deliverynote.OrderCode = &order.Code
+
+		err = deliverynote.Update()
+		if err != nil {
+			return err
+		}
+
+		// Notify all connected clients so they can remove this DN from their notification bell
+		mutex.Lock()
+		var targets []struct{ userID, deviceID string }
+		for userID, devices := range Clients {
+			for deviceID := range devices {
+				targets = append(targets, struct{ userID, deviceID string }{userID, deviceID})
+			}
+		}
+		mutex.Unlock()
+		for _, t := range targets {
+			Emit(t.userID, t.deviceID, "delivery_note_order_linked", map[string]interface{}{
+				"delivery_note_id": order.DeliveryNoteID.Hex(),
+			})
 		}
 	}
 

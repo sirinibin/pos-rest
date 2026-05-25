@@ -54,6 +54,25 @@ func ListDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var dnStats models.DeliveryNoteStats
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 && keys[0] == "1" {
+		dnStats, err = store.GetDeliveryNoteStats(criterias.SearchBy)
+		if err != nil {
+			response.Status = false
+			response.Errors["stats"] = "Unable to find delivery note stats:" + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	response.Meta = map[string]interface{}{
+		"total_deliverynote":     dnStats.NetTotal,
+		"vat_price":              dnStats.VatPrice,
+		"discount":               dnStats.Discount,
+		"shipping_handling_fees": dnStats.ShippingOrHandlingFees,
+	}
+
 	if len(deliverynotes) == 0 {
 		response.Result = []interface{}{}
 	} else {
@@ -232,6 +251,11 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	deliverynote.UpdatedAt = &now
 
+	// If notify_at is being set to a future time, reset notified so the cron fires again
+	if deliverynote.NotifyAt != nil && deliverynote.NotifyAt.After(now) {
+		deliverynote.Notified = false
+	}
+
 	// Validate data
 	if errs := deliverynote.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
@@ -379,5 +403,46 @@ func CalculateDeliveryNoteNetTotal(w http.ResponseWriter, r *http.Request) {
 	response.Status = true
 	response.Result = deliveryNote
 
+	json.NewEncoder(w).Encode(response)
+}
+
+// ListDeliveryNoteReminders returns delivery notes that have been notified (notify_at reached)
+// and have no sales created yet (order_id is nil). Used for the notification bell on page load.
+func ListDeliveryNoteReminders(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	reminders, err := store.GetActiveDeliveryNoteReminders()
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Unable to find reminders:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	if len(reminders) == 0 {
+		response.Result = []interface{}{}
+	} else {
+		response.Result = reminders
+	}
 	json.NewEncoder(w).Encode(response)
 }

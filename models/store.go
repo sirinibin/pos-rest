@@ -107,32 +107,34 @@ type StoreList struct {
 }
 
 type StoreSettings struct {
-	ShowAddressInInvoiceFooter             bool            `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
-	DefaultQuotationValidityDays           *int64          `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
-	DefaultQuotationDeliveryDays           *int64          `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
-	ZatcaQrOnLeftBottom                    bool            `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
-	ShowReceivedByFooterInInvoice          bool            `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
-	BlockSaleWhenPurchasePriceIsHigher     bool            `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
-	EnableMonthlySerialNumber              bool            `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
-	QuotationInvoiceAccounting             bool            `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
-	OneLineProductNameInInvoice            bool            `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
-	OneLineProductNameInPrintInvoice       bool            `bson:"one_line_product_name_in_print_invoice" json:"one_line_product_name_in_print_invoice"`
-	ShowMinusOnCreditBalanceInBalanceSheet bool            `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
-	HideTotalAmountRowInBalanceSheet       bool            `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
-	ShowSellerInfoInInvoice                bool            `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
-	EnableInvoicePrintTypeSelection        bool            `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
-	AllowAdjustSameDatePayments            bool            `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
-	HideQuotationInvoiceVAT                bool            `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
-	UpdateProductStockOnQuotationSales     bool            `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
-	EnableAutoPaymentCloseOnReturn         bool            `bson:"enable_auto_payment_close_on_return" json:"enable_auto_payment_close_on_return"`
-	EnableAutoSalesPaymentCloseOnPurchase  bool            `bson:"enable_auto_sales_payment_close_on_purchase" json:"enable_auto_sales_payment_close_on_purchase"`
-	EnableAutoPurchasePaymentCloseOnSales  bool            `bson:"enable_auto_purchase_payment_close_on_sales" json:"enable_auto_purchase_payment_close_on_sales"`
-	DisablePurchasesOnAccounts             bool            `bson:"disable_purchases_on_accounts" json:"disable_purchases_on_accounts"`
-	Invoice                                InvoiceSettings `bson:"invoice" json:"invoice"`
-	EnableAutoTranslationToArabic          bool            `bson:"enable_auto_translation_to_arabic" json:"enable_auto_translation_to_arabic"`
-	EnableWarehouseModule                  bool            `bson:"enable_warehouse_module" json:"enable_warehouse_module"`
-	ShowCurrencySymbol                     bool            `bson:"show_currency_symbol" json:"show_currency_symbol"`
-	AddPriceDetailsInDeliveryNote          bool            `bson:"add_price_details_in_delivery_note" json:"add_price_details_in_delivery_note,omitempty"`
+	ShowAddressInInvoiceFooter                  bool            `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
+	DefaultQuotationValidityDays                *int64          `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
+	DefaultQuotationDeliveryDays                *int64          `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
+	ZatcaQrOnLeftBottom                         bool            `bson:"zatca_qr_on_left_bottom" json:"zatca_qr_on_left_bottom"`
+	ShowReceivedByFooterInInvoice               bool            `bson:"show_received_by_footer_in_invoice" json:"show_received_by_footer_in_invoice"`
+	BlockSaleWhenPurchasePriceIsHigher          bool            `bson:"block_sale_when_purchase_price_is_higher" json:"block_sale_when_purchase_price_is_higher"`
+	EnableMonthlySerialNumber                   bool            `bson:"enable_monthly_serial_number" json:"enable_monthly_serial_number"`
+	QuotationInvoiceAccounting                  bool            `bson:"quotation_invoice_accounting" json:"quotation_invoice_accounting"`
+	OneLineProductNameInInvoice                 bool            `bson:"one_line_product_name_in_invoice" json:"one_line_product_name_in_invoice"`
+	OneLineProductNameInPrintInvoice            bool            `bson:"one_line_product_name_in_print_invoice" json:"one_line_product_name_in_print_invoice"`
+	ShowMinusOnCreditBalanceInBalanceSheet      bool            `bson:"show_minus_on_liability_balance_in_balance_sheet" json:"show_minus_on_liability_balance_in_balance_sheet"`
+	HideTotalAmountRowInBalanceSheet            bool            `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
+	ShowSellerInfoInInvoice                     bool            `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
+	EnableInvoicePrintTypeSelection             bool            `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
+	AllowAdjustSameDatePayments                 bool            `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
+	HideQuotationInvoiceVAT                     bool            `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
+	UpdateProductStockOnQuotationSales          bool            `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
+	EnableAutoPaymentCloseOnReturn              bool            `bson:"enable_auto_payment_close_on_return" json:"enable_auto_payment_close_on_return"`
+	EnableAutoSalesPaymentCloseOnPurchase       bool            `bson:"enable_auto_sales_payment_close_on_purchase" json:"enable_auto_sales_payment_close_on_purchase"`
+	EnableAutoPurchasePaymentCloseOnSales       bool            `bson:"enable_auto_purchase_payment_close_on_sales" json:"enable_auto_purchase_payment_close_on_sales"`
+	DisablePurchasesOnAccounts                  bool            `bson:"disable_purchases_on_accounts" json:"disable_purchases_on_accounts"`
+	Invoice                                     InvoiceSettings `bson:"invoice" json:"invoice"`
+	EnableAutoTranslationToArabic               bool            `bson:"enable_auto_translation_to_arabic" json:"enable_auto_translation_to_arabic"`
+	EnableWarehouseModule                       bool            `bson:"enable_warehouse_module" json:"enable_warehouse_module"`
+	ShowCurrencySymbol                          bool            `bson:"show_currency_symbol" json:"show_currency_symbol"`
+	AddPriceDetailsInDeliveryNote               bool            `bson:"add_price_details_in_delivery_note" json:"add_price_details_in_delivery_note,omitempty"`
+	SkipProductSelectionWhileDeliveryNoteImport bool            `bson:"skip_product_selection_while_delivery_note_import" json:"skip_product_selection_while_delivery_note_import,omitempty"`
+	BlockSalesAfterPendingCount                 int             `bson:"block_sales_after_pending_count" json:"block_sales_after_pending_count,omitempty"`
 }
 
 type InvoiceSettings struct {

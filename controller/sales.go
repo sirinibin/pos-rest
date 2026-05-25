@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -60,6 +61,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	response.Criterias = criterias
 
 	var salesStats models.SalesStats
+	var dnStats models.DeliveryNoteStats
 
 	keys, ok := r.URL.Query()["search[stats]"]
 	if ok && len(keys[0]) >= 1 {
@@ -68,6 +70,23 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				response.Status = false
 				response.Errors["total_sales"] = "Unable to find total amount of orders:" + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+
+			// Build a delivery-note filter from only the fields that exist on delivery notes
+			dnFilter := map[string]interface{}{
+				"deleted": criterias.SearchBy["deleted"],
+			}
+			for _, key := range []string{"store_id", "date", "created_at", "customer_id", "created_by"} {
+				if val, exists := criterias.SearchBy[key]; exists {
+					dnFilter[key] = val
+				}
+			}
+			dnStats, err = store.GetDeliveryNoteStats(dnFilter)
+			if err != nil {
+				response.Status = false
+				response.Errors["delivery_note_total"] = "Unable to find delivery note stats:" + err.Error()
 				json.NewEncoder(w).Encode(response)
 				return
 			}
@@ -94,6 +113,7 @@ func ListOrder(w http.ResponseWriter, r *http.Request) {
 	response.Meta["return_amount"] = salesStats.ReturnAmount
 	response.Meta["purchase_sales"] = salesStats.PurchaseSales
 	response.Meta["sales_return_sales"] = salesStats.SalesReturnSales
+	response.Meta["delivery_note_total"] = dnStats.NetTotal
 
 	if len(orders) == 0 {
 		response.Result = []interface{}{}
@@ -282,6 +302,37 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Block sales creation if the customer already has too many unpaid sales
+	if store.Settings.BlockSalesAfterPendingCount > 0 &&
+		order.CustomerID != nil && !order.CustomerID.IsZero() {
+		pendingFilter := map[string]interface{}{
+			"customer_id":    order.CustomerID,
+			"payment_status": map[string]interface{}{"$in": []string{"not_paid", "paid_partially"}},
+			"deleted":        map[string]interface{}{"$ne": true},
+		}
+		pendingCount, err := store.GetTotalCount(pendingFilter, "order")
+		if err != nil {
+			queue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			response.Status = false
+			response.Errors["pending_sales_check"] = "error checking pending sales: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if pendingCount >= int64(store.Settings.BlockSalesAfterPendingCount) {
+			queue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			w.WriteHeader(http.StatusBadRequest)
+			response.Status = false
+			response.Errors["blocked"] = fmt.Sprintf(
+				"Customer has %d unpaid sale(s). New sales are blocked until existing sales are paid.",
+				pendingCount,
+			)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	order.FindTotalQuantity()
 
 	err = order.UpdateForeignLabelFields()
@@ -379,6 +430,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		order.LinkQuotation()
+		order.LinkDeliveryNote()
 		order.CreateProductsSalesHistory()
 		order.SetProductsStock()
 		order.SetProductsSalesStats()
@@ -608,6 +660,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		order.LinkQuotation()
+		order.LinkDeliveryNote()
 		order.ClearProductsSalesHistory()
 		order.CreateProductsSalesHistory()
 		order.SetProductsStock()

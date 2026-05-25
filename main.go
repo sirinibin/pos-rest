@@ -17,6 +17,7 @@ import (
 	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -305,6 +306,7 @@ func main() {
 
 	//DeliveryNote
 	router.HandleFunc("/v1/delivery-note/calculate-net-total", controller.CalculateDeliveryNoteNetTotal).Methods("POST")
+	router.HandleFunc("/v1/delivery-note/reminders", controller.ListDeliveryNoteReminders).Methods("GET")
 	router.HandleFunc("/v1/delivery-note", controller.CreateDeliveryNote).Methods("POST")
 	router.HandleFunc("/v1/delivery-note", controller.ListDeliveryNote).Methods("GET")
 	router.HandleFunc("/v1/delivery-note/{id}", controller.ViewDeliveryNote).Methods("GET")
@@ -538,6 +540,11 @@ func main() {
 	//cronJobsEveryHour()
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(3).Hour().Do(cronJobsEveryHour)
+	s.Every(1).Minute().Do(func() {
+		if err := models.NotifyDeliveryNoteReminders(); err != nil {
+			log.Print("NotifyDeliveryNoteReminders error:", err)
+		}
+	})
 	s.StartAsync()
 
 	// One-time historical BI backfill — run at startup when BI_RUN_BACKFILL=true

@@ -76,6 +76,10 @@ type DeliveryNote struct {
 	DeliveredByName        string                `json:"delivered_by_name,omitempty" bson:"delivered_by_name,omitempty"`
 	CreatedByName          string                `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName          string                `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
+	OrderID                *primitive.ObjectID   `json:"order_id" bson:"order_id"`
+	OrderCode              *string               `json:"order_code" bson:"order_code"`
+	NotifyAt               *time.Time            `json:"notify_at,omitempty" bson:"notify_at,omitempty"`
+	Notified               bool                  `json:"notified,omitempty" bson:"notified"`
 }
 
 func (deliveryNote *DeliveryNote) CreateNewCustomerFromName() error {
@@ -408,6 +412,11 @@ func (store *Store) SearchDeliveryNote(w http.ResponseWriter, r *http.Request) (
 			return deliverynotes, criterias, err
 		}
 		criterias.SearchBy["delivered_by"] = deliveredByID
+	}
+
+	keys, ok = r.URL.Query()["search[order_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["order_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
 	keys, ok = r.URL.Query()["limit"]
@@ -871,6 +880,116 @@ func (store *Store) IsDeliveryNoteExists(ID *primitive.ObjectID) (exists bool, e
 	return (count > 0), err
 }
 
+// GetActiveDeliveryNoteReminders returns delivery notes for this store where
+// notify_at has passed, notified=true, and no sales order has been created yet.
+func (store *Store) GetActiveDeliveryNoteReminders() ([]*DeliveryNote, error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	filter := bson.M{
+		"store_id":  store.ID,
+		"deleted":   bson.M{"$ne": true},
+		"notified":  true,
+		"notify_at": bson.M{"$lte": now},
+		"order_id":  bson.M{"$in": []interface{}{nil, primitive.NilObjectID}},
+	}
+
+	findOptions := options.Find()
+	findOptions.SetProjection(bson.M{
+		"id":            1,
+		"code":          1,
+		"notify_at":     1,
+		"customer_id":   1,
+		"customer_name": 1,
+	})
+	findOptions.SetSort(bson.D{{Key: "notify_at", Value: 1}})
+	findOptions.SetLimit(50)
+
+	cursor, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var reminders []*DeliveryNote
+	if err = cursor.All(ctx, &reminders); err != nil {
+		return nil, err
+	}
+	return reminders, nil
+}
+
+// NotifyDeliveryNoteReminders scans all stores for delivery notes whose notify_at
+// has arrived, have no sales order yet, and haven't been notified. It emits a
+// WebSocket event to every connected client and marks the note as notified.
+func NotifyDeliveryNoteReminders() error {
+	stores, err := GetAllStores()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+
+	for _, store := range stores {
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+		filter := bson.M{
+			"store_id":  store.ID,
+			"deleted":   bson.M{"$ne": true},
+			"notified":  bson.M{"$ne": true},
+			"notify_at": bson.M{"$lte": now},
+			"order_id":  bson.M{"$in": []interface{}{nil, primitive.NilObjectID}},
+		}
+
+		cursor, err := collection.Find(ctx, filter, options.Find().SetProjection(bson.M{
+			"_id":       1,
+			"code":      1,
+			"store_id":  1,
+			"notify_at": 1,
+		}))
+		if err != nil {
+			cancel()
+			continue
+		}
+
+		var notes []*DeliveryNote
+		if err = cursor.All(ctx, &notes); err != nil {
+			cancel()
+			continue
+		}
+		cancel()
+
+		for _, dn := range notes {
+			// Collect connected user/device pairs under the mutex, then emit without holding the lock
+			type userDevice struct{ userID, deviceID string }
+			mutex.Lock()
+			var targets []userDevice
+			for userID, devices := range Clients {
+				for deviceID := range devices {
+					targets = append(targets, userDevice{userID, deviceID})
+				}
+			}
+			mutex.Unlock()
+
+			for _, t := range targets {
+				Emit(t.userID, t.deviceID, "delivery_note_reminder", map[string]interface{}{
+					"id":        dn.ID.Hex(),
+					"code":      dn.Code,
+					"notify_at": dn.NotifyAt,
+				})
+			}
+
+			// Mark as notified
+			ctxUpd, cancelUpd := context.WithTimeout(context.Background(), 5*time.Second)
+			collection.UpdateOne(ctxUpd, bson.M{"_id": dn.ID}, bson.M{"$set": bson.M{"notified": true}})
+			cancelUpd()
+		}
+	}
+	return nil
+}
+
 func ProcessDeliveryNotes() error {
 	log.Print("Processing delivery notes")
 
@@ -1236,4 +1355,47 @@ func (dn *DeliveryNote) CalculateDiscountPercentage() {
 
 	percentage = (dn.DiscountWithVAT / baseBeforeDiscountWithVAT) * 100
 	dn.DiscountPercentWithVAT = RoundTo2Decimals(percentage)
+}
+
+type DeliveryNoteStats struct {
+	NetTotal               float64 `json:"net_total" bson:"net_total"`
+	VatPrice               float64 `json:"vat_price" bson:"vat_price"`
+	Discount               float64 `json:"discount" bson:"discount"`
+	ShippingOrHandlingFees float64 `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+}
+
+func (store *Store) GetDeliveryNoteStats(filter map[string]interface{}) (stats DeliveryNoteStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		{
+			"$match": filter,
+		},
+		{
+			"$group": bson.M{
+				"_id":                    nil,
+				"net_total":              bson.M{"$sum": "$net_total"},
+				"vat_price":              bson.M{"$sum": "$vat_price"},
+				"discount":               bson.M{"$sum": "$discount"},
+				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
+			},
+		},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+
+	if cur.Next(ctx) {
+		err := cur.Decode(&stats)
+		if err != nil {
+			return stats, err
+		}
+	}
+
+	return stats, nil
 }

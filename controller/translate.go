@@ -28,7 +28,6 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse the incoming JSON request
 	var req TranslationRequest
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -36,7 +35,6 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//Adding 1,
 	// Set up Google Translate client
 	//aws: /home/ubuntu/google-account.json
 	//local: /Users/sirin/Downloads/startpos-464823-f6608ae0765c.json
@@ -44,12 +42,12 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 	client, err := translate.NewClient(ctx, option.WithCredentialsFile(env.Getenv("GOOGLE_APPLICATION_CREDENTIALS", "/home/ubuntu/google-account.json")))
 	if err != nil {
 		http.Error(w, "Failed to create Google Translate client", http.StatusInternalServerError)
+		log.Print("Error creating Google Translate client: ", err)
 		return
 	}
 	defer client.Close()
 
-	// Perform the translation
-	targetLang := language.Make("ar") // Convert target language to language.Tag
+	targetLang := language.Make("ar")
 	resp, err := client.Translate(ctx, []string{req.Text}, targetLang, nil)
 	if err != nil {
 		http.Error(w, "Failed to translate text", http.StatusInternalServerError)
@@ -57,15 +55,12 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract the translated text
 	if len(resp) == 0 {
 		http.Error(w, "No translation found", http.StatusInternalServerError)
 		return
 	}
-	translatedText := resp[0].Text
 
-	// Return the translated text as JSON
-	response := TranslationResponse{TranslatedText: translatedText}
+	response := TranslationResponse{TranslatedText: resp[0].Text}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
