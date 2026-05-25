@@ -135,6 +135,8 @@ type StoreSettings struct {
 	AddPriceDetailsInDeliveryNote               bool            `bson:"add_price_details_in_delivery_note" json:"add_price_details_in_delivery_note,omitempty"`
 	SkipProductSelectionWhileDeliveryNoteImport bool            `bson:"skip_product_selection_while_delivery_note_import" json:"skip_product_selection_while_delivery_note_import,omitempty"`
 	BlockSalesAfterPendingCount                 int             `bson:"block_sales_after_pending_count" json:"block_sales_after_pending_count,omitempty"`
+	StatsShowOverallSummary                     *bool           `bson:"stats_show_overall_summary" json:"stats_show_overall_summary"`
+	StatsShowProfitLossStatement                *bool           `bson:"stats_show_profit_loss_statement" json:"stats_show_profit_loss_statement"`
 }
 
 type InvoiceSettings struct {

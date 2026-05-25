@@ -553,21 +553,21 @@ func (store *Store) UpdatePurchaseProfit() error {
 
 type PurchaseStats struct {
 	//ID                     *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal               float64             `json:"net_total" bson:"net_total"`
-	VatPrice               float64             `json:"vat_price" bson:"vat_price"`
-	Discount               float64             `json:"discount" bson:"discount"`
-	CashDiscount           float64             `json:"cash_discount" bson:"cash_discount"`
-	ShippingOrHandlingFees float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
-	NetRetailProfit        float64             `json:"net_retail_net_profit" bson:"net_retail_profit"`
-	NetWholesaleProfit     float64             `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
-	PaidPurchase           float64             `json:"paid_purchase" bson:"paid_purchase"`
-	UnPaidPurchase         float64             `json:"unpaid_purchase" bson:"unpaid_purchase"`
-	CashPurchase           float64             `json:"cash_purchase" bson:"cash_purchase"`
-	BankAccountPurchase    float64             `json:"bank_account_purchase" bson:"bank_account_purchase"`
-	ReturnCount            int64               `json:"return_count" bson:"return_count"`
-	ReturnAmount           float64             `json:"return_amount" bson:"return_amount"`
-	SalesPurchase          float64             `json:"sales_purchase" bson:"sales_purchase"`
-	PurchaseReturnPurchase float64             `json:"purchase_return_purchase" bson:"purchase_return_purchase"`
+	NetTotal               float64 `json:"net_total" bson:"net_total"`
+	VatPrice               float64 `json:"vat_price" bson:"vat_price"`
+	Discount               float64 `json:"discount" bson:"discount"`
+	CashDiscount           float64 `json:"cash_discount" bson:"cash_discount"`
+	ShippingOrHandlingFees float64 `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	NetRetailProfit        float64 `json:"net_retail_net_profit" bson:"net_retail_profit"`
+	NetWholesaleProfit     float64 `json:"net_wholesale_profit" bson:"net_wholesale_profit"`
+	PaidPurchase           float64 `json:"paid_purchase" bson:"paid_purchase"`
+	UnPaidPurchase         float64 `json:"unpaid_purchase" bson:"unpaid_purchase"`
+	CashPurchase           float64 `json:"cash_purchase" bson:"cash_purchase"`
+	BankAccountPurchase    float64 `json:"bank_account_purchase" bson:"bank_account_purchase"`
+	ReturnCount            int64   `json:"return_count" bson:"return_count"`
+	ReturnAmount           float64 `json:"return_amount" bson:"return_amount"`
+	SalesPurchase          float64 `json:"sales_purchase" bson:"sales_purchase"`
+	PurchaseReturnPurchase float64 `json:"purchase_return_purchase" bson:"purchase_return_purchase"`
 }
 
 func (store *Store) GetPurchaseStats(filter map[string]interface{}) (stats PurchaseStats, err error) {
@@ -1438,6 +1438,16 @@ func (store *Store) SearchPurchase(w http.ResponseWriter, r *http.Request) (purc
 			return purchases, criterias, err
 		}
 		criterias.SearchBy["order_placed_by"] = orderPlacedByID
+	}
+
+	keys, ok = r.URL.Query()["search[enable_on_accounts]"]
+	if ok && len(keys[0]) >= 1 {
+		value := ParseBoolToInt(keys[0])
+		if value == 1 {
+			criterias.SearchBy["enable_on_accounts"] = true
+		} else if value == 0 {
+			criterias.SearchBy["enable_on_accounts"] = bson.M{"$ne": true}
+		}
 	}
 
 	keys, ok = r.URL.Query()["limit"]
@@ -4066,8 +4076,6 @@ func (purchase *Purchase) CloseSalesPayment() error {
 	return nil
 }
 
-
-
 func (store *Store) BuildPurchaseCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
 
 	criterias = SearchCriterias{
@@ -4461,6 +4469,16 @@ func (store *Store) BuildPurchaseCriterias(w http.ResponseWriter, r *http.Reques
 			return criterias, err
 		}
 		criterias.SearchBy["order_placed_by"] = orderPlacedByID
+	}
+
+	keys, ok = r.URL.Query()["search[enable_on_accounts]"]
+	if ok && len(keys[0]) >= 1 {
+		value := ParseBoolToInt(keys[0])
+		if value == 1 {
+			criterias.SearchBy["enable_on_accounts"] = true
+		} else if value == 0 {
+			criterias.SearchBy["enable_on_accounts"] = bson.M{"$ne": true}
+		}
 	}
 
 	return criterias, nil

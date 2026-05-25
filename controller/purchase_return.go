@@ -246,7 +246,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !store.Settings.DisablePurchasesOnAccounts {
+	if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
 		err = purchasereturn.DoAccounting()
 		if err != nil {
 			response.Status = false
@@ -259,7 +259,9 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchasereturn.VendorID, bson.M{})
 		if vendor != nil {
-			vendor.SetCreditBalance()
+			if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
+				vendor.SetCreditBalance()
+			}
 		}
 	}
 
@@ -272,7 +274,9 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	go purchasereturn.SetVendorPurchaseReturnStats()
 	go purchase.SetVendorPurchaseStats()
 
-	go purchasereturn.SetPostBalances()
+	if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
+		go purchasereturn.SetPostBalances()
+	}
 
 	go purchasereturn.CreateProductsHistory(true, nil)
 
@@ -454,7 +458,7 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !store.Settings.DisablePurchasesOnAccounts {
+	if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
 		err = purchasereturn.DoAccounting()
 		if err != nil {
 			response.Status = false
@@ -475,7 +479,9 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	if purchasereturn.VendorID != nil && !purchasereturn.VendorID.IsZero() {
 		vendor, _ := store.FindVendorByID(purchasereturn.VendorID, bson.M{})
 		if vendor != nil {
-			vendor.SetCreditBalance()
+			if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
+				vendor.SetCreditBalance()
+			}
 		}
 	}
 
@@ -489,10 +495,12 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	go purchasereturn.SetVendorPurchaseReturnStats()
 	go purchase.SetVendorPurchaseStats()
 
-	go func() {
-		purchasereturn.SetPostBalances()
-		purchasereturnOld.SetPostBalances()
-	}()
+	if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
+		go func() {
+			purchasereturn.SetPostBalances()
+			purchasereturnOld.SetPostBalances()
+		}()
+	}
 
 	go func() {
 		purchasereturn.ClearProductsHistory()
