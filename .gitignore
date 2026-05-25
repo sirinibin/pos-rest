@@ -1,0 +1,13 @@
+startpos-api
+.DS_Store
+*.pyc
+ZatcaPython/venv_aspose_fix/
+ZatcaPython/templates/
+ZatcaPython/*.pdf
+ZatcaPython/*.xml
+ZatcaPython/*.jar
+ZatcaPython/*.py
+ZatcaPython/utilities/__pycache__/
+ZatcaPython/utilities/fatoora-cli-simulation-dotnet/Data/
+ZatcaPython/utilities/fatoora-cli-simulation-dotnet/Lib/
+ZatcaPython/repaired.pdf
