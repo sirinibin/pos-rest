@@ -83,6 +83,15 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	response.Meta["bank_account_purchase_return"] = purchaseReturnStats.BankAccountPurchaseReturn
 	response.Meta["shipping_handling_fees"] = purchaseReturnStats.ShippingOrHandlingFees
 
+	// Accounted purchase return total (enable_on_accounts=true)
+	accountedFilter := map[string]interface{}{}
+	for k, v := range criterias.SearchBy {
+		accountedFilter[k] = v
+	}
+	accountedFilter["enable_on_accounts"] = true
+	accountedStats, _ := store.GetPurchaseReturnStats(accountedFilter)
+	response.Meta["accounted_purchase_return"] = accountedStats.NetTotal
+
 	if len(purchasereturns) == 0 {
 		response.Result = []interface{}{}
 	} else {

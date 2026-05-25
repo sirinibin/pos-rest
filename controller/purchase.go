@@ -96,6 +96,15 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	response.Meta["sales_purchase"] = purchaseStats.SalesPurchase
 	response.Meta["purchase_return_purchase"] = purchaseStats.PurchaseReturnPurchase
 
+	// Accounted purchase total (enable_on_accounts=true)
+	accountedFilter := map[string]interface{}{}
+	for k, v := range criterias.SearchBy {
+		accountedFilter[k] = v
+	}
+	accountedFilter["enable_on_accounts"] = true
+	accountedStats, _ := store.GetPurchaseStats(accountedFilter)
+	response.Meta["accounted_purchase"] = accountedStats.NetTotal
+
 	if len(purchases) == 0 {
 		response.Result = []interface{}{}
 	} else {
