@@ -72,6 +72,8 @@ func ListCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total"] = customerwithdrawalStats.Total
+	response.Meta["total_vendor"] = customerwithdrawalStats.TotalVendor
+	response.Meta["total_customer"] = customerwithdrawalStats.TotalCustomer
 	response.Meta["bank"] = customerwithdrawalStats.Bank
 	response.Meta["cash"] = customerwithdrawalStats.Cash
 
