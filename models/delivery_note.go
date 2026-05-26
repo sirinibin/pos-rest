@@ -932,6 +932,10 @@ func NotifyDeliveryNoteReminders() error {
 	now := time.Now()
 
 	for _, store := range stores {
+		if !store.Settings.EnableNotification {
+			continue
+		}
+
 		collection := db.GetDB("store_" + store.ID.Hex()).Collection("delivery_note")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 

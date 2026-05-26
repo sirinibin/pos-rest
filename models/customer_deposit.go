@@ -449,11 +449,13 @@ func (customerdeposit *CustomerDeposit) UpdateForeignLabelFields() error {
 }
 
 type CustomerDepositStats struct {
-	ID           *primitive.ObjectID `json:"id" bson:"_id"`
-	Total        float64             `json:"total" bson:"total"`
-	Cash         float64             `json:"cash" bson:"cash"`
-	Bank         float64             `json:"bank" bson:"bank"`
-	PurchaseFund float64             `json:"purchase_fund" bson:"purchase_fund"`
+	ID            *primitive.ObjectID `json:"id" bson:"_id"`
+	Total         float64             `json:"total" bson:"total"`
+	TotalCustomer float64             `json:"total_customer" bson:"total_customer"`
+	TotalVendor   float64             `json:"total_vendor" bson:"total_vendor"`
+	Cash          float64             `json:"cash" bson:"cash"`
+	Bank          float64             `json:"bank" bson:"bank"`
+	PurchaseFund  float64             `json:"purchase_fund" bson:"purchase_fund"`
 }
 
 func (store *Store) GetCustomerDepositStats(filter map[string]interface{}) (stats CustomerDepositStats, err error) {
@@ -469,6 +471,20 @@ func (store *Store) GetCustomerDepositStats(filter map[string]interface{}) (stat
 			"$group": bson.M{
 				"_id":   nil,
 				"total": bson.M{"$sum": "$net_total"},
+				"total_customer": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$type", "customer"}},
+						"$net_total",
+						0,
+					},
+				}},
+				"total_vendor": bson.M{"$sum": bson.M{
+					"$cond": []interface{}{
+						bson.M{"$eq": []interface{}{"$type", "vendor"}},
+						"$net_total",
+						0,
+					},
+				}},
 				"purchase_fund": bson.M{"$sum": bson.M{"$sum": bson.M{
 					"$map": bson.M{
 						"input": "$payments",

@@ -72,6 +72,8 @@ func ListCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	response.Meta = map[string]interface{}{}
 
 	response.Meta["total"] = customerdepositStats.Total
+	response.Meta["total_customer"] = customerdepositStats.TotalCustomer
+	response.Meta["total_vendor"] = customerdepositStats.TotalVendor
 	response.Meta["bank"] = customerdepositStats.Bank
 	response.Meta["cash"] = customerdepositStats.Cash
 	response.Meta["purchase_fund"] = customerdepositStats.PurchaseFund
