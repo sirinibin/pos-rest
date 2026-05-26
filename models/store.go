@@ -137,6 +137,8 @@ type StoreSettings struct {
 	BlockSalesAfterPendingCount                 int             `bson:"block_sales_after_pending_count" json:"block_sales_after_pending_count,omitempty"`
 	StatsShowOverallSummary                     *bool           `bson:"stats_show_overall_summary" json:"stats_show_overall_summary"`
 	StatsShowProfitLossStatement                *bool           `bson:"stats_show_profit_loss_statement" json:"stats_show_profit_loss_statement"`
+	EnableNotification                          bool            `bson:"enable_notification" json:"enable_notification"`
+	EnableSalesPageSelection                    bool            `bson:"enable_sales_page_selection" json:"enable_sales_page_selection"`
 }
 
 type InvoiceSettings struct {
