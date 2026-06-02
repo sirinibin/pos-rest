@@ -1616,6 +1616,34 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["customer_id"] = "invalid customer"
 	}
 
+	if scenario == "update" && oldSalesReturn != nil && oldSalesReturn.Zatca.ReportingPassed && store.Zatca.Phase == "2" {
+		if len(salesreturn.Products) != len(oldSalesReturn.Products) {
+			errs["products"] = "Cannot add or remove products from a sales return that has been reported to ZATCA"
+			return errs
+		}
+		for i := range salesreturn.Products {
+			if i >= len(oldSalesReturn.Products) {
+				break
+			}
+			p := salesreturn.Products[i]
+			op := oldSalesReturn.Products[i]
+			if p.UnitPrice != op.UnitPrice || p.UnitPriceWithVAT != op.UnitPriceWithVAT ||
+				p.Quantity != op.Quantity ||
+				p.UnitDiscount != op.UnitDiscount || p.UnitDiscountWithVAT != op.UnitDiscountWithVAT {
+				errs["products"] = "Cannot change product prices, quantities, or discounts on a sales return reported to ZATCA"
+				return errs
+			}
+		}
+		if salesreturn.ShippingOrHandlingFees != oldSalesReturn.ShippingOrHandlingFees {
+			errs["shipping_handling_fees"] = "Cannot change shipping fees on a sales return reported to ZATCA"
+			return errs
+		}
+		if salesreturn.Discount != oldSalesReturn.Discount || salesreturn.DiscountWithVAT != oldSalesReturn.DiscountWithVAT {
+			errs["discount"] = "Cannot change discount on a sales return reported to ZATCA"
+			return errs
+		}
+	}
+
 	if salesreturn.Discount < 0 {
 		errs["discount"] = "Cash discount should not be < 0"
 	}

@@ -2216,6 +2216,34 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
+	if scenario == "update" && oldOrder != nil && oldOrder.Zatca.ReportingPassed && store.Zatca.Phase == "2" {
+		if len(order.Products) != len(oldOrder.Products) {
+			errs["products"] = "Cannot add or remove products from an invoice that has been reported to ZATCA"
+			return errs
+		}
+		for i := range order.Products {
+			if i >= len(oldOrder.Products) {
+				break
+			}
+			op := order.Products[i]
+			oop := oldOrder.Products[i]
+			if op.UnitPrice != oop.UnitPrice || op.UnitPriceWithVAT != oop.UnitPriceWithVAT ||
+				op.Quantity != oop.Quantity ||
+				op.UnitDiscount != oop.UnitDiscount || op.UnitDiscountWithVAT != oop.UnitDiscountWithVAT {
+				errs["products"] = "Cannot change product prices, quantities, or discounts on an invoice reported to ZATCA"
+				return errs
+			}
+		}
+		if order.ShippingOrHandlingFees != oldOrder.ShippingOrHandlingFees {
+			errs["shipping_handling_fees"] = "Cannot change shipping fees on an invoice reported to ZATCA"
+			return errs
+		}
+		if order.Discount != oldOrder.Discount || order.DiscountWithVAT != oldOrder.DiscountWithVAT {
+			errs["discount"] = "Cannot change discount on an invoice reported to ZATCA"
+			return errs
+		}
+	}
+
 	if order.Discount < 0 {
 		errs["discount"] = "Cash discount should not be < 0"
 	}
