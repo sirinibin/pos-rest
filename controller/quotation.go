@@ -374,6 +374,9 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	go quotation.SetPostBalances()
 	go quotation.CreateProductsHistory(true, nil)
+	if quotation.StoreID != nil {
+		go models.MarkDashboardDirty(*quotation.StoreID, quotation.Date)
+	}
 
 	response.Status = true
 	response.Result = quotation
@@ -697,6 +700,9 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 	}()*/
 
 	store.NotifyUsers("quotation_updated")
+	if quotation.StoreID != nil {
+		go models.MarkDashboardDirty(*quotation.StoreID, quotation.Date)
+	}
 	response.Status = true
 	response.Result = quotation
 	json.NewEncoder(w).Encode(response)
@@ -816,6 +822,10 @@ func DeleteQuotation(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if quotation.StoreID != nil {
+		go models.MarkDashboardDirty(*quotation.StoreID, quotation.Date)
 	}
 
 	response.Status = true

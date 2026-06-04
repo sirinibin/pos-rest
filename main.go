@@ -484,6 +484,18 @@ func main() {
 	router.HandleFunc("/v1/socket", controller.WebSocketHandler).Methods("GET")
 	router.HandleFunc("/v1/upload-pdf", controller.SavePdf).Methods("POST")
 	router.HandleFunc("/v1/share-pdf", controller.SharePdf).Methods("POST")
+	router.HandleFunc("/v1/chart-image-share", controller.ShareChartImage).Methods("POST")
+
+	// Dashboard analytics (precomputed monthly aggregation)
+	router.HandleFunc("/v1/dashboard/monthly", controller.DashboardGetMonthly).Methods("GET")
+	router.HandleFunc("/v1/dashboard/products", controller.DashboardGetProducts).Methods("GET")
+	router.HandleFunc("/v1/dashboard/customers", controller.DashboardGetCustomers).Methods("GET")
+	router.HandleFunc("/v1/dashboard/outstanding", controller.DashboardGetOutstanding).Methods("GET")
+	router.HandleFunc("/v1/dashboard/categories", controller.DashboardGetCategories).Methods("GET")
+	router.HandleFunc("/v1/dashboard/vendors", controller.DashboardGetVendors).Methods("GET")
+	router.HandleFunc("/v1/dashboard/accounts", controller.DashboardGetAccounts).Methods("GET")
+	router.HandleFunc("/v1/dashboard/stock", controller.DashboardGetStock).Methods("GET")
+	router.HandleFunc("/v1/dashboard/backfill", controller.DashboardBackfill).Methods("POST")
 
 	// Invoice PDF generation via headless Chrome
 	router.HandleFunc("/v1/invoice/pdf", controller.InvoicePDF).Methods("POST")
@@ -546,6 +558,16 @@ func main() {
 		}
 	})
 	s.StartAsync()
+
+	// Dashboard analytics: start the dirty-month worker, drain any persisted dirty
+	// months from a previous crash, then clear old data and backfill from scratch.
+	models.StartDashboardDirtyWorker()
+	go models.DrainPersistedDirtyDates()
+	go models.ClearDashboardMonthlyForAllStores() // clears old monthly dashboard data
+	go func() {
+		time.Sleep(1 * time.Second)            // wait for clear to finish
+		models.BackfillDashboardForAllStores() // fills all available history per store
+	}()
 
 	// One-time historical BI backfill — run at startup when BI_RUN_BACKFILL=true
 	//go models.RunBIIncrementalUpdateForAllStores()

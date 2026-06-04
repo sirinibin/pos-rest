@@ -158,6 +158,9 @@ func CreateSalesPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if salespayment.StoreID != nil {
+		go models.MarkDashboardDirty(*salespayment.StoreID, salespayment.Date)
+	}
 	response.Status = true
 	response.Result = salespayment
 
@@ -276,6 +279,9 @@ func UpdateSalesPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if salespayment.StoreID != nil {
+		go models.MarkDashboardDirty(*salespayment.StoreID, salespayment.Date)
+	}
 	response.Status = true
 	response.Result = salespayment
 	json.NewEncoder(w).Encode(response)
@@ -420,6 +426,10 @@ func DeleteSalesPayment(w http.ResponseWriter, r *http.Request) {
 		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if salesPayment.StoreID != nil {
+		go models.MarkDashboardDirty(*salesPayment.StoreID, salesPayment.Date)
 	}
 
 	response.Status = true

@@ -315,6 +315,9 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	go purchase.CreateProductsHistory(true, nil)
 
 	store.NotifyUsers("purchase_updated")
+	if purchase.StoreID != nil {
+		go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
+	}
 	response.Status = true
 	response.Result = purchase
 
@@ -564,6 +567,9 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	store.NotifyUsers("purchase_updated")
+	if purchase.StoreID != nil {
+		go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
+	}
 	response.Status = true
 	response.Result = purchase
 	json.NewEncoder(w).Encode(response)
@@ -690,6 +696,10 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if purchase.StoreID != nil {
+		go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
 	}
 
 	response.Status = true

@@ -191,6 +191,9 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 	go expense.SetPostBalances()
 
 	store.NotifyUsers("expense_updated")
+	if expense.StoreID != nil {
+		go models.MarkDashboardDirty(*expense.StoreID, expense.Date)
+	}
 
 	response.Status = true
 	response.Result = expense
@@ -346,6 +349,9 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if expense.StoreID != nil {
+		go models.MarkDashboardDirty(*expense.StoreID, expense.Date)
+	}
 	response.Status = true
 	response.Result = expense
 	json.NewEncoder(w).Encode(response)
@@ -520,6 +526,10 @@ func DeleteExpense(w http.ResponseWriter, r *http.Request) {
 		response.Errors["delete"] = "Unable to delete:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if expense.StoreID != nil {
+		go models.MarkDashboardDirty(*expense.StoreID, expense.Date)
 	}
 
 	response.Status = true

@@ -218,6 +218,9 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 
 	store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
 	store.NotifyUsers("receivable_updated")
+	if customerdeposit.StoreID != nil {
+		go models.MarkDashboardDirty(*customerdeposit.StoreID, customerdeposit.Date)
+	}
 
 	response.Status = true
 	response.Result = customerdeposit
@@ -434,6 +437,9 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 
 	store, _ = models.FindStoreByID(customerdeposit.StoreID, bson.M{})
 	store.NotifyUsers("receivable_updated")
+	if customerdeposit.StoreID != nil {
+		go models.MarkDashboardDirty(*customerdeposit.StoreID, customerdeposit.Date)
+	}
 
 	response.Status = true
 	response.Result = customerdeposit
@@ -607,6 +613,10 @@ func DeleteCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		response.Errors["delete"] = "Unable to delete:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if customerdeposit.StoreID != nil {
+		go models.MarkDashboardDirty(*customerdeposit.StoreID, customerdeposit.Date)
 	}
 
 	response.Status = true

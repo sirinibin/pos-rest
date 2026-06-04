@@ -290,6 +290,9 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	go purchasereturn.CreateProductsHistory(true, nil)
 
 	store.NotifyUsers("purchase_return_updated")
+	if purchasereturn.StoreID != nil {
+		go models.MarkDashboardDirty(*purchasereturn.StoreID, purchasereturn.Date)
+	}
 
 	response.Status = true
 	response.Result = purchasereturn
@@ -517,6 +520,9 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	store.NotifyUsers("purchase_return_updated")
+	if purchasereturn.StoreID != nil {
+		go models.MarkDashboardDirty(*purchasereturn.StoreID, purchasereturn.Date)
+	}
 
 	response.Status = true
 	response.Result = purchasereturn
@@ -634,6 +640,10 @@ func DeletePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if purchasereturn.StoreID != nil {
+		go models.MarkDashboardDirty(*purchasereturn.StoreID, purchasereturn.Date)
 	}
 
 	response.Status = true

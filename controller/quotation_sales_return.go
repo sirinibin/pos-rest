@@ -297,6 +297,9 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	go quotationsalesreturn.CreateProductsHistory(true, nil)
 
 	store.NotifyUsers("quotationsales_return_updated")
+	if quotationsalesreturn.StoreID != nil {
+		go models.MarkDashboardDirty(*quotationsalesreturn.StoreID, quotationsalesreturn.Date)
+	}
 
 	response.Status = true
 	response.Result = quotationsalesreturn
@@ -535,6 +538,9 @@ func UpdateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	store.NotifyUsers("quotationsales_return_updated")
+	if quotationsalesreturn.StoreID != nil {
+		go models.MarkDashboardDirty(*quotationsalesreturn.StoreID, quotationsalesreturn.Date)
+	}
 
 	response.Status = true
 	response.Result = quotationsalesreturn
@@ -665,6 +671,10 @@ func DeleteQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+	}
+
+	if quotationsalesreturn.StoreID != nil {
+		go models.MarkDashboardDirty(*quotationsalesreturn.StoreID, quotationsalesreturn.Date)
 	}
 
 	response.Status = true

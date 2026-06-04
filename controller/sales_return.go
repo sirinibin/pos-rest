@@ -321,6 +321,9 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	go salesreturn.CreateProductsHistory(true, nil)
 
 	store.NotifyUsers("sales_return_updated")
+	if salesreturn.StoreID != nil {
+		go models.MarkDashboardDirty(*salesreturn.StoreID, salesreturn.Date)
+	}
 
 	response.Status = true
 	response.Result = salesreturn
@@ -574,6 +577,9 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	store.NotifyUsers("sales_return_updated")
+	if salesreturn.StoreID != nil {
+		go models.MarkDashboardDirty(*salesreturn.StoreID, salesreturn.Date)
+	}
 
 	response.Status = true
 	response.Result = salesreturn
@@ -704,6 +710,10 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if salesreturn.StoreID != nil {
+		go models.MarkDashboardDirty(*salesreturn.StoreID, salesreturn.Date)
+	}
+
 	response.Status = true
 	response.Result = "Deleted successfully"
 
@@ -771,6 +781,10 @@ func UndeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if salesreturn.StoreID != nil {
+		go models.MarkDashboardDirty(*salesreturn.StoreID, salesreturn.Date)
 	}
 
 	response.Status = true

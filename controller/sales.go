@@ -470,6 +470,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if order.StoreID != nil {
+		go models.MarkDashboardDirty(*order.StoreID, order.Date)
+	}
 	response.Status = true
 	response.Result = order
 
@@ -726,6 +729,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	store.NotifyUsers("sales_updated")
+	if order.StoreID != nil {
+		go models.MarkDashboardDirty(*order.StoreID, order.Date)
+	}
 	response.Status = true
 	response.Result = order
 	json.NewEncoder(w).Encode(response)
@@ -1064,6 +1070,10 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	if order.StoreID != nil {
+		go models.MarkDashboardDirty(*order.StoreID, order.Date)
 	}
 
 	response.Status = true
