@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -153,6 +154,66 @@ func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {
 	hrs, mins := math.Modf(timeZoneOffset)
 	mins = 60 * mins
 	return date.Add(time.Hour*time.Duration(hrs) + time.Minute*time.Duration(mins))
+}
+
+// CountryTimezoneOffset returns the UTC offset (in hours, negated) for a given ISO country code.
+// Sign convention matches getTimezoneOffset()/60 in JavaScript and ConvertTimeZoneToUTC:
+// positive-UTC countries have a negative offset (e.g. Saudi Arabia UTC+3 → -3).
+func CountryTimezoneOffset(countryCode string) float64 {
+	offsets := map[string]float64{
+		// Middle East
+		"SA": -3, "KW": -3, "QA": -3, "BH": -3, "YE": -3, "IQ": -3,
+		"JO": -3, "SY": -3, "PS": -3, "SD": -3, "SO": -3, "ER": -3, "ET": -3, "KE": -3,
+		"AE": -4, "OM": -4,
+		"IR": -3.5,
+		"EG": -2, "LB": -2, "IL": -2, "LY": -2,
+		"TR": -3,
+		// South / Southeast Asia
+		"IN": -5.5, "LK": -5.5,
+		"PK": -5,
+		"NP": -5.75,
+		"BD": -6,
+		"MM": -6.5,
+		"TH": -7, "VN": -7, "ID": -7,
+		"MY": -8, "SG": -8, "PH": -8, "HK": -8, "TW": -8, "CN": -8,
+		"JP": -9, "KR": -9,
+		// Europe (standard / CET; DST months shift by 1 but this is the base)
+		"GB": 0, "IE": 0, "PT": 0, "IS": 0, "GH": 0, "MA": 0,
+		"DE": -1, "FR": -1, "IT": -1, "ES": -1, "NL": -1, "BE": -1,
+		"CH": -1, "AT": -1, "SE": -1, "NO": -1, "DK": -1, "PL": -1,
+		"NG": -1, "TN": -1, "DZ": -1,
+		"FI": -2, "GR": -2, "ZA": -2, "EE": -2, "LV": -2, "LT": -2, "RO": -2, "BG": -2,
+		// Americas (standard time; eastern US/CA approximation)
+		"BR": 3, "AR": 3, "CL": 3, "UY": 3,
+		"BO": 4, "PY": 4, "VE": 4,
+		"CO": 5, "PE": 5, "EC": 5,
+		"MX": 6,
+		"US": 5, "CA": 5,
+		// Oceania
+		"AU": -10, "NZ": -12,
+	}
+	if offset, ok := offsets[countryCode]; ok {
+		return offset
+	}
+	return 0 // default UTC (UK base)
+}
+
+// TimezoneOffsetFromRequest resolves the timezone offset for standalone search functions
+// (those without a *Store receiver) by looking up the store from search[store_id] in the request.
+func TimezoneOffsetFromRequest(r *http.Request) float64 {
+	keys, ok := r.URL.Query()["search[store_id]"]
+	if !ok || len(keys[0]) == 0 {
+		return 0
+	}
+	storeID, err := primitive.ObjectIDFromHex(keys[0])
+	if err != nil {
+		return 0
+	}
+	store, err := FindStoreByID(&storeID, bson.M{"country_code": 1})
+	if err != nil || store == nil {
+		return 0
+	}
+	return CountryTimezoneOffset(store.CountryCode)
 }
 
 func (store *Store) GetTotalCount(filter map[string]interface{}, collectionName string) (count int64, err error) {
