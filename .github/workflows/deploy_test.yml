@@ -16,11 +16,11 @@ jobs:
     steps:
       # Step 1: Checkout code
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Set up Go
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: "1.23"
 
@@ -29,7 +29,7 @@ jobs:
       - name: Clean Build Directory
         run: rm -rf ./bin ./build ./pos-rest
       - name: Clear GitHub Actions Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ./build
           key: ${{ runner.os }}-build-${{ github.run_id }}
