@@ -150,13 +150,7 @@ func (store *Store) SearchSalesPayment(w http.ResponseWriter, r *http.Request) (
 		}
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	keys, ok = r.URL.Query()["search[created_by_name]"]
 	if ok && len(keys[0]) >= 1 {

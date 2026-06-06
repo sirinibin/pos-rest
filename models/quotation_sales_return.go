@@ -1328,13 +1328,7 @@ func (store *Store) SearchQuotationSalesReturn(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
@@ -1370,7 +1364,6 @@ func (store *Store) SearchQuotationSalesReturn(w http.ResponseWriter, r *http.Re
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
 		}
-		log.Printf("Start Date:%v", startDate)
 	}
 
 	keys, ok = r.URL.Query()["search[to_date]"]
@@ -1386,7 +1379,6 @@ func (store *Store) SearchQuotationSalesReturn(w http.ResponseWriter, r *http.Re
 		}
 		endDate = endDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
-		log.Printf("End Date:%v", endDate)
 	}
 
 	if !startDate.IsZero() && !endDate.IsZero() {
@@ -4681,13 +4673,7 @@ func (store *Store) BuildQuotationSalesReturnCriterias(w http.ResponseWriter, r 
 		}
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
@@ -4723,7 +4709,6 @@ func (store *Store) BuildQuotationSalesReturnCriterias(w http.ResponseWriter, r 
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
 		}
-		log.Printf("Start Date:%v", startDate)
 	}
 
 	keys, ok = r.URL.Query()["search[to_date]"]
@@ -4739,7 +4724,6 @@ func (store *Store) BuildQuotationSalesReturnCriterias(w http.ResponseWriter, r 
 		}
 		endDate = endDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
-		log.Printf("End Date:%v", endDate)
 	}
 
 	if !startDate.IsZero() && !endDate.IsZero() {

@@ -1353,13 +1353,9 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[return_count]"]
 	if ok && len(keys[0]) >= 1 {
@@ -4046,13 +4042,9 @@ func (store *Store) BuildQuotationCriterias(w http.ResponseWriter, r *http.Reque
 
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[return_count]"]
 	if ok && len(keys[0]) >= 1 {

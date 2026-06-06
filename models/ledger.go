@@ -127,13 +127,7 @@ func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models
 		criterias.SortBy = GetSortByFields(keys[0])
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {

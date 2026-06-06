@@ -1120,13 +1120,7 @@ func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (s
 		}
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
@@ -1162,7 +1156,6 @@ func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (s
 		if timeZoneOffset != 0 {
 			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
 		}
-		log.Printf("Start Date:%v", startDate)
 	}
 
 	keys, ok = r.URL.Query()["search[to_date]"]
@@ -1178,7 +1171,6 @@ func (store *Store) SearchSalesReturn(w http.ResponseWriter, r *http.Request) (s
 		}
 		endDate = endDate.Add(time.Hour * time.Duration(24))
 		endDate = endDate.Add(-time.Second * time.Duration(1))
-		log.Printf("End Date:%v", endDate)
 	}
 
 	if !startDate.IsZero() && !endDate.IsZero() {
@@ -5038,13 +5030,9 @@ func (store *Store) BuildSalesReturnCriterias(w http.ResponseWriter, r *http.Req
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[zatca.reporting_passed]"]
 	if ok && len(keys[0]) >= 1 {

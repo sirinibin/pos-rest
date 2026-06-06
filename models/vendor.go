@@ -749,13 +749,7 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 		criterias.SortBy = GetSortByFields(keys[0])
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	keys, ok = r.URL.Query()["search[deleted]"]
 	if ok && len(keys[0]) >= 1 {
@@ -2186,13 +2180,7 @@ func (store *Store) BuildVendorCriterias(w http.ResponseWriter, r *http.Request)
 		criterias.SortBy = GetSortByFields(keys[0])
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	keys, ok = r.URL.Query()["search[deleted]"]
 	if ok && len(keys[0]) >= 1 {

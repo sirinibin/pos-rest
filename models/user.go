@@ -441,13 +441,9 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 		criterias.SearchBy["store_ids"] = bson.M{"$in": accessingUser.StoreIDs}
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := TimezoneOffsetFromRequest(r)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[online]"]
 	if ok && len(keys[0]) >= 1 {

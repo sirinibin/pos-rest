@@ -453,13 +453,7 @@ func (store *Store) SearchPosting(w http.ResponseWriter, r *http.Request) (
 		criterias.SortBy = GetSortByFields(keys[0])
 	}
 
-	timeZoneOffset := 0.0
-	keys, ok = r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
 	//var startDate time.Time
 	//var endDate time.Time

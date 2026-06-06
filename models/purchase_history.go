@@ -120,14 +120,9 @@ func (store *Store) SearchPurchaseHistory(w http.ResponseWriter, r *http.Request
 
 	criterias.SearchBy = make(map[string]interface{})
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
@@ -879,14 +874,9 @@ func (store *Store) BuildPurchaseHistoryCriterias(w http.ResponseWriter, r *http
 
 	criterias.SearchBy = make(map[string]interface{})
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {

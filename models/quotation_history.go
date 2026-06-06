@@ -114,13 +114,9 @@ func (store *Store) SearchQuotationHistory(w http.ResponseWriter, r *http.Reques
 
 	criterias.SearchBy = make(map[string]interface{})
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[type]"]
 	if ok && len(keys[0]) >= 1 {
@@ -835,13 +831,9 @@ func (store *Store) BuildQuotationHistoryCriterias(w http.ResponseWriter, r *htt
 
 	criterias.SearchBy = make(map[string]interface{})
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[type]"]
 	if ok && len(keys[0]) >= 1 {

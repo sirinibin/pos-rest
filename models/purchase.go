@@ -1056,13 +1056,9 @@ func (store *Store) SearchPurchase(w http.ResponseWriter, r *http.Request) (purc
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[cash_discount]"]
 	if ok && len(keys[0]) >= 1 {
@@ -1956,6 +1952,32 @@ func (purchase *Purchase) SetProductsStock() (err error) {
 	return nil
 }
 
+// isLastPurchaseForProduct returns true if the current purchase is the most
+// recent non-deleted purchase in the store that contains the given product.
+func (purchase *Purchase) isLastPurchaseForProduct(productID primitive.ObjectID) (bool, error) {
+	collection := db.GetDB("store_" + purchase.StoreID.Hex()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetProjection(bson.M{"_id": 1})
+	findOneOptions.SetSort(bson.M{"_id": -1})
+
+	var result struct {
+		ID primitive.ObjectID `bson:"_id"`
+	}
+	err := collection.FindOne(ctx, bson.M{
+		"store_id":           purchase.StoreID,
+		"products.product_id": productID,
+		"deleted":            bson.M{"$ne": true},
+	}, findOneOptions).Decode(&result)
+	if err != nil {
+		return false, err
+	}
+
+	return result.ID == purchase.ID, nil
+}
+
 func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
@@ -1963,6 +1985,14 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 	}
 
 	for _, purchaseProduct := range purchase.Products {
+		isLast, err := purchase.isLastPurchaseForProduct(purchaseProduct.ProductID)
+		if err != nil {
+			return err
+		}
+		if !isLast {
+			continue
+		}
+
 		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
 		if err != nil {
 			return err
@@ -4087,13 +4117,9 @@ func (store *Store) BuildPurchaseCriterias(w http.ResponseWriter, r *http.Reques
 	criterias.SearchBy = make(map[string]interface{})
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
-	timeZoneOffset := 0.0
-	keys, ok := r.URL.Query()["search[timezone_offset]"]
-	if ok && len(keys[0]) >= 1 {
-		if s, err := strconv.ParseFloat(keys[0], 64); err == nil {
-			timeZoneOffset = s
-		}
-	}
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	var keys []string
+	var ok bool
 
 	keys, ok = r.URL.Query()["search[cash_discount]"]
 	if ok && len(keys[0]) >= 1 {
