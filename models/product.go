@@ -3636,9 +3636,9 @@ func ProcessProducts() error {
 			continue
 		}*/
 
-		if store.Code != "LGK" && store.Code != "LGK-SIMULATION" {
+		/*if store.Code != "LGK" && store.Code != "LGK-SIMULATION" {
 			continue
-		}
+		}*/
 		totalCount, err := store.GetTotalCount(bson.M{
 			//	"part_number": "8938",
 		}, "product")
@@ -3678,9 +3678,26 @@ func ProcessProducts() error {
 				continue
 			}
 
-			product.SetStock()
+			purchaseHistory, err := product.GetLastPurchaseHistory()
+			if err != nil {
+				return errors.New("Error fetching last purchase history:" + err.Error())
+			}
+
+			if purchaseHistory != nil {
+				if productStoreTemp, ok := product.ProductStores[store.ID.Hex()]; ok {
+					productStoreTemp.PurchaseUnitPrice = purchaseHistory.UnitPrice
+					productStoreTemp.PurchaseUnitPriceWithVAT = purchaseHistory.UnitPriceWithVAT
+					product.ProductStores[store.ID.Hex()] = productStoreTemp
+				}
+				err = product.Update(&store.ID)
+				if err != nil {
+					return errors.New("Error updating product with last purchase unit price:" + err.Error())
+				}
+			}
+
+			/*product.SetStock()
 			product.AllowDuplicates = true
-			product.Update(&store.ID)
+			product.Update(&store.ID)*/
 
 			/*if product.PartNumber != "8938" {
 				continue
@@ -5066,6 +5083,28 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 	}
 
 	return stats.Quantity, nil
+}
+
+func (product *Product) GetLastPurchaseHistory() (*ProductPurchaseHistory, error) {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_purchase_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.M{"_id": -1})
+
+	var history ProductPurchaseHistory
+	err := collection.FindOne(ctx, bson.M{
+		"product_id": product.ID,
+	}, findOneOptions).Decode(&history)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &history, nil
 }
 
 func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
