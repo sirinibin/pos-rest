@@ -5091,7 +5091,7 @@ func (product *Product) GetLastPurchaseHistory() (*ProductPurchaseHistory, error
 	defer cancel()
 
 	findOneOptions := options.FindOne()
-	findOneOptions.SetSort(bson.M{"_id": -1})
+	findOneOptions.SetSort(bson.M{"date": -1})
 
 	var history ProductPurchaseHistory
 	err := collection.FindOne(ctx, bson.M{
