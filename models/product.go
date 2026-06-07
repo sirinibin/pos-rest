@@ -1234,6 +1234,23 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		//criterias.SearchBy["stores"] = stockElement
 	}
 
+	keys, ok = r.URL.Query()["search[main_store_stock]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		stockValue, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks.main_store"] = bson.M{operator: stockValue}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks.main_store"] = stockValue
+		}
+	}
+
 	//sales
 	keys, ok = r.URL.Query()["search[sales_count]"]
 	if ok && len(keys[0]) >= 1 {
@@ -5320,6 +5337,23 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 			} else {
 				criterias.SearchBy["product_stores."+storeID.Hex()+".stock"] = stockValue
 			}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[main_store_stock]"]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+
+		stockValue, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if operator != "" {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks.main_store"] = bson.M{operator: stockValue}
+		} else {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_stocks.main_store"] = stockValue
 		}
 	}
 
