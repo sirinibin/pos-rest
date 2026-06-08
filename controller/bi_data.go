@@ -477,6 +477,28 @@ func BILedger(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"status": true, "result": rows})
 }
 
+// ── BIStoreSettings  GET /v1/bi/store-settings ───────────────────────────────
+
+type BIStoreSettingsResult struct {
+	QuotationInvoiceAccounting bool    `json:"quotation_invoice_accounting"`
+	DisablePurchasesOnAccounts bool    `json:"disable_purchases_on_accounts"`
+	VatPercent                 float64 `json:"vat_percent"`
+}
+
+func BIStoreSettings(w http.ResponseWriter, r *http.Request) {
+	store, ok := biAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	result := BIStoreSettingsResult{
+		QuotationInvoiceAccounting: store.Settings.QuotationInvoiceAccounting,
+		DisablePurchasesOnAccounts: store.Settings.DisablePurchasesOnAccounts,
+		VatPercent:                 store.VatPercent,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": true, "result": result})
+}
+
 // ── BISalesReturns  GET /v1/bi/sales-returns ─────────────────────────────────
 
 type BISalesReturnRow struct {

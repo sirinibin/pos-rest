@@ -504,6 +504,7 @@ func main() {
 	router.HandleFunc("/v1/bi/orders", controller.BIOrders).Methods("GET")
 	router.HandleFunc("/v1/bi/ledger", controller.BILedger).Methods("GET")
 	router.HandleFunc("/v1/bi/sales-returns", controller.BISalesReturns).Methods("GET")
+	router.HandleFunc("/v1/bi/store-settings", controller.BIStoreSettings).Methods("GET")
 
 	// Invoice PDF generation via headless Chrome
 	router.HandleFunc("/v1/invoice/pdf", controller.InvoicePDF).Methods("POST")
