@@ -481,6 +481,13 @@ func BILedger(w http.ResponseWriter, r *http.Request) {
 // ── BIStoreSettings  GET /v1/bi/store-settings ───────────────────────────────
 
 type BIStoreSettingsResult struct {
+	// Identity
+	Name               string `json:"name"`
+	BranchName         string `json:"branch_name"`
+	VATNo              string `json:"vat_no"`
+	RegistrationNumber string `json:"registration_number"`
+	Address            string `json:"address"`
+	// Accounting flags
 	QuotationInvoiceAccounting bool    `json:"quotation_invoice_accounting"`
 	DisablePurchasesOnAccounts bool    `json:"disable_purchases_on_accounts"`
 	VatPercent                 float64 `json:"vat_percent"`
@@ -492,6 +499,11 @@ func BIStoreSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := BIStoreSettingsResult{
+		Name:               store.Name,
+		BranchName:         store.BranchName,
+		VATNo:              store.VATNo,
+		RegistrationNumber: store.RegistrationNumber,
+		Address:            store.Address,
 		QuotationInvoiceAccounting: store.Settings.QuotationInvoiceAccounting,
 		DisablePurchasesOnAccounts: store.Settings.DisablePurchasesOnAccounts,
 		VatPercent:                 store.VatPercent,
