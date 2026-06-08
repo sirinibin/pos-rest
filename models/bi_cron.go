@@ -198,14 +198,14 @@ func RunBIIncrementalUpdateForAllStores() {
 			continue
 		}
 		id := store.ID
-		RunBIMonthlyRevenueUpdate(id, 12)
+		RunBIMonthlyRevenueUpdate(id, 24)
 		RunBITopProductsUpdate(id)
 		RunBITopCustomersUpdate(id)
-		RunBIExpenseSummaryUpdate(id, 12)
+		RunBIExpenseSummaryUpdate(id, 24)
 		RunBIOutstandingUpdate(id)
 		RunBIStockAlertsUpdate(id)
 		RunBIVendorPerformanceUpdate(id)
-		RunBIQuotationConversionUpdate(id, 12)
+		RunBIQuotationConversionUpdate(id, 24)
 	}
 
 	log.Printf("[BI] Incremental update complete in %s", time.Since(start).Round(time.Second))

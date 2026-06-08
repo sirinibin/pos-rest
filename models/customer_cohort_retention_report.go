@@ -1,10 +1,37 @@
 package models
 
 import (
+	"context"
 	"time"
 
+	"github.com/sirinibin/startpos/backend/db"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// GetBICohortRetention returns all cohort retention rows for the store,
+// sorted by cohort_first_buy_month ascending.
+func (store *Store) GetBICohortRetention() ([]CustomerCohortRetentionReport, error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer_cohort_retention_report")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	opts := options.Find().
+		SetSort(bson.D{bson.E{Key: "cohort_first_buy_month", Value: 1}})
+
+	cursor, err := collection.Find(ctx, bson.M{"store_id": store.ID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []CustomerCohortRetentionReport
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
 
 // CustomerCohortRetentionReport holds cohort-level retention statistics.
 // One document per cohort month per store; upserted by {store_id, cohort_first_buy_month}.

@@ -7,6 +7,7 @@ import (
 	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -26,6 +27,47 @@ type CustomerChurnRiskTierHistory struct {
 	DaysSinceLastBuy   int                 `bson:"days_since_last_buy" json:"days_since_last_buy"`
 	CreatedAt          *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+// GetBICustomerChurn returns the latest churn risk snapshot for all customers,
+// optionally filtered by risk_tier ("Critical","High","Medium","Low").
+// Sorted by churn_percent desc (highest risk first).
+func (store *Store) GetBICustomerChurn(tierFilter string, limit int) ([]CustomerChurnRiskTierHistory, error) {
+	if limit <= 0 || limit > 2000 {
+		limit = 50
+	}
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer_churn_risk_tier_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	matchFilter := bson.M{"store_id": store.ID}
+	if tierFilter != "" {
+		matchFilter["risk_tier"] = tierFilter
+	}
+
+	pipeline := mongo.Pipeline{
+		bson.D{bson.E{Key: "$match", Value: matchFilter}},
+		bson.D{bson.E{Key: "$sort", Value: bson.D{bson.E{Key: "date", Value: -1}}}},
+		bson.D{bson.E{Key: "$group", Value: bson.M{
+			"_id": "$customer_id",
+			"doc": bson.M{"$first": "$$ROOT"},
+		}}},
+		bson.D{bson.E{Key: "$replaceRoot", Value: bson.M{"newRoot": "$doc"}}},
+		bson.D{bson.E{Key: "$sort", Value: bson.D{bson.E{Key: "churn_percent", Value: -1}}}},
+		bson.D{bson.E{Key: "$limit", Value: int64(limit)}},
+	}
+
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []CustomerChurnRiskTierHistory
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // GetCustomerChurnHistory returns churn risk tier history for a customer, newest first.

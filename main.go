@@ -198,6 +198,12 @@ func main() {
 	router.HandleFunc("/v1/bi/stock-alerts", controller.GetBIStockAlerts).Methods("GET")
 	router.HandleFunc("/v1/bi/vendor-performance", controller.GetBIVendorPerformance).Methods("GET")
 	router.HandleFunc("/v1/bi/quotation-conversion", controller.GetBIQuotationConversion).Methods("GET")
+	router.HandleFunc("/v1/bi/product-abc-xyz", controller.GetBIProductAbcXyz).Methods("GET")
+	router.HandleFunc("/v1/bi/customer-churn", controller.GetBICustomerChurn).Methods("GET")
+	router.HandleFunc("/v1/bi/customer-clv", controller.GetBICustomerCLV).Methods("GET")
+	router.HandleFunc("/v1/bi/cohort-retention", controller.GetBICohortRetention).Methods("GET")
+	router.HandleFunc("/v1/bi/product-sales-trend", controller.GetBIProductSalesTrend).Methods("GET")
+	router.HandleFunc("/v1/bi/sales-by-category", controller.GetBISalesByCategory).Methods("GET")
 
 	//Expense
 	router.HandleFunc("/v1/expense/summary", controller.ExpenseSummary).Methods("GET")

@@ -7,6 +7,7 @@ import (
 	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -30,6 +31,47 @@ type CustomerPredicted12MonthCLVHistory struct {
 	TenureDays                            int                 `bson:"tenure_days" json:"tenure_days"`
 	CreatedAt                             *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt                             *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
+}
+
+// GetBICustomerCLV returns the latest predicted CLV snapshot for all customers,
+// optionally filtered by segment ("High Value","Mid Value","Low Value").
+// Sorted by predicted_clv_amount_12months desc.
+func (store *Store) GetBICustomerCLV(segment string, limit int) ([]CustomerPredicted12MonthCLVHistory, error) {
+	if limit <= 0 || limit > 2000 {
+		limit = 50
+	}
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer_predicted_12month_clv_history")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	matchFilter := bson.M{"store_id": store.ID}
+	if segment != "" {
+		matchFilter["lifetime_value_segment_for_12months"] = segment
+	}
+
+	pipeline := mongo.Pipeline{
+		bson.D{bson.E{Key: "$match", Value: matchFilter}},
+		bson.D{bson.E{Key: "$sort", Value: bson.D{bson.E{Key: "date", Value: -1}}}},
+		bson.D{bson.E{Key: "$group", Value: bson.M{
+			"_id": "$customer_id",
+			"doc": bson.M{"$first": "$$ROOT"},
+		}}},
+		bson.D{bson.E{Key: "$replaceRoot", Value: bson.M{"newRoot": "$doc"}}},
+		bson.D{bson.E{Key: "$sort", Value: bson.D{bson.E{Key: "predicted_clv_amount_12months", Value: -1}}}},
+		bson.D{bson.E{Key: "$limit", Value: int64(limit)}},
+	}
+
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []CustomerPredicted12MonthCLVHistory
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // GetCustomerCLVHistory returns CLV segment history for a customer, newest first.

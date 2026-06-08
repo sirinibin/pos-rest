@@ -69,6 +69,72 @@ func (store *Store) GetBITopProducts(period string, limit int) ([]BITopProduct, 
 	return results, nil
 }
 
+// BICategoryRow holds aggregated revenue/profit for one product category.
+type BICategoryRow struct {
+	CategoryName string  `json:"category_name" bson:"_id"`
+	Revenue      float64 `json:"revenue"       bson:"revenue"`
+	Profit       float64 `json:"profit"        bson:"profit"`
+	UnitsSold    float64 `json:"units_sold"    bson:"units_sold"`
+	ReturnAmount float64 `json:"return_amount" bson:"return_amount"`
+	ProductCount int64   `json:"product_count" bson:"product_count"`
+}
+
+// GetBISalesByCategory aggregates bi_top_products by product category.
+// It looks up category_name from the product collection since bi_top_products
+// doesn't denormalize it. Returns categories sorted by revenue descending.
+// Period: "30d" | "90d" | "all"
+func (store *Store) GetBISalesByCategory(period string) ([]BICategoryRow, error) {
+	if period == "" {
+		period = "30d"
+	}
+	storeHex := store.ID.Hex()
+	collection := db.GetDB("store_" + storeHex).Collection("bi_top_products")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	pipeline := mongo.Pipeline{
+		bson.D{bson.E{Key: "$match", Value: bson.M{"period": period}}},
+		// Join product to get category_name (bi_top_products.product_id → product._id)
+		bson.D{bson.E{Key: "$lookup", Value: bson.M{
+			"from":         "product",
+			"localField":   "product_id",
+			"foreignField": "_id",
+			"as":           "prod",
+		}}},
+		// category_name in product is stored as an array, so double-unwrap
+		bson.D{bson.E{Key: "$addFields", Value: bson.M{
+			"category_name": bson.M{"$ifNull": bson.A{
+				bson.M{"$arrayElemAt": bson.A{
+					bson.M{"$arrayElemAt": bson.A{"$prod.category_name", 0}},
+					0,
+				}},
+				"Uncategorized",
+			}},
+		}}},
+		bson.D{bson.E{Key: "$group", Value: bson.M{
+			"_id":           "$category_name",
+			"revenue":       bson.M{"$sum": "$revenue"},
+			"profit":        bson.M{"$sum": "$profit"},
+			"units_sold":    bson.M{"$sum": "$units_sold"},
+			"return_amount": bson.M{"$sum": "$return_amount"},
+			"product_count": bson.M{"$sum": 1},
+		}}},
+		bson.D{bson.E{Key: "$sort", Value: bson.D{bson.E{Key: "revenue", Value: -1}}}},
+	}
+
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []BICategoryRow
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 // UpsertBITopProducts computes and upserts top products for the given period.
 func UpsertBITopProducts(storeID primitive.ObjectID, period string) error {
 	collection := db.GetDB("store_" + storeID.Hex()).Collection("bi_top_products")
