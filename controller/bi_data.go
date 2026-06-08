@@ -177,8 +177,9 @@ func BIProducts(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
+	// No store-membership filter: include archived/deactivated products so
+	// historical sales records always resolve to a name (not a raw ObjectId).
 	pipeline := bson.A{
-		bson.M{"$match": bson.M{"stores.store_id": store.ID}},
 		bson.M{"$addFields": bson.M{
 			"_store": bson.M{"$first": bson.M{
 				"$filter": bson.M{
@@ -192,8 +193,8 @@ func BIProducts(w http.ResponseWriter, r *http.Request) {
 			"name":                1,
 			"part_number":         1,
 			"item_code":           1,
-			"stock":               "$_store.stock",
-			"purchase_unit_price": "$_store.purchase_unit_price",
+			"stock":               bson.M{"$ifNull": bson.A{"$_store.stock", 0}},
+			"purchase_unit_price": bson.M{"$ifNull": bson.A{"$_store.purchase_unit_price", 0}},
 		}},
 	}
 
