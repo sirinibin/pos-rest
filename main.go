@@ -497,6 +497,14 @@ func main() {
 	router.HandleFunc("/v1/dashboard/stock", controller.DashboardGetStock).Methods("GET")
 	router.HandleFunc("/v1/dashboard/backfill", controller.DashboardBackfill).Methods("POST")
 
+	// BI bulk-data endpoints (for Python report generation)
+	router.HandleFunc("/v1/bi/product-sales-history", controller.BIProductSalesHistory).Methods("GET")
+	router.HandleFunc("/v1/bi/products", controller.BIProducts).Methods("GET")
+	router.HandleFunc("/v1/bi/customers", controller.BICustomers).Methods("GET")
+	router.HandleFunc("/v1/bi/orders", controller.BIOrders).Methods("GET")
+	router.HandleFunc("/v1/bi/ledger", controller.BILedger).Methods("GET")
+	router.HandleFunc("/v1/bi/sales-returns", controller.BISalesReturns).Methods("GET")
+
 	// Invoice PDF generation via headless Chrome
 	router.HandleFunc("/v1/invoice/pdf", controller.InvoicePDF).Methods("POST")
 	router.HandleFunc("/v1/invoice/print-data/{key}", controller.InvoicePrintData).Methods("GET")
