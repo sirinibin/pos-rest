@@ -423,9 +423,9 @@ func SaveBIBatchCost(w http.ResponseWriter, r *http.Request) {
 	var resp models.Response
 	resp.Errors = make(map[string]string)
 
-	if !cronAPIKeyValid(r) {
+	if _, err := models.AuthenticateByAccessToken(r); err != nil {
 		resp.Status = false
-		resp.Errors["auth"] = "Invalid or missing cron API key"
+		resp.Errors["access_token"] = "Invalid access token: " + err.Error()
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(resp)
 		return
