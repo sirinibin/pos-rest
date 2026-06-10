@@ -503,7 +503,7 @@ func main() {
 	router.HandleFunc("/v1/dashboard/stock", controller.DashboardGetStock).Methods("GET")
 	router.HandleFunc("/v1/dashboard/backfill", controller.DashboardBackfill).Methods("POST")
 
-	// BI bulk-data endpoints (for Python report generation)
+	// BI bulk-data endpoints (JWT or X-BI-Cron-Key for cron jobs)
 	router.HandleFunc("/v1/bi/product-sales-history", controller.BIProductSalesHistory).Methods("GET")
 	router.HandleFunc("/v1/bi/products", controller.BIProducts).Methods("GET")
 	router.HandleFunc("/v1/bi/customers", controller.BICustomers).Methods("GET")
@@ -511,6 +511,23 @@ func main() {
 	router.HandleFunc("/v1/bi/ledger", controller.BILedger).Methods("GET")
 	router.HandleFunc("/v1/bi/sales-returns", controller.BISalesReturns).Methods("GET")
 	router.HandleFunc("/v1/bi/store-settings", controller.BIStoreSettings).Methods("GET")
+
+	// BI report results — store/fetch pre-computed CSV+PDF from MongoDB
+	router.HandleFunc("/v1/bi/report-result", controller.SaveBIReportResult).Methods("POST")
+	router.HandleFunc("/v1/bi/report-result", controller.GetBIReportResult).Methods("GET")
+	router.HandleFunc("/v1/bi/report-result/download", controller.DownloadBIReportResult).Methods("GET")
+
+	// BI cron log — written by cron runner, read by admin UI
+	router.HandleFunc("/v1/bi/cron-log", controller.SaveBICronLog).Methods("POST")
+	router.HandleFunc("/v1/bi/cron-log", controller.GetBICronLog).Methods("GET")
+	router.HandleFunc("/v1/bi/cron-log", controller.DeleteBICronLog).Methods("DELETE")
+
+	// BI score batch-upsert endpoints (cron key only — replace direct pymongo writes)
+	router.HandleFunc("/v1/bi/report-scores/abc-xyz", controller.SaveAbcXyzScores).Methods("POST")
+	router.HandleFunc("/v1/bi/report-scores/velocity", controller.SaveVelocityScores).Methods("POST")
+	router.HandleFunc("/v1/bi/report-scores/clv", controller.SaveCLVScores).Methods("POST")
+	router.HandleFunc("/v1/bi/report-scores/cohort", controller.SaveCohortScores).Methods("POST")
+	router.HandleFunc("/v1/bi/report-scores/churn", controller.SaveChurnScores).Methods("POST")
 
 	// Invoice PDF generation via headless Chrome
 	router.HandleFunc("/v1/invoice/pdf", controller.InvoicePDF).Methods("POST")
