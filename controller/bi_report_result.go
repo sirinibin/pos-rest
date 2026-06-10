@@ -410,6 +410,92 @@ func SaveCohortScores(w http.ResponseWriter, r *http.Request) {
 	resp.Status = true; json.NewEncoder(w).Encode(resp)
 }
 
+// ── POST /v1/bi/batch-cost  (cron key) ───────────────────────────────────────
+
+type saveBatchCostReq struct {
+	ReportKey   string  `json:"report_key"`
+	CostUSD     float64 `json:"cost_usd"`
+	DurationSec int64   `json:"duration_sec"`
+}
+
+func SaveBIBatchCost(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var resp models.Response
+	resp.Errors = make(map[string]string)
+
+	if !cronAPIKeyValid(r) {
+		resp.Status = false
+		resp.Errors["auth"] = "Invalid or missing cron API key"
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	var req saveBatchCostReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		resp.Status = false
+		resp.Errors["body"] = "Invalid JSON: " + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	if req.ReportKey == "" {
+		resp.Status = false
+		resp.Errors["report_key"] = "required"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	if err := models.AddBIBatchCost(req.ReportKey, req.CostUSD, req.DurationSec); err != nil {
+		resp.Status = false
+		resp.Errors["save"] = err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	resp.Status = true
+	json.NewEncoder(w).Encode(resp)
+}
+
+// ── GET /v1/bi/batch-costs  (JWT) ────────────────────────────────────────────
+
+func GetBIBatchCosts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var resp models.Response
+	resp.Errors = make(map[string]string)
+
+	if _, err := models.AuthenticateByAccessToken(r); err != nil {
+		resp.Status = false
+		resp.Errors["access_token"] = "Invalid access token: " + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	costs, err := models.GetAllBIBatchCosts()
+	if err != nil {
+		resp.Status = false
+		resp.Errors["find"] = err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	var grandTotal float64
+	for _, c := range costs {
+		grandTotal += c.TotalCostUSD
+	}
+
+	resp.Status = true
+	resp.Result = map[string]interface{}{
+		"grand_total_usd": grandTotal,
+		"reports":         costs,
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
 // ── POST /v1/bi/report-scores/churn  (cron key) ──────────────────────────────
 
 func SaveChurnScores(w http.ResponseWriter, r *http.Request) {

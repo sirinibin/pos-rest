@@ -522,6 +522,10 @@ func main() {
 	router.HandleFunc("/v1/bi/cron-log", controller.GetBICronLog).Methods("GET")
 	router.HandleFunc("/v1/bi/cron-log", controller.DeleteBICronLog).Methods("DELETE")
 
+	// AWS Batch cost tracking — written by Python poller, read by admin UI
+	router.HandleFunc("/v1/bi/batch-cost", controller.SaveBIBatchCost).Methods("POST")
+	router.HandleFunc("/v1/bi/batch-costs", controller.GetBIBatchCosts).Methods("GET")
+
 	// BI score batch-upsert endpoints (cron key only — replace direct pymongo writes)
 	router.HandleFunc("/v1/bi/report-scores/abc-xyz", controller.SaveAbcXyzScores).Methods("POST")
 	router.HandleFunc("/v1/bi/report-scores/velocity", controller.SaveVelocityScores).Methods("POST")
