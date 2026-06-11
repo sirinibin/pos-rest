@@ -538,37 +538,40 @@ func (store *Store) SaveCustomerImage(customerID *primitive.ObjectID, filename s
 }
 
 func (customer *Customer) GenerateSearchWords() {
-	//cleanedWords := CleanString(strings.ToLower(customer.Name + "  " + customer.VATNo + "  " + customer.Phone))
-	//cleanedWordsArabic := CleanString(customer.NameInArabic + "  " + customer.VATNoInArabic + "  " + customer.PhoneInArabic)
+	var words []string
 
-	customer.SearchWords = GenerateSearchTokens(strings.ToLower(customer.Name))
-	if customer.Name != "" {
-		customer.SearchWords = append(customer.SearchWords, strings.ToLower(string(customer.Name[0])))
+	appendTokens := func(val string) {
+		if val == "" {
+			return
+		}
+		words = append(words, GenerateSearchTokens(strings.ToLower(val))...)
 	}
-	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.Code))...)
-	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.VATNo))...)
-	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.Phone))...)
 
-	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.NameInArabic))...)
-	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.VATNoInArabic))...)
-	customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(strings.ToLower(customer.PhoneInArabic))...)
+	appendTokens(customer.Name)
+	appendTokens(customer.Code)
+	appendTokens(customer.VATNo)
+	appendTokens(customer.Phone)
+	appendTokens(customer.Phone2)
+	appendTokens(customer.NameInArabic)
+	appendTokens(customer.VATNoInArabic)
+	appendTokens(customer.PhoneInArabic)
+	appendTokens(customer.Phone2InArabic)
+	appendTokens(customer.Email)
 
-	//customer.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
-
-	/*
-		allCombinations := GetAllWordCombinations(customer.Name)
-		for _, combination := range allCombinations {
-			customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
-		}*/
-
-	//cleanedWords = CleanString(customer.Code)
-
-	//customer.SearchWords = append(customer.SearchWords, generatePrefixesSuffixesSubstrings(cleanedWords)...)
-
-	additionalSearchTerms := customer.GetAdditionalSearchTerms()
-	for _, term := range additionalSearchTerms {
-		customer.SearchWords = append(customer.SearchWords, GenerateSearchTokens(term)...)
+	for _, term := range customer.GetAdditionalSearchTerms() {
+		appendTokens(term)
 	}
+
+	// Deduplicate
+	seen := make(map[string]struct{}, len(words))
+	deduped := make([]string, 0, len(words))
+	for _, w := range words {
+		if _, ok := seen[w]; !ok {
+			seen[w] = struct{}{}
+			deduped = append(deduped, w)
+		}
+	}
+	customer.SearchWords = deduped
 
 	if customer.NameInArabic != "" {
 		customer.SearchWordsInArabic = GenerateSearchTokens(customer.NameInArabic)
@@ -597,6 +600,7 @@ func (customer *Customer) GetAdditionalSearchTerms() []string {
 
 func (customer *Customer) SetAdditionalkeywords() {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	customer.AdditionalKeywords = nil
 	if containsSpecialChars(customer.Code) {
 		customer.AdditionalKeywords = append(customer.AdditionalKeywords, re.ReplaceAllString(customer.Code, ""))
 	}
@@ -2761,12 +2765,18 @@ func ProcessCustomers() error {
 				continue
 			}
 
-			customer.SetCustomerSalesStatsByStoreID(store.ID)
-			customer.SetCustomerSalesReturnStatsByStoreID(store.ID)
-			customer.SetCustomerQuotationStatsByStoreID(store.ID)
-			customer.SetCustomerQuotationInvoiceStatsByStoreID(store.ID)
-			customer.SetCustomerQuotationSalesReturnStatsByStoreID(store.ID)
-			customer.SetCustomerDeliveryNoteStatsByStoreID(store.ID)
+			customer.GenerateSearchWords()
+			customer.SetAdditionalkeywords()
+			customer.SetSearchLabel()
+
+			/*
+				customer.SetCustomerSalesStatsByStoreID(store.ID)
+				customer.SetCustomerSalesReturnStatsByStoreID(store.ID)
+				customer.SetCustomerQuotationStatsByStoreID(store.ID)
+				customer.SetCustomerQuotationInvoiceStatsByStoreID(store.ID)
+				customer.SetCustomerQuotationSalesReturnStatsByStoreID(store.ID)
+				customer.SetCustomerDeliveryNoteStatsByStoreID(store.ID)
+			*/
 
 			/*customer.GenerateSearchWords()
 			customer.SetSearchLabel()
@@ -3898,7 +3908,8 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 
 		searchWord := strings.ToLower(keys[0])
-		criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		/*
 			criterias.SearchBy["$or"] = []bson.M{

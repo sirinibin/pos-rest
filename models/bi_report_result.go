@@ -61,6 +61,14 @@ func (store *Store) GetBIReportResultWithPDF(reportKey string) (*BIReportResult,
 	return &result, nil
 }
 
+func (store *Store) DeleteBIReportResult(reportKey string) error {
+	col := db.GetDB("store_" + store.ID.Hex()).Collection("bi_report_result")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := col.DeleteOne(ctx, bson.M{"store_id": store.ID, "report_key": reportKey})
+	return err
+}
+
 func (store *Store) UpsertBIReportResult(reportKey, csvContent string, pdfContent []byte, rowCount int) error {
 	col := db.GetDB("store_" + store.ID.Hex()).Collection("bi_report_result")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

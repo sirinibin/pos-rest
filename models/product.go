@@ -4266,12 +4266,14 @@ func RankProductsBySearchTokens(products []Product, searchTokens []string) []Pro
 
 func GenerateSearchTokens(input string) []string {
 	clean := strings.ToLower(CleanStringPreserveSpace(input))
+	if clean == "" {
+		return nil
+	}
 	words := strings.Fields(clean)
 	tokenSet := make(map[string]struct{})
 
 	// Add full phrase
 	tokenSet[clean] = struct{}{}
-	var sepReplacer = regexp.MustCompile(`[-./\[\]*",()_+#|\\]`)
 
 	newWords := words
 	// Add single words
@@ -4380,10 +4382,12 @@ func GenerateSearchTokens(input string) []string {
 		}
 	}
 
-	// Convert set to slice
+	// Convert set to slice, skip empty or single-char tokens
 	tokens := make([]string, 0, len(tokenSet))
 	for t := range tokenSet {
-		tokens = append(tokens, t)
+		if len([]rune(t)) >= 2 {
+			tokens = append(tokens, t)
+		}
 	}
 	return tokens
 }
@@ -4465,6 +4469,7 @@ func (product *Product) GeneratePrefixes() {
 
 // var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
 var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s\-]+`)
+var sepReplacer = regexp.MustCompile(`[-./\[\]*",()_+#|\\]`)
 
 func CleanString(input string) string {
 	// Replace special characters with a space

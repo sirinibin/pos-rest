@@ -515,6 +515,7 @@ func main() {
 	// BI report results — store/fetch pre-computed CSV+PDF from MongoDB
 	router.HandleFunc("/v1/bi/report-result", controller.SaveBIReportResult).Methods("POST")
 	router.HandleFunc("/v1/bi/report-result", controller.GetBIReportResult).Methods("GET")
+	router.HandleFunc("/v1/bi/report-result", controller.DeleteBIReportResult).Methods("DELETE")
 	router.HandleFunc("/v1/bi/report-result/download", controller.DownloadBIReportResult).Methods("GET")
 
 	// BI cron log — written by cron runner, read by admin UI
@@ -686,11 +687,10 @@ func cronJobsEveryHour() error {
 	// Run Go-native BI incremental aggregation for all stores
 	//go models.RunBIIncrementalUpdateForAllStores()
 
-	/*
-		err := models.ProcessProducts()
-		if err != nil {
-			log.Print(err)
-		}*/
+	err := models.ProcessCustomers()
+	if err != nil {
+		log.Print(err)
+	}
 
 	/*
 		err := models.ProcessProductHistory()
