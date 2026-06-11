@@ -130,6 +130,35 @@ func SaveBIReportResult(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// ── DELETE /v1/bi/report-result  (JWT) ───────────────────────────────────────
+
+func DeleteBIReportResult(w http.ResponseWriter, r *http.Request) {
+	store, ok := biCronOrJWT(w, r)
+	if !ok {
+		return
+	}
+	reportKey := r.URL.Query().Get("report_key")
+	if reportKey == "" {
+		var resp models.Response
+		resp.Status = false
+		resp.Errors = map[string]string{"report_key": "required"}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	if err := store.DeleteBIReportResult(reportKey); err != nil {
+		var resp models.Response
+		resp.Status = false
+		resp.Errors = map[string]string{"delete": err.Error()}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	var resp models.Response
+	resp.Status = true
+	json.NewEncoder(w).Encode(resp)
+}
+
 // ── GET /v1/bi/report-result  (JWT or cron key) ───────────────────────────────
 
 func GetBIReportResult(w http.ResponseWriter, r *http.Request) {

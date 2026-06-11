@@ -515,6 +515,7 @@ func main() {
 	// BI report results — store/fetch pre-computed CSV+PDF from MongoDB
 	router.HandleFunc("/v1/bi/report-result", controller.SaveBIReportResult).Methods("POST")
 	router.HandleFunc("/v1/bi/report-result", controller.GetBIReportResult).Methods("GET")
+	router.HandleFunc("/v1/bi/report-result", controller.DeleteBIReportResult).Methods("DELETE")
 	router.HandleFunc("/v1/bi/report-result/download", controller.DownloadBIReportResult).Methods("GET")
 
 	// BI cron log — written by cron runner, read by admin UI
