@@ -611,7 +611,11 @@ func (store *Store) ProcessSalesCashDiscounts() error {
 		}
 
 		order, _ := store.FindOrderByID(model.OrderID, bson.M{})
-		order.CashDiscount = model.Amount
+		cashDiscountStats, _ := store.GetSalesCashDiscountStats(bson.M{
+			"order_id": model.OrderID,
+			"deleted":  bson.M{"$ne": true},
+		})
+		order.CashDiscount = cashDiscountStats.TotalCashDiscount
 		order.Update()
 		//model.Date = model.CreatedAt
 		//model.Method = "cash"

@@ -144,6 +144,26 @@ func CreateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cashDiscountStats, err := store.GetSalesCashDiscountStats(bson.M{
+		"order_id": salescashdiscount.OrderID,
+		"deleted":  bson.M{"$ne": true},
+	})
+	if err != nil {
+		response.Status = false
+		response.Errors["cash_discount"] = "Error computing cash discount total: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	order.CashDiscount = cashDiscountStats.TotalCashDiscount
+	err = order.Update()
+	if err != nil {
+		response.Status = false
+		response.Errors["order_update"] = "Error updating order cash discount: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	go models.MarkDashboardDirty(*order.StoreID, order.Date)
+
 	err = order.UndoAccounting()
 	if err != nil {
 		response.Status = false
@@ -262,6 +282,26 @@ func UpdateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	cashDiscountStats, err := store.GetSalesCashDiscountStats(bson.M{
+		"order_id": salescashdiscount.OrderID,
+		"deleted":  bson.M{"$ne": true},
+	})
+	if err != nil {
+		response.Status = false
+		response.Errors["cash_discount"] = "Error computing cash discount total: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	order.CashDiscount = cashDiscountStats.TotalCashDiscount
+	err = order.Update()
+	if err != nil {
+		response.Status = false
+		response.Errors["order_update"] = "Error updating order cash discount: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	go models.MarkDashboardDirty(*order.StoreID, order.Date)
 
 	err = order.UndoAccounting()
 	if err != nil {

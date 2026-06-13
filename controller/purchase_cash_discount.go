@@ -128,6 +128,27 @@ func CreatePurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	purchase, err := store.FindPurchaseByID(purchasecashdiscount.PurchaseID, bson.M{})
+	if err == nil {
+		cashDiscountStats, statsErr := store.GetPurchaseCashDiscountStats(bson.M{
+			"purchase_id": purchasecashdiscount.PurchaseID,
+			"deleted":     bson.M{"$ne": true},
+		})
+		if statsErr == nil {
+			purchase.CashDiscount = cashDiscountStats.TotalCashDiscount
+			_ = purchase.Update()
+			go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
+		}
+	}
+
 	response.Status = true
 	response.Result = purchasecashdiscount
 
@@ -220,6 +241,19 @@ func UpdatePurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to find purchase cash discount:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	purchase, err := store.FindPurchaseByID(purchasecashdiscount.PurchaseID, bson.M{})
+	if err == nil {
+		cashDiscountStats, statsErr := store.GetPurchaseCashDiscountStats(bson.M{
+			"purchase_id": purchasecashdiscount.PurchaseID,
+			"deleted":     bson.M{"$ne": true},
+		})
+		if statsErr == nil {
+			purchase.CashDiscount = cashDiscountStats.TotalCashDiscount
+			_ = purchase.Update()
+			go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
+		}
 	}
 
 	response.Status = true

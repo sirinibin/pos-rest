@@ -160,7 +160,8 @@ func ComputeAndUpsertDashboardMonthly(storeID primitive.ObjectID, monthStr strin
 	d.AcctPurchaseAmount, _ = dmSum(ctx, sdb.Collection("purchase"), acctF, "net_total")
 	d.AcctPurchaseReturnAmount, _ = dmSum(ctx, sdb.Collection("purchasereturn"), acctF, "net_total")
 
-	// Cash discounts
+	// Cash discounts — read from the parent document's cash_discount field,
+	// which is the authoritative source (set at creation or updated by the cash-discount module).
 	d.SalesCashDiscount, _ = dmSum(ctx, sdb.Collection("order"), dateFilterWithDelete, "cash_discount")
 	d.SalesReturnCashDiscount, _ = dmSum(ctx, sdb.Collection("salesreturn"), dateFilterWithDelete, "cash_discount")
 	d.PurchaseCashDiscount, _ = dmSum(ctx, sdb.Collection("purchase"), dateFilterWithDelete, "cash_discount")

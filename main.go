@@ -104,7 +104,7 @@ func main() {
 	seedDefaultUser()
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
-	go models.SetIndexes()
+	//go models.SetIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -600,11 +600,11 @@ func main() {
 	// months from a previous crash, then clear old data and backfill from scratch.
 	models.StartDashboardDirtyWorker()
 	go models.DrainPersistedDirtyDates()
-	/*go models.ClearDashboardMonthlyForAllStores() // clears old monthly dashboard data
+	go models.ClearDashboardMonthlyForAllStores() // clears old monthly dashboard data
 	go func() {
 		time.Sleep(1 * time.Second)            // wait for clear to finish
 		models.BackfillDashboardForAllStores() // fills all available history per store
-	}()*/
+	}()
 
 	// One-time historical BI backfill — run at startup when BI_RUN_BACKFILL=true
 	//go models.RunBIIncrementalUpdateForAllStores()
@@ -687,10 +687,11 @@ func cronJobsEveryHour() error {
 	// Run Go-native BI incremental aggregation for all stores
 	//go models.RunBIIncrementalUpdateForAllStores()
 
-	err := models.ProcessCustomers()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessCustomers()
+		if err != nil {
+			log.Print(err)
+		}*/
 
 	/*
 
