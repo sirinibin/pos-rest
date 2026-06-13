@@ -104,7 +104,7 @@ func main() {
 	seedDefaultUser()
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
-	go models.SetIndexes()
+	//go models.SetIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -687,15 +687,16 @@ func cronJobsEveryHour() error {
 	// Run Go-native BI incremental aggregation for all stores
 	//go models.RunBIIncrementalUpdateForAllStores()
 
-	err := models.ProcessCustomers()
-	if err != nil {
-		log.Print(err)
-	}
+	/*
+		err := models.ProcessCustomers()
+		if err != nil {
+			log.Print(err)
+		}
 
-	err = models.ProcessProducts()
-	if err != nil {
-		log.Print(err)
-	}
+		err = models.ProcessProducts()
+		if err != nil {
+			log.Print(err)
+		}*/
 
 	/*
 		err := models.ProcessProductHistory()

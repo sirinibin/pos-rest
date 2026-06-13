@@ -892,40 +892,17 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		searchWord = strings.ToLower(keys[0])
-		searchWord = escapeTextSearchInput(searchWord)
-		//log.Print("|" + searchWord + "|")
-
-		//searchWord = strings.Replace(searchWord, `"`, `\"`, -1)
-		//searchWord = strings.Replace(searchWord, "\\", `\\`, -1)
-		/*
-			searchWord = strings.Replace(searchWord, "(", `\(`, -1)
-			searchWord = strings.Replace(searchWord, ")", `\)`, -1)
-			searchWord = strings.Replace(searchWord, "{", `\{`, -1)
-			searchWord = strings.Replace(searchWord, "}", `\}`, -1)*/
-		//searchWord = strings.Replace(searchWord, "[", `\[`, -1)
-		//searchWord = strings.Replace(searchWord, "]", `\]`, -1)
-		/*searchWord = strings.Replace(searchWord, `*`, `\*`, -1)
-
-		searchWord = strings.Replace(searchWord, "_", `\_`, -1)
-		searchWord = strings.Replace(searchWord, "+", `\\+`, -1)
-		searchWord = strings.Replace(searchWord, "'", `\'`, -1)
-		searchWord = strings.Replace(searchWord, `"`, `\"`, -1)*/
-
+		// Strip punctuation so $text tokenization is consistent across MongoDB versions
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
+		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
+		if strings.Contains(searchWord, " ") {
+			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
+			searchWord = "\"" + searchWord + "\""
+		} else if strings.Contains(searchWord, "-") {
+			// Single word with hyphens: strip all hyphens to match compact token
+			searchWord = strings.ReplaceAll(searchWord, "-", "")
+		}
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		//log.Print("searchWord" + searchWord)
-		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
-
-		//criterias.SortBy["score"] = bson.M{"$meta": "textScore"}
-		//criterias.Select = map[string]interface{}{}
-		//criterias.Select["score"] = bson.M{"$meta": "textScore"}
-
-		/*
-			criterias.SearchBy["$or"] = []bson.M{
-				{"part_number": bson.M{"$regex": searchWord, "$options": "i"}},
-				{"name": bson.M{"$regex": searchWord, "$options": "i"}},
-				{"name_in_arabic": bson.M{"$regex": searchWord, "$options": "i"}},
-			}
-			criterias.SortBy = bson.M{"name": 1}*/
 	}
 	sortFieldName := ""
 	ascending := true

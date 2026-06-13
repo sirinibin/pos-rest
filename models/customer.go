@@ -1954,16 +1954,6 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 			searchWord = strings.ReplaceAll(searchWord, "-", "")
 		}
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		/*
-			criterias.SearchBy["$or"] = []bson.M{
-				{"name": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"code": bson.M{"$regex": keys[0], "$options": "i"}},
-			}*/
 	}
 
 	keys, ok = r.URL.Query()["search[phone]"]
