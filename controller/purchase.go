@@ -104,6 +104,7 @@ func ListPurchase(w http.ResponseWriter, r *http.Request) {
 	accountedFilter["enable_on_accounts"] = true
 	accountedStats, _ := store.GetPurchaseStats(accountedFilter)
 	response.Meta["accounted_purchase"] = accountedStats.NetTotal
+	response.Meta["accounted_purchase_cash_discount"] = accountedStats.CashDiscount
 
 	if len(purchases) == 0 {
 		response.Result = []interface{}{}

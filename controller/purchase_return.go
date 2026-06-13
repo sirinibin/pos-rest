@@ -91,6 +91,7 @@ func ListPurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	accountedFilter["enable_on_accounts"] = true
 	accountedStats, _ := store.GetPurchaseReturnStats(accountedFilter)
 	response.Meta["accounted_purchase_return"] = accountedStats.NetTotal
+	response.Meta["accounted_purchase_return_cash_discount"] = accountedStats.CashDiscount
 
 	if len(purchasereturns) == 0 {
 		response.Result = []interface{}{}

@@ -63,6 +63,16 @@ type DashboardMonthly struct {
 	AcctPurchaseAmount       float64 `bson:"accounted_purchase_amount"        json:"accounted_purchase_amount"`
 	AcctPurchaseReturnAmount float64 `bson:"accounted_purchase_return_amount" json:"accounted_purchase_return_amount"`
 
+	// Cash discounts (for P&L expense adjustment)
+	SalesCashDiscount                  float64 `bson:"sales_cash_discount"                    json:"sales_cash_discount"`
+	SalesReturnCashDiscount            float64 `bson:"sales_return_cash_discount"             json:"sales_return_cash_discount"`
+	PurchaseCashDiscount               float64 `bson:"purchase_cash_discount"                 json:"purchase_cash_discount"`
+	PurchaseReturnCashDiscount         float64 `bson:"purchase_return_cash_discount"          json:"purchase_return_cash_discount"`
+	AcctPurchaseCashDiscount           float64 `bson:"accounted_purchase_cash_discount"       json:"accounted_purchase_cash_discount"`
+	AcctPurchaseReturnCashDiscount     float64 `bson:"accounted_purchase_return_cash_discount" json:"accounted_purchase_return_cash_discount"`
+	QtnSalesCashDiscount               float64 `bson:"qtn_sales_cash_discount"                json:"qtn_sales_cash_discount"`
+	QtnSalesReturnCashDiscount         float64 `bson:"qtn_sales_return_cash_discount"         json:"qtn_sales_return_cash_discount"`
+
 	// Expenses
 	ExpenseAmount float64 `bson:"expense_amount" json:"expense_amount"`
 	ExpenseCount  int64   `bson:"expense_count"  json:"expense_count"`
@@ -149,6 +159,16 @@ func ComputeAndUpsertDashboardMonthly(storeID primitive.ObjectID, monthStr strin
 	acctF := dmMerge(dateFilterWithDelete, bson.M{"enable_on_accounts": true})
 	d.AcctPurchaseAmount, _ = dmSum(ctx, sdb.Collection("purchase"), acctF, "net_total")
 	d.AcctPurchaseReturnAmount, _ = dmSum(ctx, sdb.Collection("purchasereturn"), acctF, "net_total")
+
+	// Cash discounts
+	d.SalesCashDiscount, _ = dmSum(ctx, sdb.Collection("order"), dateFilterWithDelete, "cash_discount")
+	d.SalesReturnCashDiscount, _ = dmSum(ctx, sdb.Collection("salesreturn"), dateFilterWithDelete, "cash_discount")
+	d.PurchaseCashDiscount, _ = dmSum(ctx, sdb.Collection("purchase"), dateFilterWithDelete, "cash_discount")
+	d.PurchaseReturnCashDiscount, _ = dmSum(ctx, sdb.Collection("purchasereturn"), dateFilterWithDelete, "cash_discount")
+	d.AcctPurchaseCashDiscount, _ = dmSum(ctx, sdb.Collection("purchase"), acctF, "cash_discount")
+	d.AcctPurchaseReturnCashDiscount, _ = dmSum(ctx, sdb.Collection("purchasereturn"), acctF, "cash_discount")
+	d.QtnSalesCashDiscount, _ = dmSum(ctx, sdb.Collection("quotation"), dmMerge(dateFilterWithDelete, bson.M{"type": "invoice"}), "cash_discount")
+	d.QtnSalesReturnCashDiscount, _ = dmSum(ctx, sdb.Collection("quotation_sales_return"), dateFilterWithDelete, "cash_discount")
 
 	// Expenses
 	d.ExpenseAmount, d.ExpenseCount = dmSumCount(ctx, sdb.Collection("expense"), dateFilterWithDelete, "amount")
