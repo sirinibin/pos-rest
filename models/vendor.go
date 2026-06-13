@@ -2081,8 +2081,19 @@ func ProcessVendors() error {
 			if vendor.StoreID.Hex() != store.ID.Hex() {
 				continue
 			}
-			vendor.SetVendorPurchaseStatsByStoreID(store.ID)
-			vendor.SetVendorPurchaseReturnStatsByStoreID(store.ID)
+
+			vendor.GenerateSearchWords()
+			vendor.SetAdditionalkeywords()
+			vendor.SetSearchLabel()
+			err = vendor.Update()
+			if err != nil {
+				return err
+			}
+
+			/*
+				vendor.SetVendorPurchaseStatsByStoreID(store.ID)
+				vendor.SetVendorPurchaseReturnStatsByStoreID(store.ID)
+			*/
 
 			/*vendor.GenerateSearchWords()
 			vendor.SetSearchLabel()

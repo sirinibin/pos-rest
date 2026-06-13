@@ -4307,6 +4307,45 @@ func GenerateSearchTokens(input string) []string {
 		}
 	}
 
+	// Also generate n-grams from clean (special-char-stripped, deduplicated) words.
+	// This ensures searches like "BAKARA SADDAD THAILAND" match a product named
+	// "BAKARA SADDAD (THAILAND)", because the backend strips punctuation from the
+	// search phrase before querying, but the raw words list still has "(thailand)"
+	// between "saddad" and "thailand", so the clean phrase is never a consecutive n-gram.
+	cleanWords := make([]string, 0, len(words))
+	seenClean := make(map[string]struct{})
+	for _, w := range words {
+		c := sepReplacer.ReplaceAllString(w, "")
+		if c == "" {
+			continue
+		}
+		if _, ok := seenClean[c]; !ok {
+			seenClean[c] = struct{}{}
+			cleanWords = append(cleanWords, c)
+		}
+	}
+	if len(cleanWords) < len(words) {
+		// Full clean phrase
+		tokenSet[strings.Join(cleanWords, " ")] = struct{}{}
+		// N-grams from clean words
+		for n := 2; n <= len(cleanWords); n++ {
+			for i := 0; i <= len(cleanWords)-n; i++ {
+				ngram := strings.Join(cleanWords[i:i+n], " ")
+				if ngram != "" {
+					tokenSet[ngram] = struct{}{}
+				}
+			}
+		}
+		// Word pairs from clean words
+		for i := 0; i < len(cleanWords); i++ {
+			for j := 0; j < len(cleanWords); j++ {
+				if i != j {
+					tokenSet[cleanWords[i]+" "+cleanWords[j]] = struct{}{}
+				}
+			}
+		}
+	}
+
 	/*
 		// Add all unordered word combinations (permutations) for length 2 up to maxLen
 		maxCombinations := 1000
