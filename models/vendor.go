@@ -354,38 +354,43 @@ func (store *Store) SaveVendorImage(vendorID *primitive.ObjectID, filename strin
 }
 
 func (vendor *Vendor) GenerateSearchWords() {
-	cleanedWords := CleanString(vendor.Name + "  " + vendor.VATNo + "  " + vendor.Phone)
-	cleanedWordsArabic := CleanString(vendor.NameInArabic + "  " + vendor.VATNoInArabic + "  " + vendor.PhoneInArabic)
+	var words []string
 
-	vendor.SearchWords = generatePrefixesSuffixesSubstrings(cleanedWords)
-
-	cleanedWords = CleanString(vendor.Code)
-
-	vendor.SearchWords = append(vendor.SearchWords, generatePrefixesSuffixesSubstrings(cleanedWords)...)
-
-	additionalSearchTerms := vendor.GetAdditionalSearchTerms()
-	for _, term := range additionalSearchTerms {
-		vendor.SearchWords = append(vendor.SearchWords, generatePrefixesSuffixesSubstrings(term)...)
+	appendTokens := func(val string) {
+		if val == "" {
+			return
+		}
+		words = append(words, GenerateSearchTokens(strings.ToLower(val))...)
 	}
 
-	if !govalidator.IsNull(vendor.Code) {
-		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Code[0]))
+	appendTokens(vendor.Name)
+	appendTokens(vendor.Code)
+	appendTokens(vendor.VATNo)
+	appendTokens(vendor.Phone)
+	appendTokens(vendor.Phone2)
+	appendTokens(vendor.NameInArabic)
+	appendTokens(vendor.VATNoInArabic)
+	appendTokens(vendor.PhoneInArabic)
+	appendTokens(vendor.Phone2InArabic)
+	appendTokens(vendor.Email)
+
+	for _, term := range vendor.GetAdditionalSearchTerms() {
+		appendTokens(term)
 	}
 
-	if !govalidator.IsNull(vendor.Name) {
-		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Name[0]))
+	// Deduplicate
+	seen := make(map[string]struct{}, len(words))
+	deduped := make([]string, 0, len(words))
+	for _, w := range words {
+		if _, ok := seen[w]; !ok {
+			seen[w] = struct{}{}
+			deduped = append(deduped, w)
+		}
 	}
+	vendor.SearchWords = deduped
 
-	if !govalidator.IsNull(vendor.VATNo) {
-		vendor.SearchWords = append(vendor.SearchWords, string(vendor.VATNo[0]))
-	}
-
-	if !govalidator.IsNull(vendor.Phone) {
-		vendor.SearchWords = append(vendor.SearchWords, string(vendor.Phone[0]))
-	}
-
-	if cleanedWordsArabic != "" {
-		vendor.SearchWordsInArabic = generatePrefixesSuffixesSubstrings(cleanedWordsArabic)
+	if vendor.NameInArabic != "" {
+		vendor.SearchWordsInArabic = GenerateSearchTokens(vendor.NameInArabic)
 	}
 }
 
@@ -394,16 +399,14 @@ func (vendor *Vendor) GetAdditionalSearchTerms() []string {
 	searchTerm := []string{}
 
 	if containsSpecialChars(vendor.Name) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(vendor.Name, ""))
-
+		searchTerm = append(searchTerm, re.ReplaceAllString(strings.ToLower(vendor.Name), ""))
 	}
 	if containsSpecialChars(vendor.Code) {
-		searchTerm = append(searchTerm, re.ReplaceAllString(vendor.Code, ""))
-
+		searchTerm = append(searchTerm, re.ReplaceAllString(strings.ToLower(vendor.Code), ""))
 	}
 
 	if vendor.CountryName != "" {
-		searchTerm = append(searchTerm, re.ReplaceAllString(vendor.CountryName, ""))
+		searchTerm = append(searchTerm, re.ReplaceAllString(strings.ToLower(vendor.CountryName), ""))
 	}
 
 	return searchTerm
@@ -411,6 +414,7 @@ func (vendor *Vendor) GetAdditionalSearchTerms() []string {
 
 func (vendor *Vendor) SetAdditionalkeywords() {
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	vendor.AdditionalKeywords = nil
 	if containsSpecialChars(vendor.Code) {
 		vendor.AdditionalKeywords = append(vendor.AdditionalKeywords, re.ReplaceAllString(vendor.Code, ""))
 	}
@@ -1234,19 +1238,18 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 	textSearching := false
 	keys, ok = r.URL.Query()["search[query]"]
 	if ok && len(keys[0]) >= 1 {
-		textSearching = true
-		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-		//criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
-		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + keys[0] + "\""}
-		criterias.SearchBy["$text"] = bson.M{"$search": keys[0]}
-		/*criterias.SearchBy["$or"] = []bson.M{
-			{"name": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
-			{"code": bson.M{"$regex": keys[0], "$options": "i"}},
-		}*/
+		searchWord := strings.ToLower(keys[0])
+		// Strip punctuation so $text tokenization is consistent across MongoDB versions
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
+		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
+		if strings.Contains(searchWord, " ") {
+			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
+			searchWord = "\"" + searchWord + "\""
+		} else if strings.Contains(searchWord, "-") {
+			// Single word with hyphens: strip all hyphens to match compact token
+			searchWord = strings.ReplaceAll(searchWord, "-", "")
+		}
+		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 	}
 
 	keys, ok = r.URL.Query()["search[email]"]
@@ -1369,7 +1372,7 @@ func (vendor *Vendor) SetSearchLabel() {
 	vendor.SearchLabel = "#" + vendor.Code + " " + vendor.Name
 
 	if vendor.NameInArabic != "" {
-		vendor.SearchLabel += " / " + vendor.NameInArabic
+		vendor.SearchLabel += " | " + vendor.NameInArabic
 	}
 
 	if vendor.Phone != "" {
@@ -1377,7 +1380,7 @@ func (vendor *Vendor) SetSearchLabel() {
 	}
 
 	if vendor.PhoneInArabic != "" {
-		vendor.SearchLabel += " / " + vendor.PhoneInArabic
+		vendor.SearchLabel += " | " + vendor.PhoneInArabic
 	}
 
 	if vendor.VATNo != "" {
@@ -1385,8 +1388,36 @@ func (vendor *Vendor) SetSearchLabel() {
 	}
 }
 
+func (vendor *Vendor) TrimSpaceFromFields() {
+	vendor.Name = strings.TrimSpace(vendor.Name)
+	vendor.NameInArabic = strings.TrimSpace(vendor.NameInArabic)
+	vendor.Phone = strings.TrimSpace(vendor.Phone)
+	vendor.Phone2 = strings.TrimSpace(vendor.Phone2)
+	vendor.PhoneInArabic = strings.TrimSpace(vendor.PhoneInArabic)
+	vendor.Phone2InArabic = strings.TrimSpace(vendor.Phone2InArabic)
+	vendor.VATNo = strings.TrimSpace(vendor.VATNo)
+	vendor.VATNoInArabic = strings.TrimSpace(vendor.VATNoInArabic)
+	vendor.Email = strings.TrimSpace(vendor.Email)
+	vendor.Address = strings.TrimSpace(vendor.Address)
+	vendor.AddressInArabic = strings.TrimSpace(vendor.AddressInArabic)
+	vendor.RegistrationNumber = strings.TrimSpace(vendor.RegistrationNumber)
+	vendor.RegistrationNumberInArabic = strings.TrimSpace(vendor.RegistrationNumberInArabic)
+	vendor.ContactPerson = strings.TrimSpace(vendor.ContactPerson)
+	vendor.NationalAddress.BuildingNo = strings.TrimSpace(vendor.NationalAddress.BuildingNo)
+	vendor.NationalAddress.StreetName = strings.TrimSpace(vendor.NationalAddress.StreetName)
+	vendor.NationalAddress.StreetNameArabic = strings.TrimSpace(vendor.NationalAddress.StreetNameArabic)
+	vendor.NationalAddress.DistrictName = strings.TrimSpace(vendor.NationalAddress.DistrictName)
+	vendor.NationalAddress.DistrictNameArabic = strings.TrimSpace(vendor.NationalAddress.DistrictNameArabic)
+	vendor.NationalAddress.CityName = strings.TrimSpace(vendor.NationalAddress.CityName)
+	vendor.NationalAddress.CityNameArabic = strings.TrimSpace(vendor.NationalAddress.CityNameArabic)
+	vendor.NationalAddress.ZipCode = strings.TrimSpace(vendor.NationalAddress.ZipCode)
+	vendor.NationalAddress.AdditionalNo = strings.TrimSpace(vendor.NationalAddress.AdditionalNo)
+	vendor.NationalAddress.UnitNo = strings.TrimSpace(vendor.NationalAddress.UnitNo)
+}
+
 func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
 	errs = make(map[string]string)
+	vendor.TrimSpaceFromFields()
 
 	store, err := FindStoreByID(vendor.StoreID, bson.M{})
 	if err != nil {
