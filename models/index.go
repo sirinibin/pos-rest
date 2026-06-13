@@ -45,7 +45,13 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
-	fields := bson.M{"bar_code": 1}
+	fields := bson.M{"name_prefixes": 1}
+	err = store.CreateIndex("product", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"bar_code": 1}
 	err = store.CreateIndex("product", fields, false, false, "")
 	if err != nil {
 		return err
@@ -102,6 +108,12 @@ func (store *Store) CreateAllIndexes() error {
 		return err
 	}
 
+	fields = bson.M{"search_words": 1}
+	err = store.CreateIndex("customer", fields, false, false, "")
+	if err != nil {
+		return err
+	}
+
 	fields = bson.M{"code": 1}
 	err = store.CreateIndex("customer", fields, false, false, "")
 	if err != nil {
@@ -150,6 +162,12 @@ func (store *Store) CreateAllIndexes() error {
 		bson.E{Key: "country_name", Value: "text"},
 	}
 	err = store.CreateTextIndex("vendor", textFields, "vendor_text_index")
+	if err != nil {
+		return err
+	}
+
+	fields = bson.M{"search_words": 1}
+	err = store.CreateIndex("vendor", fields, false, false, "")
 	if err != nil {
 		return err
 	}

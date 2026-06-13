@@ -1238,19 +1238,27 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 	textSearching := false
 	keys, ok = r.URL.Query()["search[query]"]
 	if ok && len(keys[0]) >= 1 {
-		textSearching = true
 		searchWord := strings.ToLower(keys[0])
-		// Strip punctuation so $text tokenization is consistent across MongoDB versions
+		// Strip punctuation so tokenization is consistent across MongoDB versions
 		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
 		if strings.Contains(searchWord, " ") {
-			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
-			searchWord = "\"" + searchWord + "\""
-		} else if strings.Contains(searchWord, "-") {
-			// Single word with hyphens: strip all hyphens to match compact token
-			searchWord = strings.ReplaceAll(searchWord, "-", "")
+			var meaningful []string
+			for _, w := range strings.Fields(searchWord) {
+				if len([]rune(w)) >= 2 {
+					meaningful = append(meaningful, w)
+				}
+			}
+			if len(meaningful) > 0 {
+				criterias.SearchBy["search_words"] = bson.M{"$all": meaningful}
+			}
+		} else {
+			textSearching = true
+			if strings.Contains(searchWord, "-") {
+				searchWord = strings.ReplaceAll(searchWord, "-", "")
+			}
+			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		}
-		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 	}
 
 	keys, ok = r.URL.Query()["search[email]"]
@@ -2709,17 +2717,24 @@ func (store *Store) BuildVendorCriterias(w http.ResponseWriter, r *http.Request)
 	keys, ok = r.URL.Query()["search[query]"]
 	if ok && len(keys[0]) >= 1 {
 		searchWord := strings.ToLower(keys[0])
-		// Strip punctuation so $text tokenization is consistent across MongoDB versions
 		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
 		if strings.Contains(searchWord, " ") {
-			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
-			searchWord = "\"" + searchWord + "\""
-		} else if strings.Contains(searchWord, "-") {
-			// Single word with hyphens: strip all hyphens to match compact token
-			searchWord = strings.ReplaceAll(searchWord, "-", "")
+			var meaningful []string
+			for _, w := range strings.Fields(searchWord) {
+				if len([]rune(w)) >= 2 {
+					meaningful = append(meaningful, w)
+				}
+			}
+			if len(meaningful) > 0 {
+				criterias.SearchBy["search_words"] = bson.M{"$all": meaningful}
+			}
+		} else {
+			if strings.Contains(searchWord, "-") {
+				searchWord = strings.ReplaceAll(searchWord, "-", "")
+			}
+			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		}
-		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 	}
 
 	keys, ok = r.URL.Query()["search[email]"]

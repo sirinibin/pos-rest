@@ -892,17 +892,30 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		searchWord = strings.ToLower(keys[0])
-		// Strip punctuation so $text tokenization is consistent across MongoDB versions
+		// Strip punctuation so tokenization is consistent across MongoDB versions
 		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
 		if strings.Contains(searchWord, " ") {
-			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
-			searchWord = "\"" + searchWord + "\""
-		} else if strings.Contains(searchWord, "-") {
-			// Single word with hyphens: strip all hyphens to match compact token
-			searchWord = strings.ReplaceAll(searchWord, "-", "")
+			// Multi-word: require every meaningful word to be present in search_words.
+			// This handles substring matches ("india" → "indian") and names with special
+			// chars where single-char tokens like "m" or "3" are filtered from storage.
+			var meaningful []string
+			for _, w := range strings.Fields(searchWord) {
+				if len([]rune(w)) >= 2 {
+					meaningful = append(meaningful, w)
+				}
+			}
+			if len(meaningful) > 0 {
+				criterias.SearchBy["name_prefixes"] = bson.M{"$all": meaningful}
+			}
+			textSearching = false // $all does not use the text index; skip textScore sort
+		} else {
+			if strings.Contains(searchWord, "-") {
+				// Single word with hyphens: strip all hyphens to match compact token
+				searchWord = strings.ReplaceAll(searchWord, "-", "")
+			}
+			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		}
-		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 	}
 	sortFieldName := ""
 	ascending := true
@@ -4307,40 +4320,29 @@ func GenerateSearchTokens(input string) []string {
 		}
 	}
 
-	// Also generate n-grams from clean (special-char-stripped, deduplicated) words.
-	// This ensures searches like "BAKARA SADDAD THAILAND" match a product named
-	// "BAKARA SADDAD (THAILAND)", because the backend strips punctuation from the
-	// search phrase before querying, but the raw words list still has "(thailand)"
-	// between "saddad" and "thailand", so the clean phrase is never a consecutive n-gram.
-	cleanWords := make([]string, 0, len(words))
-	seenClean := make(map[string]struct{})
-	for _, w := range words {
-		c := sepReplacer.ReplaceAllString(w, "")
-		if c == "" {
-			continue
-		}
-		if _, ok := seenClean[c]; !ok {
-			seenClean[c] = struct{}{}
-			cleanWords = append(cleanWords, c)
-		}
-	}
-	if len(cleanWords) < len(words) {
-		// Full clean phrase
-		tokenSet[strings.Join(cleanWords, " ")] = struct{}{}
-		// N-grams from clean words
-		for n := 2; n <= len(cleanWords); n++ {
-			for i := 0; i <= len(cleanWords)-n; i++ {
-				ngram := strings.Join(cleanWords[i:i+n], " ")
-				if ngram != "" {
-					tokenSet[ngram] = struct{}{}
+	// Generate tokens from the fully-stripped version of the original input.
+	// The backend search query replaces all separators (parens, dots, etc.) with spaces,
+	// so we must store the same normalised form as a token.
+	// Example: "BAKARA SADDAD (M) 3.5 (INDIAN)" → backend phrase "bakara saddad m 3 5 indian"
+	// must appear as a stored token for phrase search to hit.
+	strippedWords := strings.Fields(sepReplacer.ReplaceAllString(clean, " "))
+	if len(strippedWords) > 0 {
+		strippedPhrase := strings.Join(strippedWords, " ")
+		if strippedPhrase != clean {
+			tokenSet[strippedPhrase] = struct{}{}
+			for n := 2; n <= len(strippedWords); n++ {
+				for i := 0; i <= len(strippedWords)-n; i++ {
+					ngram := strings.Join(strippedWords[i:i+n], " ")
+					if ngram != "" {
+						tokenSet[ngram] = struct{}{}
+					}
 				}
 			}
-		}
-		// Word pairs from clean words
-		for i := 0; i < len(cleanWords); i++ {
-			for j := 0; j < len(cleanWords); j++ {
-				if i != j {
-					tokenSet[cleanWords[i]+" "+cleanWords[j]] = struct{}{}
+			for i := 0; i < len(strippedWords); i++ {
+				for j := 0; j < len(strippedWords); j++ {
+					if i != j {
+						tokenSet[strippedWords[i]+" "+strippedWords[j]] = struct{}{}
+					}
 				}
 			}
 		}
@@ -5228,17 +5230,24 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
 		searchWord = strings.ToLower(keys[0])
-		// Strip punctuation so $text tokenization is consistent across MongoDB versions
 		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
 		if strings.Contains(searchWord, " ") {
-			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
-			searchWord = "\"" + searchWord + "\""
-		} else if strings.Contains(searchWord, "-") {
-			// Single word with hyphens: strip all hyphens to match compact token
-			searchWord = strings.ReplaceAll(searchWord, "-", "")
+			var meaningful []string
+			for _, w := range strings.Fields(searchWord) {
+				if len([]rune(w)) >= 2 {
+					meaningful = append(meaningful, w)
+				}
+			}
+			if len(meaningful) > 0 {
+				criterias.SearchBy["name_prefixes"] = bson.M{"$all": meaningful}
+			}
+		} else {
+			if strings.Contains(searchWord, "-") {
+				searchWord = strings.ReplaceAll(searchWord, "-", "")
+			}
+			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		}
-		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 	}
 	sortFieldName := ""
 	keys, ok = r.URL.Query()["sort"]
