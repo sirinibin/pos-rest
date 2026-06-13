@@ -4393,45 +4393,36 @@ func GenerateSearchTokens(input string) []string {
 }
 
 func (product *Product) GeneratePrefixes() {
-	//cleanPrefixPartNumber := CleanString(strings.ToLower(product.PrefixPartNumber))
-	//cleanPartNumber := CleanString(strings.ToLower(product.PartNumber))
-	//cleanName := CleanString(strings.ToLower(product.Name))
-	//cleanNameArabic := CleanString(product.NameInArabic)
+	var tokens []string
 
-	//product.NamePrefixes = generatePrefixesSuffixesSubstrings(cleanName)
-
-	product.NamePrefixes = GenerateSearchTokens(strings.ToLower(product.Name))
-
-	//product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(cleanName)...)
-	/*
-		allCombinations := GetAllWordCombinations(cleanName)
-		for _, combination := range allCombinations {
-			product.NamePrefixes = append(product.NamePrefixes, generatePrefixesSuffixesSubstrings(strings.ToLower(combination))...)
-		}*/
-
-	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(product.PartNumber))...)
-	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(product.PrefixPartNumber))...)
-	product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(product.PrefixPartNumber+"-"+product.PartNumber))...)
-
-	additionalSearchTerms := product.GetAdditionalSearchTerms()
-	for _, term := range additionalSearchTerms {
-		product.NamePrefixes = append(product.NamePrefixes, GenerateSearchTokens(strings.ToLower(term))...)
-	}
-
-	if product.Name != "" {
-		product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(product.Name[0])))
-	}
-
-	/*
-		if cleanPrefixPartNumber != "" {
-			product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPrefixPartNumber[0])))
+	appendTokens := func(val string) {
+		if val == "" {
+			return
 		}
+		tokens = append(tokens, GenerateSearchTokens(strings.ToLower(val))...)
+	}
 
-		if cleanPartNumber != "" {
-			product.NamePrefixes = append(product.NamePrefixes, strings.ToLower(string(cleanPartNumber[0])))
-		}*/
+	appendTokens(product.Name)
+	appendTokens(product.PartNumber)
+	appendTokens(product.PrefixPartNumber)
+	if product.PrefixPartNumber != "" && product.PartNumber != "" {
+		appendTokens(product.PrefixPartNumber + "-" + product.PartNumber)
+	}
 
-	//product.NamePrefixes = RemoveDuplicateStrings(product.NamePrefixes)
+	for _, term := range product.GetAdditionalSearchTerms() {
+		appendTokens(term)
+	}
+
+	// Deduplicate
+	seen := make(map[string]struct{}, len(tokens))
+	deduped := make([]string, 0, len(tokens))
+	for _, w := range tokens {
+		if _, ok := seen[w]; !ok {
+			seen[w] = struct{}{}
+			deduped = append(deduped, w)
+		}
+	}
+	product.NamePrefixes = deduped
 
 	if product.NameInArabic != "" {
 		product.NameInArabicPrefixes = GenerateSearchTokens(product.NameInArabic)
@@ -5198,11 +5189,14 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	if ok && len(keys[0]) >= 1 {
 		searchWord = strings.ToLower(keys[0])
 		// Strip punctuation so $text tokenization is consistent across MongoDB versions
-		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s]`).ReplaceAllString(searchWord, " ")
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
-		// Phrase search for multi-word queries: prevents OR explosion and ranks exact phrase first
 		if strings.Contains(searchWord, " ") {
+			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
 			searchWord = "\"" + searchWord + "\""
+		} else if strings.Contains(searchWord, "-") {
+			// Single word with hyphens: strip all hyphens to match compact token
+			searchWord = strings.ReplaceAll(searchWord, "-", "")
 		}
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 	}
