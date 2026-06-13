@@ -5197,8 +5197,13 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
 		searchWord = strings.ToLower(keys[0])
-		searchWord = escapeTextSearchInput(searchWord)
-
+		// Strip punctuation so $text tokenization is consistent across MongoDB versions
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s]`).ReplaceAllString(searchWord, " ")
+		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
+		// Phrase search for multi-word queries: prevents OR explosion and ranks exact phrase first
+		if strings.Contains(searchWord, " ") {
+			searchWord = "\"" + searchWord + "\""
+		}
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 	}
 	sortFieldName := ""
