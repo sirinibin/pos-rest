@@ -1943,12 +1943,15 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 
 		searchWord := strings.ToLower(keys[0])
 		// Strip punctuation so $text tokenization is consistent across MongoDB versions
-		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s]`).ReplaceAllString(searchWord, " ")
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
-		// Phrase search for multi-word queries: prevents OR explosion (200 "co" results)
-		// and ranks the exact phrase match first (uses n-gram tokens stored by GenerateSearchTokens)
 		if strings.Contains(searchWord, " ") {
+			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
 			searchWord = "\"" + searchWord + "\""
+		} else if strings.Contains(searchWord, "-") {
+			// Single word with hyphens (e.g. "cn-a40057", "al-mansour"):
+			// strip all hyphens to match the compact token stored by GenerateSearchTokens
+			searchWord = strings.ReplaceAll(searchWord, "-", "")
 		}
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
@@ -2774,6 +2777,10 @@ func ProcessCustomers() error {
 			customer.GenerateSearchWords()
 			customer.SetAdditionalkeywords()
 			customer.SetSearchLabel()
+			err = customer.Update()
+			if err != nil {
+				return err
+			}
 
 			/*
 				customer.SetCustomerSalesStatsByStoreID(store.ID)
@@ -3911,21 +3918,18 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 
 	keys, ok = r.URL.Query()["search[query]"]
 	if ok && len(keys[0]) >= 1 {
-		//criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-
 		searchWord := strings.ToLower(keys[0])
-		//criterias.SearchBy["$text"] = bson.M{"$search": "\"" + searchWord + "\""}
+		// Strip punctuation so $text tokenization is consistent across MongoDB versions
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
+		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
+		if strings.Contains(searchWord, " ") {
+			// Multi-word: phrase search prevents OR explosion and ranks exact phrase first
+			searchWord = "\"" + searchWord + "\""
+		} else if strings.Contains(searchWord, "-") {
+			// Single word with hyphens: strip all hyphens to match compact token
+			searchWord = strings.ReplaceAll(searchWord, "-", "")
+		}
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
-		/*
-			criterias.SearchBy["$or"] = []bson.M{
-				{"name": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"name_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"phone": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"phone_in_arabic": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"vat_no": bson.M{"$regex": keys[0], "$options": "i"}},
-				{"code": bson.M{"$regex": keys[0], "$options": "i"}},
-			}*/
 	}
 
 	keys, ok = r.URL.Query()["search[phone]"]
