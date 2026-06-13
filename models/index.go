@@ -37,6 +37,8 @@ func (store *Store) CreateAllIndexes() error {
 		bson.E{Key: "name_in_arabic", Value: "text"},
 		bson.E{Key: "name_in_arabic_prefixes", Value: "text"},
 		bson.E{Key: "part_number", Value: "text"},
+		bson.E{Key: "item_code", Value: "text"},
+		bson.E{Key: "ean_12", Value: "text"},
 	}
 	err := store.CreateTextIndex("product", textFields, "product_text_index")
 	if err != nil {

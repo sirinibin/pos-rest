@@ -2524,26 +2524,28 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 }
 
 func (product *Product) SetAdditionalkeywords() {
-	re := regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
 	keywords := []string{}
-	if containsSpecialChars(product.PrefixPartNumber) {
-		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(strings.ToLower(product.PrefixPartNumber), "")))
-	}
 
-	if containsSpecialChars(product.PartNumber) {
-		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(strings.ToLower(product.PartNumber), "")))
-	}
-
-	if containsSpecialChars(product.Name) {
-		keywords = append(keywords, CleanStringPreserveSpace(re.ReplaceAllString(strings.ToLower(product.Name), "")))
-	}
-
-	if containsSpecialChars(product.NameInArabic) {
-		word := re.ReplaceAllString(product.NameInArabic, "")
-		if !govalidator.IsNull(CleanStringPreserveSpace(word)) {
-			keywords = append(keywords, CleanStringPreserveSpace(word))
+	addCompact := func(val string) {
+		if val == "" {
+			return
 		}
+		compact := CleanStringPreserveSpace(additionalKeywordsStripper.ReplaceAllString(strings.ToLower(val), ""))
+		if compact != "" && compact != strings.ToLower(val) {
+			keywords = append(keywords, compact)
+		}
+	}
 
+	addCompact(product.PrefixPartNumber)
+	addCompact(product.PartNumber)
+	addCompact(product.Name)
+	addCompact(product.ItemCode)
+
+	if product.NameInArabic != "" {
+		word := CleanStringPreserveSpace(additionalKeywordsStripper.ReplaceAllString(product.NameInArabic, ""))
+		if !govalidator.IsNull(word) {
+			keywords = append(keywords, word)
+		}
 	}
 
 	product.AdditionalKeywords = keywords
@@ -3695,22 +3697,31 @@ func ProcessProducts() error {
 				continue
 			}
 
-			purchaseHistory, err := product.GetLastPurchaseHistory()
+			product.GeneratePrefixes()
+			product.SetAdditionalkeywords()
+			err = product.Update(&store.ID)
 			if err != nil {
-				return errors.New("Error fetching last purchase history:" + err.Error())
+				return errors.New("Error updating product:" + err.Error())
 			}
 
-			if purchaseHistory != nil {
-				if productStoreTemp, ok := product.ProductStores[store.ID.Hex()]; ok {
-					productStoreTemp.PurchaseUnitPrice = purchaseHistory.UnitPrice
-					productStoreTemp.PurchaseUnitPriceWithVAT = purchaseHistory.UnitPriceWithVAT
-					product.ProductStores[store.ID.Hex()] = productStoreTemp
-				}
-				err = product.Update(&store.ID)
+			/*
+				purchaseHistory, err := product.GetLastPurchaseHistory()
 				if err != nil {
-					return errors.New("Error updating product with last purchase unit price:" + err.Error())
+					return errors.New("Error fetching last purchase history:" + err.Error())
 				}
-			}
+
+				if purchaseHistory != nil {
+					if productStoreTemp, ok := product.ProductStores[store.ID.Hex()]; ok {
+						productStoreTemp.PurchaseUnitPrice = purchaseHistory.UnitPrice
+						productStoreTemp.PurchaseUnitPriceWithVAT = purchaseHistory.UnitPriceWithVAT
+						product.ProductStores[store.ID.Hex()] = productStoreTemp
+					}
+					err = product.Update(&store.ID)
+					if err != nil {
+						return errors.New("Error updating product with last purchase unit price:" + err.Error())
+					}
+				}
+			*/
 
 			/*product.SetStock()
 			product.AllowDuplicates = true
@@ -4408,12 +4419,14 @@ func (product *Product) GeneratePrefixes() {
 	if product.PrefixPartNumber != "" && product.PartNumber != "" {
 		appendTokens(product.PrefixPartNumber + "-" + product.PartNumber)
 	}
+	appendTokens(product.ItemCode)
+	appendTokens(product.Ean12)
 
 	for _, term := range product.GetAdditionalSearchTerms() {
 		appendTokens(term)
 	}
 
-	// Deduplicate
+	// Deduplicate NamePrefixes
 	seen := make(map[string]struct{}, len(tokens))
 	deduped := make([]string, 0, len(tokens))
 	for _, w := range tokens {
@@ -4425,7 +4438,17 @@ func (product *Product) GeneratePrefixes() {
 	product.NamePrefixes = deduped
 
 	if product.NameInArabic != "" {
-		product.NameInArabicPrefixes = GenerateSearchTokens(product.NameInArabic)
+		arabicTokens := GenerateSearchTokens(strings.ToLower(product.NameInArabic))
+		// Deduplicate NameInArabicPrefixes
+		arabicSeen := make(map[string]struct{}, len(arabicTokens))
+		arabicDeduped := make([]string, 0, len(arabicTokens))
+		for _, w := range arabicTokens {
+			if _, ok := arabicSeen[w]; !ok {
+				arabicSeen[w] = struct{}{}
+				arabicDeduped = append(arabicDeduped, w)
+			}
+		}
+		product.NameInArabicPrefixes = arabicDeduped
 	}
 }
 
@@ -4461,6 +4484,7 @@ func (product *Product) GeneratePrefixes() {
 // var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
 var specialCharEscaper = regexp.MustCompile(`[^\p{L}\p{N}\s\-]+`)
 var sepReplacer = regexp.MustCompile(`[-./\[\]*",()_+#|\\]`)
+var additionalKeywordsStripper = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
 
 func CleanString(input string) string {
 	// Replace special characters with a space
