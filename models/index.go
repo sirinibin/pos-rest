@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -30,942 +31,237 @@ func SetIndexes() error {
 }
 
 func (store *Store) CreateAllIndexes() error {
-	//product
-	textFields := bson.D{
-		bson.E{Key: "name", Value: "text"},
-		bson.E{Key: "name_prefixes", Value: "text"},
-		bson.E{Key: "name_in_arabic", Value: "text"},
-		bson.E{Key: "name_in_arabic_prefixes", Value: "text"},
-		bson.E{Key: "part_number", Value: "text"},
-		bson.E{Key: "item_code", Value: "text"},
-		bson.E{Key: "ean_12", Value: "text"},
+	var errs []string
+
+	idx := func(coll string, fields bson.M) {
+		if err := store.CreateIndex(coll, fields, false, false, ""); err != nil {
+			errs = append(errs, fmt.Sprintf("%s %v: %v", coll, fields, err))
+		}
 	}
-	err := store.CreateTextIndex("product", textFields, "product_text_index")
-	if err != nil {
-		return err
+	tidx := func(coll string, fields bson.D, name string) {
+		if err := store.CreateTextIndex(coll, fields, name); err != nil {
+			errs = append(errs, fmt.Sprintf("%s text(%s): %v", coll, name, err))
+		}
+	}
+	cidx := func(coll string, fields bson.D) {
+		if err := store.CreateCompoundIndex(coll, fields); err != nil {
+			errs = append(errs, fmt.Sprintf("%s compound%v: %v", coll, fields, err))
+		}
 	}
 
-	fields := bson.M{"name_prefixes": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	// product
+	tidx("product", bson.D{
+		{Key: "name", Value: "text"},
+		{Key: "name_prefixes", Value: "text"},
+		{Key: "name_in_arabic", Value: "text"},
+		{Key: "name_in_arabic_prefixes", Value: "text"},
+		{Key: "part_number", Value: "text"},
+		{Key: "item_code", Value: "text"},
+		{Key: "ean_12", Value: "text"},
+	}, "product_text_index")
+	idx("product", bson.M{"name_prefixes": 1})
+	idx("product", bson.M{"bar_code": 1})
+	idx("product", bson.M{"category_id": 1})
+	idx("product", bson.M{"brand_id": 1})
+	idx("product", bson.M{"country_code": 1})
+	idx("product", bson.M{"ean_12": 1})
+	idx("product", bson.M{"deleted": 1})
 
-	fields = bson.M{"bar_code": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	// customer
+	tidx("customer", bson.D{
+		{Key: "name", Value: "text"},
+		{Key: "name_in_arabic", Value: "text"},
+		{Key: "code", Value: "text"},
+		{Key: "phone", Value: "text"},
+		{Key: "phone_in_arabic", Value: "text"},
+		{Key: "phone2", Value: "text"},
+		{Key: "phone2_in_arabic", Value: "text"},
+		{Key: "vat_no", Value: "text"},
+		{Key: "vat_no_in_arabic", Value: "text"},
+		{Key: "email", Value: "text"},
+		{Key: "search_words_in_arabic", Value: "text"},
+		{Key: "search_words", Value: "text"},
+		{Key: "country_name", Value: "text"},
+	}, "customer_text_index")
+	idx("customer", bson.M{"search_words": 1})
+	idx("customer", bson.M{"code": 1})
+	idx("customer", bson.M{"vat_no": 1})
+	idx("customer", bson.M{"phone": 1})
+	idx("customer", bson.M{"created_at": -1})
+	cidx("customer", bson.D{{Key: "deleted", Value: 1}, {Key: "created_at", Value: -1}})
 
-	fields = bson.M{"category_id": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	// vendor
+	tidx("vendor", bson.D{
+		{Key: "name", Value: "text"},
+		{Key: "name_in_arabic", Value: "text"},
+		{Key: "code", Value: "text"},
+		{Key: "phone", Value: "text"},
+		{Key: "phone_in_arabic", Value: "text"},
+		{Key: "vat_no", Value: "text"},
+		{Key: "vat_no_in_arabic", Value: "text"},
+		{Key: "email", Value: "text"},
+		{Key: "search_words_in_arabic", Value: "text"},
+		{Key: "search_words", Value: "text"},
+		{Key: "country_name", Value: "text"},
+	}, "vendor_text_index")
+	idx("vendor", bson.M{"search_words": 1})
+	idx("vendor", bson.M{"code": 1})
+	idx("vendor", bson.M{"vat_no": 1})
+	idx("vendor", bson.M{"phone": 1})
+	cidx("vendor", bson.D{{Key: "deleted", Value: 1}, {Key: "created_at", Value: -1}})
 
-	fields = bson.M{"brand_id": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	// order
+	idx("order", bson.M{"customer_id": 1})
+	idx("order", bson.M{"date": -1})
+	idx("order", bson.M{"created_at": -1})
+	idx("order", bson.M{"code": 1})
+	idx("order", bson.M{"invoice_count_value": 1})
+	idx("order", bson.M{"payment_status": 1})
+	cidx("order", bson.D{{Key: "deleted", Value: 1}})
+	cidx("order", bson.D{{Key: "zatca.reporting_passed", Value: 1}, {Key: "zatca.reporting_passed_at", Value: -1}})
 
-	fields = bson.M{"country_code": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	// salesreturn
+	idx("salesreturn", bson.M{"customer_id": 1})
+	idx("salesreturn", bson.M{"date": -1})
+	idx("salesreturn", bson.M{"created_at": -1})
+	idx("salesreturn", bson.M{"code": 1})
+	idx("salesreturn", bson.M{"invoice_count_value": 1})
+	cidx("salesreturn", bson.D{{Key: "deleted", Value: 1}})
 
-	fields = bson.M{"ean_12": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	// purchase
+	idx("purchase", bson.M{"vendor_id": 1})
+	idx("purchase", bson.M{"date": -1})
+	idx("purchase", bson.M{"created_at": -1})
+	idx("purchase", bson.M{"code": 1})
+	cidx("purchase", bson.D{{Key: "deleted", Value: 1}})
 
-	fields = bson.M{"deleted": 1}
-	err = store.CreateIndex("product", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	// purchasereturn
+	idx("purchasereturn", bson.M{"vendor_id": 1})
+	idx("purchasereturn", bson.M{"date": -1})
+	idx("purchasereturn", bson.M{"created_at": -1})
+	idx("purchasereturn", bson.M{"code": 1})
+	cidx("purchasereturn", bson.D{{Key: "deleted", Value: 1}})
 
-	//customer
-	textFields = bson.D{
-		bson.E{Key: "name", Value: "text"},
-		bson.E{Key: "name_in_arabic", Value: "text"},
-		bson.E{Key: "code", Value: "text"},
-		bson.E{Key: "phone", Value: "text"},
-		bson.E{Key: "phone_in_arabic", Value: "text"},
-		bson.E{Key: "phone2", Value: "text"},
-		bson.E{Key: "phone2_in_arabic", Value: "text"},
-		bson.E{Key: "vat_no", Value: "text"},
-		bson.E{Key: "vat_no_in_arabic", Value: "text"},
-		bson.E{Key: "email", Value: "text"},
-		bson.E{Key: "search_words_in_arabic", Value: "text"},
-		bson.E{Key: "search_words", Value: "text"},
-		bson.E{Key: "country_name", Value: "text"},
-	}
-	err = store.CreateTextIndex("customer", textFields, "customer_text_index")
-	if err != nil {
-		return err
-	}
+	// quotation
+	idx("quotation", bson.M{"customer_id": 1})
+	idx("quotation", bson.M{"date": -1})
+	idx("quotation", bson.M{"created_at": -1})
+	idx("quotation", bson.M{"code": 1})
+	cidx("quotation", bson.D{{Key: "deleted", Value: 1}})
 
-	fields = bson.M{"search_words": 1}
-	err = store.CreateIndex("customer", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("customer", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"vat_no": 1}
-	err = store.CreateIndex("customer", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"phone": 1}
-	err = store.CreateIndex("customer", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("customer", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields := bson.D{
-		bson.E{Key: "deleted", Value: 1},
-		bson.E{Key: "created_at", Value: -1},
-	}
-	err = store.CreateCompoundIndex("customer", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//vendor
-	textFields = bson.D{
-		bson.E{Key: "name", Value: "text"},
-		bson.E{Key: "name_in_arabic", Value: "text"},
-		bson.E{Key: "code", Value: "text"},
-		bson.E{Key: "phone", Value: "text"},
-		bson.E{Key: "phone_in_arabic", Value: "text"},
-		bson.E{Key: "vat_no", Value: "text"},
-		bson.E{Key: "vat_no_in_arabic", Value: "text"},
-		bson.E{Key: "email", Value: "text"},
-		bson.E{Key: "search_words_in_arabic", Value: "text"},
-		bson.E{Key: "search_words", Value: "text"},
-		bson.E{Key: "country_name", Value: "text"},
-	}
-	err = store.CreateTextIndex("vendor", textFields, "vendor_text_index")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"search_words": 1}
-	err = store.CreateIndex("vendor", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("vendor", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"vat_no": 1}
-	err = store.CreateIndex("vendor", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"phone": 1}
-	err = store.CreateIndex("vendor", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-		bson.E{Key: "created_at", Value: -1},
-	}
-	err = store.CreateCompoundIndex("vendor", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//order
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("order", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("order", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("order", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("order", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"invoice_count_value": 1}
-	err = store.CreateIndex("order", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"payment_status": 1}
-	err = store.CreateIndex("order", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-	}
-	err = store.CreateCompoundIndex("order", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "zatca.reporting_passed", Value: 1},
-		bson.E{Key: "zatca.reporting_passed_at", Value: -1},
-	}
-	err = store.CreateCompoundIndex("order", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//salesreturn
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("salesreturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("salesreturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("salesreturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("salesreturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"invoice_count_value": 1}
-	err = store.CreateIndex("salesreturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-	}
-	err = store.CreateCompoundIndex("salesreturn", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//purchase
-	fields = bson.M{"vendor_id": 1}
-	err = store.CreateIndex("purchase", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("purchase", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("purchase", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("purchase", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-	}
-	err = store.CreateCompoundIndex("purchase", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//purchase return
-	fields = bson.M{"vendor_id": 1}
-	err = store.CreateIndex("purchasereturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("purchasereturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("purchasereturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("purchasereturn", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-	}
-	err = store.CreateCompoundIndex("purchasereturn", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//quotation
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("quotation", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("quotation", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("quotation", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("quotation", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-	}
-	err = store.CreateCompoundIndex("quotation", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//delivery_note
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("delivery_note", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("delivery_note", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("delivery_note", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"code": 1}
-	err = store.CreateIndex("delivery_note", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-	}
-	err = store.CreateCompoundIndex("delivery_note", compoundFields)
-	if err != nil {
-		return err
-	}
+	// delivery_note
+	idx("delivery_note", bson.M{"customer_id": 1})
+	idx("delivery_note", bson.M{"date": -1})
+	idx("delivery_note", bson.M{"created_at": -1})
+	idx("delivery_note", bson.M{"code": 1})
+	cidx("delivery_note", bson.D{{Key: "deleted", Value: 1}})
 
 	// product_history
-	// Add these inside func (store *Store) CreateAllIndexes():
-
-	// product_history collection indexes
-	fields = bson.M{"product_id": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"reference_id": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"reference_type": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"vendor_id": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_id": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_code": 1}
-	err = store.CreateIndex("product_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
+	idx("product_history", bson.M{"product_id": 1})
+	idx("product_history", bson.M{"reference_id": 1})
+	idx("product_history", bson.M{"reference_type": 1})
+	idx("product_history", bson.M{"date": -1})
+	idx("product_history", bson.M{"created_at": -1})
+	idx("product_history", bson.M{"customer_id": 1})
+	idx("product_history", bson.M{"vendor_id": 1})
+	idx("product_history", bson.M{"warehouse_id": 1})
+	idx("product_history", bson.M{"warehouse_code": 1})
 
 	// product_sales_history
-	// Add these inside func (store *Store) CreateAllIndexes():
-
-	// product_sales_history collection indexes
-	fields = bson.M{"product_id": 1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"order_id": 1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"order_code": 1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_id": 1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_code": 1}
-	err = store.CreateIndex("product_sales_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	// posting collection indexes
-	fields = bson.M{"account_id": 1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"reference_id": 1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"reference_model": 1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"reference_code": 1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"account_number": 1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	// For queries on embedded posts array fields:
-	fields = bson.M{"posts.account_id": 1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"posts.date": -1}
-	err = store.CreateIndex("posting", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "deleted", Value: 1},
-	}
-	err = store.CreateCompoundIndex("posting", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	compoundFields = bson.D{
-		bson.E{Key: "account_id", Value: 1},
-		bson.E{Key: "date", Value: 1},
-	}
-	err = store.CreateCompoundIndex("posting", compoundFields)
-	if err != nil {
-		return err
-	}
-
-	//Ledger
-	fields = bson.M{"reference_id": 1}
-	err = store.CreateIndex("ledger", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"reference_model": 1}
-	err = store.CreateIndex("ledger", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"reference_code": 1}
-	err = store.CreateIndex("ledger", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("ledger", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"journals.account_id": 1}
-	err = store.CreateIndex("ledger", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"journals.date": -1}
-	err = store.CreateIndex("ledger", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"deleted": 1}
-	err = store.CreateIndex("ledger", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	// Add these inside func (store *Store) CreateAllIndexes():
-
-	// product_quotation_sales_return_history collection indexes
-
-	fields = bson.M{"product_id": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"quotation_id": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"quotation_code": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"quotation_sales_return_id": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"quotation_sales_return_code": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_id": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_code": 1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("product_quotation_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	// Add these inside func (store *Store) CreateAllIndexes():
-
-	// product_quotation_history collection indexes
-	fields = bson.M{"product_id": 1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
+	idx("product_sales_history", bson.M{"product_id": 1})
+	idx("product_sales_history", bson.M{"customer_id": 1})
+	idx("product_sales_history", bson.M{"order_id": 1})
+	idx("product_sales_history", bson.M{"order_code": 1})
+	idx("product_sales_history", bson.M{"date": -1})
+	idx("product_sales_history", bson.M{"created_at": -1})
+	idx("product_sales_history", bson.M{"warehouse_id": 1})
+	idx("product_sales_history", bson.M{"warehouse_code": 1})
+
+	// posting
+	idx("posting", bson.M{"account_id": 1})
+	idx("posting", bson.M{"reference_id": 1})
+	idx("posting", bson.M{"reference_model": 1})
+	idx("posting", bson.M{"reference_code": 1})
+	idx("posting", bson.M{"date": -1})
+	idx("posting", bson.M{"account_number": 1})
+	idx("posting", bson.M{"created_at": -1})
+	idx("posting", bson.M{"posts.account_id": 1})
+	idx("posting", bson.M{"posts.date": -1})
+	cidx("posting", bson.D{{Key: "deleted", Value: 1}})
+	cidx("posting", bson.D{{Key: "account_id", Value: 1}, {Key: "date", Value: 1}})
+
+	// ledger
+	idx("ledger", bson.M{"reference_id": 1})
+	idx("ledger", bson.M{"reference_model": 1})
+	idx("ledger", bson.M{"reference_code": 1})
+	idx("ledger", bson.M{"created_at": -1})
+	idx("ledger", bson.M{"journals.account_id": 1})
+	idx("ledger", bson.M{"journals.date": -1})
+	idx("ledger", bson.M{"deleted": 1})
+
+	// product_quotation_sales_return_history
+	idx("product_quotation_sales_return_history", bson.M{"product_id": 1})
+	idx("product_quotation_sales_return_history", bson.M{"customer_id": 1})
+	idx("product_quotation_sales_return_history", bson.M{"quotation_id": 1})
+	idx("product_quotation_sales_return_history", bson.M{"quotation_code": 1})
+	idx("product_quotation_sales_return_history", bson.M{"quotation_sales_return_id": 1})
+	idx("product_quotation_sales_return_history", bson.M{"quotation_sales_return_code": 1})
+	idx("product_quotation_sales_return_history", bson.M{"warehouse_id": 1})
+	idx("product_quotation_sales_return_history", bson.M{"warehouse_code": 1})
+	idx("product_quotation_sales_return_history", bson.M{"date": -1})
+	idx("product_quotation_sales_return_history", bson.M{"created_at": -1})
+
+	// product_quotation_history
+	idx("product_quotation_history", bson.M{"product_id": 1})
+	idx("product_quotation_history", bson.M{"customer_id": 1})
+	idx("product_quotation_history", bson.M{"quotation_id": 1})
+	idx("product_quotation_history", bson.M{"quotation_code": 1})
+	idx("product_quotation_history", bson.M{"warehouse_id": 1})
+	idx("product_quotation_history", bson.M{"warehouse_code": 1})
+	idx("product_quotation_history", bson.M{"date": -1})
+	idx("product_quotation_history", bson.M{"created_at": -1})
+	idx("product_quotation_history", bson.M{"updated_at": -1})
+
+	// product_purchase_return_history
+	idx("product_purchase_return_history", bson.M{"product_id": 1})
+	idx("product_purchase_return_history", bson.M{"vendor_id": 1})
+	idx("product_purchase_return_history", bson.M{"purchase_return_id": 1})
+	idx("product_purchase_return_history", bson.M{"purchase_return_code": 1})
+	idx("product_purchase_return_history", bson.M{"purchase_id": 1})
+	idx("product_purchase_return_history", bson.M{"purchase_code": 1})
+	idx("product_purchase_return_history", bson.M{"warehouse_id": 1})
+	idx("product_purchase_return_history", bson.M{"warehouse_code": 1})
+	idx("product_purchase_return_history", bson.M{"date": -1})
+	idx("product_purchase_return_history", bson.M{"created_at": -1})
+	idx("product_purchase_return_history", bson.M{"updated_at": -1})
+
+	// product_purchase_history
+	idx("product_purchase_history", bson.M{"product_id": 1})
+	idx("product_purchase_history", bson.M{"vendor_id": 1})
+	idx("product_purchase_history", bson.M{"purchase_id": 1})
+	idx("product_purchase_history", bson.M{"purchase_code": 1})
+	idx("product_purchase_history", bson.M{"warehouse_id": 1})
+	idx("product_purchase_history", bson.M{"warehouse_code": 1})
+	idx("product_purchase_history", bson.M{"date": -1})
+	idx("product_purchase_history", bson.M{"created_at": -1})
+	idx("product_purchase_history", bson.M{"updated_at": -1})
+
+	// product_sales_return_history
+	idx("product_sales_return_history", bson.M{"product_id": 1})
+	idx("product_sales_return_history", bson.M{"customer_id": 1})
+	idx("product_sales_return_history", bson.M{"order_id": 1})
+	idx("product_sales_return_history", bson.M{"order_code": 1})
+	idx("product_sales_return_history", bson.M{"sales_return_id": 1})
+	idx("product_sales_return_history", bson.M{"sales_return_code": 1})
+	idx("product_sales_return_history", bson.M{"warehouse_id": 1})
+	idx("product_sales_return_history", bson.M{"warehouse_code": 1})
+	idx("product_sales_return_history", bson.M{"date": -1})
+	idx("product_sales_return_history", bson.M{"created_at": -1})
+	idx("product_sales_return_history", bson.M{"updated_at": -1})
+
+	if len(errs) > 0 {
+		return fmt.Errorf("store %s: %d index error(s): %s", store.ID.Hex(), len(errs), strings.Join(errs, " | "))
 	}
-
-	fields = bson.M{"quotation_id": 1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"quotation_code": 1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_id": 1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_code": 1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"updated_at": -1}
-	err = store.CreateIndex("product_quotation_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	// Add these inside func (store *Store) CreateAllIndexes():
-
-	// product_purchase_return_history collection indexes
-	fields = bson.M{"product_id": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"vendor_id": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"purchase_return_id": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"purchase_return_code": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"purchase_id": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"purchase_code": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_id": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_code": 1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"updated_at": -1}
-	err = store.CreateIndex("product_purchase_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	// Add these inside func (store *Store) CreateAllIndexes():
-
-	// product_purchase_history collection indexes
-	fields = bson.M{"product_id": 1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"vendor_id": 1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"purchase_id": 1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"purchase_code": 1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_id": 1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_code": 1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"updated_at": -1}
-	err = store.CreateIndex("product_purchase_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	// Add these inside func (store *Store) CreateAllIndexes():
-
-	// product_sales_return_history collection indexes
-	fields = bson.M{"product_id": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"customer_id": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"order_id": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"order_code": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"sales_return_id": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"sales_return_code": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_id": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"warehouse_code": 1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"date": -1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"created_at": -1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
-	fields = bson.M{"updated_at": -1}
-	err = store.CreateIndex("product_sales_return_history", fields, false, false, "")
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
