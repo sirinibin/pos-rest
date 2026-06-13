@@ -1945,6 +1945,11 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		// Strip punctuation so $text tokenization is consistent across MongoDB versions
 		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
+		// Phrase search for multi-word queries: prevents OR explosion (200 "co" results)
+		// and ranks the exact phrase match first (uses n-gram tokens stored by GenerateSearchTokens)
+		if strings.Contains(searchWord, " ") {
+			searchWord = "\"" + searchWord + "\""
+		}
 		criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		//criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		/*
