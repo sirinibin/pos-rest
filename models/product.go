@@ -39,6 +39,7 @@ type ProductStore struct {
 	IsUnitPriceWithVAT           bool                        `bson:"with_vat" json:"with_vat"`
 	Stock                        float64                     `bson:"stock" json:"stock"`
 	WarehouseStocks              map[string]float64          `bson:"warehouse_stocks" json:"warehouse_stocks"`
+	WarehouseRacks               map[string]string           `bson:"warehouse_racks" json:"warehouse_racks"`
 	ProductWarehouses            map[string]ProductWarehouse `bson:"product_warehouses" json:"product_warehouses"`
 	StocksAdded                  float64                     `bson:"stocks_added,omitempty" json:"stocks_added,omitempty"`
 	StocksRemoved                float64                     `bson:"stocks_removed,omitempty" json:"stocks_removed,omitempty"`
@@ -294,6 +295,34 @@ type ProductStats struct {
 	SalesReturnProfit   float64 `json:"sales_return_profit" bson:"sales_return_profit"`
 	Purchase            float64 `json:"purchase" bson:"purchase"`
 	PurchaseReturn      float64 `json:"purchase_return" bson:"purchase_return"`
+}
+
+func (store *Store) MigrateRackToWarehouseRacks() (count int64, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	filter := bson.M{
+		"rack": bson.M{"$exists": true, "$ne": ""},
+		"$or": []bson.M{
+			{"product_stores." + store.ID.Hex() + ".warehouse_racks.main_store": bson.M{"$exists": false}},
+			{"product_stores." + store.ID.Hex() + ".warehouse_racks.main_store": ""},
+		},
+	}
+
+	update := []bson.M{
+		{
+			"$set": bson.M{
+				"product_stores." + store.ID.Hex() + ".warehouse_racks.main_store": "$rack",
+			},
+		},
+	}
+
+	result, err := collection.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return 0, err
+	}
+	return result.ModifiedCount, nil
 }
 
 func (store *Store) GetProductStats(
@@ -2086,7 +2115,25 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 	keys, ok = r.URL.Query()["search[rack]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["rack"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		rackTerm := keys[0]
+		rackCodeKeys, hasRackCode := r.URL.Query()["search[warehouse_rack_code]"]
+		if hasRackCode && len(rackCodeKeys[0]) >= 1 {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_racks."+rackCodeKeys[0]] = map[string]interface{}{"$regex": rackTerm, "$options": "i"}
+		} else if rackCodesKeys, hasRackCodes := r.URL.Query()["search[warehouse_rack_codes]"]; hasRackCodes && len(rackCodesKeys[0]) >= 1 {
+			codes := strings.Split(rackCodesKeys[0], ",")
+			orClauses := make([]bson.M, 0, len(codes))
+			for _, code := range codes {
+				code = strings.TrimSpace(code)
+				if code != "" {
+					orClauses = append(orClauses, bson.M{"product_stores." + storeID.Hex() + ".warehouse_racks." + code: map[string]interface{}{"$regex": rackTerm, "$options": "i"}})
+				}
+			}
+			if len(orClauses) > 0 {
+				criterias.SearchBy["$or"] = orClauses
+			}
+		} else {
+			criterias.SearchBy["rack"] = map[string]interface{}{"$regex": rackTerm, "$options": "i"}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[item_code]"]
@@ -6145,7 +6192,25 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 	keys, ok = r.URL.Query()["search[rack]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["rack"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+		rackTerm := keys[0]
+		rackCodeKeys, hasRackCode := r.URL.Query()["search[warehouse_rack_code]"]
+		if hasRackCode && len(rackCodeKeys[0]) >= 1 {
+			criterias.SearchBy["product_stores."+storeID.Hex()+".warehouse_racks."+rackCodeKeys[0]] = map[string]interface{}{"$regex": rackTerm, "$options": "i"}
+		} else if rackCodesKeys, hasRackCodes := r.URL.Query()["search[warehouse_rack_codes]"]; hasRackCodes && len(rackCodesKeys[0]) >= 1 {
+			codes := strings.Split(rackCodesKeys[0], ",")
+			orClauses := make([]bson.M, 0, len(codes))
+			for _, code := range codes {
+				code = strings.TrimSpace(code)
+				if code != "" {
+					orClauses = append(orClauses, bson.M{"product_stores." + storeID.Hex() + ".warehouse_racks." + code: map[string]interface{}{"$regex": rackTerm, "$options": "i"}})
+				}
+			}
+			if len(orClauses) > 0 {
+				criterias.SearchBy["$or"] = orClauses
+			}
+		} else {
+			criterias.SearchBy["rack"] = map[string]interface{}{"$regex": rackTerm, "$options": "i"}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[item_code]"]

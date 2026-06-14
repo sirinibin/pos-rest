@@ -172,6 +172,7 @@ func main() {
 
 	//Product
 	router.HandleFunc("/v1/product/summary", controller.ProductSummary).Methods("GET")
+	router.HandleFunc("/v1/product/migrate-rack", controller.MigrateProductRackToWarehouseRacks).Methods("POST")
 	router.HandleFunc("/v1/product", controller.CreateProduct).Methods("POST")
 	router.HandleFunc("/v1/product", controller.ListProduct).Methods("GET")
 	router.HandleFunc("/v1/product/json", controller.ListProductJson).Methods("GET")
