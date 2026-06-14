@@ -9,13 +9,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// BICronStoreSettings persists the Store Settings section of the Cron Jobs UI.
-// One document per POS instance URL, stored in the global DB.
+// BICronStoreSettings persists the full Cron Jobs UI config per POS instance.
+// One document per base_url, stored in the global DB.
 type BICronStoreSettings struct {
 	BaseURL         string            `bson:"base_url" json:"base_url"`
 	EnabledStores   []string          `bson:"enabled_stores" json:"enabled_stores"`
 	ReportSchedules map[string]string `bson:"report_schedules" json:"report_schedules"`
 	ReportPlatforms map[string]string `bson:"report_platforms" json:"report_platforms"`
+	Paused          bool              `bson:"paused" json:"paused"`
+	LastRunAt       string            `bson:"last_run_at,omitempty" json:"last_run_at,omitempty"`
 	UpdatedAt       time.Time         `bson:"updated_at" json:"updated_at"`
 }
 
@@ -24,9 +26,8 @@ func GetBICronStoreSettings(baseURL string) (*BICronStoreSettings, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	filter := bson.M{"base_url": baseURL}
 	var s BICronStoreSettings
-	if err := col.FindOne(ctx, filter).Decode(&s); err != nil {
+	if err := col.FindOne(ctx, bson.M{"base_url": baseURL}).Decode(&s); err != nil {
 		return &BICronStoreSettings{
 			BaseURL:         baseURL,
 			EnabledStores:   []string{},
