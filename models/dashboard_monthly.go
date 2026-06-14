@@ -63,6 +63,10 @@ type DashboardMonthly struct {
 	AcctPurchaseAmount       float64 `bson:"accounted_purchase_amount"        json:"accounted_purchase_amount"`
 	AcctPurchaseReturnAmount float64 `bson:"accounted_purchase_return_amount" json:"accounted_purchase_return_amount"`
 
+	// Commission (for P&L expense adjustment: sales commission adds to expense, return commission reduces it)
+	SalesCommission       float64 `bson:"sales_commission"        json:"sales_commission"`
+	SalesReturnCommission float64 `bson:"sales_return_commission" json:"sales_return_commission"`
+
 	// Cash discounts (for P&L expense adjustment)
 	SalesCashDiscount                  float64 `bson:"sales_cash_discount"                    json:"sales_cash_discount"`
 	SalesReturnCashDiscount            float64 `bson:"sales_return_cash_discount"             json:"sales_return_cash_discount"`
@@ -159,6 +163,10 @@ func ComputeAndUpsertDashboardMonthly(storeID primitive.ObjectID, monthStr strin
 	acctF := dmMerge(dateFilterWithDelete, bson.M{"enable_on_accounts": true})
 	d.AcctPurchaseAmount, _ = dmSum(ctx, sdb.Collection("purchase"), acctF, "net_total")
 	d.AcctPurchaseReturnAmount, _ = dmSum(ctx, sdb.Collection("purchasereturn"), acctF, "net_total")
+
+	// Commission
+	d.SalesCommission, _ = dmSum(ctx, sdb.Collection("order"), dateFilterWithDelete, "commission")
+	d.SalesReturnCommission, _ = dmSum(ctx, sdb.Collection("salesreturn"), dateFilterWithDelete, "commission")
 
 	// Cash discounts — read from the parent document's cash_discount field,
 	// which is the authoritative source (set at creation or updated by the cash-discount module).
