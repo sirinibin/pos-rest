@@ -528,6 +528,14 @@ func main() {
 	router.HandleFunc("/v1/bi/batch-cost", controller.SaveBIBatchCost).Methods("POST")
 	router.HandleFunc("/v1/bi/batch-costs", controller.GetBIBatchCosts).Methods("GET")
 
+	// AWS Batch settings — persisted in MongoDB so they survive file/config resets
+	router.HandleFunc("/v1/bi/aws-batch-settings", controller.GetBIAwsBatchSettings).Methods("GET")
+	router.HandleFunc("/v1/bi/aws-batch-settings", controller.SaveBIAwsBatchSettings).Methods("POST")
+
+	// Cron store settings (enabled stores, schedules, platforms) — persisted in MongoDB
+	router.HandleFunc("/v1/bi/cron-store-settings", controller.GetBICronStoreSettings).Methods("GET")
+	router.HandleFunc("/v1/bi/cron-store-settings", controller.SaveBICronStoreSettings).Methods("POST")
+
 	// BI score batch-upsert endpoints (cron key only — replace direct pymongo writes)
 	router.HandleFunc("/v1/bi/report-scores/abc-xyz", controller.SaveAbcXyzScores).Methods("POST")
 	router.HandleFunc("/v1/bi/report-scores/velocity", controller.SaveVelocityScores).Methods("POST")
