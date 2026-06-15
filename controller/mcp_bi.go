@@ -1,0 +1,359 @@
+package controller
+
+// mcp_bi.go — MCP BI Analytics endpoints under /v1/mcp/bi/
+//
+//   GET /v1/mcp/bi/monthly-revenue      — bi_get_monthly_revenue
+//   GET /v1/mcp/bi/top-products         — bi_get_top_products
+//   GET /v1/mcp/bi/top-customers        — bi_get_top_customers
+//   GET /v1/mcp/bi/expense-summary      — bi_get_expense_summary
+//   GET /v1/mcp/bi/outstanding          — bi_get_outstanding
+//   GET /v1/mcp/bi/stock-alerts         — bi_get_stock_alerts
+//   GET /v1/mcp/bi/vendor-performance   — bi_get_vendor_performance
+//   GET /v1/mcp/bi/quotation-conversion — bi_get_quotation_conversion
+//   GET /v1/mcp/bi/sales-by-category    — bi_get_sales_by_category
+//   GET /v1/mcp/bi/product-abc-xyz      — bi_get_product_abc_xyz
+//   GET /v1/mcp/bi/customer-churn       — bi_get_customer_churn
+//   GET /v1/mcp/bi/customer-clv         — bi_get_customer_clv
+//   GET /v1/mcp/bi/cohort-retention     — bi_get_cohort_retention
+//   GET /v1/mcp/bi/product-sales-trends — bi_get_product_sales_trends
+//   GET /v1/mcp/bi/monthly-pl           — bi_get_monthly_pl
+//   GET /v1/mcp/bi/store-settings       — bi_get_store_settings
+
+import (
+	"net/http"
+	"strconv"
+)
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+func intParam(r *http.Request, key string, def int) int {
+	if v := r.URL.Query().Get(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return def
+}
+
+func strParam(r *http.Request, key, def string) string {
+	if v := r.URL.Query().Get(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// ── Endpoints ─────────────────────────────────────────────────────────────────
+
+// MCPBIMonthlyRevenue handles GET /v1/mcp/bi/monthly-revenue
+// Query params: store_id, months (default 12)
+func MCPBIMonthlyRevenue(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	months := intParam(r, "months", 12)
+	results, err := store.GetBIMonthlyRevenue(months)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"months":   months,
+		"result":   results,
+	})
+}
+
+// MCPBITopProducts handles GET /v1/mcp/bi/top-products
+// Query params: store_id, period (30d|90d|all), limit
+func MCPBITopProducts(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	period := strParam(r, "period", "30d")
+	limit := intParam(r, "limit", 20)
+	results, err := store.GetBITopProducts(period, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"period":   period,
+		"result":   results,
+	})
+}
+
+// MCPBITopCustomers handles GET /v1/mcp/bi/top-customers
+func MCPBITopCustomers(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	period := strParam(r, "period", "30d")
+	limit := intParam(r, "limit", 20)
+	results, err := store.GetBITopCustomers(period, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"period":   period,
+		"result":   results,
+	})
+}
+
+// MCPBIExpenseSummary handles GET /v1/mcp/bi/expense-summary
+func MCPBIExpenseSummary(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	months := intParam(r, "months", 6)
+	results, err := store.GetBIExpenseSummary(months)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"months":   months,
+		"result":   results,
+	})
+}
+
+// MCPBIOutstanding handles GET /v1/mcp/bi/outstanding
+// Query params: store_id, type (AR|AP), limit
+func MCPBIOutstanding(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	outType := strParam(r, "type", "AR")
+	limit := intParam(r, "limit", 500)
+	result, err := store.GetBIOutstanding(outType, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, result)
+}
+
+// MCPBIStockAlerts handles GET /v1/mcp/bi/stock-alerts
+// Query params: store_id, alert_type, limit
+func MCPBIStockAlerts(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	alertType := r.URL.Query().Get("alert_type")
+	limit := intParam(r, "limit", 50)
+	results, err := store.GetBIStockAlerts(alertType, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id":      store.ID.Hex(),
+		"total_alerts":  len(results),
+		"result":        results,
+	})
+}
+
+// MCPBIVendorPerformance handles GET /v1/mcp/bi/vendor-performance
+func MCPBIVendorPerformance(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	period := strParam(r, "period", "30d")
+	limit := intParam(r, "limit", 20)
+	results, err := store.GetBIVendorPerformance(period, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"period":   period,
+		"result":   results,
+	})
+}
+
+// MCPBIQuotationConversion handles GET /v1/mcp/bi/quotation-conversion
+func MCPBIQuotationConversion(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	months := intParam(r, "months", 6)
+	results, err := store.GetBIQuotationConversion(months)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"months":   months,
+		"result":   results,
+	})
+}
+
+// MCPBISalesByCategory handles GET /v1/mcp/bi/sales-by-category
+func MCPBISalesByCategory(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	period := strParam(r, "period", "30d")
+	results, err := store.GetBISalesByCategory(period)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"period":   period,
+		"result":   results,
+	})
+}
+
+// MCPBIProductAbcXyz handles GET /v1/mcp/bi/product-abc-xyz
+// Query params: store_id, abc_tier, xyz_tier, limit
+func MCPBIProductAbcXyz(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	abcTier := r.URL.Query().Get("abc_tier")
+	xyzTier := r.URL.Query().Get("xyz_tier")
+	limit := intParam(r, "limit", 100)
+	results, err := store.GetBIProductAbcXyz(abcTier, xyzTier, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"result":   results,
+	})
+}
+
+// MCPBICustomerChurn handles GET /v1/mcp/bi/customer-churn
+// Query params: store_id, tier (Critical|High|Medium|Low), limit
+func MCPBICustomerChurn(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	tier := r.URL.Query().Get("tier")
+	limit := intParam(r, "limit", 50)
+	results, err := store.GetBICustomerChurn(tier, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"result":   results,
+	})
+}
+
+// MCPBICustomerCLV handles GET /v1/mcp/bi/customer-clv
+// Query params: store_id, segment, limit
+func MCPBICustomerCLV(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	segment := r.URL.Query().Get("segment")
+	limit := intParam(r, "limit", 50)
+	results, err := store.GetBICustomerCLV(segment, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"result":   results,
+	})
+}
+
+// MCPBICohortRetention handles GET /v1/mcp/bi/cohort-retention
+func MCPBICohortRetention(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	results, err := store.GetBICohortRetention()
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"result":   results,
+	})
+}
+
+// MCPBIProductSalesTrends handles GET /v1/mcp/bi/product-sales-trends
+// Query params: store_id, trend, limit
+func MCPBIProductSalesTrends(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	trend := r.URL.Query().Get("trend")
+	limit := intParam(r, "limit", 50)
+	results, err := store.GetBIProductSalesTrends(trend, limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"result":   results,
+	})
+}
+
+// MCPBIMonthlyPL handles GET /v1/mcp/bi/monthly-pl
+// Query params: store_id, months (default 12)
+func MCPBIMonthlyPL(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	months := intParam(r, "months", 12)
+	results, err := store.GetMonthlyPL(months)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"months":   months,
+		"result":   results,
+	})
+}
+
+// MCPBIStoreSettings handles GET /v1/mcp/bi/store-settings
+// Returns store identity and key accounting flags.
+func MCPBIStoreSettings(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"id":                              store.ID.Hex(),
+		"name":                            store.Name,
+		"branch_name":                     store.BranchName,
+		"vat_no":                          store.VATNo,
+		"registration_number":             store.RegistrationNumber,
+		"address":                         store.Address,
+		"vat_percent":                     store.VatPercent,
+		"quotation_invoice_accounting":    store.Settings.QuotationInvoiceAccounting,
+		"disable_purchases_on_accounts":   store.Settings.DisablePurchasesOnAccounts,
+	})
+}
