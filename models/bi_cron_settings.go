@@ -12,13 +12,14 @@ import (
 // BICronStoreSettings persists the full Cron Jobs UI config per POS instance.
 // One document per base_url, stored in the global DB.
 type BICronStoreSettings struct {
-	BaseURL         string            `bson:"base_url" json:"base_url"`
-	EnabledStores   []string          `bson:"enabled_stores" json:"enabled_stores"`
-	ReportSchedules map[string]string `bson:"report_schedules" json:"report_schedules"`
-	ReportPlatforms map[string]string `bson:"report_platforms" json:"report_platforms"`
-	Paused          bool              `bson:"paused" json:"paused"`
-	LastRunAt       string            `bson:"last_run_at,omitempty" json:"last_run_at,omitempty"`
-	UpdatedAt       time.Time         `bson:"updated_at" json:"updated_at"`
+	BaseURL         string                       `bson:"base_url" json:"base_url"`
+	EnabledStores   []string                     `bson:"enabled_stores" json:"enabled_stores"`
+	ReportSchedules map[string]string            `bson:"report_schedules" json:"report_schedules"`
+	ReportPlatforms map[string]string            `bson:"report_platforms" json:"report_platforms"`
+	ReportParams    map[string]map[string]interface{} `bson:"report_params,omitempty" json:"report_params,omitempty"`
+	Paused          bool                         `bson:"paused" json:"paused"`
+	LastRunAt       string                       `bson:"last_run_at,omitempty" json:"last_run_at,omitempty"`
+	UpdatedAt       time.Time                    `bson:"updated_at" json:"updated_at"`
 }
 
 func GetBICronStoreSettings(baseURL string) (*BICronStoreSettings, error) {
@@ -52,6 +53,9 @@ func UpsertBICronStoreSettings(s *BICronStoreSettings) error {
 	}
 	if s.ReportPlatforms == nil {
 		s.ReportPlatforms = map[string]string{}
+	}
+	if s.ReportParams == nil {
+		s.ReportParams = map[string]map[string]interface{}{}
 	}
 
 	opts := options.Replace().SetUpsert(true)
