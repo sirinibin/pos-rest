@@ -66,8 +66,13 @@ func (store *Store) GetMonthlyPL(months int) ([]MonthlyPLRecord, error) {
 	qtnAccounting := store.Settings.QuotationInvoiceAccounting
 	dpaMode := store.Settings.DisablePurchasesOnAccounts
 
+	// Apply the same timezone offset used by the P&L Statement so that
+	// "January 2026" means Jan 1 00:00 → Feb 1 00:00 in the STORE'S local time,
+	// converted to UTC — exactly as CountryTimezoneOffset + ConvertTimeZoneToUTC
+	// does in the sales/expense/purchase controllers.
+	tzOffset := CountryTimezoneOffset(store.CountryCode)
+
 	now := time.Now().UTC()
-	// Start from the first day of the current month and go backwards
 	curYear, curMonth := now.Year(), int(now.Month())
 
 	records := make([]MonthlyPLRecord, 0, months)
@@ -80,8 +85,12 @@ func (store *Store) GetMonthlyPL(months int) ([]MonthlyPLRecord, error) {
 			y--
 		}
 
-		start := time.Date(y, time.Month(m), 1, 0, 0, 0, 0, time.UTC)
-		end := start.AddDate(0, 1, 0)
+		// Local midnight → UTC  (same logic as ConvertTimeZoneToUTC in the controller)
+		localStart := time.Date(y, time.Month(m), 1, 0, 0, 0, 0, time.UTC)
+		localEnd   := time.Date(y, time.Month(m)+1, 1, 0, 0, 0, 0, time.UTC)
+
+		start := ConvertTimeZoneToUTC(tzOffset, localStart)
+		end   := ConvertTimeZoneToUTC(tzOffset, localEnd)
 
 		base := map[string]interface{}{
 			"deleted": map[string]interface{}{"$ne": true},
@@ -96,6 +105,7 @@ func (store *Store) GetMonthlyPL(months int) ([]MonthlyPLRecord, error) {
 
 		// ── Expenses ──────────────────────────────────────────────────────────
 		expStats, _ := store.GetExpenseStats(base)
+		depStats, _ := store.GetCustomerDepositStats(base)
 
 		// ── Purchases ─────────────────────────────────────────────────────────
 		purStats, _ := store.GetPurchaseStats(base)
@@ -144,7 +154,7 @@ func (store *Store) GetMonthlyPL(months int) ([]MonthlyPLRecord, error) {
 		// ── Expense formula (exact match to frontend P&L Statement) ───────────
 		var expense float64
 		if dpaMode {
-			expense = expStats.Total - expStats.PurchaseFund +
+			expense = expStats.Total - depStats.PurchaseFund +
 				acctPurStats.NetTotal - acctPurRetStats.NetTotal
 		} else {
 			expense = expStats.Total + purStats.NetTotal - purRetStats.NetTotal
@@ -167,7 +177,7 @@ func (store *Store) GetMonthlyPL(months int) ([]MonthlyPLRecord, error) {
 			Revenue:         RoundTo2Decimals(revenue),
 
 			TotalExpense:                        RoundTo2Decimals(expStats.Total),
-			DepositPurchaseFund:                 RoundTo2Decimals(expStats.PurchaseFund),
+			DepositPurchaseFund:                 RoundTo2Decimals(depStats.PurchaseFund),
 			TotalPurchase:                       RoundTo2Decimals(purStats.NetTotal),
 			TotalPurchaseReturn:                 RoundTo2Decimals(purRetStats.NetTotal),
 			AccountedPurchase:                   RoundTo2Decimals(acctPurStats.NetTotal),
