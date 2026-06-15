@@ -115,13 +115,86 @@ func main() {
 
 	router := mux.NewRouter()
 
+	// ── MCP-optimised API layer (/v1/mcp/) ────────────────────────────────────
+	// Auth
+	router.HandleFunc("/v1/mcp/login", controller.MCPLogin).Methods("POST")
+	router.HandleFunc("/v1/mcp/stores", controller.MCPListStores).Methods("GET")
+	router.HandleFunc("/v1/mcp/me", controller.MCPMe).Methods("GET")
+	// Sales
+	router.HandleFunc("/v1/mcp/sales/summary", controller.MCPSalesSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/orders", controller.MCPListOrders).Methods("GET")
+	router.HandleFunc("/v1/mcp/order/{id}", controller.MCPGetOrder).Methods("GET")
+	router.HandleFunc("/v1/mcp/sales/history/summary", controller.MCPSalesHistorySummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/sales/history", controller.MCPListSalesHistory).Methods("GET")
+	router.HandleFunc("/v1/mcp/sales-return/summary", controller.MCPSalesReturnSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/sales-returns", controller.MCPListSalesReturns).Methods("GET")
+	router.HandleFunc("/v1/mcp/sales-return/history", controller.MCPListSalesReturnHistory).Methods("GET")
+	// Purchases
+	router.HandleFunc("/v1/mcp/purchases/summary", controller.MCPPurchaseSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/purchases", controller.MCPListPurchases).Methods("GET")
+	router.HandleFunc("/v1/mcp/purchase/{id}", controller.MCPGetPurchase).Methods("GET")
+	router.HandleFunc("/v1/mcp/purchases/history/summary", controller.MCPPurchaseHistorySummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/purchases/history", controller.MCPListPurchaseHistory).Methods("GET")
+	router.HandleFunc("/v1/mcp/purchase-returns/summary", controller.MCPPurchaseReturnSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/purchase-returns", controller.MCPListPurchaseReturns).Methods("GET")
+	// Customers
+	router.HandleFunc("/v1/mcp/customers/summary", controller.MCPCustomerSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/customers/new", controller.MCPGetNewCustomers).Methods("GET")
+	router.HandleFunc("/v1/mcp/customers", controller.MCPListCustomers).Methods("GET")
+	router.HandleFunc("/v1/mcp/customer/{id}", controller.MCPGetCustomer).Methods("GET")
+	// Vendors
+	router.HandleFunc("/v1/mcp/vendors/summary", controller.MCPVendorSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/vendors", controller.MCPListVendors).Methods("GET")
+	router.HandleFunc("/v1/mcp/vendor/{id}", controller.MCPGetVendor).Methods("GET")
+	// Products
+	router.HandleFunc("/v1/mcp/products/summary", controller.MCPProductSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/products", controller.MCPListProducts).Methods("GET")
+	router.HandleFunc("/v1/mcp/product/{id}", controller.MCPGetProduct).Methods("GET")
+	router.HandleFunc("/v1/mcp/product-categories", controller.MCPListProductCategories).Methods("GET")
+	router.HandleFunc("/v1/mcp/product-brands", controller.MCPListProductBrands).Methods("GET")
+	// Expenses
+	router.HandleFunc("/v1/mcp/expenses/summary", controller.MCPExpenseSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/expenses", controller.MCPListExpenses).Methods("GET")
+	router.HandleFunc("/v1/mcp/expense/{id}", controller.MCPGetExpense).Methods("GET")
+	router.HandleFunc("/v1/mcp/expense-categories", controller.MCPListExpenseCategories).Methods("GET")
+	// Finance
+	router.HandleFunc("/v1/mcp/customer-deposits", controller.MCPListCustomerDeposits).Methods("GET")
+	router.HandleFunc("/v1/mcp/customer-withdrawals", controller.MCPListCustomerWithdrawals).Methods("GET")
+	router.HandleFunc("/v1/mcp/capitals", controller.MCPListCapitals).Methods("GET")
+	router.HandleFunc("/v1/mcp/ledger", controller.MCPListLedger).Methods("GET")
+	router.HandleFunc("/v1/mcp/accounts", controller.MCPListAccounts).Methods("GET")
+	// Inventory & Quotations
+	router.HandleFunc("/v1/mcp/warehouses", controller.MCPListWarehouses).Methods("GET")
+	router.HandleFunc("/v1/mcp/stock-transfers", controller.MCPListStockTransfers).Methods("GET")
+	router.HandleFunc("/v1/mcp/delivery-notes", controller.MCPListDeliveryNotes).Methods("GET")
+	router.HandleFunc("/v1/mcp/quotations/summary", controller.MCPQuotationSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/quotations", controller.MCPListQuotations).Methods("GET")
+	router.HandleFunc("/v1/mcp/quotation/{id}", controller.MCPGetQuotation).Methods("GET")
+	// Profit & Loss
+	router.HandleFunc("/v1/mcp/profit-loss", controller.MCPProfitLossStatement).Methods("GET")
+	// BI Analytics
+	router.HandleFunc("/v1/mcp/bi/monthly-revenue", controller.MCPBIMonthlyRevenue).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/top-products", controller.MCPBITopProducts).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/top-customers", controller.MCPBITopCustomers).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/expense-summary", controller.MCPBIExpenseSummary).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/outstanding", controller.MCPBIOutstanding).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/stock-alerts", controller.MCPBIStockAlerts).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/vendor-performance", controller.MCPBIVendorPerformance).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/quotation-conversion", controller.MCPBIQuotationConversion).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/sales-by-category", controller.MCPBISalesByCategory).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/product-abc-xyz", controller.MCPBIProductAbcXyz).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/customer-churn", controller.MCPBICustomerChurn).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/customer-clv", controller.MCPBICustomerCLV).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/cohort-retention", controller.MCPBICohortRetention).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/product-sales-trends", controller.MCPBIProductSalesTrends).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/monthly-pl", controller.MCPBIMonthlyPL).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/store-settings", controller.MCPBIStoreSettings).Methods("GET")
+	// ── end MCP API ────────────────────────────────────────────────────────────
+
 	//API Info
 	router.HandleFunc("/v1/info", controller.APIInfo).Methods("GET")
 
 	// Health check — Redis + MongoDB connection status (no auth required)
-	router.HandleFunc("/v1/health", controller.HealthCheck).Methods("GET")
-
-	// Health check — Redis + MongoDB connectivity, no auth required
 	router.HandleFunc("/v1/health", controller.HealthCheck).Methods("GET")
 
 	//OpenAPI Spec
