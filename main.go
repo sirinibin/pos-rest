@@ -610,11 +610,11 @@ func main() {
 	// months from a previous crash, then clear old data and backfill from scratch.
 	models.StartDashboardDirtyWorker()
 	go models.DrainPersistedDirtyDates()
-	go models.ClearDashboardMonthlyForAllStores() // clears old monthly dashboard data
+	/*go models.ClearDashboardMonthlyForAllStores() // clears old monthly dashboard data
 	go func() {
 		time.Sleep(1 * time.Second)            // wait for clear to finish
 		models.BackfillDashboardForAllStores() // fills all available history per store
-	}()
+	}()*/
 
 	// One-time historical BI backfill — run at startup when BI_RUN_BACKFILL=true
 	//go models.RunBIIncrementalUpdateForAllStores()
