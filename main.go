@@ -191,6 +191,7 @@ func main() {
 	router.HandleFunc("/v1/product/{id}/bi-history", controller.GetProductBiHistory).Methods("GET")
 
 	//BI Analytics
+	router.HandleFunc("/v1/bi/monthly-pl", controller.BIMonthlyPL).Methods("GET")
 	router.HandleFunc("/v1/bi/monthly-revenue", controller.GetBIMonthlyRevenue).Methods("GET")
 	router.HandleFunc("/v1/bi/top-products", controller.GetBITopProducts).Methods("GET")
 	router.HandleFunc("/v1/bi/top-customers", controller.GetBITopCustomers).Methods("GET")
