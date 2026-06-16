@@ -683,10 +683,12 @@ func (store *Store) UpdateQuotationProfit() error {
 }
 
 type QuotationStats struct {
-	//ID        *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal  float64             `json:"net_total" bson:"net_total"`
-	NetProfit float64             `json:"net_profit" bson:"net_profit"`
-	Loss      float64             `json:"loss" bson:"loss"`
+	//ID            *primitive.ObjectID `json:"id" bson:"_id"`
+	NetTotal       float64 `json:"net_total" bson:"net_total"`
+	NetProfit      float64 `json:"net_profit" bson:"net_profit"`
+	Loss           float64 `json:"loss" bson:"loss"`
+	InvoicedCount  int64   `json:"invoiced_count" bson:"invoiced_count"`
+	InvoicedAmount float64 `json:"invoiced_amount" bson:"invoiced_amount"`
 }
 
 type QuotationInvoiceStats struct {
@@ -868,6 +870,26 @@ func (store *Store) GetQuotationStats(filter map[string]interface{}) (stats Quot
 				"net_total":  bson.M{"$sum": "$net_total"},
 				"net_profit": bson.M{"$sum": "$net_profit"},
 				"loss":       bson.M{"$sum": "$loss"},
+				"invoiced_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{"$and": []interface{}{
+							bson.M{"$ifNull": []interface{}{"$order_id", false}},
+							bson.M{"$ne": []interface{}{"$order_id", primitive.NilObjectID}},
+						}},
+						"then": 1,
+						"else": 0,
+					},
+				}},
+				"invoiced_amount": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{"$and": []interface{}{
+							bson.M{"$ifNull": []interface{}{"$order_id", false}},
+							bson.M{"$ne": []interface{}{"$order_id", primitive.NilObjectID}},
+						}},
+						"then": "$net_total",
+						"else": 0,
+					},
+				}},
 			},
 		},
 	}
@@ -886,6 +908,7 @@ func (store *Store) GetQuotationStats(filter map[string]interface{}) (stats Quot
 		stats.NetTotal = RoundFloat(stats.NetTotal, 2)
 		stats.NetProfit = RoundFloat(stats.NetProfit, 2)
 		stats.Loss = RoundFloat(stats.Loss, 2)
+		stats.InvoicedAmount = RoundFloat(stats.InvoicedAmount, 2)
 
 		return stats, nil
 	}
@@ -1556,6 +1579,25 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 	keys, ok = r.URL.Query()["search[order_code]"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.SearchBy["order_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[invoiced]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return quotations, criterias, err
+		}
+		if value == 1 {
+			criterias.SearchBy["order_id"] = bson.M{
+				"$exists": true,
+				"$ne":     nil,
+				"$nin":    []interface{}{primitive.NilObjectID},
+			}
+		} else if value == 0 {
+			criterias.SearchBy["order_id"] = bson.M{
+				"$in": []interface{}{nil, primitive.NilObjectID},
+			}
+		}
 	}
 
 	keys, ok = r.URL.Query()["search[reported_to_zatca]"]

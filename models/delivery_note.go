@@ -414,6 +414,25 @@ func (store *Store) SearchDeliveryNote(w http.ResponseWriter, r *http.Request) (
 		criterias.SearchBy["order_code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
 	}
 
+	keys, ok = r.URL.Query()["search[invoiced]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return deliverynotes, criterias, err
+		}
+		if value == 1 {
+			criterias.SearchBy["order_id"] = bson.M{
+				"$exists": true,
+				"$ne":     nil,
+				"$nin":    []interface{}{primitive.NilObjectID},
+			}
+		} else if value == 0 {
+			criterias.SearchBy["order_id"] = bson.M{
+				"$in": []interface{}{nil, primitive.NilObjectID},
+			}
+		}
+	}
+
 	keys, ok = r.URL.Query()["limit"]
 	if ok && len(keys[0]) >= 1 {
 		criterias.Size, _ = strconv.Atoi(keys[0])
@@ -1361,6 +1380,7 @@ type DeliveryNoteStats struct {
 	VatPrice               float64 `json:"vat_price" bson:"vat_price"`
 	Discount               float64 `json:"discount" bson:"discount"`
 	ShippingOrHandlingFees float64 `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	InvoicedCount          int64   `json:"invoiced_count" bson:"invoiced_count"`
 }
 
 func (store *Store) GetDeliveryNoteStats(filter map[string]interface{}) (stats DeliveryNoteStats, err error) {
@@ -1379,6 +1399,16 @@ func (store *Store) GetDeliveryNoteStats(filter map[string]interface{}) (stats D
 				"vat_price":              bson.M{"$sum": "$vat_price"},
 				"discount":               bson.M{"$sum": "$discount"},
 				"shipping_handling_fees": bson.M{"$sum": "$shipping_handling_fees"},
+				"invoiced_count": bson.M{"$sum": bson.M{
+					"$cond": bson.M{
+						"if": bson.M{"$and": []interface{}{
+							bson.M{"$ifNull": []interface{}{"$order_id", false}},
+							bson.M{"$ne": []interface{}{"$order_id", primitive.NilObjectID}},
+						}},
+						"then": 1,
+						"else": 0,
+					},
+				}},
 			},
 		},
 	}

@@ -81,6 +81,8 @@ func ListQuotation(w http.ResponseWriter, r *http.Request) {
 	response.Meta["total_quotation"] = quotationStats.NetTotal
 	response.Meta["profit"] = quotationStats.NetProfit
 	response.Meta["loss"] = quotationStats.Loss
+	response.Meta["invoiced_count"] = quotationStats.InvoicedCount
+	response.Meta["invoiced_amount"] = quotationStats.InvoicedAmount
 	//invoice
 
 	response.Meta["invoice_total_sales"] = quotationInvoiceStats.InvoiceNetTotal

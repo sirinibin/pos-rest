@@ -71,6 +71,7 @@ func ListDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		"vat_price":              dnStats.VatPrice,
 		"discount":               dnStats.Discount,
 		"shipping_handling_fees": dnStats.ShippingOrHandlingFees,
+		"invoiced_count":         dnStats.InvoicedCount,
 	}
 
 	if len(deliverynotes) == 0 {
