@@ -139,6 +139,10 @@ type StoreSettings struct {
 	StatsShowProfitLossStatement                *bool           `bson:"stats_show_profit_loss_statement" json:"stats_show_profit_loss_statement"`
 	EnableNotification                          bool            `bson:"enable_notification" json:"enable_notification"`
 	EnableSalesPageSelection                    bool            `bson:"enable_sales_page_selection" json:"enable_sales_page_selection"`
+	EvolutionAPIURL                             string          `bson:"evolution_api_url" json:"evolution_api_url,omitempty"`
+	EvolutionAPIKey                             string          `bson:"evolution_api_key" json:"evolution_api_key,omitempty"`
+	EvolutionInstanceName                       string          `bson:"evolution_instance_name" json:"evolution_instance_name,omitempty"`
+	UseWhatsAppAPI                              bool            `bson:"use_whatsapp_api" json:"use_whatsapp_api"`
 }
 
 type InvoiceSettings struct {
@@ -698,8 +702,6 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if govalidator.IsNull(store.Phone) {
 		errs["phone"] = "Phone is required"
-	} else if !ValidateSaudiPhone(store.Phone) {
-		errs["phone"] = "Invalid phone no."
 	}
 
 	if govalidator.IsNull(store.PhoneInArabic) {

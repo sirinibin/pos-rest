@@ -565,6 +565,16 @@ func main() {
 	router.HandleFunc("/v1/socket", controller.WebSocketHandler).Methods("GET")
 	router.HandleFunc("/v1/upload-pdf", controller.SavePdf).Methods("POST")
 	router.HandleFunc("/v1/share-pdf", controller.SharePdf).Methods("POST")
+	router.HandleFunc("/v1/whatsapp/send-document", controller.SendWhatsAppDocument).Methods("POST")
+	router.HandleFunc("/v1/whatsapp/connect", controller.ConnectWhatsApp).Methods("POST")
+	router.HandleFunc("/v1/whatsapp/qr", controller.GetWhatsAppQR).Methods("GET")
+	router.HandleFunc("/v1/whatsapp/status", controller.GetWhatsAppStatus).Methods("GET")
+	router.HandleFunc("/v1/whatsapp/disconnect", controller.DisconnectWhatsApp).Methods("DELETE")
+	router.HandleFunc("/v1/whatsapp/check-numbers", controller.CheckWhatsAppNumbers).Methods("POST")
+	router.HandleFunc("/v1/whatsapp/contacts", controller.GetWhatsAppContacts).Methods("GET")
+	router.HandleFunc("/v1/whatsapp/contacts-count", controller.GetWhatsAppContactsCount).Methods("GET")
+	router.HandleFunc("/v1/whatsapp/sync-contacts", controller.SyncWhatsAppContacts).Methods("POST")
+	router.HandleFunc("/v1/whatsapp/contacts", controller.ClearWhatsAppContacts).Methods("DELETE")
 	router.HandleFunc("/v1/chart-image-share", controller.ShareChartImage).Methods("POST")
 
 	// Dashboard analytics (precomputed monthly aggregation)
@@ -677,7 +687,13 @@ func main() {
 			log.Print("NotifyDeliveryNoteReminders error:", err)
 		}
 	})
+	s.Every(1).Hour().Do(func() {
+		go models.SyncWhatsAppContactsForAllStores()
+	})
 	s.StartAsync()
+
+	// Sync WhatsApp contacts at startup so they're immediately available
+	go models.SyncWhatsAppContactsForAllStores()
 
 	// Dashboard analytics: start the dirty-month worker, drain any persisted dirty
 	// months from a previous crash, then clear old data and backfill from scratch.

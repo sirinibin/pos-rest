@@ -1603,10 +1603,6 @@ func (purchase *Purchase) Validate(
 		purchase.Date = &date
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(purchase.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(purchase.Phone)) {
-		errs["phone"] = "Invalid phone no."
-		return
-	}
 
 	if !govalidator.IsNull(strings.TrimSpace(purchase.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(purchase.VatNo), "15") {
 		errs["vat_no"] = "VAT No. should be 15 digits"
