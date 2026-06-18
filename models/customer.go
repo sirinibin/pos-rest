@@ -1080,7 +1080,7 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return customers, criterias, err
 		}
@@ -1097,7 +1097,7 @@ func (store *Store) SearchCustomer(w http.ResponseWriter, r *http.Request) (cust
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return customers, criterias, err
 		}
@@ -3054,7 +3054,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return criterias, err
 		}
@@ -3071,7 +3071,7 @@ func (store *Store) BuildCustomerCriterias(w http.ResponseWriter, r *http.Reques
 		operator := GetMongoLogicalOperator(keys[0])
 		keys[0] = TrimLogicalOperatorPrefix(keys[0])
 
-		value, err := strconv.ParseInt(keys[0], 10, 64)
+		value, err := strconv.ParseFloat(keys[0], 64)
 		if err != nil {
 			return criterias, err
 		}

@@ -178,6 +178,11 @@ func MCPBIStockAlerts(w http.ResponseWriter, r *http.Request) {
 		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Cache miss: populate on demand then re-query.
+	if len(results) == 0 {
+		_ = models.UpsertBIStockAlerts(store.ID)
+		results, _ = store.GetBIStockAlerts(alertType, limit)
+	}
 	mcpWriteJSON(w, map[string]interface{}{
 		"store_id":      store.ID.Hex(),
 		"total_alerts":  len(results),
@@ -221,6 +226,11 @@ func MCPBIQuotationConversion(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// Cache miss: populate on demand then re-query.
+	if len(results) == 0 {
+		models.RunBIQuotationConversionUpdate(store.ID, months)
+		results, _ = store.GetBIQuotationConversion(months)
 	}
 	mcpWriteJSON(w, map[string]interface{}{
 		"store_id": store.ID.Hex(),
