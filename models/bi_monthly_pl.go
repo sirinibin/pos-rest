@@ -39,6 +39,10 @@ type MonthlyPLRecord struct {
 	QtnSalesReturnCashDiscount          float64 `json:"qtn_sales_return_cash_discount"`
 	Expense                             float64 `json:"expense"` // final P&L expense
 
+	// ── VAT breakdown (mirrors P&L Statement Revenue tooltip) ─────────────────
+	VATInRevenue      float64 `json:"vat_in_revenue"`       // net VAT = sales_vat − returns_vat
+	RevenueWithoutVAT float64 `json:"revenue_without_vat"`  // Revenue − VATInRevenue
+
 	// ── Net ───────────────────────────────────────────────────────────────────
 	ProfitLoss float64 `json:"profit_loss"`
 	IsProfit   bool    `json:"is_profit"`
@@ -163,6 +167,14 @@ func (store *Store) GetMonthlyPL(months int) ([]MonthlyPLRecord, error) {
 
 		profitLoss := revenue - expense
 
+		// VAT breakdown: mirrors frontend "Revenue" tooltip
+		// net VAT in revenue = sales VAT − returns VAT ± qtn adjustments
+		vatInRevenue := salesStats.VatPrice - sretStats.VatPrice
+		if qtnAccounting {
+			vatInRevenue += qtnInvoiceStats.InvoiceVatPrice - qtnSalesRetStats.VatPrice
+		}
+		revenueWithoutVAT := revenue - vatInRevenue
+
 		period := fmt.Sprintf("%04d-%02d", y, m)
 		records = append(records, MonthlyPLRecord{
 			Period:    period,
@@ -174,7 +186,9 @@ func (store *Store) GetMonthlyPL(months int) ([]MonthlyPLRecord, error) {
 			SalesReturns:    RoundTo2Decimals(sretStats.NetTotal),
 			QtnSales:        RoundTo2Decimals(qtnInvoiceStats.InvoiceNetTotal),
 			QtnSalesReturns: RoundTo2Decimals(qtnSalesRetStats.NetTotal),
-			Revenue:         RoundTo2Decimals(revenue),
+			Revenue:           RoundTo2Decimals(revenue),
+			VATInRevenue:      RoundTo2Decimals(vatInRevenue),
+			RevenueWithoutVAT: RoundTo2Decimals(revenueWithoutVAT),
 
 			TotalExpense:                        RoundTo2Decimals(expStats.Total),
 			DepositPurchaseFund:                 RoundTo2Decimals(depStats.PurchaseFund),
