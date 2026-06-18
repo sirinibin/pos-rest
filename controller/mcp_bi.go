@@ -22,6 +22,9 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"time"
+
+	"github.com/sirinibin/startpos/backend/models"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -335,6 +338,169 @@ func MCPBIMonthlyPL(w http.ResponseWriter, r *http.Request) {
 		"store_id": store.ID.Hex(),
 		"months":   months,
 		"result":   results,
+	})
+}
+
+// MCPDailyRevenue handles GET /v1/mcp/bi/daily-revenue
+// Returns day-by-day sales totals for a date range.
+// Query params: store_id, date_str | from_date + to_date
+func MCPDailyRevenue(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+
+	tzOffset := models.CountryTimezoneOffset(store.CountryCode)
+
+	// Build UTC start/end from the date params using the same helper as P&L Statement.
+	adapted := mcpBuildRequest(r)
+	criterias, err := store.BuildSalesCriterias(w, adapted)
+	if err != nil {
+		mcpWriteError(w, "filter error: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	filter := criterias.SearchBy
+
+	// Extract start/end from the filter map; fall back to last 7 days.
+	var start, end time.Time
+	if v, ok := filter["date"].(map[string]interface{}); ok {
+		if s, ok := v["$gte"].(time.Time); ok {
+			start = s
+		}
+		if e, ok := v["$lt"].(time.Time); ok {
+			end = e
+		}
+	}
+	if start.IsZero() {
+		// Default: current month so far
+		now := time.Now().UTC()
+		localNow := now.Add(time.Duration(-tzOffset * float64(time.Hour)))
+		start = models.ConvertTimeZoneToUTC(tzOffset,
+			time.Date(localNow.Year(), localNow.Month(), 1, 0, 0, 0, 0, time.UTC))
+		end = now
+	}
+
+	results, err := store.GetDailyRevenue(start, end, tzOffset)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Compute summary totals
+	var totalOrders int64
+	var totalGross, totalNet float64
+	for _, r := range results {
+		totalOrders += r.OrderCount
+		totalGross += r.GrossSales
+		totalNet += r.NetSales
+	}
+
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id":      store.ID.Hex(),
+		"days":          len(results),
+		"total_orders":  totalOrders,
+		"total_gross":   models.RoundTo2Decimals(totalGross),
+		"total_net":     models.RoundTo2Decimals(totalNet),
+		"result":        results,
+	})
+}
+
+// MCPProductReturnRate handles GET /v1/mcp/bi/product-return-rate
+// Returns products ranked by return rate (returned units / sold units).
+// Query params: store_id, limit (default 50)
+func MCPProductReturnRate(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	limit := intParam(r, "limit", 50)
+	results, err := store.GetProductReturnRates(limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"total":    len(results),
+		"result":   results,
+	})
+}
+
+// MCPCustomersOverCredit handles GET /v1/mcp/bi/customers-over-credit
+// Returns customers whose outstanding balance exceeds their credit limit.
+// Query params: store_id, limit (default 100)
+func MCPCustomersOverCredit(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	limit := intParam(r, "limit", 100)
+	results, err := store.GetCustomersOverCreditLimit(limit)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id": store.ID.Hex(),
+		"total":    len(results),
+		"result":   results,
+	})
+}
+
+// MCPHourlySales handles GET /v1/mcp/bi/hourly-sales
+// Returns order count and gross sales grouped by hour of day (0-23).
+// Query params: store_id, date_str | from_date + to_date
+func MCPHourlySales(w http.ResponseWriter, r *http.Request) {
+	store, ok := mcpAuthAndStore(w, r)
+	if !ok {
+		return
+	}
+	tzOffset := models.CountryTimezoneOffset(store.CountryCode)
+
+	adapted := mcpBuildRequest(r)
+	criterias, err := store.BuildSalesCriterias(w, adapted)
+	if err != nil {
+		mcpWriteError(w, "filter error: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	filter := criterias.SearchBy
+
+	var start, end time.Time
+	if v, ok := filter["date"].(map[string]interface{}); ok {
+		if s, ok := v["$gte"].(time.Time); ok {
+			start = s
+		}
+		if e, ok := v["$lt"].(time.Time); ok {
+			end = e
+		}
+	}
+	if start.IsZero() {
+		now := time.Now().UTC()
+		localNow := now.Add(time.Duration(-tzOffset * float64(time.Hour)))
+		start = models.ConvertTimeZoneToUTC(tzOffset,
+			time.Date(localNow.Year(), localNow.Month(), 1, 0, 0, 0, 0, time.UTC))
+		end = now
+	}
+
+	results, err := store.GetHourlySales(start, end, tzOffset)
+	if err != nil {
+		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Find peak hour
+	peakHour := results[0]
+	for _, h := range results {
+		if h.GrossSales > peakHour.GrossSales {
+			peakHour = h
+		}
+	}
+
+	mcpWriteJSON(w, map[string]interface{}{
+		"store_id":   store.ID.Hex(),
+		"peak_hour":  peakHour.HourLabel,
+		"peak_sales": peakHour.GrossSales,
+		"result":     results,
 	})
 }
 

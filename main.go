@@ -188,6 +188,10 @@ func main() {
 	router.HandleFunc("/v1/mcp/bi/cohort-retention", controller.MCPBICohortRetention).Methods("GET")
 	router.HandleFunc("/v1/mcp/bi/product-sales-trends", controller.MCPBIProductSalesTrends).Methods("GET")
 	router.HandleFunc("/v1/mcp/bi/monthly-pl", controller.MCPBIMonthlyPL).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/daily-revenue", controller.MCPDailyRevenue).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/hourly-sales", controller.MCPHourlySales).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/product-return-rate", controller.MCPProductReturnRate).Methods("GET")
+	router.HandleFunc("/v1/mcp/bi/customers-over-credit", controller.MCPCustomersOverCredit).Methods("GET")
 	router.HandleFunc("/v1/mcp/bi/store-settings", controller.MCPBIStoreSettings).Methods("GET")
 	// ── end MCP API ────────────────────────────────────────────────────────────
 
