@@ -106,6 +106,11 @@ func MCPBITopCustomers(w http.ResponseWriter, r *http.Request) {
 		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Cache miss: populate on demand then re-query.
+	if len(results) == 0 {
+		_ = models.UpsertBITopCustomers(store.ID, period)
+		results, _ = store.GetBITopCustomers(period, limit)
+	}
 	mcpWriteJSON(w, map[string]interface{}{
 		"store_id": store.ID.Hex(),
 		"period":   period,
@@ -146,6 +151,11 @@ func MCPBIOutstanding(w http.ResponseWriter, r *http.Request) {
 		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Cache miss: populate on demand then re-query.
+	if len(result.Items) == 0 {
+		_ = models.UpsertBIOutstanding(store.ID)
+		result, _ = store.GetBIOutstanding(outType, limit)
+	}
 	mcpWriteJSON(w, result)
 }
 
@@ -182,6 +192,11 @@ func MCPBIVendorPerformance(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// Cache miss: populate on demand then re-query.
+	if len(results) == 0 {
+		_ = models.UpsertBIVendorPerformance(store.ID, period)
+		results, _ = store.GetBIVendorPerformance(period, limit)
 	}
 	mcpWriteJSON(w, map[string]interface{}{
 		"store_id": store.ID.Hex(),
