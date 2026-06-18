@@ -81,6 +81,11 @@ func MCPBITopProducts(w http.ResponseWriter, r *http.Request) {
 		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Cache miss: populate on demand then re-query.
+	if len(results) == 0 {
+		_ = models.UpsertBITopProducts(store.ID, period)
+		results, _ = store.GetBITopProducts(period, limit)
+	}
 	mcpWriteJSON(w, map[string]interface{}{
 		"store_id": store.ID.Hex(),
 		"period":   period,
