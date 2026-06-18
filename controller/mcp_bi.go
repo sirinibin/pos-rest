@@ -130,6 +130,11 @@ func MCPBIExpenseSummary(w http.ResponseWriter, r *http.Request) {
 		mcpWriteError(w, "query error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Cache miss: populate on demand then re-query.
+	if len(results) == 0 {
+		models.RunBIExpenseSummaryUpdate(store.ID, months)
+		results, _ = store.GetBIExpenseSummary(months)
+	}
 	mcpWriteJSON(w, map[string]interface{}{
 		"store_id": store.ID.Hex(),
 		"months":   months,
