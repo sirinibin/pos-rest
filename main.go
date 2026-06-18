@@ -620,6 +620,11 @@ func main() {
 	router.HandleFunc("/v1/bi/cron-store-settings", controller.GetBICronStoreSettings).Methods("GET")
 	router.HandleFunc("/v1/bi/cron-store-settings", controller.SaveBICronStoreSettings).Methods("POST")
 
+	// User-defined custom BI questions
+	router.HandleFunc("/v1/bi/custom-questions", controller.ListBICustomQuestions).Methods("GET")
+	router.HandleFunc("/v1/bi/custom-questions", controller.CreateBICustomQuestion).Methods("POST")
+	router.HandleFunc("/v1/bi/custom-questions/{id}", controller.DeleteBICustomQuestion).Methods("DELETE")
+
 	// BI score batch-upsert endpoints (cron key only — replace direct pymongo writes)
 	router.HandleFunc("/v1/bi/report-scores/abc-xyz", controller.SaveAbcXyzScores).Methods("POST")
 	router.HandleFunc("/v1/bi/report-scores/velocity", controller.SaveVelocityScores).Methods("POST")
