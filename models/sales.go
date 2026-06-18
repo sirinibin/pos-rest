@@ -1674,6 +1674,78 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 	return orders, criterias, nil
 }
 
+// resolveDateKeyword converts natural-language date keywords (e.g. "this week",
+// "last month") into UTC start/end boundaries using the store's timezone offset.
+// Returns (start, end, true) when the keyword is recognised; (zero, zero, false)
+// for plain date strings that should be parsed normally.
+func resolveDateKeyword(keyword string, tzOffset float64) (start, end time.Time, ok bool) {
+	utcNow := time.Now().UTC()
+	// Shift UTC to store-local time (tzOffset is negative for UTC+ zones, e.g. SA=-3)
+	localNow := utcNow.Add(time.Duration(float64(-1) * tzOffset * float64(time.Hour)))
+	today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.UTC)
+
+	// Convert a local naive midnight to UTC
+	toUTC := func(t time.Time) time.Time {
+		return ConvertTimeZoneToUTC(tzOffset, t)
+	}
+	startOfDay := func(t time.Time) time.Time { return toUTC(t) }
+	endOfDay := func(t time.Time) time.Time {
+		return toUTC(t).Add(time.Hour*24 - time.Second)
+	}
+
+	k := strings.ToLower(strings.TrimSpace(keyword))
+	switch k {
+	case "today", "now":
+		return startOfDay(today), endOfDay(today), true
+	case "yesterday":
+		yesterday := today.AddDate(0, 0, -1)
+		return startOfDay(yesterday), endOfDay(yesterday), true
+	case "this week", "current week":
+		wd := int(today.Weekday())
+		if wd == 0 {
+			wd = 7 // Sunday → 7 (ISO weekday)
+		}
+		monday := today.AddDate(0, 0, -(wd - 1))
+		return startOfDay(monday), endOfDay(today), true
+	case "last week", "previous week":
+		wd := int(today.Weekday())
+		if wd == 0 {
+			wd = 7
+		}
+		monday := today.AddDate(0, 0, -(wd-1)-7)
+		sunday := monday.AddDate(0, 0, 6)
+		return startOfDay(monday), endOfDay(sunday), true
+	case "this month", "current month":
+		firstDay := time.Date(localNow.Year(), localNow.Month(), 1, 0, 0, 0, 0, time.UTC)
+		return startOfDay(firstDay), endOfDay(today), true
+	case "last month", "previous month":
+		firstThisMonth := time.Date(localNow.Year(), localNow.Month(), 1, 0, 0, 0, 0, time.UTC)
+		lastDayPrev := firstThisMonth.AddDate(0, 0, -1)
+		firstDayPrev := time.Date(lastDayPrev.Year(), lastDayPrev.Month(), 1, 0, 0, 0, 0, time.UTC)
+		return startOfDay(firstDayPrev), endOfDay(lastDayPrev), true
+	case "this year", "current year":
+		firstDay := time.Date(localNow.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+		return startOfDay(firstDay), endOfDay(today), true
+	case "last year", "previous year":
+		firstDay := time.Date(localNow.Year()-1, 1, 1, 0, 0, 0, 0, time.UTC)
+		lastDay := time.Date(localNow.Year()-1, 12, 31, 0, 0, 0, 0, time.UTC)
+		return startOfDay(firstDay), endOfDay(lastDay), true
+	}
+
+	// "last N days" / "past N days"
+	for _, prefix := range []string{"last ", "past "} {
+		if strings.HasPrefix(k, prefix) && strings.HasSuffix(k, " days") {
+			mid := strings.TrimSuffix(strings.TrimPrefix(k, prefix), " days")
+			if n, err2 := strconv.Atoi(strings.TrimSpace(mid)); err2 == nil && n > 0 {
+				s := today.AddDate(0, 0, -(n - 1))
+				return startOfDay(s), endOfDay(today), true
+			}
+		}
+	}
+
+	return time.Time{}, time.Time{}, false
+}
+
 func (store *Store) BuildSalesCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
 	criterias = SearchCriterias{
 		Page:   1,
@@ -1709,19 +1781,21 @@ func (store *Store) BuildSalesCriterias(w http.ResponseWriter, r *http.Request) 
 
 	keys, ok = r.URL.Query()["search[date_str]"]
 	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		startDate, err := time.Parse(shortForm, keys[0])
-		if err != nil {
-			return criterias, err
+		if s, e, resolved := resolveDateKeyword(keys[0], timeZoneOffset); resolved {
+			criterias.SearchBy["date"] = bson.M{"$gte": s, "$lte": e}
+		} else {
+			const shortForm = "Jan 02 2006"
+			startDate, err := time.Parse(shortForm, keys[0])
+			if err != nil {
+				return criterias, err
+			}
+			if timeZoneOffset != 0 {
+				startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+			}
+			endDate := startDate.Add(time.Hour * time.Duration(24))
+			endDate = endDate.Add(-time.Second * time.Duration(1))
+			criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
 		}
-
-		if timeZoneOffset != 0 {
-			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
-		}
-
-		endDate := startDate.Add(time.Hour * time.Duration(24))
-		endDate = endDate.Add(-time.Second * time.Duration(1))
-		criterias.SearchBy["date"] = bson.M{"$gte": startDate, "$lte": endDate}
 	}
 
 	var startDate time.Time
