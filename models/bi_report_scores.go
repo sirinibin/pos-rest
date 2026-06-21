@@ -232,19 +232,21 @@ type CohortCustomerScore struct {
 }
 
 type CohortReportRow struct {
-	CohortMonth    string  `json:"cohort_month"`
-	TotalCustomers int     `json:"total_customers"`
-	ActiveAt1M     int     `json:"active_at_1m"`
-	ActiveAt3M     int     `json:"active_at_3m"`
-	ActiveAt6M     int     `json:"active_at_6m"`
-	ActiveAt12M    int     `json:"active_at_12m"`
-	ActiveAt24M    int     `json:"active_at_24m"`
-	Retention1M    float64 `json:"retention_1m"`
-	Retention3M    float64 `json:"retention_3m"`
-	Retention6M    float64 `json:"retention_6m"`
-	Retention12M   float64 `json:"retention_12m"`
-	Retention24M   float64 `json:"retention_24m"`
-	RetentionTrend string  `json:"retention_trend"`
+	CohortMonth         string  `json:"cohort_month"`
+	TotalCustomers      int     `json:"total_customers"`
+	TotalSpend          float64 `json:"total_spend"`
+	AvgSpendPerCustomer float64 `json:"avg_spend_per_customer"`
+	ActiveAt1M          int     `json:"active_at_1m"`
+	ActiveAt3M          int     `json:"active_at_3m"`
+	ActiveAt6M          int     `json:"active_at_6m"`
+	ActiveAt12M         int     `json:"active_at_12m"`
+	ActiveAt24M         int     `json:"active_at_24m"`
+	Retention1M         float64 `json:"retention_1m"`
+	Retention3M         float64 `json:"retention_3m"`
+	Retention6M         float64 `json:"retention_6m"`
+	Retention12M        float64 `json:"retention_12m"`
+	Retention24M        float64 `json:"retention_24m"`
+	RetentionTrend      string  `json:"retention_trend"`
 }
 
 type CohortScoreRequest struct {
@@ -294,6 +296,7 @@ func (store *Store) BulkUpsertCohortScores(req CohortScoreRequest) error {
 		doc := bson.M{
 			"store_id": store.ID, "cohort_first_buy_month": r.CohortMonth,
 			"total_customers": r.TotalCustomers,
+			"total_spend": r.TotalSpend, "avg_spend_per_customer": r.AvgSpendPerCustomer,
 			"active_customers_at_1month": r.ActiveAt1M, "active_customers_at_3month": r.ActiveAt3M,
 			"active_customers_at_6month": r.ActiveAt6M, "active_customers_at_12month": r.ActiveAt12M,
 			"active_customers_at_24month": r.ActiveAt24M,
