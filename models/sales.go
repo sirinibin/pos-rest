@@ -2283,6 +2283,12 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	}
 
 	if scenario == "update" && oldOrder != nil && oldOrder.Zatca.ReportingPassed && store.Zatca.Phase == "2" {
+		customerChanged := (order.CustomerID == nil) != (oldOrder.CustomerID == nil) ||
+			(order.CustomerID != nil && oldOrder.CustomerID != nil && *order.CustomerID != *oldOrder.CustomerID)
+		if customerChanged {
+			errs["customer_id"] = "Cannot change customer on an invoice reported to ZATCA"
+			return errs
+		}
 		if len(order.Products) != len(oldOrder.Products) {
 			errs["products"] = "Cannot add or remove products from an invoice that has been reported to ZATCA"
 			return errs

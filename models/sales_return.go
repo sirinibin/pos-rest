@@ -1609,6 +1609,12 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	}
 
 	if scenario == "update" && oldSalesReturn != nil && oldSalesReturn.Zatca.ReportingPassed && store.Zatca.Phase == "2" {
+		customerChanged := (salesreturn.CustomerID == nil) != (oldSalesReturn.CustomerID == nil) ||
+			(salesreturn.CustomerID != nil && oldSalesReturn.CustomerID != nil && *salesreturn.CustomerID != *oldSalesReturn.CustomerID)
+		if customerChanged {
+			errs["customer_id"] = "Cannot change customer on a sales return reported to ZATCA"
+			return errs
+		}
 		if len(salesreturn.Products) != len(oldSalesReturn.Products) {
 			errs["products"] = "Cannot add or remove products from a sales return that has been reported to ZATCA"
 			return errs
