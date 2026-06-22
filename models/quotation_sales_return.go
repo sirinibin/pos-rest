@@ -722,19 +722,19 @@ func (quotationsalesReturn *QuotationSalesReturn) RemoveInvoiceFromCustomerPayab
 // DiskQuotaUsageResult payload for disk quota usage
 type QuotationSalesReturnStats struct {
 	//ID                                 *primitive.ObjectID `json:"id" bson:"_id"`
-	NetTotal                           float64             `json:"net_total" bson:"net_total"`
-	VatPrice                           float64             `json:"vat_price" bson:"vat_price"`
-	Discount                           float64             `json:"discount" bson:"discount"`
-	CashDiscount                       float64             `json:"cash_discount" bson:"cash_discount"`
-	NetProfit                          float64             `json:"net_profit" bson:"net_profit"`
-	NetLoss                            float64             `json:"net_loss" bson:"net_loss"`
-	PaidQuotationSalesReturn           float64             `json:"paid_quotation_sales_return" bson:"paid_quotation_sales_return"`
-	UnPaidQuotationSalesReturn         float64             `json:"unpaid_quotation_sales_return" bson:"unpaid_quotation_sales_return"`
-	CashQuotationSalesReturn           float64             `json:"cash_quotation_sales_return" bson:"cash_quotation_sales_return"`
-	BankAccountQuotationSalesReturn    float64             `json:"bank_account_quotation_sales_return" bson:"bank_account_quotation_sales_return"`
-	ShippingOrHandlingFees             float64             `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
-	QuotationSalesReturnCount          int64               `json:"quotation_sales_return_count" bson:"quotation_sales_return_count"`
-	QuotationSalesQuotationSalesReturn float64             `json:"quotation_sales_quotation_sales_return" bson:"quotation_sales_quotation_sales_return"`
+	NetTotal                           float64 `json:"net_total" bson:"net_total"`
+	VatPrice                           float64 `json:"vat_price" bson:"vat_price"`
+	Discount                           float64 `json:"discount" bson:"discount"`
+	CashDiscount                       float64 `json:"cash_discount" bson:"cash_discount"`
+	NetProfit                          float64 `json:"net_profit" bson:"net_profit"`
+	NetLoss                            float64 `json:"net_loss" bson:"net_loss"`
+	PaidQuotationSalesReturn           float64 `json:"paid_quotation_sales_return" bson:"paid_quotation_sales_return"`
+	UnPaidQuotationSalesReturn         float64 `json:"unpaid_quotation_sales_return" bson:"unpaid_quotation_sales_return"`
+	CashQuotationSalesReturn           float64 `json:"cash_quotation_sales_return" bson:"cash_quotation_sales_return"`
+	BankAccountQuotationSalesReturn    float64 `json:"bank_account_quotation_sales_return" bson:"bank_account_quotation_sales_return"`
+	ShippingOrHandlingFees             float64 `json:"shipping_handling_fees" bson:"shipping_handling_fees"`
+	QuotationSalesReturnCount          int64   `json:"quotation_sales_return_count" bson:"quotation_sales_return_count"`
+	QuotationSalesQuotationSalesReturn float64 `json:"quotation_sales_quotation_sales_return" bson:"quotation_sales_quotation_sales_return"`
 }
 
 func (store *Store) GetQuotationSalesReturnStats(filter map[string]interface{}) (stats QuotationSalesReturnStats, err error) {
@@ -2954,15 +2954,15 @@ func ProcessQuotationSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDI" {
 			continue
-		}*/
+		}
+
+		customerOld, _ := store.FindCustomerByName("TAREK SHAH MODINA KAHAR VAI", bson.M{})
 
 		totalCount, err := store.GetTotalCount(bson.M{
-			"store_id": store.ID,
-			//"zatca.compliance_passed": bson.M{"$eq": false},
-			//"zatca.reporting_passed":              bson.M{"$ne": true},
-			//"zatca.compliance_check_failed_count": nil,
+			"store_id":    store.ID,
+			"customer_id": customerOld.ID,
 		}, "quotation_sales_return")
 		if err != nil {
 			return err
@@ -2972,14 +2972,11 @@ func ProcessQuotationSalesReturns() error {
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
 		findOptions.SetAllowDiskUse(true)
-		//findOptions.SetSort(GetSortByFields("created_at"))
 		findOptions.SetSort(bson.M{"date": 1})
 
 		cur, err := collection.Find(ctx, bson.M{
-			"store_id": store.ID,
-			//"zatca.compliance_passed": bson.M{"$eq": false},
-			//"zatca.reporting_passed":              bson.M{"$ne": true},
-			//"zatca.compliance_check_failed_count": nil,
+			"store_id":    store.ID,
+			"customer_id": customerOld.ID,
 		}, findOptions)
 		if err != nil {
 			return errors.New("Error fetching quotations:" + err.Error())
@@ -3000,28 +2997,38 @@ func ProcessQuotationSalesReturns() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if quotationsalesReturn.StoreID.Hex() != store.ID.Hex() {
-				continue
-			}
+			if quotationsalesReturn.CustomerID.Hex() == customerOld.ID.Hex() {
+				quotationsalesReturnOld := quotationsalesReturn
 
-			/*if quotationsalesReturn.CustomerID == nil || quotationsalesReturn.CustomerID.IsZero() {
-				quotationsalesReturn.SetUnKnownCustomerIfNoCustomerSelected()
+				customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+				if err != nil {
+					log.Print("UNKNOWN customer not found, skipping quotation sales return " + quotationsalesReturn.ID.Hex() + ": " + err.Error())
+					bar.Add(1)
+					continue
+				}
 
+				customerOld, _ := store.FindCustomerByName("TAREK SHAH MODINA KAHAR VAI", bson.M{})
+
+				quotationsalesReturn.CustomerID = &customer.ID
+				quotationsalesReturn.CustomerName = customer.Name
+				quotationsalesReturn.CustomerNameArabic = customer.NameInArabic
 				quotationsalesReturn.Update()
 
-				quotationsalesReturn.ClearProductsHistory()
-				quotationsalesReturn.CreateProductsHistory(false)
-
-				quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
-				quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
+				if customerOld != nil {
+					quotationsalesReturnOld.SetCustomerQuotationSalesReturnStats()
+					customerOld.SetCreditBalance()
+				}
+				quotationsalesReturn.SetCustomerQuotationSalesReturnStats()
 
 				quotationsalesReturn.UndoAccounting()
 				quotationsalesReturn.DoAccounting()
+				customer.SetCreditBalance()
 
-				quotationsalesReturn.SetCustomerQuotationSalesReturnStats()
-			}*/
-
-			quotationsalesReturn.SetCustomerQuotationSalesReturnStats()
+				quotationsalesReturn.ClearProductsHistory()
+				quotationsalesReturn.CreateProductsHistory(true, &quotationsalesReturnOld)
+				quotationsalesReturn.ClearProductsQuotationSalesReturnHistory()
+				quotationsalesReturn.CreateProductsQuotationSalesReturnHistory()
+			}
 
 			//quotationsalesReturn.ClearProductsHistory()
 			//quotationsalesReturn.CreateProductsHistory(false)
@@ -4562,8 +4569,6 @@ func (quotationsalesReturn *QuotationSalesReturn) ValidateZatcaReporting() (errs
 
 	return errs
 }
-
-
 
 func (store *Store) BuildQuotationSalesReturnCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
 

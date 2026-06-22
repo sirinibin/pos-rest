@@ -3448,15 +3448,15 @@ func ProcessSalesReturns() error {
 	}
 
 	for _, store := range stores {
-		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDI" {
 			continue
-		}*/
+		}
+
+		customerOld, _ := store.FindCustomerByName("TAREK SHAH MODINA KAHAR VAI", bson.M{})
 
 		totalCount, err := store.GetTotalCount(bson.M{
-			"store_id": store.ID,
-			//"zatca.compliance_passed": bson.M{"$eq": false},
-			//"zatca.reporting_passed":              bson.M{"$ne": true},
-			//"zatca.compliance_check_failed_count": nil,
+			"store_id":    store.ID,
+			"customer_id": customerOld.ID,
 		}, "salesreturn")
 		if err != nil {
 			return err
@@ -3466,14 +3466,11 @@ func ProcessSalesReturns() error {
 		findOptions := options.Find()
 		findOptions.SetNoCursorTimeout(true)
 		findOptions.SetAllowDiskUse(true)
-		//findOptions.SetSort(GetSortByFields("created_at"))
 		findOptions.SetSort(bson.M{"date": 1})
 
 		cur, err := collection.Find(ctx, bson.M{
-			"store_id": store.ID,
-			//"zatca.compliance_passed": bson.M{"$eq": false},
-			//"zatca.reporting_passed":              bson.M{"$ne": true},
-			//"zatca.compliance_check_failed_count": nil,
+			"store_id":    store.ID,
+			"customer_id": customerOld.ID,
 		}, findOptions)
 		if err != nil {
 			return errors.New("Error fetching quotations:" + err.Error())
@@ -3494,29 +3491,36 @@ func ProcessSalesReturns() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if salesReturn.StoreID.Hex() != store.ID.Hex() {
-				continue
-			}
+			if salesReturn.CustomerID.Hex() == customerOld.ID.Hex() {
+				salesReturnOld := salesReturn
 
-			//salesReturn.ClearProductsHistory()
-			//salesReturn.CreateProductsHistory(false)
+				customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+				if err != nil {
+					log.Print("UNKNOWN customer not found, skipping sales return " + salesReturn.ID.Hex() + ": " + err.Error())
+					bar.Add(1)
+					continue
+				}
 
-			/*if salesReturn.CustomerID == nil || salesReturn.CustomerID.IsZero() {
-				salesReturn.SetUnKnownCustomerIfNoCustomerSelected()
-
+				salesReturn.CustomerID = &customer.ID
+				salesReturn.CustomerName = customer.Name
+				salesReturn.CustomerNameArabic = customer.NameInArabic
 				salesReturn.Update()
 
-				salesReturn.ClearProductsHistory()
-				salesReturn.CreateProductsHistory(false)
-				salesReturn.ClearProductsSalesReturnHistory()
-				salesReturn.CreateProductsSalesReturnHistory()
+				if customerOld != nil {
+					salesReturnOld.SetCustomerSalesReturnStats()
+					customerOld.SetCreditBalance()
+				}
+				salesReturn.SetCustomerSalesReturnStats()
 
 				salesReturn.UndoAccounting()
 				salesReturn.DoAccounting()
+				customer.SetCreditBalance()
 
-				salesReturn.SetCustomerSalesReturnStats()
-			}*/
-			salesReturn.SetCustomerSalesReturnStats()
+				salesReturn.ClearProductsHistory()
+				salesReturn.CreateProductsHistory(true, &salesReturnOld)
+				salesReturn.ClearProductsSalesReturnHistory()
+				salesReturn.CreateProductsSalesReturnHistory()
+			}
 
 			/*salesReturn.ClearProductsSalesReturnHistory()
 
