@@ -4061,12 +4061,13 @@ func ProcessSales() error {
 	}
 
 	for _, store := range stores {
-		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDI" {
 			continue
-		}*/
+		}
 
 		totalCount, err := store.GetTotalCount(bson.M{
-			"store_id": store.ID,
+			"store_id":      store.ID,
+			"customer_name": "TAREK SHAH MODINA KAHAR VAI",
 			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
@@ -4085,7 +4086,8 @@ func ProcessSales() error {
 		//	criterias.SearchBy["zatca.reporting_passed"] = bson.M{"$ne": true}
 		//"zatca.compliance_check_failed_count": bson.M{"$lt": 1},
 		cur, err := collection.Find(ctx, bson.M{
-			"store_id": store.ID,
+			"store_id":      store.ID,
+			"customer_name": "TAREK SHAH MODINA KAHAR VAI",
 			//"zatca.compliance_passed": bson.M{"$eq": false},
 			//"zatca.reporting_passed":              bson.M{"$ne": true},
 			//"zatca.compliance_check_failed_count": nil,
@@ -4114,6 +4116,36 @@ func ProcessSales() error {
 				continue
 			}
 
+			if order.CustomerName == "TAREK SHAH MODINA KAHAR VAI" {
+				orderOld := order
+
+				customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+				if err != nil {
+					log.Print("UNKNOWN customer not found, skipping order " + order.ID.Hex() + ": " + err.Error())
+					bar.Add(1)
+					continue
+				}
+
+				customerOld, _ := store.FindCustomerByName("TAREK SHAH MODINA KAHAR VAI", bson.M{})
+
+				order.CustomerID = &customer.ID
+				order.CustomerName = customer.Name
+				order.CustomerNameArabic = customer.NameInArabic
+				order.Update()
+
+				if customerOld != nil {
+					orderOld.SetCustomerSalesStats()
+					customerOld.SetCreditBalance()
+				}
+				order.SetCustomerSalesStats()
+
+				order.UndoAccounting()
+				order.DoAccounting()
+				customer.SetCreditBalance()
+				order.ClearProductsHistory()
+				order.CreateProductsHistory(true, &orderOld)
+			}
+
 			/*if order.CustomerID == nil || order.CustomerID.IsZero() {
 				order.SetUnKnownCustomerIfNoCustomerSelected()
 
@@ -4129,7 +4161,7 @@ func ProcessSales() error {
 
 				order.SetCustomerSalesStats()
 			}*/
-			order.SetCustomerSalesStats()
+			//order.SetCustomerSalesStats()
 
 			//order.ClearProductsHistory()
 			//order.CreateProductsHistory(false)
@@ -5508,6 +5540,29 @@ func (model *Order) SetPostBalances() error {
 	}
 
 	err = ledger.SetPostBalancesByLedger(model.Date)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (model *Order) SetPostBalancesSync() error {
+	store, err := FindStoreByID(model.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(model.ID, *model.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return errors.New("Error finding ledger by reference id: " + err.Error())
+	}
+
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+
+	err = ledger.SetPostBalancesByLedgerSync(model.Date)
 	if err != nil {
 		return err
 	}

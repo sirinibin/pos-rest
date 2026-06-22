@@ -795,11 +795,15 @@ func cronJobsEveryHour() error {
 	// Run Go-native BI incremental aggregation for all stores
 	//go models.RunBIIncrementalUpdateForAllStores()
 
-	/*
-		err := models.ProcessCustomers()
-		if err != nil {
-			log.Print(err)
-		}*/
+	err := models.ProcessSales()
+	if err != nil {
+		log.Print(err)
+	}
+
+	err = models.ProcessQuotations()
+	if err != nil {
+		log.Print(err)
+	}
 
 	/*
 

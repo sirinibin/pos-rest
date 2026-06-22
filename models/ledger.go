@@ -619,3 +619,25 @@ func (ledger *Ledger) SetPostBalancesByLedger(afterDate *time.Time) (err error) 
 
 	return nil
 }
+
+func (ledger *Ledger) SetPostBalancesByLedgerSync(afterDate *time.Time) (err error) {
+	store, err := FindStoreByID(ledger.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledgerAccounts := map[string]Account{}
+
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil && err != mongo.ErrNoDocuments {
+			return errors.New("Error getting related accounts: " + err.Error())
+		}
+	}
+
+	for _, account := range ledgerAccounts {
+		store.SetPostsBalancesByAccountID(&account, afterDate)
+	}
+
+	return nil
+}

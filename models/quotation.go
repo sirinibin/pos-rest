@@ -693,18 +693,18 @@ type QuotationStats struct {
 
 type QuotationInvoiceStats struct {
 	//ID                            *primitive.ObjectID `json:"id" bson:"_id"`
-	InvoiceNetTotal               float64             `json:"invoice_net_total" bson:"invoice_net_total"`
-	InvoiceNetProfit              float64             `json:"invoice_net_profit" bson:"invoice_net_profit"`
-	InvoiceNetLoss                float64             `json:"invoice_net_loss" bson:"invoice_net_loss"`
-	InvoiceVatPrice               float64             `json:"invoice_vat_price" bson:"vinvoice_at_price"`
-	InvoiceDiscount               float64             `json:"invoice_discount" bson:"invoice_discount"`
-	InvoiceShippingOrHandlingFees float64             `json:"invoice_hipping_handling_fees" bson:"invoice_shipping_handling_fees"`
-	InvoicePaidSales              float64             `json:"invoice_paid_sales" bson:"invoice_paid_sales"`
-	InvoiceUnPaidSales            float64             `json:"invoice_unpaid_sales" bson:"invoice_unpaid_sales"`
-	InvoiceCashSales              float64             `json:"invoice_cash_sales" bson:"invoice_cash_sales"`
-	InvoiceBankAccountSales       float64             `json:"invoice_bank_account_sales" bson:"invoice_bank_account_sales"`
-	InvoiceCashDiscount           float64             `json:"invoice_cash_discount" bson:"invoice_cash_discount"`
-	InvoiceSalesReturnSales       float64             `json:"invoice_sales_return_sales" bson:"invoice_sales_return_sales"`
+	InvoiceNetTotal               float64 `json:"invoice_net_total" bson:"invoice_net_total"`
+	InvoiceNetProfit              float64 `json:"invoice_net_profit" bson:"invoice_net_profit"`
+	InvoiceNetLoss                float64 `json:"invoice_net_loss" bson:"invoice_net_loss"`
+	InvoiceVatPrice               float64 `json:"invoice_vat_price" bson:"vinvoice_at_price"`
+	InvoiceDiscount               float64 `json:"invoice_discount" bson:"invoice_discount"`
+	InvoiceShippingOrHandlingFees float64 `json:"invoice_hipping_handling_fees" bson:"invoice_shipping_handling_fees"`
+	InvoicePaidSales              float64 `json:"invoice_paid_sales" bson:"invoice_paid_sales"`
+	InvoiceUnPaidSales            float64 `json:"invoice_unpaid_sales" bson:"invoice_unpaid_sales"`
+	InvoiceCashSales              float64 `json:"invoice_cash_sales" bson:"invoice_cash_sales"`
+	InvoiceBankAccountSales       float64 `json:"invoice_bank_account_sales" bson:"invoice_bank_account_sales"`
+	InvoiceCashDiscount           float64 `json:"invoice_cash_discount" bson:"invoice_cash_discount"`
+	InvoiceSalesReturnSales       float64 `json:"invoice_sales_return_sales" bson:"invoice_sales_return_sales"`
 }
 
 func (store *Store) GetQuotationInvoiceStats(filter map[string]interface{}) (stats QuotationInvoiceStats, err error) {
@@ -2524,11 +2524,14 @@ func ProcessQuotations() error {
 	}
 
 	for _, store := range stores {
-		/*if store.Code != "MBDIT" && store.Code != "LGK" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDI" {
 			continue
-		}*/
+		}
 
-		totalCount, err := store.GetTotalCount(bson.M{}, "quotation")
+		totalCount, err := store.GetTotalCount(bson.M{
+			"store_id":      store.ID,
+			"customer_name": "TAREK SHAH MODINA KAHAR VAI",
+		}, "quotation")
 		if err != nil {
 			return err
 		}
@@ -2540,7 +2543,10 @@ func ProcessQuotations() error {
 		findOptions.SetAllowDiskUse(true)
 		findOptions.SetSort(bson.M{"date": 1})
 
-		cur, err := collection.Find(ctx, bson.M{}, findOptions)
+		cur, err := collection.Find(ctx, bson.M{
+			"store_id":      store.ID,
+			"customer_name": "TAREK SHAH MODINA KAHAR VAI",
+		}, findOptions)
 		if err != nil {
 			return errors.New("Error fetching quotations:" + err.Error())
 		}
@@ -2560,8 +2566,39 @@ func ProcessQuotations() error {
 				return errors.New("Cursor decode error:" + err.Error())
 			}
 
-			if quotation.StoreID.Hex() != store.ID.Hex() {
-				continue
+			if quotation.CustomerName == "TAREK SHAH MODINA KAHAR VAI" {
+				quotationOld := quotation
+
+				customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+				if err != nil {
+					log.Print("UNKNOWN customer not found, skipping quotation " + quotation.ID.Hex() + ": " + err.Error())
+					bar.Add(1)
+					continue
+				}
+
+				customerOld, _ := store.FindCustomerByName("TAREK SHAH MODINA KAHAR VAI", bson.M{})
+
+				quotation.CustomerID = &customer.ID
+				quotation.CustomerName = customer.Name
+				quotation.CustomerNameArabic = customer.NameInArabic
+				quotation.Update()
+
+				if customerOld != nil {
+					quotationOld.SetCustomerQuotationStats()
+					customerOld.SetCreditBalance()
+				}
+				quotation.SetCustomerQuotationStats()
+
+				quotation.UndoAccounting()
+				quotation.DoAccounting()
+
+				customer.SetCreditBalance()
+
+				quotation.ClearProductsHistory()
+				quotation.CreateProductsHistory(true, &quotationOld)
+
+				quotation.ClearProductsQuotationHistory()
+				quotation.CreateProductsQuotationHistory()
 			}
 
 			/*if quotation.CustomerID == nil || quotation.CustomerID.IsZero() {
@@ -2580,7 +2617,7 @@ func ProcessQuotations() error {
 
 				quotation.SetCustomerQuotationStats()
 			}*/
-			quotation.SetCustomerQuotationStats()
+			//quotation.SetCustomerQuotationStats()
 
 			//quotation.ClearProductsHistory()
 			//quotation.CreateProductsHistory(false)
@@ -4069,8 +4106,6 @@ func (quotation *Quotation) DeletePaymentsByReceivablePaymentID(receivablePaymen
 	}
 	return nil
 }
-
-
 
 func (store *Store) BuildQuotationCriterias(w http.ResponseWriter, r *http.Request) (criterias SearchCriterias, err error) {
 
