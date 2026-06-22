@@ -915,7 +915,11 @@ func (salesReturn *SalesReturn) SaveClearedInvoiceData(reportingResponse ZatcaRe
 	// Step 2: Save to an XML file
 	//fileName := "output.xml"
 	//xmlResponseFilePath := "ZatcaPython/templates/invoice_" + order.Code + "_response.xml"
-	xmlResponseFilePath := "zatca/returns/xml/" + salesReturn.StoreID.Hex() + "_" + salesReturn.Code + ".xml"
+	xmlResponseFilePath := "zatca/" + salesReturn.StoreID.Hex() + "/sales-returns/xml/" + salesReturn.Code + ".xml"
+	if err = os.MkdirAll("zatca/"+salesReturn.StoreID.Hex()+"/sales-returns/xml", 0755); err != nil {
+		fmt.Println("Error creating directory:", err)
+		return err
+	}
 	err = os.WriteFile(xmlResponseFilePath, xmlData, 0644)
 	if err != nil {
 		fmt.Println("Error writing file:", err)
