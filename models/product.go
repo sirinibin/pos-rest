@@ -119,6 +119,7 @@ type StockAdjustment struct {
 	DateStr       string              `json:"date_str,omitempty" bson:"-"`
 	Type          string              `bson:"type" json:"type"` // added|removed
 	Quantity      float64             `bson:"quantity" json:"quantity"`
+	Reason        string              `bson:"reason,omitempty" json:"reason,omitempty"`
 	WarehouseID   *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
 	WarehouseCode *string             `json:"warehouse_code" bson:"warehouse_code"`
 	CreatedAt     *time.Time          `bson:"created_at,omitempty" json:"created_at,omitempty"`

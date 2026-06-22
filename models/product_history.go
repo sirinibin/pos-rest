@@ -59,6 +59,7 @@ type ProductHistory struct {
 	UpdatedAt          *time.Time          `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	WarehouseID        *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
 	WarehouseCode      *string             `json:"warehouse_code" bson:"warehouse_code"`
+	Reason             string              `bson:"reason,omitempty" json:"reason,omitempty"`
 }
 
 type HistoryStats struct {
@@ -919,6 +920,7 @@ func (product *Product) CreateStockAdjustmentHistory() error {
 			Unit:          product.Unit,
 			WarehouseID:   stockAdjustment.WarehouseID,
 			WarehouseCode: stockAdjustment.WarehouseCode,
+			Reason:        stockAdjustment.Reason,
 			CreatedAt:     stockAdjustment.CreatedAt,
 			UpdatedAt:     stockAdjustment.CreatedAt,
 		}
