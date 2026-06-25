@@ -922,8 +922,11 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	if ok && len(keys[0]) >= 1 {
 		textSearching = true
 		searchWord = strings.ToLower(keys[0])
-		// Strip punctuation so tokenization is consistent across MongoDB versions
-		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
+		// Strip punctuation so tokenization is consistent across MongoDB versions.
+		// Preserve "/" so "r/d" stays as a single 3-char token and matches the stored
+		// name_prefixes token; without this, "r/d volvo" splits into "r","d","volvo"
+		// and the single-char tokens are filtered out, making the query too broad.
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-/]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
 		if strings.Contains(searchWord, " ") {
 			// Multi-word: require every meaningful word to be present in search_words.
@@ -5278,7 +5281,7 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	keys, ok = r.URL.Query()["search[search_text]"]
 	if ok && len(keys[0]) >= 1 {
 		searchWord = strings.ToLower(keys[0])
-		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-]`).ReplaceAllString(searchWord, " ")
+		searchWord = regexp.MustCompile(`[^\p{L}\p{N}\s\-/]`).ReplaceAllString(searchWord, " ")
 		searchWord = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(searchWord, " "))
 		if strings.Contains(searchWord, " ") {
 			var meaningful []string
