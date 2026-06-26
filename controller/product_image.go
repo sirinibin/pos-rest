@@ -85,16 +85,17 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageUrl := fmt.Sprintf("/images/%s/products/%s/%s", storeID, productID, filename)
+	// Store just filename in DB; return full URL to frontend for immediate display
+	fullURL := fmt.Sprintf("/images/%s/products/%s/%s", storeID, productID, filename)
 	if fileExists(savePath) {
-		err = store.SaveProductImage(&productObjectID, imageUrl)
+		err = store.SaveProductImage(&productObjectID, filename)
 		if err != nil {
 			http.Error(w, "error saving image to db:"+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"url":"%s"}`, imageUrl)
+		fmt.Fprintf(w, `{"url":"%s"}`, fullURL)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -149,7 +150,8 @@ func DeleteProductImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	product, _ := store.FindProductByID(&productObjectID, bson.M{})
-	product.Images = removeItem(product.Images, imageUrl)
+	// DB stores just filename; imageUrl from frontend is the full path
+	product.Images = removeItem(product.Images, filepath.Base(imageUrl))
 	err = product.Update(&store.ID)
 	if err != nil {
 		http.Error(w, "error updating product", http.StatusInternalServerError)

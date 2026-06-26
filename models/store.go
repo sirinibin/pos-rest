@@ -1051,12 +1051,13 @@ func (store *Store) SaveLogoFile() error {
 		return err
 	}
 
-	filename := "images/" + store.ID.Hex() + "/store/logo_" + store.ID.Hex() + extension
-	err = SaveBase64File(filename, content)
+	baseFilename := "logo_" + store.ID.Hex() + extension
+	diskPath := "images/" + store.ID.Hex() + "/store/" + baseFilename
+	err = SaveBase64File(diskPath, content)
 	if err != nil {
 		return err
 	}
-	store.Logo = "/" + filename
+	store.Logo = baseFilename
 	store.LogoContent = ""
 	return nil
 }

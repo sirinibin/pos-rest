@@ -84,16 +84,16 @@ func UploadVendorImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageUrl := fmt.Sprintf("/images/%s/vendors/%s/%s", storeID, vendorID, filename)
+	fullURL := fmt.Sprintf("/images/%s/vendors/%s/%s", storeID, vendorID, filename)
 	if fileExists(savePath) {
-		err = store.SaveVendorImage(&vendorObjectID, imageUrl)
+		err = store.SaveVendorImage(&vendorObjectID, filename)
 		if err != nil {
 			http.Error(w, "error saving image to db", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"url":"%s"}`, imageUrl)
+		fmt.Fprintf(w, `{"url":"%s"}`, fullURL)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -142,7 +142,7 @@ func DeleteVendorImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	vendor, _ := store.FindVendorByID(&vendorObjectID, bson.M{})
-	vendor.Images = removeItem(vendor.Images, imageUrl)
+	vendor.Images = removeItem(vendor.Images, filepath.Base(imageUrl))
 	vendor.Update()
 
 	w.WriteHeader(http.StatusOK)

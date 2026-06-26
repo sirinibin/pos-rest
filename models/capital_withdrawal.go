@@ -854,12 +854,13 @@ func (capitalwithdrawal *CapitalWithdrawal) SaveImages() error {
 			return err
 		}
 
-		filename := "images/" + capitalwithdrawal.StoreID.Hex() + "/capital_withdrawals/" + GenerateFileName("capitalwithdrawal_", extension)
-		err = SaveBase64File(filename, content)
+		baseFilename := GenerateFileName("capitalwithdrawal_", extension)
+		diskPath := "images/" + capitalwithdrawal.StoreID.Hex() + "/capital_withdrawals/" + baseFilename
+		err = SaveBase64File(diskPath, content)
 		if err != nil {
 			return err
 		}
-		capitalwithdrawal.Images = append(capitalwithdrawal.Images, "/"+filename)
+		capitalwithdrawal.Images = append(capitalwithdrawal.Images, baseFilename)
 	}
 
 	capitalwithdrawal.ImagesContent = []string{}

@@ -3264,12 +3264,13 @@ func (product *Product) SaveImages() error {
 		if product.StoreID != nil {
 			storeFolder = product.StoreID.Hex()
 		}
-		filename := "images/" + storeFolder + "/products/" + GenerateFileName("product_", extension)
-		err = SaveBase64File(filename, content)
+		baseFilename := GenerateFileName("product_", extension)
+		diskPath := "images/" + storeFolder + "/products/" + product.ID.Hex() + "/" + baseFilename
+		err = SaveBase64File(diskPath, content)
 		if err != nil {
 			return err
 		}
-		product.Images = append(product.Images, "/"+filename)
+		product.Images = append(product.Images, baseFilename)
 	}
 
 	product.ImagesContent = []string{}

@@ -376,12 +376,13 @@ func (signature *UserSignature) SaveSignatureFile() error {
 		return err
 	}
 
-	filename := "images/" + signature.StoreID.Hex() + "/signatures/signature_" + signature.ID.Hex() + extension
-	err = SaveBase64File(filename, content)
+	baseFilename := "signature_" + signature.ID.Hex() + extension
+	diskPath := "images/" + signature.StoreID.Hex() + "/signatures/" + baseFilename
+	err = SaveBase64File(diskPath, content)
 	if err != nil {
 		return err
 	}
-	signature.Signature = "/" + filename
+	signature.Signature = baseFilename
 	signature.SignatureContent = ""
 	return nil
 }

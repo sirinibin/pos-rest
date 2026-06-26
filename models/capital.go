@@ -957,12 +957,13 @@ func (capital *Capital) SaveImages() error {
 			return err
 		}
 
-		filename := "images/" + capital.StoreID.Hex() + "/capitals/" + GenerateFileName("capital_", extension)
-		err = SaveBase64File(filename, content)
+		baseFilename := GenerateFileName("capital_", extension)
+		diskPath := "images/" + capital.StoreID.Hex() + "/capitals/" + baseFilename
+		err = SaveBase64File(diskPath, content)
 		if err != nil {
 			return err
 		}
-		capital.Images = append(capital.Images, "/"+filename)
+		capital.Images = append(capital.Images, baseFilename)
 	}
 
 	capital.ImagesContent = []string{}

@@ -84,16 +84,16 @@ func UploadCustomerImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageUrl := fmt.Sprintf("/images/%s/customers/%s/%s", storeID, customerID, filename)
+	fullURL := fmt.Sprintf("/images/%s/customers/%s/%s", storeID, customerID, filename)
 	if fileExists(savePath) {
-		err = store.SaveCustomerImage(&customerObjectID, imageUrl)
+		err = store.SaveCustomerImage(&customerObjectID, filename)
 		if err != nil {
 			http.Error(w, "error saving image to db", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"url":"%s"}`, imageUrl)
+		fmt.Fprintf(w, `{"url":"%s"}`, fullURL)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -142,7 +142,7 @@ func DeleteCustomerImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	customer, _ := store.FindCustomerByID(&customerObjectID, bson.M{})
-	customer.Images = removeItem(customer.Images, imageUrl)
+	customer.Images = removeItem(customer.Images, filepath.Base(imageUrl))
 	customer.Update()
 
 	w.WriteHeader(http.StatusOK)
