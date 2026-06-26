@@ -42,7 +42,7 @@ func UploadVendorImage(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Ensure upload directory exists
-	uploadDir := fmt.Sprintf("./images/vendors/%s", vendorID)
+	uploadDir := fmt.Sprintf("./images/%s/vendors/%s", storeID, vendorID)
 	err = os.MkdirAll(uploadDir, os.ModePerm)
 	if err != nil {
 		http.Error(w, "Unable to create upload directory:"+err.Error(), http.StatusInternalServerError)
@@ -84,7 +84,7 @@ func UploadVendorImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageUrl := fmt.Sprintf("/images/vendors/%s/%s", vendorID, filename)
+	imageUrl := fmt.Sprintf("/images/%s/vendors/%s/%s", storeID, vendorID, filename)
 	if fileExists(savePath) {
 		err = store.SaveVendorImage(&vendorObjectID, imageUrl)
 		if err != nil {

@@ -43,7 +43,7 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Ensure upload directory exists
-	uploadDir := fmt.Sprintf("./images/products/%s", productID)
+	uploadDir := fmt.Sprintf("./images/%s/products/%s", storeID, productID)
 	err = os.MkdirAll(uploadDir, os.ModePerm)
 	if err != nil {
 		http.Error(w, "Unable to create upload directory:"+err.Error(), http.StatusInternalServerError)
@@ -85,7 +85,7 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageUrl := fmt.Sprintf("/images/products/%s/%s", productID, filename)
+	imageUrl := fmt.Sprintf("/images/%s/products/%s/%s", storeID, productID, filename)
 	if fileExists(savePath) {
 		err = store.SaveProductImage(&productObjectID, imageUrl)
 		if err != nil {

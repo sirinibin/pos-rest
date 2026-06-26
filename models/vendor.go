@@ -1731,7 +1731,11 @@ func (vendor *Vendor) SaveLogoFile() error {
 		return err
 	}
 
-	filename := "images/vendor/logo_" + vendor.ID.Hex() + extension
+	storeFolder := "unknown"
+	if vendor.StoreID != nil {
+		storeFolder = vendor.StoreID.Hex()
+	}
+	filename := "images/" + storeFolder + "/vendors/logo_" + vendor.ID.Hex() + extension
 	err = SaveBase64File(filename, content)
 	if err != nil {
 		return err

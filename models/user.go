@@ -662,7 +662,11 @@ func (user *User) SavePhoto() error {
 		return err
 	}
 
-	filename := "images/users/user_" + user.ID.Hex() + extension
+	storeFolder := "global"
+	if len(user.StoreIDs) > 0 && user.StoreIDs[0] != nil {
+		storeFolder = user.StoreIDs[0].Hex()
+	}
+	filename := "images/" + storeFolder + "/users/user_" + user.ID.Hex() + extension
 	err = SaveBase64File(filename, content)
 	if err != nil {
 		return err

@@ -756,7 +756,7 @@ func (divident *Divident) SaveImages() error {
 			return err
 		}
 
-		filename := "images/dividents/" + GenerateFileName("divident_", extension)
+		filename := "images/" + divident.StoreID.Hex() + "/dividents/" + GenerateFileName("divident_", extension)
 		err = SaveBase64File(filename, content)
 		if err != nil {
 			return err

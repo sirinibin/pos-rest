@@ -854,7 +854,7 @@ func (capitalwithdrawal *CapitalWithdrawal) SaveImages() error {
 			return err
 		}
 
-		filename := "images/capital_withdrawals/" + GenerateFileName("capitalwithdrawal_", extension)
+		filename := "images/" + capitalwithdrawal.StoreID.Hex() + "/capital_withdrawals/" + GenerateFileName("capitalwithdrawal_", extension)
 		err = SaveBase64File(filename, content)
 		if err != nil {
 			return err

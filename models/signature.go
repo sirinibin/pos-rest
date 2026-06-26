@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -375,7 +376,7 @@ func (signature *UserSignature) SaveSignatureFile() error {
 		return err
 	}
 
-	filename := "images/signatures/signature_" + signature.ID.Hex() + extension
+	filename := "images/" + signature.StoreID.Hex() + "/signatures/signature_" + signature.ID.Hex() + extension
 	err = SaveBase64File(filename, content)
 	if err != nil {
 		return err
@@ -386,7 +387,9 @@ func (signature *UserSignature) SaveSignatureFile() error {
 }
 
 func SaveBase64File(filename string, content []byte) error {
-
+	if err := os.MkdirAll(filepath.Dir(filename), os.ModePerm); err != nil {
+		return err
+	}
 	f, err := os.Create(filename)
 	if err != nil {
 		return err

@@ -1166,7 +1166,7 @@ func (expense *Expense) SaveImages() error {
 			return err
 		}
 
-		filename := "images/expenses/" + GenerateFileName("expense_", extension)
+		filename := "images/" + expense.StoreID.Hex() + "/expenses/" + GenerateFileName("expense_", extension)
 		err = SaveBase64File(filename, content)
 		if err != nil {
 			return err
