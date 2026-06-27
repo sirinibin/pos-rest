@@ -278,6 +278,15 @@ func ViewProductBrand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = productBrand.UpdateForeignLabelFields()
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Error fetching related fields:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = productBrand
 

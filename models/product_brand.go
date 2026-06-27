@@ -30,7 +30,29 @@ type ProductBrand struct {
 	DeletedAt     *time.Time          `bson:"deleted_at" json:"deleted_at"`
 	CreatedBy     *primitive.ObjectID `json:"created_by,omitempty" bson:"created_by,omitempty"`
 	UpdatedBy     *primitive.ObjectID `json:"updated_by,omitempty" bson:"updated_by,omitempty"`
+	CreatedByName string              `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
+	UpdatedByName string              `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	StoreID       *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+}
+
+func (productBrand *ProductBrand) UpdateForeignLabelFields() error {
+	if productBrand.CreatedBy != nil {
+		createdByUser, err := FindUserByID(productBrand.CreatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		productBrand.CreatedByName = createdByUser.Name
+	}
+
+	if productBrand.UpdatedBy != nil {
+		updatedByUser, err := FindUserByID(productBrand.UpdatedBy, bson.M{"id": 1, "name": 1})
+		if err != nil {
+			return err
+		}
+		productBrand.UpdatedByName = updatedByUser.Name
+	}
+
+	return nil
 }
 
 func (productBrand *ProductBrand) AttributesValueChangeEvent(productBrandOld *ProductBrand) error {
@@ -339,8 +361,13 @@ func (productBrand *ProductBrand) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	err := productBrand.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	productBrand.ID = primitive.NewObjectID()
-	_, err := collection.InsertOne(ctx, &productBrand)
+	_, err = collection.InsertOne(ctx, &productBrand)
 	if err != nil {
 		return err
 	}
@@ -392,10 +419,15 @@ func (productBrand *ProductBrand) Update() error {
 	updateOptions.SetUpsert(false)
 	defer cancel()
 
+	err := productBrand.UpdateForeignLabelFields()
+	if err != nil {
+		return err
+	}
+
 	now := time.Now()
 	productBrand.UpdatedAt = &now
 
-	_, err := collection.UpdateOne(
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": productBrand.ID},
 		bson.M{"$set": productBrand},
