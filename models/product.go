@@ -185,6 +185,7 @@ type Product struct {
 	LinkToProductID      *primitive.ObjectID     `json:"link_to_product_id,omitempty" bson:"-"`
 	Set                  ProductSet              `json:"set" bson:"set"`
 	AllowDuplicates      bool                    `bson:"allow_duplicates" json:"allow_duplicates"`
+	Note                 string                  `bson:"note,omitempty" json:"note,omitempty"`
 
 	// BI: Sales Velocity Trend — populated by cron job every 3 hours
 	SalesVelocityTrend       string  `bson:"sales_velocity_trend,omitempty" json:"sales_velocity_trend,omitempty"`
