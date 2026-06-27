@@ -272,6 +272,8 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customer.ID = customerID
+
 	// Validate data
 	if errs := customer.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false

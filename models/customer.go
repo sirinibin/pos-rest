@@ -2693,12 +2693,14 @@ func (customer *Customer) IsCodeExists() (exists bool, err error) {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"code":     customer.Code,
 			"store_id": customer.StoreID,
+			"deleted":  bson.M{"$ne": true},
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
 			"code":     customer.Code,
 			"store_id": customer.StoreID,
 			"_id":      bson.M{"$ne": customer.ID},
+			"deleted":  bson.M{"$ne": true},
 		})
 	}
 
