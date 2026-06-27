@@ -331,11 +331,24 @@ func (signature *UserSignature) IsNameExists() (exists bool, err error) {
 
 func GetFileExtensionFromBase64(content []byte) (ext string, err error) {
 	filetype := http.DetectContentType(content)
-	extensions, err := mime.ExtensionsByType(filetype)
-	if err != nil {
-		return "", err
+	switch filetype {
+	case "image/jpeg", "image/pjpeg":
+		return ".jpg", nil
+	case "image/png":
+		return ".png", nil
+	case "image/gif":
+		return ".gif", nil
+	case "image/webp":
+		return ".webp", nil
+	case "image/bmp":
+		return ".bmp", nil
+	case "application/pdf":
+		return ".pdf", nil
 	}
-
+	extensions, err := mime.ExtensionsByType(filetype)
+	if err != nil || len(extensions) == 0 {
+		return "", errors.New("unsupported file type: " + filetype)
+	}
 	return extensions[len(extensions)-1], nil
 }
 
