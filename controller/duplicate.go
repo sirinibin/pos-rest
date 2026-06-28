@@ -16,6 +16,49 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// replaceStoreID recursively walks every document and replaces the old store ID
+// with the new store ID wherever it appears — as a map key, a string value, or
+// a primitive.ObjectID value. Covers fields like:
+//   - product_stores.<OLD_ID>  (key)
+//   - store_id: <OLD_OID>      (ObjectID value)
+//   - store_id: "<OLD_STR>"    (string value)
+func replaceStoreID(doc bson.M, oldStr string, oldOID primitive.ObjectID, newStr string, newOID primitive.ObjectID) bson.M {
+	result := bson.M{}
+	for k, v := range doc {
+		key := k
+		if k == oldStr {
+			key = newStr
+		}
+		result[key] = replaceStoreIDValue(v, oldStr, oldOID, newStr, newOID)
+	}
+	return result
+}
+
+func replaceStoreIDValue(v interface{}, oldStr string, oldOID primitive.ObjectID, newStr string, newOID primitive.ObjectID) interface{} {
+	switch val := v.(type) {
+	case bson.M:
+		return replaceStoreID(val, oldStr, oldOID, newStr, newOID)
+	case bson.A:
+		result := make(bson.A, len(val))
+		for i, item := range val {
+			result[i] = replaceStoreIDValue(item, oldStr, oldOID, newStr, newOID)
+		}
+		return result
+	case primitive.ObjectID:
+		if val == oldOID {
+			return newOID
+		}
+		return val
+	case string:
+		if val == oldStr {
+			return newStr
+		}
+		return val
+	default:
+		return val
+	}
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type DuplicateStepData struct {
@@ -65,6 +108,7 @@ func newDuplicateJob(oldStoreID, newStoreID, newStoreName string) *DuplicateJob 
 			{ID: "create_store_db", Name: "Initialize new store database", Status: "pending"},
 			{ID: "copy_collections", Name: "Copy MongoDB collections", Status: "pending"},
 			{ID: "update_store_refs", Name: "Update store references in all records", Status: "pending"},
+			{ID: "update_main_db_refs", Name: "Update product/customer/vendor store keys in main DB", Status: "pending"},
 			{ID: "copy_images", Name: "Copy store images", Status: "pending"},
 			{ID: "copy_zatca", Name: "Copy Zatca files", Status: "pending"},
 			{ID: "create_indexes", Name: "Create database indexes", Status: "pending"},
@@ -307,30 +351,27 @@ func runDuplicateJob(
 	delete(storeDoc, "deleted_at")
 	delete(storeDoc, "deleted_by_name")
 
-	// Zatca: if Phase 2 and connected, keep env=production but disconnect — user must reconnect manually
+	// Zatca: for any Phase 2 store, always disconnect and remove all credentials — preserve only phase and env
 	if zatca, ok := storeDoc["zatca"].(bson.M); ok {
 		if phase, _ := zatca["phase"].(string); phase == "2" {
-			if connected, _ := zatca["connected"].(bool); connected {
-				zatca["env"] = "production"
-				zatca["connected"] = false
-				zatca["otp"] = ""
-				zatca["private_key"] = ""
-				zatca["csr"] = ""
-				zatca["binary_security_token"] = ""
-				zatca["secret"] = ""
-				zatca["production_binary_security_token"] = ""
-				zatca["production_secret"] = ""
-				zatca["compliance_request_id"] = int64(0)
-				zatca["production_request_id"] = int64(0)
-				zatca["last_connected_at"] = nil
-				zatca["connected_by"] = nil
-				zatca["disconnected_by"] = nil
-				zatca["last_disconnected_at"] = nil
-				zatca["connection_failed_count"] = int64(0)
-				zatca["connection_errors"] = []string{}
-				zatca["connection_last_failed_at"] = nil
-				storeDoc["zatca"] = zatca
-			}
+			zatca["connected"] = false
+			delete(zatca, "otp")
+			delete(zatca, "private_key")
+			delete(zatca, "csr")
+			delete(zatca, "binary_security_token")
+			delete(zatca, "secret")
+			delete(zatca, "production_binary_security_token")
+			delete(zatca, "production_secret")
+			delete(zatca, "compliance_request_id")
+			delete(zatca, "production_request_id")
+			delete(zatca, "last_connected_at")
+			delete(zatca, "connected_by")
+			delete(zatca, "disconnected_by")
+			delete(zatca, "last_disconnected_at")
+			delete(zatca, "connection_failed_count")
+			delete(zatca, "connection_errors")
+			delete(zatca, "connection_last_failed_at")
+			storeDoc["zatca"] = zatca
 		}
 	}
 
@@ -373,6 +414,7 @@ func runDuplicateJob(
 			if err := cursor.Decode(&doc); err != nil {
 				continue
 			}
+			doc = replaceStoreID(doc, oldStoreIDStr, oldStoreOID, newStoreIDStr, newStoreOID)
 			docs = append(docs, doc)
 		}
 		cursor.Close(ctx)
@@ -406,7 +448,49 @@ func runDuplicateJob(
 	}
 	job.setStep("update_store_refs", "done", 100, "")
 
-	// ── Step 5: Copy images/<oldID> → images/<newID> ─────────────────────────
+	// ── Step 5: Copy store-keyed sub-docs in main DB (product/customer/vendor) ─
+	job.setStep("update_main_db_refs", "running", 0, "")
+	type mainDBMap struct {
+		collection string
+		field      string
+	}
+	mainDBMaps := []mainDBMap{
+		{collection: "product", field: "product_stores"},
+		{collection: "customer", field: "stores"},
+		{collection: "vendor", field: "stores"},
+	}
+	for mi, m := range mainDBMaps {
+		progress := float64(mi) / float64(len(mainDBMaps)) * 100.0
+		job.setStep("update_main_db_refs", "running", progress, "Updating "+m.collection+"."+m.field+"…")
+
+		col := mainDB.Collection(m.collection)
+		cur, err := col.Find(ctx, bson.M{m.field + "." + oldStoreIDStr: bson.M{"$exists": true}})
+		if err != nil {
+			continue
+		}
+		for cur.Next(ctx) {
+			var doc bson.M
+			if err := cur.Decode(&doc); err != nil {
+				continue
+			}
+			fieldMap, ok := doc[m.field].(bson.M)
+			if !ok {
+				continue
+			}
+			oldData, exists := fieldMap[oldStoreIDStr]
+			if !exists {
+				continue
+			}
+			_, _ = col.UpdateOne(ctx,
+				bson.M{"_id": doc["_id"]},
+				bson.M{"$set": bson.M{m.field + "." + newStoreIDStr: oldData}},
+			)
+		}
+		cur.Close(ctx)
+	}
+	job.setStep("update_main_db_refs", "done", 100, "")
+
+	// ── Step 6: Copy images/<oldID> → images/<newID> ─────────────────────────
 	job.setStep("copy_images", "running", 0, "")
 	srcImages := "images/" + oldStoreIDStr
 	dstImages := "images/" + newStoreIDStr
