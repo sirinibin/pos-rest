@@ -143,6 +143,7 @@ type StoreSettings struct {
 	EvolutionAPIKey                             string          `bson:"evolution_api_key" json:"evolution_api_key,omitempty"`
 	EvolutionInstanceName                       string          `bson:"evolution_instance_name" json:"evolution_instance_name,omitempty"`
 	UseWhatsAppAPI                              bool            `bson:"use_whatsapp_api" json:"use_whatsapp_api"`
+	AllowProductsDuplicatesByDefault            bool            `bson:"allow_products_duplicates_by_default" json:"allow_products_duplicates_by_default"`
 }
 
 type InvoiceSettings struct {

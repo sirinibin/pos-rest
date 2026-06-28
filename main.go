@@ -803,10 +803,13 @@ func cronJobsEveryHour() error {
 	//go models.RunBIIncrementalUpdateForAllStores()
 
 	/*
-		err := models.ProcessQuotations()
+		err := models.ProcessProducts()
 		if err != nil {
 			log.Print(err)
-		}
+		}*/
+
+	/*
+
 
 		err = models.ProcessSalesReturns()
 		if err != nil {

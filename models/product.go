@@ -2486,10 +2486,18 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		sortBy := bson.D{
 			bson.E{Key: "score", Value: bson.M{"$meta": "textScore"}},
 			bson.E{Key: sortFieldName, Value: sortValue},
+			bson.E{Key: "_id", Value: -1},
 		}
 		findOptions.SetSort(sortBy)
 	} else {
-		findOptions.SetSort(criterias.SortBy)
+		sortDoc := bson.D{}
+		for k, v := range criterias.SortBy {
+			sortDoc = append(sortDoc, bson.E{Key: k, Value: v})
+		}
+		if _, exists := criterias.SortBy["_id"]; !exists {
+			sortDoc = append(sortDoc, bson.E{Key: "_id", Value: -1})
+		}
+		findOptions.SetSort(sortDoc)
 	}
 
 	if !loadData {
@@ -3698,13 +3706,9 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		/*if store.Code != "MBDIT" && store.Code != "MBDI" && store.Code != "MBDI-SIMULATION" {
+		if store.Code != "MBDI" {
 			continue
-		}*/
-
-		/*if store.Code != "LGK" && store.Code != "LGK-SIMULATION" {
-			continue
-		}*/
+		}
 		totalCount, err := store.GetTotalCount(bson.M{
 			//	"part_number": "8938",
 		}, "product")
@@ -3744,8 +3748,7 @@ func ProcessProducts() error {
 				continue
 			}
 
-			product.GeneratePrefixes()
-			product.SetAdditionalkeywords()
+			product.AllowDuplicates = true
 			err = product.Update(&store.ID)
 			if err != nil {
 				return errors.New("Error updating product:" + err.Error())
