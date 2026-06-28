@@ -82,6 +82,62 @@ type DeliveryNote struct {
 	Notified               bool                  `json:"notified,omitempty" bson:"notified"`
 }
 
+func (deliveryNote *DeliveryNote) SetUnKnownCustomerIfNoCustomerSelected() error {
+	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if deliveryNote.CustomerID != nil && !deliveryNote.CustomerID.IsZero() {
+		return nil
+	}
+
+	customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer == nil {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:         "UNKNOWN",
+			NameInArabic: "مجهول",
+			CreatedBy:    deliveryNote.CreatedBy,
+			UpdatedBy:    deliveryNote.CreatedBy,
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+			StoreID:      deliveryNote.StoreID,
+		}
+
+		err = newCustomer.MakeCode()
+		if err != nil {
+			return err
+		}
+
+		newCustomer.GenerateSearchWords()
+		newCustomer.SetSearchLabel()
+		newCustomer.SetAdditionalkeywords()
+
+		err = newCustomer.Insert()
+		if err != nil {
+			return err
+		}
+
+		err = newCustomer.UpdateForeignLabelFields()
+		if err != nil {
+			return err
+		}
+
+		customer = &newCustomer
+	}
+
+	deliveryNote.CustomerID = &customer.ID
+	deliveryNote.CustomerName = customer.Name
+	deliveryNote.CustomerNameArabic = customer.NameInArabic
+
+	return nil
+}
+
 func (deliveryNote *DeliveryNote) CreateNewCustomerFromName() error {
 	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
 	if err != nil {

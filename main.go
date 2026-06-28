@@ -230,6 +230,10 @@ func main() {
 	router.HandleFunc("/v1/store/{id}/duplicate/size", controller.GetStoreDuplicateSize).Methods("GET")
 	router.HandleFunc("/v1/store/{id}/duplicate/start", controller.StartStoreDuplicate).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/duplicate/progress", controller.GetStoreDuplicateProgress).Methods("GET")
+	router.HandleFunc("/v1/store/{id}/restore", controller.RestoreStore).Methods("POST")
+	router.HandleFunc("/v1/store/{id}/mark-permanent-deletion", controller.MarkStoreForPermanentDeletion).Methods("POST")
+	router.HandleFunc("/v1/store/{id}/abort-permanent-deletion", controller.AbortStorePermanentDeletion).Methods("POST")
+	router.HandleFunc("/v1/store/{id}/permanent", controller.PermanentlyDeleteStore).Methods("DELETE")
 	router.HandleFunc("/v1/store/{id}", controller.ViewStore).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.UpdateStore).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
@@ -705,6 +709,11 @@ func main() {
 	})
 	s.Every(1).Hour().Do(func() {
 		go models.SyncWhatsAppContactsForAllStores()
+	})
+	s.Every(1).Hour().Do(func() {
+		if err := models.ProcessScheduledPermanentDeletions(); err != nil {
+			log.Printf("[store-cleanup] error: %v", err)
+		}
 	})
 	s.StartAsync()
 

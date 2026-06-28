@@ -127,6 +127,14 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = deliverynote.SetUnKnownCustomerIfNoCustomerSelected()
+	if err != nil {
+		response.Status = false
+		response.Errors["unknown_customer"] = "error setting unknown customer: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	err = deliverynote.CreateNewCustomerFromName()
 	if err != nil {
 		response.Status = false
@@ -270,6 +278,14 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	if errs := deliverynote.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = deliverynote.SetUnKnownCustomerIfNoCustomerSelected()
+	if err != nil {
+		response.Status = false
+		response.Errors["unknown_customer"] = "error setting unknown customer: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}

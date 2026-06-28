@@ -467,3 +467,243 @@ func DeleteStore(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 
 }
+
+// RestoreStore : handler for POST /v1/store/{id}/restore
+func RestoreStore(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to find store:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if !store.Deleted {
+		response.Status = false
+		response.Errors["store"] = "Store is not deleted"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = store.RestoreStore()
+	if err != nil {
+		response.Status = false
+		response.Errors["restore"] = "Unable to restore store:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Store restored successfully"
+	json.NewEncoder(w).Encode(response)
+}
+
+// MarkStoreForPermanentDeletion : handler for POST /v1/store/{id}/mark-permanent-deletion
+func MarkStoreForPermanentDeletion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to find store:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if !store.Deleted {
+		response.Status = false
+		response.Errors["store"] = "Store must be soft-deleted before marking for permanent deletion"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var body struct {
+		Days int `json:"days"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.Days <= 0 {
+		body.Days = 14
+	}
+
+	err = store.MarkForPermanentDeletion(body.Days)
+	if err != nil {
+		response.Status = false
+		response.Errors["mark"] = "Unable to mark for permanent deletion:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Marked for permanent deletion successfully"
+	json.NewEncoder(w).Encode(response)
+}
+
+// PermanentlyDeleteStore : handler for DELETE /v1/store/{id}/permanent
+func PermanentlyDeleteStore(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid user ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	accessingUser, err := models.FindUserByID(&userID, bson.M{})
+	if err != nil || accessingUser.Role != "Admin" {
+		response.Status = false
+		response.Errors["role"] = "Only Admins can permanently delete stores"
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to find store:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if !store.Deleted {
+		response.Status = false
+		response.Errors["store"] = "Store must be soft-deleted before permanent deletion"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Immediate permanent deletion is only allowed if store is less than 3 days old
+	if store.CreatedAt == nil || time.Since(*store.CreatedAt) > 3*24*time.Hour {
+		response.Status = false
+		response.Errors["store"] = "Immediate permanent deletion is only allowed for stores created within the last 3 days"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = store.PermanentlyDelete()
+	if err != nil {
+		response.Status = false
+		response.Errors["delete"] = "Unable to permanently delete store:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Store permanently deleted"
+	json.NewEncoder(w).Encode(response)
+}
+
+// AbortStorePermanentDeletion : handler for POST /v1/store/{id}/abort-permanent-deletion
+func AbortStorePermanentDeletion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to find store:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if !store.MarkedForPermanentDeletion {
+		response.Status = false
+		response.Errors["store"] = "Store is not marked for permanent deletion"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = store.UnmarkForPermanentDeletion()
+	if err != nil {
+		response.Status = false
+		response.Errors["abort"] = "Unable to abort permanent deletion:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Permanent deletion aborted"
+	json.NewEncoder(w).Encode(response)
+}

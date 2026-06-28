@@ -307,11 +307,11 @@ func runDuplicateJob(
 	delete(storeDoc, "deleted_at")
 	delete(storeDoc, "deleted_by_name")
 
-	// Zatca: if Phase 2 and connected, reset to NonProduction (SandBox) and disconnect
+	// Zatca: if Phase 2 and connected, keep env=production but disconnect — user must reconnect manually
 	if zatca, ok := storeDoc["zatca"].(bson.M); ok {
 		if phase, _ := zatca["phase"].(string); phase == "2" {
 			if connected, _ := zatca["connected"].(bool); connected {
-				zatca["env"] = "NonProduction"
+				zatca["env"] = "production"
 				zatca["connected"] = false
 				zatca["otp"] = ""
 				zatca["private_key"] = ""

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -53,6 +54,9 @@ type Store struct {
 	DeletedBy                              *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser                          *User                 `json:"deleted_by_user,omitempty"`
 	DeletedAt                              *time.Time            `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	MarkedForPermanentDeletion             bool                  `bson:"marked_for_permanent_deletion,omitempty" json:"marked_for_permanent_deletion,omitempty"`
+	MarkedForPermanentDeletionAt           *time.Time            `bson:"marked_for_permanent_deletion_at,omitempty" json:"marked_for_permanent_deletion_at,omitempty"`
+	PermanentDeletionAfterDays             int                   `bson:"permanent_deletion_after_days,omitempty" json:"permanent_deletion_after_days,omitempty"`
 	CreatedAt                              *time.Time            `bson:"created_at,omitempty" json:"created_at,omitempty"`
 	UpdatedAt                              *time.Time            `bson:"updated_at,omitempty" json:"updated_at,omitempty"`
 	CreatedBy                              *primitive.ObjectID   `json:"created_by,omitempty" bson:"created_by,omitempty"`
@@ -343,7 +347,6 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (stores []Store, criter
 	}
 
 	criterias.SearchBy = make(map[string]interface{})
-	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	tokenClaims, err := AuthenticateByAccessToken(r)
 	if err != nil {
@@ -374,6 +377,20 @@ func SearchStore(w http.ResponseWriter, r *http.Request) (stores []Store, criter
 	timeZoneOffset := TimezoneOffsetFromRequest(r)
 	var keys []string
 	var ok bool
+
+	keys, ok = r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		switch strings.ToLower(keys[0]) {
+		case "yes":
+			criterias.SearchBy["deleted"] = true
+		case "all":
+			// no filter on deleted
+		default:
+			criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+		}
+	} else {
+		criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+	}
 
 	var createdAtStartDate time.Time
 	var createdAtEndDate time.Time
@@ -1128,6 +1145,137 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 	}
 
 	return nil
+}
+
+func (store *Store) RestoreStore() error {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": store.ID},
+		bson.M{"$set": bson.M{"deleted": false}, "$unset": bson.M{
+			"deleted_by":                      "",
+			"deleted_at":                      "",
+			"deleted_by_name":                 "",
+			"marked_for_permanent_deletion":    "",
+			"marked_for_permanent_deletion_at": "",
+			"permanent_deletion_after_days":    "",
+		}},
+	)
+	return err
+}
+
+func (store *Store) MarkForPermanentDeletion(days int) error {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": store.ID},
+		bson.M{"$set": bson.M{
+			"marked_for_permanent_deletion":    true,
+			"marked_for_permanent_deletion_at": now,
+			"permanent_deletion_after_days":    days,
+		}},
+	)
+	return err
+}
+
+func (store *Store) UnmarkForPermanentDeletion() error {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": store.ID},
+		bson.M{"$unset": bson.M{
+			"marked_for_permanent_deletion":    "",
+			"marked_for_permanent_deletion_at": "",
+			"permanent_deletion_after_days":    "",
+		}},
+	)
+	return err
+}
+
+// ProcessScheduledPermanentDeletions finds all stores marked for permanent deletion
+// whose scheduled time has passed and hard-deletes them.
+func ProcessScheduledPermanentDeletions() error {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cursor, err := collection.Find(ctx, bson.M{"marked_for_permanent_deletion": true})
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+
+	now := time.Now()
+	for cursor.Next(ctx) {
+		var store Store
+		if err := cursor.Decode(&store); err != nil {
+			log.Printf("[store-cleanup] decode error: %v", err)
+			continue
+		}
+		if store.MarkedForPermanentDeletionAt == nil {
+			continue
+		}
+		days := store.PermanentDeletionAfterDays
+		if days <= 0 {
+			days = 14
+		}
+		deadline := store.MarkedForPermanentDeletionAt.Add(time.Duration(days) * 24 * time.Hour)
+		if now.After(deadline) {
+			if err := store.PermanentlyDelete(); err != nil {
+				log.Printf("[store-cleanup] failed to delete store %s: %v", store.ID.Hex(), err)
+			} else {
+				log.Printf("[store-cleanup] permanently deleted store %s (%s)", store.ID.Hex(), store.Name)
+			}
+		}
+	}
+	return cursor.Err()
+}
+
+func (store *Store) PermanentlyDelete() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Drop the per-store MongoDB database
+	dbName := "store_" + store.ID.Hex()
+	if err := db.Client("").Database(dbName).Drop(ctx); err != nil {
+		return fmt.Errorf("failed to drop store database: %w", err)
+	}
+
+	// Delete store images directory
+	if err := os.RemoveAll("images/" + store.ID.Hex()); err != nil {
+		return fmt.Errorf("failed to delete store images: %w", err)
+	}
+
+	// Delete store ZATCA XMLs directory
+	if err := os.RemoveAll("zatca/" + store.ID.Hex()); err != nil {
+		return fmt.Errorf("failed to delete store zatca files: %w", err)
+	}
+
+	// Remove this store from all users' store_ids arrays (without deleting users)
+	userCollection := db.Client("").Database(db.GetPosDB()).Collection("user")
+	_, err := userCollection.UpdateMany(
+		ctx,
+		bson.M{"store_ids": store.ID},
+		bson.M{"$pull": bson.M{"store_ids": store.ID}},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to remove store from users: %w", err)
+	}
+
+	// Hard-delete the store document from the main DB
+	storeCollection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	_, err = storeCollection.DeleteOne(ctx, bson.M{"_id": store.ID})
+	return err
 }
 
 func FindStoreByCode(
