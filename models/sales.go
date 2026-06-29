@@ -3122,6 +3122,7 @@ func (order *Order) AddPayments() error {
 			OrderCode:     order.Code,
 			Amount:        payment.Amount,
 			Method:        payment.Method,
+			Description:   payment.Description,
 			Date:          payment.Date,
 			CreatedAt:     order.CreatedAt,
 			UpdatedAt:     order.UpdatedAt,
@@ -3158,6 +3159,7 @@ func (order *Order) UpdatePayments() error {
 				OrderCode:     order.Code,
 				Amount:        payment.Amount,
 				Method:        payment.Method,
+				Description:   payment.Description,
 				Date:          payment.Date,
 				CreatedAt:     &now,
 				UpdatedAt:     &now,
@@ -3183,6 +3185,7 @@ func (order *Order) UpdatePayments() error {
 			salesPayment.Date = payment.Date
 			salesPayment.Amount = payment.Amount
 			salesPayment.Method = payment.Method
+			salesPayment.Description = payment.Description
 			salesPayment.UpdatedAt = &now
 			salesPayment.UpdatedBy = order.UpdatedBy
 			salesPayment.UpdatedByName = order.UpdatedByName

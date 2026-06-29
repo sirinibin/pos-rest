@@ -572,6 +572,7 @@ func (quotationsalesReturn *QuotationSalesReturn) AddPayments() error {
 			QuotationCode:            quotationsalesReturn.QuotationCode,
 			Amount:                   payment.Amount,
 			Method:                   payment.Method,
+			Description:              payment.Description,
 			Date:                     payment.Date,
 			CreatedAt:                quotationsalesReturn.CreatedAt,
 			UpdatedAt:                quotationsalesReturn.UpdatedAt,
@@ -608,6 +609,7 @@ func (quotationsalesReturn *QuotationSalesReturn) UpdatePayments() error {
 				QuotationCode:            quotationsalesReturn.QuotationCode,
 				Amount:                   payment.Amount,
 				Method:                   payment.Method,
+				Description:              payment.Description,
 				Date:                     payment.Date,
 				CreatedAt:                &now,
 				UpdatedAt:                &now,
@@ -633,6 +635,7 @@ func (quotationsalesReturn *QuotationSalesReturn) UpdatePayments() error {
 			quotationsalesReturnPayment.Date = payment.Date
 			quotationsalesReturnPayment.Amount = payment.Amount
 			quotationsalesReturnPayment.Method = payment.Method
+			quotationsalesReturnPayment.Description = payment.Description
 			quotationsalesReturnPayment.UpdatedAt = &now
 			quotationsalesReturnPayment.UpdatedBy = quotationsalesReturn.UpdatedBy
 			quotationsalesReturnPayment.UpdatedByName = quotationsalesReturn.UpdatedByName

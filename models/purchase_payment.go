@@ -26,6 +26,7 @@ type PurchasePayment struct {
 	PurchaseCode     string              `json:"purchase_code" bson:"purchase_code"`
 	Amount           float64             `json:"amount" bson:"amount"`
 	Method           string              `json:"method" bson:"method"`
+	Description      *string             `json:"description,omitempty" bson:"description,omitempty"`
 	ReferenceType    string              `json:"reference_type" bson:"reference_type"`
 	ReferenceCode    string              `json:"reference_code" bson:"reference_code"`
 	ReferenceID      *primitive.ObjectID `json:"reference_id" bson:"reference_id"`

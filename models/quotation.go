@@ -473,6 +473,7 @@ func (quotation *Quotation) AddPayments() error {
 			QuotationCode: quotation.Code,
 			Amount:        payment.Amount,
 			Method:        payment.Method,
+			Description:   payment.Description,
 			Date:          payment.Date,
 			CreatedAt:     quotation.CreatedAt,
 			UpdatedAt:     quotation.UpdatedAt,
@@ -511,6 +512,7 @@ func (quotation *Quotation) UpdatePayments() error {
 				QuotationCode: quotation.Code,
 				Amount:        payment.Amount,
 				Method:        payment.Method,
+				Description:   payment.Description,
 				Date:          payment.Date,
 				CreatedAt:     &now,
 				UpdatedAt:     &now,
@@ -536,6 +538,7 @@ func (quotation *Quotation) UpdatePayments() error {
 			salesPayment.Date = payment.Date
 			salesPayment.Amount = payment.Amount
 			salesPayment.Method = payment.Method
+			salesPayment.Description = payment.Description
 			salesPayment.UpdatedAt = &now
 			salesPayment.UpdatedBy = quotation.UpdatedBy
 			salesPayment.UpdatedByName = quotation.UpdatedByName

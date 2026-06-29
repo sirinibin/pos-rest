@@ -330,6 +330,7 @@ func (model *PurchaseReturn) AddPayments() error {
 			PurchaseCode:       model.PurchaseCode,
 			Amount:             payment.Amount,
 			Method:             payment.Method,
+			Description:        payment.Description,
 			Date:               payment.Date,
 			CreatedAt:          model.CreatedAt,
 			UpdatedAt:          model.UpdatedAt,
@@ -366,6 +367,7 @@ func (model *PurchaseReturn) UpdatePayments() error {
 				PurchaseCode:       model.PurchaseCode,
 				Amount:             payment.Amount,
 				Method:             payment.Method,
+				Description:        payment.Description,
 				Date:               payment.Date,
 				CreatedAt:          &now,
 				UpdatedAt:          &now,
@@ -390,6 +392,7 @@ func (model *PurchaseReturn) UpdatePayments() error {
 			purchaseReturnPayment.Date = payment.Date
 			purchaseReturnPayment.Amount = payment.Amount
 			purchaseReturnPayment.Method = payment.Method
+			purchaseReturnPayment.Description = payment.Description
 			purchaseReturnPayment.UpdatedAt = &now
 			purchaseReturnPayment.UpdatedBy = model.UpdatedBy
 			purchaseReturnPayment.UpdatedByName = model.UpdatedByName

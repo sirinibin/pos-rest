@@ -345,6 +345,7 @@ func (model *Purchase) AddPayments() error {
 			PurchaseCode:  model.Code,
 			Amount:        payment.Amount,
 			Method:        payment.Method,
+			Description:   payment.Description,
 			Date:          payment.Date,
 			CreatedAt:     model.CreatedAt,
 			UpdatedAt:     model.UpdatedAt,
@@ -380,6 +381,7 @@ func (model *Purchase) UpdatePayments() error {
 				PurchaseCode:  model.Code,
 				Amount:        payment.Amount,
 				Method:        payment.Method,
+				Description:   payment.Description,
 				Date:          payment.Date,
 				CreatedAt:     &now,
 				UpdatedAt:     &now,
@@ -405,6 +407,7 @@ func (model *Purchase) UpdatePayments() error {
 			purchasePayment.Date = payment.Date
 			purchasePayment.Amount = payment.Amount
 			purchasePayment.Method = payment.Method
+			purchasePayment.Description = payment.Description
 			purchasePayment.UpdatedAt = &now
 			purchasePayment.UpdatedBy = model.UpdatedBy
 			purchasePayment.UpdatedByName = model.UpdatedByName

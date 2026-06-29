@@ -236,6 +236,7 @@ func (salesReturn *SalesReturn) AddPayments() error {
 			OrderCode:       salesReturn.OrderCode,
 			Amount:          payment.Amount,
 			Method:          payment.Method,
+			Description:     payment.Description,
 			Date:            payment.Date,
 			CreatedAt:       salesReturn.CreatedAt,
 			UpdatedAt:       salesReturn.UpdatedAt,
@@ -287,6 +288,7 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 				OrderCode:       salesReturn.OrderCode,
 				Amount:          payment.Amount,
 				Method:          payment.Method,
+				Description:     payment.Description,
 				Date:            payment.Date,
 				CreatedAt:       &now,
 				UpdatedAt:       &now,
@@ -312,6 +314,7 @@ func (salesReturn *SalesReturn) UpdatePayments() error {
 			salesReturnPayment.Date = payment.Date
 			salesReturnPayment.Amount = payment.Amount
 			salesReturnPayment.Method = payment.Method
+			salesReturnPayment.Description = payment.Description
 			salesReturnPayment.UpdatedAt = &now
 			salesReturnPayment.UpdatedBy = salesReturn.UpdatedBy
 			salesReturnPayment.UpdatedByName = salesReturn.UpdatedByName
