@@ -148,6 +148,8 @@ type StoreSettings struct {
 	EvolutionInstanceName                       string          `bson:"evolution_instance_name" json:"evolution_instance_name,omitempty"`
 	UseWhatsAppAPI                              bool            `bson:"use_whatsapp_api" json:"use_whatsapp_api"`
 	AllowProductsDuplicatesByDefault            bool            `bson:"allow_products_duplicates_by_default" json:"allow_products_duplicates_by_default"`
+	SalesCreateFormDesign                       string          `bson:"sales_create_form_design" json:"sales_create_form_design,omitempty"`
+	SalesReturnCreateFormDesign                 string          `bson:"sales_return_create_form_design" json:"sales_return_create_form_design,omitempty"`
 }
 
 type InvoiceSettings struct {
