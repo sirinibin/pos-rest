@@ -734,7 +734,7 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 		}
 
 		err = store.UpdateManyByCollectionName(
-			"sales_return",
+			"salesreturn",
 			bson.M{"customer_id": customer.ID},
 			bson.M{
 				"customer_name":        customer.Name,
@@ -914,6 +914,16 @@ func (customer *Customer) AttributesValueChangeEvent(customerOld *Customer) erro
 	}
 
 	if customer.VATNo != customerOld.VATNo {
+		_ = store.UpdateManyByCollectionName(
+			"order",
+			bson.M{"customer_id": customer.ID},
+			bson.M{"vat_no": customer.VATNo},
+		)
+		_ = store.UpdateManyByCollectionName(
+			"sales_return",
+			bson.M{"customer_id": customer.ID},
+			bson.M{"vat_no": customer.VATNo},
+		)
 		if customerOld.VATNo != "" {
 			err = store.UpdateManyByCollectionName(
 				"vendor",

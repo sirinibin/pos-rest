@@ -273,6 +273,9 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	customer.ID = customerID
+	if customer.StoreID == nil {
+		customer.StoreID = customerOld.StoreID
+	}
 
 	// Validate data
 	if errs := customer.Validate(w, r, "update"); len(errs) > 0 {

@@ -529,7 +529,7 @@ func (vendor *Vendor) AttributesValueChangeEvent(vendorOld *Vendor) error {
 		}
 
 		err = store.UpdateManyByCollectionName(
-			"purchase_return",
+			"purchasereturn",
 			bson.M{"vendor_id": vendor.ID},
 			bson.M{
 				"vendor_name":        vendor.Name,

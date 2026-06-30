@@ -236,6 +236,11 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	vendor.ID = vendorID
+	if vendor.StoreID == nil {
+		vendor.StoreID = vendorOld.StoreID
+	}
+
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
 		response.Status = false
