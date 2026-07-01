@@ -92,6 +92,8 @@ type Purchase struct {
 	AutoRoundingAmount         bool     `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
 	CashDiscount               float64  `bson:"cash_discount" json:"cash_discount"`
 	ReturnCashDiscount         float64  `bson:"return_cash_discount" json:"return_cash_discount"`
+	Commission                 float64  `bson:"commission" json:"commission"`
+	CommissionPaymentMethod    string   `bson:"commission_payment_method" json:"commission_payment_method"`
 	PaymentStatus              string   `bson:"payment_status" json:"payment_status"`
 	ShippingOrHandlingFees     float64  `bson:"shipping_handling_fees" json:"shipping_handling_fees"`
 	ExpectedRetailProfit       float64  `bson:"retail_profit" json:"retail_profit"`
@@ -1688,6 +1690,10 @@ func (purchase *Purchase) Validate(
 
 	if len(purchase.Products) > 0 && purchase.NetTotal > 0 && purchase.CashDiscount >= purchase.NetTotal {
 		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", purchase.NetTotal)
+	}
+
+	if purchase.Commission > 0 && govalidator.IsNull(purchase.CommissionPaymentMethod) {
+		errs["commission_payment_method"] = "Commission payment method is required"
 	}
 
 	for i, product := range purchase.Products {

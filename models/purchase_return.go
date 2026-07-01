@@ -84,8 +84,10 @@ type PurchaseReturn struct {
 	ActualNetTotal         float64  `bson:"actual_net_total" json:"actual_net_total"`
 	RoundingAmount         float64  `bson:"rounding_amount" json:"rounding_amount"`
 	AutoRoundingAmount     bool     `bson:"auto_rounding_amount" json:"auto_rounding_amount"`
-	CashDiscount           float64  `bson:"cash_discount" json:"cash_discount"`
-	PaymentStatus          string   `bson:"payment_status" json:"payment_status"`
+	CashDiscount              float64  `bson:"cash_discount" json:"cash_discount"`
+	Commission                float64  `bson:"commission" json:"commission"`
+	CommissionPaymentMethod   string   `bson:"commission_payment_method" json:"commission_payment_method"`
+	PaymentStatus             string   `bson:"payment_status" json:"payment_status"`
 	/*
 		Deleted                bool                    `bson:"deleted,omitempty" json:"deleted,omitempty"`
 		DeletedBy              *primitive.ObjectID     `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -1411,6 +1413,10 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 	if purchasereturn.NetTotal > 0 && purchasereturn.CashDiscount >= purchasereturn.NetTotal {
 		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", purchasereturn.NetTotal)
+	}
+
+	if purchasereturn.Commission > 0 && govalidator.IsNull(purchasereturn.CommissionPaymentMethod) {
+		errs["commission_payment_method"] = "Commission payment method is required"
 	}
 
 	maxDiscountAllowed := 0.00
