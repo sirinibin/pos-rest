@@ -350,7 +350,7 @@ func (store *Store) CreateIndex(collectionName string, fields bson.M, unique boo
 	}
 
 	// 2. Create the context for this operation
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	// 4. Create a single index
@@ -370,7 +370,7 @@ func (store *Store) CreateIndex(collectionName string, fields bson.M, unique boo
 
 func (store *Store) CreateTextIndex(collectionName string, fields bson.D, indexName string) error {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	indexModel := mongo.IndexModel{
@@ -396,7 +396,7 @@ func (store *Store) CreateCompoundIndex(collectionName string, fields bson.D) er
 		Options: options.Index(),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	indexName, err := collection.Indexes().CreateOne(ctx, mod)
