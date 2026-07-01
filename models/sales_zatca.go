@@ -21,26 +21,44 @@ import (
 )
 
 func (orderProduct OrderProduct) GetZatcaUnit() string {
-	if orderProduct.Unit == "drum" {
+	switch orderProduct.Unit {
+	// Physical product units
+	case "drum":
 		return "DRM"
-	} else if orderProduct.Unit == "Kg" {
+	case "Kg":
 		return "KGM"
-	} else if orderProduct.Unit == "Meter(s)" {
+	case "Meter(s)":
 		return "MTR"
-	} else if orderProduct.Unit == "Gm" {
+	case "Gm":
 		return "GRM"
-	} else if orderProduct.Unit == "L" {
+	case "L":
 		return "LTR"
-	} else if orderProduct.Unit == "Mg" {
+	case "Mg":
 		return "MG"
-	} else if orderProduct.Unit == "set" {
+	case "set":
 		return "SET"
-	} else if orderProduct.Unit == "MMT" {
+	case "MMT":
 		return "MMT"
-	} else if orderProduct.Unit == "CMT" {
+	case "CMT":
 		return "CMT"
+	// Service units (UN/CEFACT Rec 20) — legacy string values
+	case "hour":
+		return "HUR"
+	case "day":
+		return "DAY"
+	case "month":
+		return "MON"
+	case "session", "package", "visit":
+		return "C62"
+	// Direct UN/CEFACT Rec 20 codes — pass through when unit is already stored as a code
+	case "C62", "HUR", "DAY", "WEE", "MON", "ANN", "EA":
+		return orderProduct.Unit
 	}
 
+	if orderProduct.IsService {
+		// Per Visit or any unrecognised service unit → "one" (C62)
+		return "C62"
+	}
 	return "PCE"
 }
 

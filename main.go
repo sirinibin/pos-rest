@@ -230,6 +230,9 @@ func main() {
 	router.HandleFunc("/v1/store/{id}/duplicate/size", controller.GetStoreDuplicateSize).Methods("GET")
 	router.HandleFunc("/v1/store/{id}/duplicate/start", controller.StartStoreDuplicate).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/duplicate/progress", controller.GetStoreDuplicateProgress).Methods("GET")
+	router.HandleFunc("/v1/store/{id}/duplicate-with-products/size", controller.GetStoreDuplicateWithProductsSize).Methods("GET")
+	router.HandleFunc("/v1/store/{id}/duplicate-with-products/start", controller.StartStoreDuplicateWithProducts).Methods("POST")
+	router.HandleFunc("/v1/store/{id}/duplicate-with-products/progress", controller.GetStoreDuplicateWithProductsProgress).Methods("GET")
 	router.HandleFunc("/v1/store/{id}/restore", controller.RestoreStore).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/mark-permanent-deletion", controller.MarkStoreForPermanentDeletion).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/abort-permanent-deletion", controller.AbortStorePermanentDeletion).Methods("POST")
@@ -352,6 +355,14 @@ func main() {
 	router.HandleFunc("/v1/product-category/{id}", controller.UpdateProductCategory).Methods("PUT")
 	router.HandleFunc("/v1/product-category/{id}", controller.DeleteProductCategory).Methods("DELETE")
 	router.HandleFunc("/v1/product-category/restore/{id}", controller.RestoreProductCategory).Methods("POST")
+
+	//ServiceCategory
+	router.HandleFunc("/v1/service-category", controller.CreateServiceCategory).Methods("POST")
+	router.HandleFunc("/v1/service-category", controller.ListServiceCategory).Methods("GET")
+	router.HandleFunc("/v1/service-category/{id}", controller.ViewServiceCategory).Methods("GET")
+	router.HandleFunc("/v1/service-category/{id}", controller.UpdateServiceCategory).Methods("PUT")
+	router.HandleFunc("/v1/service-category/{id}", controller.DeleteServiceCategory).Methods("DELETE")
+	router.HandleFunc("/v1/service-category/restore/{id}", controller.RestoreServiceCategory).Methods("POST")
 
 	//ProductBrand
 	router.HandleFunc("/v1/product-brand", controller.CreateProductBrand).Methods("POST")

@@ -186,6 +186,13 @@ type Product struct {
 	Set                  ProductSet              `json:"set" bson:"set"`
 	AllowDuplicates      bool                    `bson:"allow_duplicates" json:"allow_duplicates"`
 	Note                 string                  `bson:"note,omitempty" json:"note,omitempty"`
+	IsService            bool                    `bson:"is_service" json:"is_service"`
+	DurationMinutes      int                     `bson:"duration_minutes,omitempty" json:"duration_minutes,omitempty"`
+	DurationUnit         string                  `bson:"duration_unit,omitempty" json:"duration_unit,omitempty"`
+	BookingRequired      bool                    `bson:"booking_required" json:"booking_required"`
+	DeliveryMode         string                  `bson:"delivery_mode,omitempty" json:"delivery_mode,omitempty"`
+	ServiceCategoryID    *primitive.ObjectID     `bson:"service_category_id,omitempty" json:"service_category_id,omitempty"`
+	ServiceCategoryName  string                  `bson:"service_category_name,omitempty" json:"service_category_name,omitempty"`
 
 	// BI: Sales Velocity Trend — populated by cron job every 3 hours
 	SalesVelocityTrend       string  `bson:"sales_velocity_trend,omitempty" json:"sales_velocity_trend,omitempty"`
@@ -877,6 +884,8 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 		if value == 1 {
 			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		} else if value == 2 {
+			delete(criterias.SearchBy, "deleted")
 		}
 	}
 
@@ -892,6 +901,68 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 		} else if value == 0 {
 			criterias.SearchBy["is_set"] = bson.M{"$ne": true}
 		}
+	}
+
+	keys, ok = r.URL.Query()["search[is_service]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["is_service"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["is_service"] = bson.M{"$ne": true}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[service_category_id]"]
+	if ok && len(keys[0]) >= 1 {
+		serviceCategoryIds := strings.Split(keys[0], ",")
+		objecIds := []primitive.ObjectID{}
+		for _, id := range serviceCategoryIds {
+			serviceCategoryID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return products, criterias, err
+			}
+			objecIds = append(objecIds, serviceCategoryID)
+		}
+		if len(objecIds) > 0 {
+			criterias.SearchBy["service_category_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[delivery_mode]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["delivery_mode"] = keys[0]
+	}
+
+	keys, ok = r.URL.Query()["search[booking_required]"]
+	if ok && len(keys[0]) >= 1 {
+		bookingValue, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		if bookingValue == 1 {
+			criterias.SearchBy["booking_required"] = bson.M{"$eq": true}
+		} else if bookingValue == 0 {
+			criterias.SearchBy["booking_required"] = bson.M{"$ne": true}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[unit]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["unit"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	}
+
+	keys, ok = r.URL.Query()["search[duration_minutes]"]
+	if ok && len(keys[0]) >= 1 {
+		durationValue, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return products, criterias, err
+		}
+		criterias.SearchBy["duration_minutes"] = durationValue
 	}
 
 	var storeID primitive.ObjectID
@@ -2647,36 +2718,43 @@ func (product *Product) SetSearchLabel() {
 
 	_, ok := product.ProductStores[product.StoreID.Hex()]
 	if ok {
-		stockStr := ""
-		stockCount := 1
-		for warehouseCode, warehouseStock := range product.ProductStores[product.StoreID.Hex()].WarehouseStocks {
-			if stockCount == 1 {
-				stockStr = "("
+		if product.IsService {
+			product.SearchLabel += " [Service]"
+			if product.ProductStores[product.StoreID.Hex()].RetailUnitPrice != 0 {
+				product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[product.StoreID.Hex()].RetailUnitPrice)
 			}
-			warehouseCodeStr := ""
-			warehouseCodeStr = warehouseCode
-			if warehouseCode == "main_store" {
-				warehouseCodeStr = "Main Store"
+		} else {
+			stockStr := ""
+			stockCount := 1
+			for warehouseCode, warehouseStock := range product.ProductStores[product.StoreID.Hex()].WarehouseStocks {
+				if stockCount == 1 {
+					stockStr = "("
+				}
+				warehouseCodeStr := ""
+				warehouseCodeStr = warehouseCode
+				if warehouseCode == "main_store" {
+					warehouseCodeStr = "Main Store"
+				}
+
+				stockStr += warehouseCodeStr + ": " + fmt.Sprintf("%.2f", warehouseStock)
+
+				if product.Unit != "" {
+					stockStr += " " + product.Unit
+				}
+
+				if stockCount < len(product.ProductStores[product.StoreID.Hex()].WarehouseStocks) {
+					stockStr += ", "
+				} else {
+					stockStr += ")"
+				}
+
+				stockCount++
 			}
 
-			stockStr += warehouseCodeStr + ": " + fmt.Sprintf("%.2f", warehouseStock)
-
-			if product.Unit != "" {
-				stockStr += " " + product.Unit
+			product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[product.StoreID.Hex()].Stock) + " " + product.Unit + " " + stockStr
+			if product.ProductStores[product.StoreID.Hex()].RetailUnitPrice != 0 {
+				product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[product.StoreID.Hex()].RetailUnitPrice)
 			}
-
-			if stockCount < len(product.ProductStores[product.StoreID.Hex()].WarehouseStocks) {
-				stockStr += ", "
-			} else {
-				stockStr += ")"
-			}
-
-			stockCount++
-		}
-
-		product.SearchLabel += " - Stock: " + fmt.Sprintf("%.2f", product.ProductStores[product.StoreID.Hex()].Stock) + " " + product.Unit + " " + stockStr
-		if product.ProductStores[product.StoreID.Hex()].RetailUnitPrice != 0 {
-			product.SearchLabel += " - Unit price: " + fmt.Sprintf("%.2f", product.ProductStores[product.StoreID.Hex()].RetailUnitPrice)
 		}
 	}
 
@@ -2796,7 +2874,14 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 
 	} //end for
 
+	if product.ProductStores == nil {
+		product.ProductStores = make(map[string]ProductStore)
+	}
+
 	productStores := product.ProductStores[store.ID.Hex()]
+	if productStores.StoreID.IsZero() {
+		productStores.StoreID = store.ID
+	}
 
 	productStores.StocksAdded = stocksAdded
 	productStores.StocksRemoved = stocksRemoved
@@ -3150,29 +3235,71 @@ func (product *Product) CopyToStore(storeID *primitive.ObjectID) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
 
+	oldProductStore := product.ProductStores[product.StoreID.Hex()]
+
 	productInDb, err := store.FindProductByID(&product.ID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
 	}
 
-	if productInDb != nil {
+	if productInDb == nil {
+		productInDb, err = store.FindProductByPartNumber(product.PartNumber, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+	}
+
+	resolveProductBrand := func(p *Product) error {
+		if p.BrandID == nil {
+			return nil
+		}
+		productBrand, err := store.FindProductBrandByID(p.BrandID, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+		if productBrand != nil {
+			p.BrandID = &productBrand.ID
+			p.BrandName = productBrand.Name
+			return nil
+		}
+		productBrand, err = store.FindProductBrandByName(p.BrandName, bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+		if productBrand != nil {
+			p.BrandID = &productBrand.ID
+			p.BrandName = productBrand.Name
+		}
 		return nil
 	}
 
-	productInDb, err = store.FindProductByPartNumber(product.PartNumber, bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return err
-	}
-
-	if productInDb != nil {
+	resolveProductCategory := func(p *Product) error {
+		if len(p.CategoryID) == 0 {
+			return nil
+		}
+		productCategory, err := store.FindProductCategoryByID(p.CategoryID[0], bson.M{})
+		if err != nil && err != mongo.ErrNoDocuments {
+			return err
+		}
+		if productCategory != nil {
+			p.CategoryID[0] = &productCategory.ID
+			p.CategoryName[0] = productCategory.Name
+			return nil
+		}
+		if len(p.CategoryName) > 0 {
+			productCategory, err = store.FindProductCategoryByName(p.CategoryName[0], bson.M{})
+			if err != nil && err != mongo.ErrNoDocuments {
+				return err
+			}
+			if productCategory != nil {
+				p.CategoryID[0] = &productCategory.ID
+				p.CategoryName[0] = productCategory.Name
+			}
+		}
 		return nil
 	}
 
-	oldProductStore := product.ProductStores[product.StoreID.Hex()]
-
-	product.StoreID = storeID // storeID> destination
-	product.InitStoreUnitPrice()
-	product.ProductStores[storeID.Hex()] = ProductStore{
+	targetProductStore := ProductStore{
 		StoreID:                   *storeID,
 		StoreName:                 store.Name,
 		PurchaseUnitPrice:         oldProductStore.PurchaseUnitPrice,
@@ -3183,48 +3310,41 @@ func (product *Product) CopyToStore(storeID *primitive.ObjectID) (err error) {
 		RetailUnitPriceWithVAT:    oldProductStore.RetailUnitPriceWithVAT,
 	}
 
-	if product.BrandID != nil {
-		productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
+	if productInDb != nil {
+		// Product already exists in target store — sync prices, brand, and category only.
+		if productInDb.ProductStores == nil {
+			productInDb.ProductStores = make(map[string]ProductStore)
+		}
+		productInDb.ProductStores[storeID.Hex()] = targetProductStore
+
+		productInDb.BrandID = product.BrandID
+		productInDb.BrandName = product.BrandName
+		productInDb.BrandCode = product.BrandCode
+		if err = resolveProductBrand(productInDb); err != nil {
 			return err
 		}
 
-		if productBrand != nil {
-			product.BrandID = &productBrand.ID
-			product.BrandName = productBrand.Name
+		productInDb.CategoryID = product.CategoryID
+		productInDb.CategoryName = product.CategoryName
+		if err = resolveProductCategory(productInDb); err != nil {
+			return err
 		}
 
-		if productBrand == nil {
-			productBrand, err = store.FindProductBrandByName(product.BrandName, bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments {
-				return err
-			}
+		productInDb.InitStoreUnitPrice()
+		productInDb.CalculateUnitProfit()
 
-			product.BrandID = &productBrand.ID
-			product.BrandName = productBrand.Name
-		}
+		return productInDb.Update(storeID)
 	}
 
-	if len(product.CategoryID) > 0 {
-		productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
-		if err != nil && err != mongo.ErrNoDocuments {
-			return err
-		}
+	product.StoreID = storeID // storeID> destination
+	product.InitStoreUnitPrice()
+	product.ProductStores[storeID.Hex()] = targetProductStore
 
-		if productCategory != nil {
-			product.CategoryID[0] = &productCategory.ID
-			product.CategoryName[0] = productCategory.Name
-		}
-
-		if productCategory == nil && len(product.CategoryName) > 0 {
-			productCategory, err = store.FindProductCategoryByName(product.CategoryName[0], bson.M{})
-			if err != nil && err != mongo.ErrNoDocuments {
-				return err
-			}
-
-			product.CategoryID = append(product.CategoryID, &productCategory.ID)
-			product.CategoryName = append(product.CategoryName, productCategory.Name)
-		}
+	if err = resolveProductBrand(product); err != nil {
+		return err
+	}
+	if err = resolveProductCategory(product); err != nil {
+		return err
 	}
 
 	_, err = collection.InsertOne(ctx, &product)
@@ -3239,18 +3359,10 @@ func (product *Product) CopyToStore(storeID *primitive.ObjectID) (err error) {
 	product.InitStoreUnitPrice()
 	product.CalculateUnitProfit()
 	product.GeneratePrefixes()
-	product.SetProductQuotationStatsByStoreID(*product.StoreID)
-	product.SetProductDeliveryNoteStatsByStoreID(*product.StoreID)
-	product.SetStock()
 	product.SetAdditionalkeywords()
 	product.ClearStockAdjustmentHistory()
 
-	err = product.Update(storeID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return product.Update(storeID)
 }
 
 func (product *Product) SaveImages() error {
@@ -3748,11 +3860,12 @@ func ProcessProducts() error {
 				continue
 			}
 
-			product.AllowDuplicates = true
-			err = product.Update(&store.ID)
-			if err != nil {
-				return errors.New("Error updating product:" + err.Error())
-			}
+			/*
+				product.AllowDuplicates = true
+				err = product.Update(&store.ID)
+				if err != nil {
+					return errors.New("Error updating product:" + err.Error())
+				}*/
 
 			/*
 				purchaseHistory, err := product.GetLastPurchaseHistory()
@@ -3843,50 +3956,49 @@ func ProcessProducts() error {
 			log.Print("Part No.:" + product.PartNumber)
 			log.Print("Product Name:" + product.Name)*/
 
-			/*
-				destinations := []string{"MDNA-SIMULATION", "MDNA", "t1", "YNB", "YNB-SIMULATION"}
+			destinations := []string{"MDNA-SIMULATION", "MDNA"}
 
-				for _, destinationCode := range destinations {
-					destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
-					if err != nil && err != mongo.ErrNoDocuments {
-						return err
-					}
+			for _, destinationCode := range destinations {
+				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
+				if err != nil && err != mongo.ErrNoDocuments {
+					return err
+				}
 
-					if destinationStore != nil {
-						if product.BrandID != nil {
-							productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
-							if err != nil && err != mongo.ErrNoDocuments {
-								return err
-							}
-
-							if productBrand != nil {
-								err = productBrand.CopyToStore(&destinationStore.ID)
-								if err != nil {
-									return err
-								}
-							}
-						}
-
-						if len(product.CategoryID) > 0 {
-							productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
-							if err != nil && err != mongo.ErrNoDocuments {
-								return err
-							}
-
-							if productCategory != nil {
-								err = productCategory.CopyToStore(&destinationStore.ID)
-								if err != nil {
-									return err
-								}
-							}
-						}
-
-						err = product.CopyToStore(&destinationStore.ID)
-						if err != nil {
+				if destinationStore != nil {
+					if product.BrandID != nil {
+						productBrand, err := store.FindProductBrandByID(product.BrandID, bson.M{})
+						if err != nil && err != mongo.ErrNoDocuments {
 							return err
 						}
+
+						if productBrand != nil {
+							err = productBrand.CopyToStore(&destinationStore.ID)
+							if err != nil {
+								return err
+							}
+						}
 					}
-				}*/
+
+					if len(product.CategoryID) > 0 {
+						productCategory, err := store.FindProductCategoryByID(product.CategoryID[0], bson.M{})
+						if err != nil && err != mongo.ErrNoDocuments {
+							return err
+						}
+
+						if productCategory != nil {
+							err = productCategory.CopyToStore(&destinationStore.ID)
+							if err != nil {
+								return err
+							}
+						}
+					}
+
+					err = product.CopyToStore(&destinationStore.ID)
+					if err != nil {
+						return err
+					}
+				}
+			}
 
 			/*
 				product.SetStock()
@@ -4588,6 +4700,10 @@ func sanitizeUTF8(input string) string {
 }
 
 func (product *Product) SetStock() error {
+	if product.IsService {
+		return nil
+	}
+
 	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
 		return err
@@ -5246,6 +5362,8 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 
 		if value == 1 {
 			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		} else if value == 2 {
+			delete(criterias.SearchBy, "deleted")
 		}
 	}
 
@@ -5260,6 +5378,20 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 			criterias.SearchBy["is_set"] = bson.M{"$eq": true}
 		} else if value == 0 {
 			criterias.SearchBy["is_set"] = bson.M{"$ne": true}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[is_service]"]
+	if ok && len(keys[0]) >= 1 {
+		value, err := strconv.ParseInt(keys[0], 10, 64)
+		if err != nil {
+			return criterias, err
+		}
+
+		if value == 1 {
+			criterias.SearchBy["is_service"] = bson.M{"$eq": true}
+		} else if value == 0 {
+			criterias.SearchBy["is_service"] = bson.M{"$ne": true}
 		}
 	}
 

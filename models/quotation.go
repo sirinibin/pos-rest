@@ -46,6 +46,7 @@ type QuotationProduct struct {
 	UnitDiscountPercentWithVAT float64 `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
 	Profit                     float64 `bson:"profit" json:"profit"`
 	Loss                       float64 `bson:"loss" json:"loss"`
+	IsService                  bool    `bson:"is_service" json:"is_service"`
 }
 
 // Quotation : Quotation structure
@@ -1161,7 +1162,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 	}
 
 	for i, product := range quotation.Products {
-		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1, "is_service": 1})
 		if err != nil {
 			return err
 		}
@@ -1170,6 +1171,7 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		quotation.Products[i].ItemCode = productObject.ItemCode
 		//quotation.Products[i].PartNumber = productObject.PartNumber
 		quotation.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
+		quotation.Products[i].IsService = productObject.IsService
 	}
 
 	return nil

@@ -60,6 +60,7 @@ type ProductHistory struct {
 	WarehouseID        *primitive.ObjectID `json:"warehouse_id" bson:"warehouse_id"`
 	WarehouseCode      *string             `json:"warehouse_code" bson:"warehouse_code"`
 	Reason             string              `bson:"reason,omitempty" json:"reason,omitempty"`
+	IsService          bool                `json:"is_service,omitempty" bson:"is_service,omitempty"`
 }
 
 type HistoryStats struct {
@@ -1244,9 +1245,12 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool, orderOld *Order
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
-		if err != nil {
-			return err
+		var stock float64
+		if !product.IsService {
+			stock, err = product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+			if err != nil {
+				return err
+			}
 		}
 
 		history := ProductHistory{
@@ -1269,8 +1273,11 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool, orderOld *Order
 			DiscountPercent:    orderProduct.UnitDiscountPercent,
 			CreatedAt:          order.CreatedAt,
 			UpdatedAt:          order.UpdatedAt,
-			WarehouseID:        orderProduct.WarehouseID,
-			WarehouseCode:      orderProduct.WarehouseCode,
+			IsService:          product.IsService,
+		}
+		if !product.IsService {
+			history.WarehouseID = orderProduct.WarehouseID
+			history.WarehouseCode = orderProduct.WarehouseCode
 		}
 
 		history.UnitPrice = RoundTo2Decimals(orderProduct.UnitPrice)
@@ -1421,9 +1428,12 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool, sal
 			return errors.New("Product not found for sales return product id:" + salesReturnProduct.ProductID.Hex())
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
-		if err != nil {
-			return errors.New("Error getting product quantity for sales return:" + err.Error())
+		var stock float64
+		if !product.IsService {
+			stock, err = product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+			if err != nil {
+				return errors.New("Error getting product quantity for sales return:" + err.Error())
+			}
 		}
 
 		history := ProductHistory{
@@ -1445,8 +1455,11 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool, sal
 			DiscountPercent:    salesReturnProduct.UnitDiscountPercent,
 			CreatedAt:          salesReturn.CreatedAt,
 			UpdatedAt:          salesReturn.UpdatedAt,
-			WarehouseID:        salesReturnProduct.WarehouseID,
-			WarehouseCode:      salesReturnProduct.WarehouseCode,
+			IsService:          product.IsService,
+		}
+		if !product.IsService {
+			history.WarehouseID = salesReturnProduct.WarehouseID
+			history.WarehouseCode = salesReturnProduct.WarehouseCode
 		}
 
 		history.UnitPrice = RoundTo2Decimals(salesReturnProduct.UnitPrice)

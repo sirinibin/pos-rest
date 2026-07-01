@@ -40,6 +40,7 @@ type PurchaseReturnProduct struct {
 	UnitDiscountWithVAT            float64             `bson:"unit_discount_with_vat" json:"unit_discount_with_vat"`
 	UnitDiscountPercentWithVAT     float64             `bson:"unit_discount_percent_with_vat" json:"unit_discount_percent_with_vat"`
 	Selected                       bool                `bson:"selected" json:"selected"`
+	IsService                      bool                `bson:"is_service" json:"is_service"`
 }
 
 // PurchaseReturn : PurchaseReturn structure
@@ -674,7 +675,7 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 		}*/
 
 	for i, product := range purchasereturn.Products {
-		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1, "is_service": 1})
 		if err != nil {
 			return err
 		}
@@ -683,6 +684,7 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 		purchasereturn.Products[i].ItemCode = productObject.ItemCode
 		//	purchasereturn.Products[i].PartNumber = productObject.PartNumber
 		purchasereturn.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
+		purchasereturn.Products[i].IsService = productObject.IsService
 	}
 
 	return nil

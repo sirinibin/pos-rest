@@ -449,7 +449,7 @@ func GetDashboardStock(storeID primitive.ObjectID) (DashboardStockSummary, error
 	storeIDStr := storeID.Hex()
 
 	cur, err := db.GetDB("store_"+storeIDStr).Collection("product").
-		Find(ctx, bson.M{"deleted": bson.M{"$ne": true}},
+		Find(ctx, bson.M{"deleted": bson.M{"$ne": true}, "is_service": bson.M{"$ne": true}},
 			options.Find().SetProjection(bson.M{"product_stores." + storeIDStr + ".stock": 1}))
 	if err != nil {
 		return DashboardStockSummary{}, err

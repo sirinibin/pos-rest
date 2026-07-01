@@ -47,6 +47,7 @@ type PurchaseProduct struct {
 	ExpectedWholesaleProfit    float64             `bson:"wholesale_profit" json:"wholesale_profit"`
 	ExpectedWholesaleLoss      float64             `bson:"wholesale_loss" json:"wholesale_loss"`
 	ExpectedRetailLoss         float64             `bson:"retail_loss" json:"retail_loss"`
+	IsService                  bool                `bson:"is_service" json:"is_service"`
 }
 
 // Purchase : Purchase structure
@@ -871,6 +872,7 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 			"item_code":          1,
 			"part_number":        1,
 			"prefix_part_number": 1,
+			"is_service":         1,
 		})
 		if err != nil {
 			return err
@@ -880,6 +882,7 @@ func (purchase *Purchase) UpdateForeignLabelFields() error {
 		purchase.Products[i].ItemCode = productObject.ItemCode
 		//purchase.Products[i].PartNumber = productObject.PartNumber
 		purchase.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
+		purchase.Products[i].IsService = productObject.IsService
 	}
 
 	return nil
@@ -1699,6 +1702,11 @@ func (purchase *Purchase) Validate(
 
 			if !exists {
 				errs["product_id_"+strconv.Itoa(i)] = "Invalid product_id:" + product.ProductID.Hex() + " in products"
+			} else {
+				productObj, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "is_service": 1, "name": 1})
+				if err == nil && productObj.IsService {
+					errs["product_id_"+strconv.Itoa(i)] = "\"" + productObj.Name + "\" is a service and cannot be added to a purchase order"
+				}
 			}
 		}
 

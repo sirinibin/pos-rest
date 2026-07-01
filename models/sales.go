@@ -47,8 +47,9 @@ type OrderProduct struct {
 	ActualLineTotal            float64            `bson:"actual_line_total" json:"actual_line_total"`
 	ActualLineTotalWithVAT     float64            `bson:"actual_line_total_with_vat" json:"actual_line_total_with_vat"`
 	*/
-	Profit float64 `bson:"profit" json:"profit"`
-	Loss   float64 `bson:"loss" json:"loss"`
+	Profit    float64 `bson:"profit" json:"profit"`
+	Loss      float64 `bson:"loss" json:"loss"`
+	IsService bool    `bson:"is_service" json:"is_service"`
 }
 
 // Order : Order structure
@@ -718,7 +719,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 	*/
 
 	for i, product := range order.Products {
-		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1, "is_service": 1})
 		if err != nil {
 			return err
 		}
@@ -727,6 +728,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 		order.Products[i].ItemCode = productObject.ItemCode
 		//order.Products[i].PartNumber = productObject.PartNumber
 		order.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
+		order.Products[i].IsService = productObject.IsService
 	}
 
 	return nil

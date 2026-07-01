@@ -44,6 +44,7 @@ type SalesReturnProduct struct {
 	Profit                     float64             `bson:"profit" json:"profit"`
 	Loss                       float64             `bson:"loss" json:"loss"`
 	Selected                   bool                `bson:"selected" json:"selected"`
+	IsService                  bool                `bson:"is_service" json:"is_service"`
 }
 
 // SalesReturn : SalesReturn structure
@@ -755,7 +756,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		}*/
 
 	for i, product := range salesreturn.Products {
-		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1, "is_service": 1})
 		if err != nil {
 			return err
 		}
@@ -764,6 +765,7 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 		salesreturn.Products[i].ItemCode = productObject.ItemCode
 		//salesreturn.Products[i].PartNumber = productObject.PartNumber
 		salesreturn.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
+		salesreturn.Products[i].IsService = productObject.IsService
 	}
 
 	return nil

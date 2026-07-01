@@ -154,6 +154,8 @@ type StoreSettings struct {
 	PurchaseCreateFormDesign                    string          `bson:"purchase_create_form_design" json:"purchase_create_form_design,omitempty"`
 	PurchaseReturnCreateFormDesign              string          `bson:"purchase_return_create_form_design" json:"purchase_return_create_form_design,omitempty"`
 	QuotationSalesReturnCreateFormDesign        string          `bson:"quotation_sales_return_create_form_design" json:"quotation_sales_return_create_form_design,omitempty"`
+	EnableProducts                              bool            `bson:"enable_products" json:"enable_products"`
+	EnableServices                              bool            `bson:"enable_services" json:"enable_services"`
 }
 
 type InvoiceSettings struct {

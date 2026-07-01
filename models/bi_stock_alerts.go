@@ -126,10 +126,11 @@ func UpsertBIStockAlerts(storeID primitive.ObjectID) error {
 		}
 	}
 
-	// Scan products
+	// Scan products — exclude services (no stock to alert on)
 	cursor, err := productColl.Find(ctx, bson.M{
-		"store_id": storeID,
-		"deleted":  bson.M{"$ne": true},
+		"store_id":   storeID,
+		"deleted":    bson.M{"$ne": true},
+		"is_service": bson.M{"$ne": true},
 	}, options.Find().SetProjection(bson.M{
 		"_id": 1, "name": 1, "item_code": 1, "category_name": 1,
 		"stock": 1, "purchase_unit_price": 1,
