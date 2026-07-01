@@ -150,6 +150,10 @@ type StoreSettings struct {
 	AllowProductsDuplicatesByDefault            bool            `bson:"allow_products_duplicates_by_default" json:"allow_products_duplicates_by_default"`
 	SalesCreateFormDesign                       string          `bson:"sales_create_form_design" json:"sales_create_form_design,omitempty"`
 	SalesReturnCreateFormDesign                 string          `bson:"sales_return_create_form_design" json:"sales_return_create_form_design,omitempty"`
+	QuotationCreateFormDesign                   string          `bson:"quotation_create_form_design" json:"quotation_create_form_design,omitempty"`
+	PurchaseCreateFormDesign                    string          `bson:"purchase_create_form_design" json:"purchase_create_form_design,omitempty"`
+	PurchaseReturnCreateFormDesign              string          `bson:"purchase_return_create_form_design" json:"purchase_return_create_form_design,omitempty"`
+	QuotationSalesReturnCreateFormDesign        string          `bson:"quotation_sales_return_create_form_design" json:"quotation_sales_return_create_form_design,omitempty"`
 }
 
 type InvoiceSettings struct {
