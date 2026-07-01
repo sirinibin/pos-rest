@@ -1015,15 +1015,16 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			}
 			textSearching = false // $all does not use the text index; skip textScore sort
 		} else {
-			if strings.Contains(searchWord, "-") {
-				// Single word with hyphens: strip all hyphens to match compact token
-				searchWord = strings.ReplaceAll(searchWord, "-", "")
-			}
+			// Single word: text index (O(log n), scales to 100k+).
+			// name_prefixes stores substrings of name/part_number/item_code tokens,
+			// so "10000" matches "CXA-10000A". ean_12 is excluded from name_prefixes
+			// (see GeneratePrefixes) so sequential auto-barcodes no longer pollute
+			// results. Run MigrateProductNamePrefixes once to clean existing products.
 			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
+			textSearching = true
 		}
 	}
 	sortFieldName := ""
-	ascending := true
 	keys, ok = r.URL.Query()["sort"]
 	if ok && len(keys[0]) >= 1 {
 		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
@@ -1033,7 +1034,6 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 
 	if sortFieldName != "" {
 		if strings.HasPrefix(sortFieldName, "-") {
-			ascending = false
 			sortFieldName = strings.TrimPrefix(sortFieldName, "-")
 		}
 	}
@@ -2549,14 +2549,9 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 	}*/
 	//sr := bson.M{"score": bson.M{"$meta": "textScore"}}
 	if textSearching {
-		sortValue := 1
-		if !ascending {
-			sortValue = -1
-		}
-
 		sortBy := bson.D{
 			bson.E{Key: "score", Value: bson.M{"$meta": "textScore"}},
-			bson.E{Key: sortFieldName, Value: sortValue},
+			bson.E{Key: "country_name", Value: 1},
 			bson.E{Key: "_id", Value: -1},
 		}
 		findOptions.SetSort(sortBy)
@@ -3818,9 +3813,9 @@ func ProcessProducts() error {
 	//productsToExport := []Product{}
 
 	for _, store := range stores {
-		if store.Code != "MBDI" {
+		/*if store.Code != "MBDI" {
 			continue
-		}
+		}*/
 		totalCount, err := store.GetTotalCount(bson.M{
 			//	"part_number": "8938",
 		}, "product")
@@ -3956,7 +3951,7 @@ func ProcessProducts() error {
 			log.Print("Part No.:" + product.PartNumber)
 			log.Print("Product Name:" + product.Name)*/
 
-			destinations := []string{"MDNA-SIMULATION", "MDNA"}
+			/*destinations := []string{"MDNA-SIMULATION", "MDNA"}
 
 			for _, destinationCode := range destinations {
 				destinationStore, err := FindStoreByCode(destinationCode, bson.M{})
@@ -3998,7 +3993,7 @@ func ProcessProducts() error {
 						return err
 					}
 				}
-			}
+			}*/
 
 			/*
 				product.SetStock()
@@ -4610,7 +4605,10 @@ func (product *Product) GeneratePrefixes() {
 		appendTokens(product.PrefixPartNumber + "-" + product.PartNumber)
 	}
 	appendTokens(product.ItemCode)
-	appendTokens(product.Ean12)
+	// Ean12/bar_code are not tokenised into name_prefixes — they use exact-match
+	// search instead.  Sequential auto-generated barcodes (100000000001, …) would
+	// otherwise pollute name_prefixes with every numeric substring (e.g. "10000"),
+	// causing unrelated products to appear for part-number searches.
 
 	for _, term := range product.GetAdditionalSearchTerms() {
 		appendTokens(term)
@@ -4640,6 +4638,50 @@ func (product *Product) GeneratePrefixes() {
 		}
 		product.NameInArabicPrefixes = arabicDeduped
 	}
+}
+
+// MigrateProductNamePrefixes regenerates name_prefixes for every non-deleted
+// product in the store, removing stale ean_12 substring tokens that polluted
+// the text index. Safe to run multiple times (idempotent). Call once after
+// deploying the GeneratePrefixes fix.
+func (store *Store) MigrateProductNamePrefixes() {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+	ctx := context.Background()
+
+	projection := bson.M{
+		"name": 1, "part_number": 1, "prefix_part_number": 1,
+		"item_code": 1, "ean_12": 1, "additional_keywords": 1,
+		"name_in_arabic": 1,
+	}
+	cursor, err := collection.Find(ctx,
+		bson.M{"deleted": bson.M{"$ne": true}},
+		options.Find().SetProjection(projection),
+	)
+	if err != nil {
+		log.Printf("[migrate] store %s: find error: %v", store.ID.Hex(), err)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	updated := 0
+	for cursor.Next(ctx) {
+		var p Product
+		if err := cursor.Decode(&p); err != nil {
+			continue
+		}
+		p.GeneratePrefixes()
+		_, err := collection.UpdateOne(ctx,
+			bson.M{"_id": p.ID},
+			bson.M{"$set": bson.M{
+				"name_prefixes":           p.NamePrefixes,
+				"name_in_arabic_prefixes": p.NameInArabicPrefixes,
+			}},
+		)
+		if err == nil {
+			updated++
+		}
+	}
+	log.Printf("[migrate] store %s: regenerated name_prefixes for %d products", store.ID.Hex(), updated)
 }
 
 func RemoveDuplicateStrings(input []string) []string {
@@ -5435,9 +5477,6 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 				criterias.SearchBy["name_prefixes"] = bson.M{"$all": meaningful}
 			}
 		} else {
-			if strings.Contains(searchWord, "-") {
-				searchWord = strings.ReplaceAll(searchWord, "-", "")
-			}
 			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		}
 	}

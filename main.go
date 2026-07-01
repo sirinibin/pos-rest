@@ -106,6 +106,17 @@ func main() {
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
 	//go models.SetIndexes()
 
+	go func() {
+		stores, err := models.GetAllStores()
+		if err != nil {
+			log.Printf("[migrate] could not load stores: %v", err)
+			return
+		}
+		for _, store := range stores {
+			store.MigrateProductNamePrefixes()
+		}
+	}()
+
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
 	if err != nil {

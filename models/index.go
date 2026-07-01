@@ -60,6 +60,9 @@ func (store *Store) CreateAllIndexes() error {
 		{Key: "ean_12", Value: "text"},
 	}, "product_text_index")
 	idx("product", bson.M{"name_prefixes": 1})
+	idx("product", bson.M{"part_number": 1})
+	idx("product", bson.M{"prefix_part_number": 1})
+	idx("product", bson.M{"item_code": 1})
 	idx("product", bson.M{"bar_code": 1})
 	idx("product", bson.M{"category_id": 1})
 	idx("product", bson.M{"brand_id": 1})
