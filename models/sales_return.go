@@ -2372,7 +2372,7 @@ func (salesReturn *SalesReturn) MakeRedisCode() error {
 	}
 
 	// === 8. Set InvoiceCountValue (based on global counter) ===
-	salesReturn.InvoiceCountValue = globalIncr - (store.SalesReturnSerialNumber.StartFromCount - 1)
+	salesReturn.InvoiceCountValue = globalIncr
 
 	return nil
 }
@@ -2477,7 +2477,7 @@ func (model *SalesReturn) MakeRedisCode() error {
 		}
 	}
 
-	model.InvoiceCountValue = incr - (store.SalesReturnSerialNumber.StartFromCount - 1)
+	model.InvoiceCountValue = incr
 	return nil
 }
 

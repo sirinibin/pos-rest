@@ -1001,7 +1001,7 @@ func (stocktransfer *StockTransfer) MakeRedisCode() error {
 	}
 
 	// === 8. Set InvoiceCountValue (based on global counter) ===
-	stocktransfer.InvoiceCountValue = globalIncr - (store.StockTransferSerialNumber.StartFromCount - 1)
+	stocktransfer.InvoiceCountValue = globalIncr
 
 	return nil
 }

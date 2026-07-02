@@ -2491,7 +2491,7 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 	}
 
 	// === 8. Set InvoiceCountValue (based on global counter) ===
-	quotationsalesReturn.InvoiceCountValue = globalIncr - (store.QuotationSalesReturnSerialNumber.StartFromCount - 1)
+	quotationsalesReturn.InvoiceCountValue = globalIncr
 
 	return nil
 }

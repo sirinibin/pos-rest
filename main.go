@@ -106,17 +106,6 @@ func main() {
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
 	//go models.SetIndexes()
 
-	go func() {
-		stores, err := models.GetAllStores()
-		if err != nil {
-			log.Printf("[migrate] could not load stores: %v", err)
-			return
-		}
-		for _, store := range stores {
-			store.MigrateProductNamePrefixes()
-		}
-	}()
-
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
 	if err != nil {
@@ -388,6 +377,13 @@ func main() {
 	router.HandleFunc("/v1/product-brand/{id}", controller.UpdateProductBrand).Methods("PUT")
 	router.HandleFunc("/v1/product-brand/{id}", controller.DeleteProductBrand).Methods("DELETE")
 	router.HandleFunc("/v1/product-brand/restore/{id}", controller.RestoreProductBrand).Methods("POST")
+
+	//CustomerPackage
+	router.HandleFunc("/v1/customer-package", controller.CreateCustomerPackage).Methods("POST")
+	router.HandleFunc("/v1/customer-package", controller.ListCustomerPackage).Methods("GET")
+	router.HandleFunc("/v1/customer-package/{id}", controller.ViewCustomerPackage).Methods("GET")
+	router.HandleFunc("/v1/customer-package/{id}", controller.UpdateCustomerPackage).Methods("PUT")
+	router.HandleFunc("/v1/customer-package/{id}", controller.DeleteCustomerPackage).Methods("DELETE")
 
 	//ExpenseCategory
 	router.HandleFunc("/v1/expense-category", controller.CreateExpenseCategory).Methods("POST")

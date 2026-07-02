@@ -3569,7 +3569,10 @@ func (order *Order) MakeRedisCode() error {
 	}
 
 	// === 8. Set InvoiceCountValue (based on global counter) ===
-	order.InvoiceCountValue = globalIncr - (store.SalesSerialNumber.StartFromCount - 1)
+	// Use globalIncr directly to ensure ICV is always a positive sequential integer.
+	// The offset formula (globalIncr - StartFromCount + 1) can produce negative values
+	// if StartFromCount was changed after Redis counter initialization, causing ZATCA BR-KSA-34.
+	order.InvoiceCountValue = globalIncr
 
 	return nil
 }

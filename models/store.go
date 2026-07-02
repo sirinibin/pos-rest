@@ -98,6 +98,9 @@ type Store struct {
 	HideTotalAmountRowInBalanceSheet       bool                  `bson:"hide_total_amount_row_in_balance_sheet" json:"hide_total_amount_row_in_balance_sheet"`
 	ShowSellerInfoInInvoice                bool                  `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
 	Settings                               StoreSettings         `bson:"settings" json:"settings"`
+	CustomerPackageID                      *primitive.ObjectID   `json:"customer_package_id,omitempty" bson:"customer_package_id,omitempty"`
+	CustomerPackageName                    string                `json:"customer_package_name,omitempty" bson:"customer_package_name,omitempty"`
+	CustomerPackageTabIDs                  []string              `json:"customer_package_tab_ids" bson:"customer_package_tab_ids"`
 }
 
 // StoreList is a slim projection of Store returned by GET /v1/store/list.
@@ -341,6 +344,17 @@ func (store *Store) UpdateForeignLabelFields() error {
 			return err
 		}
 		store.DeletedByName = deletedByUser.Name
+	}
+
+	if store.CustomerPackageID != nil && !store.CustomerPackageID.IsZero() {
+		pkg, err := FindCustomerPackageByID(store.CustomerPackageID, bson.M{"id": 1, "name": 1, "tab_ids": 1})
+		if err == nil {
+			store.CustomerPackageName = pkg.Name
+			store.CustomerPackageTabIDs = pkg.TabIDs
+		}
+	} else {
+		store.CustomerPackageName = ""
+		store.CustomerPackageTabIDs = nil
 	}
 
 	return nil
