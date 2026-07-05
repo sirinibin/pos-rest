@@ -188,13 +188,7 @@ func (account *Account) CalculateBalance(beforeDate *time.Time, beforeID *primit
 }
 
 func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, criterias SearchCriterias, err error) {
-	criterias = SearchCriterias{
-		Page:   1,
-		Size:   10,
-		SortBy: map[string]interface{}{},
-	}
-
-	criterias.SearchBy = make(map[string]interface{})
+	criterias = InitSearchCriterias()
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	timeZoneOffset := TimezoneOffsetFromRequest(r)
@@ -286,15 +280,9 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 		*/
 	}
 
-	keys, ok = r.URL.Query()["search[phone]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["phone"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
+	ParseTextSearch(r, &criterias, "search[phone]", "phone")
 
-	keys, ok = r.URL.Query()["search[vat_no]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["vat_no"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
+	ParseTextSearch(r, &criterias, "search[vat_no]", "vat_no")
 
 	keys, ok = r.URL.Query()["search[type]"]
 	if ok && len(keys[0]) >= 1 {
@@ -303,10 +291,7 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 		}
 	}
 
-	keys, ok = r.URL.Query()["search[number]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["number"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
+	ParseTextSearch(r, &criterias, "search[number]", "number")
 
 	keys, ok = r.URL.Query()["search[balance]"]
 	if ok && len(keys[0]) >= 1 {
@@ -379,9 +364,6 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 		criterias.SortBy = GetSortByFields(keys[0])
 	}
 
-	var createdAtStartDate time.Time
-	var createdAtEndDate time.Time
-
 	keys, ok = r.URL.Query()["search[created_at]"]
 	if ok && len(keys[0]) >= 1 {
 		const shortForm = "Jan 02 2006"
@@ -398,45 +380,9 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
 	}
 
-	keys, ok = r.URL.Query()["search[created_at_from]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtStartDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
-		}
+	if err = ParseDateRangeFilter(r, &criterias, "search[created_at_from]", "search[created_at_to]", "created_at", timeZoneOffset); err != nil {
+		return models, criterias, err
 	}
-
-	keys, ok = r.URL.Query()["search[created_at_to]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtEndDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
-		}
-
-		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
-		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
-	}
-
-	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
-	} else if !createdAtStartDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
-	} else if !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
-	}
-
-	var updatedAtStartDate time.Time
-	var updatedAtEndDate time.Time
 
 	keys, ok = r.URL.Query()["search[updated_at]"]
 	if ok && len(keys[0]) >= 1 {
@@ -454,41 +400,8 @@ func SearchAccount(w http.ResponseWriter, r *http.Request) (models []Account, cr
 		criterias.SearchBy["updated_at"] = bson.M{"$gte": startDate, "$lte": endDate}
 	}
 
-	keys, ok = r.URL.Query()["search[updated_at_from]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		updatedAtStartDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			updatedAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, updatedAtStartDate)
-		}
-	}
-
-	keys, ok = r.URL.Query()["search[updated_at_to]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		updatedAtEndDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			updatedAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, updatedAtEndDate)
-		}
-
-		updatedAtEndDate = updatedAtEndDate.Add(time.Hour * time.Duration(24))
-		updatedAtEndDate = updatedAtEndDate.Add(-time.Second * time.Duration(1))
-	}
-
-	if !updatedAtStartDate.IsZero() && !updatedAtEndDate.IsZero() {
-		criterias.SearchBy["updated_at"] = bson.M{"$gte": updatedAtStartDate, "$lte": updatedAtEndDate}
-	} else if !updatedAtStartDate.IsZero() {
-		criterias.SearchBy["updated_at"] = bson.M{"$gte": updatedAtStartDate}
-	} else if !updatedAtEndDate.IsZero() {
-		criterias.SearchBy["updated_at"] = bson.M{"$lte": updatedAtEndDate}
+	if err = ParseDateRangeFilter(r, &criterias, "search[updated_at_from]", "search[updated_at_to]", "updated_at", timeZoneOffset); err != nil {
+		return models, criterias, err
 	}
 
 	keys, ok = r.URL.Query()["limit"]

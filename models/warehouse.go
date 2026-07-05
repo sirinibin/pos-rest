@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -164,99 +163,28 @@ func (warehouse *Warehouse) UpdateForeignLabelFields() error {
 }
 
 func (store *Store) SearchWarehouse(w http.ResponseWriter, r *http.Request) (warehouses []Warehouse, criterias SearchCriterias, err error) {
-	criterias = SearchCriterias{
-		Page:   1,
-		Size:   10,
-		SortBy: map[string]interface{}{},
-	}
-
-	criterias.SearchBy = make(map[string]interface{})
+	criterias = InitSearchCriterias()
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 	var keys []string
 	var ok bool
 
-	var createdAtStartDate time.Time
-	var createdAtEndDate time.Time
-
-	keys, ok = r.URL.Query()["search[created_at]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		startDate, err := time.Parse(shortForm, keys[0])
-		if err != nil {
-			return warehouses, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
-		}
-
-		endDate := startDate.Add(time.Hour * time.Duration(24))
-		endDate = endDate.Add(-time.Second * time.Duration(1))
-		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
+	if err = ParseExactDateFilter(r, &criterias, "search[created_at]", "created_at", timeZoneOffset); err != nil {
+		return warehouses, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[created_at_from]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtStartDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return warehouses, criterias, err
-		}
+	if err = ParseDateRangeFilter(r, &criterias, "search[created_at_from]", "search[created_at_to]", "created_at", timeZoneOffset); err != nil {
+		return warehouses, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[created_at_to]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtEndDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return warehouses, criterias, err
-		}
+	ParseTextSearch(r, &criterias, "search[name]", "name")
 
-		if timeZoneOffset != 0 {
-			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
-		}
+	ParseTextSearch(r, &criterias, "search[code]", "code")
 
-		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
-		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
-	}
+	ParseTextSearch(r, &criterias, "search[email]", "email")
 
-	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
-	} else if !createdAtStartDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
-	} else if !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
-	}
-
-	keys, ok = r.URL.Query()["search[name]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
-
-	keys, ok = r.URL.Query()["search[code]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
-
-	keys, ok = r.URL.Query()["search[email]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["email"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
-
-	keys, ok = r.URL.Query()["limit"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.Size, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["page"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.Page, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["sort"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SortBy = GetSortByFields(keys[0])
-	}
+	ParsePaginationAndSort(r, &criterias)
 
 	offset := (criterias.Page - 1) * criterias.Size
 

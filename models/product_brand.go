@@ -88,13 +88,7 @@ func (productBrand *ProductBrand) AttributesValueChangeEvent(productBrandOld *Pr
 
 func (store *Store) SearchProductBrand(w http.ResponseWriter, r *http.Request) (productBrands []ProductBrand, criterias SearchCriterias, err error) {
 
-	criterias = SearchCriterias{
-		Page:   1,
-		Size:   10,
-		SortBy: map[string]interface{}{},
-	}
-
-	criterias.SearchBy = make(map[string]interface{})
+	criterias = InitSearchCriterias()
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
@@ -123,84 +117,19 @@ func (store *Store) SearchProductBrand(w http.ResponseWriter, r *http.Request) (
 		}
 	}
 
-	keys, ok = r.URL.Query()["search[code]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["code"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	ParseTextSearch(r, &criterias, "search[code]", "code")
+
+	ParseTextSearch(r, &criterias, "search[name]", "name")
+
+	if err = ParseExactDateFilter(r, &criterias, "search[created_at]", "created_at", timeZoneOffset); err != nil {
+		return productBrands, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[name]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	if err = ParseDateRangeFilter(r, &criterias, "search[created_at_from]", "search[created_at_to]", "created_at", timeZoneOffset); err != nil {
+		return productBrands, criterias, err
 	}
 
-	var createdAtStartDate time.Time
-	var createdAtEndDate time.Time
-
-	keys, ok = r.URL.Query()["search[created_at]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		startDate, err := time.Parse(shortForm, keys[0])
-		if err != nil {
-			return productBrands, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
-		}
-
-		endDate := startDate.Add(time.Hour * time.Duration(24))
-		endDate = endDate.Add(-time.Second * time.Duration(1))
-		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
-	}
-
-	keys, ok = r.URL.Query()["search[created_at_from]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtStartDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return productBrands, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
-		}
-	}
-
-	keys, ok = r.URL.Query()["search[created_at_to]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtEndDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return productBrands, criterias, err
-		}
-		if timeZoneOffset != 0 {
-			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
-		}
-
-		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
-		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
-	}
-
-	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
-	} else if !createdAtStartDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
-	} else if !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
-	}
-
-	keys, ok = r.URL.Query()["limit"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.Size, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["page"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.Page, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["sort"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SortBy = GetSortByFields(keys[0])
-	}
+	ParsePaginationAndSort(r, &criterias)
 
 	offset := (criterias.Page - 1) * criterias.Size
 

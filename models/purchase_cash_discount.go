@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -109,160 +107,44 @@ func (purchaseCashDiscount *PurchaseCashDiscount) UpdateForeignLabelFields() err
 
 func (store *Store) SearchPurchaseCashDiscount(w http.ResponseWriter, r *http.Request) (models []PurchaseCashDiscount, criterias SearchCriterias, err error) {
 
-	criterias = SearchCriterias{
-		Page:   1,
-		Size:   10,
-		SortBy: map[string]interface{}{},
-	}
-
-	criterias.SearchBy = make(map[string]interface{})
+	criterias = InitSearchCriterias()
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 	var keys []string
 	var ok bool
 
-	keys, ok = r.URL.Query()["search[created_by_name]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["created_by_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	ParseTextSearch(r, &criterias, "search[created_by_name]", "created_by_name")
+
+	if err = ParseFloatWithOperatorFilter(r, &criterias, "search[amount]", "amount"); err != nil {
+		return models, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[amount]"]
-	if ok && len(keys[0]) >= 1 {
-		operator := GetMongoLogicalOperator(keys[0])
-		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+	ParseTextSearch(r, &criterias, "search[updated_by_name]", "updated_by_name")
 
-		value, err := strconv.ParseFloat(keys[0], 64)
-		if err != nil {
-			return models, criterias, err
-		}
+	ParseTextSearch(r, &criterias, "search[store_name]", "store_name")
 
-		if operator != "" {
-			criterias.SearchBy["amount"] = bson.M{operator: float64(value)}
-		} else {
-			criterias.SearchBy["amount"] = float64(value)
-		}
-
+	if err = ParseObjectIDFilter(r, &criterias, "search[store_id]", "store_id"); err != nil {
+		return models, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[updated_by_name]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["updated_by_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	if err = ParseObjectIDFilter(r, &criterias, "search[purchase_id]", "purchase_id"); err != nil {
+		return models, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[store_name]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["store_name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
+	if err = ParseObjectIDListFilter(r, &criterias, "search[created_by]", "created_by"); err != nil {
+		return models, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[store_id]"]
-	if ok && len(keys[0]) >= 1 {
-		storeID, err := primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-		criterias.SearchBy["store_id"] = storeID
+	if err = ParseExactDateFilter(r, &criterias, "search[created_at]", "created_at", timeZoneOffset); err != nil {
+		return models, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[purchase_id]"]
-	if ok && len(keys[0]) >= 1 {
-		purchaseID, err := primitive.ObjectIDFromHex(keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-		criterias.SearchBy["purchase_id"] = purchaseID
+	if err = ParseDateRangeFilter(r, &criterias, "search[created_at_from]", "search[created_at_to]", "created_at", timeZoneOffset); err != nil {
+		return models, criterias, err
 	}
 
-	keys, ok = r.URL.Query()["search[created_by]"]
-	if ok && len(keys[0]) >= 1 {
-
-		userIds := strings.Split(keys[0], ",")
-
-		objecIds := []primitive.ObjectID{}
-
-		for _, id := range userIds {
-			userID, err := primitive.ObjectIDFromHex(id)
-			if err != nil {
-				return models, criterias, err
-			}
-			objecIds = append(objecIds, userID)
-		}
-
-		if len(objecIds) > 0 {
-			criterias.SearchBy["created_by"] = bson.M{"$in": objecIds}
-		}
-	}
-
-	var createdAtStartDate time.Time
-	var createdAtEndDate time.Time
-
-	keys, ok = r.URL.Query()["search[created_at]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		startDate, err := time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
-		}
-
-		endDate := startDate.Add(time.Hour * time.Duration(24))
-		endDate = endDate.Add(-time.Second * time.Duration(1))
-		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
-	}
-
-	keys, ok = r.URL.Query()["search[created_at_from]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtStartDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
-		}
-
-	}
-
-	keys, ok = r.URL.Query()["search[created_at_to]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtEndDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
-		}
-
-		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
-		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
-	}
-
-	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
-	} else if !createdAtStartDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
-	} else if !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
-	}
-
-	keys, ok = r.URL.Query()["limit"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.Size, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["page"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.Page, _ = strconv.Atoi(keys[0])
-	}
-	keys, ok = r.URL.Query()["sort"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SortBy = GetSortByFields(keys[0])
-	}
+	ParsePaginationAndSort(r, &criterias)
 
 	offset := (criterias.Page - 1) * criterias.Size
 

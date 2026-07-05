@@ -814,3 +814,166 @@ func ParseBoolToInt(s string) int {
 		return -1 // or handle error as needed
 	}
 }
+
+// InitSearchCriterias returns a SearchCriterias with default pagination and empty maps.
+func InitSearchCriterias() SearchCriterias {
+	return SearchCriterias{
+		Page:     1,
+		Size:     10,
+		SortBy:   map[string]interface{}{},
+		SearchBy: map[string]interface{}{},
+	}
+}
+
+// ParseDeletedFilter sets the default "show non-deleted" filter and overrides it
+// to show deleted records when search[deleted]=1 is present in the request.
+func ParseDeletedFilter(r *http.Request, criterias *SearchCriterias) {
+	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+	keys, ok := r.URL.Query()["search[deleted]"]
+	if ok && len(keys[0]) >= 1 {
+		value, _ := strconv.ParseInt(keys[0], 10, 64)
+		if value == 1 {
+			criterias.SearchBy["deleted"] = bson.M{"$eq": true}
+		}
+	}
+}
+
+// ParsePaginationAndSort parses limit, page, and sort query parameters into criterias.
+func ParsePaginationAndSort(r *http.Request, criterias *SearchCriterias) {
+	keys, ok := r.URL.Query()["limit"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Size, _ = strconv.Atoi(keys[0])
+	}
+	keys, ok = r.URL.Query()["page"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.Page, _ = strconv.Atoi(keys[0])
+	}
+	keys, ok = r.URL.Query()["sort"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SortBy = GetSortByFields(keys[0])
+	}
+}
+
+// ParseTextSearch adds a case-insensitive regex filter for a single query parameter.
+func ParseTextSearch(r *http.Request, criterias *SearchCriterias, queryParam, dbField string) {
+	keys, ok := r.URL.Query()[queryParam]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy[dbField] = bson.M{"$regex": keys[0], "$options": "i"}
+	}
+}
+
+// ParseObjectIDFilter parses a single ObjectID query parameter into criterias.
+func ParseObjectIDFilter(r *http.Request, criterias *SearchCriterias, queryParam, dbField string) error {
+	keys, ok := r.URL.Query()[queryParam]
+	if ok && len(keys[0]) >= 1 {
+		id, err := primitive.ObjectIDFromHex(keys[0])
+		if err != nil {
+			return err
+		}
+		criterias.SearchBy[dbField] = id
+	}
+	return nil
+}
+
+// ParseObjectIDListFilter parses a comma-separated list of ObjectIDs into an $in filter.
+func ParseObjectIDListFilter(r *http.Request, criterias *SearchCriterias, queryParam, dbField string) error {
+	keys, ok := r.URL.Query()[queryParam]
+	if ok && len(keys[0]) >= 1 {
+		ids := strings.Split(keys[0], ",")
+		objectIDs := make([]primitive.ObjectID, 0, len(ids))
+		for _, id := range ids {
+			objectID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return err
+			}
+			objectIDs = append(objectIDs, objectID)
+		}
+		if len(objectIDs) > 0 {
+			criterias.SearchBy[dbField] = bson.M{"$in": objectIDs}
+		}
+	}
+	return nil
+}
+
+// ParseFloatWithOperatorFilter parses a float query parameter that may be prefixed
+// with a comparison operator (<=, <, >=, >).
+func ParseFloatWithOperatorFilter(r *http.Request, criterias *SearchCriterias, queryParam, dbField string) error {
+	keys, ok := r.URL.Query()[queryParam]
+	if ok && len(keys[0]) >= 1 {
+		operator := GetMongoLogicalOperator(keys[0])
+		keys[0] = TrimLogicalOperatorPrefix(keys[0])
+		value, err := strconv.ParseFloat(keys[0], 64)
+		if err != nil {
+			return err
+		}
+		if operator != "" {
+			criterias.SearchBy[dbField] = bson.M{operator: value}
+		} else {
+			criterias.SearchBy[dbField] = value
+		}
+	}
+	return nil
+}
+
+// ParseExactDateFilter parses a single "Jan 02 2006" date parameter and stores
+// a [$gte start, $lte end-of-day] range in criterias for the given db field.
+func ParseExactDateFilter(r *http.Request, criterias *SearchCriterias, queryParam, dbField string, timeZoneOffset float64) error {
+	keys, ok := r.URL.Query()[queryParam]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		date, err := time.Parse(shortForm, keys[0])
+		if err != nil {
+			return err
+		}
+		if timeZoneOffset != 0 {
+			date = ConvertTimeZoneToUTC(timeZoneOffset, date)
+		}
+		endDate := date.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+		criterias.SearchBy[dbField] = bson.M{"$gte": date, "$lte": endDate}
+	}
+	return nil
+}
+
+// ParseDateRangeFilter parses from/to "Jan 02 2006" query parameters and stores
+// the appropriate $gte/$lte range in criterias for the given db field.
+func ParseDateRangeFilter(r *http.Request, criterias *SearchCriterias, fromParam, toParam, dbField string, timeZoneOffset float64) error {
+	var startDate time.Time
+	var endDate time.Time
+	keys, ok := r.URL.Query()[fromParam]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		var err error
+		startDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return err
+		}
+		if timeZoneOffset != 0 {
+			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
+		}
+	}
+
+	keys, ok = r.URL.Query()[toParam]
+	if ok && len(keys[0]) >= 1 {
+		const shortForm = "Jan 02 2006"
+		var err error
+		endDate, err = time.Parse(shortForm, keys[0])
+		if err != nil {
+			return err
+		}
+		if timeZoneOffset != 0 {
+			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
+		}
+		endDate = endDate.Add(time.Hour * time.Duration(24))
+		endDate = endDate.Add(-time.Second * time.Duration(1))
+	}
+
+	if !startDate.IsZero() && !endDate.IsZero() {
+		criterias.SearchBy[dbField] = bson.M{"$gte": startDate, "$lte": endDate}
+	} else if !startDate.IsZero() {
+		criterias.SearchBy[dbField] = bson.M{"$gte": startDate}
+	} else if !endDate.IsZero() {
+		criterias.SearchBy[dbField] = bson.M{"$lte": endDate}
+	}
+	return nil
+}

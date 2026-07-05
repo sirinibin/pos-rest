@@ -48,13 +48,7 @@ type Journal struct {
 }
 
 func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models []Ledger, criterias SearchCriterias, err error) {
-	criterias = SearchCriterias{
-		Page:   1,
-		Size:   10,
-		SortBy: map[string]interface{}{},
-	}
-
-	criterias.SearchBy = make(map[string]interface{})
+	criterias = InitSearchCriterias()
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
 
 	var storeID primitive.ObjectID
@@ -129,61 +123,12 @@ func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models
 
 	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
 
-	keys, ok = r.URL.Query()["search[date_str]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		startDate, err := time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
-		}
-
-		endDate := startDate.Add(time.Hour * time.Duration(24))
-		endDate = endDate.Add(-time.Second * time.Duration(1))
-		criterias.SearchBy["journals.date"] = bson.M{"$gte": startDate, "$lte": endDate}
+	if err = ParseExactDateFilter(r, &criterias, "search[date_str]", "journals.date", timeZoneOffset); err != nil {
+		return models, criterias, err
 	}
 
-	var startDate time.Time
-	var endDate time.Time
-
-	keys, ok = r.URL.Query()["search[from_date]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		startDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			startDate = ConvertTimeZoneToUTC(timeZoneOffset, startDate)
-		}
-	}
-
-	keys, ok = r.URL.Query()["search[to_date]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		endDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			endDate = ConvertTimeZoneToUTC(timeZoneOffset, endDate)
-		}
-
-		endDate = endDate.Add(time.Hour * time.Duration(24))
-		endDate = endDate.Add(-time.Second * time.Duration(1))
-	}
-
-	if !startDate.IsZero() && !endDate.IsZero() {
-		criterias.SearchBy["journals.date"] = bson.M{"$gte": startDate, "$lte": endDate}
-	} else if !startDate.IsZero() {
-		criterias.SearchBy["journals.date"] = bson.M{"$gte": startDate}
-	} else if !endDate.IsZero() {
-		criterias.SearchBy["journals.date"] = bson.M{"$lte": endDate}
+	if err = ParseDateRangeFilter(r, &criterias, "search[from_date]", "search[to_date]", "journals.date", timeZoneOffset); err != nil {
+		return models, criterias, err
 	}
 
 	keys, ok = r.URL.Query()["search[debit]"]
@@ -242,9 +187,6 @@ func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models
 		}
 	}
 
-	var createdAtStartDate time.Time
-	var createdAtEndDate time.Time
-
 	keys, ok = r.URL.Query()["search[created_at]"]
 	if ok && len(keys[0]) >= 1 {
 		const shortForm = "Jan 02 2006"
@@ -261,41 +203,8 @@ func (store *Store) SearchLedger(w http.ResponseWriter, r *http.Request) (models
 		criterias.SearchBy["created_at"] = bson.M{"$gte": startDate, "$lte": endDate}
 	}
 
-	keys, ok = r.URL.Query()["search[created_at_from]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtStartDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			createdAtStartDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtStartDate)
-		}
-	}
-
-	keys, ok = r.URL.Query()["search[created_at_to]"]
-	if ok && len(keys[0]) >= 1 {
-		const shortForm = "Jan 02 2006"
-		createdAtEndDate, err = time.Parse(shortForm, keys[0])
-		if err != nil {
-			return models, criterias, err
-		}
-
-		if timeZoneOffset != 0 {
-			createdAtEndDate = ConvertTimeZoneToUTC(timeZoneOffset, createdAtEndDate)
-		}
-
-		createdAtEndDate = createdAtEndDate.Add(time.Hour * time.Duration(24))
-		createdAtEndDate = createdAtEndDate.Add(-time.Second * time.Duration(1))
-	}
-
-	if !createdAtStartDate.IsZero() && !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate, "$lte": createdAtEndDate}
-	} else if !createdAtStartDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$gte": createdAtStartDate}
-	} else if !createdAtEndDate.IsZero() {
-		criterias.SearchBy["created_at"] = bson.M{"$lte": createdAtEndDate}
+	if err = ParseDateRangeFilter(r, &criterias, "search[created_at_from]", "search[created_at_to]", "created_at", timeZoneOffset); err != nil {
+		return models, criterias, err
 	}
 
 	keys, ok = r.URL.Query()["limit"]

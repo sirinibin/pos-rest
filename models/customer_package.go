@@ -68,10 +68,7 @@ func SearchCustomerPackage(w http.ResponseWriter, r *http.Request) (packages []C
 	var keys []string
 	var ok bool
 
-	keys, ok = r.URL.Query()["search[name]"]
-	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["name"] = map[string]interface{}{"$regex": keys[0], "$options": "i"}
-	}
+	ParseTextSearch(r, &criterias, "search[name]", "name")
 
 	keys, ok = r.URL.Query()["limit"]
 	if ok && len(keys[0]) >= 1 {
