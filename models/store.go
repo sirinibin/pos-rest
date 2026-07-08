@@ -73,6 +73,7 @@ type Store struct {
 	SalesReturnSerialNumber                SerialNumber          `bson:"sales_return_serial_number" json:"sales_return_serial_number"`
 	PurchaseSerialNumber                   SerialNumber          `bson:"purchase_serial_number,omitempty" json:"purchase_serial_number"`
 	PurchaseReturnSerialNumber             SerialNumber          `bson:"purchase_return_serial_number" json:"purchase_return_serial_number"`
+	PurchaseOrderSerialNumber              SerialNumber          `bson:"purchase_order_serial_number" json:"purchase_order_serial_number"`
 	QuotationSerialNumber                  SerialNumber          `bson:"quotation_serial_number" json:"quotation_serial_number"`
 	QuotationSalesReturnSerialNumber       SerialNumber          `bson:"quotation_sales_return_serial_number" json:"quotation_sales_return_serial_number"`
 	BankAccount                            BankAccount           `bson:"bank_account,omitempty" json:"bank_account,omitempty"`
@@ -138,6 +139,7 @@ type StoreSettings struct {
 	Invoice                                     InvoiceSettings `bson:"invoice" json:"invoice"`
 	EnableAutoTranslationToArabic               bool            `bson:"enable_auto_translation_to_arabic" json:"enable_auto_translation_to_arabic"`
 	EnableWarehouseModule                       bool            `bson:"enable_warehouse_module" json:"enable_warehouse_module"`
+	EnablePurchaseOrderModule                   bool            `bson:"enable_purchase_order_module" json:"enable_purchase_order_module"`
 	ShowCurrencySymbol                          bool            `bson:"show_currency_symbol" json:"show_currency_symbol"`
 	AddPriceDetailsInDeliveryNote               bool            `bson:"add_price_details_in_delivery_note" json:"add_price_details_in_delivery_note,omitempty"`
 	SkipProductSelectionWhileDeliveryNoteImport bool            `bson:"skip_product_selection_while_delivery_note_import" json:"skip_product_selection_while_delivery_note_import,omitempty"`
@@ -556,6 +558,7 @@ func (store *Store) TrimSpaceFromFields() {
 	store.SalesReturnSerialNumber.Prefix = strings.TrimSpace(store.SalesReturnSerialNumber.Prefix)
 	store.PurchaseSerialNumber.Prefix = strings.TrimSpace(store.PurchaseSerialNumber.Prefix)
 	store.PurchaseReturnSerialNumber.Prefix = strings.TrimSpace(store.PurchaseReturnSerialNumber.Prefix)
+	store.PurchaseOrderSerialNumber.Prefix = strings.TrimSpace(store.PurchaseOrderSerialNumber.Prefix)
 	store.QuotationSerialNumber.Prefix = strings.TrimSpace(store.QuotationSerialNumber.Prefix)
 	store.CustomerSerialNumber.Prefix = strings.TrimSpace(store.CustomerSerialNumber.Prefix)
 	store.VendorSerialNumber.Prefix = strings.TrimSpace(store.VendorSerialNumber.Prefix)
@@ -780,6 +783,19 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if store.PurchaseReturnSerialNumber.StartFromCount < 0 {
 		errs["purchase_return_serial_number_start_from_count"] = "Counting start from, is required"
+	}
+
+	//purchase order serial number
+	if govalidator.IsNull(store.PurchaseOrderSerialNumber.Prefix) {
+		errs["purchase_order_serial_number_prefix"] = "Prefix is required"
+	}
+
+	if store.PurchaseOrderSerialNumber.PaddingCount <= 0 {
+		errs["purchase_order_serial_number_padding_count"] = "Padding count is required"
+	}
+
+	if store.PurchaseOrderSerialNumber.StartFromCount < 0 {
+		errs["purchase_order_serial_number_start_from_count"] = "Counting start from, is required"
 	}
 
 	//quotation return serial number

@@ -510,6 +510,17 @@ func main() {
 	router.HandleFunc("/v1/vendor/upload-image", controller.UploadVendorImage).Methods("POST")
 	router.HandleFunc("/v1/vendor/delete-image", controller.DeleteVendorImage).Methods("POST")
 
+	//PurchaseOrder
+	router.HandleFunc("/v1/purchase-order/summary", controller.PurchaseOrderSummary).Methods("GET")
+	router.HandleFunc("/v1/purchase-order", controller.CreatePurchaseOrder).Methods("POST")
+	router.HandleFunc("/v1/purchase-order/calculate-net-total", controller.CalculatePurchaseOrderNetTotal).Methods("POST")
+	router.HandleFunc("/v1/purchase-order", controller.ListPurchaseOrder).Methods("GET")
+	router.HandleFunc("/v1/purchase-order/{id}", controller.ViewPurchaseOrder).Methods("GET")
+	router.HandleFunc("/v1/previous-purchase-order/{id}", controller.ViewPreviousPurchaseOrder).Methods("GET")
+	router.HandleFunc("/v1/next-purchase-order/{id}", controller.ViewNextPurchaseOrder).Methods("GET")
+	router.HandleFunc("/v1/purchase-order/{id}", controller.UpdatePurchaseOrder).Methods("PUT")
+	router.HandleFunc("/v1/purchase-order/{id}", controller.DeletePurchaseOrder).Methods("DELETE")
+
 	//Purchase
 	router.HandleFunc("/v1/purchase/summary", controller.PurchaseSummary).Methods("GET")
 	router.HandleFunc("/v1/purchase", controller.CreatePurchase).Methods("POST")
