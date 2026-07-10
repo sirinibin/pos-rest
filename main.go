@@ -378,6 +378,15 @@ func main() {
 	router.HandleFunc("/v1/product-brand/{id}", controller.DeleteProductBrand).Methods("DELETE")
 	router.HandleFunc("/v1/product-brand/restore/{id}", controller.RestoreProductBrand).Methods("POST")
 
+	//ArabicName
+	router.HandleFunc("/v1/arabic-name", controller.CreateArabicName).Methods("POST")
+	router.HandleFunc("/v1/arabic-name", controller.ListArabicName).Methods("GET")
+	router.HandleFunc("/v1/arabic-name/permanent/{id}", controller.HardDeleteArabicName).Methods("DELETE")
+	router.HandleFunc("/v1/arabic-name/restore/{id}", controller.RestoreArabicName).Methods("POST")
+	router.HandleFunc("/v1/arabic-name/{id}", controller.ViewArabicName).Methods("GET")
+	router.HandleFunc("/v1/arabic-name/{id}", controller.UpdateArabicName).Methods("PUT")
+	router.HandleFunc("/v1/arabic-name/{id}", controller.DeleteArabicName).Methods("DELETE")
+
 	//CustomerPackage
 	router.HandleFunc("/v1/customer-package", controller.CreateCustomerPackage).Methods("POST")
 	router.HandleFunc("/v1/customer-package", controller.ListCustomerPackage).Methods("GET")

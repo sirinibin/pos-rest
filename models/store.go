@@ -161,6 +161,7 @@ type StoreSettings struct {
 	QuotationSalesReturnCreateFormDesign        string          `bson:"quotation_sales_return_create_form_design" json:"quotation_sales_return_create_form_design,omitempty"`
 	EnableProducts                              bool            `bson:"enable_products" json:"enable_products"`
 	EnableServices                              bool            `bson:"enable_services" json:"enable_services"`
+	EnableArabicNamesList                       bool            `bson:"enable_arabic_names_list" json:"enable_arabic_names_list"`
 }
 
 type InvoiceSettings struct {
