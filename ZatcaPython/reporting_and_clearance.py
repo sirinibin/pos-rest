@@ -91,7 +91,8 @@ def main():
         
         new_doc = base_document
 
-        json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key,environment_type)
+        store_id = payloadFromGo.get("store_id", "")
+        json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key, environment_type, store_id)
         
         
         if einvoice_signer.is_simplified_invoice(new_doc):

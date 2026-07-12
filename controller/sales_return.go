@@ -194,9 +194,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 	salesreturn.UUID = uuid.New().String()
 
+	var zatcaQueue *SafeQueue
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && salesreturn.EnableReportToZatca {
 		//Zatca Queue
-		zatcaQueue := GetOrCreateQueue("", "zatca")
+		zatcaQueue = GetOrCreateQueue(store.ID.Hex(), "zatca")
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
@@ -206,6 +207,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 			queue.Pop()
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 			redisErr := salesreturn.UnMakeCode()
 			if redisErr != nil {
 				response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -221,7 +223,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	err = salesreturn.Insert()
 	if err != nil {
 		queue.Pop()
-		zatcaQueue.Pop()
+		if zatcaQueue != nil {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+		}
 		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 		redisErr := salesreturn.UnMakeCode()
 		if redisErr != nil {
@@ -237,7 +242,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queue.Pop()
-	zatcaQueue.Pop()
+	if zatcaQueue != nil {
+		zatcaQueue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+	}
 	CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 
 	salesreturn.UpdateOrderReturnCount()

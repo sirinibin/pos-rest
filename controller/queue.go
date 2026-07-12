@@ -96,7 +96,7 @@ var (
 	storePurchaseReturnQueues       = make(map[string]*SafeQueue)
 	storeQuotationQueues            = make(map[string]*SafeQueue)
 	storeQuotationSalesReturnQueues = make(map[string]*SafeQueue)
-	zatcaQueue                      = NewSafeQueue()
+	storeZatcaQueues                = make(map[string]*SafeQueue)
 	queueMu                         sync.Mutex
 )
 
@@ -149,8 +149,12 @@ func GetOrCreateQueue(storeID string, modelName string) *SafeQueue {
 		}
 		return q
 	} else if modelName == "zatca" {
-		// Return the single global ZATCA queue, ignoring storeID
-		return zatcaQueue
+		q, exists := storeZatcaQueues[storeID]
+		if !exists {
+			q = NewSafeQueue()
+			storeZatcaQueues[storeID] = q
+		}
+		return q
 	}
 
 	return nil
@@ -190,6 +194,11 @@ func CleanupQueueIfEmpty(storeID string, modelName string) {
 		q, exists := storeQuotationSalesReturnQueues[storeID]
 		if exists && len(q.queue) == 0 {
 			delete(storeQuotationSalesReturnQueues, storeID)
+		}
+	} else if modelName == "zatca" {
+		q, exists := storeZatcaQueues[storeID]
+		if exists && len(q.queue) == 0 {
+			delete(storeZatcaQueues, storeID)
 		}
 	}
 }

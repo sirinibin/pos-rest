@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 from lxml import etree
 from datetime import datetime,timezone
@@ -17,6 +18,39 @@ import pytz
 import subprocess
 import uuid as uuid_lib
 import stat
+
+
+def ensure_store_sdk_home(store_id):
+    if not store_id:
+        return os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
+
+    store_home = os.path.abspath(f"ZatcaPython/store-data/{store_id}")
+    if os.path.exists(store_home):
+        return store_home
+
+    source = os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
+
+    os.makedirs(os.path.join(store_home, "Configuration"), exist_ok=True)
+    os.makedirs(os.path.join(store_home, "Data", "PIH"), exist_ok=True)
+    os.makedirs(os.path.join(store_home, "Data", "Input"), exist_ok=True)
+    os.makedirs(os.path.join(store_home, "Data", "Certificates"), exist_ok=True)
+
+    for static_file in ["config.json", "defaults.json", "usage.txt"]:
+        src_file = os.path.join(source, "Configuration", static_file)
+        if os.path.exists(src_file):
+            shutil.copy(src_file, os.path.join(store_home, "Configuration", static_file))
+
+    src_pih = os.path.join(source, "Data", "PIH", "pih.txt")
+    if os.path.exists(src_pih):
+        shutil.copy(src_pih, os.path.join(store_home, "Data", "PIH", "pih.txt"))
+
+    for name in ["Apps", os.path.join("Data", "Schemas"), os.path.join("Data", "Rules")]:
+        src = os.path.join(source, name)
+        dst = os.path.join(store_home, name)
+        if os.path.exists(src) and not os.path.lexists(dst):
+            os.symlink(src, dst)
+
+    return store_home
 
 
 class einvoice_signer:
@@ -80,7 +114,7 @@ class einvoice_signer:
     #     return einvoice_signer.sign_simplified_invoice(canonical_xml, base64_hash, x509_certificate_content, private_key_content, resource_paths["ubl_template"], resource_paths["signature"], uuid)
 
     @staticmethod
-    def get_request_api(xml, x509_certificate_content, private_key_content,environment_type):
+    def get_request_api(xml, x509_certificate_content, private_key_content, environment_type, store_id=""):
         """Main function to process the invoice request."""
         # Define resource file paths
         resource_paths = {
@@ -114,7 +148,7 @@ class einvoice_signer:
             return einvoice_signer.create_result(uuid, base64_hash, base64_invoice)
 
         # Sign the simplified invoice
-        return einvoice_signer.sign_simplified_invoice(canonical_xml,environment_type,private_key_content, x509_certificate_content)
+        return einvoice_signer.sign_simplified_invoice(canonical_xml, environment_type, private_key_content, x509_certificate_content, store_id)
 
     @staticmethod
     def extract_uuid(xml):
@@ -170,19 +204,20 @@ class einvoice_signer:
         })
 
     @staticmethod
-    def sign_simplified_invoice(canonical_xml, environment_type, private_key, certificate_content):
+    def sign_simplified_invoice(canonical_xml, environment_type, private_key, certificate_content, store_id=""):
         """
         Sign the simplified invoice using Fatoora CLI based on the environment.
         Arguments:
         - canonical_xml: The canonicalized XML content to be signed.
         - environment_type: The environment type ("Simulation", "NonProduction", or "Production").
         - private_key: The private key content to be used for signing.
-        - generated_csr: The CSR content to be used for signing.
-        
+        - certificate_content: The certificate content to be used for signing.
+        - store_id: The store ID used to isolate the SDK home directory per store.
+
         Returns:
         - JSON string containing the invoiceHash, uuid, and invoice.
         """
-        fatoora_cli_home = os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
+        fatoora_cli_home = ensure_store_sdk_home(store_id)
 
         os.environ["FATOORA_HOME"] = fatoora_cli_home
       

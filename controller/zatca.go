@@ -380,7 +380,7 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 
 	if store.Zatca.Phase == "2" && store.Zatca.Connected {
 		//Zatca Queue
-		zatcaQueue := GetOrCreateQueue("", "zatca")
+		zatcaQueue := GetOrCreateQueue(store.ID.Hex(), "zatca")
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
@@ -388,6 +388,7 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		err = order.ReportToZatca()
 		if err != nil {
 			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
 			w.WriteHeader(http.StatusBadRequest)
@@ -395,6 +396,7 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		zatcaQueue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 
 		err = order.Update()
 		if err != nil {
@@ -517,7 +519,7 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 		}
 
 		//Zatca Queue
-		zatcaQueue := GetOrCreateQueue("", "zatca")
+		zatcaQueue := GetOrCreateQueue(store.ID.Hex(), "zatca")
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
@@ -525,6 +527,7 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 		err = salesReturn.ReportToZatca()
 		if err != nil {
 			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
 			w.WriteHeader(http.StatusBadRequest)
@@ -532,6 +535,7 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		zatcaQueue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 
 		err = salesReturn.Update()
 		if err != nil {

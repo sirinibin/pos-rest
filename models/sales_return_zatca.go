@@ -840,6 +840,7 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 		"production_secret":                store.Zatca.ProductionSecret,
 		"xml_file_path":                    "ZatcaPython/templates/return_invoice_" + salesReturn.Code + ".xml",
 		"is_simplified":                    isSimplified,
+		"store_id":                         store.ID.Hex(),
 	}
 
 	// Convert payload to JSON
