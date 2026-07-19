@@ -121,6 +121,7 @@ type Order struct {
 	Phone                   string              `bson:"phone" json:"phone"`
 	VatNo                   string              `bson:"vat_no" json:"vat_no"`
 	Address                 string              `bson:"address" json:"address"`
+	CustomerPONo           string              `bson:"customer_po_no" json:"customer_po_no"`
 	EnableReportToZatca     bool                `json:"enable_report_to_zatca" bson:"-"`
 	QuotationID             *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
 	QuotationCode           *string             `json:"quotation_code" bson:"quotation_code"`
@@ -2101,20 +2102,20 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	//validation
 	if customer != nil && customer.CreditLimit > 0 {
-		if customer.Account == nil {
-			customer.Account = &Account{}
-			if order.BalanceAmount > 0 {
+		actualBalanceAmount := RoundTo2Decimals(order.NetTotal - order.CashDiscount - totalPayment)
+		// A fully-paid sale extends no credit — skip the limit check.
+		if actualBalanceAmount > 0 {
+			if customer.Account == nil {
+				customer.Account = &Account{}
 				customer.Account.Type = "asset"
-			} else {
-				customer.Account.Type = "liability"
 			}
-		}
-		if scenario != "update" && customer.IsCreditLimitExceeded(order.BalanceAmount, false) {
-			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit-customer.CreditBalance))
-			return errs
-		} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldOrder.BalanceAmount, order.BalanceAmount, false) {
-			errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", ((customer.CreditLimit+oldOrder.BalanceAmount)-customer.CreditBalance))
-			return errs
+			if scenario != "update" && customer.IsCreditLimitExceeded(actualBalanceAmount, false) {
+				errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", (customer.CreditLimit-customer.CreditBalance))
+				return errs
+			} else if scenario == "update" && customer.WillEditExceedCreditLimit(oldOrder.BalanceAmount, actualBalanceAmount, false) {
+				errs["customer_credit_limit"] = "Exceeding customer credit limit: " + fmt.Sprintf("%.02f", ((customer.CreditLimit+oldOrder.BalanceAmount)-customer.CreditBalance))
+				return errs
+			}
 		}
 	}
 

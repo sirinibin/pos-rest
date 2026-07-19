@@ -162,6 +162,7 @@ type StoreSettings struct {
 	EnableProducts                              bool            `bson:"enable_products" json:"enable_products"`
 	EnableServices                              bool            `bson:"enable_services" json:"enable_services"`
 	EnableArabicNamesList                       bool            `bson:"enable_arabic_names_list" json:"enable_arabic_names_list"`
+	EnableCustomerPONo                         bool            `bson:"enable_customer_po_no" json:"enable_customer_po_no"`
 }
 
 type InvoiceSettings struct {
