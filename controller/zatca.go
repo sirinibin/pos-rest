@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/models"
 	"github.com/sirinibin/startpos/backend/utils"
@@ -651,4 +652,230 @@ func IsConnectedToInternet() bool {
 		return false
 	}
 	return true
+}
+
+func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	depositID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["deposit_id"] = "Invalid Deposit ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	deposit, err := store.FindCustomerDepositByID(&depositID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["find_deposit"] = "Unable to find deposit:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Old records may be missing UUID or ICV (created before ZATCA was added).
+	needsUpdate := false
+	if deposit.UUID == "" {
+		deposit.UUID = uuid.New().String()
+		needsUpdate = true
+	}
+	if deposit.InvoiceCountValue == 0 {
+		if icvErr := deposit.EnsureInvoiceCountValue(); icvErr != nil {
+			response.Status = false
+			response.Errors["invoice_count_value"] = "Failed to assign ICV: " + icvErr.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		needsUpdate = true
+	}
+	if needsUpdate {
+		_ = deposit.Update()
+	}
+
+	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if errs := deposit.ValidateZatcaReporting(); len(errs) > 0 {
+		response.Status = false
+		response.Errors = errs
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		zatcaQueue := GetOrCreateQueue(store.ID.Hex(), "zatca")
+		zatcaQueueToken := generateQueueToken()
+		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
+		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+
+		err = deposit.ReportToZatca()
+		if err != nil {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+			_ = deposit.Update() // persist failure info (reporting_failed_count, reporting_errors)
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		zatcaQueue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+
+		err = deposit.Update()
+		if err != nil {
+			response.Status = false
+			response.Errors["update"] = "Unable to update:" + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	response.Status = true
+	response.Result = deposit
+	json.NewEncoder(w).Encode(response)
+}
+
+func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	withdrawalID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["withdrawal_id"] = "Invalid Withdrawal ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	withdrawal, err := store.FindCustomerWithdrawalByID(&withdrawalID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["find_withdrawal"] = "Unable to find withdrawal:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Old records may be missing UUID or ICV (created before ZATCA was added).
+	needsUpdateW := false
+	if withdrawal.UUID == "" {
+		withdrawal.UUID = uuid.New().String()
+		needsUpdateW = true
+	}
+	if withdrawal.InvoiceCountValue == 0 {
+		if icvErr := withdrawal.EnsureInvoiceCountValue(); icvErr != nil {
+			response.Status = false
+			response.Errors["invoice_count_value"] = "Failed to assign ICV: " + icvErr.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		needsUpdateW = true
+	}
+	if needsUpdateW {
+		_ = withdrawal.Update()
+	}
+
+	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if errs := withdrawal.ValidateZatcaReporting(); len(errs) > 0 {
+		response.Status = false
+		response.Errors = errs
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected {
+		zatcaQueue := GetOrCreateQueue(store.ID.Hex(), "zatca")
+		zatcaQueueToken := generateQueueToken()
+		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
+		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+
+		err = withdrawal.ReportToZatca()
+		if err != nil {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+			_ = withdrawal.Update() // persist failure info (reporting_failed_count, reporting_errors)
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		zatcaQueue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+
+		err = withdrawal.Update()
+		if err != nil {
+			response.Status = false
+			response.Errors["update"] = "Unable to update:" + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	response.Status = true
+	response.Result = withdrawal
+	json.NewEncoder(w).Encode(response)
 }

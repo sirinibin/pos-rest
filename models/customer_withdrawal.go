@@ -59,11 +59,17 @@ type CustomerWithdrawal struct {
 	DeletedBy          *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser      *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt          *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	Payments           []PayablePayment    `bson:"payments" json:"payments"`
-	Total              float64             `bson:"total" json:"total"`
-	TotalDiscount      float64             `bson:"total_discount" json:"total_discount"`
-	NetTotal           float64             `bson:"net_total" json:"net_total"`
-	PaymentMethods     []string            `json:"payment_methods" bson:"payment_methods"`
+	Payments             []PayablePayment    `bson:"payments" json:"payments"`
+	Total                float64             `bson:"total" json:"total"`
+	TotalDiscount        float64             `bson:"total_discount" json:"total_discount"`
+	NetTotal             float64             `bson:"net_total" json:"net_total"`
+	PaymentMethods       []string            `json:"payment_methods" bson:"payment_methods"`
+	InvoiceCountValue    int64               `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
+	UUID                 string              `bson:"uuid,omitempty" json:"uuid,omitempty"`
+	Hash                 string              `bson:"hash,omitempty" json:"hash,omitempty"`
+	PrevHash             string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
+	Zatca                ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
+	EnableReportToZatca  bool                `json:"enable_report_to_zatca" bson:"-"`
 }
 
 type PayablePayment struct {
@@ -1199,6 +1205,9 @@ func (customerWithdrawal *CustomerWithdrawal) MakeRedisCode() error {
 		orderDate := baseTime.Format("20060102") // YYYYMMDD
 		customerWithdrawal.Code = strings.ReplaceAll(customerWithdrawal.Code, "DATE", orderDate)
 	}
+
+	// === 8. Set InvoiceCountValue for ZATCA ICV ===
+	customerWithdrawal.InvoiceCountValue = globalIncr
 
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/models"
 	"github.com/sirinibin/startpos/backend/utils"
@@ -138,12 +139,45 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customerdeposit.UUID = uuid.New().String()
+	customerdeposit.Zatca = models.ZatcaReporting{}
+
 	err = customerdeposit.MakeRedisCode()
 	if err != nil {
 		response.Status = false
 		response.Errors["code"] = "Error making code: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	store, err := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.Phase == "2" && store.Zatca.Connected &&
+		store.Settings.EnableZatcaReportingForReceivables && customerdeposit.EnableReportToZatca {
+		zatcaQueue := GetOrCreateQueue(store.ID.Hex(), "zatca")
+		zatcaQueueToken := generateQueueToken()
+		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
+		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+
+		err = customerdeposit.ReportToZatca()
+		if err != nil {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+			customerdeposit.UnMakeRedisCode()
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		zatcaQueue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 	}
 
 	err = customerdeposit.Insert()
@@ -216,7 +250,7 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 
 	go customerdeposit.SetPostBalances()
 
-	store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+	store, _ = models.FindStoreByID(customerdeposit.StoreID, bson.M{})
 	store.NotifyUsers("receivable_updated")
 	if customerdeposit.StoreID != nil {
 		go models.MarkDashboardDirty(*customerdeposit.StoreID, customerdeposit.Date)

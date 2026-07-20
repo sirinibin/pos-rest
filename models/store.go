@@ -163,6 +163,11 @@ type StoreSettings struct {
 	EnableServices                              bool            `bson:"enable_services" json:"enable_services"`
 	EnableArabicNamesList                       bool            `bson:"enable_arabic_names_list" json:"enable_arabic_names_list"`
 	EnableCustomerPONo                         bool            `bson:"enable_customer_po_no" json:"enable_customer_po_no"`
+	EnableZatcaReportingForReceivables              bool `bson:"enable_zatca_reporting_for_receivables" json:"enable_zatca_reporting_for_receivables"`
+	EnableZatcaReportingForPayables                 bool `bson:"enable_zatca_reporting_for_payables" json:"enable_zatca_reporting_for_payables"`
+	AutoSuggestAdvancePaymentLinkingInSales         bool `bson:"auto_suggest_advance_payment_linking_in_sales" json:"auto_suggest_advance_payment_linking_in_sales"`
+	AutoSuggestAdvancePaymentLinkingInSalesReturn   bool `bson:"auto_suggest_advance_payment_linking_in_sales_return" json:"auto_suggest_advance_payment_linking_in_sales_return"`
+	DisplayVATInReceivablesAndPayables              bool `bson:"display_vat_in_receivables_and_payables" json:"display_vat_in_receivables_and_payables"`
 }
 
 type InvoiceSettings struct {

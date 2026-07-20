@@ -483,12 +483,6 @@ func (order *Order) MakeXMLContent() (string, error) {
 	}
 
 	prePaidAmount := float64(0.00)
-	/*
-		for _, payment := range order.Payments {
-			if payment.Method == "customer_account" {
-				prePaidAmount += *payment.Amount
-			}
-		}*/
 
 	totalAllowance := float64(0.00)
 	chargeTotalAmount := float64(0.00)
@@ -595,6 +589,78 @@ func (order *Order) MakeXMLContent() (string, error) {
 			},
 			Price: price,
 		})
+	}
+
+	// Prepayment reference lines for ZATCA-reported customer deposits (Debit Notes)
+	vatPercent := float64(0)
+	if order.VatPercent != nil {
+		vatPercent = *order.VatPercent
+	}
+	for _, payment := range order.Payments {
+		if payment.ReferenceType != "customer_deposit" || payment.ReceivableID == nil {
+			continue
+		}
+		deposit, err := store.FindCustomerDepositByID(payment.ReceivableID, bson.M{})
+		if err != nil || !deposit.Zatca.ReportingPassed {
+			continue
+		}
+		if deposit.NetTotal > order.NetTotal {
+			continue
+		}
+		var depositNetExVat, depositVat float64
+		if vatPercent > 0 {
+			depositNetExVat = RoundTo2Decimals(deposit.NetTotal / (1 + vatPercent/100))
+			depositVat = RoundTo2Decimals(deposit.NetTotal - depositNetExVat)
+		} else {
+			depositNetExVat = deposit.NetTotal
+			depositVat = 0
+		}
+		prePaidAmount = RoundTo2Decimals(prePaidAmount + deposit.NetTotal)
+		lineNum := len(invoice.InvoiceLines) + 1
+		invoice.InvoiceLines = append(invoice.InvoiceLines, InvoiceLine{
+			ID:                  strconv.Itoa(lineNum),
+			InvoicedQuantity:    InvoicedQuantity{UnitCode: "PCE", Value: 0},
+			LineExtensionAmount: LineAmount{Value: 0, CurrencyID: "SAR"},
+			PrepaymentDocRef: &PrepaymentDocumentRef{
+				ID:               strconv.FormatInt(deposit.InvoiceCountValue, 10),
+				UUID:             deposit.UUID,
+				IssueDate:        deposit.Date.In(loc).Format("2006-01-02"),
+				IssueTime:        deposit.Date.In(loc).Format("15:04:05"),
+				DocumentTypeCode: "381",
+			},
+			TaxTotal: TaxTotal{
+				TaxAmount: TaxAmount{Value: 0, CurrencyID: "SAR"},
+				TaxSubtotal: &TaxSubtotal{
+					TaxableAmount: TaxableAmount{Value: ToFixed2(depositNetExVat, 2), CurrencyID: "SAR"},
+					TaxAmount:     TaxAmount{Value: ToFixed2(depositVat, 2), CurrencyID: "SAR"},
+					TaxCategory: TaxCategory{
+						ID:      IDField{Value: "S", SchemeID: "UN/ECE 5305", AgencyID: "6"},
+						Percent: TaxPercent(ToFixed2(vatPercent, 2)),
+						TaxScheme: TaxScheme{
+							ID: IDField{Value: "VAT", SchemeID: "UN/ECE 5153", AgencyID: "6"},
+						},
+					},
+				},
+			},
+			Item: Item{
+				Name: "Advance Payment / " + deposit.Code,
+				ClassifiedTaxCategory: ClassifiedTaxCategory{
+					ID:      "S",
+					Percent: TaxPercent(ToFixed2(vatPercent, 2)),
+					TaxScheme: TaxScheme{
+						ID: IDField{Value: "VAT", SchemeID: "UN/ECE 5153", AgencyID: "6"},
+					},
+				},
+			},
+			Price: Price{
+				PriceAmount:  PriceAmount{Value: 0, CurrencyID: "SAR"},
+				BaseQuantity: BaseQuantity{UnitCode: "PCE", Value: 1},
+			},
+		})
+	}
+	if prePaidAmount > 0 {
+		invoice.LegalMonetaryTotal.PrepaidAmount = MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"}
+		invoice.LegalMonetaryTotal.PayableAmount = MonetaryAmount{Value: RoundTo2Decimals(order.NetTotal - prePaidAmount), CurrencyID: "SAR"}
 	}
 
 	// **Marshal Back to XML**

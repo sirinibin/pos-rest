@@ -600,6 +600,8 @@ func main() {
 	router.HandleFunc("/v1/store/zatca/connect", controller.ConnectStoreToZatca).Methods("POST")
 	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
 	router.HandleFunc("/v1/sales-return/zatca/report/{id}", controller.ReportSalesReturnToZatca).Methods("POST")
+	router.HandleFunc("/v1/customer-deposit/zatca/report/{id}", controller.ReportCustomerDepositToZatca).Methods("POST")
+	router.HandleFunc("/v1/customer-withdrawal/zatca/report/{id}", controller.ReportCustomerWithdrawalToZatca).Methods("POST")
 	router.HandleFunc("/v1/store/zatca/disconnect", controller.DisconnectStoreFromZatca).Methods("POST")
 
 	//Ledger

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/models"
 	"github.com/sirinibin/startpos/backend/utils"
@@ -137,12 +138,45 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	customerwithdrawal.UUID = uuid.New().String()
+	customerwithdrawal.Zatca = models.ZatcaReporting{}
+
 	err = customerwithdrawal.MakeRedisCode()
 	if err != nil {
 		response.Status = false
 		response.Errors["code"] = "Error making code: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	withdrawalStore, withdrawalStoreErr := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	if withdrawalStoreErr != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + withdrawalStoreErr.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if withdrawalStore.Zatca.Phase == "2" && withdrawalStore.Zatca.Connected &&
+		withdrawalStore.Settings.EnableZatcaReportingForPayables && customerwithdrawal.EnableReportToZatca {
+		zatcaQueue := GetOrCreateQueue(withdrawalStore.ID.Hex(), "zatca")
+		zatcaQueueToken := generateQueueToken()
+		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
+		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+
+		err = customerwithdrawal.ReportToZatca()
+		if err != nil {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(withdrawalStore.ID.Hex(), "zatca")
+			customerwithdrawal.UnMakeRedisCode()
+			response.Status = false
+			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		zatcaQueue.Pop()
+		CleanupQueueIfEmpty(withdrawalStore.ID.Hex(), "zatca")
 	}
 
 	err = customerwithdrawal.Insert()

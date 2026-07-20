@@ -345,23 +345,31 @@ class einvoice_signer:
 
             # Step 3: Run the Fatoora invoice request command
             invoice_request_command = [
-                "java", 
+                "java",
                 "-jar", jar_file_path,
-                "-invoice", signed_file_path,
+                "-invoice", os.path.abspath(signed_file_path),
                 "-invoiceRequest",
-                "-apiRequest", request_file_path,
+                "-apiRequest", os.path.abspath(request_file_path),
             ]
             if env_flag:
                 invoice_request_command.append(env_flag)
-            #print("Executing Fatoora invoice request command:", " ".join(invoice_request_command))
-            subprocess.run(invoice_request_command, check=True, capture_output=True, text=True, env=saudi_env)
-
-            if not os.path.exists(request_file_path):
+            try:
+                inv_req_result = subprocess.run(invoice_request_command, check=True, capture_output=True, text=True, env=saudi_env)
+            except subprocess.CalledProcessError as e:
                 error_data = {
-                    "error": f"Request file not found: {request_file_path}. Executing Fatoora sign command:"+ " ".join(invoice_request_command),
+                    "error": f"Fatoora invoiceRequest failed (exit {e.returncode}). stdout: {e.stdout!r}. stderr: {e.stderr!r}. Command: " + " ".join(invoice_request_command),
                 }
                 print(json.dumps(error_data))
-                exit(1);
+                exit(1)
+
+            if not os.path.exists(request_file_path):
+                jar_out = (inv_req_result.stdout or "").strip()
+                jar_err = (inv_req_result.stderr or "").strip()
+                error_data = {
+                    "error": f"Request file not found: {os.path.abspath(request_file_path)}. JAR stdout: {jar_out!r}. JAR stderr: {jar_err!r}. Command: " + " ".join(invoice_request_command),
+                }
+                print(json.dumps(error_data))
+                exit(1)
 
             # Step 4: Extract content from the generated request JSON file
             with open(request_file_path, "r") as request_file:
@@ -392,27 +400,27 @@ class einvoice_signer:
             })
 
         except subprocess.CalledProcessError as e:
-            #print("Error executing Fatoora CLI command:", e.stderr)
-            for file_path in [xml_file_path, private_key_file_path, certificate_file_path, signed_file_path, request_file_path]:
-                if os.path.exists(file_path):
-                    os.remove(file_path) 
             error_data = {
             "error": str(e),
             }
             print(json.dumps(error_data))
             exit(1)
-          
+
         except Exception as e:
-            #print("An error occurred:", e)
-            for file_path in [xml_file_path, private_key_file_path, certificate_file_path, signed_file_path, request_file_path]:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
             error_data = {
             "error": str(e),
             "traceback": ''
             }
-            print(json.dumps(error_data)) 
+            print(json.dumps(error_data))
             exit(1)
+
+        finally:
+            for file_path in [private_key_file_path, certificate_file_path, xml_file_path, signed_file_path, request_file_path, config_file_path]:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception:
+                        pass
         
              
     '''

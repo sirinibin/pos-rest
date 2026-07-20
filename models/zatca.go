@@ -322,15 +322,26 @@ func (t TaxAmount) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeToken(start.End())
 }
 
+// PrepaymentDocumentRef references a previously-reported advance payment (Debit Note) inside a sales InvoiceLine
+type PrepaymentDocumentRef struct {
+	XMLName          xml.Name `xml:"cac:DocumentReference"`
+	ID               string   `xml:"cbc:ID"`
+	UUID             string   `xml:"cbc:UUID,omitempty"`
+	IssueDate        string   `xml:"cbc:IssueDate"`
+	IssueTime        string   `xml:"cbc:IssueTime"`
+	DocumentTypeCode string   `xml:"cbc:DocumentTypeCode"`
+}
+
 // Invoice Line
 type InvoiceLine struct {
-	ID                  string           `xml:"cbc:ID"`
-	Note                *Note            `xml:"cbc:Note"`
-	InvoicedQuantity    InvoicedQuantity `xml:"cbc:InvoicedQuantity"`
-	LineExtensionAmount LineAmount       `xml:"cbc:LineExtensionAmount"`
-	TaxTotal            TaxTotal         `xml:"cac:TaxTotal"`
-	Item                Item             `xml:"cac:Item"`
-	Price               Price            `xml:"cac:Price"`
+	ID                  string                 `xml:"cbc:ID"`
+	Note                *Note                  `xml:"cbc:Note"`
+	InvoicedQuantity    InvoicedQuantity       `xml:"cbc:InvoicedQuantity"`
+	LineExtensionAmount LineAmount             `xml:"cbc:LineExtensionAmount"`
+	PrepaymentDocRef    *PrepaymentDocumentRef `xml:"cac:DocumentReference,omitempty"`
+	TaxTotal            TaxTotal               `xml:"cac:TaxTotal"`
+	Item                Item                   `xml:"cac:Item"`
+	Price               Price                  `xml:"cac:Price"`
 }
 
 type InvoicedQuantity struct {
