@@ -165,8 +165,7 @@ type StoreSettings struct {
 	EnableCustomerPONo                         bool            `bson:"enable_customer_po_no" json:"enable_customer_po_no"`
 	EnableZatcaReportingForReceivables              bool `bson:"enable_zatca_reporting_for_receivables" json:"enable_zatca_reporting_for_receivables"`
 	EnableZatcaReportingForPayables                 bool `bson:"enable_zatca_reporting_for_payables" json:"enable_zatca_reporting_for_payables"`
-	AutoSuggestAdvancePaymentLinkingInSales         bool `bson:"auto_suggest_advance_payment_linking_in_sales" json:"auto_suggest_advance_payment_linking_in_sales"`
-	AutoSuggestAdvancePaymentLinkingInSalesReturn   bool `bson:"auto_suggest_advance_payment_linking_in_sales_return" json:"auto_suggest_advance_payment_linking_in_sales_return"`
+	AutoPromptAdvancePaymentLinkingInSales          bool `bson:"auto_suggest_advance_payment_linking_in_sales" json:"auto_suggest_advance_payment_linking_in_sales"`
 	DisplayVATInReceivablesAndPayables              bool `bson:"display_vat_in_receivables_and_payables" json:"display_vat_in_receivables_and_payables"`
 }
 

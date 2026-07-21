@@ -591,17 +591,29 @@ func (order *Order) MakeXMLContent() (string, error) {
 		})
 	}
 
-	// Prepayment reference lines for ZATCA-reported customer deposits (Debit Notes)
+	// Prepayment reference lines for ZATCA-reported customer deposits (Debit Notes).
+	// Only deposits whose Debit Note was already reported to ZATCA are referenced here;
+	// un-reported deposits are silently skipped (no XML line, no PrepaidAmount change).
 	vatPercent := float64(0)
 	if order.VatPercent != nil {
 		vatPercent = *order.VatPercent
 	}
-	for _, payment := range order.Payments {
-		if payment.ReferenceType != "customer_deposit" || payment.ReceivableID == nil {
+	// Use the in-memory PaymentsInput when Payments hasn't been saved yet
+	// (auto-ZATCA during creation runs before AddPayments/SetPaymentStatus).
+	paymentsToCheck := order.Payments
+	if len(paymentsToCheck) == 0 {
+		paymentsToCheck = order.PaymentsInput
+	}
+	for _, payment := range paymentsToCheck {
+		depositID := payment.ReceivableID
+		if depositID == nil {
+			depositID = payment.ReferenceID
+		}
+		if payment.ReferenceType != "customer_deposit" || depositID == nil {
 			continue
 		}
-		deposit, err := store.FindCustomerDepositByID(payment.ReceivableID, bson.M{})
-		if err != nil || !deposit.Zatca.ReportingPassed {
+		deposit, err := store.FindCustomerDepositByID(depositID, bson.M{})
+		if err != nil || deposit == nil || !deposit.Zatca.ReportingPassed {
 			continue
 		}
 		if deposit.NetTotal > order.NetTotal {
@@ -617,22 +629,28 @@ func (order *Order) MakeXMLContent() (string, error) {
 		}
 		prePaidAmount = RoundTo2Decimals(prePaidAmount + deposit.NetTotal)
 		lineNum := len(invoice.InvoiceLines) + 1
+		// ZATCA BR-KSA-74: KSA-30 (DocumentTypeCode in PrepaymentDocumentRef) must be "386".
+		// ZATCA BR-KSA-82: When KSA-30 is present, BT-131 (LineExtensionAmount), KSA-11
+		//   (line TaxTotal.TaxAmount), and KSA-12 (RoundingAmount) MUST all be 0.
+		// ZATCA BR-KSA-80: PrepaidAmount = KSA-31 (TaxSubtotal.TaxableAmount) + KSA-32
+		//   (TaxSubtotal.TaxAmount).  These are informational and distinct from KSA-11/12.
 		invoice.InvoiceLines = append(invoice.InvoiceLines, InvoiceLine{
 			ID:                  strconv.Itoa(lineNum),
 			InvoicedQuantity:    InvoicedQuantity{UnitCode: "PCE", Value: 0},
 			LineExtensionAmount: LineAmount{Value: 0, CurrencyID: "SAR"},
 			PrepaymentDocRef: &PrepaymentDocumentRef{
-				ID:               strconv.FormatInt(deposit.InvoiceCountValue, 10),
+				ID:               deposit.Code,
 				UUID:             deposit.UUID,
 				IssueDate:        deposit.Date.In(loc).Format("2006-01-02"),
 				IssueTime:        deposit.Date.In(loc).Format("15:04:05"),
-				DocumentTypeCode: "381",
+				DocumentTypeCode: "386",
 			},
 			TaxTotal: TaxTotal{
-				TaxAmount: TaxAmount{Value: 0, CurrencyID: "SAR"},
+				TaxAmount:      TaxAmount{Value: 0, CurrencyID: "SAR"},
+				RoundingAmount: &RoundingAmount{Value: 0, CurrencyID: "SAR"},
 				TaxSubtotal: &TaxSubtotal{
-					TaxableAmount: TaxableAmount{Value: ToFixed2(depositNetExVat, 2), CurrencyID: "SAR"},
-					TaxAmount:     TaxAmount{Value: ToFixed2(depositVat, 2), CurrencyID: "SAR"},
+					TaxableAmount: TaxableAmount{Value: depositNetExVat, CurrencyID: "SAR"},
+					TaxAmount:     TaxAmount{Value: depositVat, CurrencyID: "SAR"},
 					TaxCategory: TaxCategory{
 						ID:      IDField{Value: "S", SchemeID: "UN/ECE 5305", AgencyID: "6"},
 						Percent: TaxPercent(ToFixed2(vatPercent, 2)),
@@ -659,8 +677,11 @@ func (order *Order) MakeXMLContent() (string, error) {
 		})
 	}
 	if prePaidAmount > 0 {
+		// Invoice-level LineExtensionAmount / TaxExclusiveAmount / TaxInclusiveAmount /
+		// TaxTotals are left at full product values.  The advance deduction is expressed
+		// only through PrepaidAmount and PayableAmount (ZATCA handles the cross-reference).
 		invoice.LegalMonetaryTotal.PrepaidAmount = MonetaryAmount{Value: ToFixed2(prePaidAmount, 2), CurrencyID: "SAR"}
-		invoice.LegalMonetaryTotal.PayableAmount = MonetaryAmount{Value: RoundTo2Decimals(order.NetTotal - prePaidAmount), CurrencyID: "SAR"}
+		invoice.LegalMonetaryTotal.PayableAmount = MonetaryAmount{Value: RoundTo2Decimals(order.NetTotal - order.RoundingAmount - prePaidAmount), CurrencyID: "SAR"}
 	}
 
 	// **Marshal Back to XML**

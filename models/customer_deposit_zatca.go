@@ -39,6 +39,26 @@ func (deposit *CustomerDeposit) ValidateZatcaReporting() (errs map[string]string
 		errs["already_reported"] = "Already reported to ZATCA"
 	}
 
+	// Block reporting if this deposit is linked as a payment on any ZATCA-reported sales invoice.
+	// In that case the sales invoice was reported with full VAT (no prepayment deduction), so
+	// reporting the deposit now as a Debit Note would cause double taxation.
+	for _, payment := range deposit.Payments {
+		if payment.InvoiceID == nil || payment.InvoiceID.IsZero() {
+			continue
+		}
+		if payment.InvoiceType == nil || *payment.InvoiceType != "sales" {
+			continue
+		}
+		order, err := store.FindOrderByID(payment.InvoiceID, bson.M{"code": 1, "zatca.reporting_passed": 1})
+		if err != nil || order == nil {
+			continue
+		}
+		if order.Zatca.ReportingPassed {
+			errs["zatca_linked_invoice"] = "Cannot report: this advance payment is linked to sales invoice " + order.Code + " which is already reported to ZATCA with full VAT. Reporting this advance separately would cause double taxation. To report this advance to ZATCA, first unlink it by removing the invoice from this receivable's payments."
+			return errs
+		}
+	}
+
 	return errs
 }
 

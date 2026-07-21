@@ -2817,7 +2817,35 @@ func (order *Order) Insert() error {
 	return nil
 }
 
+// linkCustomerDepositPayment links the first unlinked ReceivablePayment inside the
+// deposit to this order, and returns the ReceivablePayment ID (for ReceivablePaymentID).
+func (order *Order) linkCustomerDepositPayment(store *Store, depositID *primitive.ObjectID) *primitive.ObjectID {
+	if store == nil || depositID == nil || depositID.IsZero() {
+		return nil
+	}
+	deposit, err := store.FindCustomerDepositByID(depositID, bson.M{})
+	if err != nil || deposit == nil {
+		return nil
+	}
+	invoiceType := "sales"
+	invoiceCode := order.Code
+	for i, dp := range deposit.Payments {
+		if dp.InvoiceID == nil || dp.InvoiceID.IsZero() {
+			deposit.Payments[i].InvoiceID = &order.ID
+			deposit.Payments[i].InvoiceCode = &invoiceCode
+			deposit.Payments[i].InvoiceType = &invoiceType
+			_ = deposit.Update()
+			_ = deposit.DoAccounting()
+			id := deposit.Payments[i].ID
+			return &id
+		}
+	}
+	return nil
+}
+
 func (order *Order) AddPayments() error {
+	store, _ := FindStoreByID(order.StoreID, bson.M{})
+
 	for _, payment := range order.PaymentsInput {
 		salesPayment := SalesPayment{
 			OrderID:       &order.ID,
@@ -2834,6 +2862,13 @@ func (order *Order) AddPayments() error {
 			UpdatedByName: order.UpdatedByName,
 			StoreID:       order.StoreID,
 			StoreName:     order.StoreName,
+			ReferenceType: payment.ReferenceType,
+			ReferenceCode: payment.ReferenceCode,
+			ReferenceID:   payment.ReferenceID,
+			ReceivableID:  payment.ReferenceID,
+		}
+		if payment.ReferenceType == "customer_deposit" {
+			salesPayment.ReceivablePaymentID = order.linkCustomerDepositPayment(store, payment.ReferenceID)
 		}
 		err := salesPayment.Insert()
 		if err != nil {
@@ -2871,6 +2906,13 @@ func (order *Order) UpdatePayments() error {
 				UpdatedByName: order.UpdatedByName,
 				StoreID:       order.StoreID,
 				StoreName:     order.StoreName,
+				ReferenceType: payment.ReferenceType,
+				ReferenceCode: payment.ReferenceCode,
+				ReferenceID:   payment.ReferenceID,
+				ReceivableID:  payment.ReferenceID,
+			}
+			if payment.ReferenceType == "customer_deposit" {
+				salesPayment.ReceivablePaymentID = order.linkCustomerDepositPayment(store, payment.ReferenceID)
 			}
 			err := salesPayment.Insert()
 			if err != nil {
