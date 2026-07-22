@@ -153,8 +153,6 @@ func NotifyUserByID(userID *primitive.ObjectID, event string, data interface{}) 
 	}
 	mutex.Unlock()
 
-	fmt.Printf("[NotifyUserByID] event=%s userID=%s hasUser=%v deviceCount=%d\n", event, userIDStr, hasUser, len(deviceIDs))
-
 	if hasUser && len(deviceIDs) > 0 {
 		for _, deviceID := range deviceIDs {
 			Emit(userIDStr, deviceID, event, data)
@@ -165,17 +163,13 @@ func NotifyUserByID(userID *primitive.ObjectID, event string, data interface{}) 
 	// Fallback: use DB device.Connected when user has no in-memory connection
 	user, err := FindUserByID(userID, bson.M{})
 	if err != nil {
-		fmt.Printf("[NotifyUserByID] FindUserByID error: %v\n", err)
 		return err
 	}
-	connectedDevices := 0
 	for _, device := range user.Devices {
 		if device.Connected {
-			connectedDevices++
 			Emit(user.ID.Hex(), device.DeviceID, event, data)
 		}
 	}
-	fmt.Printf("[NotifyUserByID] fallback DB path: totalDevices=%d connectedDevices=%d\n", len(user.Devices), connectedDevices)
 	return nil
 }
 

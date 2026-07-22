@@ -48,7 +48,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		models.Clients[userID] = make(map[string][]*websocket.Conn)
 	}
 	models.Clients[userID][deviceID] = append(models.Clients[userID][deviceID], conn)
-	fmt.Printf("[WS CONNECT] userID=%s deviceID=%s totalClients=%d\n", userID, deviceID, len(models.Clients))
 	mutex.Unlock()
 
 	/*
@@ -61,7 +60,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
-			fmt.Printf("[WS DISCONNECT] userID=%s deviceID=%s\n", userID, deviceID)
 
 			now := time.Now()
 			userObjectID, convErr := primitive.ObjectIDFromHex(userID)
