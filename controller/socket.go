@@ -48,16 +48,8 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		models.Clients[userID] = make(map[string][]*websocket.Conn)
 	}
 	models.Clients[userID][deviceID] = append(models.Clients[userID][deviceID], conn)
+	fmt.Printf("[WS CONNECT] userID=%s deviceID=%s totalClients=%d\n", userID, deviceID, len(models.Clients))
 	mutex.Unlock()
-	/*
-		fmt.Println("User Connected:", userID)
-		fmt.Println("Clients count:")
-		fmt.Println(len(models.Clients))
-		fmt.Println("Devices count:")
-		fmt.Println(len(models.Clients[userID]))
-		fmt.Println("Connections count on device: " + deviceID)
-		fmt.Println(len(models.Clients[userID][deviceID]))
-	*/
 
 	/*
 		Emit(userID, deviceID, "role_updated", map[string]string{
@@ -69,10 +61,39 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		messageType, msg, err := conn.ReadMessage()
 		if err != nil {
-			//fmt.Println("User Disconnected:", userID)
-			//fmt.Println("error: " + err.Error())
-			mutex.Lock()
+			fmt.Printf("[WS DISCONNECT] userID=%s deviceID=%s\n", userID, deviceID)
 
+			now := time.Now()
+			userObjectID, convErr := primitive.ObjectIDFromHex(userID)
+			if convErr != nil {
+				fmt.Println("invalid user id on disconnect: " + convErr.Error())
+				break
+			}
+			user, findErr := models.FindUserByID(&userObjectID, bson.M{})
+			if findErr != nil {
+				fmt.Println("error finding user on disconnect: " + findErr.Error())
+				// Still clean up Clients even if DB lookup failed
+				mutex.Lock()
+				connections := models.Clients[userID][deviceID]
+				for i, c := range connections {
+					if c == conn {
+						models.Clients[userID][deviceID] = append(connections[:i], connections[i+1:]...)
+						break
+					}
+				}
+				if len(models.Clients[userID][deviceID]) == 0 {
+					delete(models.Clients[userID], deviceID)
+				}
+				if len(models.Clients[userID]) == 0 {
+					delete(models.Clients, userID)
+				}
+				mutex.Unlock()
+				break
+			}
+
+			// Minimal critical section: update Clients and read tab count
+			var tabsOpen int
+			mutex.Lock()
 			connections := models.Clients[userID][deviceID]
 			for i, c := range connections {
 				if c == conn {
@@ -80,22 +101,20 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
+			tabsOpen = len(models.Clients[userID][deviceID])
+			if len(models.Clients[userID][deviceID]) == 0 {
+				delete(models.Clients[userID], deviceID)
+			}
+			if len(models.Clients[userID]) == 0 {
+				delete(models.Clients, userID)
+			}
+			mutex.Unlock()
 
-			now := time.Now()
-			userObjectID, err := primitive.ObjectIDFromHex(userID)
-			if err != nil {
-				fmt.Println("invalid user id: " + err.Error())
-				return
-			}
-			user, err := models.FindUserByID(&userObjectID, bson.M{})
-			if err != nil {
-				fmt.Println("error finding user: " + err.Error())
-				return
-			}
+			// DB update and notifications outside the mutex
 			_, ok := user.Devices[deviceID]
 			if ok {
 				deviceData := user.Devices[deviceID]
-				deviceData.TabsOpen = len(models.Clients[userID][deviceID])
+				deviceData.TabsOpen = tabsOpen
 				if deviceData.TabsOpen == 0 {
 					deviceData.Connected = false
 					deviceData.LastDisConnectedAt = &now
@@ -115,7 +134,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if user.Online != oldOnlineStatus {
-					//log.Print("Online status changed for user after disconnection:" + user.Name)
 					err = models.NotifyUserStatusChange()
 					if err != nil {
 						fmt.Println("error sending status change notification:", err.Error())
@@ -123,7 +141,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if user.ConnectedComputers != oldConnectedComputers {
-					//log.Print("computers count changed for user after disconnection:" + user.Name)
 					err = models.NotifyUserDeviceCountChange()
 					if err != nil {
 						fmt.Println("error sending computer count change notification:", err.Error())
@@ -131,7 +148,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if user.ConnectedMobiles != oldConnectedMobiles {
-					//log.Print("mobiles count changed for user after disconnection:" + user.Name)
 					err = models.NotifyUserDeviceCountChange()
 					if err != nil {
 						fmt.Println("error sending mobile count change notification:", err.Error())
@@ -139,7 +155,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if user.ConnectedTabs != oldConnectedTabs {
-					//log.Print("tabs count changed for user after disconnection:" + user.Name)
 					err = models.NotifyUserDeviceCountChange()
 					if err != nil {
 						fmt.Println("error sending tabs count change notification:", err.Error())
@@ -147,19 +162,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			// Remove device if no connections remain
-			if len(models.Clients[userID][deviceID]) == 0 {
-				delete(models.Clients[userID], deviceID)
-			}
-
-			// Remove user if no devices remain
-			if len(models.Clients[userID]) == 0 {
-				delete(models.Clients, userID)
-			}
-
-			mutex.Unlock()
-			//fmt.Println("Remaining devices for", userID, ":", len(models.Clients[userID]))
-			//fmt.Println("Remaining Connections for", userID, " and device:", deviceID, ":", len(models.Clients[userID][deviceID]))
 			break
 		}
 
