@@ -6,6 +6,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var mutex = sync.Mutex{}
@@ -138,6 +140,19 @@ func ConvertToLocation(data interface{}) (Location, error) {
 	}
 
 	return location, nil
+}
+
+func NotifyUserByID(userID *primitive.ObjectID, event string, data interface{}) error {
+	user, err := FindUserByID(userID, bson.M{})
+	if err != nil {
+		return err
+	}
+	for _, device := range user.Devices {
+		if device.Connected {
+			Emit(user.ID.Hex(), device.DeviceID, event, data)
+		}
+	}
+	return nil
 }
 
 func (store *Store) NotifyUsers(event string) error {

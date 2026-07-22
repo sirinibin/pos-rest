@@ -9,11 +9,10 @@ import (
 	"github.com/sirinibin/startpos/backend/models"
 	"github.com/sirinibin/startpos/backend/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// ListPurchaseOrder : handler for GET /purchase-order
-func ListPurchaseOrder(w http.ResponseWriter, r *http.Request) {
+// ListPurchaseRequest : handler for GET /purchase-request
+func ListPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -35,15 +34,15 @@ func ListPurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pos, criterias, err := store.SearchPurchaseOrder(w, r)
+	prs, criterias, err := store.SearchPurchaseRequest(w, r)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Unable to find purchase orders:" + err.Error()
+		response.Errors["find"] = "Unable to find purchase requests:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	totalCount, err := store.GetPurchaseOrderTotalCount(criterias.SearchBy)
+	totalCount, err := store.GetPurchaseRequestTotalCount(criterias.SearchBy)
 	if err != nil {
 		response.Status = false
 		response.Errors["total_count"] = "Unable to find total count:" + err.Error()
@@ -53,32 +52,12 @@ func ListPurchaseOrder(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.TotalCount = totalCount
-
-	var stats models.PurchaseOrderStats
-	keys, ok := r.URL.Query()["search[stats]"]
-	if ok && len(keys[0]) >= 1 && keys[0] == "1" {
-		stats, err = store.GetPurchaseOrderStats(criterias.SearchBy)
-		if err != nil {
-			response.Status = false
-			response.Errors["stats"] = "Unable to find stats:" + err.Error()
-			json.NewEncoder(w).Encode(response)
-			return
-		}
-	}
-
-	response.Meta = map[string]interface{}{
-		"total_purchase_order": stats.NetTotal,
-		"vat_price":            stats.VatPrice,
-		"discount":             stats.Discount,
-		"count":                stats.Count,
-	}
-
-	response.Result = pos
+	response.Result = prs
 	json.NewEncoder(w).Encode(response)
 }
 
-// CreatePurchaseOrder : handler for POST /purchase-order
-func CreatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
+// CreatePurchaseRequest : handler for POST /purchase-request
+func CreatePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -92,8 +71,8 @@ func CreatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var po *models.PurchaseOrder
-	if !utils.Decode(w, r, &po) {
+	var pr *models.PurchaseRequest
+	if !utils.Decode(w, r, &pr) {
 		return
 	}
 
@@ -114,19 +93,16 @@ func CreatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	po.CreatedBy = &userID
-	po.UpdatedBy = &userID
-	po.CreatedAt = &now
-	po.UpdatedAt = &now
-	po.StoreID = &store.ID
+	pr.CreatedBy = &userID
+	pr.UpdatedBy = &userID
+	pr.CreatedAt = &now
+	pr.UpdatedAt = &now
+	pr.StoreID = &store.ID
+	pr.Status = "pending"
 
-	if po.Status == "" {
-		po.Status = "draft"
-	}
+	pr.FindNetTotal()
 
-	po.FindNetTotal()
-
-	errs := po.Validate(w, r, "create")
+	errs := pr.Validate(w, r, "create")
 	if len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
@@ -134,25 +110,9 @@ func CreatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = po.CreateNewVendorFromName()
-	if err != nil {
-		response.Status = false
-		response.Errors["vendor"] = "Error creating vendor:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	pr.FindTotalQuantity()
 
-	err = po.SetUnKnownVendorIfNoVendorSelected()
-	if err != nil {
-		response.Status = false
-		response.Errors["vendor"] = "Error setting vendor:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	po.FindTotalQuantity()
-
-	err = po.UpdateForeignLabelFields()
+	err = pr.UpdateForeignLabelFields()
 	if err != nil {
 		response.Status = false
 		response.Errors["update_foreign"] = "Error updating label fields:" + err.Error()
@@ -160,7 +120,7 @@ func CreatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = po.MakeCode()
+	err = pr.MakeCode()
 	if err != nil {
 		response.Status = false
 		response.Errors["code"] = "Error generating code:" + err.Error()
@@ -168,45 +128,32 @@ func CreatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = po.Insert()
+	err = pr.Insert()
 	if err != nil {
 		response.Status = false
-		response.Errors["insert"] = "Unable to create purchase order:" + err.Error()
+		response.Errors["insert"] = "Unable to create purchase request:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	// If this PO was created from a Purchase Request, link the PR back to the PO
-	if po.PurchaseRequestID != nil && !po.PurchaseRequestID.IsZero() {
-		pr, err := store.FindPurchaseRequestByID(po.PurchaseRequestID, nil)
-		if err == nil && pr != nil {
-			now := time.Now()
-			pr.PurchaseOrderID = &po.ID
-			pr.PurchaseOrderCode = &po.Code
-			pr.UpdatedBy = &userID
-			pr.UpdatedAt = &now
-			pr.Update()
-			if pr.CreatedBy != nil {
-				models.NotifyUserByID(pr.CreatedBy, "purchase_request_po_created", map[string]interface{}{
-					"id":                  pr.ID.Hex(),
-					"code":                pr.Code,
-					"purchase_order_id":   po.ID.Hex(),
-					"purchase_order_code": po.Code,
-				})
-			}
-			store.NotifyUsers("purchase_request_updated")
-		}
+	// Notify assignee
+	if pr.AssignedTo != nil {
+		models.NotifyUserByID(pr.AssignedTo, "purchase_request_received", map[string]interface{}{
+			"id":              pr.ID.Hex(),
+			"code":            pr.Code,
+			"created_by_name": pr.CreatedByName,
+		})
 	}
 
-	store.NotifyUsers("purchase_order_updated")
+	store.NotifyUsers("purchase_request_updated")
 
 	response.Status = true
-	response.Result = po
+	response.Result = pr
 	json.NewEncoder(w).Encode(response)
 }
 
-// ViewPurchaseOrder : handler for GET /purchase-order/{id}
-func ViewPurchaseOrder(w http.ResponseWriter, r *http.Request) {
+// ViewPurchaseRequest : handler for GET /purchase-request/{id}
+func ViewPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -237,127 +184,21 @@ func ViewPurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	po, err := store.FindPurchaseOrderByID(&id, nil)
+	pr, err := store.FindPurchaseRequestByID(&id, nil)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Purchase order not found:" + err.Error()
+		response.Errors["find"] = "Purchase request not found:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	response.Status = true
-	response.Result = po
+	response.Result = pr
 	json.NewEncoder(w).Encode(response)
 }
 
-func ViewPreviousPurchaseOrder(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var response models.Response
-	response.Errors = make(map[string]string)
-
-	_, err := models.AuthenticateByAccessToken(r)
-	if err != nil {
-		response.Status = false
-		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	vars := mux.Vars(r)
-	id, err := primitive.ObjectIDFromHex(vars["id"])
-	if err != nil {
-		response.Status = false
-		response.Errors["id"] = "Invalid ID:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	store, err := ParseStore(r)
-	if err != nil {
-		response.Status = false
-		response.Errors["store_id"] = "Invalid store id:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	po, err := store.FindPurchaseOrderByID(&id, nil)
-	if err != nil {
-		response.Status = false
-		response.Errors["find"] = "Purchase order not found:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	prev, err := po.FindPreviousPurchaseOrder(map[string]interface{}{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		response.Status = false
-		response.Errors["find"] = "Unable to find previous:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	response.Status = true
-	response.Result = prev
-	json.NewEncoder(w).Encode(response)
-}
-
-func ViewNextPurchaseOrder(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var response models.Response
-	response.Errors = make(map[string]string)
-
-	_, err := models.AuthenticateByAccessToken(r)
-	if err != nil {
-		response.Status = false
-		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	vars := mux.Vars(r)
-	id, err := primitive.ObjectIDFromHex(vars["id"])
-	if err != nil {
-		response.Status = false
-		response.Errors["id"] = "Invalid ID:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	store, err := ParseStore(r)
-	if err != nil {
-		response.Status = false
-		response.Errors["store_id"] = "Invalid store id:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	po, err := store.FindPurchaseOrderByID(&id, nil)
-	if err != nil {
-		response.Status = false
-		response.Errors["find"] = "Purchase order not found:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	next, err := po.FindNextPurchaseOrder(map[string]interface{}{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		response.Status = false
-		response.Errors["find"] = "Unable to find next:" + err.Error()
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	response.Status = true
-	response.Result = next
-	json.NewEncoder(w).Encode(response)
-}
-
-// UpdatePurchaseOrder : handler for PUT /purchase-order/{id}
-func UpdatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
+// UpdatePurchaseRequest : handler for PUT /purchase-request/{id}
+func UpdatePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -388,16 +229,16 @@ func UpdatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	po, err := store.FindPurchaseOrderByID(&id, nil)
+	pr, err := store.FindPurchaseRequestByID(&id, nil)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Purchase order not found:" + err.Error()
+		response.Errors["find"] = "Purchase request not found:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	var poUpdate *models.PurchaseOrder
-	if !utils.Decode(w, r, &poUpdate) {
+	var prUpdate *models.PurchaseRequest
+	if !utils.Decode(w, r, &prUpdate) {
 		return
 	}
 
@@ -410,17 +251,21 @@ func UpdatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	poUpdate.ID = po.ID
-	poUpdate.Code = po.Code
-	poUpdate.CreatedBy = po.CreatedBy
-	poUpdate.CreatedAt = po.CreatedAt
-	poUpdate.UpdatedBy = &userID
-	poUpdate.UpdatedAt = &now
-	poUpdate.StoreID = &store.ID
+	prUpdate.ID = pr.ID
+	prUpdate.Code = pr.Code
+	prUpdate.CreatedBy = pr.CreatedBy
+	prUpdate.CreatedAt = pr.CreatedAt
+	prUpdate.UpdatedBy = &userID
+	prUpdate.UpdatedAt = &now
+	prUpdate.StoreID = &store.ID
 
-	poUpdate.FindNetTotal()
+	if prUpdate.Status == "" {
+		prUpdate.Status = pr.Status
+	}
 
-	errs := poUpdate.Validate(w, r, "update")
+	prUpdate.FindNetTotal()
+
+	errs := prUpdate.Validate(w, r, "update")
 	if len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
@@ -428,25 +273,9 @@ func UpdatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = poUpdate.CreateNewVendorFromName()
-	if err != nil {
-		response.Status = false
-		response.Errors["vendor"] = "Error creating vendor:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
+	prUpdate.FindTotalQuantity()
 
-	err = poUpdate.SetUnKnownVendorIfNoVendorSelected()
-	if err != nil {
-		response.Status = false
-		response.Errors["vendor"] = "Error setting vendor:" + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	poUpdate.FindTotalQuantity()
-
-	err = poUpdate.UpdateForeignLabelFields()
+	err = prUpdate.UpdateForeignLabelFields()
 	if err != nil {
 		response.Status = false
 		response.Errors["update_foreign"] = "Error updating label fields:" + err.Error()
@@ -454,23 +283,23 @@ func UpdatePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = poUpdate.Update()
+	err = prUpdate.Update()
 	if err != nil {
 		response.Status = false
-		response.Errors["update"] = "Unable to update purchase order:" + err.Error()
+		response.Errors["update"] = "Unable to update purchase request:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	store.NotifyUsers("purchase_order_updated")
+	store.NotifyUsers("purchase_request_updated")
 
 	response.Status = true
-	response.Result = poUpdate
+	response.Result = prUpdate
 	json.NewEncoder(w).Encode(response)
 }
 
-// DeletePurchaseOrder : handler for DELETE /purchase-order/{id}
-func DeletePurchaseOrder(w http.ResponseWriter, r *http.Request) {
+// DeletePurchaseRequest : handler for DELETE /purchase-request/{id}
+func DeletePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -501,40 +330,49 @@ func DeletePurchaseOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	po, err := store.FindPurchaseOrderByID(&id, nil)
+	pr, err := store.FindPurchaseRequestByID(&id, nil)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Purchase order not found:" + err.Error()
+		response.Errors["find"] = "Purchase request not found:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	err = po.Delete()
+	err = pr.Delete()
 	if err != nil {
 		response.Status = false
-		response.Errors["delete"] = "Unable to delete purchase order:" + err.Error()
+		response.Errors["delete"] = "Unable to delete purchase request:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	store.NotifyUsers("purchase_order_updated")
+	store.NotifyUsers("purchase_request_updated")
 
 	response.Status = true
-	response.Result = "Purchase order deleted successfully"
+	response.Result = "Purchase request deleted successfully"
 	json.NewEncoder(w).Encode(response)
 }
 
-// PurchaseOrderSummary : handler for GET /purchase-order/summary
-func PurchaseOrderSummary(w http.ResponseWriter, r *http.Request) {
+// AcceptPurchaseRequest : handler for POST /purchase-request/{id}/accept
+func AcceptPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
 		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["id"] = "Invalid ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -547,34 +385,68 @@ func PurchaseOrderSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, criterias, err := store.SearchPurchaseOrder(w, r)
+	pr, err := store.FindPurchaseRequestByID(&id, nil)
 	if err != nil {
 		response.Status = false
-		response.Errors["find"] = "Unable to find purchase orders:" + err.Error()
+		response.Errors["find"] = "Purchase request not found:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	stats, err := store.GetPurchaseOrderStats(criterias.SearchBy)
+	// Decode body for partial vs full accept
+	var body struct {
+		Partial bool `json:"partial"`
+	}
+	utils.Decode(w, r, &body)
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
 		response.Status = false
-		response.Errors["stats"] = "Unable to get stats:" + err.Error()
+		response.Errors["user_id"] = "Invalid user id in token"
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	now := time.Now()
+	if body.Partial {
+		pr.Status = "partially_accepted"
+	} else {
+		pr.Status = "accepted"
+	}
+	pr.UpdatedBy = &userID
+	pr.UpdatedAt = &now
+
+	err = pr.Update()
+	if err != nil {
+		response.Status = false
+		response.Errors["update"] = "Unable to update purchase request:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Notify creator
+	if pr.CreatedBy != nil {
+		models.NotifyUserByID(pr.CreatedBy, "purchase_request_status_changed", map[string]interface{}{
+			"id":     pr.ID.Hex(),
+			"code":   pr.Code,
+			"status": pr.Status,
+		})
+	}
+
+	store.NotifyUsers("purchase_request_updated")
 
 	response.Status = true
-	response.Result = stats
+	response.Result = pr
 	json.NewEncoder(w).Encode(response)
 }
 
-// CalculatePurchaseOrderNetTotal : handler for POST /purchase-order/calculate-net-total
-func CalculatePurchaseOrderNetTotal(w http.ResponseWriter, r *http.Request) {
+// RejectPurchaseRequest : handler for POST /purchase-request/{id}/reject
+func RejectPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -583,14 +455,156 @@ func CalculatePurchaseOrderNetTotal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var po *models.PurchaseOrder
-	if !utils.Decode(w, r, &po) {
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["id"] = "Invalid ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
-	po.FindNetTotal()
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	pr, err := store.FindPurchaseRequestByID(&id, nil)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Purchase request not found:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid user id in token"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	now := time.Now()
+	pr.Status = "rejected"
+	pr.UpdatedBy = &userID
+	pr.UpdatedAt = &now
+
+	err = pr.Update()
+	if err != nil {
+		response.Status = false
+		response.Errors["update"] = "Unable to update purchase request:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Notify creator
+	if pr.CreatedBy != nil {
+		models.NotifyUserByID(pr.CreatedBy, "purchase_request_status_changed", map[string]interface{}{
+			"id":     pr.ID.Hex(),
+			"code":   pr.Code,
+			"status": pr.Status,
+		})
+	}
+
+	store.NotifyUsers("purchase_request_updated")
 
 	response.Status = true
-	response.Result = po
+	response.Result = pr
+	json.NewEncoder(w).Encode(response)
+}
+
+// CreatePurchaseOrderFromPR : handler for POST /purchase-request/{id}/create-purchase-order
+func CreatePurchaseOrderFromPR(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["id"] = "Invalid ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	pr, err := store.FindPurchaseRequestByID(&id, nil)
+	if err != nil {
+		response.Status = false
+		response.Errors["find"] = "Purchase request not found:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if pr.Status != "accepted" && pr.Status != "partially_accepted" {
+		response.Status = false
+		response.Errors["status"] = "Purchase request must be accepted before creating a purchase order"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid user id in token"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	po, err := pr.ConvertToPurchaseOrder(&userID)
+	if err != nil {
+		response.Status = false
+		response.Errors["create_po"] = "Unable to create purchase order:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Link PO back to PR
+	now := time.Now()
+	pr.PurchaseOrderID = &po.ID
+	pr.PurchaseOrderCode = &po.Code
+	pr.UpdatedBy = &userID
+	pr.UpdatedAt = &now
+	pr.Update()
+
+	// Notify creator
+	if pr.CreatedBy != nil {
+		models.NotifyUserByID(pr.CreatedBy, "purchase_request_po_created", map[string]interface{}{
+			"id":                  pr.ID.Hex(),
+			"code":                pr.Code,
+			"purchase_order_id":   po.ID.Hex(),
+			"purchase_order_code": po.Code,
+		})
+	}
+
+	store.NotifyUsers("purchase_order_updated")
+	store.NotifyUsers("purchase_request_updated")
+
+	response.Status = true
+	response.Result = map[string]interface{}{
+		"purchase_request": pr,
+		"purchase_order":   po,
+	}
 	json.NewEncoder(w).Encode(response)
 }

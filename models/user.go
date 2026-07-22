@@ -42,6 +42,8 @@ type User struct {
 	StoreIDs           []*primitive.ObjectID `json:"store_ids" bson:"store_ids"`
 	StoreNames         []string              `json:"store_names" bson:"store_names"`
 	Role               string                `json:"role,omitempty" bson:"role,omitempty"` //Admin | Manager | SalesMen
+	RoleIDs            []*primitive.ObjectID `json:"role_ids" bson:"role_ids"`
+	RoleNames          []string              `json:"role_names" bson:"role_names"`
 	Online             bool                  `bson:"online" json:"online"`
 	LastOnlineAt       *time.Time            `bson:"last_online_at,omitempty" json:"last_online_at,omitempty"`
 	LastOfflineAt      *time.Time            `bson:"last_offline_at,omitempty" json:"last_offline_at,omitempty"`
@@ -91,6 +93,8 @@ type UserForm struct {
 	Photo        string                `bson:"photo,omitempty" json:"photo,omitempty"`
 	PhotoContent string                `json:"photo_content,omitempty"`
 	Role         string                `bson:"role,omitempty" json:"role,omitempty"`
+	RoleIDs      []*primitive.ObjectID `json:"role_ids" bson:"role_ids"`
+	RoleNames    []string              `json:"role_names" bson:"role_names"`
 	StoreIDs     []*primitive.ObjectID `json:"store_ids" bson:"store_ids"`
 	StoreNames   []string              `json:"store_names" bson:"store_names"`
 	Admin        bool                  `bson:"admin" json:"admin"`
@@ -299,11 +303,23 @@ func (user *User) UpdateForeignLabelFields() error {
 	user.StoreNames = []string{}
 
 	for _, storeID := range user.StoreIDs {
-		storeTemp, err := FindStoreByID(storeID, bson.M{"id": 1, "name": 1, "branch_name": 1})
+		storeTemp, err := FindStoreByID(storeID, bson.M{"id": 1, "name": 1, "branch_name": 1, "code": 1})
 		if err != nil {
 			return errors.New("Error Finding store id:" + storeID.Hex() + ",error:" + err.Error())
 		}
-		user.StoreNames = append(user.StoreNames, storeTemp.Name+" - "+storeTemp.BranchName)
+		user.StoreNames = append(user.StoreNames, storeTemp.Name+" - "+storeTemp.BranchName+" ("+storeTemp.Code+")")
+	}
+
+	user.RoleNames = []string{}
+	for _, roleID := range user.RoleIDs {
+		for _, storeID := range user.StoreIDs {
+			userRole, err := FindUserRoleByID(storeID, roleID, bson.M{"id": 1, "name": 1})
+			if err != nil {
+				continue
+			}
+			user.RoleNames = append(user.RoleNames, userRole.Name)
+			break
+		}
 	}
 
 	if user.CreatedBy != nil {

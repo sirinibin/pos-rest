@@ -99,7 +99,7 @@ func AuthenticateByAccessToken(r *http.Request) (tokenClaims TokenClaims, err er
 		return tokenClaims, err
 	}
 
-	UserObject, err = FindUserByID(&userID, bson.M{"id": 1, "name": 1, "deleted": 1})
+	UserObject, err = FindUserByID(&userID, bson.M{"id": 1, "name": 1, "deleted": 1, "role": 1, "role_ids": 1, "store_ids": 1})
 	if err != nil {
 		return tokenClaims, err
 	}

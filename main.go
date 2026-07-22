@@ -408,6 +408,14 @@ func main() {
 	router.HandleFunc("/v1/user/{id}", controller.UpdateUser).Methods("PUT")
 	router.HandleFunc("/v1/user/{id}", controller.DeleteUser).Methods("DELETE")
 
+	//UserRole (RBAC)
+	router.HandleFunc("/v1/user-role/effective-permissions", controller.GetEffectivePermissions).Methods("GET")
+	router.HandleFunc("/v1/user-role", controller.CreateUserRole).Methods("POST")
+	router.HandleFunc("/v1/user-role", controller.ListUserRole).Methods("GET")
+	router.HandleFunc("/v1/user-role/{id}", controller.ViewUserRole).Methods("GET")
+	router.HandleFunc("/v1/user-role/{id}", controller.UpdateUserRole).Methods("PUT")
+	router.HandleFunc("/v1/user-role/{id}", controller.DeleteUserRole).Methods("DELETE")
+
 	//Signature
 	router.HandleFunc("/v1/signature", controller.CreateSignature).Methods("POST")
 	router.HandleFunc("/v1/signature", controller.ListSignature).Methods("GET")
@@ -529,6 +537,16 @@ func main() {
 	router.HandleFunc("/v1/next-purchase-order/{id}", controller.ViewNextPurchaseOrder).Methods("GET")
 	router.HandleFunc("/v1/purchase-order/{id}", controller.UpdatePurchaseOrder).Methods("PUT")
 	router.HandleFunc("/v1/purchase-order/{id}", controller.DeletePurchaseOrder).Methods("DELETE")
+
+	//Purchase Request
+	router.HandleFunc("/v1/purchase-request", controller.ListPurchaseRequest).Methods("GET")
+	router.HandleFunc("/v1/purchase-request", controller.CreatePurchaseRequest).Methods("POST")
+	router.HandleFunc("/v1/purchase-request/{id}", controller.ViewPurchaseRequest).Methods("GET")
+	router.HandleFunc("/v1/purchase-request/{id}", controller.UpdatePurchaseRequest).Methods("PUT")
+	router.HandleFunc("/v1/purchase-request/{id}", controller.DeletePurchaseRequest).Methods("DELETE")
+	router.HandleFunc("/v1/purchase-request/{id}/accept", controller.AcceptPurchaseRequest).Methods("POST")
+	router.HandleFunc("/v1/purchase-request/{id}/reject", controller.RejectPurchaseRequest).Methods("POST")
+	router.HandleFunc("/v1/purchase-request/{id}/create-purchase-order", controller.CreatePurchaseOrderFromPR).Methods("POST")
 
 	//Purchase
 	router.HandleFunc("/v1/purchase/summary", controller.PurchaseSummary).Methods("GET")

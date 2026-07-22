@@ -236,6 +236,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	user.PhotoContent = userForm.PhotoContent
 	user.Role = userForm.Role
 	user.StoreIDs = userForm.StoreIDs
+	user.RoleIDs = userForm.RoleIDs
 
 	accessingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {

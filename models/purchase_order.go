@@ -88,6 +88,9 @@ type PurchaseOrder struct {
 	// Link to Purchase after conversion
 	PurchaseID   *primitive.ObjectID `json:"purchase_id" bson:"purchase_id"`
 	PurchaseCode *string             `json:"purchase_code" bson:"purchase_code"`
+	// Link to Purchase Request that originated this PO
+	PurchaseRequestID   *primitive.ObjectID `json:"purchase_request_id" bson:"purchase_request_id"`
+	PurchaseRequestCode *string             `json:"purchase_request_code" bson:"purchase_request_code"`
 }
 
 type PurchaseOrderStats struct {
