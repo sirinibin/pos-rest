@@ -47,9 +47,10 @@ type OrderProduct struct {
 	ActualLineTotal            float64            `bson:"actual_line_total" json:"actual_line_total"`
 	ActualLineTotalWithVAT     float64            `bson:"actual_line_total_with_vat" json:"actual_line_total_with_vat"`
 	*/
-	Profit    float64 `bson:"profit" json:"profit"`
-	Loss      float64 `bson:"loss" json:"loss"`
-	IsService bool    `bson:"is_service" json:"is_service"`
+	Profit              float64 `bson:"profit" json:"profit"`
+	Loss                float64 `bson:"loss" json:"loss"`
+	IsService           bool    `bson:"is_service" json:"is_service"`
+	ServiceCategoryName string  `bson:"service_category_name,omitempty" json:"service_category_name,omitempty"`
 }
 
 // Order : Order structure
@@ -128,6 +129,9 @@ type Order struct {
 	DeliveryNoteID          *primitive.ObjectID `json:"delivery_note_id" bson:"delivery_note_id"`
 	Commission              float64             `bson:"commission" json:"commission"`
 	CommissionPaymentMethod string              `bson:"commission_payment_method" json:"commission_payment_method"`
+	// AutoMobile Workshop: vehicle snapshot attached at sale time
+	VehicleID       *primitive.ObjectID `json:"vehicle_id,omitempty" bson:"vehicle_id,omitempty"`
+	VehicleSnapshot *VehicleSnapshot    `json:"vehicle_snapshot,omitempty" bson:"vehicle_snapshot,omitempty"`
 }
 
 type ZatcaReporting struct {
@@ -675,6 +679,21 @@ func (order *Order) UpdateForeignLabelFields() error {
 		order.CustomerNameArabic = ""
 	}
 
+	// AutoMobile Workshop: snapshot the selected vehicle's details onto the order
+	// so the invoice/preview keeps showing them even if the vehicle is later edited/deleted.
+	if order.VehicleID != nil && !order.VehicleID.IsZero() {
+		vehicle, err := store.FindVehicleByID(order.VehicleID, bson.M{})
+		if err != nil {
+			return errors.New("error finding vehicle: " + err.Error())
+		}
+		if vehicle != nil {
+			snapshot := vehicle.GetVehicleSnapshot()
+			order.VehicleSnapshot = &snapshot
+		}
+	} else {
+		order.VehicleSnapshot = nil
+	}
+
 	if order.DeliveredBy != nil {
 		deliveredByUser, err := FindUserByID(order.DeliveredBy, bson.M{"id": 1, "name": 1})
 		if err != nil {
@@ -720,7 +739,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 	*/
 
 	for i, product := range order.Products {
-		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1, "is_service": 1})
+		productObject, err := store.FindProductByID(&product.ProductID, bson.M{"id": 1, "name": 1, "name_in_arabic": 1, "item_code": 1, "part_number": 1, "prefix_part_number": 1, "is_service": 1, "service_category_name": 1})
 		if err != nil {
 			return err
 		}
@@ -730,6 +749,7 @@ func (order *Order) UpdateForeignLabelFields() error {
 		//order.Products[i].PartNumber = productObject.PartNumber
 		order.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 		order.Products[i].IsService = productObject.IsService
+		order.Products[i].ServiceCategoryName = productObject.ServiceCategoryName
 	}
 
 	return nil
@@ -1950,6 +1970,20 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	if customer == nil && govalidator.IsNull(order.CustomerName) {
 		order.CustomerID = nil
+	}
+
+	// AutoMobile Workshop: resolve VehicleSnapshot server-side from VehicleID so it
+	// can't be spoofed/stale from the client, and clear it if no vehicle selected.
+	if order.VehicleID != nil {
+		vehicle, err := store.FindVehicleByID(order.VehicleID, bson.M{})
+		if err != nil {
+			errs["vehicle_id"] = "Invalid vehicle"
+		} else {
+			snapshot := vehicle.GetVehicleSnapshot()
+			order.VehicleSnapshot = &snapshot
+		}
+	} else {
+		order.VehicleSnapshot = nil
 	}
 
 	if govalidator.IsNull(order.DateStr) {

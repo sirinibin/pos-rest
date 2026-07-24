@@ -401,6 +401,37 @@ func main() {
 	router.HandleFunc("/v1/expense-category/{id}", controller.UpdateExpenseCategory).Methods("PUT")
 	router.HandleFunc("/v1/expense-category/{id}", controller.DeleteExpenseCategory).Methods("DELETE")
 
+	//AutoMobile Workshop — Employee
+	router.HandleFunc("/v1/employee", controller.CreateEmployee).Methods("POST")
+	router.HandleFunc("/v1/employee", controller.ListEmployee).Methods("GET")
+	router.HandleFunc("/v1/employee/{id}", controller.ViewEmployee).Methods("GET")
+	router.HandleFunc("/v1/employee/{id}", controller.UpdateEmployee).Methods("PUT")
+	router.HandleFunc("/v1/employee/{id}", controller.DeleteEmployee).Methods("DELETE")
+	router.HandleFunc("/v1/employee/permanent/{id}", controller.HardDeleteEmployee).Methods("DELETE")
+	router.HandleFunc("/v1/employee-salary-payment", controller.CreateEmployeeSalaryPayment).Methods("POST")
+	router.HandleFunc("/v1/employee-salary-payment", controller.ListEmployeeSalaryPayment).Methods("GET")
+	router.HandleFunc("/v1/employee-salary-payment/{id}", controller.ViewEmployeeSalaryPayment).Methods("GET")
+	router.HandleFunc("/v1/employee-salary-payment/{id}", controller.UpdateEmployeeSalaryPayment).Methods("PUT")
+	router.HandleFunc("/v1/employee-salary-payment/{id}", controller.DeleteEmployeeSalaryPayment).Methods("DELETE")
+
+	//AutoMobile Workshop — Vehicle
+	router.HandleFunc("/v1/vehicle/brands", controller.ListVehicleBrands).Methods("GET")
+	router.HandleFunc("/v1/vehicle", controller.CreateVehicle).Methods("POST")
+	router.HandleFunc("/v1/vehicle", controller.ListVehicle).Methods("GET")
+	router.HandleFunc("/v1/vehicle/{id}", controller.ViewVehicle).Methods("GET")
+	router.HandleFunc("/v1/vehicle/{id}", controller.UpdateVehicle).Methods("PUT")
+	router.HandleFunc("/v1/vehicle/{id}", controller.DeleteVehicle).Methods("DELETE")
+
+	//AutoMobile Workshop — Repair Job
+	router.HandleFunc("/v1/repair-job", controller.CreateRepairJob).Methods("POST")
+	router.HandleFunc("/v1/repair-job", controller.ListRepairJob).Methods("GET")
+	router.HandleFunc("/v1/repair-job/{id}", controller.ViewRepairJob).Methods("GET")
+	router.HandleFunc("/v1/repair-job/{id}", controller.UpdateRepairJob).Methods("PUT")
+	router.HandleFunc("/v1/repair-job/{id}", controller.DeleteRepairJob).Methods("DELETE")
+
+	//AutoMobile Workshop — Dashboard
+	router.HandleFunc("/v1/automobile/dashboard", controller.GetAutoMobileDashboard).Methods("GET")
+
 	//User
 	router.HandleFunc("/v1/user", controller.CreateUser).Methods("POST")
 	router.HandleFunc("/v1/user", controller.ListUser).Methods("GET")
@@ -1598,6 +1629,12 @@ func cronJobsEveryHour() error {
 			log.Print(err)
 		}
 	*/
+
+	// AutoMobile Workshop: auto-accrue unpaid employee salaries on their due dates
+	err := models.ProcessSalaryDueDatesForAllStores()
+	if err != nil {
+		log.Print(err)
+	}
 
 	return nil
 }

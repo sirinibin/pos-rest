@@ -165,11 +165,13 @@ type StoreSettings struct {
 	EnableProducts                              bool            `bson:"enable_products" json:"enable_products"`
 	EnableServices                              bool            `bson:"enable_services" json:"enable_services"`
 	EnableArabicNamesList                       bool            `bson:"enable_arabic_names_list" json:"enable_arabic_names_list"`
-	EnableCustomerPONo                         bool            `bson:"enable_customer_po_no" json:"enable_customer_po_no"`
-	EnableZatcaReportingForReceivables              bool `bson:"enable_zatca_reporting_for_receivables" json:"enable_zatca_reporting_for_receivables"`
-	EnableZatcaReportingForPayables                 bool `bson:"enable_zatca_reporting_for_payables" json:"enable_zatca_reporting_for_payables"`
-	AutoPromptAdvancePaymentLinkingInSales          bool `bson:"auto_suggest_advance_payment_linking_in_sales" json:"auto_suggest_advance_payment_linking_in_sales"`
-	DisplayVATInReceivablesAndPayables              bool `bson:"display_vat_in_receivables_and_payables" json:"display_vat_in_receivables_and_payables"`
+	EnableCustomerPONo                          bool            `bson:"enable_customer_po_no" json:"enable_customer_po_no"`
+	EnableZatcaReportingForReceivables          bool            `bson:"enable_zatca_reporting_for_receivables" json:"enable_zatca_reporting_for_receivables"`
+	EnableZatcaReportingForPayables             bool            `bson:"enable_zatca_reporting_for_payables" json:"enable_zatca_reporting_for_payables"`
+	AutoPromptAdvancePaymentLinkingInSales      bool            `bson:"auto_suggest_advance_payment_linking_in_sales" json:"auto_suggest_advance_payment_linking_in_sales"`
+	DisplayVATInReceivablesAndPayables          bool            `bson:"display_vat_in_receivables_and_payables" json:"display_vat_in_receivables_and_payables"`
+	EnableAutomobileModule                      bool            `bson:"enable_automobile_module" json:"enable_automobile_module"`
+	EnableEmployeeModule                        bool            `bson:"enable_employee_module" json:"enable_employee_module"`
 }
 
 type InvoiceSettings struct {
@@ -1127,9 +1129,9 @@ func (store *Store) RestoreStore() error {
 		ctx,
 		bson.M{"_id": store.ID},
 		bson.M{"$set": bson.M{"deleted": false}, "$unset": bson.M{
-			"deleted_by":                      "",
-			"deleted_at":                      "",
-			"deleted_by_name":                 "",
+			"deleted_by":                       "",
+			"deleted_at":                       "",
+			"deleted_by_name":                  "",
 			"marked_for_permanent_deletion":    "",
 			"marked_for_permanent_deletion_at": "",
 			"permanent_deletion_after_days":    "",

@@ -1032,6 +1032,96 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 	return postings, nil
 }
 
+// RebuildAccountPostingBalances recalculates the running "Balance" recorded
+// on every Post belonging to the given account, walking all of the account's
+// Postings in true chronological order (by date, then by _id as a tiebreaker
+// for same-day entries, matching original insertion order).
+//
+// This is needed because CreatePostings() computes each new Posting's
+// running balance from the account's balance AS OF THAT MOMENT (i.e. based
+// on whatever postings already exist in the database when it runs) and
+// never revisits already-created postings afterwards. If a later-dated
+// posting for a period is deleted/recreated with an earlier date than
+// postings that already exist for the account (for example: a same-month
+// salary advance is paid first, and only afterwards is the automatic
+// salary-due accrual posted retroactively for the 1st of that month), the
+// balances stored on those already-existing, later-dated postings become
+// stale — they were computed before the earlier-dated entry existed, so the
+// balance column no longer reads correctly in chronological order.
+//
+// Call this after any operation that inserts/removes ledger postings for an
+// account out of strict chronological order (currently: the automatic
+// salary-due accrual create/clear cycle).
+func RebuildAccountPostingBalances(store *Store, accountID primitive.ObjectID) error {
+	account, err := store.FindAccountByID(accountID, bson.M{})
+	if err != nil {
+		return errors.New("error finding account for balance rebuild: " + err.Error())
+	}
+	if account == nil {
+		return nil
+	}
+
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "date", Value: 1}, {Key: "_id", Value: 1}})
+
+	cur, err := collection.Find(ctx, bson.M{
+		"store_id":   store.ID,
+		"account_id": accountID,
+	}, findOptions)
+	if err != nil {
+		return errors.New("error finding postings for balance rebuild: " + err.Error())
+	}
+	defer cur.Close(ctx)
+
+	running := 0.0
+	for cur.Next(ctx) {
+		var posting Posting
+		if err := cur.Decode(&posting); err != nil {
+			continue
+		}
+
+		changed := false
+		for i, post := range posting.Posts {
+			amount := post.Debit
+			if post.DebitOrCredit == "credit" {
+				amount = post.Credit
+			}
+
+			// post.DebitOrCredit reflects THIS account's own side of the
+			// entry (see CreatePostings): debit always increases the
+			// running value; credit decreases it, except for
+			// revenue/capital accounts where credit also increases it —
+			// mirroring the exact convention used when postings are first
+			// created.
+			if post.DebitOrCredit == "debit" {
+				running += amount
+			} else if account.Type == "revenue" || account.Type == "capital" {
+				running += amount
+			} else {
+				running -= amount
+			}
+
+			newBalance := RoundTo2Decimals(running)
+			if posting.Posts[i].Balance != newBalance {
+				posting.Posts[i].Balance = newBalance
+				changed = true
+			}
+		}
+
+		if changed {
+			if err := posting.Update(); err != nil {
+				return errors.New("error updating posting balance: " + err.Error())
+			}
+		}
+	}
+
+	return nil
+}
+
 func (posting *Posting) Insert() error {
 	collection := db.GetDB("store_" + posting.StoreID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
