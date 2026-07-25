@@ -132,6 +132,9 @@ type Quotation struct {
 	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
 	Commission               float64             `bson:"commission" json:"commission"`
 	CommissionPaymentMethod  string              `bson:"commission_payment_method" json:"commission_payment_method"`
+	VehicleID                *primitive.ObjectID `json:"vehicle_id,omitempty" bson:"vehicle_id,omitempty"`
+	VehicleSnapshot          *VehicleSnapshot    `json:"vehicle_snapshot,omitempty" bson:"vehicle_snapshot,omitempty"`
+	KmDriven                 float64             `json:"km_driven" bson:"km_driven"`
 }
 
 func (store *Store) IfStore2QuotationSalesShouldAffectTheStock(refDate *time.Time) bool {
@@ -1531,6 +1534,10 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 		if len(objecIds) > 0 {
 			criterias.SearchBy["customer_id"] = bson.M{"$in": objecIds}
 		}
+	}
+
+	if err = ParseObjectIDFilter(r, &criterias, "search[vehicle_id]", "vehicle_id"); err != nil {
+		return quotations, criterias, err
 	}
 
 	if err = ParseObjectIDListFilter(r, &criterias, "search[created_by]", "created_by"); err != nil {

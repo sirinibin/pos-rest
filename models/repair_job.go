@@ -49,7 +49,8 @@ type RepairJob struct {
 	Total             float64             `json:"total" bson:"total"`
 	TotalWithVat      float64             `json:"total_with_vat" bson:"total_with_vat"`
 	EstimatedDelivery *time.Time          `json:"estimated_delivery,omitempty" bson:"estimated_delivery,omitempty"`
-	Status            string              `json:"status" bson:"status"` // open, in_progress, completed, delivered, cancelled
+	Status            string              `json:"status" bson:"status"` // open, in_progress, completed, delivered, cancelled, closed
+	Archived          bool                `bson:"archived" json:"archived"`
 	Deleted           bool                `bson:"deleted" json:"deleted"`
 	DeletedBy         *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedAt         *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
@@ -206,9 +207,20 @@ func (store *Store) FindRepairJobByID(
 func (store *Store) SearchRepairJob(w http.ResponseWriter, r *http.Request) (jobs []RepairJob, criterias SearchCriterias, err error) {
 	criterias = InitSearchCriterias()
 	criterias.SearchBy["deleted"] = bson.M{"$ne": true}
+	criterias.SearchBy["archived"] = bson.M{"$ne": true}
 
 	var keys []string
 	var ok bool
+
+	keys, ok = r.URL.Query()["search[archived]"]
+	if ok && len(keys[0]) >= 1 {
+		value, _ := strconv.ParseInt(keys[0], 10, 64)
+		if value == 1 {
+			criterias.SearchBy["archived"] = true
+		} else {
+			criterias.SearchBy["archived"] = bson.M{"$ne": true}
+		}
+	}
 
 	keys, ok = r.URL.Query()["search[store_id]"]
 	if ok && len(keys[0]) >= 1 {

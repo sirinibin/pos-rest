@@ -46,17 +46,34 @@ func GetAutoMobileDashboard(w http.ResponseWriter, r *http.Request) {
 func parseWorkshopDashboardDateRange(r *http.Request, tzOffset float64) (*time.Time, *time.Time) {
 	var fromDate, toDate *time.Time
 
-	if raw := r.URL.Query().Get("from_date"); raw != "" {
-		if localStart, err := time.Parse("2006-01-02", raw); err == nil {
+	// from_month / to_month (YYYY-MM) take precedence over from_date / to_date
+	if raw := r.URL.Query().Get("from_month"); raw != "" {
+		if localStart, err := time.Parse("2006-01", raw); err == nil {
 			utcStart := models.ConvertTimeZoneToUTC(tzOffset, localStart)
 			fromDate = &utcStart
 		}
 	}
+	if raw := r.URL.Query().Get("to_month"); raw != "" {
+		if localEnd, err := time.Parse("2006-01", raw); err == nil {
+			nextMonthUTC := models.ConvertTimeZoneToUTC(tzOffset, localEnd.AddDate(0, 1, 0))
+			toDate = &nextMonthUTC
+		}
+	}
 
-	if raw := r.URL.Query().Get("to_date"); raw != "" {
-		if localEnd, err := time.Parse("2006-01-02", raw); err == nil {
-			nextDayUTC := models.ConvertTimeZoneToUTC(tzOffset, localEnd.AddDate(0, 0, 1))
-			toDate = &nextDayUTC
+	if fromDate == nil {
+		if raw := r.URL.Query().Get("from_date"); raw != "" {
+			if localStart, err := time.Parse("2006-01-02", raw); err == nil {
+				utcStart := models.ConvertTimeZoneToUTC(tzOffset, localStart)
+				fromDate = &utcStart
+			}
+		}
+	}
+	if toDate == nil {
+		if raw := r.URL.Query().Get("to_date"); raw != "" {
+			if localEnd, err := time.Parse("2006-01-02", raw); err == nil {
+				nextDayUTC := models.ConvertTimeZoneToUTC(tzOffset, localEnd.AddDate(0, 0, 1))
+				toDate = &nextDayUTC
+			}
 		}
 	}
 
