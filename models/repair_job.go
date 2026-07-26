@@ -33,6 +33,7 @@ type RepairJob struct {
 	Date              *time.Time          `json:"date" bson:"date"`
 	VehicleID         *primitive.ObjectID `json:"vehicle_id,omitempty" bson:"vehicle_id"`
 	CustomerID        *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id"`
+	CustomerName      string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
 	VehicleNumber     string              `json:"vehicle_number" bson:"vehicle_number"`
 	Brand             string              `json:"brand" bson:"brand"`
 	Model             string              `json:"model" bson:"model"`
@@ -266,6 +267,30 @@ func (store *Store) SearchRepairJob(w http.ResponseWriter, r *http.Request) (job
 	}
 
 	ParseTextSearch(r, &criterias, "search[job_number]", "job_number")
+	ParseTextSearch(r, &criterias, "search[vehicle_number]", "vehicle_number")
+	ParseTextSearch(r, &criterias, "search[technician_name]", "technician_name")
+	ParseTextSearch(r, &criterias, "search[customer_name]", "customer_name")
+
+	var timeZoneOffset float64
+	keys, ok = r.URL.Query()["search[timezone_offset]"]
+	if ok && len(keys[0]) >= 1 {
+		timeZoneOffset, _ = strconv.ParseFloat(keys[0], 64)
+	}
+	if err = ParseExactDateFilter(r, &criterias, "search[date]", "date", timeZoneOffset); err != nil {
+		return jobs, criterias, err
+	}
+
+	if err = ParseDateRangeFilter(r, &criterias, "search[from_date]", "search[to_date]", "date", timeZoneOffset); err != nil {
+		return jobs, criterias, err
+	}
+
+	if err = ParseExactDateFilter(r, &criterias, "search[estimated_delivery]", "estimated_delivery", timeZoneOffset); err != nil {
+		return jobs, criterias, err
+	}
+
+	if err = ParseDateRangeFilter(r, &criterias, "search[estimated_delivery_from]", "search[estimated_delivery_to]", "estimated_delivery", timeZoneOffset); err != nil {
+		return jobs, criterias, err
+	}
 
 	keys, ok = r.URL.Query()["sort"]
 	if ok && len(keys[0]) >= 1 {
@@ -317,6 +342,41 @@ func (store *Store) SearchRepairJob(w http.ResponseWriter, r *http.Request) (job
 			return jobs, criterias, errors.New("Cursor decode error:" + err.Error())
 		}
 		jobs = append(jobs, job)
+	}
+
+	// Populate customer_name for jobs that have customer_id but no stored customer_name
+	missingIDs := map[primitive.ObjectID]bool{}
+	for _, j := range jobs {
+		if j.CustomerID != nil && j.CustomerName == "" {
+			missingIDs[*j.CustomerID] = true
+		}
+	}
+	if len(missingIDs) > 0 {
+		ids := make([]primitive.ObjectID, 0, len(missingIDs))
+		for id := range missingIDs {
+			ids = append(ids, id)
+		}
+		customerNameMap := map[primitive.ObjectID]string{}
+		custCol := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+		custCtx := context.Background()
+		custCur, custErr := custCol.Find(custCtx, bson.M{"_id": bson.M{"$in": ids}}, options.Find().SetProjection(bson.M{"name": 1}))
+		if custErr == nil && custCur != nil {
+			defer custCur.Close(custCtx)
+			for custCur.Next(custCtx) {
+				var c struct {
+					ID   primitive.ObjectID `bson:"_id"`
+					Name string             `bson:"name"`
+				}
+				if custCur.Decode(&c) == nil {
+					customerNameMap[c.ID] = c.Name
+				}
+			}
+		}
+		for i := range jobs {
+			if jobs[i].CustomerID != nil && jobs[i].CustomerName == "" {
+				jobs[i].CustomerName = customerNameMap[*jobs[i].CustomerID]
+			}
+		}
 	}
 
 	return jobs, criterias, nil
