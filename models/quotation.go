@@ -135,6 +135,7 @@ type Quotation struct {
 	VehicleID                *primitive.ObjectID `json:"vehicle_id,omitempty" bson:"vehicle_id,omitempty"`
 	VehicleSnapshot          *VehicleSnapshot    `json:"vehicle_snapshot,omitempty" bson:"vehicle_snapshot,omitempty"`
 	KmDriven                 float64             `json:"km_driven" bson:"km_driven"`
+	RepairJobID              *primitive.ObjectID `json:"repair_job_id,omitempty" bson:"repair_job_id,omitempty"`
 }
 
 func (store *Store) IfStore2QuotationSalesShouldAffectTheStock(refDate *time.Time) bool {
@@ -1172,7 +1173,9 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 		//quotation.Products[i].Name = productObject.Name
 		quotation.Products[i].NameInArabic = productObject.NameInArabic
 		quotation.Products[i].ItemCode = productObject.ItemCode
-		//quotation.Products[i].PartNumber = productObject.PartNumber
+		if productObject.PartNumber != "" {
+			quotation.Products[i].PartNumber = productObject.PartNumber
+		}
 		quotation.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 		quotation.Products[i].IsService = productObject.IsService
 	}
@@ -1839,7 +1842,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["unit_discount_"+strconv.Itoa(index)] = "Unit discount should not be greater than unit price"
 		}
 
-		if product.PurchaseUnitPrice == 0 {
+		if store.Settings.EnablePurchaseUnitPriceValidation && product.PurchaseUnitPrice == 0 {
 			errs["purchase_unit_price_"+strconv.Itoa(index)] = "Purchase Unit Price is required"
 		}
 
@@ -2143,6 +2146,50 @@ func (store *Store) FindLastQuotationByStoreID(
 	}
 
 	return quotation, err
+}
+
+func (quotation *Quotation) FindNextQuotation(selectFields map[string]interface{}) (next *Quotation, err error) {
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.M{"date": 1})
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx, bson.M{
+		"date":     bson.M{"$gte": quotation.Date},
+		"_id":      bson.M{"$ne": quotation.ID},
+		"store_id": quotation.StoreID,
+	}, findOneOptions).Decode(&next)
+	if err != nil {
+		return nil, err
+	}
+	return next, nil
+}
+
+func (quotation *Quotation) FindPreviousQuotation(selectFields map[string]interface{}) (prev *Quotation, err error) {
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.M{"date": -1})
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+
+	err = collection.FindOne(ctx, bson.M{
+		"date":     bson.M{"$lte": quotation.Date},
+		"_id":      bson.M{"$ne": quotation.ID},
+		"store_id": quotation.StoreID,
+	}, findOneOptions).Decode(&prev)
+	if err != nil {
+		return nil, err
+	}
+	return prev, nil
 }
 
 func (quotation *Quotation) IsCodeExists() (exists bool, err error) {

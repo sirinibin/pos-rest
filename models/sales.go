@@ -133,6 +133,7 @@ type Order struct {
 	VehicleID       *primitive.ObjectID `json:"vehicle_id,omitempty" bson:"vehicle_id,omitempty"`
 	VehicleSnapshot *VehicleSnapshot    `json:"vehicle_snapshot,omitempty" bson:"vehicle_snapshot,omitempty"`
 	KmDriven        float64             `json:"km_driven" bson:"km_driven"`
+	RepairJobID     *primitive.ObjectID `json:"repair_job_id,omitempty" bson:"repair_job_id,omitempty"`
 }
 
 type ZatcaReporting struct {
@@ -747,7 +748,9 @@ func (order *Order) UpdateForeignLabelFields() error {
 		//order.Products[i].Name = productObject.Name
 		order.Products[i].NameInArabic = productObject.NameInArabic
 		order.Products[i].ItemCode = productObject.ItemCode
-		//order.Products[i].PartNumber = productObject.PartNumber
+		if productObject.PartNumber != "" {
+			order.Products[i].PartNumber = productObject.PartNumber
+		}
 		order.Products[i].PrefixPartNumber = productObject.PrefixPartNumber
 		order.Products[i].IsService = productObject.IsService
 		order.Products[i].ServiceCategoryName = productObject.ServiceCategoryName

@@ -423,6 +423,10 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 
+	if order.RepairJobID != nil && !order.RepairJobID.IsZero() {
+		store.LinkOrderToRepairJob(order.RepairJobID, order.ID, order.Code, order.NetTotal)
+	}
+
 	order.AddPayments()
 	order.SetPaymentStatus()
 	order.Update()

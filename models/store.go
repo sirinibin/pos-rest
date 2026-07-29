@@ -172,6 +172,7 @@ type StoreSettings struct {
 	DisplayVATInReceivablesAndPayables          bool            `bson:"display_vat_in_receivables_and_payables" json:"display_vat_in_receivables_and_payables"`
 	EnableAutomobileModule                      bool            `bson:"enable_automobile_module" json:"enable_automobile_module"`
 	EnableEmployeeModule                        bool            `bson:"enable_employee_module" json:"enable_employee_module"`
+	EnablePurchaseUnitPriceValidation           bool            `bson:"enable_purchase_unit_price_validation" json:"enable_purchase_unit_price_validation"`
 }
 
 type InvoiceSettings struct {

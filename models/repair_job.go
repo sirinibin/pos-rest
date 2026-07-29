@@ -10,18 +10,24 @@ import (
 	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // RepairJobPart : a part used in a repair job
 type RepairJobPart struct {
-	ProductID          *primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	Name               string              `json:"name" bson:"name"`
-	Qty                float64             `json:"qty" bson:"qty"`
-	UnitPrice          float64             `json:"unit_price" bson:"unit_price"`
-	UnitPriceWithVat   float64             `json:"unit_price_with_vat" bson:"unit_price_with_vat"`
-	TotalPrice         float64             `json:"total_price" bson:"total_price"`
-	TotalPriceWithVat  float64             `json:"total_price_with_vat" bson:"total_price_with_vat"`
+	ProductID          *primitive.ObjectID    `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	ItemCode           string                 `json:"item_code,omitempty" bson:"item_code,omitempty"`
+	PartNumber         string                 `json:"part_number,omitempty" bson:"part_number,omitempty"`
+	Name               string                 `json:"name" bson:"name"`
+	Qty                float64                `json:"qty" bson:"qty"`
+	PurchaseUnitPrice  float64                `json:"purchase_unit_price" bson:"purchase_unit_price"`
+	Stock              float64                `json:"stock" bson:"stock"`
+	WarehouseStocks    map[string]float64     `json:"warehouse_stocks,omitempty" bson:"warehouse_stocks,omitempty"`
+	UnitPrice          float64                `json:"unit_price" bson:"unit_price"`
+	UnitPriceWithVat   float64                `json:"unit_price_with_vat" bson:"unit_price_with_vat"`
+	TotalPrice         float64                `json:"total_price" bson:"total_price"`
+	TotalPriceWithVat  float64                `json:"total_price_with_vat" bson:"total_price_with_vat"`
 }
 
 // RepairJob : structure for AutoMobile Workshop repair job
@@ -44,13 +50,20 @@ type RepairJob struct {
 	TechnicianID      *primitive.ObjectID `json:"technician_id,omitempty" bson:"technician_id,omitempty"`
 	TechnicianName    string              `json:"technician_name" bson:"technician_name"`
 	LabourCharge      float64             `json:"labour_charge" bson:"labour_charge"`
+	VatPercent        float64             `json:"vat_percent" bson:"vat_percent"`
 	Parts             []RepairJobPart     `json:"parts" bson:"parts"`
 	PartsTotal        float64             `json:"parts_total" bson:"parts_total"`
 	PartsTotalWithVat float64             `json:"parts_total_with_vat" bson:"parts_total_with_vat"`
 	Total             float64             `json:"total" bson:"total"`
 	TotalWithVat      float64             `json:"total_with_vat" bson:"total_with_vat"`
 	EstimatedDelivery *time.Time          `json:"estimated_delivery,omitempty" bson:"estimated_delivery,omitempty"`
-	Status            string              `json:"status" bson:"status"` // open, in_progress, completed, delivered, cancelled, closed
+	Status               string              `json:"status" bson:"status"` // open, in_progress, completed, delivered, cancelled, closed
+	OrderID              *primitive.ObjectID `json:"order_id,omitempty" bson:"order_id,omitempty"`
+	OrderCode            string              `json:"order_code,omitempty" bson:"order_code,omitempty"`
+	OrderNetTotal        float64             `json:"order_net_total,omitempty" bson:"order_net_total,omitempty"`
+	QuotationID          *primitive.ObjectID `json:"quotation_id,omitempty" bson:"quotation_id,omitempty"`
+	QuotationCode        string              `json:"quotation_code,omitempty" bson:"quotation_code,omitempty"`
+	QuotationNetTotal    float64             `json:"quotation_net_total,omitempty" bson:"quotation_net_total,omitempty"`
 	Archived          bool                `bson:"archived" json:"archived"`
 	Deleted           bool                `bson:"deleted" json:"deleted"`
 	DeletedBy         *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -78,7 +91,14 @@ func (job *RepairJob) CalculateTotals() {
 		job.PartsTotalWithVat += job.Parts[i].TotalPriceWithVat
 	}
 	job.Total = job.LabourCharge + job.PartsTotal
-	job.TotalWithVat = job.LabourCharge + job.PartsTotalWithVat
+	if job.VatPercent > 0 {
+		labourExcl := RoundTo2Decimals(job.LabourCharge / (1 + job.VatPercent/100))
+		subtotal := RoundTo2Decimals(job.PartsTotal + labourExcl)
+		vatAmount := RoundTo2Decimals(subtotal * job.VatPercent / 100)
+		job.TotalWithVat = RoundTo2Decimals(subtotal + vatAmount)
+	} else {
+		job.TotalWithVat = job.LabourCharge + job.PartsTotalWithVat
+	}
 }
 
 func (job *RepairJob) UpdateForeignLabelFields() error {
@@ -178,6 +198,30 @@ func (job *RepairJob) Update() error {
 		bson.M{"$set": job},
 		options.Update().SetUpsert(false),
 	)
+	return err
+}
+
+func (store *Store) LinkOrderToRepairJob(jobID *primitive.ObjectID, orderID primitive.ObjectID, orderCode string, netTotal float64) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("repair_job")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := collection.UpdateOne(ctx, bson.M{"_id": jobID}, bson.M{"$set": bson.M{
+		"order_id":        orderID,
+		"order_code":      orderCode,
+		"order_net_total": netTotal,
+	}})
+	return err
+}
+
+func (store *Store) LinkQuotationToRepairJob(jobID *primitive.ObjectID, quotationID primitive.ObjectID, quotationCode string, netTotal float64) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("repair_job")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := collection.UpdateOne(ctx, bson.M{"_id": jobID}, bson.M{"$set": bson.M{
+		"quotation_id":        quotationID,
+		"quotation_code":      quotationCode,
+		"quotation_net_total": netTotal,
+	}})
 	return err
 }
 
@@ -400,4 +444,78 @@ func (job *RepairJob) Delete(tokenClaims TokenClaims) error {
 		options.Update().SetUpsert(false),
 	)
 	return err
+}
+
+func (job *RepairJob) SetUnknownCustomerIfNoCustomerSelected() error {
+	if job.CustomerID != nil && !job.CustomerID.IsZero() {
+		return nil
+	}
+
+	store, err := FindStoreByID(job.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	customer, err := store.FindCustomerByName("UNKNOWN", bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	if customer == nil {
+		now := time.Now()
+		newCustomer := Customer{
+			Name:         "UNKNOWN",
+			NameInArabic: "مجهول",
+			CreatedAt:    &now,
+			UpdatedAt:    &now,
+			StoreID:      job.StoreID,
+		}
+		if job.CreatedBy != nil {
+			newCustomer.CreatedBy = job.CreatedBy
+			newCustomer.UpdatedBy = job.CreatedBy
+		} else if job.UpdatedBy != nil {
+			newCustomer.CreatedBy = job.UpdatedBy
+			newCustomer.UpdatedBy = job.UpdatedBy
+		}
+		if err = newCustomer.MakeCode(); err != nil {
+			return err
+		}
+		newCustomer.GenerateSearchWords()
+		newCustomer.SetSearchLabel()
+		newCustomer.SetAdditionalkeywords()
+		if err = newCustomer.Insert(); err != nil {
+			return err
+		}
+		if err = newCustomer.UpdateForeignLabelFields(); err != nil {
+			return err
+		}
+		customer = &newCustomer
+	}
+
+	job.CustomerID = &customer.ID
+	job.CustomerName = customer.Name
+
+	return nil
+}
+
+func (job *RepairJob) LinkToOrderAndQuotation() {
+	if job.OrderID != nil && !job.OrderID.IsZero() {
+		collection := db.GetDB("store_" + job.StoreID.Hex()).Collection("order")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		collection.UpdateOne(ctx,
+			bson.M{"_id": job.OrderID},
+			bson.M{"$set": bson.M{"repair_job_id": job.ID}},
+		)
+	}
+
+	if job.QuotationID != nil && !job.QuotationID.IsZero() {
+		collection := db.GetDB("store_" + job.StoreID.Hex()).Collection("quotation")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		collection.UpdateOne(ctx,
+			bson.M{"_id": job.QuotationID},
+			bson.M{"$set": bson.M{"repair_job_id": job.ID}},
+		)
+	}
 }

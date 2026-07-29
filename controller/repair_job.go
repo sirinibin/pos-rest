@@ -143,6 +143,13 @@ func CreateRepairJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := job.SetUnknownCustomerIfNoCustomerSelected(); err != nil {
+		response.Status = false
+		response.Errors["customer"] = "Unable to set unknown customer:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if err := job.Insert(); err != nil {
 		response.Status = false
 		response.Errors["insert"] = "Unable to insert repair job:" + err.Error()
@@ -150,6 +157,8 @@ func CreateRepairJob(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	job.LinkToOrderAndQuotation()
 
 	response.Status = true
 	response.Result = job
@@ -263,6 +272,13 @@ func UpdateRepairJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := job.SetUnknownCustomerIfNoCustomerSelected(); err != nil {
+		response.Status = false
+		response.Errors["customer"] = "Unable to set unknown customer:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if err := job.Update(); err != nil {
 		response.Status = false
 		response.Errors["update"] = "Unable to update repair job:" + err.Error()
@@ -270,6 +286,8 @@ func UpdateRepairJob(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	job.LinkToOrderAndQuotation()
 
 	response.Status = true
 	response.Result = job
