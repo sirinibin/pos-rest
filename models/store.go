@@ -173,6 +173,10 @@ type StoreSettings struct {
 	EnableAutomobileModule                      bool            `bson:"enable_automobile_module" json:"enable_automobile_module"`
 	EnableEmployeeModule                        bool            `bson:"enable_employee_module" json:"enable_employee_module"`
 	EnablePurchaseUnitPriceValidation           bool            `bson:"enable_purchase_unit_price_validation" json:"enable_purchase_unit_price_validation"`
+	CashOpeningBalance                          float64         `bson:"cash_opening_balance" json:"cash_opening_balance"`
+	CashOpeningBalanceDate                      *time.Time      `bson:"cash_opening_balance_date,omitempty" json:"cash_opening_balance_date,omitempty"`
+	BankOpeningBalance                          float64         `bson:"bank_opening_balance" json:"bank_opening_balance"`
+	BankOpeningBalanceDate                      *time.Time      `bson:"bank_opening_balance_date,omitempty" json:"bank_opening_balance_date,omitempty"`
 }
 
 type InvoiceSettings struct {
@@ -279,6 +283,22 @@ func (store *Store) SetChangeLog(
 */
 
 func (store *Store) AttributesValueChangeEvent(storeOld *Store) error {
+
+	cashChanged := store.Settings.CashOpeningBalance != storeOld.Settings.CashOpeningBalance ||
+		!TimesEqual(store.Settings.CashOpeningBalanceDate, storeOld.Settings.CashOpeningBalanceDate)
+	bankChanged := store.Settings.BankOpeningBalance != storeOld.Settings.BankOpeningBalance ||
+		!TimesEqual(store.Settings.BankOpeningBalanceDate, storeOld.Settings.BankOpeningBalanceDate)
+
+	if cashChanged {
+		if err := store.PostCashOpeningBalanceIfNeeded(); err != nil {
+			return err
+		}
+	}
+	if bankChanged {
+		if err := store.PostBankOpeningBalanceIfNeeded(); err != nil {
+			return err
+		}
+	}
 
 	if store.Name != storeOld.Name {
 		usedInCollections := []string{
@@ -1003,6 +1023,37 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 			w.WriteHeader(http.StatusBadRequest)
 		}
 	*/
+
+	if store.Settings.CashOpeningBalance < 0 {
+		errs["settings.cash_opening_balance"] = "Cash opening balance cannot be negative"
+	}
+	if store.Settings.CashOpeningBalance > 0 && store.Settings.CashOpeningBalanceDate == nil {
+		errs["settings.cash_opening_balance_date"] = "Date is required when cash opening balance is entered"
+	}
+	if store.Settings.CashOpeningBalance > 0 && store.Settings.CashOpeningBalanceDate != nil {
+		if dateErr := store.ValidateOpeningBalanceDateByAccountName(
+			"Cash",
+			store.Settings.CashOpeningBalanceDate,
+			[]string{cashOpeningBalanceReferenceModel},
+		); dateErr != nil {
+			errs["settings.cash_opening_balance_date"] = dateErr.Error()
+		}
+	}
+	if store.Settings.BankOpeningBalance < 0 {
+		errs["settings.bank_opening_balance"] = "Bank opening balance cannot be negative"
+	}
+	if store.Settings.BankOpeningBalance > 0 && store.Settings.BankOpeningBalanceDate == nil {
+		errs["settings.bank_opening_balance_date"] = "Date is required when bank opening balance is entered"
+	}
+	if store.Settings.BankOpeningBalance > 0 && store.Settings.BankOpeningBalanceDate != nil {
+		if dateErr := store.ValidateOpeningBalanceDateByAccountName(
+			"Bank",
+			store.Settings.BankOpeningBalanceDate,
+			[]string{bankOpeningBalanceReferenceModel},
+		); dateErr != nil {
+			errs["settings.bank_opening_balance_date"] = dateErr.Error()
+		}
+	}
 
 	return errs
 }

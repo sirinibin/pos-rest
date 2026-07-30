@@ -51,6 +51,15 @@ type User struct {
 	ConnectedTabs      int                   `json:"connected_tabs" bson:"connected_tabs"`
 	ConnectedComputers int                   `json:"connected_computers" bson:"connected_computers"`
 	Devices            map[string]*Device    `bson:"devices" json:"devices"`
+
+	// StoreID is used to scope financial operations (opening balance) to a specific store.
+	StoreID              *primitive.ObjectID `bson:"store_id,omitempty" json:"store_id,omitempty"`
+	Account              *Account            `json:"account" bson:"account"`
+	OpeningBalance       float64             `bson:"opening_balance" json:"opening_balance"`
+	OpeningBalanceDate   *time.Time          `bson:"opening_balance_date,omitempty" json:"opening_balance_date,omitempty"`
+	OpeningBalancePosted bool                `bson:"opening_balance_posted" json:"opening_balance_posted"`
+	// OpeningBalanceType: "payable" (store owes user) or "receivable" (user owes store)
+	OpeningBalanceType   string              `bson:"opening_balance_type" json:"opening_balance_type"`
 }
 
 // Device represents detailed information about a user's device
@@ -98,6 +107,11 @@ type UserForm struct {
 	StoreIDs     []*primitive.ObjectID `json:"store_ids" bson:"store_ids"`
 	StoreNames   []string              `json:"store_names" bson:"store_names"`
 	Admin        bool                  `bson:"admin" json:"admin"`
+
+	StoreID              *primitive.ObjectID `json:"store_id,omitempty"`
+	OpeningBalance       float64             `json:"opening_balance"`
+	OpeningBalanceDate   *time.Time          `json:"opening_balance_date,omitempty"`
+	OpeningBalanceType   string              `json:"opening_balance_type"`
 }
 
 func (user *User) SetOnlineStatus() error {
@@ -428,6 +442,30 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	if emailExists {
 		errs["email"] = "E-mail is Already in use"
+	}
+
+	if user.OpeningBalance < 0 {
+		errs["opening_balance"] = "Opening balance cannot be negative"
+	}
+	if user.OpeningBalanceType != "" && user.OpeningBalanceType != "payable" && user.OpeningBalanceType != "receivable" {
+		errs["opening_balance_type"] = "Opening balance type must be 'payable' or 'receivable'"
+	}
+	if user.OpeningBalance != 0 && user.OpeningBalanceDate == nil {
+		errs["opening_balance_date"] = "Opening balance date is required when an opening balance is entered"
+	}
+	if user.OpeningBalance != 0 && user.StoreID == nil {
+		errs["store_id"] = "Store is required when an opening balance is set"
+	}
+	if user.OpeningBalance != 0 && user.OpeningBalanceDate != nil && user.StoreID != nil {
+		if userStore, storeErr := FindStoreByID(user.StoreID, bson.M{}); storeErr == nil {
+			if dateErr := userStore.ValidateOpeningBalanceDateForAccount(
+				user.ID,
+				user.OpeningBalanceDate,
+				[]string{userOpeningBalanceReferenceModel},
+			); dateErr != nil {
+				errs["opening_balance_date"] = dateErr.Error()
+			}
+		}
 	}
 
 	if emailExists {

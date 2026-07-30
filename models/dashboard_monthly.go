@@ -81,6 +81,9 @@ type DashboardMonthly struct {
 	ExpenseAmount float64 `bson:"expense_amount" json:"expense_amount"`
 	ExpenseCount  int64   `bson:"expense_count"  json:"expense_count"`
 
+	// Salary paid (only populated when enable_employee_module is true)
+	SalaryPaid float64 `bson:"salary_paid" json:"salary_paid"`
+
 	// Customer-deposit purchase-fund (used when disable_purchases_on_accounts = true)
 	DepositPurchaseFund float64 `bson:"deposit_purchase_fund" json:"deposit_purchase_fund"`
 
@@ -182,11 +185,14 @@ func ComputeAndUpsertDashboardMonthly(storeID primitive.ObjectID, monthStr strin
 	// Expenses
 	d.ExpenseAmount, d.ExpenseCount = dmSumCount(ctx, sdb.Collection("expense"), dateFilterWithDelete, "amount")
 
+	// Salary paid
+	d.SalaryPaid, _ = dmSum(ctx, sdb.Collection("employee_salary_payment"), dateFilterWithDelete, "amount")
+
 	// Customer-deposit purchase fund
 	d.DepositPurchaseFund = dmSumEmbeddedPayments(ctx, sdb.Collection("customerdeposit"), dateFilterWithDelete, "purchase_fund")
 
 	// Skip months with no activity — nothing to store, nothing to show.
-	if d.SalesAmount+d.SalesReturnAmount+d.PurchaseAmount+d.ExpenseAmount+d.QtnInvoiceAmount == 0 {
+	if d.SalesAmount+d.SalesReturnAmount+d.PurchaseAmount+d.ExpenseAmount+d.QtnInvoiceAmount+d.SalaryPaid == 0 {
 		// Remove any stale record for this month (e.g. left over from bad data that was corrected).
 		_, _ = sdb.Collection("dashboard_monthly").DeleteOne(
 			ctx,

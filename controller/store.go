@@ -204,6 +204,24 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := store.PostCashOpeningBalanceIfNeeded(); err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["cash_opening_balance"] = "error posting cash opening balance: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if err := store.PostBankOpeningBalanceIfNeeded(); err != nil {
+		response.Status = false
+		response.Errors = make(map[string]string)
+		response.Errors["bank_opening_balance"] = "error posting bank opening balance: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = store
 

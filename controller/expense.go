@@ -79,6 +79,11 @@ func ListExpense(w http.ResponseWriter, r *http.Request) {
 	response.Meta["purchase_fund"] = expenseStats.PurchaseFund
 	response.Meta["vat"] = expenseStats.Vat
 
+	if store.Settings.EnableEmployeeModule {
+		salaryPaid, _ := store.GetSalaryPaidInPeriod(criterias.SearchBy)
+		response.Meta["salary_paid"] = salaryPaid
+	}
+
 	if len(expenses) == 0 {
 		response.Result = []interface{}{}
 	} else {

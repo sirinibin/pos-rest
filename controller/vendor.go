@@ -173,6 +173,28 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if vendor.OpeningBalance > 0 {
+		vendorStore, err := models.FindStoreByID(vendor.StoreID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors["opening_balance"] = "Unable to find store for opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if err := vendor.PostVendorOpeningBalanceIfNeeded(vendorStore); err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["opening_balance"] = "Unable to post opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if vendor.OpeningBalancePosted {
+			_ = vendor.Update()
+		}
+	}
+
 	response.Status = true
 	response.Result = vendor
 
@@ -286,6 +308,22 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	openingBalanceChanged := vendor.OpeningBalance != vendorOld.OpeningBalance ||
+		!models.TimesEqual(vendor.OpeningBalanceDate, vendorOld.OpeningBalanceDate) ||
+		vendor.OpeningBalanceType != vendorOld.OpeningBalanceType ||
+		(!vendor.OpeningBalancePosted && vendor.OpeningBalance != 0)
+	if openingBalanceChanged {
+		if err := vendor.PostVendorOpeningBalanceIfNeeded(store); err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["opening_balance"] = "Unable to post opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		_ = vendor.Update()
 	}
 
 	vendor, err = store.FindVendorByID(&vendor.ID, bson.M{})

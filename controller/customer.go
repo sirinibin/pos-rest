@@ -208,6 +208,28 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if customer.OpeningBalance > 0 {
+		customerStore, err := models.FindStoreByID(customer.StoreID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors["opening_balance"] = "Unable to find store for opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if err := customer.PostCustomerOpeningBalanceIfNeeded(customerStore); err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["opening_balance"] = "Unable to post opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if customer.OpeningBalancePosted {
+			_ = customer.Update()
+		}
+	}
+
 	response.Status = true
 	response.Result = customer
 
@@ -322,6 +344,22 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	openingBalanceChanged := customer.OpeningBalance != customerOld.OpeningBalance ||
+		!models.TimesEqual(customer.OpeningBalanceDate, customerOld.OpeningBalanceDate) ||
+		customer.OpeningBalanceType != customerOld.OpeningBalanceType ||
+		(!customer.OpeningBalancePosted && customer.OpeningBalance != 0)
+	if openingBalanceChanged {
+		if err := customer.PostCustomerOpeningBalanceIfNeeded(store); err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["opening_balance"] = "Unable to post opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		_ = customer.Update()
 	}
 
 	customer, err = store.FindCustomerByID(&customer.ID, nil)

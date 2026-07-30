@@ -210,9 +210,14 @@ func UpdateVehicle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existingCurrentKM := vehicle.CurrentKM
+
 	if !utils.Decode(w, r, &vehicle) {
 		return
 	}
+
+	// current_km is read-only on update; it is managed by sales/quotation creation
+	vehicle.CurrentKM = existingCurrentKM
 
 	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	vehicle.UpdatedBy = &userID

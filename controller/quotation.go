@@ -273,6 +273,10 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	if quotation.RepairJobID != nil && !quotation.RepairJobID.IsZero() {
 		store.LinkQuotationToRepairJob(quotation.RepairJobID, quotation.ID, quotation.Code, quotation.NetTotal)
 	}
+	for _, jobID := range quotation.RepairJobIDs {
+		jid := jobID
+		store.LinkQuotationToRepairJob(&jid, quotation.ID, quotation.Code, quotation.NetTotal)
+	}
 
 	err = quotation.CreateProductsQuotationHistory()
 	if err != nil {

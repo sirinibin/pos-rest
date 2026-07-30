@@ -133,7 +133,8 @@ type Order struct {
 	VehicleID       *primitive.ObjectID `json:"vehicle_id,omitempty" bson:"vehicle_id,omitempty"`
 	VehicleSnapshot *VehicleSnapshot    `json:"vehicle_snapshot,omitempty" bson:"vehicle_snapshot,omitempty"`
 	KmDriven        float64             `json:"km_driven" bson:"km_driven"`
-	RepairJobID     *primitive.ObjectID `json:"repair_job_id,omitempty" bson:"repair_job_id,omitempty"`
+	RepairJobID     *primitive.ObjectID   `json:"repair_job_id,omitempty" bson:"repair_job_id,omitempty"`
+	RepairJobIDs    []primitive.ObjectID  `json:"repair_job_ids,omitempty" bson:"repair_job_ids,omitempty"`
 }
 
 type ZatcaReporting struct {
@@ -2877,6 +2878,7 @@ func (order *Order) linkCustomerDepositPayment(store *Store, depositID *primitiv
 			deposit.Payments[i].InvoiceCode = &invoiceCode
 			deposit.Payments[i].InvoiceType = &invoiceType
 			_ = deposit.Update()
+			_ = deposit.UndoAccounting()
 			_ = deposit.DoAccounting()
 			id := deposit.Payments[i].ID
 			return &id

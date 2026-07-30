@@ -426,6 +426,10 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	if order.RepairJobID != nil && !order.RepairJobID.IsZero() {
 		store.LinkOrderToRepairJob(order.RepairJobID, order.ID, order.Code, order.NetTotal)
 	}
+	for _, jobID := range order.RepairJobIDs {
+		jid := jobID
+		store.LinkOrderToRepairJob(&jid, order.ID, order.Code, order.NetTotal)
+	}
 
 	order.AddPayments()
 	order.SetPaymentStatus()

@@ -177,6 +177,28 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.OpeningBalance > 0 && user.StoreID != nil {
+		userStore, err := models.FindStoreByID(user.StoreID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors["opening_balance"] = "Unable to find store for opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if err := user.PostUserOpeningBalanceIfNeeded(userStore); err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["opening_balance"] = "Unable to post opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if user.OpeningBalancePosted {
+			_ = user.Update()
+		}
+	}
+
 	response.Status = true
 	response.Result = user
 
@@ -225,6 +247,14 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldOpeningBalance := user.OpeningBalance
+	oldOpeningBalanceType := user.OpeningBalanceType
+	var oldOpeningBalanceDate *time.Time
+	if user.OpeningBalanceDate != nil {
+		t := *user.OpeningBalanceDate
+		oldOpeningBalanceDate = &t
+	}
+
 	user.Admin = userForm.Admin
 	user.Email = userForm.Email
 	user.Mob = userForm.Mob
@@ -237,6 +267,10 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	user.Role = userForm.Role
 	user.StoreIDs = userForm.StoreIDs
 	user.RoleIDs = userForm.RoleIDs
+	user.StoreID = userForm.StoreID
+	user.OpeningBalance = userForm.OpeningBalance
+	user.OpeningBalanceDate = userForm.OpeningBalanceDate
+	user.OpeningBalanceType = userForm.OpeningBalanceType
 
 	accessingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -290,6 +324,31 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	openingBalanceChanged := user.OpeningBalance != oldOpeningBalance ||
+		!models.TimesEqual(user.OpeningBalanceDate, oldOpeningBalanceDate) ||
+		user.OpeningBalanceType != oldOpeningBalanceType ||
+		(!user.OpeningBalancePosted && user.OpeningBalance != 0)
+	if openingBalanceChanged && user.StoreID != nil {
+		userStore, err := models.FindStoreByID(user.StoreID, bson.M{})
+		if err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["opening_balance"] = "Unable to find store for opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if err := user.PostUserOpeningBalanceIfNeeded(userStore); err != nil {
+			response.Status = false
+			response.Errors = make(map[string]string)
+			response.Errors["opening_balance"] = "Unable to post opening balance: " + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		_ = user.Update()
 	}
 
 	user, err = models.FindUserByID(&user.ID, bson.M{})

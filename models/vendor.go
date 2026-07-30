@@ -97,6 +97,12 @@ type Vendor struct {
 	UseRemarksInPurchases      bool                   `bson:"use_remarks_in_purchases" json:"use_remarks_in_purchases"`
 	Images                     []string               `bson:"images,omitempty" json:"images,omitempty"`
 	Sponsor                    string                 `bson:"sponsor" json:"sponsor"`
+
+	OpeningBalance       float64    `bson:"opening_balance" json:"opening_balance"`
+	OpeningBalanceDate   *time.Time `bson:"opening_balance_date,omitempty" json:"opening_balance_date,omitempty"`
+	OpeningBalancePosted bool       `bson:"opening_balance_posted" json:"opening_balance_posted"`
+	// OpeningBalanceType: "payable" (store owes vendor, default) or "receivable" (vendor owes store)
+	OpeningBalanceType   string     `bson:"opening_balance_type" json:"opening_balance_type"`
 }
 
 type VendorStats struct {
@@ -1478,18 +1484,26 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(vendor.Code)) {
-		codeExists, err := vendor.IsCodeExists()
-		if err != nil {
-			errs["code"] = err.Error()
+		skipCodeCheck := false
+		if scenario == "update" && !vendor.ID.IsZero() {
+			if existing, exErr := store.FindVendorByID(&vendor.ID, bson.M{"code": 1}); exErr == nil && existing != nil && existing.Code == vendor.Code {
+				skipCodeCheck = true
+			}
 		}
+		if !skipCodeCheck {
+			codeExists, err := vendor.IsCodeExists()
+			if err != nil {
+				errs["code"] = err.Error()
+			}
 
-		if codeExists {
-			errs["code"] = "ID already exists."
-		}
+			if codeExists {
+				errs["code"] = "ID already exists."
+			}
 
-		if codeExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
+			if codeExists {
+				w.WriteHeader(http.StatusConflict)
+				return errs
+			}
 		}
 	}
 
@@ -1552,6 +1566,38 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 
 		if emailExists {
 			errs["email"] = "E-mail is Already in use"
+		}
+	}
+
+	if vendor.OpeningBalance < 0 {
+		errs["opening_balance"] = "Opening balance cannot be negative"
+	}
+	if vendor.OpeningBalanceType != "" && vendor.OpeningBalanceType != "payable" && vendor.OpeningBalanceType != "receivable" {
+		errs["opening_balance_type"] = "Opening balance type must be 'payable' or 'receivable'"
+	}
+	if vendor.OpeningBalance != 0 && vendor.OpeningBalanceDate == nil {
+		errs["opening_balance_date"] = "Opening balance date is required when an opening balance is entered"
+	}
+	if vendor.OpeningBalance != 0 && vendor.OpeningBalanceDate != nil && vendor.StoreID != nil {
+		if vendorStore, storeErr := FindStoreByID(vendor.StoreID, bson.M{}); storeErr == nil {
+			// Look up the account using the same priority as CreateAccountIfNotExists:
+			// VAT+name first (catches shared-VAT accounts), then reference_id.
+			var vendorAccount *Account
+			if vendor.VATNo != "" {
+				vendorAccount, _ = vendorStore.FindAccountByVatNoByName(vendor.VATNo, vendor.Name, vendor.StoreID, bson.M{"_id": 1})
+			}
+			if vendorAccount == nil {
+				vendorAccount, _ = vendorStore.FindAccountByReferenceID(vendor.ID, vendorStore.ID, bson.M{"_id": 1})
+			}
+			if vendorAccount != nil {
+				if dateErr := vendorStore.ValidateOpeningBalanceDateForAccountID(
+					vendorAccount.ID,
+					vendor.OpeningBalanceDate,
+					[]string{vendorOpeningBalanceReferenceModel},
+				); dateErr != nil {
+					errs["opening_balance_date"] = dateErr.Error()
+				}
+			}
 		}
 	}
 

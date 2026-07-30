@@ -40,6 +40,8 @@ type Employee struct {
 	OpeningBalance       float64             `bson:"opening_balance" json:"opening_balance"`
 	OpeningBalanceDate   *time.Time          `bson:"opening_balance_date,omitempty" json:"opening_balance_date,omitempty"`
 	OpeningBalancePosted bool                `bson:"opening_balance_posted" json:"opening_balance_posted"`
+	// OpeningBalanceType: "payable" (store owes employee) or "receivable" (employee owes store)
+	OpeningBalanceType   string              `bson:"opening_balance_type" json:"opening_balance_type"`
 	IsActive             bool                `bson:"is_active" json:"is_active"`
 	Account              *Account            `json:"account" bson:"account"`
 	StoreID              *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
@@ -191,6 +193,50 @@ func (store *Store) GetEmployeeStats(filter map[string]interface{}) (stats Emplo
 	return stats, nil
 }
 
+// SalaryPaymentStats holds aggregate totals for the salary payment list.
+type SalaryPaymentStats struct {
+	TotalPayments     int64   `json:"total_payments" bson:"total_payments"`
+	TotalAmount       float64 `json:"total_amount" bson:"total_amount"`
+	TotalCash         float64 `json:"total_cash" bson:"total_cash"`
+	TotalBankTransfer float64 `json:"total_bank_transfer" bson:"total_bank_transfer"`
+}
+
+func (store *Store) GetSalaryPaymentStats(filter map[string]interface{}) (stats SalaryPaymentStats, err error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("employee_salary_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pipeline := []bson.M{
+		{"$match": filter},
+		{"$group": bson.M{
+			"_id":           nil,
+			"total_payments": bson.M{"$sum": 1},
+			"total_amount":  bson.M{"$sum": "$amount"},
+			"total_cash": bson.M{"$sum": bson.M{"$cond": []interface{}{
+				bson.M{"$eq": []interface{}{"$payment_method", "cash"}}, "$amount", 0,
+			}}},
+			"total_bank_transfer": bson.M{"$sum": bson.M{"$cond": []interface{}{
+				bson.M{"$eq": []interface{}{"$payment_method", "bank_transfer"}}, "$amount", 0,
+			}}},
+		}},
+	}
+
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return stats, err
+	}
+	defer cur.Close(ctx)
+	if cur.Next(ctx) {
+		if err := cur.Decode(&stats); err != nil {
+			return stats, err
+		}
+		stats.TotalAmount = RoundFloat(stats.TotalAmount, 2)
+		stats.TotalCash = RoundFloat(stats.TotalCash, 2)
+		stats.TotalBankTransfer = RoundFloat(stats.TotalBankTransfer, 2)
+	}
+	return stats, nil
+}
+
 // ──────────────────────────────────────────────────────────
 // Employee CRUD
 // ──────────────────────────────────────────────────────────
@@ -249,8 +295,22 @@ func (employee *Employee) Validate(w http.ResponseWriter, r *http.Request, scena
 	if employee.OpeningBalance < 0 {
 		errs["opening_balance"] = "Opening balance cannot be negative"
 	}
+	if employee.OpeningBalanceType != "" && employee.OpeningBalanceType != "payable" && employee.OpeningBalanceType != "receivable" {
+		errs["opening_balance_type"] = "Opening balance type must be 'payable' or 'receivable'"
+	}
 	if employee.OpeningBalance != 0 && employee.OpeningBalanceDate == nil {
 		errs["opening_balance_date"] = "Opening balance date is required when an opening balance is entered"
+	}
+	if employee.OpeningBalance != 0 && employee.OpeningBalanceDate != nil && employee.StoreID != nil {
+		if empStore, storeErr := FindStoreByID(employee.StoreID, bson.M{}); storeErr == nil {
+			if dateErr := empStore.ValidateOpeningBalanceDateForAccount(
+				employee.ID,
+				employee.OpeningBalanceDate,
+				[]string{employeeOpeningBalanceReferenceModel},
+			); dateErr != nil {
+				errs["opening_balance_date"] = dateErr.Error()
+			}
+		}
 	}
 
 	if strings.TrimSpace(employee.Mob1) != "" && employee.StoreID != nil && !employee.StoreID.IsZero() {
@@ -1265,10 +1325,15 @@ func (store *Store) RemoveOpeningBalanceLedgerAndPostings(employeeID *primitive.
 	return err
 }
 
-// CreateOpeningBalanceLedger posts the one-time migration cutover entry:
-// DR OPENING BALANCE EQUITY  /  CR EMP: NAME
-// This represents what the store already owed the employee (under a previous,
-// external payroll system) as of the opening balance date.
+// CreateOpeningBalanceLedger posts the one-time migration cutover entry.
+//
+// payable  (default): DR OPENING BALANCE EQUITY / CR EMP: NAME
+//
+//	Store owes the employee (e.g. unpaid salary from previous system).
+//
+// receivable:         DR EMP: NAME / CR OPENING BALANCE EQUITY
+//
+//	Employee owes the store (e.g. advance issued under previous system).
 func (employee *Employee) CreateOpeningBalanceLedger(store *Store, amount float64, date *time.Time) (*Ledger, error) {
 	openingBalanceAccount, err := store.CreateAccountIfNotExists(employee.StoreID, nil, nil, "OPENING BALANCE EQUITY", nil, nil)
 	if err != nil {
@@ -1286,26 +1351,53 @@ func (employee *Employee) CreateOpeningBalanceLedger(store *Store, amount float6
 		entryDate = &now
 	}
 
+	// receivable = employee owes the store → flip: DR emp / CR equity
+	isReceivable := employee.OpeningBalanceType == "receivable"
+
 	groupID := primitive.NewObjectID()
-	journals := []Journal{
-		{
-			Date:          entryDate,
-			AccountID:     openingBalanceAccount.ID,
-			AccountName:   openingBalanceAccount.Name,
-			AccountNumber: openingBalanceAccount.Number,
-			DebitOrCredit: "debit",
-			Debit:         amount,
-			GroupID:       groupID,
-		},
-		{
-			Date:          entryDate,
-			AccountID:     empAccount.ID,
-			AccountName:   empAccount.Name,
-			AccountNumber: empAccount.Number,
-			DebitOrCredit: "credit",
-			Credit:        amount,
-			GroupID:       groupID,
-		},
+	var journals []Journal
+	if isReceivable {
+		journals = []Journal{
+			{
+				Date:          entryDate,
+				AccountID:     empAccount.ID,
+				AccountName:   empAccount.Name,
+				AccountNumber: empAccount.Number,
+				DebitOrCredit: "debit",
+				Debit:         amount,
+				GroupID:       groupID,
+			},
+			{
+				Date:          entryDate,
+				AccountID:     openingBalanceAccount.ID,
+				AccountName:   openingBalanceAccount.Name,
+				AccountNumber: openingBalanceAccount.Number,
+				DebitOrCredit: "credit",
+				Credit:        amount,
+				GroupID:       groupID,
+			},
+		}
+	} else {
+		journals = []Journal{
+			{
+				Date:          entryDate,
+				AccountID:     openingBalanceAccount.ID,
+				AccountName:   openingBalanceAccount.Name,
+				AccountNumber: openingBalanceAccount.Number,
+				DebitOrCredit: "debit",
+				Debit:         amount,
+				GroupID:       groupID,
+			},
+			{
+				Date:          entryDate,
+				AccountID:     empAccount.ID,
+				AccountName:   empAccount.Name,
+				AccountNumber: empAccount.Number,
+				DebitOrCredit: "credit",
+				Credit:        amount,
+				GroupID:       groupID,
+			},
+		}
 	}
 
 	ledger := &Ledger{
@@ -1347,6 +1439,7 @@ func (employee *Employee) PostOpeningBalanceIfNeeded(store *Store) error {
 			empAccount.CalculateBalance(nil, nil)
 			empAccount.Update()
 			employee.Account = empAccount
+			_ = RebuildAccountPostingBalances(store, empAccount.ID)
 		}
 		return nil
 	}
@@ -1357,6 +1450,14 @@ func (employee *Employee) PostOpeningBalanceIfNeeded(store *Store) error {
 	}
 	if _, err := ledger.CreatePostings(); err != nil {
 		return errors.New("error posting opening balance ledger: " + err.Error())
+	}
+
+	// Recalculate and rebuild AFTER postings exist so the balance sheet reflects the new date.
+	if empAccount, aErr := employee.GetOrCreateLiabilityAccount(store); aErr == nil && empAccount != nil {
+		empAccount.CalculateBalance(nil, nil)
+		empAccount.Update()
+		employee.Account = empAccount
+		_ = RebuildAccountPostingBalances(store, empAccount.ID)
 	}
 
 	employee.OpeningBalancePosted = true
@@ -1547,6 +1648,18 @@ func (store *Store) SearchEmployeeSalaryPayment(w http.ResponseWriter, r *http.R
 	if ok && len(keys[0]) >= 1 {
 		y, _ := strconv.Atoi(keys[0])
 		criterias.SearchBy["year"] = y
+	}
+
+	ParseTextSearch(r, &criterias, "search[employee_name]", "employee_name")
+
+	keys, ok = r.URL.Query()["search[payment_method]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["payment_method"] = keys[0]
+	}
+
+	timeZoneOffset := CountryTimezoneOffset(store.CountryCode)
+	if err = ParseDateRangeFilter(r, &criterias, "search[date_from]", "search[date_to]", "date", timeZoneOffset); err != nil {
+		return payments, criterias, err
 	}
 
 	keys, ok = r.URL.Query()["sort"]
@@ -1928,4 +2041,38 @@ func processSalaryDuesForStore(store *Store, now time.Time) error {
 	}
 
 	return nil
+}
+
+// GetSalaryPaidInPeriod sums employee_salary_payment.amount for the store,
+// filtered by the same date range present in the expense search criteria map.
+func (store *Store) GetSalaryPaidInPeriod(filter map[string]interface{}) (float64, error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("employee_salary_payment")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	matchFilter := bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+	}
+	if dateFilter, ok := filter["date"]; ok {
+		matchFilter["date"] = dateFilter
+	}
+
+	pipeline := []bson.M{
+		{"$match": matchFilter},
+		{"$group": bson.M{"_id": nil, "total": bson.M{"$sum": "$amount"}}},
+	}
+	cur, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(ctx)
+
+	var res struct {
+		Total float64 `bson:"total"`
+	}
+	if cur.Next(ctx) {
+		cur.Decode(&res)
+	}
+	return RoundFloat(res.Total, 2), nil
 }

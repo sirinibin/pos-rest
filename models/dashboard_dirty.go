@@ -247,7 +247,7 @@ func latestTransactionDate(storeID primitive.ObjectID) time.Time {
 		"order", "salesreturn", "sales_payment",
 		"purchase", "purchasereturn",
 		"expense", "quotation", "quotation_sales_return",
-		"customerdeposit",
+		"customerdeposit", "employee_salary_payment",
 	}
 	var latest time.Time
 	for _, name := range colls {
@@ -278,7 +278,7 @@ func earliestTransactionDate(storeID primitive.ObjectID) time.Time {
 		"order", "salesreturn", "sales_payment",
 		"purchase", "purchasereturn",
 		"expense", "quotation", "quotation_sales_return",
-		"customerdeposit",
+		"customerdeposit", "employee_salary_payment",
 	}
 	var earliest time.Time
 	for _, name := range colls {

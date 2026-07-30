@@ -117,6 +117,12 @@ type Customer struct {
 	UseRemarksInSales          bool                     `bson:"use_remarks_in_sales" json:"use_remarks_in_sales"`
 	Images                     []string                 `bson:"images,omitempty" json:"images,omitempty"`
 
+	OpeningBalance       float64    `bson:"opening_balance" json:"opening_balance"`
+	OpeningBalanceDate   *time.Time `bson:"opening_balance_date,omitempty" json:"opening_balance_date,omitempty"`
+	OpeningBalancePosted bool       `bson:"opening_balance_posted" json:"opening_balance_posted"`
+	// OpeningBalanceType: "receivable" (customer owes store, default) or "payable" (store owes customer)
+	OpeningBalanceType   string     `bson:"opening_balance_type" json:"opening_balance_type"`
+
 	// BI: Churn Risk — populated by cron job every 3 hours
 	ChurnRiskTier       string  `bson:"churn_risk_tier,omitempty" json:"churn_risk_tier,omitempty"`
 	ChurnRiskTierReason string  `bson:"churn_risk_tier_reason,omitempty" json:"churn_risk_tier_reason,omitempty"`
@@ -2285,18 +2291,50 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		}*/
 
 	if !govalidator.IsNull(strings.TrimSpace(customer.Code)) {
-		codeExists, err := customer.IsCodeExists()
-		if err != nil {
-			errs["code"] = err.Error()
+		// On update, skip the uniqueness check when the code hasn't changed — the
+		// customer already owns that code and excluding itself via $ne should handle
+		// it, but data inconsistencies (duplicate docs) can cause false positives.
+		skipCodeCheck := false
+		if scenario == "update" && !customer.ID.IsZero() {
+			if existing, exErr := store.FindCustomerByID(&customer.ID, bson.M{"code": 1}); exErr == nil && existing != nil && existing.Code == customer.Code {
+				skipCodeCheck = true
+			}
 		}
+		if !skipCodeCheck {
+			codeExists, err := customer.IsCodeExists()
+			if err != nil {
+				errs["code"] = err.Error()
+			}
 
-		if codeExists {
-			errs["code"] = "ID already exists."
+			if codeExists {
+				errs["code"] = "ID already exists."
+			}
+
+			if codeExists {
+				w.WriteHeader(http.StatusConflict)
+				return errs
+			}
 		}
+	}
 
-		if codeExists {
-			w.WriteHeader(http.StatusConflict)
-			return errs
+	if customer.OpeningBalance < 0 {
+		errs["opening_balance"] = "Opening balance cannot be negative"
+	}
+	if customer.OpeningBalanceType != "" && customer.OpeningBalanceType != "receivable" && customer.OpeningBalanceType != "payable" {
+		errs["opening_balance_type"] = "Opening balance type must be 'receivable' or 'payable'"
+	}
+	if customer.OpeningBalance != 0 && customer.OpeningBalanceDate == nil {
+		errs["opening_balance_date"] = "Opening balance date is required when an opening balance is entered"
+	}
+	if customer.OpeningBalance != 0 && customer.OpeningBalanceDate != nil && customer.StoreID != nil {
+		if customerStore, storeErr := FindStoreByID(customer.StoreID, bson.M{}); storeErr == nil {
+			if dateErr := customerStore.ValidateOpeningBalanceDateForAccount(
+				customer.ID,
+				customer.OpeningBalanceDate,
+				[]string{customerOpeningBalanceReferenceModel},
+			); dateErr != nil {
+				errs["opening_balance_date"] = dateErr.Error()
+			}
 		}
 	}
 

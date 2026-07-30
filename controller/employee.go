@@ -298,6 +298,7 @@ func UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	// Remember prior opening-balance values so we only re-post the ledger entry
 	// when they actually change (avoids needless ledger churn on unrelated edits).
 	oldOpeningBalance := employee.OpeningBalance
+	oldOpeningBalanceType := employee.OpeningBalanceType
 	var oldOpeningBalanceDate *time.Time
 	if employee.OpeningBalanceDate != nil {
 		t := *employee.OpeningBalanceDate
@@ -358,7 +359,8 @@ func UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	}
 
 	openingBalanceChanged := employee.OpeningBalance != oldOpeningBalance ||
-		!sameOptionalDate(employee.OpeningBalanceDate, oldOpeningBalanceDate) ||
+		!models.TimesEqual(employee.OpeningBalanceDate, oldOpeningBalanceDate) ||
+		employee.OpeningBalanceType != oldOpeningBalanceType ||
 		(!employee.OpeningBalancePosted && employee.OpeningBalance != 0)
 	if openingBalanceChanged {
 		if err := employee.PostOpeningBalanceIfNeeded(store); err != nil {
@@ -546,6 +548,22 @@ func ListEmployeeSalaryPayment(w http.ResponseWriter, r *http.Request) {
 	response.Status = true
 	response.Criterias = criterias
 	response.TotalCount, _ = store.GetTotalCount(criterias.SearchBy, "employee_salary_payment")
+
+	keys, ok := r.URL.Query()["search[stats]"]
+	if ok && len(keys[0]) >= 1 && keys[0] == "1" {
+		salaryStats, err := store.GetSalaryPaymentStats(criterias.SearchBy)
+		if err != nil {
+			response.Errors["stats"] = "Unable to compute salary payment stats: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		response.Meta = map[string]interface{}{
+			"total_payments":      salaryStats.TotalPayments,
+			"total_amount":        salaryStats.TotalAmount,
+			"total_cash":          salaryStats.TotalCash,
+			"total_bank_transfer": salaryStats.TotalBankTransfer,
+		}
+	}
 
 	if len(payments) == 0 {
 		response.Result = []interface{}{}
