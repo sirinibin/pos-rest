@@ -411,6 +411,22 @@ func GetDashboardVendors(storeID primitive.ObjectID, fromDateStr, toDateStr stri
 
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
+type DashboardEmployee struct {
+	SalaryBalance float64 `json:"salary_balance"`
+}
+
+func GetDashboardEmployee(storeID primitive.ObjectID) (*DashboardEmployee, error) {
+	store, err := FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	balance, err := store.getEmployeeSalaryBalance()
+	if err != nil {
+		return nil, err
+	}
+	return &DashboardEmployee{SalaryBalance: RoundFloat(balance, 2)}, nil
+}
+
 func GetDashboardAccounts(storeID primitive.ObjectID) ([]DashboardAccountSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

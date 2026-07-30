@@ -699,6 +699,7 @@ func main() {
 	router.HandleFunc("/v1/dashboard/vendors", controller.DashboardGetVendors).Methods("GET")
 	router.HandleFunc("/v1/dashboard/accounts", controller.DashboardGetAccounts).Methods("GET")
 	router.HandleFunc("/v1/dashboard/stock", controller.DashboardGetStock).Methods("GET")
+	router.HandleFunc("/v1/dashboard/employee", controller.DashboardGetEmployee).Methods("GET")
 	router.HandleFunc("/v1/dashboard/backfill", controller.DashboardBackfill).Methods("POST")
 
 	// BI bulk-data endpoints (JWT or X-BI-Cron-Key for cron jobs)

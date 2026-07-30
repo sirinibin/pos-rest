@@ -212,6 +212,23 @@ func DashboardGetStock(w http.ResponseWriter, r *http.Request) {
 	dashboardJSON(w, data)
 }
 
+// GET /v1/dashboard/employee?store_id=X
+func DashboardGetEmployee(w http.ResponseWriter, r *http.Request) {
+	if !dashboardAuth(w, r) {
+		return
+	}
+	storeID, _, ok := dashboardStoreAndTZ(w, r)
+	if !ok {
+		return
+	}
+	data, err := models.GetDashboardEmployee(storeID)
+	if err != nil {
+		dashboardError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	dashboardJSON(w, data)
+}
+
 // POST /v1/dashboard/backfill?store_id=X&months=12
 // Triggers a historical backfill for one store. Runs asynchronously.
 func DashboardBackfill(w http.ResponseWriter, r *http.Request) {
