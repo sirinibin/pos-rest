@@ -591,7 +591,7 @@ func (capital *Capital) MakeRedisCode() error {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, (globalIncr - 1), 0).Err()
+				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
