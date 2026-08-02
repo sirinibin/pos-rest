@@ -40,6 +40,9 @@ type CustomerDeposit struct {
 	Vendor             *Vendor             `json:"vendor" bson:"-"`
 	VendorName         string              `json:"vendor_name" bson:"vendor_name"`
 	VendorNameArabic   string              `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
+	EmployeeID         *primitive.ObjectID `json:"employee_id" bson:"employee_id"`
+	Employee           *Employee           `json:"employee" bson:"-"`
+	EmployeeName       string              `json:"employee_name" bson:"employee_name"`
 	PaymentMethod      string              `json:"payment_method" bson:"payment_method"`
 	StoreID            *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
@@ -851,6 +854,10 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 
 	if customerDeposit.Type == "vendor" && (customerDeposit.VendorID == nil || customerDeposit.VendorID.IsZero()) {
 		errs["vendor_id"] = "Vendor is required"
+	}
+
+	if customerDeposit.Type == "employee" && (customerDeposit.EmployeeID == nil || customerDeposit.EmployeeID.IsZero()) {
+		errs["employee_id"] = "Employee is required"
 	}
 
 	if govalidator.IsNull(customerDeposit.DateStr) {
@@ -1826,6 +1833,7 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 	now := time.Now()
 	var customer *Customer
 	var vendor *Vendor
+	var employee *Employee
 
 	if customerDeposit.Type == "customer" && customerDeposit.CustomerID != nil && !customerDeposit.CustomerID.IsZero() {
 		customer, err = store.FindCustomerByID(customerDeposit.CustomerID, bson.M{})
@@ -1841,7 +1849,14 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 		}
 	}
 
-	if vendor == nil && customer == nil {
+	if customerDeposit.Type == "employee" && customerDeposit.EmployeeID != nil && !customerDeposit.EmployeeID.IsZero() {
+		employee, err = store.FindEmployeeByID(customerDeposit.EmployeeID, bson.M{})
+		if err != nil {
+			return ledgers, err
+		}
+	}
+
+	if vendor == nil && customer == nil && employee == nil {
 		return ledgers, err
 	}
 
@@ -1877,6 +1892,12 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			return ledgers, err
 		}
 		sendingAccount = vendorAccount
+	} else if customerDeposit.Type == "employee" && employee != nil {
+		empAccount, err := employee.GetOrCreateLiabilityAccount(store)
+		if err != nil {
+			return ledgers, err
+		}
+		sendingAccount = empAccount
 	}
 
 	cashAccount, err := store.CreateAccountIfNotExists(customerDeposit.StoreID, nil, nil, "Cash", nil, nil)
@@ -1966,6 +1987,8 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 			referenceModel = "customer_deposit"
 		} else if customerDeposit.Type == "vendor" {
 			referenceModel = "vendor_deposit"
+		} else if customerDeposit.Type == "employee" {
+			referenceModel = "employee_deposit"
 		}
 
 		ledger := &Ledger{

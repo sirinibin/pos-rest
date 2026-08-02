@@ -39,6 +39,9 @@ type CustomerWithdrawal struct {
 	Vendor             *Vendor             `json:"vendor" bson:"-"`
 	VendorName         string              `json:"vendor_name" bson:"vendor_name"`
 	VendorNameArabic   string              `json:"vendor_nam_arabic" bson:"vendor_name_arabic"`
+	EmployeeID         *primitive.ObjectID `json:"employee_id" bson:"employee_id"`
+	Employee           *Employee           `json:"employee" bson:"-"`
+	EmployeeName       string              `json:"employee_name" bson:"employee_name"`
 	PaymentMethod      string              `json:"payment_method" bson:"payment_method"`
 	StoreID            *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
 	StoreName          string              `json:"store_name,omitempty" bson:"store_name,omitempty"`
@@ -817,6 +820,10 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 
 	if customerWithdrawal.Type == "vendor" && (customerWithdrawal.VendorID == nil || customerWithdrawal.VendorID.IsZero()) {
 		errs["vendor_id"] = "Vendor is required"
+	}
+
+	if customerWithdrawal.Type == "employee" && (customerWithdrawal.EmployeeID == nil || customerWithdrawal.EmployeeID.IsZero()) {
+		errs["employee_id"] = "Employee is required"
 	}
 
 	if govalidator.IsNull(customerWithdrawal.DateStr) {
@@ -1750,6 +1757,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 
 	var customer *Customer
 	var vendor *Vendor
+	var employee *Employee
 
 	if customerWithdrawal.Type == "customer" && customerWithdrawal.CustomerID != nil && !customerWithdrawal.CustomerID.IsZero() {
 		customer, err = store.FindCustomerByID(customerWithdrawal.CustomerID, bson.M{})
@@ -1765,7 +1773,14 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 		}
 	}
 
-	if vendor == nil && customer == nil {
+	if customerWithdrawal.Type == "employee" && customerWithdrawal.EmployeeID != nil && !customerWithdrawal.EmployeeID.IsZero() {
+		employee, err = store.FindEmployeeByID(customerWithdrawal.EmployeeID, bson.M{})
+		if err != nil {
+			return ledgers, err
+		}
+	}
+
+	if vendor == nil && customer == nil && employee == nil {
 		return ledgers, err
 	}
 
@@ -1773,7 +1788,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 
 	var receivingAccount *Account
 
-	if customerWithdrawal.Type == "customer" {
+	if customerWithdrawal.Type == "customer" && customer != nil {
 		referenceModel = "customer"
 		customerAccount, err := store.CreateAccountIfNotExists(
 			customerWithdrawal.StoreID,
@@ -1787,7 +1802,7 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			return nil, err
 		}
 		receivingAccount = customerAccount
-	} else if customerWithdrawal.Type == "vendor" {
+	} else if customerWithdrawal.Type == "vendor" && vendor != nil {
 		referenceModel = "vendor"
 		vendorAccount, err := store.CreateAccountIfNotExists(
 			customerWithdrawal.StoreID,
@@ -1801,6 +1816,12 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			return nil, err
 		}
 		receivingAccount = vendorAccount
+	} else if customerWithdrawal.Type == "employee" && employee != nil {
+		empAccount, err := employee.GetOrCreateLiabilityAccount(store)
+		if err != nil {
+			return nil, err
+		}
+		receivingAccount = empAccount
 	}
 
 	cashAccount, err := store.CreateAccountIfNotExists(customerWithdrawal.StoreID, nil, nil, "Cash", nil, nil)
@@ -1884,6 +1905,8 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 			referenceModel = "customer_withdrawal"
 		} else if customerWithdrawal.Type == "vendor" {
 			referenceModel = "vendor_withdrawal"
+		} else if customerWithdrawal.Type == "employee" {
+			referenceModel = "employee_withdrawal"
 		}
 
 		ledger := &Ledger{

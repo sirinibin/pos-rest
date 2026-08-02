@@ -224,6 +224,19 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if customerdeposit.EmployeeID != nil && !customerdeposit.EmployeeID.IsZero() {
+		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+		if store != nil {
+			emp, _ := store.FindEmployeeByID(customerdeposit.EmployeeID, bson.M{})
+			if emp != nil {
+				empAccount, _ := emp.GetOrCreateLiabilityAccount(store)
+				if empAccount != nil {
+					empAccount.CalculateBalance(nil, nil)
+				}
+			}
+		}
+	}
+
 	err = customerdeposit.CloseSalesPayments()
 	if err != nil {
 		response.Status = false
@@ -408,6 +421,19 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 			vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{})
 			if vendor != nil {
 				vendor.SetCreditBalance()
+			}
+		}
+	}
+
+	if customerdeposit.EmployeeID != nil && !customerdeposit.EmployeeID.IsZero() {
+		store, _ := models.FindStoreByID(customerdeposit.StoreID, bson.M{})
+		if store != nil {
+			emp, _ := store.FindEmployeeByID(customerdeposit.EmployeeID, bson.M{})
+			if emp != nil {
+				empAccount, _ := emp.GetOrCreateLiabilityAccount(store)
+				if empAccount != nil {
+					empAccount.CalculateBalance(nil, nil)
+				}
 			}
 		}
 	}

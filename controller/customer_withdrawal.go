@@ -223,6 +223,19 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if customerwithdrawal.EmployeeID != nil && !customerwithdrawal.EmployeeID.IsZero() {
+		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+		if store != nil {
+			emp, _ := store.FindEmployeeByID(customerwithdrawal.EmployeeID, bson.M{})
+			if emp != nil {
+				empAccount, _ := emp.GetOrCreateLiabilityAccount(store)
+				if empAccount != nil {
+					empAccount.CalculateBalance(nil, nil)
+				}
+			}
+		}
+	}
+
 	err = customerwithdrawal.CloseSalesReturnPayments()
 	if err != nil {
 		response.Status = false
@@ -403,6 +416,19 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 			vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{})
 			if vendor != nil {
 				vendor.SetCreditBalance()
+			}
+		}
+	}
+
+	if customerwithdrawal.EmployeeID != nil && !customerwithdrawal.EmployeeID.IsZero() {
+		store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+		if store != nil {
+			emp, _ := store.FindEmployeeByID(customerwithdrawal.EmployeeID, bson.M{})
+			if emp != nil {
+				empAccount, _ := emp.GetOrCreateLiabilityAccount(store)
+				if empAccount != nil {
+					empAccount.CalculateBalance(nil, nil)
+				}
 			}
 		}
 	}
