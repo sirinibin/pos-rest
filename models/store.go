@@ -184,6 +184,7 @@ type StoreSettings struct {
 	NonVATSales                                 bool            `bson:"non_vat_sales" json:"non_vat_sales"`
 	EnableAutomobileModule                      bool            `bson:"enable_automobile_module" json:"enable_automobile_module"`
 	EnableAutomobileDashboard                   bool            `bson:"enable_automobile_dashboard" json:"enable_automobile_dashboard"`
+	EnableCommonDashboard                       *bool           `bson:"enable_common_dashboard,omitempty" json:"enable_common_dashboard,omitempty"`
 	EnableSalesInQuotation                      bool            `bson:"enable_sales_in_quotation" json:"enable_sales_in_quotation"`
 	EnableEmployeeModule                        bool            `bson:"enable_employee_module" json:"enable_employee_module"`
 	EnablePurchaseUnitPriceValidation           bool            `bson:"enable_purchase_unit_price_validation" json:"enable_purchase_unit_price_validation"`
