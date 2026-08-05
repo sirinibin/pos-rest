@@ -3270,6 +3270,9 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 		var vendorPhone *string
 		if vendor != nil {
 			vendorName = vendor.Name
+			if vendor.Name == "UNKNOWN" {
+				vendorName = "Vendor Accounts - Unknown"
+			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
@@ -3412,6 +3415,9 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 		var vendorPhone *string
 		if vendor != nil {
 			vendorName = vendor.Name
+			if vendor.Name == "UNKNOWN" {
+				vendorName = "Vendor Accounts - Unknown"
+			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
@@ -3476,6 +3482,9 @@ func MakeJournalsForPurchaseExtraPayments(
 	var vendorPhone *string
 	if vendor != nil {
 		vendorName = vendor.Name
+		if vendor.Name == "UNKNOWN" {
+			vendorName = "Vendor Accounts - Unknown"
+		}
 		referenceID = &vendor.ID
 		vendorVATNo = &vendor.VATNo
 		vendorPhone = &vendor.Phone
@@ -3620,6 +3629,9 @@ func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
 		var vendorPhone *string
 		if vendor != nil {
 			vendorName = vendor.Name
+			if vendor.Name == "UNKNOWN" {
+				vendorName = "Vendor Accounts - Unknown"
+			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
