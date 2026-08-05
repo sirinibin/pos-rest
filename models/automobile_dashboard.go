@@ -40,8 +40,10 @@ type VATBoxBreakdown struct {
 
 // ProductProfitBreakdown carries the sales vs return breakdown for a product type.
 type ProductProfitBreakdown struct {
-	SalesProfit  float64 `json:"sales_profit"`
-	ReturnProfit float64 `json:"return_profit"`
+	SalesProfit        float64 `json:"sales_profit"`
+	ReturnProfit       float64 `json:"return_profit"`
+	NonVatSalesProfit  float64 `json:"non_vat_sales_profit"`
+	NonVatReturnProfit float64 `json:"non_vat_return_profit"`
 }
 
 // EmployeeSalaryEntry is one row of the per-employee salary balance breakdown.
@@ -195,7 +197,7 @@ func (store *Store) GetAutoMobileDashboard(fromDate, toDate *time.Time) (AutoMob
 	if err != nil {
 		return dash, err
 	}
-	dash.LabourProfit = RoundFloat(labourBD.SalesProfit-labourBD.ReturnProfit, 2)
+	dash.LabourProfit = RoundFloat(labourBD.SalesProfit-labourBD.ReturnProfit+labourBD.NonVatSalesProfit-labourBD.NonVatReturnProfit, 2)
 	dash.SpareProfit = RoundFloat(spareBD.SalesProfit-spareBD.ReturnProfit, 2)
 	dash.AdditionalProfit = RoundFloat(additionalBD.SalesProfit-additionalBD.ReturnProfit, 2)
 	dash.LabourBreakdown = roundProductBreakdown(labourBD)
@@ -302,8 +304,10 @@ func roundVATBox(bd VATBoxBreakdown) VATBoxBreakdown {
 
 func roundProductBreakdown(bd ProductProfitBreakdown) ProductProfitBreakdown {
 	return ProductProfitBreakdown{
-		SalesProfit:  RoundFloat(bd.SalesProfit, 2),
-		ReturnProfit: RoundFloat(bd.ReturnProfit, 2),
+		SalesProfit:        RoundFloat(bd.SalesProfit, 2),
+		ReturnProfit:       RoundFloat(bd.ReturnProfit, 2),
+		NonVatSalesProfit:  RoundFloat(bd.NonVatSalesProfit, 2),
+		NonVatReturnProfit: RoundFloat(bd.NonVatReturnProfit, 2),
 	}
 }
 
@@ -454,7 +458,23 @@ func (store *Store) getProductTypeProfitBreakdowns(fromDate, toDate *time.Time) 
 		return
 	}
 
-	labour = ProductProfitBreakdown{SalesProfit: salesRes.Labour, ReturnProfit: returnRes.Labour}
+	nvSalesPipeline := buildProductProfitPipeline(store.ID, dateFilter, "non_vat_sales")
+	nvReturnPipeline := buildProductProfitPipeline(store.ID, dateFilter, "non_vat_sales_return")
+	nvSalesRes, err := runProductProfitPipeline(store, nvSalesPipeline, "non_vat_sales")
+	if err != nil {
+		return
+	}
+	nvReturnRes, err := runProductProfitPipeline(store, nvReturnPipeline, "non_vat_sales_return")
+	if err != nil {
+		return
+	}
+
+	labour = ProductProfitBreakdown{
+		SalesProfit:        salesRes.Labour,
+		ReturnProfit:       returnRes.Labour,
+		NonVatSalesProfit:  nvSalesRes.Labour,
+		NonVatReturnProfit: nvReturnRes.Labour,
+	}
 	spare = ProductProfitBreakdown{SalesProfit: salesRes.Spare, ReturnProfit: returnRes.Spare}
 	additional = ProductProfitBreakdown{SalesProfit: salesRes.Additional, ReturnProfit: returnRes.Additional}
 	return
