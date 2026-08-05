@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -157,14 +158,14 @@ func (store *Store) GetAutoMobileDashboard(fromDate, toDate *time.Time) (AutoMob
 	dash.MonthlyProfitBreakdown = roundProfitBreakdown(monthBD)
 
 	// ── Counter Cash & Bank Cash ──────────────────────────────────────────
-	counterCash, cashID, err := store.getAccountBalanceWithID("CASH")
+	counterCash, cashID, err := store.getAccountBalanceWithID("CASH", fromDate, toDate)
 	if err != nil {
 		return dash, err
 	}
 	dash.CounterCash = RoundFloat(counterCash, 2)
 	dash.CashAccountID = cashID
 
-	bankCash, bankID, err := store.getAccountBalanceWithID("BANK")
+	bankCash, bankID, err := store.getAccountBalanceWithID("BANK", fromDate, toDate)
 	if err != nil {
 		return dash, err
 	}
@@ -198,8 +199,8 @@ func (store *Store) GetAutoMobileDashboard(fromDate, toDate *time.Time) (AutoMob
 		return dash, err
 	}
 	dash.LabourProfit = RoundFloat(labourBD.SalesProfit-labourBD.ReturnProfit+labourBD.NonVatSalesProfit-labourBD.NonVatReturnProfit, 2)
-	dash.SpareProfit = RoundFloat(spareBD.SalesProfit-spareBD.ReturnProfit, 2)
-	dash.AdditionalProfit = RoundFloat(additionalBD.SalesProfit-additionalBD.ReturnProfit, 2)
+	dash.SpareProfit = RoundFloat(spareBD.SalesProfit-spareBD.ReturnProfit+spareBD.NonVatSalesProfit-spareBD.NonVatReturnProfit, 2)
+	dash.AdditionalProfit = RoundFloat(additionalBD.SalesProfit-additionalBD.ReturnProfit+additionalBD.NonVatSalesProfit-additionalBD.NonVatReturnProfit, 2)
 	dash.LabourBreakdown = roundProductBreakdown(labourBD)
 	dash.SpareBreakdown = roundProductBreakdown(spareBD)
 	dash.AdditionalBreakdown = roundProductBreakdown(additionalBD)
@@ -289,6 +290,15 @@ func roundProfitBreakdown(bd ProfitBreakdown) ProfitBreakdown {
 		NonVatSalesReturnRevenue: RoundFloat(bd.NonVatSalesReturnRevenue, 2),
 		NonVatNetRevenue:         RoundFloat(bd.NonVatNetRevenue, 2),
 	}
+}
+
+// computeNetVAT applies the VAT box formula:
+//
+//	NetVAT = SalesVAT − SalesReturnVAT − PurchaseVAT + PurchaseReturnVAT − ExpenseVAT
+//
+// ExpenseVAT is input VAT paid to vendors (reduces the liability owed to the tax authority).
+func computeNetVAT(bd VATBoxBreakdown) float64 {
+	return bd.SalesVAT - bd.SalesReturnVAT - bd.PurchaseVAT + bd.PurchaseReturnVAT - bd.ExpenseVAT
 }
 
 func roundVATBox(bd VATBoxBreakdown) VATBoxBreakdown {
@@ -475,8 +485,18 @@ func (store *Store) getProductTypeProfitBreakdowns(fromDate, toDate *time.Time) 
 		NonVatSalesProfit:  nvSalesRes.Labour,
 		NonVatReturnProfit: nvReturnRes.Labour,
 	}
-	spare = ProductProfitBreakdown{SalesProfit: salesRes.Spare, ReturnProfit: returnRes.Spare}
-	additional = ProductProfitBreakdown{SalesProfit: salesRes.Additional, ReturnProfit: returnRes.Additional}
+	spare = ProductProfitBreakdown{
+		SalesProfit:        salesRes.Spare,
+		ReturnProfit:       returnRes.Spare,
+		NonVatSalesProfit:  nvSalesRes.Spare,
+		NonVatReturnProfit: nvReturnRes.Spare,
+	}
+	additional = ProductProfitBreakdown{
+		SalesProfit:        salesRes.Additional,
+		ReturnProfit:       returnRes.Additional,
+		NonVatSalesProfit:  nvSalesRes.Additional,
+		NonVatReturnProfit: nvReturnRes.Additional,
+	}
 	return
 }
 
@@ -496,30 +516,39 @@ func buildProductProfitPipeline(storeID interface{}, dateFilter bson.M, _ string
 		matchFilter["date"] = dateFilter
 	}
 
-	// profit_expr = products.quantity × (products.unit_price − products.purchase_unit_price)
-	profitExpr := bson.M{"$multiply": bson.A{
+	hasPurchaseCost := bson.M{"$gt": bson.A{bson.M{"$ifNull": bson.A{"$products.purchase_unit_price", 0}}, 0}}
+	profitWithCost := bson.M{"$multiply": bson.A{
 		"$products.quantity",
 		bson.M{"$subtract": bson.A{"$products.unit_price", "$products.purchase_unit_price"}},
 	}}
+	// Services: use selling price when no purchase cost; deduct it when cost is set
+	serviceProfitExpr := bson.M{"$cond": bson.A{
+		hasPurchaseCost,
+		profitWithCost,
+		bson.M{"$multiply": bson.A{"$products.quantity", "$products.unit_price"}},
+	}}
+	// Non-services: profit only when purchase_unit_price is stored (> 0)
+	spareProfitExpr := bson.M{"$cond": bson.A{hasPurchaseCost, profitWithCost, 0}}
 
+	nameLower := bson.M{"$toLower": "$products.name"}
 	isLabour := bson.M{"$and": bson.A{
 		bson.M{"$eq": bson.A{"$products.is_service", true}},
-		bson.M{"$eq": bson.A{"$products.name", "Labour Charge"}},
+		bson.M{"$eq": bson.A{nameLower, "labour charge"}},
 	}}
 	isSpare := bson.M{"$eq": bson.A{"$products.is_service", false}}
 	isAdditional := bson.M{"$and": bson.A{
 		bson.M{"$eq": bson.A{"$products.is_service", true}},
-		bson.M{"$ne": bson.A{"$products.name", "Labour Charge"}},
+		bson.M{"$ne": bson.A{nameLower, "labour charge"}},
 	}}
 
 	return []bson.M{
 		{"$match": matchFilter},
 		{"$unwind": "$products"},
 		{"$group": bson.M{
-			"_id": nil,
-			"labour": bson.M{"$sum": bson.M{"$cond": bson.A{isLabour, profitExpr, 0}}},
-			"spare":  bson.M{"$sum": bson.M{"$cond": bson.A{isSpare, profitExpr, 0}}},
-			"additional": bson.M{"$sum": bson.M{"$cond": bson.A{isAdditional, profitExpr, 0}}},
+			"_id":        nil,
+			"labour":     bson.M{"$sum": bson.M{"$cond": bson.A{isLabour, serviceProfitExpr, 0}}},
+			"spare":      bson.M{"$sum": bson.M{"$cond": bson.A{isSpare, spareProfitExpr, 0}}},
+			"additional": bson.M{"$sum": bson.M{"$cond": bson.A{isAdditional, serviceProfitExpr, 0}}},
 		}},
 	}
 }
@@ -634,28 +663,36 @@ func (store *Store) monthlyProductProfitMap(dateFilter bson.M, collectionName st
 		matchFilter["date"] = dateFilter
 	}
 
-	profitExpr := bson.M{"$multiply": bson.A{
+	mHasCost := bson.M{"$gt": bson.A{bson.M{"$ifNull": bson.A{"$products.purchase_unit_price", 0}}, 0}}
+	mProfitWithCost := bson.M{"$multiply": bson.A{
 		"$products.quantity",
 		bson.M{"$subtract": bson.A{"$products.unit_price", "$products.purchase_unit_price"}},
 	}}
+	mServiceProfitExpr := bson.M{"$cond": bson.A{
+		mHasCost,
+		mProfitWithCost,
+		bson.M{"$multiply": bson.A{"$products.quantity", "$products.unit_price"}},
+	}}
+	mSpareProfitExpr := bson.M{"$cond": bson.A{mHasCost, mProfitWithCost, 0}}
+	mNameLower := bson.M{"$toLower": "$products.name"}
 	isLabour := bson.M{"$and": bson.A{
 		bson.M{"$eq": bson.A{"$products.is_service", true}},
-		bson.M{"$eq": bson.A{"$products.name", "Labour Charge"}},
+		bson.M{"$eq": bson.A{mNameLower, "labour charge"}},
 	}}
 	isSpare := bson.M{"$eq": bson.A{"$products.is_service", false}}
 	isAdditional := bson.M{"$and": bson.A{
 		bson.M{"$eq": bson.A{"$products.is_service", true}},
-		bson.M{"$ne": bson.A{"$products.name", "Labour Charge"}},
+		bson.M{"$ne": bson.A{mNameLower, "labour charge"}},
 	}}
 
 	pipeline := []bson.M{
 		{"$match": matchFilter},
 		{"$unwind": "$products"},
 		{"$group": bson.M{
-			"_id": bson.M{"$dateToString": bson.M{"format": "%Y-%m", "date": "$date"}},
-			"labour":     bson.M{"$sum": bson.M{"$cond": bson.A{isLabour, profitExpr, 0}}},
-			"spare":      bson.M{"$sum": bson.M{"$cond": bson.A{isSpare, profitExpr, 0}}},
-			"additional": bson.M{"$sum": bson.M{"$cond": bson.A{isAdditional, profitExpr, 0}}},
+			"_id":        bson.M{"$dateToString": bson.M{"format": "%Y-%m", "date": "$date"}},
+			"labour":     bson.M{"$sum": bson.M{"$cond": bson.A{isLabour, mServiceProfitExpr, 0}}},
+			"spare":      bson.M{"$sum": bson.M{"$cond": bson.A{isSpare, mSpareProfitExpr, 0}}},
+			"additional": bson.M{"$sum": bson.M{"$cond": bson.A{isAdditional, mServiceProfitExpr, 0}}},
 			"revenue":    bson.M{"$sum": "$net_total"},
 		}},
 		{"$sort": bson.M{"_id": 1}},
@@ -700,8 +737,10 @@ func offsetDuration(offset float64) time.Duration {
 	return time.Hour*time.Duration(hours) + time.Minute*time.Duration(minutes)
 }
 
-// getAccountBalanceWithID returns the balance and hex ID for a named system account.
-func (store *Store) getAccountBalanceWithID(name string) (balance float64, id string, err error) {
+// getAccountBalanceWithID returns the signed balance and hex ID for a named system account.
+// When fromDate/toDate are nil the all-time running balance is returned; otherwise only
+// postings within [fromDate, toDate) are summed (net debit − credit).
+func (store *Store) getAccountBalanceWithID(name string, fromDate, toDate *time.Time) (balance float64, id string, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("account")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -718,54 +757,105 @@ func (store *Store) getAccountBalanceWithID(name string) (balance float64, id st
 	if err != nil {
 		return 0, "", err
 	}
-	if err := account.CalculateBalance(nil, nil); err != nil {
-		return 0, "", err
+
+	var debitTotal, creditTotal float64
+
+	if fromDate == nil && toDate == nil {
+		if err := account.CalculateBalance(nil, nil); err != nil {
+			return 0, "", err
+		}
+		debitTotal = account.DebitTotal
+		creditTotal = account.CreditTotal
+	} else {
+		postFilter := bson.M{
+			"account_id": account.ID,
+			"store_id":   account.StoreID,
+		}
+		dateF := bson.M{}
+		if fromDate != nil {
+			dateF["$gte"] = *fromDate
+		}
+		if toDate != nil {
+			dateF["$lt"] = *toDate
+		}
+		if len(dateF) > 0 {
+			postFilter["date"] = dateF
+		}
+
+		pipeline := []bson.M{
+			{"$match": postFilter},
+			{"$group": bson.M{
+				"_id":          nil,
+				"debit_total":  bson.M{"$sum": "$debit_total"},
+				"credit_total": bson.M{"$sum": "$credit_total"},
+			}},
+		}
+
+		postCtx, postCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer postCancel()
+
+		cur, curErr := db.GetDB("store_"+store.ID.Hex()).Collection("posting").Aggregate(postCtx, pipeline)
+		if curErr != nil {
+			return 0, "", curErr
+		}
+		defer cur.Close(postCtx)
+
+		var stats struct {
+			DebitTotal  float64 `bson:"debit_total"`
+			CreditTotal float64 `bson:"credit_total"`
+		}
+		if cur.Next(postCtx) {
+			cur.Decode(&stats)
+		}
+		debitTotal = RoundFloat(stats.DebitTotal, 2)
+		creditTotal = RoundFloat(stats.CreditTotal, 2)
 	}
-	return account.Balance, account.ID.Hex(), nil
+
+	// Positive = more debits (cash in) than credits (cash out), negative = deficit.
+	return RoundFloat(debitTotal-creditTotal, 2), account.ID.Hex(), nil
 }
 
 func (store *Store) getCustomerReceivables(fromDate, toDate *time.Time) (float64, error) {
-	if fromDate == nil && toDate == nil {
-		stats, err := store.GetCustomerStats(map[string]interface{}{
-			"deleted": bson.M{"$ne": true},
-		})
-		if err != nil {
-			return 0, err
-		}
-		return stats.CreditBalance, nil
-	}
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	dateF := bson.M{}
-	if fromDate != nil {
-		dateF["$gte"] = *fromDate
+
+	matchFilter := bson.M{
+		"store_id":       store.ID,
+		"deleted":        bson.M{"$ne": true},
+		"payment_status": bson.M{"$in": bson.A{"not_paid", "paid_partially"}},
+		"status":         bson.M{"$ne": "cancelled"},
 	}
-	if toDate != nil {
-		dateF["$lt"] = *toDate
+	if fromDate != nil || toDate != nil {
+		dateF := bson.M{}
+		if fromDate != nil {
+			dateF["$gte"] = *fromDate
+		}
+		if toDate != nil {
+			dateF["$lt"] = *toDate
+		}
+		matchFilter["date"] = dateF
 	}
-	pipeline := []bson.M{
-		{"$match": bson.M{
-			"store_id":       store.ID,
-			"deleted":        bson.M{"$ne": true},
-			"payment_status": bson.M{"$in": bson.A{"not_paid", "paid_partially"}},
-			"status":         bson.M{"$ne": "cancelled"},
-			"date":           dateF,
-		}},
-		{"$group": bson.M{"_id": nil, "total": bson.M{"$sum": "$balance_amount"}}},
+
+	groupStage := bson.M{"$group": bson.M{"_id": nil, "total": bson.M{"$sum": "$balance_amount"}}}
+
+	sumCollection := func(collName string) float64 {
+		col := db.GetDB("store_" + store.ID.Hex()).Collection(collName)
+		pipeline := []bson.M{{"$match": matchFilter}, groupStage}
+		cur, err := col.Aggregate(ctx, pipeline)
+		if err != nil {
+			return 0
+		}
+		defer cur.Close(ctx)
+		var res struct {
+			Total float64 `bson:"total"`
+		}
+		if cur.Next(ctx) {
+			cur.Decode(&res)
+		}
+		return res.Total
 	}
-	cur, err := collection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return 0, err
-	}
-	defer cur.Close(ctx)
-	var res struct {
-		Total float64 `bson:"total"`
-	}
-	if cur.Next(ctx) {
-		cur.Decode(&res)
-	}
-	return res.Total, nil
+
+	return sumCollection("order") + sumCollection("non_vat_sales"), nil
 }
 
 func (store *Store) getVendorPayables(fromDate, toDate *time.Time) (float64, error) {
@@ -1021,105 +1111,80 @@ func (store *Store) getExpenseCategoryBreakdown(filter map[string]interface{}) (
 	return entries, nil
 }
 
-// getCustomerCreditBreakdown returns the top customers by outstanding credit balance.
-// Without dates: reads denormalized credit_balance from customer docs.
-// With dates: aggregates balance_amount from order collection for the period.
+// getCustomerCreditBreakdown returns the top customers by outstanding credit balance,
+// aggregating from both order and non_vat_sales collections.
 func (store *Store) getCustomerCreditBreakdown(fromDate, toDate *time.Time) ([]CustomerCreditEntry, error) {
-	type idName struct {
-		id   primitive.ObjectID
-		name string
-		bal  float64
-	}
-
-	if fromDate == nil && toDate == nil {
-		collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		cur, err := collection.Find(ctx, bson.M{
-			"store_id":       store.ID,
-			"deleted":        bson.M{"$ne": true},
-			"credit_balance": bson.M{"$gt": 0},
-		}, options.Find().
-			SetSort(bson.M{"credit_balance": -1}).
-			SetLimit(20).
-			SetProjection(bson.M{"name": 1, "credit_balance": 1}))
-		if err != nil {
-			return nil, err
-		}
-		defer cur.Close(ctx)
-		var rows []idName
-		for cur.Next(ctx) {
-			var c Customer
-			if err := cur.Decode(&c); err != nil {
-				continue
-			}
-			rows = append(rows, idName{id: c.ID, name: c.Name, bal: RoundFloat(c.CreditBalance, 2)})
-		}
-		var custIDs []primitive.ObjectID
-		for _, r := range rows {
-			custIDs = append(custIDs, r.id)
-		}
-		refMap := lookupAccountIDsByReferenceIDsSlice(store, "customer", custIDs)
-		var entries []CustomerCreditEntry
-		for _, r := range rows {
-			entries = append(entries, CustomerCreditEntry{
-				CustomerID:    r.id.Hex(),
-				AccountID:     refMap[r.id.Hex()],
-				Name:          r.name,
-				CreditBalance: r.bal,
-			})
-		}
-		return entries, nil
-	}
-
-	// Date-filtered: aggregate from order collection
-	collection := db.GetDB("store_" + store.ID.Hex()).Collection("order")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	dateF := bson.M{}
-	if fromDate != nil {
-		dateF["$gte"] = *fromDate
+
+	matchFilter := bson.M{
+		"store_id":       store.ID,
+		"deleted":        bson.M{"$ne": true},
+		"payment_status": bson.M{"$in": bson.A{"not_paid", "paid_partially"}},
+		"status":         bson.M{"$ne": "cancelled"},
 	}
-	if toDate != nil {
-		dateF["$lt"] = *toDate
+	if fromDate != nil || toDate != nil {
+		dateF := bson.M{}
+		if fromDate != nil {
+			dateF["$gte"] = *fromDate
+		}
+		if toDate != nil {
+			dateF["$lt"] = *toDate
+		}
+		matchFilter["date"] = dateF
 	}
+
 	pipeline := []bson.M{
-		{"$match": bson.M{
-			"store_id":       store.ID,
-			"deleted":        bson.M{"$ne": true},
-			"payment_status": bson.M{"$in": bson.A{"not_paid", "paid_partially"}},
-			"status":         bson.M{"$ne": "cancelled"},
-			"date":           dateF,
-		}},
+		{"$match": matchFilter},
 		{"$group": bson.M{
 			"_id":   "$customer_id",
 			"name":  bson.M{"$first": "$customer_name"},
 			"total": bson.M{"$sum": "$balance_amount"},
 		}},
-		{"$match": bson.M{"total": bson.M{"$gt": 0}}},
-		{"$sort": bson.M{"total": -1}},
-		{"$limit": 20},
 	}
-	cur, err := collection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, err
+
+	type accumRow struct {
+		id   primitive.ObjectID
+		name string
+		bal  float64
 	}
-	defer cur.Close(ctx)
-	var rows []idName
-	for cur.Next(ctx) {
-		var row struct {
-			ID    *primitive.ObjectID `bson:"_id"`
-			Name  string              `bson:"name"`
-			Total float64             `bson:"total"`
-		}
-		if err := cur.Decode(&row); err != nil {
+	balMap := map[primitive.ObjectID]*accumRow{}
+
+	for _, collName := range []string{"order", "non_vat_sales"} {
+		col := db.GetDB("store_" + store.ID.Hex()).Collection(collName)
+		cur, err := col.Aggregate(ctx, pipeline)
+		if err != nil {
 			continue
 		}
-		if row.ID == nil {
-			continue
+		for cur.Next(ctx) {
+			var row struct {
+				ID    *primitive.ObjectID `bson:"_id"`
+				Name  string              `bson:"name"`
+				Total float64             `bson:"total"`
+			}
+			if cur.Decode(&row) != nil || row.ID == nil {
+				continue
+			}
+			if existing, ok := balMap[*row.ID]; ok {
+				existing.bal += row.Total
+			} else {
+				balMap[*row.ID] = &accumRow{id: *row.ID, name: row.Name, bal: row.Total}
+			}
 		}
-		rows = append(rows, idName{id: *row.ID, name: row.Name, bal: RoundFloat(row.Total, 2)})
+		cur.Close(ctx)
 	}
+
+	var rows []accumRow
+	for _, v := range balMap {
+		if v.bal > 0 {
+			rows = append(rows, *v)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].bal > rows[j].bal })
+	if len(rows) > 20 {
+		rows = rows[:20]
+	}
+
 	var custIDs []primitive.ObjectID
 	for _, r := range rows {
 		custIDs = append(custIDs, r.id)
@@ -1131,7 +1196,7 @@ func (store *Store) getCustomerCreditBreakdown(fromDate, toDate *time.Time) ([]C
 			CustomerID:    r.id.Hex(),
 			AccountID:     refMap[r.id.Hex()],
 			Name:          r.name,
-			CreditBalance: r.bal,
+			CreditBalance: RoundFloat(r.bal, 2),
 		})
 	}
 	return entries, nil
@@ -1324,7 +1389,7 @@ func (store *Store) sumCollectionField(collectionName, field string, filter map[
 }
 
 // getVATBoxBreakdown computes VAT box components for the given date range.
-// Formula: Net VAT = SalesVAT - SalesReturnVAT - PurchaseVAT + PurchaseReturnVAT + ExpenseVAT
+// Formula: Net VAT = SalesVAT - SalesReturnVAT - PurchaseVAT + PurchaseReturnVAT - ExpenseVAT
 // Purchase VAT considers only accounted purchases when DisablePurchasesOnAccounts is true.
 func (store *Store) getVATBoxBreakdown(fromDate, toDate *time.Time) (VATBoxBreakdown, error) {
 	bd := VATBoxBreakdown{}
@@ -1377,6 +1442,6 @@ func (store *Store) getVATBoxBreakdown(fromDate, toDate *time.Time) (VATBoxBreak
 		return bd, err
 	}
 
-	bd.NetVAT = bd.SalesVAT - bd.SalesReturnVAT - bd.PurchaseVAT + bd.PurchaseReturnVAT + bd.ExpenseVAT
+	bd.NetVAT = computeNetVAT(bd)
 	return bd, nil
 }

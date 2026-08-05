@@ -3206,21 +3206,14 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate) {
 		referenceModel := "vendor"
-		vendorName := ""
+		vendorName := resolveVendorAccountName(vendor)
 		var referenceID *primitive.ObjectID
 		var vendorVATNo *string
 		var vendorPhone *string
 		if vendor != nil {
-			vendorName = vendor.Name
-			if vendor.Name == "UNKNOWN" {
-				vendorName = "Vendor Accounts - Unknown"
-			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
-		} else {
-			vendorName = "Vendor Accounts - Unknown"
-			referenceID = nil
 		}
 
 		vendorAccount, err := store.CreateAccountIfNotExists(
@@ -3262,21 +3255,14 @@ func MakeJournalsForPurchaseReturnPaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate) {
 		referenceModel := "vendor"
-		vendorName := ""
+		vendorName := resolveVendorAccountName(vendor)
 		var referenceID *primitive.ObjectID
 		var vendorVATNo *string
 		var vendorPhone *string
 		if vendor != nil {
-			vendorName = vendor.Name
-			if vendor.Name == "UNKNOWN" {
-				vendorName = "Vendor Accounts - Unknown"
-			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
-		} else {
-			vendorName = "Vendor Accounts - Unknown"
-			referenceID = nil
 		}
 
 		vendorAccount, err := store.CreateAccountIfNotExists(
@@ -3374,21 +3360,14 @@ func MakeJournalsForPurchaseReturnExtraPayments(
 	} //end for
 
 	referenceModel := "vendor"
-	vendorName := ""
+	vendorName := resolveVendorAccountName(vendor)
 	var referenceID *primitive.ObjectID
 	var vendorVATNo *string
 	var vendorPhone *string
 	if vendor != nil {
-		vendorName = vendor.Name
-		if vendor.Name == "UNKNOWN" {
-			vendorName = "Vendor Accounts - Unknown"
-		}
 		referenceID = &vendor.ID
 		vendorVATNo = &vendor.VATNo
 		vendorPhone = &vendor.Phone
-	} else {
-		vendorName = "Vendor Accounts - Unknown"
-		referenceID = nil
 	}
 
 	vendorAccount, err := store.CreateAccountIfNotExists(
@@ -3479,21 +3458,14 @@ func (purchaseReturn *PurchaseReturn) CreateLedger() (ledger *Ledger, err error)
 	if len(purchaseReturn.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(purchaseReturn.Date, firstPaymentDate)) {
 		//Case: UnPaid
 		referenceModel := "vendor"
-		vendorName := ""
+		vendorName := resolveVendorAccountName(vendor)
 		var referenceID *primitive.ObjectID
 		var vendorVATNo *string
 		var vendorPhone *string
 		if vendor != nil {
-			vendorName = vendor.Name
-			if vendor.Name == "UNKNOWN" {
-				vendorName = "Vendor Accounts - Unknown"
-			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
-		} else {
-			vendorName = "Vendor Accounts - Unknown"
-			referenceID = nil
 		}
 
 		vendorAccount, err := store.CreateAccountIfNotExists(

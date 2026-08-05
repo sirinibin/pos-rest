@@ -2443,6 +2443,16 @@ func (store *Store) IsPurchaseExists(ID *primitive.ObjectID) (exists bool, err e
 	return (count > 0), err
 }
 
+// resolveVendorAccountName returns the ledger account name for a vendor.
+// A nil vendor or the placeholder "UNKNOWN" vendor both map to the shared
+// anonymous ledger account so that all no-vendor purchases are grouped together.
+func resolveVendorAccountName(v *Vendor) string {
+	if v == nil || v.Name == "UNKNOWN" {
+		return "Vendor Accounts - Unknown"
+	}
+	return v.Name
+}
+
 func (purchase *Purchase) SetUnKnownVendorIfNoVendorSelected() error {
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
@@ -3264,21 +3274,14 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 		})
 	} else if paymentsByDatetimeNumber > 1 || !IsDateTimesEqual(purchase.Date, firstPaymentDate) {
 		referenceModel := "vendor"
-		vendorName := ""
+		vendorName := resolveVendorAccountName(vendor)
 		var referenceID *primitive.ObjectID
 		var vendorVATNo *string
 		var vendorPhone *string
 		if vendor != nil {
-			vendorName = vendor.Name
-			if vendor.Name == "UNKNOWN" {
-				vendorName = "Vendor Accounts - Unknown"
-			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
-		} else {
-			vendorName = "Vendor Accounts - Unknown"
-			referenceID = nil
 		}
 
 		vendorAccount, err := store.CreateAccountIfNotExists(
@@ -3409,21 +3412,14 @@ func MakeJournalsForPurchasePaymentsByDatetime(
 	//Asset or debt increased
 	if paymentsByDatetimeNumber == 1 && balanceAmount > 0 && IsDateTimesEqual(purchase.Date, firstPaymentDate) {
 		referenceModel := "vendor"
-		vendorName := ""
+		vendorName := resolveVendorAccountName(vendor)
 		var referenceID *primitive.ObjectID
 		var vendorVATNo *string
 		var vendorPhone *string
 		if vendor != nil {
-			vendorName = vendor.Name
-			if vendor.Name == "UNKNOWN" {
-				vendorName = "Vendor Accounts - Unknown"
-			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
-		} else {
-			vendorName = "Vendor Accounts - Unknown"
-			referenceID = nil
 		}
 
 		vendorAccount, err := store.CreateAccountIfNotExists(
@@ -3476,21 +3472,14 @@ func MakeJournalsForPurchaseExtraPayments(
 	}
 
 	referenceModel := "vendor"
-	vendorName := ""
+	vendorName := resolveVendorAccountName(vendor)
 	var referenceID *primitive.ObjectID
 	var vendorVATNo *string
 	var vendorPhone *string
 	if vendor != nil {
-		vendorName = vendor.Name
-		if vendor.Name == "UNKNOWN" {
-			vendorName = "Vendor Accounts - Unknown"
-		}
 		referenceID = &vendor.ID
 		vendorVATNo = &vendor.VATNo
 		vendorPhone = &vendor.Phone
-	} else {
-		vendorName = "Vendor Accounts - Unknown"
-		referenceID = nil
 	}
 
 	vendorAccount, err := store.CreateAccountIfNotExists(
@@ -3623,21 +3612,14 @@ func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
 	if len(purchase.Payments) == 0 || (firstPaymentDate != nil && !IsDateTimesEqual(purchase.Date, firstPaymentDate)) {
 		//Case: UnPaid
 		referenceModel := "vendor"
-		vendorName := ""
+		vendorName := resolveVendorAccountName(vendor)
 		var referenceID *primitive.ObjectID
 		var vendorVATNo *string
 		var vendorPhone *string
 		if vendor != nil {
-			vendorName = vendor.Name
-			if vendor.Name == "UNKNOWN" {
-				vendorName = "Vendor Accounts - Unknown"
-			}
 			referenceID = &vendor.ID
 			vendorVATNo = &vendor.VATNo
 			vendorPhone = &vendor.Phone
-		} else {
-			vendorName = "Vendor Accounts - Unknown"
-			referenceID = nil
 		}
 
 		vendorAccount, err := store.CreateAccountIfNotExists(

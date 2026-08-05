@@ -2743,6 +2743,8 @@ func (order *Order) CalculateOrderProfit() error {
 		profit := 0.0
 		if purchaseUnitPrice > 0 {
 			profit = salesPrice - (quantity * purchaseUnitPrice)
+		} else if orderProduct.IsService {
+			profit = salesPrice
 		}
 
 		loss := 0.0

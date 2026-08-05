@@ -171,6 +171,18 @@ func (account *Account) CalculateBalance(beforeDate *time.Time, beforeID *primit
 		}
 	}
 
+	// Infer type from name for system accounts that predate the type field being set.
+	if account.Type == "" && account.ReferenceModel == nil {
+		switch account.Name {
+		case "CASH", "BANK":
+			account.Type = "asset"
+		case "SALES", "NON VAT SALES", "PURCHASE RETURN", "CASH DISCOUNT RECEIVED":
+			account.Type = "revenue"
+		case "SALES RETURN", "NON VAT SALES RETURN", "PURCHASE", "CASH DISCOUNT ALLOWED", "COMMISSION ALLOWED", "SALARY EXPENSE":
+			account.Type = "expense"
+		}
+	}
+
 	if account.Type == "drawing" || account.Type == "expense" || account.Type == "asset" {
 		account.DebitOrCreditBalance = "debit_balance"
 	} else if account.Type == "liability" || account.Type == "capital" || account.Type == "revenue" {
@@ -557,9 +569,9 @@ func (store *Store) CreateAccountIfNotExists(
 
 	if referenceModel == nil && (name == "CASH" || name == "BANK") {
 		account.Type = "asset"
-	} else if referenceModel == nil && (name == "SALES") {
+	} else if referenceModel == nil && (name == "SALES" || name == "NON VAT SALES") {
 		account.Type = "revenue"
-	} else if referenceModel == nil && (name == "SALES RETURN") {
+	} else if referenceModel == nil && (name == "SALES RETURN" || name == "NON VAT SALES RETURN") {
 		account.Type = "expense"
 	} else if referenceModel == nil && (name == "PURCHASE") {
 		account.Type = "expense"

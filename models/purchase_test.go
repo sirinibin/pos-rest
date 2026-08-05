@@ -2,6 +2,8 @@ package models
 
 import (
 	"testing"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -187,5 +189,69 @@ func TestPurchase_FindTotalQuantity_EmptyProducts(t *testing.T) {
 	p.FindTotalQuantity()
 	if p.TotalQuantity != 0 {
 		t.Errorf("TotalQuantity = %v, want 0", p.TotalQuantity)
+	}
+}
+
+// ── resolveVendorAccountName ──────────────────────────────────────────────────
+// These tests cover the account-name selection logic used in every CreateLedger
+// call on purchases and purchase returns.
+
+func TestResolveVendorAccountName_NilVendor(t *testing.T) {
+	// When no vendor is attached the shared anonymous account must be used.
+	got := resolveVendorAccountName(nil)
+	if got != "Vendor Accounts - Unknown" {
+		t.Errorf("nil vendor: want %q, got %q", "Vendor Accounts - Unknown", got)
+	}
+}
+
+func TestResolveVendorAccountName_UnknownPlaceholder(t *testing.T) {
+	// The UNKNOWN vendor is created automatically when no vendor is selected.
+	// Its journal entry must use the shared account, not the raw name "UNKNOWN".
+	id := primitive.NewObjectID()
+	v := &Vendor{ID: id, Name: "UNKNOWN"}
+	got := resolveVendorAccountName(v)
+	if got != "Vendor Accounts - Unknown" {
+		t.Errorf("UNKNOWN vendor: want %q, got %q", "Vendor Accounts - Unknown", got)
+	}
+}
+
+func TestResolveVendorAccountName_RegularVendor(t *testing.T) {
+	// A normal vendor must pass its own name through unchanged.
+	id := primitive.NewObjectID()
+	v := &Vendor{ID: id, Name: "ACME Supplies"}
+	got := resolveVendorAccountName(v)
+	if got != "ACME Supplies" {
+		t.Errorf("regular vendor: want %q, got %q", "ACME Supplies", got)
+	}
+}
+
+func TestResolveVendorAccountName_EmptyName(t *testing.T) {
+	// An empty vendor name should pass through as-is (not remapped to Unknown).
+	id := primitive.NewObjectID()
+	v := &Vendor{ID: id, Name: ""}
+	got := resolveVendorAccountName(v)
+	if got != "" {
+		t.Errorf("empty vendor name: want %q, got %q", "", got)
+	}
+}
+
+func TestResolveVendorAccountName_LowercaseUnknown_NotRemapped(t *testing.T) {
+	// Only the exact uppercase "UNKNOWN" sentinel (set by SetUnKnownVendorIfNoVendorSelected)
+	// is remapped; lowercase variants must not be affected.
+	id := primitive.NewObjectID()
+	v := &Vendor{ID: id, Name: "unknown"}
+	got := resolveVendorAccountName(v)
+	if got != "unknown" {
+		t.Errorf("lowercase 'unknown': want %q (no remap), got %q", "unknown", got)
+	}
+}
+
+func TestResolveVendorAccountName_UnknownWithSpaces_NotRemapped(t *testing.T) {
+	// Whitespace-padded variants should not trigger the sentinel match.
+	id := primitive.NewObjectID()
+	v := &Vendor{ID: id, Name: " UNKNOWN "}
+	got := resolveVendorAccountName(v)
+	if got != " UNKNOWN " {
+		t.Errorf("padded 'UNKNOWN': want %q (no remap), got %q", " UNKNOWN ", got)
 	}
 }

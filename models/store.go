@@ -183,6 +183,7 @@ type StoreSettings struct {
 	DisplayVATInReceivablesAndPayables          bool            `bson:"display_vat_in_receivables_and_payables" json:"display_vat_in_receivables_and_payables"`
 	NonVATSales                                 bool            `bson:"non_vat_sales" json:"non_vat_sales"`
 	EnableAutomobileModule                      bool            `bson:"enable_automobile_module" json:"enable_automobile_module"`
+	EnableAutomobileDashboard                   bool            `bson:"enable_automobile_dashboard" json:"enable_automobile_dashboard"`
 	EnableSalesInQuotation                      bool            `bson:"enable_sales_in_quotation" json:"enable_sales_in_quotation"`
 	EnableEmployeeModule                        bool            `bson:"enable_employee_module" json:"enable_employee_module"`
 	EnablePurchaseUnitPriceValidation           bool            `bson:"enable_purchase_unit_price_validation" json:"enable_purchase_unit_price_validation"`
