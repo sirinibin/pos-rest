@@ -1798,6 +1798,50 @@ func (purchase *Purchase) SetProductsStock() (err error) {
 	return nil
 }
 
+// LastPurchaseInfo holds the result of a last-purchase lookup for a product.
+type LastPurchaseInfo struct {
+	PurchaseID               primitive.ObjectID
+	PurchaseCode             string
+	PurchaseUnitPrice        float64
+	PurchaseUnitPriceWithVAT float64
+	CreatedAt                *time.Time
+}
+
+// GetLastPurchaseUnitPriceForProduct returns the purchase unit price (excl. and incl. VAT)
+// from the most recent non-deleted purchase in the store that contains the given product.
+func GetLastPurchaseUnitPriceForProduct(storeID *primitive.ObjectID, productID primitive.ObjectID) (*LastPurchaseInfo, error) {
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("purchase")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	findOneOptions := options.FindOne()
+	findOneOptions.SetSort(bson.M{"_id": -1})
+	findOneOptions.SetProjection(bson.M{"_id": 1, "code": 1, "created_at": 1, "products": 1})
+
+	var result Purchase
+	err := collection.FindOne(ctx, bson.M{
+		"store_id":            storeID,
+		"products.product_id": productID,
+		"deleted":             bson.M{"$ne": true},
+	}, findOneOptions).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range result.Products {
+		if p.ProductID == productID {
+			return &LastPurchaseInfo{
+				PurchaseID:               result.ID,
+				PurchaseCode:             result.Code,
+				PurchaseUnitPrice:        p.PurchaseUnitPrice,
+				PurchaseUnitPriceWithVAT: p.PurchaseUnitPriceWithVAT,
+				CreatedAt:                result.CreatedAt,
+			}, nil
+		}
+	}
+	return nil, errors.New("product not found in last purchase")
+}
+
 // isLastPurchaseForProduct returns true if the current purchase is the most
 // recent non-deleted purchase in the store that contains the given product.
 func (purchase *Purchase) isLastPurchaseForProduct(productID primitive.ObjectID) (bool, error) {
@@ -1830,6 +1874,8 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 		return err
 	}
 
+	now := time.Now()
+
 	for _, purchaseProduct := range purchase.Products {
 		isLast, err := purchase.isLastPurchaseForProduct(purchaseProduct.ProductID)
 		if err != nil {
@@ -1848,15 +1894,34 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 
 			productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
 			productStoreTemp.PurchaseUnitPriceWithVAT = purchaseProduct.PurchaseUnitPriceWithVAT
+			productStoreTemp.LastPurchaseID = &purchase.ID
+			productStoreTemp.LastPurchaseCode = purchase.Code
+			productStoreTemp.LastPurchasePriceUpdatedAt = &now
 
-			if purchaseProduct.WholesaleUnitPrice > 0 {
-				productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
-				productStoreTemp.WholesaleUnitPriceWithVAT = purchaseProduct.WholesaleUnitPriceWithVAT
-			}
-
-			if purchaseProduct.RetailUnitPrice > 0 {
-				productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
-				productStoreTemp.RetailUnitPriceWithVAT = purchaseProduct.RetailUnitPriceWithVAT
+			if store.Settings.EnableAutoUpdatePricesFromLastPurchase {
+				if productStoreTemp.AutoUpdateWholesalePriceFromLastPurchase && productStoreTemp.WholesaleMarginPercent > 0 {
+					productStoreTemp.WholesaleUnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (1 + productStoreTemp.WholesaleMarginPercent/100))
+					productStoreTemp.WholesaleUnitPriceWithVAT = RoundTo2Decimals(productStoreTemp.WholesaleUnitPrice * (1 + store.VatPercent/100))
+				} else if purchaseProduct.WholesaleUnitPrice > 0 {
+					productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+					productStoreTemp.WholesaleUnitPriceWithVAT = purchaseProduct.WholesaleUnitPriceWithVAT
+				}
+				if productStoreTemp.AutoUpdateRetailPriceFromLastPurchase && productStoreTemp.RetailMarginPercent > 0 {
+					productStoreTemp.RetailUnitPrice = RoundTo2Decimals(purchaseProduct.PurchaseUnitPrice * (1 + productStoreTemp.RetailMarginPercent/100))
+					productStoreTemp.RetailUnitPriceWithVAT = RoundTo2Decimals(productStoreTemp.RetailUnitPrice * (1 + store.VatPercent/100))
+				} else if purchaseProduct.RetailUnitPrice > 0 {
+					productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
+					productStoreTemp.RetailUnitPriceWithVAT = purchaseProduct.RetailUnitPriceWithVAT
+				}
+			} else {
+				if purchaseProduct.WholesaleUnitPrice > 0 {
+					productStoreTemp.WholesaleUnitPrice = purchaseProduct.WholesaleUnitPrice
+					productStoreTemp.WholesaleUnitPriceWithVAT = purchaseProduct.WholesaleUnitPriceWithVAT
+				}
+				if purchaseProduct.RetailUnitPrice > 0 {
+					productStoreTemp.RetailUnitPrice = purchaseProduct.RetailUnitPrice
+					productStoreTemp.RetailUnitPriceWithVAT = purchaseProduct.RetailUnitPriceWithVAT
+				}
 			}
 
 			product.ProductStores[purchase.StoreID.Hex()] = productStoreTemp

@@ -87,6 +87,8 @@ type Store struct {
 	CapitalDepositSerialNumber             SerialNumber          `bson:"capital_deposit_serial_number" json:"capital_deposit_serial_number"`
 	DividentSerialNumber                   SerialNumber          `bson:"divident_serial_number" json:"divident_serial_number"`
 	StockTransferSerialNumber              SerialNumber          `bson:"stock_transfer_serial_number" json:"stock_transfer_serial_number"`
+	NonVATSalesSerialNumber                SerialNumber          `bson:"non_vat_sales_serial_number" json:"non_vat_sales_serial_number"`
+	NonVATSalesReturnSerialNumber          SerialNumber          `bson:"non_vat_sales_return_serial_number" json:"non_vat_sales_return_serial_number"`
 	ShowAddressInInvoiceFooter             bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
 	DefaultQuotationValidityDays           *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
 	DefaultQuotationDeliveryDays           *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
@@ -131,8 +133,10 @@ type StoreSettings struct {
 	ShowSellerInfoInInvoice                     bool            `bson:"show_seller_info_in_invoice" json:"show_seller_info_in_invoice"`
 	EnableInvoicePrintTypeSelection             bool            `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
 	AllowAdjustSameDatePayments                 bool            `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
-	HideQuotationInvoiceVAT                     bool            `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
-	UpdateProductStockOnQuotationSales          bool            `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
+	HideQuotationInvoiceVAT                        bool            `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
+	HideVATInQuotationSalesInvoice                 bool            `bson:"hide_vat_in_quotation_sales_invoice" json:"hide_vat_in_quotation_sales_invoice"`
+	ExcludeServiceVATInQuotationSalesInvoice       bool            `bson:"exclude_service_vat_in_quotation_sales_invoice" json:"exclude_service_vat_in_quotation_sales_invoice"`
+	UpdateProductStockOnQuotationSales             bool            `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
 	EnableAutoPaymentCloseOnReturn              bool            `bson:"enable_auto_payment_close_on_return" json:"enable_auto_payment_close_on_return"`
 	EnableAutoSalesPaymentCloseOnPurchase       bool            `bson:"enable_auto_sales_payment_close_on_purchase" json:"enable_auto_sales_payment_close_on_purchase"`
 	EnableAutoPurchasePaymentCloseOnSales       bool            `bson:"enable_auto_purchase_payment_close_on_sales" json:"enable_auto_purchase_payment_close_on_sales"`
@@ -156,12 +160,19 @@ type StoreSettings struct {
 	EvolutionInstanceName                       string          `bson:"evolution_instance_name" json:"evolution_instance_name,omitempty"`
 	UseWhatsAppAPI                              bool            `bson:"use_whatsapp_api" json:"use_whatsapp_api"`
 	AllowProductsDuplicatesByDefault            bool            `bson:"allow_products_duplicates_by_default" json:"allow_products_duplicates_by_default"`
+	BalanceSheetDesign                          string          `bson:"balance_sheet_design" json:"balance_sheet_design,omitempty"`
+	BalanceSheetA4PreviewDesign                 string          `bson:"balance_sheet_a4_preview_design" json:"balance_sheet_a4_preview_design,omitempty"`
+	InvoiceA4PreviewDesign                      string          `bson:"invoice_a4_preview_design" json:"invoice_a4_preview_design,omitempty"`
 	SalesCreateFormDesign                       string          `bson:"sales_create_form_design" json:"sales_create_form_design,omitempty"`
 	SalesReturnCreateFormDesign                 string          `bson:"sales_return_create_form_design" json:"sales_return_create_form_design,omitempty"`
 	QuotationCreateFormDesign                   string          `bson:"quotation_create_form_design" json:"quotation_create_form_design,omitempty"`
 	PurchaseCreateFormDesign                    string          `bson:"purchase_create_form_design" json:"purchase_create_form_design,omitempty"`
 	PurchaseReturnCreateFormDesign              string          `bson:"purchase_return_create_form_design" json:"purchase_return_create_form_design,omitempty"`
 	QuotationSalesReturnCreateFormDesign        string          `bson:"quotation_sales_return_create_form_design" json:"quotation_sales_return_create_form_design,omitempty"`
+	InvoiceHeaderDesign                         string          `bson:"invoice_header_design" json:"invoice_header_design,omitempty"`
+	BalanceSheetHeaderDesign                    string          `bson:"balance_sheet_header_design" json:"balance_sheet_header_design,omitempty"`
+	EnableAutoRefresh                           bool            `bson:"enable_auto_refresh" json:"enable_auto_refresh"`
+	EnableVATBox                                bool            `bson:"enable_vat_box" json:"enable_vat_box"`
 	EnableProducts                              bool            `bson:"enable_products" json:"enable_products"`
 	EnableServices                              bool            `bson:"enable_services" json:"enable_services"`
 	EnableArabicNamesList                       bool            `bson:"enable_arabic_names_list" json:"enable_arabic_names_list"`
@@ -170,9 +181,12 @@ type StoreSettings struct {
 	EnableZatcaReportingForPayables             bool            `bson:"enable_zatca_reporting_for_payables" json:"enable_zatca_reporting_for_payables"`
 	AutoPromptAdvancePaymentLinkingInSales      bool            `bson:"auto_suggest_advance_payment_linking_in_sales" json:"auto_suggest_advance_payment_linking_in_sales"`
 	DisplayVATInReceivablesAndPayables          bool            `bson:"display_vat_in_receivables_and_payables" json:"display_vat_in_receivables_and_payables"`
+	NonVATSales                                 bool            `bson:"non_vat_sales" json:"non_vat_sales"`
 	EnableAutomobileModule                      bool            `bson:"enable_automobile_module" json:"enable_automobile_module"`
+	EnableSalesInQuotation                      bool            `bson:"enable_sales_in_quotation" json:"enable_sales_in_quotation"`
 	EnableEmployeeModule                        bool            `bson:"enable_employee_module" json:"enable_employee_module"`
 	EnablePurchaseUnitPriceValidation           bool            `bson:"enable_purchase_unit_price_validation" json:"enable_purchase_unit_price_validation"`
+	EnableAutoUpdatePricesFromLastPurchase      bool            `bson:"enable_auto_update_prices_from_last_purchase" json:"enable_auto_update_prices_from_last_purchase"`
 	CashOpeningBalance                          float64         `bson:"cash_opening_balance" json:"cash_opening_balance"`
 	CashOpeningBalanceDate                      *time.Time      `bson:"cash_opening_balance_date,omitempty" json:"cash_opening_balance_date,omitempty"`
 	BankOpeningBalance                          float64         `bson:"bank_opening_balance" json:"bank_opening_balance"`
@@ -185,6 +199,8 @@ type InvoiceSettings struct {
 	Phase2B2B            PhaseInvoiceSettings `bson:"phase2_b2b" json:"phase2_b2b"`
 	QuotationSales       InvoiceTitles        `bson:"quotation_sales_titles" json:"quotation_sales_titles"`
 	QuotationSalesReturn InvoiceTitles        `bson:"quotation_sales_return_titles" json:"quotation_sales_return_titles"`
+	NonVATSales          InvoiceTitles        `bson:"non_vat_sales_titles" json:"non_vat_sales_titles"`
+	NonVATSalesReturn    InvoiceTitles        `bson:"non_vat_sales_return_titles" json:"non_vat_sales_return_titles"`
 	Quotation            string               `bson:"quotation_title" json:"quotation_title"`
 	DeliveryNoteTitle    string               `bson:"delivery_note_title" json:"delivery_note_title"`
 	PayableTitle         string               `bson:"payable_title" json:"payable_title"`
@@ -601,6 +617,8 @@ func (store *Store) TrimSpaceFromFields() {
 	store.CapitalDepositSerialNumber.Prefix = strings.TrimSpace(store.CapitalDepositSerialNumber.Prefix)
 	store.DividentSerialNumber.Prefix = strings.TrimSpace(store.DividentSerialNumber.Prefix)
 	store.DeliveryNoteSerialNumber.Prefix = strings.TrimSpace(store.DeliveryNoteSerialNumber.Prefix)
+	store.NonVATSalesSerialNumber.Prefix = strings.TrimSpace(store.NonVATSalesSerialNumber.Prefix)
+	store.NonVATSalesReturnSerialNumber.Prefix = strings.TrimSpace(store.NonVATSalesReturnSerialNumber.Prefix)
 }
 
 func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {

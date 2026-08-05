@@ -271,11 +271,11 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
 
 	if quotation.RepairJobID != nil && !quotation.RepairJobID.IsZero() {
-		store.LinkQuotationToRepairJob(quotation.RepairJobID, quotation.ID, quotation.Code, quotation.NetTotal)
+		store.LinkQuotationToRepairJob(quotation.RepairJobID, quotation.ID, quotation.Code, quotation.NetTotal, quotation.Type)
 	}
 	for _, jobID := range quotation.RepairJobIDs {
 		jid := jobID
-		store.LinkQuotationToRepairJob(&jid, quotation.ID, quotation.Code, quotation.NetTotal)
+		store.LinkQuotationToRepairJob(&jid, quotation.ID, quotation.Code, quotation.NetTotal, quotation.Type)
 	}
 
 	err = quotation.CreateProductsQuotationHistory()

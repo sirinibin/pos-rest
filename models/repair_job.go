@@ -16,18 +16,20 @@ import (
 
 // RepairJobPart : a part used in a repair job
 type RepairJobPart struct {
-	ProductID          *primitive.ObjectID    `json:"product_id,omitempty" bson:"product_id,omitempty"`
-	ItemCode           string                 `json:"item_code,omitempty" bson:"item_code,omitempty"`
-	PartNumber         string                 `json:"part_number,omitempty" bson:"part_number,omitempty"`
-	Name               string                 `json:"name" bson:"name"`
-	Qty                float64                `json:"qty" bson:"qty"`
-	PurchaseUnitPrice  float64                `json:"purchase_unit_price" bson:"purchase_unit_price"`
-	Stock              float64                `json:"stock" bson:"stock"`
-	WarehouseStocks    map[string]float64     `json:"warehouse_stocks,omitempty" bson:"warehouse_stocks,omitempty"`
-	UnitPrice          float64                `json:"unit_price" bson:"unit_price"`
-	UnitPriceWithVat   float64                `json:"unit_price_with_vat" bson:"unit_price_with_vat"`
-	TotalPrice         float64                `json:"total_price" bson:"total_price"`
-	TotalPriceWithVat  float64                `json:"total_price_with_vat" bson:"total_price_with_vat"`
+	ProductID             *primitive.ObjectID `json:"product_id,omitempty" bson:"product_id,omitempty"`
+	ItemCode              string              `json:"item_code,omitempty" bson:"item_code,omitempty"`
+	PartNumber            string              `json:"part_number,omitempty" bson:"part_number,omitempty"`
+	Name                  string              `json:"name" bson:"name"`
+	Qty                   float64             `json:"qty" bson:"qty"`
+	PurchaseUnitPrice     float64             `json:"purchase_unit_price" bson:"purchase_unit_price"`
+	Stock                 float64             `json:"stock" bson:"stock"`
+	WarehouseStocks       map[string]float64  `json:"warehouse_stocks,omitempty" bson:"warehouse_stocks,omitempty"`
+	UnitPrice             float64             `json:"unit_price" bson:"unit_price"`
+	UnitPriceWithVat      float64             `json:"unit_price_with_vat" bson:"unit_price_with_vat"`
+	UnitDiscount          float64             `json:"unit_discount" bson:"unit_discount"`
+	UnitDiscountWithVat   float64             `json:"unit_discount_with_vat" bson:"unit_discount_with_vat"`
+	TotalPrice            float64             `json:"total_price" bson:"total_price"`
+	TotalPriceWithVat     float64             `json:"total_price_with_vat" bson:"total_price_with_vat"`
 }
 
 // RepairJob : structure for AutoMobile Workshop repair job
@@ -47,8 +49,10 @@ type RepairJob struct {
 	Complaint         string              `json:"complaint" bson:"complaint"`
 	Inspection        string              `json:"inspection" bson:"inspection"`
 	WorkDone          string              `json:"work_done" bson:"work_done"`
-	TechnicianID      *primitive.ObjectID `json:"technician_id,omitempty" bson:"technician_id,omitempty"`
-	TechnicianName    string              `json:"technician_name" bson:"technician_name"`
+	TechnicianID      *primitive.ObjectID   `json:"technician_id,omitempty" bson:"technician_id,omitempty"`
+	TechnicianName    string                `json:"technician_name" bson:"technician_name"`
+	TechnicianIDs     []primitive.ObjectID  `json:"technician_ids,omitempty" bson:"technician_ids,omitempty"`
+	TechnicianNames   []string              `json:"technician_names,omitempty" bson:"technician_names,omitempty"`
 	LabourCharge      float64             `json:"labour_charge" bson:"labour_charge"`
 	VatPercent        float64             `json:"vat_percent" bson:"vat_percent"`
 	Parts             []RepairJobPart     `json:"parts" bson:"parts"`
@@ -64,6 +68,10 @@ type RepairJob struct {
 	QuotationID          *primitive.ObjectID `json:"quotation_id,omitempty" bson:"quotation_id,omitempty"`
 	QuotationCode        string              `json:"quotation_code,omitempty" bson:"quotation_code,omitempty"`
 	QuotationNetTotal    float64             `json:"quotation_net_total,omitempty" bson:"quotation_net_total,omitempty"`
+	QuotationType        string              `json:"quotation_type,omitempty" bson:"quotation_type,omitempty"`
+	NonVATSalesID        *primitive.ObjectID `json:"non_vat_sales_id,omitempty" bson:"non_vat_sales_id,omitempty"`
+	NonVATSalesCode      string              `json:"non_vat_sales_code,omitempty" bson:"non_vat_sales_code,omitempty"`
+	NonVATSalesNetTotal  float64             `json:"non_vat_sales_net_total,omitempty" bson:"non_vat_sales_net_total,omitempty"`
 	Archived          bool                `bson:"archived" json:"archived"`
 	Deleted           bool                `bson:"deleted" json:"deleted"`
 	DeletedBy         *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -81,12 +89,12 @@ func (job *RepairJob) CalculateTotals() {
 	job.PartsTotal = 0
 	job.PartsTotalWithVat = 0
 	for i := range job.Parts {
-		job.Parts[i].TotalPrice = job.Parts[i].Qty * job.Parts[i].UnitPrice
+		job.Parts[i].TotalPrice = job.Parts[i].Qty * (job.Parts[i].UnitPrice - job.Parts[i].UnitDiscount)
 		unitWithVat := job.Parts[i].UnitPriceWithVat
 		if unitWithVat == 0 {
 			unitWithVat = job.Parts[i].UnitPrice
 		}
-		job.Parts[i].TotalPriceWithVat = job.Parts[i].Qty * unitWithVat
+		job.Parts[i].TotalPriceWithVat = job.Parts[i].Qty * (unitWithVat - job.Parts[i].UnitDiscountWithVat)
 		job.PartsTotal += job.Parts[i].TotalPrice
 		job.PartsTotalWithVat += job.Parts[i].TotalPriceWithVat
 	}
@@ -139,6 +147,21 @@ func (job *RepairJob) UpdateForeignLabelFields() error {
 			if err == nil && emp != nil {
 				job.TechnicianName = emp.Name
 			}
+		}
+	}
+	// Technician names for multi-tech array (only resolve if names array is shorter than IDs array)
+	if len(job.TechnicianIDs) > 0 && len(job.TechnicianNames) < len(job.TechnicianIDs) {
+		store, err := FindStoreByID(job.StoreID, bson.M{})
+		if err == nil && store != nil {
+			names := make([]string, len(job.TechnicianIDs))
+			for i, tid := range job.TechnicianIDs {
+				tidCopy := tid
+				emp, err := store.FindEmployeeByID(&tidCopy, bson.M{"name": 1})
+				if err == nil && emp != nil {
+					names[i] = emp.Name
+				}
+			}
+			job.TechnicianNames = names
 		}
 	}
 
@@ -213,7 +236,7 @@ func (store *Store) LinkOrderToRepairJob(jobID *primitive.ObjectID, orderID prim
 	return err
 }
 
-func (store *Store) LinkQuotationToRepairJob(jobID *primitive.ObjectID, quotationID primitive.ObjectID, quotationCode string, netTotal float64) error {
+func (store *Store) LinkQuotationToRepairJob(jobID *primitive.ObjectID, quotationID primitive.ObjectID, quotationCode string, netTotal float64, quotationType string) error {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("repair_job")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -221,6 +244,19 @@ func (store *Store) LinkQuotationToRepairJob(jobID *primitive.ObjectID, quotatio
 		"quotation_id":        quotationID,
 		"quotation_code":      quotationCode,
 		"quotation_net_total": netTotal,
+		"quotation_type":      quotationType,
+	}})
+	return err
+}
+
+func (store *Store) LinkNonVATSalesToRepairJob(jobID *primitive.ObjectID, salesID primitive.ObjectID, salesCode string, netTotal float64) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("repair_job")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := collection.UpdateOne(ctx, bson.M{"_id": jobID}, bson.M{"$set": bson.M{
+		"non_vat_sales_id":        salesID,
+		"non_vat_sales_code":      salesCode,
+		"non_vat_sales_net_total": netTotal,
 	}})
 	return err
 }

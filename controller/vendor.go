@@ -193,6 +193,9 @@ func CreateVendor(w http.ResponseWriter, r *http.Request) {
 		if vendor.OpeningBalancePosted {
 			_ = vendor.Update()
 		}
+		// Refresh credit balance from the account balance sheet now that the
+		// opening balance ledger entry has been posted.
+		_ = vendor.SetCreditBalance()
 	}
 
 	response.Status = true
@@ -324,6 +327,9 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = vendor.Update()
+		// Refresh credit balance from the account balance sheet now that the
+		// opening balance ledger entry has changed.
+		_ = vendor.SetCreditBalance()
 	}
 
 	vendor, err = store.FindVendorByID(&vendor.ID, bson.M{})

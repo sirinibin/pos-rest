@@ -34,9 +34,18 @@ type ProductStore struct {
 	PurchaseUnitPriceSecret      string                      `bson:"purchase_unit_price_secret,omitempty" json:"purchase_unit_price_secret,omitempty"`
 	WholesaleUnitPrice           float64                     `bson:"wholesale_unit_price" json:"wholesale_unit_price"`
 	WholesaleUnitPriceWithVAT    float64                     `bson:"wholesale_unit_price_with_vat" json:"wholesale_unit_price_with_vat"`
-	RetailUnitPrice              float64                     `bson:"retail_unit_price" json:"retail_unit_price"`
-	RetailUnitPriceWithVAT       float64                     `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
-	IsUnitPriceWithVAT           bool                        `bson:"with_vat" json:"with_vat"`
+	RetailUnitPrice                            float64                     `bson:"retail_unit_price" json:"retail_unit_price"`
+	RetailUnitPriceWithVAT                     float64                     `bson:"retail_unit_price_with_vat" json:"retail_unit_price_with_vat"`
+	WholesaleMarginPercent                     float64                     `bson:"wholesale_margin_percent" json:"wholesale_margin_percent"`
+	RetailMarginPercent                        float64                     `bson:"retail_margin_percent" json:"retail_margin_percent"`
+	AutoUpdateWholesalePriceFromLastPurchase   bool                        `bson:"auto_update_wholesale_price_from_last_purchase" json:"auto_update_wholesale_price_from_last_purchase"`
+	AutoUpdateRetailPriceFromLastPurchase      bool                        `bson:"auto_update_retail_price_from_last_purchase" json:"auto_update_retail_price_from_last_purchase"`
+	LastPurchaseID                             *primitive.ObjectID         `bson:"last_purchase_id,omitempty" json:"last_purchase_id,omitempty"`
+	LastPurchaseCode                           string                      `bson:"last_purchase_code,omitempty" json:"last_purchase_code,omitempty"`
+	LastPurchasePriceUpdatedAt                 *time.Time                  `bson:"last_purchase_price_updated_at,omitempty" json:"last_purchase_price_updated_at,omitempty"`
+	WholesaleManualPriceUpdatedAt              *time.Time                  `bson:"wholesale_manual_price_updated_at,omitempty" json:"wholesale_manual_price_updated_at,omitempty"`
+	RetailManualPriceUpdatedAt                 *time.Time                  `bson:"retail_manual_price_updated_at,omitempty" json:"retail_manual_price_updated_at,omitempty"`
+	IsUnitPriceWithVAT                         bool                        `bson:"with_vat" json:"with_vat"`
 	Stock                        float64                     `bson:"stock" json:"stock"`
 	WarehouseStocks              map[string]float64          `bson:"warehouse_stocks" json:"warehouse_stocks"`
 	WarehouseRacks               map[string]string           `bson:"warehouse_racks" json:"warehouse_racks"`
@@ -82,6 +91,8 @@ type ProductStore struct {
 	StockTransferAmount          float64                     `bson:"stocktransfer_amount" json:"stocktransfer_amount"`
 	StockTransferCount           int64                       `bson:"stocktransfer_count" json:"stocktransfer_count"`
 	StockTransferQuantity        float64                     `bson:"stocktransfer_quantity" json:"stocktransfer_quantity"`
+	NonVATSalesQuantity          float64                     `bson:"non_vat_sales_quantity,omitempty" json:"non_vat_sales_quantity,omitempty"`
+	NonVATSalesReturnQuantity    float64                     `bson:"non_vat_sales_return_quantity,omitempty" json:"non_vat_sales_return_quantity,omitempty"`
 }
 
 type ProductWarehouse struct {
@@ -4719,6 +4730,16 @@ func (product *Product) SetStock() error {
 	}
 	//}
 
+	err = product.SetProductNonVATSalesQuantityByStoreID(*product.StoreID)
+	if err != nil {
+		return err
+	}
+
+	err = product.SetProductNonVATSalesReturnQuantityByStoreID(*product.StoreID)
+	if err != nil {
+		return err
+	}
+
 	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
 		//newStock := (productStoreTemp.PurchaseQuantity - productStoreTemp.PurchaseReturnQuantity) - (productStoreTemp.SalesQuantity - productStoreTemp.SalesReturnQuantity) - (productStoreTemp.QuotationSalesQuantity - productStoreTemp.QuotationSalesReturnQuantity)
 
@@ -4728,6 +4749,9 @@ func (product *Product) SetStock() error {
 
 		newStock -= productStoreTemp.SalesQuantity
 		newStock += productStoreTemp.SalesReturnQuantity
+
+		newStock -= productStoreTemp.NonVATSalesQuantity
+		newStock += productStoreTemp.NonVATSalesReturnQuantity
 
 		if store.Settings.UpdateProductStockOnQuotationSales {
 

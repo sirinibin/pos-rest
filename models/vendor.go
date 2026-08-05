@@ -102,7 +102,7 @@ type Vendor struct {
 	OpeningBalanceDate   *time.Time `bson:"opening_balance_date,omitempty" json:"opening_balance_date,omitempty"`
 	OpeningBalancePosted bool       `bson:"opening_balance_posted" json:"opening_balance_posted"`
 	// OpeningBalanceType: "payable" (store owes vendor, default) or "receivable" (vendor owes store)
-	OpeningBalanceType   string     `bson:"opening_balance_type" json:"opening_balance_type"`
+	OpeningBalanceType string `bson:"opening_balance_type" json:"opening_balance_type"`
 }
 
 type VendorStats struct {
@@ -473,6 +473,19 @@ func (vendor *Vendor) SetCreditBalance() error {
 		}*/
 
 	if account != nil {
+		// Always recompute the account's balance fresh from the ledger (posting
+		// collection) — the Account Balance Sheet — instead of trusting whatever
+		// cached value happens to already be on the account document, so the
+		// vendor's credit balance never drifts out of sync with the ledger.
+		err = account.CalculateBalance(nil, nil)
+		if err != nil {
+			return errors.New("error calculating vendor account balance:" + err.Error())
+		}
+		err = account.Update()
+		if err != nil {
+			return errors.New("error updating vendor account balance:" + err.Error())
+		}
+
 		vendor.Account = account
 		vendor.CreditBalance = account.Balance
 		if account.Type == "liability" {

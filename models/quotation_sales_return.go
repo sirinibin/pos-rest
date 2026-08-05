@@ -44,6 +44,7 @@ type QuotationSalesReturnProduct struct {
 	Profit                     float64             `bson:"profit" json:"profit"`
 	Loss                       float64             `bson:"loss" json:"loss"`
 	Selected                   bool                `bson:"selected" json:"selected"`
+	IsService                  bool                `bson:"is_service" json:"is_service"`
 }
 
 // QuotationSalesReturn : QuotationSalesReturn structure
@@ -51,6 +52,7 @@ type QuotationSalesReturn struct {
 	ID                primitive.ObjectID            `json:"id,omitempty" bson:"_id,omitempty"`
 	QuotationID       *primitive.ObjectID           `json:"quotation_id,omitempty" bson:"quotation_id,omitempty"`
 	QuotationCode     string                        `bson:"quotation_code,omitempty" json:"quotation_code,omitempty"`
+	Type              string                        `bson:"type,omitempty" json:"type,omitempty"`
 	Date              *time.Time                    `bson:"date,omitempty" json:"date,omitempty"`
 	DateStr           string                        `json:"date_str,omitempty" bson:"-"`
 	InvoiceCountValue int64                         `bson:"invoice_count_value,omitempty" json:"invoice_count_value,omitempty"`
@@ -2244,7 +2246,13 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 		return err
 	}
 
-	redisKey := quotationsalesReturn.StoreID.Hex() + "_quotation_return_invoice_counter" // Global counter key
+	// Select serial number settings and Redis counter key based on return type
+	serialNumSettings := store.QuotationSalesReturnSerialNumber
+	redisKey := quotationsalesReturn.StoreID.Hex() + "_quotation_return_invoice_counter"
+	if quotationsalesReturn.Type == "non_vat_invoice" {
+		serialNumSettings = store.NonVATSalesReturnSerialNumber
+		redisKey = quotationsalesReturn.StoreID.Hex() + "_non_vat_sales_return_counter"
+	}
 
 	// === 1. Get location from store.CountryCode ===
 	location := time.UTC
@@ -2268,7 +2276,7 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 		if err != nil {
 			return err
 		}
-		startFrom := store.QuotationSalesReturnSerialNumber.StartFromCount
+		startFrom := serialNumSettings.StartFromCount
 		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
@@ -2282,13 +2290,13 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 	}
 
 	// === 5. Determine which counter to use for quotation.Code ===
-	useMonthly := strings.Contains(store.QuotationSalesReturnSerialNumber.Prefix, "DATE")
+	useMonthly := strings.Contains(serialNumSettings.Prefix, "DATE")
 	var serialNumber int64 = globalIncr
 
 	if useMonthly {
 		// Generate monthly redis key
 		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := quotationsalesReturn.StoreID.Hex() + "_quotation_return_invoice_counter_" + monthKey
+		monthlyRedisKey := redisKey + "_" + monthKey
 
 		// Ensure monthly counter exists
 		monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result()
@@ -2296,7 +2304,7 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 			return err
 		}
 		if monthlyExists == 0 {
-			startFrom := store.QuotationSalesReturnSerialNumber.StartFromCount
+			startFrom := serialNumSettings.StartFromCount
 			fromDate := time.Date(baseTime.Year(), baseTime.Month(), 1, 0, 0, 0, 0, location)
 			toDate := fromDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
 
@@ -2305,16 +2313,9 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 				return err
 			}
 
-			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
-				if err != nil {
-					return err
-				}
-			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
-				if err != nil {
-					return err
-				}
+			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			if err != nil {
+				return err
 			}
 		}
 
@@ -2329,9 +2330,9 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 	}
 
 	// === 6. Build the code ===
-	paddingCount := store.QuotationSalesReturnSerialNumber.PaddingCount
-	if store.QuotationSalesReturnSerialNumber.Prefix != "" {
-		quotationsalesReturn.Code = fmt.Sprintf("%s-%0*d", store.QuotationSalesReturnSerialNumber.Prefix, paddingCount, serialNumber)
+	paddingCount := serialNumSettings.PaddingCount
+	if serialNumSettings.Prefix != "" {
+		quotationsalesReturn.Code = fmt.Sprintf("%s-%0*d", serialNumSettings.Prefix, paddingCount, serialNumber)
 	} else {
 		quotationsalesReturn.Code = fmt.Sprintf("%0*d", paddingCount, serialNumber)
 	}

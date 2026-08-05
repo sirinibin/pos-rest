@@ -945,3 +945,57 @@ func MigrateProductRackToWarehouseRacks(w http.ResponseWriter, r *http.Request) 
 	}
 	json.NewEncoder(w).Encode(response)
 }
+
+// GetProductLastPurchasePrice returns the purchase unit price from the most
+// recent purchase that contains the given product, for use in the "Update Now"
+// button in the product form.
+func GetProductLastPurchasePrice(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := ParseStore(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	productID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["product_id"] = "Invalid product id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	info, err := models.GetLastPurchaseUnitPriceForProduct(&store.ID, productID)
+	if err != nil {
+		response.Status = false
+		response.Errors["last_purchase"] = "No purchase found for this product: " + err.Error()
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = map[string]interface{}{
+		"purchase_id":                  info.PurchaseID,
+		"purchase_code":                info.PurchaseCode,
+		"purchase_unit_price":          info.PurchaseUnitPrice,
+		"purchase_unit_price_with_vat": info.PurchaseUnitPriceWithVAT,
+		"created_at":                   info.CreatedAt,
+	}
+	json.NewEncoder(w).Encode(response)
+}

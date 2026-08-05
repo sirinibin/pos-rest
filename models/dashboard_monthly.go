@@ -87,6 +87,19 @@ type DashboardMonthly struct {
 	// Customer-deposit purchase-fund (used when disable_purchases_on_accounts = true)
 	DepositPurchaseFund float64 `bson:"deposit_purchase_fund" json:"deposit_purchase_fund"`
 
+	// Non-VAT Sales
+	NonVatSalesAmount       float64 `bson:"non_vat_sales_amount"        json:"non_vat_sales_amount"`
+	NonVatSalesReturnAmount float64 `bson:"non_vat_sales_return_amount" json:"non_vat_sales_return_amount"`
+
+	// VAT box components
+	SalesVAT              float64 `bson:"sales_vat"                     json:"sales_vat"`
+	SalesReturnVAT        float64 `bson:"sales_return_vat"              json:"sales_return_vat"`
+	PurchaseVAT           float64 `bson:"purchase_vat"                  json:"purchase_vat"`
+	PurchaseReturnVAT     float64 `bson:"purchase_return_vat"           json:"purchase_return_vat"`
+	AcctPurchaseVAT       float64 `bson:"accounted_purchase_vat"        json:"accounted_purchase_vat"`
+	AcctPurchaseReturnVAT float64 `bson:"accounted_purchase_return_vat" json:"accounted_purchase_return_vat"`
+	ExpenseVendorVAT      float64 `bson:"expense_vendor_vat"            json:"expense_vendor_vat"`
+
 	UpdatedAt time.Time `bson:"updated_at" json:"updated_at"`
 }
 
@@ -190,6 +203,23 @@ func ComputeAndUpsertDashboardMonthly(storeID primitive.ObjectID, monthStr strin
 
 	// Customer-deposit purchase fund
 	d.DepositPurchaseFund = dmSumEmbeddedPayments(ctx, sdb.Collection("customerdeposit"), dateFilterWithDelete, "purchase_fund")
+
+	// Non-VAT Sales
+	d.NonVatSalesAmount, _ = dmSum(ctx, sdb.Collection("non_vat_sales"), dateFilterWithDelete, "net_total")
+	d.NonVatSalesReturnAmount, _ = dmSum(ctx, sdb.Collection("non_vat_sales_return"), dateFilterWithDelete, "net_total")
+
+	// VAT box components
+	d.SalesVAT, _ = dmSum(ctx, sdb.Collection("order"), dateFilterWithDelete, "vat_price")
+	d.SalesReturnVAT, _ = dmSum(ctx, sdb.Collection("salesreturn"), dateFilterWithDelete, "vat_price")
+	d.PurchaseVAT, _ = dmSum(ctx, sdb.Collection("purchase"), dateFilterWithDelete, "vat_price")
+	d.PurchaseReturnVAT, _ = dmSum(ctx, sdb.Collection("purchasereturn"), dateFilterWithDelete, "vat_price")
+	d.AcctPurchaseVAT, _ = dmSum(ctx, sdb.Collection("purchase"), acctF, "vat_price")
+	d.AcctPurchaseReturnVAT, _ = dmSum(ctx, sdb.Collection("purchasereturn"), acctF, "vat_price")
+	expVendorF := dmMerge(dateFilterWithDelete, bson.M{
+		"vendor_id":         bson.M{"$exists": true, "$ne": nil},
+		"vendor_invoice_no": bson.M{"$exists": true, "$ne": ""},
+	})
+	d.ExpenseVendorVAT, _ = dmSum(ctx, sdb.Collection("expense"), expVendorF, "vat")
 
 	// Skip months with no activity — nothing to store, nothing to show.
 	if d.SalesAmount+d.SalesReturnAmount+d.PurchaseAmount+d.ExpenseAmount+d.QtnInvoiceAmount+d.SalaryPaid == 0 {

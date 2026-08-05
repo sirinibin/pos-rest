@@ -65,6 +65,24 @@ type CustomerStore struct {
 	QuotationInvoicePaidCount              int64              `bson:"quotation_invoice_paid_count" json:"quotation_invoice_paid_count"`
 	QuotationInvoicePaidAmount             float64            `bson:"quotation_invoice_paid_amount" json:"quotation_invoice_paid_amount"`
 	DeliveryNoteCount                      int64              `bson:"delivery_note_count" json:"delivery_note_count"`
+	NonVATSalesCount                       int64              `bson:"non_vat_sales_count" json:"non_vat_sales_count"`
+	NonVATSalesAmount                      float64            `bson:"non_vat_sales_amount" json:"non_vat_sales_amount"`
+	NonVATSalesPaidAmount                  float64            `bson:"non_vat_sales_paid_amount" json:"non_vat_sales_paid_amount"`
+	NonVATSalesBalanceAmount               float64            `bson:"non_vat_sales_balance_amount" json:"non_vat_sales_balance_amount"`
+	NonVATSalesProfit                      float64            `bson:"non_vat_sales_profit" json:"non_vat_sales_profit"`
+	NonVATSalesLoss                        float64            `bson:"non_vat_sales_loss" json:"non_vat_sales_loss"`
+	NonVATSalesPaidCount                   int64              `bson:"non_vat_sales_paid_count" json:"non_vat_sales_paid_count"`
+	NonVATSalesNotPaidCount                int64              `bson:"non_vat_sales_not_paid_count" json:"non_vat_sales_not_paid_count"`
+	NonVATSalesPaidPartiallyCount          int64              `bson:"non_vat_sales_paid_partially_count" json:"non_vat_sales_paid_partially_count"`
+	NonVATSalesReturnCount                 int64              `bson:"non_vat_sales_return_count" json:"non_vat_sales_return_count"`
+	NonVATSalesReturnAmount                float64            `bson:"non_vat_sales_return_amount" json:"non_vat_sales_return_amount"`
+	NonVATSalesReturnPaidAmount            float64            `bson:"non_vat_sales_return_paid_amount" json:"non_vat_sales_return_paid_amount"`
+	NonVATSalesReturnBalanceAmount         float64            `bson:"non_vat_sales_return_balance_amount" json:"non_vat_sales_return_balance_amount"`
+	NonVATSalesReturnProfit                float64            `bson:"non_vat_sales_return_profit" json:"non_vat_sales_return_profit"`
+	NonVATSalesReturnLoss                  float64            `bson:"non_vat_sales_return_loss" json:"non_vat_sales_return_loss"`
+	NonVATSalesReturnPaidCount             int64              `bson:"non_vat_sales_return_paid_count" json:"non_vat_sales_return_paid_count"`
+	NonVATSalesReturnNotPaidCount          int64              `bson:"non_vat_sales_return_not_paid_count" json:"non_vat_sales_return_not_paid_count"`
+	NonVATSalesReturnPaidPartiallyCount    int64              `bson:"non_vat_sales_return_paid_partially_count" json:"non_vat_sales_return_paid_partially_count"`
 }
 
 // Customer : Customer structure
@@ -121,7 +139,7 @@ type Customer struct {
 	OpeningBalanceDate   *time.Time `bson:"opening_balance_date,omitempty" json:"opening_balance_date,omitempty"`
 	OpeningBalancePosted bool       `bson:"opening_balance_posted" json:"opening_balance_posted"`
 	// OpeningBalanceType: "receivable" (customer owes store, default) or "payable" (store owes customer)
-	OpeningBalanceType   string     `bson:"opening_balance_type" json:"opening_balance_type"`
+	OpeningBalanceType string `bson:"opening_balance_type" json:"opening_balance_type"`
 
 	// BI: Churn Risk — populated by cron job every 3 hours
 	ChurnRiskTier       string  `bson:"churn_risk_tier,omitempty" json:"churn_risk_tier,omitempty"`
@@ -692,6 +710,19 @@ func (customer *Customer) SetCreditBalance() error {
 	*/
 
 	if account != nil {
+		// Always recompute the account's balance fresh from the ledger (posting
+		// collection) — the Account Balance Sheet — instead of trusting whatever
+		// cached value happens to already be on the account document, so the
+		// customer's credit balance never drifts out of sync with the ledger.
+		err = account.CalculateBalance(nil, nil)
+		if err != nil {
+			return errors.New("error calculating customer account balance:" + err.Error())
+		}
+		err = account.Update()
+		if err != nil {
+			return errors.New("error updating customer account balance:" + err.Error())
+		}
+
 		customer.Account = account
 		customer.CreditBalance = account.Balance
 		if account.Type == "liability" {
@@ -2858,6 +2889,66 @@ func ProcessCustomers() error {
 	}
 
 	log.Print("DONE!")
+	return nil
+}
+
+// BackfillNonVATSalesCustomerStats recomputes non_vat_sales_balance_amount and
+// non_vat_sales_return_balance_amount (and related stats) for every existing
+// customer across all stores. Run once after deploying non-VAT sales customer
+// stats tracking so historical data reflects correct balances immediately.
+func BackfillNonVATSalesCustomerStats() error {
+	log.Printf("Backfilling non-VAT sales customer stats")
+	stores, err := GetAllStores()
+	if err != nil {
+		return err
+	}
+
+	for _, store := range stores {
+		totalCount, err := store.GetTotalCount(bson.M{"store_id": store.ID}, "customer")
+		if err != nil {
+			return err
+		}
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+		ctx := context.Background()
+		findOptions := options.Find()
+		findOptions.SetNoCursorTimeout(true)
+		findOptions.SetSort(map[string]interface{}{"created_at": 1})
+		findOptions.SetAllowDiskUse(true)
+
+		cur, err := collection.Find(ctx, bson.M{"store_id": store.ID}, findOptions)
+		if err != nil {
+			return errors.New("Error fetching customers" + err.Error())
+		}
+		if cur != nil {
+			defer cur.Close(ctx)
+		}
+
+		bar := progressbar.Default(totalCount)
+		for cur != nil && cur.Next(ctx) {
+			if err := cur.Err(); err != nil {
+				return errors.New("Cursor error:" + err.Error())
+			}
+			customer := Customer{}
+			if err := cur.Decode(&customer); err != nil {
+				return errors.New("Cursor decode error:" + err.Error())
+			}
+
+			if customer.StoreID.Hex() != store.ID.Hex() {
+				continue
+			}
+
+			if err := customer.SetCustomerNonVATSalesStatsByStoreID(store.ID); err != nil {
+				log.Print("Error setting non vat sales stats for customer " + customer.Code + ": " + err.Error())
+			}
+			if err := customer.SetCustomerNonVATSalesReturnStatsByStoreID(store.ID); err != nil {
+				log.Print("Error setting non vat sales return stats for customer " + customer.Code + ": " + err.Error())
+			}
+
+			bar.Add(1)
+		}
+	}
+
+	log.Print("Non-VAT sales customer stats backfill DONE!")
 	return nil
 }
 

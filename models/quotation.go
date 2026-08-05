@@ -1553,6 +1553,9 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 		if keys[0] != "" {
 			criterias.SearchBy["type"] = keys[0]
 		}
+	} else {
+		// Exclude non_vat_invoice from regular quotation list; they appear in the Non VAT Sales module
+		criterias.SearchBy["type"] = bson.M{"$ne": "non_vat_invoice"}
 	}
 
 	/*
@@ -1977,16 +1980,9 @@ func (quotation *Quotation) MakeRedisCode() error {
 				return err
 			}
 
-			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
-				if err != nil {
-					return err
-				}
-			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
-				if err != nil {
-					return err
-				}
+			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			if err != nil {
+				return err
 			}
 		}
 
@@ -4155,6 +4151,9 @@ func (store *Store) BuildQuotationCriterias(w http.ResponseWriter, r *http.Reque
 		if keys[0] != "" {
 			criterias.SearchBy["type"] = keys[0]
 		}
+	} else {
+		// Exclude non_vat_invoice from regular quotation list; they appear in the Non VAT Sales module
+		criterias.SearchBy["type"] = bson.M{"$ne": "non_vat_invoice"}
 	}
 
 	/*

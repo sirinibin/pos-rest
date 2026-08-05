@@ -143,15 +143,15 @@ func GetDashboardTopProducts(storeID primitive.ObjectID, fromDateStr, toDateStr 
 }
 
 func aggregateProductRevenue(ctx context.Context, coll *mongo.Collection, match bson.M) (map[string]float64, error) {
-	pipe := mongo.Pipeline{
-		{{Key: "$match", Value: match}},
-		{{Key: "$unwind", Value: "$products"}},
-		{{Key: "$group", Value: bson.M{
+	pipe := []bson.M{
+		{"$match": match},
+		{"$unwind": "$products"},
+		{"$group": bson.M{
 			"_id": "$products.name",
 			"revenue": bson.M{"$sum": bson.M{
 				"$multiply": []interface{}{"$products.unit_price", "$products.quantity"},
 			}},
-		}}},
+		}},
 	}
 	cur, err := coll.Aggregate(ctx, pipe)
 	if err != nil {
@@ -265,12 +265,12 @@ func GetDashboardTopCustomers(storeID primitive.ObjectID, fromDateStr, toDateStr
 }
 
 func aggregateByCustomerName(ctx context.Context, coll *mongo.Collection, match bson.M, sumField string) map[string]float64 {
-	pipe := mongo.Pipeline{
-		{{Key: "$match", Value: match}},
-		{{Key: "$group", Value: bson.M{
+	pipe := []bson.M{
+		{"$match": match},
+		{"$group": bson.M{
 			"_id":   "$customer_name",
 			"total": bson.M{"$sum": "$" + sumField},
-		}}},
+		}},
 	}
 	cur, err := coll.Aggregate(ctx, pipe)
 	if err != nil {
@@ -312,7 +312,7 @@ func GetDashboardOutstanding(storeID primitive.ObjectID, limit int) ([]Dashboard
 			bson.M{"credit_balance": bson.M{"$gt": 0}, "deleted": bson.M{"$ne": true}},
 			options.Find().
 				SetProjection(bson.M{"name": 1, "credit_balance": 1}).
-				SetSort(bson.D{{Key: "credit_balance", Value: -1}}).
+				SetSort(bson.M{"credit_balance": -1}).
 				SetLimit(int64(limit)))
 	if err != nil {
 		return nil, err
@@ -339,18 +339,18 @@ func GetDashboardCategories(storeID primitive.ObjectID) ([]DashboardCategorySumm
 	defer cancel()
 	storeIDStr := storeID.Hex()
 
-	pipe := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{
+	pipe := []bson.M{
+		{"$match": bson.M{
 			"deleted": bson.M{"$ne": true},
 			"product_stores." + storeIDStr + ".sales": bson.M{"$gt": 0},
-		}}},
-		{{Key: "$unwind", Value: "$category_name"}},
-		{{Key: "$group", Value: bson.M{
+		}},
+		{"$unwind": "$category_name"},
+		{"$group": bson.M{
 			"_id":    "$category_name",
 			"sales":  bson.M{"$sum": "$product_stores." + storeIDStr + ".sales"},
 			"profit": bson.M{"$sum": "$product_stores." + storeIDStr + ".sales_profit"},
-		}}},
-		{{Key: "$sort", Value: bson.D{{Key: "sales", Value: -1}}}},
+		}},
+		{"$sort": bson.M{"sales": -1}},
 	}
 	cur, err := db.GetDB("store_"+storeIDStr).Collection("product").Aggregate(ctx, pipe)
 	if err != nil {
@@ -383,13 +383,13 @@ func GetDashboardVendors(storeID primitive.ObjectID, fromDateStr, toDateStr stri
 			match[k] = v
 		}
 	}
-	pipe := mongo.Pipeline{
-		{{Key: "$match", Value: match}},
-		{{Key: "$group", Value: bson.M{
+	pipe := []bson.M{
+		{"$match": match},
+		{"$group": bson.M{
 			"_id":   "$vendor_name",
 			"total": bson.M{"$sum": "$net_total"},
-		}}},
-		{{Key: "$sort", Value: bson.D{{Key: "total", Value: -1}}}},
+		}},
+		{"$sort": bson.M{"total": -1}},
 	}
 	cur, err := db.GetDB("store_"+storeID.Hex()).Collection("purchase").Aggregate(ctx, pipe)
 	if err != nil {
@@ -412,7 +412,8 @@ func GetDashboardVendors(storeID primitive.ObjectID, fromDateStr, toDateStr stri
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
 type DashboardEmployee struct {
-	SalaryBalance float64 `json:"salary_balance"`
+	SalaryBalance     float64               `json:"salary_balance"`
+	EmployeeBreakdown []EmployeeSalaryEntry `json:"employee_breakdown"`
 }
 
 func GetDashboardEmployee(storeID primitive.ObjectID) (*DashboardEmployee, error) {
@@ -420,24 +421,28 @@ func GetDashboardEmployee(storeID primitive.ObjectID) (*DashboardEmployee, error
 	if err != nil {
 		return nil, err
 	}
-	balance, err := store.getEmployeeSalaryBalance()
+	balance, err := store.getEmployeeSalaryBalance(nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &DashboardEmployee{SalaryBalance: RoundFloat(balance, 2)}, nil
+	result := &DashboardEmployee{SalaryBalance: RoundFloat(balance, 2)}
+	if breakdown, bdErr := store.getEmployeeSalaryBreakdown(nil, nil); bdErr == nil {
+		result.EmployeeBreakdown = breakdown
+	}
+	return result, nil
 }
 
 func GetDashboardAccounts(storeID primitive.ObjectID) ([]DashboardAccountSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	pipe := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"deleted": bson.M{"$ne": true}}}},
-		{{Key: "$group", Value: bson.M{
+	pipe := []bson.M{
+		{"$match": bson.M{"deleted": bson.M{"$ne": true}}},
+		{"$group": bson.M{
 			"_id":     "$type",
 			"balance": bson.M{"$sum": bson.M{"$abs": "$balance"}},
-		}}},
-		{{Key: "$sort", Value: bson.D{{Key: "balance", Value: -1}}}},
+		}},
+		{"$sort": bson.M{"balance": -1}},
 	}
 	cur, err := db.GetDB("store_"+storeID.Hex()).Collection("account").Aggregate(ctx, pipe)
 	if err != nil {

@@ -273,6 +273,7 @@ func main() {
 	router.HandleFunc("/v1/product", controller.CreateProduct).Methods("POST")
 	router.HandleFunc("/v1/product", controller.ListProduct).Methods("GET")
 	router.HandleFunc("/v1/product/json", controller.ListProductJson).Methods("GET")
+	router.HandleFunc("/v1/product/{id}/last-purchase-price", controller.GetProductLastPurchasePrice).Methods("GET")
 	router.HandleFunc("/v1/product/{id}", controller.ViewProduct).Methods("GET")
 	router.HandleFunc("/v1/product/code/{code}", controller.ViewProductByItemCode).Methods("GET")
 	router.HandleFunc("/v1/product/barcode/{barcode}", controller.ViewProductByBarCode).Methods("GET")
@@ -535,6 +536,28 @@ func main() {
 	router.HandleFunc("/v1/sales-return/{id}", controller.ViewSalesReturn).Methods("GET")
 	router.HandleFunc("/v1/sales-return/{id}", controller.DeleteSalesReturn).Methods("DELETE")
 	router.HandleFunc("/v1/sales-return/restore/{id}", controller.UndeleteSalesReturn).Methods("POST")
+
+	//NonVATSales
+	router.HandleFunc("/v1/non-vat-sales/calculate-net-total", controller.CalculateNonVATSalesNetTotal).Methods("POST")
+	router.HandleFunc("/v1/non-vat-sales", controller.CreateNonVATSales).Methods("POST")
+	router.HandleFunc("/v1/non-vat-sales", controller.ListNonVATSales).Methods("GET")
+	router.HandleFunc("/v1/last-non-vat-sale", controller.ViewLastNonVATSale).Methods("GET")
+	router.HandleFunc("/v1/previous-non-vat-sale/{id}", controller.ViewPreviousNonVATSale).Methods("GET")
+	router.HandleFunc("/v1/next-non-vat-sale/{id}", controller.ViewNextNonVATSale).Methods("GET")
+	router.HandleFunc("/v1/non-vat-sales/{id}", controller.ViewNonVATSales).Methods("GET")
+	router.HandleFunc("/v1/non-vat-sales/{id}", controller.UpdateNonVATSales).Methods("PUT")
+	router.HandleFunc("/v1/non-vat-sales/{id}", controller.DeleteNonVATSales).Methods("DELETE")
+
+	router.HandleFunc("/v1/non-vat-sales/history", controller.ListNonVATSalesHistory).Methods("GET")
+
+	//NonVATSalesReturn
+	router.HandleFunc("/v1/non-vat-sales-return/calculate-net-total", controller.CalculateNonVATSalesReturnNetTotal).Methods("POST")
+	router.HandleFunc("/v1/non-vat-sales-return", controller.CreateNonVATSalesReturn).Methods("POST")
+	router.HandleFunc("/v1/non-vat-sales-return", controller.ListNonVATSalesReturn).Methods("GET")
+	router.HandleFunc("/v1/non-vat-sales-return/history", controller.ListNonVATSalesReturnHistory).Methods("GET")
+	router.HandleFunc("/v1/non-vat-sales-return/{id}", controller.ViewNonVATSalesReturn).Methods("GET")
+	router.HandleFunc("/v1/non-vat-sales-return/{id}", controller.UpdateNonVATSalesReturn).Methods("PUT")
+	router.HandleFunc("/v1/non-vat-sales-return/{id}", controller.DeleteNonVATSalesReturn).Methods("DELETE")
 
 	//QuotationSalesReturn
 	router.HandleFunc("/v1/quotation-sales-return/summary", controller.QuotationSalesReturnSummary).Methods("GET")
@@ -835,6 +858,16 @@ func main() {
 	//if env.Getenv("BI_RUN_BACKFILL", "false") == "true" {
 	//go models.RunBIBackfillForAllStores()
 	//}
+
+	// One-time backfill of non-VAT sales customer balance stats — run at startup
+	// when BACKFILL_NON_VAT_CUSTOMER_STATS=true
+	if env.Getenv("BACKFILL_NON_VAT_CUSTOMER_STATS", "false") == "true" {
+		go func() {
+			if err := models.BackfillNonVATSalesCustomerStats(); err != nil {
+				log.Print("Error backfilling non-VAT sales customer stats: " + err.Error())
+			}
+		}()
+	}
 
 	go func() {
 		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", corsHandler))

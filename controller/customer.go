@@ -228,6 +228,9 @@ func CreateCustomer(w http.ResponseWriter, r *http.Request) {
 		if customer.OpeningBalancePosted {
 			_ = customer.Update()
 		}
+		// Refresh credit balance from the account balance sheet now that the
+		// opening balance ledger entry has been posted.
+		_ = customer.SetCreditBalance()
 	}
 
 	response.Status = true
@@ -360,6 +363,9 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = customer.Update()
+		// Refresh credit balance from the account balance sheet now that the
+		// opening balance ledger entry has changed.
+		_ = customer.SetCreditBalance()
 	}
 
 	customer, err = store.FindCustomerByID(&customer.ID, nil)

@@ -97,6 +97,8 @@ var (
 	storeQuotationQueues            = make(map[string]*SafeQueue)
 	storeQuotationSalesReturnQueues = make(map[string]*SafeQueue)
 	storeZatcaQueues                = make(map[string]*SafeQueue)
+	storeNonVATSalesQueues          = make(map[string]*SafeQueue)
+	storeNonVATSalesReturnQueues    = make(map[string]*SafeQueue)
 	queueMu                         sync.Mutex
 )
 
@@ -155,6 +157,20 @@ func GetOrCreateQueue(storeID string, modelName string) *SafeQueue {
 			storeZatcaQueues[storeID] = q
 		}
 		return q
+	} else if modelName == "non_vat_sales" {
+		q, exists := storeNonVATSalesQueues[storeID]
+		if !exists {
+			q = NewSafeQueue()
+			storeNonVATSalesQueues[storeID] = q
+		}
+		return q
+	} else if modelName == "non_vat_sales_return" {
+		q, exists := storeNonVATSalesReturnQueues[storeID]
+		if !exists {
+			q = NewSafeQueue()
+			storeNonVATSalesReturnQueues[storeID] = q
+		}
+		return q
 	}
 
 	return nil
@@ -199,6 +215,16 @@ func CleanupQueueIfEmpty(storeID string, modelName string) {
 		q, exists := storeZatcaQueues[storeID]
 		if exists && len(q.queue) == 0 {
 			delete(storeZatcaQueues, storeID)
+		}
+	} else if modelName == "non_vat_sales" {
+		q, exists := storeNonVATSalesQueues[storeID]
+		if exists && len(q.queue) == 0 {
+			delete(storeNonVATSalesQueues, storeID)
+		}
+	} else if modelName == "non_vat_sales_return" {
+		q, exists := storeNonVATSalesReturnQueues[storeID]
+		if exists && len(q.queue) == 0 {
+			delete(storeNonVATSalesReturnQueues, storeID)
 		}
 	}
 }
