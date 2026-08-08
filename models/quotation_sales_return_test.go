@@ -59,6 +59,106 @@ func TestQSR_FindTotal_EmptyProducts(t *testing.T) {
 	}
 }
 
+// ── FindNetTotal ──────────────────────────────────────────────────────────────
+
+func makeQSR(products []QuotationSalesReturnProduct, vatPct float64, discount, shipping float64) QuotationSalesReturn {
+	v := vatPct
+	return QuotationSalesReturn{
+		Products:               products,
+		VatPercent:             &v,
+		Discount:               discount,
+		ShippingOrHandlingFees: shipping,
+		AutoRoundingAmount:     false,
+	}
+}
+
+func TestQSR_FindNetTotal_VATAlwaysCalculated(t *testing.T) {
+	// Regression: returning a type=invoice quotation must include VAT — HideQuotationInvoiceVAT removed
+	q := makeQSR([]QuotationSalesReturnProduct{makeQSRProduct(1, 100.00, 0, true)}, 15, 0, 0)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 15.00 {
+		t.Errorf("VatPrice = %v, want 15.00 (VAT must not be zeroed)", q.VatPrice)
+	}
+	if q.NetTotal != 115.00 {
+		t.Errorf("NetTotal = %v, want 115.00", q.NetTotal)
+	}
+}
+
+func TestQSR_FindNetTotal_ZeroVAT(t *testing.T) {
+	q := makeQSR([]QuotationSalesReturnProduct{makeQSRProduct(2, 50.00, 0, true)}, 0, 0, 0)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 0.00 {
+		t.Errorf("VatPrice = %v, want 0.00", q.VatPrice)
+	}
+	if q.NetTotal != 100.00 {
+		t.Errorf("NetTotal = %v, want 100.00", q.NetTotal)
+	}
+}
+
+func TestQSR_FindNetTotal_WithShipping(t *testing.T) {
+	// Total=100, shipping=20, discount=0, vat=10% → base=120, vat=12, net=132
+	q := makeQSR([]QuotationSalesReturnProduct{makeQSRProduct(1, 100.00, 0, true)}, 10, 0, 20)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 12.00 {
+		t.Errorf("VatPrice = %v, want 12.00", q.VatPrice)
+	}
+	if q.NetTotal != 132.00 {
+		t.Errorf("NetTotal = %v, want 132.00", q.NetTotal)
+	}
+}
+
+func TestQSR_FindNetTotal_WithDocumentDiscount(t *testing.T) {
+	// Total=200, discount=50, shipping=0, vat=15% → base=150, vat=22.50, net=172.50
+	q := makeQSR([]QuotationSalesReturnProduct{makeQSRProduct(2, 100.00, 0, true)}, 15, 50, 0)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 22.50 {
+		t.Errorf("VatPrice = %v, want 22.50", q.VatPrice)
+	}
+	if q.NetTotal != 172.50 {
+		t.Errorf("NetTotal = %v, want 172.50", q.NetTotal)
+	}
+}
+
+func TestQSR_FindNetTotal_SkipsUnselectedProducts(t *testing.T) {
+	// Only selected product included in total — VAT applies to that total only
+	products := []QuotationSalesReturnProduct{
+		makeQSRProduct(1, 100.00, 0, true),
+		makeQSRProduct(1, 500.00, 0, false), // must be ignored
+	}
+	q := makeQSR(products, 10, 0, 0)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 10.00 {
+		t.Errorf("VatPrice = %v, want 10.00 (unselected product excluded)", q.VatPrice)
+	}
+	if q.NetTotal != 110.00 {
+		t.Errorf("NetTotal = %v, want 110.00", q.NetTotal)
+	}
+}
+
+func TestQSR_FindNetTotal_ShippingAndDiscount(t *testing.T) {
+	// Total=100, shipping=30, discount=20, vat=10% → base=110, vat=11, net=121
+	q := makeQSR([]QuotationSalesReturnProduct{makeQSRProduct(1, 100.00, 0, true)}, 10, 20, 30)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 11.00 {
+		t.Errorf("VatPrice = %v, want 11.00", q.VatPrice)
+	}
+	if q.NetTotal != 121.00 {
+		t.Errorf("NetTotal = %v, want 121.00", q.NetTotal)
+	}
+}
+
 // ── CalculateDiscountPercentage ───────────────────────────────────────────────
 
 func TestQSR_CalculateDiscountPercentage_ZeroDiscount(t *testing.T) {

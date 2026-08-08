@@ -1185,11 +1185,6 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 }
 
 func (quotation *Quotation) FindNetTotal() error {
-	store, err := FindStoreByID(quotation.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
 	quotation.ShippingOrHandlingFees = RoundTo2Decimals(quotation.ShippingOrHandlingFees)
 	quotation.Discount = RoundTo2Decimals(quotation.Discount)
 
@@ -1211,10 +1206,6 @@ func (quotation *Quotation) FindNetTotal() error {
 	// Now calculate VAT on the discounted base
 	quotation.VatPrice = RoundTo2Decimals(baseTotal * (*quotation.VatPercent / 100))
 
-	if store.Settings.HideQuotationInvoiceVAT && quotation.Type == "invoice" {
-		quotation.VatPrice = 0
-	}
-
 	quotation.NetTotal = RoundTo2Decimals(baseTotal + quotation.VatPrice)
 
 	//Actual
@@ -1223,9 +1214,6 @@ func (quotation *Quotation) FindNetTotal() error {
 
 	// Now calculate VAT on the discounted base
 	quotation.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*quotation.VatPercent / 100))
-	if store.Settings.HideQuotationInvoiceVAT && quotation.Type == "invoice" {
-		quotation.ActualVatPrice = 0
-	}
 
 	quotation.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + quotation.ActualVatPrice)
 
@@ -1553,9 +1541,6 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 		if keys[0] != "" {
 			criterias.SearchBy["type"] = keys[0]
 		}
-	} else {
-		// Exclude non_vat_invoice from regular quotation list; they appear in the Non VAT Sales module
-		criterias.SearchBy["type"] = bson.M{"$ne": "non_vat_invoice"}
 	}
 
 	/*
@@ -4151,9 +4136,6 @@ func (store *Store) BuildQuotationCriterias(w http.ResponseWriter, r *http.Reque
 		if keys[0] != "" {
 			criterias.SearchBy["type"] = keys[0]
 		}
-	} else {
-		// Exclude non_vat_invoice from regular quotation list; they appear in the Non VAT Sales module
-		criterias.SearchBy["type"] = bson.M{"$ne": "non_vat_invoice"}
 	}
 
 	/*

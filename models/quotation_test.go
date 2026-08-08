@@ -117,6 +117,96 @@ func TestQuotation_CalculateDiscountPercentage_ZeroBase(t *testing.T) {
 	}
 }
 
+// ── FindNetTotal ──────────────────────────────────────────────────────────────
+
+func TestQuotation_FindNetTotal_VATAlwaysCalculated(t *testing.T) {
+	// Regression: type=invoice must NOT zero VAT — HideQuotationInvoiceVAT logic removed
+	q := makeQuotation([]QuotationProduct{makeQuotationProduct(1, 100.00, 0)}, 15, 0, 0)
+	q.Type = "invoice"
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 15.00 {
+		t.Errorf("VatPrice = %v, want 15.00 (VAT must not be zeroed for type=invoice)", q.VatPrice)
+	}
+	if q.NetTotal != 115.00 {
+		t.Errorf("NetTotal = %v, want 115.00", q.NetTotal)
+	}
+}
+
+func TestQuotation_FindNetTotal_ZeroVAT(t *testing.T) {
+	q := makeQuotation([]QuotationProduct{makeQuotationProduct(2, 50.00, 0)}, 0, 0, 0)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 0.00 {
+		t.Errorf("VatPrice = %v, want 0.00", q.VatPrice)
+	}
+	if q.NetTotal != 100.00 {
+		t.Errorf("NetTotal = %v, want 100.00", q.NetTotal)
+	}
+}
+
+func TestQuotation_FindNetTotal_WithShipping(t *testing.T) {
+	// Total=100, shipping=20, discount=0, vat=10% → base=120, vat=12, net=132
+	q := makeQuotation([]QuotationProduct{makeQuotationProduct(1, 100.00, 0)}, 10, 0, 20)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 12.00 {
+		t.Errorf("VatPrice = %v, want 12.00 (VAT on total+shipping)", q.VatPrice)
+	}
+	if q.NetTotal != 132.00 {
+		t.Errorf("NetTotal = %v, want 132.00", q.NetTotal)
+	}
+}
+
+func TestQuotation_FindNetTotal_WithDocumentDiscount(t *testing.T) {
+	// Total=200, discount=50, shipping=0, vat=15% → base=150, vat=22.50, net=172.50
+	products := []QuotationProduct{
+		makeQuotationProduct(2, 100.00, 0),
+	}
+	q := makeQuotation(products, 15, 50, 0)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 22.50 {
+		t.Errorf("VatPrice = %v, want 22.50 (VAT after discount)", q.VatPrice)
+	}
+	if q.NetTotal != 172.50 {
+		t.Errorf("NetTotal = %v, want 172.50", q.NetTotal)
+	}
+}
+
+func TestQuotation_FindNetTotal_ShippingAndDiscount(t *testing.T) {
+	// Total=100, shipping=30, discount=20, vat=10% → base=110, vat=11, net=121
+	q := makeQuotation([]QuotationProduct{makeQuotationProduct(1, 100.00, 0)}, 10, 20, 30)
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 11.00 {
+		t.Errorf("VatPrice = %v, want 11.00", q.VatPrice)
+	}
+	if q.NetTotal != 121.00 {
+		t.Errorf("NetTotal = %v, want 121.00", q.NetTotal)
+	}
+}
+
+func TestQuotation_FindNetTotal_TypeQuotation_VATCalculated(t *testing.T) {
+	// type=quotation (default) must also have VAT calculated
+	q := makeQuotation([]QuotationProduct{makeQuotationProduct(1, 200.00, 0)}, 5, 0, 0)
+	q.Type = "quotation"
+	if err := q.FindNetTotal(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if q.VatPrice != 10.00 {
+		t.Errorf("VatPrice = %v, want 10.00", q.VatPrice)
+	}
+	if q.NetTotal != 210.00 {
+		t.Errorf("NetTotal = %v, want 210.00", q.NetTotal)
+	}
+}
+
 // ── FindTotalQuantity ─────────────────────────────────────────────────────────
 
 func TestQuotation_FindTotalQuantity_SumAllProducts(t *testing.T) {

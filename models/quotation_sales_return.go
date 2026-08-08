@@ -977,11 +977,6 @@ func (quotationsalesreturn *QuotationSalesReturn) UpdateForeignLabelFields() err
 }
 
 func (quotationsalesReturn *QuotationSalesReturn) FindNetTotal() error {
-	store, err := FindStoreByID(quotationsalesReturn.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
 	quotationsalesReturn.ShippingOrHandlingFees = RoundTo2Decimals(quotationsalesReturn.ShippingOrHandlingFees)
 	quotationsalesReturn.Discount = RoundTo2Decimals(quotationsalesReturn.Discount)
 
@@ -1003,11 +998,6 @@ func (quotationsalesReturn *QuotationSalesReturn) FindNetTotal() error {
 
 	// Now calculate VAT on the discounted base
 	quotationsalesReturn.VatPrice = RoundTo2Decimals(baseTotal * (*quotationsalesReturn.VatPercent / 100))
-
-	if store.Settings.HideQuotationInvoiceVAT {
-		quotationsalesReturn.VatPrice = 0
-	}
-
 	quotationsalesReturn.NetTotal = RoundTo2Decimals(baseTotal + quotationsalesReturn.VatPrice)
 
 	//Actual
@@ -1016,9 +1006,6 @@ func (quotationsalesReturn *QuotationSalesReturn) FindNetTotal() error {
 
 	// Now calculate VAT on the discounted base
 	quotationsalesReturn.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*quotationsalesReturn.VatPercent / 100))
-	if store.Settings.HideQuotationInvoiceVAT {
-		quotationsalesReturn.ActualVatPrice = 0
-	}
 
 	quotationsalesReturn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + quotationsalesReturn.ActualVatPrice)
 
@@ -2246,13 +2233,8 @@ func (quotationsalesReturn *QuotationSalesReturn) MakeRedisCode() error {
 		return err
 	}
 
-	// Select serial number settings and Redis counter key based on return type
 	serialNumSettings := store.QuotationSalesReturnSerialNumber
 	redisKey := quotationsalesReturn.StoreID.Hex() + "_quotation_return_invoice_counter"
-	if quotationsalesReturn.Type == "non_vat_invoice" {
-		serialNumSettings = store.NonVATSalesReturnSerialNumber
-		redisKey = quotationsalesReturn.StoreID.Hex() + "_non_vat_sales_return_counter"
-	}
 
 	// === 1. Get location from store.CountryCode ===
 	location := time.UTC
