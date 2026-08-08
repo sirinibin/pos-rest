@@ -134,6 +134,7 @@ type StoreSettings struct {
 	EnableInvoicePrintTypeSelection             bool            `bson:"enable_invoice_print_type_selection" json:"enable_invoice_print_type_selection"`
 	AllowAdjustSameDatePayments                 bool            `bson:"allow_adjust_same_date_payments" json:"allow_adjust_same_date_payments"`
 	HideQuotationInvoiceVAT                        bool            `bson:"hide_quotation_invoice_vat" json:"hide_quotation_invoice_vat"`
+	NoTaxForQuotationInvoice                       bool            `bson:"no_tax_for_quotation_invoice" json:"no_tax_for_quotation_invoice"`
 	HideVATInQuotationSalesInvoice                 bool            `bson:"hide_vat_in_quotation_sales_invoice" json:"hide_vat_in_quotation_sales_invoice"`
 	ExcludeServiceVATInQuotationSalesInvoice       bool            `bson:"exclude_service_vat_in_quotation_sales_invoice" json:"exclude_service_vat_in_quotation_sales_invoice"`
 	UpdateProductStockOnQuotationSales             bool            `bson:"update_product_stock_on_quotation_sales" json:"update_product_stock_on_quotation_sales"`
