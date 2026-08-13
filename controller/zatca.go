@@ -385,19 +385,19 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+		defer func() {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+		}()
 
 		err = order.ReportToZatca()
 		if err != nil {
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		zatcaQueue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 
 		err = order.Update()
 		if err != nil {
@@ -524,19 +524,19 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+		defer func() {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+		}()
 
 		err = salesReturn.ReportToZatca()
 		if err != nil {
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		zatcaQueue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 
 		err = salesReturn.Update()
 		if err != nil {
@@ -737,11 +737,13 @@ func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+		defer func() {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+		}()
 
 		err = deposit.ReportToZatca()
 		if err != nil {
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 			_ = deposit.Update() // persist failure info (reporting_failed_count, reporting_errors)
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
@@ -749,8 +751,6 @@ func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		zatcaQueue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 
 		err = deposit.Update()
 		if err != nil {
@@ -850,11 +850,13 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+		defer func() {
+			zatcaQueue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+		}()
 
 		err = withdrawal.ReportToZatca()
 		if err != nil {
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 			_ = withdrawal.Update() // persist failure info (reporting_failed_count, reporting_errors)
 			response.Status = false
 			response.Errors["reporting_to_zatca"] = "Error reporting to zatca: " + err.Error()
@@ -862,8 +864,6 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		zatcaQueue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 
 		err = withdrawal.Update()
 		if err != nil {
