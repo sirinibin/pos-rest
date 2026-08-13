@@ -62,6 +62,13 @@ func (orderProduct OrderProduct) GetZatcaUnit() string {
 	return "PCE"
 }
 
+func (order *Order) formatIssueDateTimeForZatca(loc *time.Location) (issueDate, issueTime string, err error) {
+	if order.Date == nil {
+		return "", "", fmt.Errorf("order date is nil")
+	}
+	return order.Date.In(loc).Format("2006-01-02"), order.Date.In(loc).Format("15:04:05"), nil
+}
+
 func (order *Order) MakeXMLContent() (string, error) {
 	var err error
 	xmlContent := ""
@@ -111,8 +118,12 @@ func (order *Order) MakeXMLContent() (string, error) {
 		return "", err
 	}
 
-	invoice.IssueDate = order.Date.In(loc).Format("2006-01-02")
-	invoice.IssueTime = order.Date.In(loc).Format("15:04:05")
+	issueDate, issueTime, err := order.formatIssueDateTimeForZatca(loc)
+	if err != nil {
+		return "", err
+	}
+	invoice.IssueDate = issueDate
+	invoice.IssueTime = issueTime
 	isSimplified := !customer.IsB2B()
 
 	if isSimplified {
