@@ -713,6 +713,22 @@ func (store *Store) FindAccountByReferenceID(
 		criteria, findOneOptions). //"deleted": bson.M{"$ne": true}
 		Decode(&account)
 	if err != nil {
+		// When there are multiple accounts for this reference and none have
+		// open=true (e.g. the balance just reached 0 and was marked open=false),
+		// fall back to returning any non-deleted account so callers like
+		// SetCreditBalance can still update the customer balance correctly.
+		if err == mongo.ErrNoDocuments && totalCount > 1 {
+			fallback := bson.M{
+				"reference_id": referenceID,
+				"store_id":     store.ID,
+				"deleted":      bson.M{"$ne": true},
+			}
+			fallbackErr := collection.FindOne(ctx, fallback, findOneOptions).Decode(&account)
+			if fallbackErr != nil {
+				return nil, fallbackErr
+			}
+			return account, nil
+		}
 		return nil, err
 	}
 
