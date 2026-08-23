@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -142,5 +143,110 @@ func TestExtractSaudiPhoneNumbers_InvalidMobilePrefix(t *testing.T) {
 	result := ExtractSaudiPhoneNumbers(input)
 	if len(result) != 0 {
 		t.Errorf("got %v, want empty (04 prefix is not a mobile)", result)
+	}
+}
+
+// ── StoreSettings.ShowWarehouseStockInSelectedProducts ────────────────────────
+// Tests that the new field added to fix "setting not saving" has correct JSON
+// and bson tags and round-trips through JSON marshaling/unmarshaling correctly.
+
+func TestStoreSettings_ShowWarehouseStockInSelectedProducts_DefaultFalse(t *testing.T) {
+	var s StoreSettings
+	if s.ShowWarehouseStockInSelectedProducts {
+		t.Error("zero-value ShowWarehouseStockInSelectedProducts should be false")
+	}
+}
+
+func TestStoreSettings_ShowWarehouseStockInSelectedProducts_JSONTag(t *testing.T) {
+	s := StoreSettings{ShowWarehouseStockInSelectedProducts: true}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	v, ok := m["show_warehouse_stock_in_selected_products"]
+	if !ok {
+		t.Error("expected JSON key 'show_warehouse_stock_in_selected_products' not found")
+	}
+	if v != true {
+		t.Errorf("expected true, got %v", v)
+	}
+}
+
+func TestStoreSettings_ShowWarehouseStockInSelectedProducts_RoundTrip(t *testing.T) {
+	cases := []struct {
+		name  string
+		value bool
+	}{
+		{"true persists", true},
+		{"false persists", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			original := StoreSettings{ShowWarehouseStockInSelectedProducts: c.value}
+			data, err := json.Marshal(original)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			var decoded StoreSettings
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			if decoded.ShowWarehouseStockInSelectedProducts != c.value {
+				t.Errorf("round-trip: got %v, want %v", decoded.ShowWarehouseStockInSelectedProducts, c.value)
+			}
+		})
+	}
+}
+
+func TestStoreSettings_ShowWarehouseStockInSelectedProducts_FromJSONString(t *testing.T) {
+	// Simulates the request body the frontend sends when the setting is saved.
+	cases := []struct {
+		json string
+		want bool
+	}{
+		{`{"show_warehouse_stock_in_selected_products": true}`, true},
+		{`{"show_warehouse_stock_in_selected_products": false}`, false},
+		{`{}`, false}, // missing → zero value
+	}
+	for _, c := range cases {
+		var s StoreSettings
+		if err := json.Unmarshal([]byte(c.json), &s); err != nil {
+			t.Fatalf("Unmarshal(%q): %v", c.json, err)
+		}
+		if s.ShowWarehouseStockInSelectedProducts != c.want {
+			t.Errorf("json=%q: got %v, want %v", c.json, s.ShowWarehouseStockInSelectedProducts, c.want)
+		}
+	}
+}
+
+func TestStoreSettings_EnableWarehouseModule_IndependentOfNewField(t *testing.T) {
+	// EnableWarehouseModule and ShowWarehouseStockInSelectedProducts are independent
+	// booleans — enabling one must not affect the other.
+	s := StoreSettings{EnableWarehouseModule: true, ShowWarehouseStockInSelectedProducts: false}
+	data, _ := json.Marshal(s)
+	var decoded StoreSettings
+	json.Unmarshal(data, &decoded)
+	if !decoded.EnableWarehouseModule {
+		t.Error("EnableWarehouseModule should be true")
+	}
+	if decoded.ShowWarehouseStockInSelectedProducts {
+		t.Error("ShowWarehouseStockInSelectedProducts should be false")
+	}
+}
+
+func TestStoreSettings_BothWarehouseFieldsTrue(t *testing.T) {
+	s := StoreSettings{EnableWarehouseModule: true, ShowWarehouseStockInSelectedProducts: true}
+	data, _ := json.Marshal(s)
+	var decoded StoreSettings
+	json.Unmarshal(data, &decoded)
+	if !decoded.EnableWarehouseModule {
+		t.Error("EnableWarehouseModule should be true")
+	}
+	if !decoded.ShowWarehouseStockInSelectedProducts {
+		t.Error("ShowWarehouseStockInSelectedProducts should be true")
 	}
 }
