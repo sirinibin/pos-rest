@@ -1893,15 +1893,17 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 		return
 	}
 
-	if scenario == "update" {
-		if totalPayment > (quotation.TotalPaymentReceived - (quotation.ReturnAmount - oldQuotationSalesReturn.TotalPaymentPaid)) {
-			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (quotation.TotalPaymentReceived-(quotation.ReturnAmount-oldQuotationSalesReturn.TotalPaymentPaid))) + " (total payment received)"
-			return errs
-		}
-	} else {
-		if totalPayment > (quotation.TotalPaymentReceived - quotation.ReturnAmount) {
-			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (quotation.TotalPaymentReceived-quotation.ReturnAmount)) + " (total payment received)"
-			return errs
+	if quotation.Type != "invoice" {
+		if scenario == "update" {
+			if totalPayment > (quotation.TotalPaymentReceived - (quotation.ReturnAmount - oldQuotationSalesReturn.TotalPaymentPaid)) {
+				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (quotation.TotalPaymentReceived-(quotation.ReturnAmount-oldQuotationSalesReturn.TotalPaymentPaid))) + " (total payment received)"
+				return errs
+			}
+		} else {
+			if totalPayment > (quotation.TotalPaymentReceived - quotation.ReturnAmount) {
+				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (quotation.TotalPaymentReceived-quotation.ReturnAmount)) + " (total payment received)"
+				return errs
+			}
 		}
 	}
 
