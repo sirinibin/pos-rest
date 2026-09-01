@@ -10,6 +10,10 @@ BINARY="pos-rest"
 
 cd "$(dirname "$0")"
 
+echo "==> Running tests..."
+go test ./... -count=1
+echo "==> All tests passed."
+
 echo "==> Building for linux/amd64..."
 GOOS=linux GOARCH=amd64 go build -o "$BINARY" .
 echo "    Checksum: $(sha256sum ./$BINARY)"
