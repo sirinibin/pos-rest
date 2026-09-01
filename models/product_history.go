@@ -804,7 +804,28 @@ func (product *Product) CreateStockAdjustmentHistory() error {
 
 		go product.AdjustStockInHistoryAfter(history.Date)
 	}
+	go product.RefreshAllHistoryWarehouseStocks()
 	return nil
+}
+
+// ComputeStockAfterEvent returns the stock level after applying one history event.
+// affectsStock controls whether quotation_invoice / quotation_sales_return change stock.
+func ComputeStockAfterEvent(referenceType string, stockBefore, quantity float64, affectsStock bool) float64 {
+	switch referenceType {
+	case "purchase", "sales_return", "stock_adjustment_by_adding":
+		return stockBefore + quantity
+	case "sales", "purchase_return", "stock_adjustment_by_removing":
+		return stockBefore - quantity
+	case "quotation_invoice":
+		if affectsStock {
+			return stockBefore - quantity
+		}
+	case "quotation_sales_return":
+		if affectsStock {
+			return stockBefore + quantity
+		}
+	}
+	return stockBefore
 }
 
 func (product *Product) AdjustStockInHistoryAfter(after *time.Time) error {
@@ -824,40 +845,60 @@ func (product *Product) AdjustStockInHistoryAfter(after *time.Time) error {
 			return err
 		}
 
-		newStock := stock
+		affectsStock := store.Settings.UpdateProductStockOnQuotationSales &&
+			store.IfStore2QuotationSalesShouldAffectTheStock(history.Date)
+		newStock := ComputeStockAfterEvent(history.ReferenceType, stock, history.Quantity, affectsStock)
 
-		if history.ReferenceType == "sales" {
-			newStock = stock - history.Quantity
-		} else if history.ReferenceType == "sales_return" {
-			newStock = stock + history.Quantity
-		} else if history.ReferenceType == "purchase" {
-			newStock = stock + history.Quantity
-		} else if history.ReferenceType == "purchase_return" {
-			newStock = stock - history.Quantity
-		} else if history.ReferenceType == "quotation_invoice" {
-			if store.Settings.UpdateProductStockOnQuotationSales {
-				if store.IfStore2QuotationSalesShouldAffectTheStock(history.Date) {
-					newStock = stock - history.Quantity
-				}
-			}
-		} else if history.ReferenceType == "quotation_sales_return" {
-			if store.Settings.UpdateProductStockOnQuotationSales {
-				if store.IfStore2QuotationSalesShouldAffectTheStock(history.Date) {
-					newStock = stock + history.Quantity
-				}
-			}
-		} else if history.ReferenceType == "stock_adjustment_by_adding" {
-			newStock = stock + history.Quantity
-		} else if history.ReferenceType == "stock_adjustment_by_removing" {
-			newStock = stock - history.Quantity
+		afterOneSec := history.Date.Add(1 * time.Second)
+		warehouseStocks, err := product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
 		}
 
 		histories[i].Stock = newStock
+		histories[i].WarehouseStocks = warehouseStocks
 		err = histories[i].Update()
 		if err != nil {
 			return err
 		}
 
+	}
+
+	return nil
+}
+
+func (product *Product) RefreshAllHistoryWarehouseStocks() error {
+	collection := db.GetDB("store_" + product.StoreID.Hex()).Collection("product_history")
+	ctx := context.Background()
+	findOptions := options.Find()
+	findOptions.SetNoCursorTimeout(true)
+	findOptions.SetAllowDiskUse(true)
+	findOptions.SetSort(map[string]interface{}{"date": 1})
+
+	cur, err := collection.Find(ctx, bson.M{"product_id": product.ID}, findOptions)
+	if err != nil {
+		return errors.New("Error fetching product history: " + err.Error())
+	}
+	if cur != nil {
+		defer cur.Close(ctx)
+	}
+
+	for cur != nil && cur.Next(ctx) {
+		history := ProductHistory{}
+		err = cur.Decode(&history)
+		if err != nil {
+			return errors.New("Cursor decode error: " + err.Error())
+		}
+
+		afterOneSec := history.Date.Add(1 * time.Second)
+		history.WarehouseStocks, err = product.GetWarehouseStocksBefore(&afterOneSec)
+		if err != nil {
+			return err
+		}
+		err = history.Update()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
