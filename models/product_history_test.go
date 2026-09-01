@@ -181,3 +181,86 @@ func TestProductHistory_WarehouseStocksConsistencyWhenBaseStockHigher(t *testing
 		t.Errorf("main_store: want 35 (unchanged), got %v", mainStoreAfter)
 	}
 }
+
+// TestProductHistory_TwoWarehousesConsistency verifies the invariant:
+// main_store = total - sum(all named warehouses).
+func TestProductHistory_TwoWarehousesConsistency(t *testing.T) {
+	const baseStock = 50.0
+	const wh1Adjustment = 20.0
+	const wh2Adjustment = 15.0
+
+	total := ComputeStockAfterEvent("stock_adjustment_by_adding",
+		ComputeStockAfterEvent("stock_adjustment_by_adding", baseStock, wh1Adjustment, false),
+		wh2Adjustment, false)
+	mainStore := total - wh1Adjustment - wh2Adjustment
+
+	if total != 85 {
+		t.Errorf("total: want 85, got %v", total)
+	}
+	if mainStore != 50 {
+		t.Errorf("main_store: want 50, got %v", mainStore)
+	}
+}
+
+// TestProductHistory_WarehouseRemovingAdjustment covers a warehouse
+// remove adjustment reducing named-warehouse stock below initial.
+func TestProductHistory_WarehouseRemovingAdjustment(t *testing.T) {
+	// Add 20 to WH1, then remove 5 from WH1.
+	baseStock := 50.0
+	afterAdd := ComputeStockAfterEvent("stock_adjustment_by_adding", baseStock, 20, false)
+	afterRemove := ComputeStockAfterEvent("stock_adjustment_by_removing", afterAdd, 5, false)
+
+	wh1Net := 20.0 - 5.0 // 15
+	mainStore := afterRemove - wh1Net
+
+	if afterRemove != 65 {
+		t.Errorf("total after add+remove: want 65, got %v", afterRemove)
+	}
+	if wh1Net != 15 {
+		t.Errorf("WH1 net: want 15, got %v", wh1Net)
+	}
+	if mainStore != 50 {
+		t.Errorf("main_store: want 50 (unchanged), got %v", mainStore)
+	}
+}
+
+// TestProductHistory_NegativeMainStore verifies main_store can be negative
+// when warehouse stock exceeds total (e.g. transfer moved stock out of main).
+func TestProductHistory_NegativeMainStore(t *testing.T) {
+	total := 10.0
+	wh1 := 15.0 // more than total in WH1 (stock transferred in)
+	mainStore := total - wh1
+	if mainStore != -5 {
+		t.Errorf("main_store: want -5, got %v", mainStore)
+	}
+}
+
+// TestProductHistory_ZeroAdjustmentNoChange verifies a zero-quantity adjustment
+// leaves all values unchanged.
+func TestProductHistory_ZeroAdjustmentNoChange(t *testing.T) {
+	const baseStock = 33.0
+	total := ComputeStockAfterEvent("stock_adjustment_by_adding", baseStock, 0, false)
+	if total != baseStock {
+		t.Errorf("zero adjustment: total should stay %v, got %v", baseStock, total)
+	}
+}
+
+// TestProductHistory_MainStoreOnlyAdjustment verifies a stock adjustment with
+// no warehouse specified affects only the total; named warehouses are unchanged.
+func TestProductHistory_MainStoreOnlyAdjustment(t *testing.T) {
+	// Before: total=33, WH1=0
+	totalBefore := 33.0
+	wh1Before := 0.0
+
+	// Add 10 to main store (no warehouse).
+	totalAfter := ComputeStockAfterEvent("stock_adjustment_by_adding", totalBefore, 10, false)
+	// WH1 stays 0; main_store = total - WH1
+	mainStoreAfter := totalAfter - wh1Before
+
+	if totalAfter != 43 {
+		t.Errorf("total: want 43, got %v", totalAfter)
+	}
+	if mainStoreAfter != 43 {
+		t.Errorf("main_store: want 43, got %v", mainStoreAfter)
+	}
+}

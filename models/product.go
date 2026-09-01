@@ -4824,11 +4824,6 @@ func (product *Product) GetWarehouseStocksBefore(before *time.Time) (warehouseSt
 
 	totalWarehouseStock := float64(0)
 
-	if productStoreTemp, ok := product.ProductStores[product.StoreID.Hex()]; ok {
-		productStoreTemp.WarehouseStocks = map[string]float64{}
-		product.ProductStores[product.StoreID.Hex()] = productStoreTemp
-	}
-
 	for _, warehouse := range warehouses {
 		if warehouse.Code == "" {
 			continue
