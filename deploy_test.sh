@@ -10,8 +10,8 @@ BINARY="pos-rest"
 
 cd "$(dirname "$0")"
 
-echo "==> Building..."
-go build -o "$BINARY" .
+echo "==> Building for linux/amd64..."
+GOOS=linux GOARCH=amd64 go build -o "$BINARY" .
 echo "    Checksum: $(sha256sum ./$BINARY)"
 
 echo "==> Stopping $SERVICE on server..."
