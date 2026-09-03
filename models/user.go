@@ -486,7 +486,11 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 	accessingUser, _ := FindUserByID(&accessingUserID, bson.M{})
 
 	if accessingUser.Role != "Admin" {
-		criterias.SearchBy["store_ids"] = bson.M{"$in": accessingUser.StoreIDs}
+		// Show users who share a store with the accessing user OR were created by them.
+		criterias.SearchBy["$or"] = []bson.M{
+			{"store_ids": bson.M{"$in": accessingUser.StoreIDs}},
+			{"created_by": accessingUserID},
+		}
 	}
 
 	timeZoneOffset := TimezoneOffsetFromRequest(r)
@@ -513,6 +517,11 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 
 	ParseTextSearch(r, &criterias, "search[mob]", "mob")
 
+	keys, ok = r.URL.Query()["search[role]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["role"] = bson.M{"$eq": keys[0]}
+	}
+
 	if err = ParseObjectIDListFilter(r, &criterias, "search[created_by]", "created_by"); err != nil {
 		return users, criterias, err
 	}
@@ -523,6 +532,23 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 
 	if err = ParseDateRangeFilter(r, &criterias, "search[created_at_from]", "search[created_at_to]", "created_at", timeZoneOffset); err != nil {
 		return users, criterias, err
+	}
+
+	// Non-admin guard applied after all filters so it cannot be overridden by query params.
+	// Non-admins must never see users with role=Admin or admin=true.
+	if accessingUser.Role != "Admin" {
+		if existingRole, has := criterias.SearchBy["role"]; has {
+			if m, ok2 := existingRole.(bson.M); ok2 {
+				if val, _ := m["$eq"].(string); val == "Admin" {
+					// Non-admin tried to search for Admin role — block it
+					criterias.SearchBy["role"] = bson.M{"$ne": "Admin"}
+				}
+				// Any other exact role ($eq: Manager etc.) already excludes Admin
+			}
+		} else {
+			criterias.SearchBy["role"] = bson.M{"$ne": "Admin"}
+		}
+		criterias.SearchBy["admin"] = bson.M{"$ne": true}
 	}
 
 	ParsePaginationAndSort(r, &criterias)
@@ -794,4 +820,25 @@ func HashPassword(password string) string {
 	salt, _ := bcrypt.Salt(10)
 	hash, _ := bcrypt.Hash(password, salt)
 	return hash
+}
+
+func (user *User) VerifyPassword(plain string) bool {
+	return bcrypt.Match(plain, user.Password)
+}
+
+func (user *User) RestoreUser(updatedBy *primitive.ObjectID) error {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	now := time.Now()
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": user.ID},
+		bson.M{
+			"$set":   bson.M{"updated_at": now, "updated_by": updatedBy},
+			"$unset": bson.M{"deleted": "", "deleted_by": "", "deleted_at": "", "deleted_by_name": ""},
+		},
+		options.Update().SetUpsert(false),
+	)
+	return err
 }
