@@ -121,7 +121,20 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	if store.NationalAddress.ShortCode != "" {
 		storeAddress = store.NationalAddress.ShortCode
 	} else {
-		storeAddress = store.Address
+		parts := []string{}
+		if store.NationalAddress.BuildingNo != "" {
+			parts = append(parts, store.NationalAddress.BuildingNo)
+		}
+		if store.NationalAddress.StreetName != "" {
+			parts = append(parts, store.NationalAddress.StreetName)
+		}
+		if store.NationalAddress.DistrictName != "" {
+			parts = append(parts, store.NationalAddress.DistrictName)
+		}
+		if store.NationalAddress.CityName != "" {
+			parts = append(parts, store.NationalAddress.CityName)
+		}
+		storeAddress = strings.Join(parts, ", ")
 	}
 	// Create JSON payload
 	payload := map[string]interface{}{
@@ -267,6 +280,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		store.Zatca.ConnectedBy = &userID
 		now := time.Now()
 		store.Zatca.LastConnectedAt = &now
+		store.Zatca.ZatcaReconnectRequired = false
 	}
 
 	err = store.Update()
@@ -339,6 +353,14 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.ZatcaReconnectRequired {
+		response.Status = false
+		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -459,6 +481,14 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.ZatcaReconnectRequired {
+		response.Status = false
+		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -686,6 +716,14 @@ func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if store.Zatca.ZatcaReconnectRequired {
+		response.Status = false
+		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	deposit, err := store.FindCustomerDepositByID(&depositID, bson.M{})
 	if err != nil {
 		response.Status = false
@@ -795,6 +833,14 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if store.Zatca.ZatcaReconnectRequired {
+		response.Status = false
+		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

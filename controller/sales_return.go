@@ -194,6 +194,16 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 	salesreturn.UUID = uuid.New().String()
 
+	if store.Zatca.ZatcaReconnectRequired && salesreturn.EnableReportToZatca {
+		queue.Pop()
+		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
+		response.Status = false
+		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	var zatcaQueue *SafeQueue
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && salesreturn.EnableReportToZatca {
 		//Zatca Queue

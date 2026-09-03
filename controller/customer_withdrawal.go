@@ -157,6 +157,15 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if withdrawalStore.Zatca.ZatcaReconnectRequired && customerwithdrawal.EnableReportToZatca {
+		customerwithdrawal.UnMakeRedisCode()
+		response.Status = false
+		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if withdrawalStore.Zatca.Phase == "2" && withdrawalStore.Zatca.Connected &&
 		withdrawalStore.Settings.EnableZatcaReportingForPayables && customerwithdrawal.EnableReportToZatca {
 		zatcaQueue := GetOrCreateQueue(withdrawalStore.ID.Hex(), "zatca")

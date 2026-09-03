@@ -28,6 +28,8 @@ type Store struct {
 	ID                                     primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
 	Name                                   string                `bson:"name,omitempty" json:"name,omitempty"`
 	NameInArabic                           string                `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	StoreName                              string                `bson:"store_name,omitempty" json:"store_name,omitempty"`
+	StoreNameInArabic                      string                `bson:"store_name_in_arabic,omitempty" json:"store_name_in_arabic,omitempty"`
 	Code                                   string                `bson:"code" json:"code"`
 	BranchName                             string                `bson:"branch_name" json:"branch_name"`
 	BusinessCategory                       string                `bson:"business_category" json:"business_category"`
@@ -49,6 +51,10 @@ type Store struct {
 	VatPercent                             float64               `bson:"vat_percent,omitempty" json:"vat_percent,omitempty"`
 	Logo                                   string                `bson:"logo,omitempty" json:"logo,omitempty"`
 	LogoContent                            string                `json:"logo_content,omitempty"`
+	RemoveLogo                             bool                  `json:"remove_logo,omitempty"`
+	InvoiceBackground                      string                `bson:"invoice_background,omitempty" json:"invoice_background,omitempty"`
+	InvoiceBackgroundContent               string                `json:"invoice_background_content,omitempty"`
+	RemoveInvoiceBackground                bool                  `json:"remove_invoice_background,omitempty"`
 	NationalAddress                        NationalAddress       `bson:"national_address,omitempty" json:"national_address,omitempty"`
 	Deleted                                bool                  `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy                              *primitive.ObjectID   `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
@@ -268,6 +274,7 @@ type Zatca struct {
 	ConnectionFailedCount         int64               `bson:"connection_failed_count,omitempty" json:"connection_failed_count,omitempty"`
 	ConnectionErrors              []string            `bson:"connection_errors,omitempty" json:"connection_errors,omitempty"`
 	ConnectionLastFailedAt        *time.Time          `bson:"connection_last_failed_at,omitempty" json:"connection_last_failed_at,omitempty"`
+	ZatcaReconnectRequired        bool                `bson:"zatca_reconnect_required,omitempty" json:"zatca_reconnect_required,omitempty"`
 }
 
 /*
@@ -590,12 +597,10 @@ func (store *Store) TrimSpaceFromFields() {
 	store.Title = strings.TrimSpace(store.Title)
 	store.TitleInArabic = strings.TrimSpace(store.TitleInArabic)
 	store.RegistrationNumber = strings.TrimSpace(store.RegistrationNumber)
-	store.ZipCode = strings.TrimSpace(store.ZipCode)
 	store.Phone = strings.TrimSpace(store.Phone)
 	store.VATNo = strings.TrimSpace(store.VATNo)
 	store.Email = strings.TrimSpace(store.Email)
-	store.Address = strings.TrimSpace(store.Address)
-	store.AddressInArabic = strings.TrimSpace(store.AddressInArabic)
+	store.NationalAddress.ShortCode = strings.TrimSpace(store.NationalAddress.ShortCode)
 	store.NationalAddress.BuildingNo = strings.TrimSpace(store.NationalAddress.BuildingNo)
 	store.NationalAddress.StreetName = strings.TrimSpace(store.NationalAddress.StreetName)
 	store.NationalAddress.StreetNameArabic = strings.TrimSpace(store.NationalAddress.StreetNameArabic)
@@ -699,26 +704,8 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["registration_number_in_arabic"] = "Registration Number/C.R NO. in Arabic is required"
 	}
 
-	if govalidator.IsNull(store.ZipCode) {
-		errs["zipcode"] = "Zipcode is required"
-	} else if !IsValidDigitNumber(store.NationalAddress.ZipCode, "5") {
-		errs["zipcode"] = "Zipcode should be 5 digits"
-	}
-
-	if govalidator.IsNull(store.NameInArabic) {
-		errs["zipcode_in_arabic"] = "ZIP/PIN Code in Arabic is required"
-	}
-
 	if govalidator.IsNull(store.Email) {
 		errs["email"] = "E-mail is required"
-	}
-
-	if govalidator.IsNull(store.Address) {
-		errs["address"] = "Address is required"
-	}
-
-	if govalidator.IsNull(store.AddressInArabic) {
-		errs["address_in_arabic"] = "Address in Arabic is required"
 	}
 
 	if govalidator.IsNull(store.Phone) {
@@ -1098,6 +1085,13 @@ func (store *Store) Insert() error {
 		}
 	}
 
+	if !govalidator.IsNull(store.InvoiceBackgroundContent) {
+		err := store.SaveInvoiceBackgroundFile()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err = collection.InsertOne(ctx, &store)
 	if err != nil {
 		return err
@@ -1127,6 +1121,32 @@ func (store *Store) SaveLogoFile() error {
 	return nil
 }
 
+func (store *Store) SaveInvoiceBackgroundFile() error {
+	raw := store.InvoiceBackgroundContent
+	if splits := strings.Split(raw, ","); len(splits) == 2 {
+		raw = splits[1]
+	}
+	content, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return err
+	}
+
+	extension, err := GetFileExtensionFromBase64(content)
+	if err != nil {
+		return err
+	}
+
+	baseFilename := "invoice_background_" + store.ID.Hex() + extension
+	diskPath := "images/" + store.ID.Hex() + "/store/" + baseFilename
+	err = SaveBase64File(diskPath, content)
+	if err != nil {
+		return err
+	}
+	store.InvoiceBackground = baseFilename
+	store.InvoiceBackgroundContent = ""
+	return nil
+}
+
 func (store *Store) Update() error {
 	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1147,10 +1167,35 @@ func (store *Store) Update() error {
 	}
 	store.LogoContent = ""
 
+	if !govalidator.IsNull(store.InvoiceBackgroundContent) {
+		err := store.SaveInvoiceBackgroundFile()
+		if err != nil {
+			return err
+		}
+	}
+	store.InvoiceBackgroundContent = ""
+
+	removeLogo := store.RemoveLogo
+	store.RemoveLogo = false
+	removeInvoiceBackground := store.RemoveInvoiceBackground
+	store.RemoveInvoiceBackground = false
+
+	updateDoc := bson.M{"$set": store}
+	unset := bson.M{}
+	if removeLogo {
+		unset["logo"] = ""
+	}
+	if removeInvoiceBackground {
+		unset["invoice_background"] = ""
+	}
+	if len(unset) > 0 {
+		updateDoc["$unset"] = unset
+	}
+
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": store.ID},
-		bson.M{"$set": store},
+		updateDoc,
 		updateOptions,
 	)
 	if err != nil {
@@ -1245,6 +1290,22 @@ func (store *Store) UnmarkForPermanentDeletion() error {
 			"marked_for_permanent_deletion_at": "",
 			"permanent_deletion_after_days":    "",
 		}},
+	)
+	return err
+}
+
+// ClearZatcaReconnectRequired sets zatca.zatca_reconnect_required to false so the
+// store is no longer blocked from reporting.  Admin-only; caller must enforce the
+// role check.
+func (store *Store) ClearZatcaReconnectRequired() error {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"_id": store.ID},
+		bson.M{"$set": bson.M{"zatca.zatca_reconnect_required": false}},
 	)
 	return err
 }

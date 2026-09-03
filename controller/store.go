@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/models"
 	"github.com/sirinibin/startpos/backend/utils"
 	"go.mongodb.org/mongo-driver/bson"
@@ -238,6 +240,65 @@ func ObjectIDExists(id primitive.ObjectID, list []*primitive.ObjectID) bool {
 	return false
 }
 
+// zatcaSensitiveFieldsChanged reports whether any field that is transmitted to
+// the ZATCA system changed between oldStore and newStore.
+//
+// Core identity and national-address fields are always compared. When isAdmin
+// is true the serial-number prefixes, padding counts, and start-from counts are
+// also compared, with the customer-deposit and customer-withdrawal serials
+// additionally gated by the corresponding settings flags on newStore.
+//
+// Callers are responsible for the Phase-2 / Connected guard; this function does
+// not replicate that gate.
+func zatcaSensitiveFieldsChanged(oldStore, newStore models.Store, isAdmin bool) bool {
+	// Core identity / national-address fields — always checked
+	if oldStore.Name != newStore.Name ||
+		oldStore.NameInArabic != newStore.NameInArabic ||
+		oldStore.Code != newStore.Code ||
+		oldStore.BranchName != newStore.BranchName ||
+		oldStore.RegistrationNumber != newStore.RegistrationNumber ||
+		oldStore.VATNo != newStore.VATNo ||
+		oldStore.BusinessCategory != newStore.BusinessCategory ||
+		oldStore.NationalAddress.ShortCode != newStore.NationalAddress.ShortCode ||
+		oldStore.NationalAddress.BuildingNo != newStore.NationalAddress.BuildingNo ||
+		oldStore.NationalAddress.StreetName != newStore.NationalAddress.StreetName ||
+		oldStore.NationalAddress.DistrictName != newStore.NationalAddress.DistrictName ||
+		oldStore.NationalAddress.CityName != newStore.NationalAddress.CityName ||
+		oldStore.NationalAddress.ZipCode != newStore.NationalAddress.ZipCode ||
+		oldStore.NationalAddress.AdditionalNo != newStore.NationalAddress.AdditionalNo ||
+		oldStore.NationalAddress.UnitNo != newStore.NationalAddress.UnitNo {
+		return true
+	}
+
+	// Serial-number fields — Admin only
+	if isAdmin {
+		if oldStore.SalesSerialNumber.Prefix != newStore.SalesSerialNumber.Prefix ||
+			oldStore.SalesSerialNumber.PaddingCount != newStore.SalesSerialNumber.PaddingCount ||
+			oldStore.SalesSerialNumber.StartFromCount != newStore.SalesSerialNumber.StartFromCount ||
+			oldStore.SalesReturnSerialNumber.Prefix != newStore.SalesReturnSerialNumber.Prefix ||
+			oldStore.SalesReturnSerialNumber.PaddingCount != newStore.SalesReturnSerialNumber.PaddingCount ||
+			oldStore.SalesReturnSerialNumber.StartFromCount != newStore.SalesReturnSerialNumber.StartFromCount {
+			return true
+		}
+		if newStore.Settings.EnableZatcaReportingForReceivables {
+			if oldStore.CustomerDepositSerialNumber.Prefix != newStore.CustomerDepositSerialNumber.Prefix ||
+				oldStore.CustomerDepositSerialNumber.PaddingCount != newStore.CustomerDepositSerialNumber.PaddingCount ||
+				oldStore.CustomerDepositSerialNumber.StartFromCount != newStore.CustomerDepositSerialNumber.StartFromCount {
+				return true
+			}
+		}
+		if newStore.Settings.EnableZatcaReportingForPayables {
+			if oldStore.CustomerWithdrawalSerialNumber.Prefix != newStore.CustomerWithdrawalSerialNumber.Prefix ||
+				oldStore.CustomerWithdrawalSerialNumber.PaddingCount != newStore.CustomerWithdrawalSerialNumber.PaddingCount ||
+				oldStore.CustomerWithdrawalSerialNumber.StartFromCount != newStore.CustomerWithdrawalSerialNumber.StartFromCount {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // UpdateStore : handler function for PUT /v1/store call
 func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -319,6 +380,22 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	store.UpdatedBy = &userID
 	now := time.Now()
 	store.UpdatedAt = &now
+
+	// Preserve zatca_reconnect_required — can only be cleared by ConnectStoreToZatca
+	store.Zatca.ZatcaReconnectRequired = storeOld.Zatca.ZatcaReconnectRequired
+
+	// Normalize whitespace on both stores before comparing sensitive fields so that
+	// trimming done by the frontend (or legacy stored values with trailing spaces)
+	// does not produce false-positive reconnect triggers.
+	store.TrimSpaceFromFields()
+	storeOld.TrimSpaceFromFields()
+
+	// Detect ZATCA-sensitive field changes when store is Phase 2 and connected
+	if storeOld.Zatca.Phase == "2" && storeOld.Zatca.Connected {
+		if zatcaSensitiveFieldsChanged(*storeOld, *store, accessingUser.Role == "Admin") {
+			store.Zatca.ZatcaReconnectRequired = true
+		}
+	}
 
 	// Validate data
 	if errs := store.Validate(w, r, "update"); len(errs) > 0 {
@@ -723,5 +800,114 @@ func AbortStorePermanentDeletion(w http.ResponseWriter, r *http.Request) {
 
 	response.Status = true
 	response.Result = "Permanent deletion aborted"
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetStoreSerialLocks returns whether serial start_from_count fields are locked
+// (i.e. at least one transaction already exists in the respective collection).
+func GetStoreSerialLocks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	ctx := context.Background()
+	dbName := "store_" + storeID.Hex()
+
+	salesCount, _ := db.GetDB(dbName).Collection("order").CountDocuments(ctx, bson.M{})
+	salesReturnCount, _ := db.GetDB(dbName).Collection("salesreturn").CountDocuments(ctx, bson.M{})
+	depositCount, _ := db.GetDB(dbName).Collection("customerdeposit").CountDocuments(ctx, bson.M{})
+	withdrawalCount, _ := db.GetDB(dbName).Collection("customerwithdrawal").CountDocuments(ctx, bson.M{})
+
+	response.Status = true
+	response.Result = map[string]bool{
+		"sales_locked":              salesCount > 0,
+		"sales_return_locked":       salesReturnCount > 0,
+		"customer_deposit_locked":   depositCount > 0,
+		"customer_withdrawal_locked": withdrawalCount > 0,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// ClearZatcaReconnect handles PUT /v1/store/{id}/zatca/clear-reconnect.
+// Admin-only: sets zatca.zatca_reconnect_required = false so the store can report
+// again without going through the ZATCA re-connection flow.
+func ClearZatcaReconnect(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid user ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	accessingUser, err := models.FindUserByID(&userID, bson.M{})
+	if err != nil || accessingUser.Role != "Admin" {
+		response.Status = false
+		response.Errors["role"] = "Only Admins can relieve a store from ZATCA re-connect requirement"
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["id"] = "Invalid Store ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Unable to find store: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if err := store.ClearZatcaReconnectRequired(); err != nil {
+		response.Status = false
+		response.Errors["update"] = "Failed to update store: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
 	json.NewEncoder(w).Encode(response)
 }

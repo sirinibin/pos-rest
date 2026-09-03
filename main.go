@@ -245,6 +245,7 @@ func main() {
 	router.HandleFunc("/v1/store/{id}/permanent", controller.PermanentlyDeleteStore).Methods("DELETE")
 	router.HandleFunc("/v1/store/{id}/populate-test-data", controller.PopulateStoreTestData).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/clear-data", controller.ClearStoreData).Methods("POST")
+	router.HandleFunc("/v1/store/{id}/serial-locks", controller.GetStoreSerialLocks).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.ViewStore).Methods("GET")
 	router.HandleFunc("/v1/store/{id}", controller.UpdateStore).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}", controller.DeleteStore).Methods("DELETE")
@@ -441,6 +442,8 @@ func main() {
 	router.HandleFunc("/v1/user/{id}", controller.ViewUser).Methods("GET")
 	router.HandleFunc("/v1/user/{id}", controller.UpdateUser).Methods("PUT")
 	router.HandleFunc("/v1/user/{id}", controller.DeleteUser).Methods("DELETE")
+	router.HandleFunc("/v1/user/{id}/change-password", controller.ChangePassword).Methods("PATCH")
+	router.HandleFunc("/v1/user/{id}/toggle-status", controller.ToggleUserStatus).Methods("PATCH")
 
 	//UserRole (RBAC)
 	router.HandleFunc("/v1/user-role/effective-permissions", controller.GetEffectivePermissions).Methods("GET")
@@ -675,6 +678,7 @@ func main() {
 
 	//Zatca
 	router.HandleFunc("/v1/store/zatca/connect", controller.ConnectStoreToZatca).Methods("POST")
+	router.HandleFunc("/v1/store/{id}/zatca/clear-reconnect", controller.ClearZatcaReconnect).Methods("PUT")
 	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
 	router.HandleFunc("/v1/sales-return/zatca/report/{id}", controller.ReportSalesReturnToZatca).Methods("POST")
 	router.HandleFunc("/v1/customer-deposit/zatca/report/{id}", controller.ReportCustomerDepositToZatca).Methods("POST")

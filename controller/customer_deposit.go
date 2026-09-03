@@ -158,6 +158,15 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if store.Zatca.ZatcaReconnectRequired && customerdeposit.EnableReportToZatca {
+		customerdeposit.UnMakeRedisCode()
+		response.Status = false
+		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	if store.Zatca.Phase == "2" && store.Zatca.Connected &&
 		store.Settings.EnableZatcaReportingForReceivables && customerdeposit.EnableReportToZatca {
 		zatcaQueue := GetOrCreateQueue(store.ID.Hex(), "zatca")
