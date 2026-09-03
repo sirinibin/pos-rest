@@ -197,6 +197,7 @@ type StoreSettings struct {
 	EnableEmployeeModule                        bool            `bson:"enable_employee_module" json:"enable_employee_module"`
 	EnablePurchaseUnitPriceValidation           bool            `bson:"enable_purchase_unit_price_validation" json:"enable_purchase_unit_price_validation"`
 	EnableAutoUpdatePricesFromLastPurchase      bool            `bson:"enable_auto_update_prices_from_last_purchase" json:"enable_auto_update_prices_from_last_purchase"`
+	DisableSalesEditOnceReportedToZatca         *bool           `bson:"disable_sales_edit_once_reported_to_zatca" json:"disable_sales_edit_once_reported_to_zatca"`
 	CashOpeningBalance                          float64         `bson:"cash_opening_balance" json:"cash_opening_balance"`
 	CashOpeningBalanceDate                      *time.Time      `bson:"cash_opening_balance_date,omitempty" json:"cash_opening_balance_date,omitempty"`
 	BankOpeningBalance                          float64         `bson:"bank_opening_balance" json:"bank_opening_balance"`

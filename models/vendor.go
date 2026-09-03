@@ -103,6 +103,9 @@ type Vendor struct {
 	OpeningBalancePosted bool       `bson:"opening_balance_posted" json:"opening_balance_posted"`
 	// OpeningBalanceType: "payable" (store owes vendor, default) or "receivable" (vendor owes store)
 	OpeningBalanceType string `bson:"opening_balance_type" json:"opening_balance_type"`
+
+	CategoryID   []*primitive.ObjectID `bson:"category_id" json:"category_id"`
+	CategoryName []string              `bson:"category_name" json:"category_name"`
 }
 
 type VendorStats struct {
@@ -742,6 +745,19 @@ func (vendor *Vendor) UpdateForeignLabelFields() error {
 		vendor.DeletedByName = deletedByUser.Name
 	}
 
+	if vendor.StoreID != nil {
+		store, err := FindStoreByID(vendor.StoreID, bson.M{})
+		if err == nil && len(vendor.CategoryID) > 0 {
+			vendor.CategoryName = []string{}
+			for _, catID := range vendor.CategoryID {
+				cat, err := store.FindVendorCategoryByID(catID, bson.M{"id": 1, "name": 1})
+				if err == nil {
+					vendor.CategoryName = append(vendor.CategoryName, cat.Name)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -839,6 +855,22 @@ func (store *Store) SearchVendor(w http.ResponseWriter, r *http.Request) (vendor
 
 		if len(objecIds) > 0 {
 			criterias.SearchBy["_id"] = bson.M{"$in": objecIds}
+		}
+	}
+
+	keys, ok = r.URL.Query()["search[category_id]"]
+	if ok && len(keys[0]) >= 1 {
+		categoryIds := strings.Split(keys[0], ",")
+		objecIds := []primitive.ObjectID{}
+		for _, id := range categoryIds {
+			categoryID, err := primitive.ObjectIDFromHex(id)
+			if err != nil {
+				return vendors, criterias, err
+			}
+			objecIds = append(objecIds, categoryID)
+		}
+		if len(objecIds) > 0 {
+			criterias.SearchBy["category_id"] = bson.M{"$in": objecIds}
 		}
 	}
 

@@ -2027,7 +2027,8 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	if scenario == "update" && oldOrder != nil && oldOrder.Zatca.ReportingPassed && store.Zatca.Phase == "2" {
+	disableSalesEditLock := store.Settings.DisableSalesEditOnceReportedToZatca == nil || *store.Settings.DisableSalesEditOnceReportedToZatca
+	if scenario == "update" && oldOrder != nil && oldOrder.Zatca.ReportingPassed && store.Zatca.Phase == "2" && disableSalesEditLock {
 		customerChanged := (order.CustomerID == nil) != (oldOrder.CustomerID == nil) ||
 			(order.CustomerID != nil && oldOrder.CustomerID != nil && *order.CustomerID != *oldOrder.CustomerID)
 		if customerChanged {

@@ -578,6 +578,12 @@ func main() {
 	*/
 
 	//Vendor
+	router.HandleFunc("/v1/vendor-category", controller.CreateVendorCategory).Methods("POST")
+	router.HandleFunc("/v1/vendor-category", controller.ListVendorCategory).Methods("GET")
+	router.HandleFunc("/v1/vendor-category/{id}", controller.ViewVendorCategory).Methods("GET")
+	router.HandleFunc("/v1/vendor-category/{id}", controller.UpdateVendorCategory).Methods("PUT")
+	router.HandleFunc("/v1/vendor-category/{id}", controller.DeleteVendorCategory).Methods("DELETE")
+
 	router.HandleFunc("/v1/vendor/summary", controller.VendorSummary).Methods("GET")
 	router.HandleFunc("/v1/vendor", controller.CreateVendor).Methods("POST")
 	router.HandleFunc("/v1/vendor", controller.ListVendor).Methods("GET")
