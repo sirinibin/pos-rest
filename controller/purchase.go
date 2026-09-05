@@ -315,6 +315,12 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 
 	go purchase.CreateProductsHistory(true, nil)
 
+	if store.Settings.EnableRFQSupplierOnPurchase && purchase.VendorID != nil && !purchase.VendorID.IsZero() && purchase.StoreID != nil {
+		vendorID := *purchase.VendorID
+		storeID := *purchase.StoreID
+		go syncVendorToRFQSupplier(store, storeID, vendorID)
+	}
+
 	store.NotifyUsers("purchase_updated")
 	if purchase.StoreID != nil {
 		go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
@@ -566,6 +572,12 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		purchase.ClearProductsHistory()
 		purchase.CreateProductsHistory(true, purchaseOld)
 	}()
+
+	if store.Settings.EnableRFQSupplierOnPurchase && purchase.VendorID != nil && !purchase.VendorID.IsZero() && purchase.StoreID != nil {
+		vendorID := *purchase.VendorID
+		storeID := *purchase.StoreID
+		go syncVendorToRFQSupplier(store, storeID, vendorID)
+	}
 
 	store.NotifyUsers("purchase_updated")
 	if purchase.StoreID != nil {

@@ -202,6 +202,34 @@ type StoreSettings struct {
 	CashOpeningBalanceDate                      *time.Time      `bson:"cash_opening_balance_date,omitempty" json:"cash_opening_balance_date,omitempty"`
 	BankOpeningBalance                          float64         `bson:"bank_opening_balance" json:"bank_opening_balance"`
 	BankOpeningBalanceDate                      *time.Time      `bson:"bank_opening_balance_date,omitempty" json:"bank_opening_balance_date,omitempty"`
+	// AI RFQ Bot – Procurement module
+	EnableAIRFQBot                              bool            `bson:"enable_ai_rfq_bot" json:"enable_ai_rfq_bot"`
+	// Bot WhatsApp number (receives RFQs from customers)
+	BotWhatsAppPhone                            string          `bson:"bot_whatsapp_phone" json:"bot_whatsapp_phone,omitempty"`
+	BotEvolutionInstanceName                    string          `bson:"bot_evolution_instance_name" json:"bot_evolution_instance_name,omitempty"`
+	BotEvolutionAPIKey                          string          `bson:"bot_evolution_api_key" json:"bot_evolution_api_key,omitempty"`
+	BotEvolutionAPIURL                          string          `bson:"bot_evolution_api_url" json:"bot_evolution_api_url,omitempty"`
+	// LLM settings (for parsing RFQ content)
+	RFQLLMProvider                              string          `bson:"rfq_llm_provider" json:"rfq_llm_provider,omitempty"`
+	RFQLLMModel                                 string          `bson:"rfq_llm_model" json:"rfq_llm_model,omitempty"`
+	RFQLLMAPIKey                                string          `bson:"rfq_llm_api_key" json:"rfq_llm_api_key,omitempty"`
+	// Google Maps API key (for finding suppliers)
+	GoogleMapsAPIKey                            string          `bson:"google_maps_api_key" json:"google_maps_api_key,omitempty"`
+	// Min suppliers required before forwarding RFQ (default 2)
+	RFQMinSuppliers                             int             `bson:"rfq_min_suppliers" json:"rfq_min_suppliers"`
+	// Purchase markets for Google Maps supplier search (e.g. ["Jeddah","Dammam","Riyadh"])
+	PurchaseMarkets []string `bson:"purchase_markets" json:"purchase_markets"`
+	// RFQIntro is shown in first-contact messages to introduce the company to new suppliers
+	RFQIntro        string   `bson:"rfq_intro" json:"rfq_intro,omitempty"`
+	// RFQAllowedSenders: only process RFQs from these WhatsApp numbers (empty = allow all)
+	RFQAllowedSenders []string `bson:"rfq_allowed_senders" json:"rfq_allowed_senders"`
+	// Store RFQ WhatsApp number (forwards RFQs to suppliers) — kept for backward compat
+	StoreRFQWhatsAppPhone                       string          `bson:"store_rfq_whatsapp_phone" json:"store_rfq_whatsapp_phone,omitempty"`
+	StoreRFQEvolutionInstanceName               string          `bson:"store_rfq_evolution_instance_name" json:"store_rfq_evolution_instance_name,omitempty"`
+	StoreRFQEvolutionAPIKey                     string          `bson:"store_rfq_evolution_api_key" json:"store_rfq_evolution_api_key,omitempty"`
+	StoreRFQEvolutionAPIURL                     string          `bson:"store_rfq_evolution_api_url" json:"store_rfq_evolution_api_url,omitempty"`
+	// When true, auto-populate/update RFQ supplier whenever a purchase is created or updated
+	EnableRFQSupplierOnPurchase                 bool            `bson:"enable_rfq_supplier_on_purchase" json:"enable_rfq_supplier_on_purchase"`
 }
 
 type InvoiceSettings struct {

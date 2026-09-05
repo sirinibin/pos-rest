@@ -2762,3 +2762,255 @@ func DeleteRFQSupplierHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprint(w, `{"success":true}`)
 }
+
+// ── Populate RFQ Suppliers from Vendors ──────────────────────────────────────
+
+// PopulateSuppliersFromVendors starts a background job that iterates all vendors,
+// collects their purchase product history, asks the LLM for categories, queries
+// Google Maps to find the vendor's WhatsApp number, and upserts RFQ supplier records.
+// Real-time progress is streamed via SSE (event: populate_progress).
+// POST /v1/rfq-bot/populate-suppliers?store_id=...
+func PopulateSuppliersFromVendors(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil || store == nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	go populateSuppliersFromVendors(store, storeObjID)
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprint(w, `{"status":"started"}`)
+}
+
+func populateSuppliersFromVendors(store *models.Store, storeID primitive.ObjectID) {
+	storeIDStr := storeID.Hex()
+
+	sendProgress := func(step, total int, msg string, done bool) {
+		pct := 0
+		if total > 0 {
+			pct = step * 100 / total
+		}
+		BroadcastRFQData(storeIDStr, "populate_progress", map[string]interface{}{
+			"step": step, "total": total, "percent": pct, "message": msg, "done": done,
+		})
+	}
+
+	sendProgress(0, 100, "Loading vendors...", false)
+
+	vendors, err := rfqFetchAllVendors(storeID)
+	if err != nil || len(vendors) == 0 {
+		sendProgress(100, 100, "No vendors found.", true)
+		return
+	}
+
+	total := len(vendors)
+	created := 0
+
+	evoURL := store.Settings.BotEvolutionAPIURL
+	if evoURL == "" {
+		evoURL = evoDefaultURL
+	}
+	evoKey := store.Settings.BotEvolutionAPIKey
+	if evoKey == "" {
+		evoKey = evoGlobalKey
+	}
+	botInstance := store.Settings.BotEvolutionInstanceName
+
+	markets := store.Settings.PurchaseMarkets
+	if len(markets) == 0 {
+		markets = []string{""}
+	}
+
+	for i, vendor := range vendors {
+		step := (i + 1) * 90 / total
+		sendProgress(step, 100, fmt.Sprintf("Processing %d/%d: %s", i+1, total, vendor.Name), false)
+
+		products := rfqFetchVendorProducts(storeID, vendor.ID)
+		if len(products) == 0 {
+			continue
+		}
+
+		categories := rfqCategorizeVendorProducts(store, vendor.Name, products)
+		if len(categories) == 0 {
+			continue
+		}
+
+		if store.Settings.GoogleMapsAPIKey == "" {
+			continue
+		}
+
+		for _, market := range markets {
+			results, err := searchGoogleMapsSuppliers(store.Settings.GoogleMapsAPIKey, vendor.Name, market, storeID, 5)
+			if err != nil || len(results) == 0 {
+				continue
+			}
+			for j := range results {
+				sup := &results[j]
+				sup.StoreID = storeID
+				sup.Categories = categories
+				sup.IsActive = true
+				if sup.Phone == "" {
+					continue
+				}
+				if !hasWhatsApp(evoURL, evoKey, botInstance, sup.Phone) {
+					continue
+				}
+				models.UpsertRFQSupplierByPlaceID(sup)
+				created++
+				break // best match per market
+			}
+		}
+	}
+
+	BroadcastRFQEvent(storeIDStr, "supplier_updated")
+	sendProgress(100, 100, fmt.Sprintf("Done. Processed %d vendors, %d RFQ suppliers created/updated.", total, created), true)
+}
+
+// rfqFetchAllVendors returns all non-deleted vendors for the given store.
+func rfqFetchAllVendors(storeID primitive.ObjectID) ([]models.Vendor, error) {
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("vendor")
+	ctx := context.Background()
+	cur, err := collection.Find(ctx, bson.M{"deleted": bson.M{"$ne": true}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var vendors []models.Vendor
+	for cur.Next(ctx) {
+		var v models.Vendor
+		if err := cur.Decode(&v); err != nil {
+			continue
+		}
+		vendors = append(vendors, v)
+	}
+	return vendors, nil
+}
+
+// rfqFetchVendorProducts returns distinct product names/part numbers from all purchases of a vendor.
+func rfqFetchVendorProducts(storeID, vendorID primitive.ObjectID) []string {
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("purchase")
+	ctx := context.Background()
+	cur, err := collection.Find(ctx, bson.M{"vendor_id": vendorID})
+	if err != nil {
+		return nil
+	}
+	defer cur.Close(ctx)
+	seen := map[string]bool{}
+	var names []string
+	for cur.Next(ctx) {
+		var p struct {
+			Products []struct {
+				Name       string `bson:"name"`
+				PartNumber string `bson:"part_number"`
+			} `bson:"products"`
+		}
+		if err := cur.Decode(&p); err != nil {
+			continue
+		}
+		for _, prod := range p.Products {
+			if prod.Name != "" && !seen[prod.Name] {
+				seen[prod.Name] = true
+				names = append(names, prod.Name)
+			}
+			if prod.PartNumber != "" && !seen[prod.PartNumber] {
+				seen[prod.PartNumber] = true
+				names = append(names, prod.PartNumber)
+			}
+		}
+	}
+	return names
+}
+
+// rfqCategorizeVendorProducts calls the LLM to derive trade categories from a vendor's product list.
+func rfqCategorizeVendorProducts(store *models.Store, vendorName string, products []string) []string {
+	if store.Settings.RFQLLMAPIKey == "" {
+		return nil
+	}
+	cap := 50
+	if len(products) < cap {
+		cap = len(products)
+	}
+	productList := strings.Join(products[:cap], "\n")
+	prompt := fmt.Sprintf(`Vendor: %s
+Products purchased from this vendor:
+%s
+
+List 1-5 short English trade category names (e.g. "Steel Pipes", "Rubber Couplings", "Electrical Equipment") that best describe what this vendor supplies. Respond ONLY with a JSON array of strings.`, vendorName, productList)
+
+	resp, err := callLLMText(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, store.Settings.RFQLLMProvider)
+	if err != nil {
+		return nil
+	}
+	resp = strings.TrimSpace(resp)
+	if i := strings.Index(resp, "["); i >= 0 {
+		resp = resp[i:]
+	}
+	if i := strings.LastIndex(resp, "]"); i >= 0 {
+		resp = resp[:i+1]
+	}
+	var cats []string
+	if err := json.Unmarshal([]byte(resp), &cats); err != nil {
+		return nil
+	}
+	return cats
+}
+
+// syncVendorToRFQSupplier is called after a purchase is created/updated when
+// EnableRFQSupplierOnPurchase is set. It runs in a goroutine.
+func syncVendorToRFQSupplier(store *models.Store, storeID primitive.ObjectID, vendorID primitive.ObjectID) {
+	if store.Settings.GoogleMapsAPIKey == "" || store.Settings.RFQLLMAPIKey == "" {
+		return
+	}
+	vendor, err := store.FindVendorByID(&vendorID, bson.M{})
+	if err != nil || vendor == nil {
+		return
+	}
+	products := rfqFetchVendorProducts(storeID, vendorID)
+	categories := rfqCategorizeVendorProducts(store, vendor.Name, products)
+	if len(categories) == 0 {
+		return
+	}
+
+	evoURL := store.Settings.BotEvolutionAPIURL
+	if evoURL == "" {
+		evoURL = evoDefaultURL
+	}
+	evoKey := store.Settings.BotEvolutionAPIKey
+	if evoKey == "" {
+		evoKey = evoGlobalKey
+	}
+	botInstance := store.Settings.BotEvolutionInstanceName
+
+	markets := store.Settings.PurchaseMarkets
+	if len(markets) == 0 {
+		markets = []string{""}
+	}
+
+	for _, market := range markets {
+		results, err := searchGoogleMapsSuppliers(store.Settings.GoogleMapsAPIKey, vendor.Name, market, storeID, 5)
+		if err != nil || len(results) == 0 {
+			continue
+		}
+		for j := range results {
+			sup := &results[j]
+			sup.StoreID = storeID
+			sup.Categories = categories
+			sup.IsActive = true
+			if sup.Phone == "" {
+				continue
+			}
+			if !hasWhatsApp(evoURL, evoKey, botInstance, sup.Phone) {
+				continue
+			}
+			models.UpsertRFQSupplierByPlaceID(sup)
+			BroadcastRFQEvent(storeID.Hex(), "supplier_updated")
+			break
+		}
+	}
+}

@@ -105,6 +105,8 @@ func main() {
 	db.InitRedis()
 	go db.StartCleanupRoutine(1*time.Minute, 20*time.Minute)
 	//go models.SetIndexes()
+	go models.EnsureRFQReceivedIndexes()
+	go models.EnsureRFQSupplierIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -206,6 +208,9 @@ func main() {
 
 	// Register a new user account
 	router.HandleFunc("/v1/register", controller.Register).Methods("POST")
+
+	// Guest self-registration: creates store + Manager user without auth
+	router.HandleFunc("/v1/guest-register", controller.GuestRegister).Methods("POST")
 
 	// OAuth2 Authentication
 	router.HandleFunc("/v1/authorize", controller.Authorize).Methods("POST")
@@ -723,6 +728,32 @@ func main() {
 	router.HandleFunc("/v1/whatsapp/contacts-count", controller.GetWhatsAppContactsCount).Methods("GET")
 	router.HandleFunc("/v1/whatsapp/sync-contacts", controller.SyncWhatsAppContacts).Methods("POST")
 	router.HandleFunc("/v1/whatsapp/contacts", controller.ClearWhatsAppContacts).Methods("DELETE")
+
+	// AI RFQ Bot – Bot WhatsApp (receives RFQs)
+	router.HandleFunc("/v1/rfq-bot/connect", controller.ConnectBotWhatsApp).Methods("POST")
+	router.HandleFunc("/v1/rfq-bot/qr", controller.GetBotWhatsAppQR).Methods("GET")
+	router.HandleFunc("/v1/rfq-bot/status", controller.GetBotWhatsAppStatus).Methods("GET")
+	router.HandleFunc("/v1/rfq-bot/disconnect", controller.DisconnectBotWhatsApp).Methods("DELETE")
+	router.HandleFunc("/v1/rfq-bot/webhook", controller.HandleRFQBotWebhook).Methods("POST")
+	router.HandleFunc("/v1/rfq-bot/check-llm", controller.CheckRFQLLMConnection).Methods("POST")
+	router.HandleFunc("/v1/rfq-bot/check-whatsapp", controller.CheckWhatsAppNumber).Methods("GET")
+	router.HandleFunc("/v1/rfq-bot/events", controller.RFQEventsHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-bot/populate-suppliers", controller.PopulateSuppliersFromVendors).Methods("POST")
+	// AI RFQ Bot – Store RFQ WhatsApp (sends to suppliers)
+	router.HandleFunc("/v1/rfq-store/connect", controller.ConnectStoreRFQWhatsApp).Methods("POST")
+	router.HandleFunc("/v1/rfq-store/qr", controller.GetStoreRFQWhatsAppQR).Methods("GET")
+	router.HandleFunc("/v1/rfq-store/status", controller.GetStoreRFQWhatsAppStatus).Methods("GET")
+	router.HandleFunc("/v1/rfq-store/disconnect", controller.DisconnectStoreRFQWhatsApp).Methods("DELETE")
+	// AI RFQ Bot – RFQ received list & detail
+	router.HandleFunc("/v1/rfq-received", controller.ListRFQReceivedHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-received/{id}", controller.GetRFQReceivedHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-received/{id}/process", controller.TriggerRFQProcess).Methods("POST")
+	// AI RFQ Bot – Supplier CRUD
+	router.HandleFunc("/v1/rfq-suppliers", controller.ListRFQSuppliersHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-suppliers", controller.CreateRFQSupplierHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-suppliers/{id}", controller.UpdateRFQSupplierHandler).Methods("PUT")
+	router.HandleFunc("/v1/rfq-suppliers/{id}", controller.DeleteRFQSupplierHandler).Methods("DELETE")
+
 	router.HandleFunc("/v1/chart-image-share", controller.ShareChartImage).Methods("POST")
 
 	// Dashboard analytics (precomputed monthly aggregation)
@@ -828,7 +859,11 @@ func main() {
 
 	//http.HandleFunc("/ws", controller.WebSocketHandler)
 	// Enable CORS
-	corsHandler := cors.Default().Handler(router) // Apply CORS middleware
+	corsHandler := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders: []string{"*"},
+	}).Handler(router) // Apply CORS middleware
 
 	//router.HandleFunc("/v1/account", controller.ListAccounts)
 
