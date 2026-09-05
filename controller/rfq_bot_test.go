@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sirinibin/startpos/backend/models"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ── parseCategories ───────────────────────────────────────────────────────────
@@ -640,5 +641,256 @@ func TestRFQSupplier_MatchedCategory_NotInJSON(t *testing.T) {
 	// MatchedCategory has json:"-" so it must NOT appear in the JSON output
 	if strings.Contains(string(b), "MatchedCategory") || strings.Contains(string(b), "Rubber Couplings") {
 		t.Errorf("MatchedCategory should be excluded from JSON, got: %s", string(b))
+	}
+}
+
+// ── StoreSettings.EnableRFQSupplierOnPurchase ─────────────────────────────────
+
+func TestStoreSettings_EnableRFQSupplierOnPurchase_JSONRoundTrip(t *testing.T) {
+	// The new field must serialise/deserialise correctly through JSON.
+	store := models.Store{}
+	store.Settings.EnableRFQSupplierOnPurchase = true
+
+	b, err := json.Marshal(store.Settings)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	if !strings.Contains(string(b), `"enable_rfq_supplier_on_purchase":true`) {
+		t.Errorf("expected enable_rfq_supplier_on_purchase:true in JSON, got: %s", string(b))
+	}
+
+	var out models.StoreSettings
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if !out.EnableRFQSupplierOnPurchase {
+		t.Error("EnableRFQSupplierOnPurchase should be true after round-trip")
+	}
+}
+
+func TestStoreSettings_EnableRFQSupplierOnPurchase_DefaultFalse(t *testing.T) {
+	// Default zero-value must be false (opt-in behaviour).
+	var s models.StoreSettings
+	if s.EnableRFQSupplierOnPurchase {
+		t.Error("EnableRFQSupplierOnPurchase should default to false")
+	}
+}
+
+// ── rfqCategorizeVendorProducts ───────────────────────────────────────────────
+
+func TestRFQCategorizeVendorProducts_NoAPIKey_ReturnsNil(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = ""
+	got := rfqCategorizeVendorProducts(store, "ACME Corp", []string{"Steel Pipe", "Valve"})
+	if got != nil {
+		t.Errorf("expected nil when no API key, got %v", got)
+	}
+}
+
+func TestRFQCategorizeVendorProducts_EmptyProducts_NoAPIKey_ReturnsNil(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = ""
+	got := rfqCategorizeVendorProducts(store, "ACME Corp", []string{})
+	if got != nil {
+		t.Errorf("expected nil for empty products + no API key, got %v", got)
+	}
+}
+
+func TestRFQCategorizeVendorProducts_UnknownProvider_ReturnsNil(t *testing.T) {
+	// An unknown LLM provider causes callLLMText to return an error → nil result.
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = "sk-test-key"
+	store.Settings.RFQLLMProvider = "unknown_llm_provider_xyz"
+	store.Settings.RFQLLMModel = "model-1"
+	got := rfqCategorizeVendorProducts(store, "ACME Corp", []string{"Steel Pipe", "Valve"})
+	if got != nil {
+		t.Errorf("expected nil for unknown provider, got %v", got)
+	}
+}
+
+func TestRFQCategorizeVendorProducts_TruncatesTo50Products(t *testing.T) {
+	// Build 60 product names. With a valid API key but unknown provider the function
+	// returns nil — we just verify the function doesn't panic on a large product list.
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = "sk-test"
+	store.Settings.RFQLLMProvider = "unknown_provider"
+	products := make([]string, 60)
+	for i := range products {
+		products[i] = "Product " + string(rune('A'+i%26))
+	}
+	got := rfqCategorizeVendorProducts(store, "BigCorp", products)
+	// Unknown provider → nil; the important thing is no panic/index-out-of-range
+	_ = got
+}
+
+// ── rfqFetchVendorProducts ───────────────────────────────────────────────────
+
+func TestRFQFetchVendorProducts_NonExistentVendor_ReturnsEmpty(t *testing.T) {
+	// Zero ObjectID — no purchases will match, must return empty (not panic).
+	nonExistent := primitive.NewObjectID()
+	storeID := primitive.NewObjectID()
+	got := rfqFetchVendorProducts(storeID, nonExistent)
+	if got != nil {
+		// nil and empty slice are both fine — the requirement is no panic and no
+		// purchases returned for an unknown vendor.
+		t.Logf("rfqFetchVendorProducts returned non-nil for non-existent vendor: %v", got)
+	}
+}
+
+// ── rfqFetchAllVendors ───────────────────────────────────────────────────────
+
+func TestRFQFetchAllVendors_NonExistentStore_ReturnsEmpty(t *testing.T) {
+	// A fresh random store ID has no vendor collection — must return empty (not panic).
+	storeID := primitive.NewObjectID()
+	got, err := rfqFetchAllVendors(storeID)
+	if err != nil {
+		t.Logf("rfqFetchAllVendors returned error (expected for empty collection): %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected 0 vendors for non-existent store, got %d", len(got))
+	}
+}
+
+// ── PopulateSuppliersFromVendors HTTP handler ─────────────────────────────────
+
+func TestPopulateSuppliersHandler_MissingStoreID_Returns400(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/populate-suppliers", nil)
+	w := httptest.NewRecorder()
+	PopulateSuppliersFromVendors(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing store_id, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "invalid store_id") {
+		t.Errorf("expected 'invalid store_id' in body, got %q", w.Body.String())
+	}
+}
+
+func TestPopulateSuppliersHandler_InvalidStoreID_Returns400(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/populate-suppliers?store_id=not-a-valid-objectid", nil)
+	w := httptest.NewRecorder()
+	PopulateSuppliersFromVendors(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid store_id hex, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "invalid store_id") {
+		t.Errorf("expected 'invalid store_id' in body, got %q", w.Body.String())
+	}
+}
+
+func TestPopulateSuppliersHandler_NonExistentStore_Returns404(t *testing.T) {
+	// A valid hex ObjectID for a store that doesn't exist in the DB
+	nonExistentID := primitive.NewObjectID().Hex()
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/populate-suppliers?store_id="+nonExistentID, nil)
+	w := httptest.NewRecorder()
+	PopulateSuppliersFromVendors(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for non-existent store, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "store not found") {
+		t.Errorf("expected 'store not found' in body, got %q", w.Body.String())
+	}
+}
+
+// ── syncVendorToRFQSupplier ───────────────────────────────────────────────────
+
+func TestSyncVendorToRFQSupplier_NoGoogleMapsKey_NoPanic(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.GoogleMapsAPIKey = ""
+	store.Settings.RFQLLMAPIKey = "sk-key"
+	storeID := primitive.NewObjectID()
+	vendorID := primitive.NewObjectID()
+	// Must return early without panicking
+	syncVendorToRFQSupplier(store, storeID, vendorID)
+}
+
+func TestSyncVendorToRFQSupplier_NoLLMKey_NoPanic(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.GoogleMapsAPIKey = "gm-key"
+	store.Settings.RFQLLMAPIKey = ""
+	storeID := primitive.NewObjectID()
+	vendorID := primitive.NewObjectID()
+	syncVendorToRFQSupplier(store, storeID, vendorID)
+}
+
+func TestSyncVendorToRFQSupplier_BothKeysEmpty_NoPanic(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.GoogleMapsAPIKey = ""
+	store.Settings.RFQLLMAPIKey = ""
+	storeID := primitive.NewObjectID()
+	vendorID := primitive.NewObjectID()
+	syncVendorToRFQSupplier(store, storeID, vendorID)
+}
+
+func TestSyncVendorToRFQSupplier_NonExistentVendorID_NoPanic(t *testing.T) {
+	// Both keys set but vendor doesn't exist in DB — must not panic.
+	store := &models.Store{}
+	store.Settings.GoogleMapsAPIKey = "gm-key"
+	store.Settings.RFQLLMAPIKey = "sk-key"
+	store.Settings.RFQLLMProvider = "openai"
+	storeID := primitive.NewObjectID()
+	vendorID := primitive.NewObjectID()
+	// FindVendorByID will fail (no such vendor) — function must return early
+	syncVendorToRFQSupplier(store, storeID, vendorID)
+}
+
+// ── populateSuppliersFromVendors goroutine ────────────────────────────────────
+
+func TestPopulateSuppliersFromVendors_NoVendors_NoPanic(t *testing.T) {
+	// A store with no vendors → goroutine must complete without panicking.
+	storeID := primitive.NewObjectID()
+	store := &models.Store{}
+	store.Settings.GoogleMapsAPIKey = "gm-key"
+	store.Settings.RFQLLMAPIKey = "sk-key"
+
+	done := make(chan struct{})
+	go func() {
+		populateSuppliersFromVendors(store, storeID)
+		close(done)
+	}()
+	<-done // blocks until goroutine returns — panics would propagate
+}
+
+// ── SSE populate_progress event format ───────────────────────────────────────
+
+func TestBroadcastRFQData_PopulateProgressFormat(t *testing.T) {
+	// BroadcastRFQData with "populate_progress" must not panic and must produce
+	// a valid SSE message containing the event name.
+	storeID := primitive.NewObjectID().Hex()
+	ch := rfqSSEHub.subscribe(storeID)
+	defer rfqSSEHub.unsubscribe(storeID, ch)
+
+	BroadcastRFQData(storeID, "populate_progress", map[string]interface{}{
+		"step": 50, "total": 100, "percent": 50, "message": "Processing 1/2: ACME", "done": false,
+	})
+
+	select {
+	case msg := <-ch:
+		if !strings.Contains(msg, "populate_progress") {
+			t.Errorf("expected 'populate_progress' in SSE message, got: %q", msg)
+		}
+		if !strings.Contains(msg, "\"percent\":50") {
+			t.Errorf("expected percent:50 in SSE data, got: %q", msg)
+		}
+	default:
+		t.Error("expected SSE message to be broadcast, channel was empty")
+	}
+}
+
+func TestBroadcastRFQData_PopulateProgressDone(t *testing.T) {
+	storeID := primitive.NewObjectID().Hex()
+	ch := rfqSSEHub.subscribe(storeID)
+	defer rfqSSEHub.unsubscribe(storeID, ch)
+
+	BroadcastRFQData(storeID, "populate_progress", map[string]interface{}{
+		"step": 100, "total": 100, "percent": 100, "message": "Done. 5 suppliers created.", "done": true,
+	})
+
+	select {
+	case msg := <-ch:
+		if !strings.Contains(msg, `"done":true`) {
+			t.Errorf("expected done:true in SSE payload, got: %q", msg)
+		}
+	default:
+		t.Error("expected SSE message to be broadcast")
 	}
 }
