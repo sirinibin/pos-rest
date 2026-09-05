@@ -377,6 +377,15 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SalesMan cannot update store settings
+	if accessingUser.Role == "SalesMan" {
+		w.WriteHeader(http.StatusForbidden)
+		response.Status = false
+		response.Errors["role"] = "SalesMan users cannot update store settings"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	store.UpdatedBy = &userID
 	now := time.Now()
 	store.UpdatedAt = &now
@@ -903,6 +912,114 @@ func ClearZatcaReconnect(w http.ResponseWriter, r *http.Request) {
 	if err := store.ClearZatcaReconnectRequired(); err != nil {
 		response.Status = false
 		response.Errors["update"] = "Failed to update store: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	json.NewEncoder(w).Encode(response)
+}
+
+// UpdateStorePrintSettings handles PUT /v1/store/{id}/print-settings.
+// Lightweight endpoint that saves only the print/preview settings blob (font, size, storeHeader, marginTop, pageSize).
+func UpdateStorePrintSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var payload struct {
+		PrintSettings map[string]interface{} `json:"print_settings"`
+	}
+	if !utils.Decode(w, r, &payload) {
+		return
+	}
+
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": storeID},
+		bson.M{"$set": bson.M{"settings.print_settings": payload.PrintSettings}},
+	)
+	if err != nil {
+		response.Status = false
+		response.Errors["update"] = "Failed to update print settings: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	json.NewEncoder(w).Encode(response)
+}
+
+// UpdateStoreSidebarConfig handles PUT /v1/store/{id}/sidebar-config.
+// Saves the sidebar menu order/visibility config for a store.
+func UpdateStoreSidebarConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var payload struct {
+		SidebarConfig []interface{} `json:"sidebar_config"`
+	}
+	if !utils.Decode(w, r, &payload) {
+		return
+	}
+
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": storeID},
+		bson.M{"$set": bson.M{"settings.sidebar_config": payload.SidebarConfig}},
+	)
+	if err != nil {
+		response.Status = false
+		response.Errors["update"] = "Failed to update sidebar config: " + err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return

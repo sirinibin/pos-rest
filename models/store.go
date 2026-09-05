@@ -229,7 +229,15 @@ type StoreSettings struct {
 	StoreRFQEvolutionAPIKey                     string          `bson:"store_rfq_evolution_api_key" json:"store_rfq_evolution_api_key,omitempty"`
 	StoreRFQEvolutionAPIURL                     string          `bson:"store_rfq_evolution_api_url" json:"store_rfq_evolution_api_url,omitempty"`
 	// When true, auto-populate/update RFQ supplier whenever a purchase is created or updated
-	EnableRFQSupplierOnPurchase                 bool            `bson:"enable_rfq_supplier_on_purchase" json:"enable_rfq_supplier_on_purchase"`
+	EnableRFQSupplierOnPurchase bool `bson:"enable_rfq_supplier_on_purchase" json:"enable_rfq_supplier_on_purchase"`
+	// When true, font/size/header/margin/page settings are synced to server instead of browser-only localStorage
+	SavePrintSettingsToServer bool `bson:"save_print_settings_to_server" json:"save_print_settings_to_server"`
+	// Stores the fontSizes blob (font, size, storeHeader, marginTop, pageSize per model) on the server
+	PrintSettings map[string]interface{} `bson:"print_settings,omitempty" json:"print_settings,omitempty"`
+	// When true, sidebar menu order/visibility is synced to server instead of browser-only localStorage
+	SaveSidebarConfigToServer bool `bson:"save_sidebar_config_to_server" json:"save_sidebar_config_to_server"`
+	// Stores the sidebar config (id+visible array) on the server
+	SidebarConfig []interface{} `bson:"sidebar_config,omitempty" json:"sidebar_config,omitempty"`
 }
 
 type InvoiceSettings struct {
