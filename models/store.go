@@ -230,6 +230,8 @@ type StoreSettings struct {
 	StoreRFQEvolutionAPIURL                     string          `bson:"store_rfq_evolution_api_url" json:"store_rfq_evolution_api_url,omitempty"`
 	// When true, auto-populate/update RFQ supplier whenever a purchase is created or updated
 	EnableRFQSupplierOnPurchase bool `bson:"enable_rfq_supplier_on_purchase" json:"enable_rfq_supplier_on_purchase"`
+	// When true, the UI switches to RTL layout whenever the user selects Arabic as the display language
+	UseRTLForArabic bool `bson:"use_rtl_for_arabic" json:"use_rtl_for_arabic"`
 	// When true, font/size/header/margin/page settings are synced to server instead of browser-only localStorage
 	SavePrintSettingsToServer bool `bson:"save_print_settings_to_server" json:"save_print_settings_to_server"`
 	// Stores the fontSizes blob (font, size, storeHeader, marginTop, pageSize per model) on the server
@@ -237,7 +239,7 @@ type StoreSettings struct {
 	// When true, sidebar menu order/visibility is synced to server instead of browser-only localStorage
 	SaveSidebarConfigToServer bool `bson:"save_sidebar_config_to_server" json:"save_sidebar_config_to_server"`
 	// Stores the sidebar config (id+visible array) on the server
-	SidebarConfig []interface{} `bson:"sidebar_config,omitempty" json:"sidebar_config,omitempty"`
+	SidebarConfig []map[string]interface{} `bson:"sidebar_config,omitempty" json:"sidebar_config,omitempty"`
 }
 
 type InvoiceSettings struct {
