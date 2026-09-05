@@ -894,3 +894,71 @@ func TestBroadcastRFQData_PopulateProgressDone(t *testing.T) {
 		t.Error("expected SSE message to be broadcast")
 	}
 }
+
+// ── StoreSettings.UseRTLForArabic ─────────────────────────────────────────────
+
+func TestStoreSettings_UseRTLForArabic_DefaultFalse(t *testing.T) {
+	var s models.StoreSettings
+	if s.UseRTLForArabic {
+		t.Error("UseRTLForArabic should default to false")
+	}
+}
+
+func TestStoreSettings_UseRTLForArabic_JSONRoundTrip_True(t *testing.T) {
+	store := models.Store{}
+	store.Settings.UseRTLForArabic = true
+
+	b, err := json.Marshal(store.Settings)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	if !strings.Contains(string(b), `"use_rtl_for_arabic":true`) {
+		t.Errorf("expected use_rtl_for_arabic:true in JSON, got: %s", string(b))
+	}
+
+	var out models.StoreSettings
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if !out.UseRTLForArabic {
+		t.Error("UseRTLForArabic should be true after round-trip")
+	}
+}
+
+func TestStoreSettings_UseRTLForArabic_JSONRoundTrip_False(t *testing.T) {
+	store := models.Store{}
+	store.Settings.UseRTLForArabic = false
+
+	b, err := json.Marshal(store.Settings)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	// false is the zero value — json may omit or include it depending on omitempty; either is fine.
+	// What matters is that unmarshal gives us false back.
+	var out models.StoreSettings
+	out.UseRTLForArabic = true // prime with true to confirm it resets to false
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if out.UseRTLForArabic {
+		t.Error("UseRTLForArabic should be false after round-trip from false value")
+	}
+}
+
+func TestStoreSettings_UseRTLForArabic_IndependentOfRFQFlag(t *testing.T) {
+	// The two new bool flags must be independent — toggling one must not affect the other.
+	store := models.Store{}
+	store.Settings.UseRTLForArabic = true
+	store.Settings.EnableRFQSupplierOnPurchase = false
+
+	b, _ := json.Marshal(store.Settings)
+	var out models.StoreSettings
+	json.Unmarshal(b, &out)
+
+	if !out.UseRTLForArabic {
+		t.Error("UseRTLForArabic should be true")
+	}
+	if out.EnableRFQSupplierOnPurchase {
+		t.Error("EnableRFQSupplierOnPurchase should be false — flags must be independent")
+	}
+}
