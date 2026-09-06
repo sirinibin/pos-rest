@@ -210,10 +210,10 @@ func main() {
 	router.HandleFunc("/v1/register", controller.Register).Methods("POST")
 
 	// Guest self-registration: creates store + Manager user without auth
-	router.HandleFunc("/v1/guest-register", controller.GuestRegister).Methods("POST")
+	router.HandleFunc("/v1/guest-register", controller.RegisterRateLimiter.Middleware(controller.GuestRegister)).Methods("POST")
 
 	// OAuth2 Authentication
-	router.HandleFunc("/v1/authorize", controller.Authorize).Methods("POST")
+	router.HandleFunc("/v1/authorize", controller.AuthRateLimiter.Middleware(controller.Authorize)).Methods("POST")
 	router.HandleFunc("/v1/accesstoken", controller.Accesstoken).Methods("POST")
 
 	// Refresh access token
@@ -746,6 +746,13 @@ func main() {
 	router.HandleFunc("/v1/rfq-store/qr", controller.GetStoreRFQWhatsAppQR).Methods("GET")
 	router.HandleFunc("/v1/rfq-store/status", controller.GetStoreRFQWhatsAppStatus).Methods("GET")
 	router.HandleFunc("/v1/rfq-store/disconnect", controller.DisconnectStoreRFQWhatsApp).Methods("DELETE")
+
+	// Email RFQ source
+	router.HandleFunc("/v1/rfq-email/connect", controller.ConnectRFQEmail).Methods("POST")
+	router.HandleFunc("/v1/rfq-email/status", controller.GetRFQEmailStatus).Methods("GET")
+	router.HandleFunc("/v1/rfq-email/disconnect", controller.DisconnectRFQEmail).Methods("DELETE")
+	router.HandleFunc("/v1/rfq-email/oauth-callback", controller.HandleRFQEmailOAuthCallback).Methods("GET")
+	router.HandleFunc("/v1/rfq-email/webhook", controller.HandleRFQEmailWebhook).Methods("POST")
 	// AI RFQ Bot – RFQ received list & detail
 	router.HandleFunc("/v1/rfq-received", controller.ListRFQReceivedHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-received/{id}", controller.GetRFQReceivedHandler).Methods("GET")

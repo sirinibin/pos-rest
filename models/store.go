@@ -223,6 +223,54 @@ type StoreSettings struct {
 	RFQIntro        string   `bson:"rfq_intro" json:"rfq_intro,omitempty"`
 	// RFQAllowedSenders: only process RFQs from these WhatsApp numbers (empty = allow all)
 	RFQAllowedSenders []string `bson:"rfq_allowed_senders" json:"rfq_allowed_senders"`
+
+	// ── Email RFQ Source ──────────────────────────────────────────────────
+	// Provider: gmail | outlook | zoho | mailgun | sendgrid | postmark | ses | imap
+	RFQEmailProvider string `bson:"rfq_email_provider" json:"rfq_email_provider,omitempty"`
+	RFQEmailConnected bool   `bson:"rfq_email_connected" json:"rfq_email_connected"`
+	// Connected email address (set after OAuth exchange or IMAP login)
+	RFQEmailAddress string `bson:"rfq_email_address" json:"rfq_email_address,omitempty"`
+
+	// Gmail OAuth2 (Gmail API)
+	RFQGmailClientID      string `bson:"rfq_gmail_client_id" json:"rfq_gmail_client_id,omitempty"`
+	RFQGmailClientSecret  string `bson:"rfq_gmail_client_secret" json:"rfq_gmail_client_secret,omitempty"`
+	RFQGmailAccessToken   string `bson:"rfq_gmail_access_token" json:"-"`
+	RFQGmailRefreshToken  string `bson:"rfq_gmail_refresh_token" json:"-"`
+
+	// Microsoft Outlook / Office 365 (Microsoft Graph API)
+	RFQOutlookTenantID     string `bson:"rfq_outlook_tenant_id" json:"rfq_outlook_tenant_id,omitempty"`
+	RFQOutlookClientID     string `bson:"rfq_outlook_client_id" json:"rfq_outlook_client_id,omitempty"`
+	RFQOutlookClientSecret string `bson:"rfq_outlook_client_secret" json:"rfq_outlook_client_secret,omitempty"`
+	RFQOutlookAccessToken  string `bson:"rfq_outlook_access_token" json:"-"`
+	RFQOutlookRefreshToken string `bson:"rfq_outlook_refresh_token" json:"-"`
+
+	// Zoho Mail (Zoho Mail API OAuth2)
+	RFQZohoClientID      string `bson:"rfq_zoho_client_id" json:"rfq_zoho_client_id,omitempty"`
+	RFQZohoClientSecret  string `bson:"rfq_zoho_client_secret" json:"rfq_zoho_client_secret,omitempty"`
+	RFQZohoAccessToken   string `bson:"rfq_zoho_access_token" json:"-"`
+	RFQZohoRefreshToken  string `bson:"rfq_zoho_refresh_token" json:"-"`
+
+	// Mailgun (inbound webhook)
+	RFQMailgunAPIKey string `bson:"rfq_mailgun_api_key" json:"rfq_mailgun_api_key,omitempty"`
+	RFQMailgunDomain string `bson:"rfq_mailgun_domain" json:"rfq_mailgun_domain,omitempty"`
+
+	// SendGrid — Inbound Parse webhook
+	RFQSendGridAPIKey string `bson:"rfq_sendgrid_api_key" json:"rfq_sendgrid_api_key,omitempty"`
+
+	// Postmark — Inbound webhook
+	RFQPostmarkServerToken string `bson:"rfq_postmark_server_token" json:"rfq_postmark_server_token,omitempty"`
+
+	// Amazon SES — email receiving via SNS webhook
+	RFQAWSSESAccessKeyID string `bson:"rfq_aws_ses_access_key_id" json:"rfq_aws_ses_access_key_id,omitempty"`
+	RFQAWSSESSecretKey   string `bson:"rfq_aws_ses_secret_key" json:"rfq_aws_ses_secret_key,omitempty"`
+	RFQAWSSESRegion      string `bson:"rfq_aws_ses_region" json:"rfq_aws_ses_region,omitempty"`
+
+	// Generic IMAP (polls inbox + junk at intervals)
+	RFQIMAPHost     string `bson:"rfq_imap_host" json:"rfq_imap_host,omitempty"`
+	RFQIMAPPort     int    `bson:"rfq_imap_port" json:"rfq_imap_port,omitempty"`
+	RFQIMAPUsername string `bson:"rfq_imap_username" json:"rfq_imap_username,omitempty"`
+	RFQIMAPPassword string `bson:"rfq_imap_password" json:"rfq_imap_password,omitempty"`
+	RFQIMAPUseSSL   bool   `bson:"rfq_imap_use_ssl" json:"rfq_imap_use_ssl"`
 	// Store RFQ WhatsApp number (forwards RFQs to suppliers) — kept for backward compat
 	StoreRFQWhatsAppPhone                       string          `bson:"store_rfq_whatsapp_phone" json:"store_rfq_whatsapp_phone,omitempty"`
 	StoreRFQEvolutionInstanceName               string          `bson:"store_rfq_evolution_instance_name" json:"store_rfq_evolution_instance_name,omitempty"`
