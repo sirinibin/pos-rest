@@ -949,3 +949,440 @@ func TestTrimSpaceFromFields_WhitespaceFalsePositivePrevention(t *testing.T) {
 			oldStore.BusinessCategory, newStore.BusinessCategory)
 	}
 }
+
+// ── StoreSettings: server-sync flags & sidebar/print fields ──────────────────
+// Tests for the four new fields added to support syncing invoice-preview settings
+// and sidebar menu config to the server.
+
+func TestStoreSettings_SavePrintSettingsToServer_DefaultFalse(t *testing.T) {
+	var s StoreSettings
+	if s.SavePrintSettingsToServer {
+		t.Error("zero-value SavePrintSettingsToServer should be false")
+	}
+}
+
+func TestStoreSettings_SavePrintSettingsToServer_JSONTag(t *testing.T) {
+	s := StoreSettings{SavePrintSettingsToServer: true}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	if v, ok := m["save_print_settings_to_server"]; !ok || v != true {
+		t.Errorf("expected JSON key 'save_print_settings_to_server'=true, got ok=%v val=%v", ok, v)
+	}
+}
+
+func TestStoreSettings_SaveSidebarConfigToServer_DefaultFalse(t *testing.T) {
+	var s StoreSettings
+	if s.SaveSidebarConfigToServer {
+		t.Error("zero-value SaveSidebarConfigToServer should be false")
+	}
+}
+
+func TestStoreSettings_SaveSidebarConfigToServer_JSONTag(t *testing.T) {
+	s := StoreSettings{SaveSidebarConfigToServer: true}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	if v, ok := m["save_sidebar_config_to_server"]; !ok || v != true {
+		t.Errorf("expected JSON key 'save_sidebar_config_to_server'=true, got ok=%v val=%v", ok, v)
+	}
+}
+
+// TestStoreSettings_SidebarConfig_JSONRoundTrip verifies the critical BSON fix:
+// SidebarConfig must be []map[string]interface{} so it JSON-encodes as
+// [{"id":"...","visible":true}] and NOT as [[{"Key":"id","Value":"..."},...]]
+// (the broken primitive.D format produced by []interface{}).
+func TestStoreSettings_SidebarConfig_JSONRoundTrip(t *testing.T) {
+	original := []map[string]interface{}{
+		{"id": "dashboard", "visible": true},
+		{"id": "sales", "visible": false},
+		{"id": "customers", "visible": true},
+	}
+	s := StoreSettings{SidebarConfig: original}
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+
+	rawArr, ok := m["sidebar_config"]
+	if !ok {
+		t.Fatal("expected 'sidebar_config' key in JSON output")
+	}
+	arr, ok := rawArr.([]interface{})
+	if !ok {
+		t.Fatalf("expected sidebar_config to be a JSON array, got %T", rawArr)
+	}
+	if len(arr) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(arr))
+	}
+
+	// Each element must be a JSON object with "id" and "visible" string/bool keys —
+	// NOT [[{"Key":"id","Value":"dashboard"},...]] which is the primitive.D format.
+	for i, elem := range arr {
+		obj, ok := elem.(map[string]interface{})
+		if !ok {
+			t.Errorf("element %d: expected map[string]interface{}, got %T — this is the primitive.D bug", i, elem)
+			continue
+		}
+		if _, hasID := obj["id"]; !hasID {
+			t.Errorf("element %d: missing 'id' key (keys present: %v)", i, obj)
+		}
+		if _, hasVisible := obj["visible"]; !hasVisible {
+			t.Errorf("element %d: missing 'visible' key (keys present: %v)", i, obj)
+		}
+		// Must NOT have "Key"/"Value" (the broken primitive.D encoding)
+		if _, hasKey := obj["Key"]; hasKey {
+			t.Errorf("element %d: found 'Key' field — this is the primitive.D bug, type should be []map[string]interface{}", i)
+		}
+	}
+
+	// Round-trip: unmarshal back into StoreSettings
+	var s2 StoreSettings
+	if err := json.Unmarshal(data, &s2); err != nil {
+		t.Fatalf("json.Unmarshal into StoreSettings failed: %v", err)
+	}
+	if len(s2.SidebarConfig) != 3 {
+		t.Fatalf("round-trip: expected 3 items, got %d", len(s2.SidebarConfig))
+	}
+	if s2.SidebarConfig[0]["id"] != "dashboard" {
+		t.Errorf("round-trip: first item id = %v, want 'dashboard'", s2.SidebarConfig[0]["id"])
+	}
+	if s2.SidebarConfig[1]["visible"] != false {
+		t.Errorf("round-trip: second item visible = %v, want false", s2.SidebarConfig[1]["visible"])
+	}
+}
+
+func TestStoreSettings_SidebarConfig_OmittedWhenEmpty(t *testing.T) {
+	s := StoreSettings{} // SidebarConfig is nil
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if _, ok := m["sidebar_config"]; ok {
+		t.Error("sidebar_config should be omitted from JSON when nil (omitempty)")
+	}
+}
+
+func TestStoreSettings_PrintSettings_JSONRoundTrip(t *testing.T) {
+	original := map[string]interface{}{
+		"fontSize":    "12px",
+		"pageSize":    "A4",
+		"marginTop":   "10mm",
+		"storeHeader": true,
+	}
+	s := StoreSettings{PrintSettings: original}
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	raw, ok := m["print_settings"]
+	if !ok {
+		t.Fatal("expected 'print_settings' key in JSON output")
+	}
+	obj, ok := raw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected print_settings to be a JSON object, got %T", raw)
+	}
+	if obj["fontSize"] != "12px" {
+		t.Errorf("fontSize = %v, want '12px'", obj["fontSize"])
+	}
+	if obj["pageSize"] != "A4" {
+		t.Errorf("pageSize = %v, want 'A4'", obj["pageSize"])
+	}
+}
+
+func TestStoreSettings_PrintSettings_OmittedWhenEmpty(t *testing.T) {
+	s := StoreSettings{} // PrintSettings is nil
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+	if _, ok := m["print_settings"]; ok {
+		t.Error("print_settings should be omitted from JSON when nil (omitempty)")
+	}
+}
+
+// TestStoreSettings_BothSyncFlagsIndependent verifies that the two sync flags
+// are independent — enabling one does not affect the other.
+func TestStoreSettings_BothSyncFlagsIndependent(t *testing.T) {
+	s := StoreSettings{SavePrintSettingsToServer: true, SaveSidebarConfigToServer: false}
+	data, _ := json.Marshal(s)
+	var m map[string]interface{}
+	json.Unmarshal(data, &m)
+	if m["save_print_settings_to_server"] != true {
+		t.Error("save_print_settings_to_server should be true")
+	}
+	if m["save_sidebar_config_to_server"] != false {
+		t.Error("save_sidebar_config_to_server should be false")
+	}
+
+	s2 := StoreSettings{SavePrintSettingsToServer: false, SaveSidebarConfigToServer: true}
+	data2, _ := json.Marshal(s2)
+	var m2 map[string]interface{}
+	json.Unmarshal(data2, &m2)
+	if m2["save_print_settings_to_server"] != false {
+		t.Error("save_print_settings_to_server should be false")
+	}
+	if m2["save_sidebar_config_to_server"] != true {
+		t.Error("save_sidebar_config_to_server should be true")
+	}
+}
+
+// ── StoreSettings.ShowCreatedByInInvoicePreview ───────────────────────────────
+// New bool field that controls whether invoice/receivables previews display a
+// "Created By" column beside the Remarks row (50/50 split).
+
+// TestShowCreatedByInInvoicePreview_DefaultFalse verifies that the zero value
+// of StoreSettings has ShowCreatedByInInvoicePreview == false, matching the
+// "default off" behaviour documented in the feature spec.
+func TestShowCreatedByInInvoicePreview_DefaultFalse(t *testing.T) {
+	var s StoreSettings
+	if s.ShowCreatedByInInvoicePreview {
+		t.Error("zero-value ShowCreatedByInInvoicePreview should be false")
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_JSONKey verifies the field marshals to the
+// expected JSON key "show_created_by_in_invoice_preview".
+func TestShowCreatedByInInvoicePreview_JSONKey(t *testing.T) {
+	s := StoreSettings{ShowCreatedByInInvoicePreview: true}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	v, ok := m["show_created_by_in_invoice_preview"]
+	if !ok {
+		t.Error("expected JSON key 'show_created_by_in_invoice_preview' not found")
+	}
+	if v != true {
+		t.Errorf("expected true, got %v", v)
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_FalsePresentInJSON verifies the field
+// appears in JSON output even when false (no omitempty tag), so the frontend
+// always receives an explicit value and never has to infer the default.
+func TestShowCreatedByInInvoicePreview_FalsePresentInJSON(t *testing.T) {
+	s := StoreSettings{ShowCreatedByInInvoicePreview: false}
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	v, ok := m["show_created_by_in_invoice_preview"]
+	if !ok {
+		t.Error("show_created_by_in_invoice_preview must be present in JSON even when false (no omitempty)")
+	}
+	if v != false {
+		t.Errorf("expected false, got %v", v)
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_RoundTrip verifies the field survives a
+// JSON marshal/unmarshal round-trip for both true and false.
+func TestShowCreatedByInInvoicePreview_RoundTrip(t *testing.T) {
+	cases := []struct {
+		name  string
+		value bool
+	}{
+		{"true persists", true},
+		{"false persists", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			original := StoreSettings{ShowCreatedByInInvoicePreview: c.value}
+			data, err := json.Marshal(original)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			var decoded StoreSettings
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			if decoded.ShowCreatedByInInvoicePreview != c.value {
+				t.Errorf("round-trip: got %v, want %v", decoded.ShowCreatedByInInvoicePreview, c.value)
+			}
+		})
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_FromJSONString simulates the request body
+// the frontend sends when the store setting is toggled and saved.
+func TestShowCreatedByInInvoicePreview_FromJSONString(t *testing.T) {
+	cases := []struct {
+		jsonInput string
+		want      bool
+	}{
+		{`{"show_created_by_in_invoice_preview": true}`, true},
+		{`{"show_created_by_in_invoice_preview": false}`, false},
+		{`{}`, false}, // absent field → zero value (default off)
+	}
+	for _, c := range cases {
+		var s StoreSettings
+		if err := json.Unmarshal([]byte(c.jsonInput), &s); err != nil {
+			t.Fatalf("Unmarshal(%q): %v", c.jsonInput, err)
+		}
+		if s.ShowCreatedByInInvoicePreview != c.want {
+			t.Errorf("json=%q: got %v, want %v", c.jsonInput, s.ShowCreatedByInInvoicePreview, c.want)
+		}
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_IndependentOfShowReceivedBy verifies that
+// the new field is independent of the existing ShowReceivedByFooterInInvoice
+// field — enabling one must not affect the other.
+func TestShowCreatedByInInvoicePreview_IndependentOfShowReceivedBy(t *testing.T) {
+	s := StoreSettings{
+		ShowReceivedByFooterInInvoice: true,
+		ShowCreatedByInInvoicePreview: false,
+	}
+	data, _ := json.Marshal(s)
+	var decoded StoreSettings
+	json.Unmarshal(data, &decoded)
+	if !decoded.ShowReceivedByFooterInInvoice {
+		t.Error("ShowReceivedByFooterInInvoice should be true")
+	}
+	if decoded.ShowCreatedByInInvoicePreview {
+		t.Error("ShowCreatedByInInvoicePreview should be false")
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_BothPreviewFlagsTrue verifies that both
+// ShowCreatedByInInvoicePreview and ShowReceivedByFooterInInvoice can be true
+// simultaneously without interference.
+func TestShowCreatedByInInvoicePreview_BothPreviewFlagsTrue(t *testing.T) {
+	s := StoreSettings{
+		ShowReceivedByFooterInInvoice: true,
+		ShowCreatedByInInvoicePreview: true,
+	}
+	data, _ := json.Marshal(s)
+	var decoded StoreSettings
+	json.Unmarshal(data, &decoded)
+	if !decoded.ShowReceivedByFooterInInvoice {
+		t.Error("ShowReceivedByFooterInInvoice should be true")
+	}
+	if !decoded.ShowCreatedByInInvoicePreview {
+		t.Error("ShowCreatedByInInvoicePreview should be true")
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_NestedInStore verifies that the field
+// appears correctly when StoreSettings is embedded in a Store and the Store
+// is marshaled to JSON.
+func TestShowCreatedByInInvoicePreview_NestedInStore(t *testing.T) {
+	store := Store{
+		Settings: StoreSettings{ShowCreatedByInInvoicePreview: true},
+	}
+	data, err := json.Marshal(store)
+	if err != nil {
+		t.Fatalf("json.Marshal Store failed: %v", err)
+	}
+	var top map[string]interface{}
+	if err := json.Unmarshal(data, &top); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	settingsRaw, ok := top["settings"]
+	if !ok {
+		t.Fatal("expected 'settings' key in marshaled Store")
+	}
+	settingsMap, ok := settingsRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("settings value is %T, expected map", settingsRaw)
+	}
+	v, ok := settingsMap["show_created_by_in_invoice_preview"]
+	if !ok {
+		t.Error("expected 'show_created_by_in_invoice_preview' inside settings object")
+	}
+	if v != true {
+		t.Errorf("expected true, got %v", v)
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_NestedInStoreFalse verifies that the field
+// is present (not omitted) in a nested Store even when false, ensuring the
+// frontend always receives an explicit signal.
+func TestShowCreatedByInInvoicePreview_NestedInStoreFalse(t *testing.T) {
+	store := Store{
+		Settings: StoreSettings{ShowCreatedByInInvoicePreview: false},
+	}
+	data, err := json.Marshal(store)
+	if err != nil {
+		t.Fatalf("json.Marshal Store failed: %v", err)
+	}
+	var top map[string]interface{}
+	if err := json.Unmarshal(data, &top); err != nil {
+		t.Fatalf("json.Unmarshal to map failed: %v", err)
+	}
+	settingsMap := top["settings"].(map[string]interface{})
+	v, ok := settingsMap["show_created_by_in_invoice_preview"]
+	if !ok {
+		t.Error("show_created_by_in_invoice_preview must be present even when false (no omitempty)")
+	}
+	if v != false {
+		t.Errorf("expected false, got %v", v)
+	}
+}
+
+// TestShowCreatedByInInvoicePreview_IndependentOfAllOtherInvoiceFlags verifies
+// toggling ShowCreatedByInInvoicePreview does not corrupt any of the three
+// other related invoice-display flags.
+func TestShowCreatedByInInvoicePreview_IndependentOfAllOtherInvoiceFlags(t *testing.T) {
+	s := StoreSettings{
+		ShowAddressInInvoiceFooter:    true,
+		ShowReceivedByFooterInInvoice: true,
+		ShowSellerInfoInInvoice:       true,
+		ShowCreatedByInInvoicePreview: false,
+	}
+	data, _ := json.Marshal(s)
+	var decoded StoreSettings
+	json.Unmarshal(data, &decoded)
+
+	if !decoded.ShowAddressInInvoiceFooter {
+		t.Error("ShowAddressInInvoiceFooter should be true")
+	}
+	if !decoded.ShowReceivedByFooterInInvoice {
+		t.Error("ShowReceivedByFooterInInvoice should be true")
+	}
+	if !decoded.ShowSellerInfoInInvoice {
+		t.Error("ShowSellerInfoInInvoice should be true")
+	}
+	if decoded.ShowCreatedByInInvoicePreview {
+		t.Error("ShowCreatedByInInvoicePreview should be false")
+	}
+}
