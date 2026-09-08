@@ -95,6 +95,7 @@ type Store struct {
 	StockTransferSerialNumber              SerialNumber          `bson:"stock_transfer_serial_number" json:"stock_transfer_serial_number"`
 	NonVATSalesSerialNumber                SerialNumber          `bson:"non_vat_sales_serial_number" json:"non_vat_sales_serial_number"`
 	NonVATSalesReturnSerialNumber          SerialNumber          `bson:"non_vat_sales_return_serial_number" json:"non_vat_sales_return_serial_number"`
+	RFQReceivedSerialNumber               SerialNumber          `bson:"rfq_received_serial_number" json:"rfq_received_serial_number"`
 	ShowAddressInInvoiceFooter             bool                  `bson:"show_address_in_invoice_footer" json:"show_address_in_invoice_footer,omitempty"`
 	DefaultQuotationValidityDays           *int64                `bson:"default_quotation_validity_days" json:"default_quotation_validity_days"`
 	DefaultQuotationDeliveryDays           *int64                `bson:"default_quotation_delivery_days" json:"default_quotation_delivery_days"`
@@ -121,6 +122,47 @@ type StoreList struct {
 	Code         string             `json:"code" bson:"code"`
 	BranchName   string             `json:"branch_name" bson:"branch_name"`
 	VATNo        string             `json:"vat_no" bson:"vat_no"`
+}
+
+// RFQEmailAccount represents one connected email source for receiving RFQs.
+type RFQEmailAccount struct {
+	ID       primitive.ObjectID `bson:"_id" json:"id"`
+	Provider string             `bson:"provider" json:"provider"`
+	Email    string             `bson:"email" json:"email"`
+	// Gmail
+	GmailClientID     string `bson:"gmail_client_id,omitempty" json:"gmail_client_id,omitempty"`
+	GmailClientSecret string `bson:"gmail_client_secret,omitempty" json:"-"`
+	GmailAccessToken  string `bson:"gmail_access_token,omitempty" json:"-"`
+	GmailRefreshToken string `bson:"gmail_refresh_token,omitempty" json:"-"`
+	// Outlook
+	OutlookTenantID     string `bson:"outlook_tenant_id,omitempty" json:"outlook_tenant_id,omitempty"`
+	OutlookClientID     string `bson:"outlook_client_id,omitempty" json:"outlook_client_id,omitempty"`
+	OutlookClientSecret string `bson:"outlook_client_secret,omitempty" json:"-"`
+	OutlookAccessToken  string `bson:"outlook_access_token,omitempty" json:"-"`
+	OutlookRefreshToken string `bson:"outlook_refresh_token,omitempty" json:"-"`
+	// Zoho
+	ZohoClientID       string `bson:"zoho_client_id,omitempty" json:"zoho_client_id,omitempty"`
+	ZohoClientSecret   string `bson:"zoho_client_secret,omitempty" json:"-"`
+	ZohoAccessToken    string `bson:"zoho_access_token,omitempty" json:"-"`
+	ZohoRefreshToken   string `bson:"zoho_refresh_token,omitempty" json:"-"`
+	ZohoAccountsServer string `bson:"zoho_accounts_server,omitempty" json:"-"`
+	// Mailgun
+	MailgunAPIKey string `bson:"mailgun_api_key,omitempty" json:"-"`
+	MailgunDomain string `bson:"mailgun_domain,omitempty" json:"mailgun_domain,omitempty"`
+	// SendGrid
+	SendGridAPIKey string `bson:"sendgrid_api_key,omitempty" json:"-"`
+	// Postmark
+	PostmarkServerToken string `bson:"postmark_server_token,omitempty" json:"-"`
+	// AWS SES
+	AWSSESAccessKeyID string `bson:"aws_ses_access_key_id,omitempty" json:"aws_ses_access_key_id,omitempty"`
+	AWSSESSecretKey   string `bson:"aws_ses_secret_key,omitempty" json:"-"`
+	AWSSESRegion      string `bson:"aws_ses_region,omitempty" json:"aws_ses_region,omitempty"`
+	// IMAP
+	IMAPHost     string `bson:"imap_host,omitempty" json:"imap_host,omitempty"`
+	IMAPPort     int    `bson:"imap_port,omitempty" json:"imap_port,omitempty"`
+	IMAPUsername string `bson:"imap_username,omitempty" json:"imap_username,omitempty"`
+	IMAPPassword string `bson:"imap_password,omitempty" json:"-"`
+	IMAPUseSSL   bool   `bson:"imap_use_ssl" json:"imap_use_ssl"`
 }
 
 type StoreSettings struct {
@@ -209,6 +251,16 @@ type StoreSettings struct {
 	BotEvolutionInstanceName                    string          `bson:"bot_evolution_instance_name" json:"bot_evolution_instance_name,omitempty"`
 	BotEvolutionAPIKey                          string          `bson:"bot_evolution_api_key" json:"bot_evolution_api_key,omitempty"`
 	BotEvolutionAPIURL                          string          `bson:"bot_evolution_api_url" json:"bot_evolution_api_url,omitempty"`
+	// Official WhatsApp Business API (Meta Cloud API) credentials for the bot
+	BotWABAPhoneNumberID       string `bson:"bot_waba_phone_number_id"        json:"bot_waba_phone_number_id,omitempty"`
+	BotWABAAccessToken         string `bson:"bot_waba_access_token"           json:"-"`
+	// WhatsApp Business Account ID — needed to list message templates
+	BotWABABusinessAccountID   string `bson:"bot_waba_business_account_id"    json:"bot_waba_business_account_id,omitempty"`
+	// RFQ PDF title shown on the PDF sent to suppliers
+	RFQPDFTitle                string `bson:"rfq_pdf_title"                   json:"rfq_pdf_title,omitempty"`
+	// WABA template names for specific use cases
+	WABATemplateRFQSupplier    string `bson:"waba_template_rfq_supplier"      json:"waba_template_rfq_supplier,omitempty"`
+	WABATemplateInvoiceShare   string `bson:"waba_template_invoice_share"     json:"waba_template_invoice_share,omitempty"`
 	// LLM settings (for parsing RFQ content)
 	RFQLLMProvider                              string          `bson:"rfq_llm_provider" json:"rfq_llm_provider,omitempty"`
 	RFQLLMModel                                 string          `bson:"rfq_llm_model" json:"rfq_llm_model,omitempty"`
@@ -271,6 +323,9 @@ type StoreSettings struct {
 	RFQIMAPUsername string `bson:"rfq_imap_username" json:"rfq_imap_username,omitempty"`
 	RFQIMAPPassword string `bson:"rfq_imap_password" json:"rfq_imap_password,omitempty"`
 	RFQIMAPUseSSL   bool   `bson:"rfq_imap_use_ssl" json:"rfq_imap_use_ssl"`
+
+	// Multi-account email sources (replaces the single-account fields above)
+	RFQEmailAccounts []RFQEmailAccount `bson:"rfq_email_accounts" json:"rfq_email_accounts,omitempty"`
 	// Store RFQ WhatsApp number (forwards RFQs to suppliers) — kept for backward compat
 	StoreRFQWhatsAppPhone                       string          `bson:"store_rfq_whatsapp_phone" json:"store_rfq_whatsapp_phone,omitempty"`
 	StoreRFQEvolutionInstanceName               string          `bson:"store_rfq_evolution_instance_name" json:"store_rfq_evolution_instance_name,omitempty"`
@@ -288,6 +343,8 @@ type StoreSettings struct {
 	SaveSidebarConfigToServer bool `bson:"save_sidebar_config_to_server" json:"save_sidebar_config_to_server"`
 	// Stores the sidebar config (id+visible array) on the server
 	SidebarConfig []map[string]interface{} `bson:"sidebar_config,omitempty" json:"sidebar_config,omitempty"`
+	// When true, invoice/receivables previews show a "Created By" column next to Remarks
+	ShowCreatedByInInvoicePreview bool `bson:"show_created_by_in_invoice_preview" json:"show_created_by_in_invoice_preview"`
 }
 
 type InvoiceSettings struct {
