@@ -353,6 +353,33 @@ type StoreSettings struct {
 	SidebarConfig []map[string]interface{} `bson:"sidebar_config,omitempty" json:"sidebar_config,omitempty"`
 	// When true, invoice/receivables previews show a "Created By" column next to Remarks
 	ShowCreatedByInInvoicePreview bool `bson:"show_created_by_in_invoice_preview" json:"show_created_by_in_invoice_preview"`
+
+	// ── Outgoing Email (for sending emails from the app) ──────────────────────────────────────
+	// Provider: smtp | sendgrid | mailgun | ses | postmark | brevo | resend
+	OutgoingEmailProvider    string `bson:"outgoing_email_provider,omitempty" json:"outgoing_email_provider,omitempty"`
+	OutgoingEmailFromName    string `bson:"outgoing_email_from_name,omitempty" json:"outgoing_email_from_name,omitempty"`
+	OutgoingEmailFromAddress string `bson:"outgoing_email_from_address,omitempty" json:"outgoing_email_from_address,omitempty"`
+	// SMTP
+	OutgoingEmailSMTPHost     string `bson:"outgoing_email_smtp_host,omitempty" json:"outgoing_email_smtp_host,omitempty"`
+	OutgoingEmailSMTPPort     int    `bson:"outgoing_email_smtp_port,omitempty" json:"outgoing_email_smtp_port,omitempty"`
+	OutgoingEmailSMTPUsername string `bson:"outgoing_email_smtp_username,omitempty" json:"outgoing_email_smtp_username,omitempty"`
+	OutgoingEmailSMTPPassword string `bson:"outgoing_email_smtp_password,omitempty" json:"outgoing_email_smtp_password,omitempty"`
+	OutgoingEmailSMTPUseTLS   bool   `bson:"outgoing_email_smtp_use_tls" json:"outgoing_email_smtp_use_tls"`
+	// SendGrid
+	OutgoingEmailSendGridAPIKey string `bson:"outgoing_email_sendgrid_api_key,omitempty" json:"outgoing_email_sendgrid_api_key,omitempty"`
+	// Mailgun
+	OutgoingEmailMailgunAPIKey string `bson:"outgoing_email_mailgun_api_key,omitempty" json:"outgoing_email_mailgun_api_key,omitempty"`
+	OutgoingEmailMailgunDomain string `bson:"outgoing_email_mailgun_domain,omitempty" json:"outgoing_email_mailgun_domain,omitempty"`
+	// AWS SES
+	OutgoingEmailSESAccessKeyID string `bson:"outgoing_email_ses_access_key_id,omitempty" json:"outgoing_email_ses_access_key_id,omitempty"`
+	OutgoingEmailSESSecretKey   string `bson:"outgoing_email_ses_secret_key,omitempty" json:"outgoing_email_ses_secret_key,omitempty"`
+	OutgoingEmailSESRegion      string `bson:"outgoing_email_ses_region,omitempty" json:"outgoing_email_ses_region,omitempty"`
+	// Postmark
+	OutgoingEmailPostmarkServerToken string `bson:"outgoing_email_postmark_server_token,omitempty" json:"outgoing_email_postmark_server_token,omitempty"`
+	// Brevo (Sendinblue)
+	OutgoingEmailBrevoAPIKey string `bson:"outgoing_email_brevo_api_key,omitempty" json:"outgoing_email_brevo_api_key,omitempty"`
+	// Resend
+	OutgoingEmailResendAPIKey string `bson:"outgoing_email_resend_api_key,omitempty" json:"outgoing_email_resend_api_key,omitempty"`
 }
 
 type InvoiceSettings struct {

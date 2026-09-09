@@ -736,11 +736,17 @@ func main() {
 	router.HandleFunc("/v1/rfq-bot/qr", controller.GetBotWhatsAppQR).Methods("GET")
 	router.HandleFunc("/v1/rfq-bot/status", controller.GetBotWhatsAppStatus).Methods("GET")
 	router.HandleFunc("/v1/rfq-bot/disconnect", controller.DisconnectBotWhatsApp).Methods("DELETE")
+	router.HandleFunc("/v1/rfq-bot/webhook", controller.VerifyRFQBotWebhook).Methods("GET")
 	router.HandleFunc("/v1/rfq-bot/webhook", controller.HandleRFQBotWebhook).Methods("POST")
 	router.HandleFunc("/v1/rfq-bot/check-llm", controller.CheckRFQLLMConnection).Methods("POST")
 	router.HandleFunc("/v1/rfq-bot/check-whatsapp", controller.CheckWhatsAppNumber).Methods("GET")
+	router.HandleFunc("/v1/rfq-bot/waba-templates", controller.GetWABATemplates).Methods("GET")
+	router.HandleFunc("/v1/rfq-bot/waba-business-account-id", controller.SaveWABABusinessAccountID).Methods("POST")
+	router.HandleFunc("/v1/rfq-bot/upload-media", controller.UploadWABAMedia).Methods("POST")
+	router.HandleFunc("/v1/rfq-bot/waba-test-message", controller.SendWABATestMessage).Methods("POST")
 	router.HandleFunc("/v1/rfq-bot/events", controller.RFQEventsHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-bot/populate-suppliers", controller.PopulateSuppliersFromVendors).Methods("POST")
+	router.HandleFunc("/v1/rfq-bot/test-google-maps", controller.TestGoogleMapsHandler).Methods("GET")
 	// AI RFQ Bot – Store RFQ WhatsApp (sends to suppliers)
 	router.HandleFunc("/v1/rfq-store/connect", controller.ConnectStoreRFQWhatsApp).Methods("POST")
 	router.HandleFunc("/v1/rfq-store/qr", controller.GetStoreRFQWhatsAppQR).Methods("GET")
@@ -753,15 +759,41 @@ func main() {
 	router.HandleFunc("/v1/rfq-email/disconnect", controller.DisconnectRFQEmail).Methods("DELETE")
 	router.HandleFunc("/v1/rfq-email/oauth-callback", controller.HandleRFQEmailOAuthCallback).Methods("GET")
 	router.HandleFunc("/v1/rfq-email/webhook", controller.HandleRFQEmailWebhook).Methods("POST")
+
+	// Meta WhatsApp Cloud API webhook (GET = verification, POST = events)
+	router.HandleFunc("/v1/meta-whatsapp/webhook", controller.HandleMetaWhatsAppWebhook).Methods("GET", "POST")
+
+	// Multi-account RFQ email source
+	router.HandleFunc("/v1/rfq-email/account", controller.ConnectRFQEmailAccount).Methods("POST")
+	router.HandleFunc("/v1/rfq-email/accounts", controller.GetRFQEmailAccounts).Methods("GET")
+	router.HandleFunc("/v1/rfq-email/account/{accountID}", controller.DisconnectRFQEmailAccount).Methods("DELETE")
+	router.HandleFunc("/v1/rfq-email/account/{accountID}/status", controller.PollRFQEmailAccountStatus).Methods("GET")
 	// AI RFQ Bot – RFQ received list & detail
 	router.HandleFunc("/v1/rfq-received", controller.ListRFQReceivedHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-received", controller.CreateRFQReceivedHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/extract", controller.ExtractRFQFromFilesHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}", controller.GetRFQReceivedHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-received/{id}", controller.UpdateRFQReceivedHandler).Methods("PUT")
 	router.HandleFunc("/v1/rfq-received/{id}/process", controller.TriggerRFQProcess).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/send", controller.SendRFQToSuppliersHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/send-preview", controller.GetRFQSendPreviewHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-received/{id}/send-test", controller.SendRFQTestMessageHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/generate-image", controller.GenerateRFQPreviewImageHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/generate-pdf", controller.GenerateRFQPDFHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/supplier-reply", controller.AddSupplierReplyHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/supplier-replies", controller.ListSupplierRepliesHandler).Methods("GET")
+	router.HandleFunc("/v1/rfq-received/{id}/supplier-replies", controller.AddManualSupplierReplyHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/supplier-replies/parse-file", controller.ParseQuotationFileHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/upload-attachment", controller.UploadRFQAttachmentHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/supplier-replies/{reply_id}", controller.DeleteSupplierReplyHandler).Methods("DELETE")
 	// AI RFQ Bot – Supplier CRUD
 	router.HandleFunc("/v1/rfq-suppliers", controller.ListRFQSuppliersHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-suppliers", controller.CreateRFQSupplierHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-suppliers/{id}", controller.UpdateRFQSupplierHandler).Methods("PUT")
 	router.HandleFunc("/v1/rfq-suppliers/{id}", controller.DeleteRFQSupplierHandler).Methods("DELETE")
+
+	// Outgoing email – test send
+	router.HandleFunc("/v1/outgoing-email/test", controller.TestOutgoingEmailHandler).Methods("POST")
 
 	router.HandleFunc("/v1/chart-image-share", controller.ShareChartImage).Methods("POST")
 
@@ -828,6 +860,10 @@ func main() {
 	// Receipt (customer deposit/withdrawal) PDF generation via headless Chrome
 	router.HandleFunc("/v1/receipt/pdf", controller.ReceiptPDF).Methods("POST")
 	router.HandleFunc("/v1/receipt/print-data/{key}", controller.ReceiptPrintData).Methods("GET")
+
+	// RFQ Received PDF generation via headless Chrome
+	router.HandleFunc("/v1/rfq/pdf", controller.RFQReceivedPDF).Methods("POST")
+	router.HandleFunc("/v1/rfq/print-data/{key}", controller.RFQReceivedPrintData).Methods("GET")
 
 	// Posting (balance sheet / journal) PDF generation via headless Chrome
 	router.HandleFunc("/v1/posting/pdf", controller.PostingPDF).Methods("POST")
