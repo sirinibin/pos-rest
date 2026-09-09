@@ -163,6 +163,9 @@ type RFQEmailAccount struct {
 	IMAPUsername string `bson:"imap_username,omitempty" json:"imap_username,omitempty"`
 	IMAPPassword string `bson:"imap_password,omitempty" json:"-"`
 	IMAPUseSSL   bool   `bson:"imap_use_ssl" json:"imap_use_ssl"`
+	// OAuthCallbackURL is the redirect URI used during the OAuth flow for this account.
+	// Stored so the callback handler can use the same URL when exchanging the code.
+	OAuthCallbackURL string `bson:"oauth_callback_url,omitempty" json:"oauth_callback_url,omitempty"`
 }
 
 type StoreSettings struct {
@@ -253,11 +256,13 @@ type StoreSettings struct {
 	BotEvolutionAPIURL                          string          `bson:"bot_evolution_api_url" json:"bot_evolution_api_url,omitempty"`
 	// Official WhatsApp Business API (Meta Cloud API) credentials for the bot
 	BotWABAPhoneNumberID       string `bson:"bot_waba_phone_number_id"        json:"bot_waba_phone_number_id,omitempty"`
-	BotWABAAccessToken         string `bson:"bot_waba_access_token"           json:"-"`
+	BotWABAAccessToken         string `bson:"bot_waba_access_token,omitempty"  json:"-"`
 	// WhatsApp Business Account ID — needed to list message templates
 	BotWABABusinessAccountID   string `bson:"bot_waba_business_account_id"    json:"bot_waba_business_account_id,omitempty"`
 	// RFQ PDF title shown on the PDF sent to suppliers
 	RFQPDFTitle                string `bson:"rfq_pdf_title"                   json:"rfq_pdf_title,omitempty"`
+	// Contact number shown in the RFQ template message sent to suppliers
+	RFQMessageContactPhone     string `bson:"rfq_message_contact_phone"       json:"rfq_message_contact_phone,omitempty"`
 	// WABA template names for specific use cases
 	WABATemplateRFQSupplier    string `bson:"waba_template_rfq_supplier"      json:"waba_template_rfq_supplier,omitempty"`
 	WABATemplateInvoiceShare   string `bson:"waba_template_invoice_share"     json:"waba_template_invoice_share,omitempty"`
@@ -286,21 +291,21 @@ type StoreSettings struct {
 	// Gmail OAuth2 (Gmail API)
 	RFQGmailClientID      string `bson:"rfq_gmail_client_id" json:"rfq_gmail_client_id,omitempty"`
 	RFQGmailClientSecret  string `bson:"rfq_gmail_client_secret" json:"rfq_gmail_client_secret,omitempty"`
-	RFQGmailAccessToken   string `bson:"rfq_gmail_access_token" json:"-"`
-	RFQGmailRefreshToken  string `bson:"rfq_gmail_refresh_token" json:"-"`
+	RFQGmailAccessToken   string `bson:"rfq_gmail_access_token,omitempty" json:"-"`
+	RFQGmailRefreshToken  string `bson:"rfq_gmail_refresh_token,omitempty" json:"-"`
 
 	// Microsoft Outlook / Office 365 (Microsoft Graph API)
 	RFQOutlookTenantID     string `bson:"rfq_outlook_tenant_id" json:"rfq_outlook_tenant_id,omitempty"`
 	RFQOutlookClientID     string `bson:"rfq_outlook_client_id" json:"rfq_outlook_client_id,omitempty"`
 	RFQOutlookClientSecret string `bson:"rfq_outlook_client_secret" json:"rfq_outlook_client_secret,omitempty"`
-	RFQOutlookAccessToken  string `bson:"rfq_outlook_access_token" json:"-"`
-	RFQOutlookRefreshToken string `bson:"rfq_outlook_refresh_token" json:"-"`
+	RFQOutlookAccessToken  string `bson:"rfq_outlook_access_token,omitempty" json:"-"`
+	RFQOutlookRefreshToken string `bson:"rfq_outlook_refresh_token,omitempty" json:"-"`
 
 	// Zoho Mail (Zoho Mail API OAuth2)
 	RFQZohoClientID      string `bson:"rfq_zoho_client_id" json:"rfq_zoho_client_id,omitempty"`
 	RFQZohoClientSecret  string `bson:"rfq_zoho_client_secret" json:"rfq_zoho_client_secret,omitempty"`
-	RFQZohoAccessToken   string `bson:"rfq_zoho_access_token" json:"-"`
-	RFQZohoRefreshToken  string `bson:"rfq_zoho_refresh_token" json:"-"`
+	RFQZohoAccessToken   string `bson:"rfq_zoho_access_token,omitempty" json:"-"`
+	RFQZohoRefreshToken  string `bson:"rfq_zoho_refresh_token,omitempty" json:"-"`
 
 	// Mailgun (inbound webhook)
 	RFQMailgunAPIKey string `bson:"rfq_mailgun_api_key" json:"rfq_mailgun_api_key,omitempty"`
@@ -326,11 +331,14 @@ type StoreSettings struct {
 
 	// Multi-account email sources (replaces the single-account fields above)
 	RFQEmailAccounts []RFQEmailAccount `bson:"rfq_email_accounts" json:"rfq_email_accounts,omitempty"`
-	// Store RFQ WhatsApp number (forwards RFQs to suppliers) — kept for backward compat
-	StoreRFQWhatsAppPhone                       string          `bson:"store_rfq_whatsapp_phone" json:"store_rfq_whatsapp_phone,omitempty"`
-	StoreRFQEvolutionInstanceName               string          `bson:"store_rfq_evolution_instance_name" json:"store_rfq_evolution_instance_name,omitempty"`
-	StoreRFQEvolutionAPIKey                     string          `bson:"store_rfq_evolution_api_key" json:"store_rfq_evolution_api_key,omitempty"`
-	StoreRFQEvolutionAPIURL                     string          `bson:"store_rfq_evolution_api_url" json:"store_rfq_evolution_api_url,omitempty"`
+	// Store RFQ WhatsApp number (forwards RFQs to suppliers) — Meta Cloud API
+	StoreRFQWABAPhoneNumberID string `bson:"store_rfq_waba_phone_number_id" json:"store_rfq_waba_phone_number_id,omitempty"`
+	StoreRFQWABAAccessToken   string `bson:"store_rfq_waba_access_token,omitempty" json:"-"`
+	// Legacy Evolution API fields (no longer used — kept for zero-downtime migration)
+	StoreRFQWhatsAppPhone         string `bson:"store_rfq_whatsapp_phone" json:"store_rfq_whatsapp_phone,omitempty"`
+	StoreRFQEvolutionInstanceName string `bson:"store_rfq_evolution_instance_name" json:"store_rfq_evolution_instance_name,omitempty"`
+	StoreRFQEvolutionAPIKey       string `bson:"store_rfq_evolution_api_key" json:"store_rfq_evolution_api_key,omitempty"`
+	StoreRFQEvolutionAPIURL       string `bson:"store_rfq_evolution_api_url" json:"store_rfq_evolution_api_url,omitempty"`
 	// When true, auto-populate/update RFQ supplier whenever a purchase is created or updated
 	EnableRFQSupplierOnPurchase bool `bson:"enable_rfq_supplier_on_purchase" json:"enable_rfq_supplier_on_purchase"`
 	// When true, the UI switches to RTL layout whenever the user selects Arabic as the display language

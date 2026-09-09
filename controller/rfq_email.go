@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,10 +16,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -251,8 +255,11 @@ func exchangeOutlookCode(code, tenantID, clientID, clientSecret, redirectURI str
 	return &tok, nil
 }
 
-func exchangeZohoCode(code, clientID, clientSecret, redirectURI string) (*rfqOAuthToken, error) {
-	resp, err := http.PostForm("https://accounts.zoho.com/oauth/v2/token", url.Values{
+func exchangeZohoCode(code, clientID, clientSecret, redirectURI, accountsServer string) (*rfqOAuthToken, error) {
+	if accountsServer == "" {
+		accountsServer = "https://accounts.zoho.com"
+	}
+	resp, err := http.PostForm(accountsServer+"/oauth/v2/token", url.Values{
 		"code": {code}, "client_id": {clientID}, "client_secret": {clientSecret},
 		"redirect_uri": {redirectURI}, "grant_type": {"authorization_code"},
 	})
@@ -618,6 +625,7 @@ func HandleRFQEmailOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	stateRaw := r.URL.Query().Get("state")
 	errParam := r.URL.Query().Get("error")
+	zohoAccountsServer := r.URL.Query().Get("accounts-server")
 
 	closeHTML := `<html><body><script>
 if(window.opener){window.opener.postMessage({rfqEmailOAuth:'done'},'*');}
@@ -645,7 +653,99 @@ if(window.opener){window.opener.postMessage({rfqEmailOAuth:'error',msg:%q},'*');
 		fail("invalid state")
 		return
 	}
-	parts := strings.SplitN(string(raw), ":", 2)
+	decoded := string(raw)
+
+	// New multi-account format: storeID:acct:accountID
+	// Legacy single-account format: storeID:provider
+	triParts := strings.SplitN(decoded, ":", 3)
+	if len(triParts) == 3 && triParts[1] == "acct" {
+		// ── Multi-account OAuth callback ──────────────────────────────
+		storeID := triParts[0]
+		accountIDHex := triParts[2]
+		accountID, err := primitive.ObjectIDFromHex(accountIDHex)
+		if err != nil {
+			fail("invalid account id in state")
+			return
+		}
+		store, storeObjID, err := rfqEmailGetStore(storeID)
+		if err != nil {
+			fail("store not found")
+			return
+		}
+		// Find the draft account
+		var acct *models.RFQEmailAccount
+		for i := range store.Settings.RFQEmailAccounts {
+			if store.Settings.RFQEmailAccounts[i].ID == accountID {
+				acct = &store.Settings.RFQEmailAccounts[i]
+				break
+			}
+		}
+		if acct == nil {
+			ids := make([]string, len(store.Settings.RFQEmailAccounts))
+			for i, a := range store.Settings.RFQEmailAccounts {
+				ids[i] = a.ID.Hex()
+			}
+			log.Printf("rfq_email oauth callback: account %s not found in store %s (have %d accounts: %v)", accountIDHex, storeID, len(ids), ids)
+			fail("account not found")
+			return
+		}
+		redirectURI := acct.OAuthCallbackURL
+		if redirectURI == "" {
+			redirectURI = rfqEmailOAuthCallbackURL()
+		}
+		var email, accessToken, refreshToken string
+		switch acct.Provider {
+		case "gmail":
+			tok, err := exchangeGmailCode(code, acct.GmailClientID, acct.GmailClientSecret, redirectURI)
+			if err != nil {
+				fail(err.Error())
+				return
+			}
+			email = fetchGmailEmail(tok.AccessToken)
+			accessToken, refreshToken = tok.AccessToken, tok.RefreshToken
+			rfqEmailAccountUpdate(storeObjID, accountID, bson.M{
+				"gmail_access_token":  accessToken,
+				"gmail_refresh_token": refreshToken,
+				"email":               email,
+			})
+		case "outlook":
+			tok, err := exchangeOutlookCode(code, acct.OutlookTenantID, acct.OutlookClientID, acct.OutlookClientSecret, redirectURI)
+			if err != nil {
+				fail(err.Error())
+				return
+			}
+			email = fetchOutlookEmail(tok.AccessToken)
+			accessToken, refreshToken = tok.AccessToken, tok.RefreshToken
+			rfqEmailAccountUpdate(storeObjID, accountID, bson.M{
+				"outlook_access_token":  accessToken,
+				"outlook_refresh_token": refreshToken,
+				"email":                 email,
+			})
+		case "zoho":
+			tok, err := exchangeZohoCode(code, acct.ZohoClientID, acct.ZohoClientSecret, redirectURI, zohoAccountsServer)
+			if err != nil {
+				fail(err.Error())
+				return
+			}
+			email = fetchZohoEmail(tok.AccessToken)
+			accessToken, refreshToken = tok.AccessToken, tok.RefreshToken
+			rfqEmailAccountUpdate(storeObjID, accountID, bson.M{
+				"zoho_access_token":    accessToken,
+				"zoho_refresh_token":   refreshToken,
+				"zoho_accounts_server": zohoAccountsServer,
+				"email":                email,
+			})
+		default:
+			fail("unknown provider: " + acct.Provider)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, closeHTML)
+		return
+	}
+
+	// ── Legacy single-account OAuth callback ──────────────────────────────────
+	parts := strings.SplitN(decoded, ":", 2)
 	if len(parts) != 2 {
 		fail("malformed state")
 		return
@@ -689,7 +789,7 @@ if(window.opener){window.opener.postMessage({rfqEmailOAuth:'error',msg:%q},'*');
 			"settings.rfq_email_address":         email,
 		}
 	case "zoho":
-		tok, err := exchangeZohoCode(code, s.RFQZohoClientID, s.RFQZohoClientSecret, redirectURI)
+		tok, err := exchangeZohoCode(code, s.RFQZohoClientID, s.RFQZohoClientSecret, redirectURI, zohoAccountsServer)
 		if err != nil {
 			fail(err.Error())
 			return
@@ -715,7 +815,9 @@ if(window.opener){window.opener.postMessage({rfqEmailOAuth:'error',msg:%q},'*');
 }
 
 // HandleRFQEmailWebhook receives inbound email events from Mailgun, SendGrid,
-// Postmark, or Amazon SES, and feeds them into the RFQ processing pipeline.
+// Postmark, Amazon SES, or IMAP, analyses the content with the store's LLM to
+// detect whether it is an RFQ, extracts products and customer information, links
+// an existing customer when found, and creates a ready_to_send RFQ record.
 func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	storeIDStr := r.URL.Query().Get("store_id")
@@ -741,13 +843,79 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	emailText := fmt.Sprintf("Subject: %s\n\n%s", subject, body)
+
+	// ── Step 1: LLM classification — is this email an RFQ? ──────────────────
+	if store.Settings.RFQLLMAPIKey != "" {
+		if !isRFQMessage(store, emailText, nil) {
+			log.Printf("rfq_email: email from %s is not an RFQ — ignoring", sender)
+			json.NewEncoder(w).Encode(map[string]string{"status": "not an RFQ"})
+			return
+		}
+	}
+
+	// ── Step 2: LLM extraction — products + customer info ───────────────────
+	var extracted rfqExtractResult
+	if store.Settings.RFQLLMAPIKey != "" {
+		llmProvider := strings.ToLower(store.Settings.RFQLLMProvider)
+		raw, llmErr := callLLMExtractRFQ(
+			store.Settings.RFQLLMAPIKey,
+			store.Settings.RFQLLMModel,
+			llmProvider,
+			emailText, nil, nil,
+		)
+		if llmErr != nil {
+			log.Printf("rfq_email: LLM extraction error for email from %s: %v", sender, llmErr)
+		} else {
+			jsonStr := extractJSONFromLLMResponse(raw)
+			if err2 := json.Unmarshal([]byte(jsonStr), &extracted); err2 != nil {
+				log.Printf("rfq_email: LLM JSON parse error: %v (raw: %s)", err2, raw)
+			}
+		}
+	}
+
+	// ── Step 3: Customer lookup by email, phone, or VAT number ──────────────
+	// Prefer the email address from the extraction; fall back to the sender address.
+	lookupEmail := extracted.CustomerEmail
+	if lookupEmail == "" {
+		lookupEmail = sender
+	}
+	var customerID *primitive.ObjectID
+	if customer, _ := store.FindCustomerByEmailOrPhone(lookupEmail, extracted.CustomerPhone, bson.M{}); customer != nil {
+		customerID = &customer.ID
+		log.Printf("rfq_email: matched email to existing customer %s (%s)", customer.Name, customer.ID.Hex())
+	}
+
+	// ── Step 4: Build and persist the RFQ ───────────────────────────────────
+	var products []models.RFQProduct
+	for _, p := range extracted.Products {
+		products = append(products, models.RFQProduct{
+			Name:     p.Name,
+			PartNo:   p.PartNo,
+			Quantity: p.Quantity,
+			Unit:     p.Unit,
+		})
+	}
+
+	fromName := extracted.CustomerName
+	if fromName == "" {
+		fromName = sender
+	}
+
 	rfq := &models.RFQReceived{
-		StoreID:     storeObjID,
-		FromPhone:   sender,
-		FromName:    sender,
-		MessageType: "text",
-		TextContent: fmt.Sprintf("Subject: %s\n\n%s", subject, body),
-		Status:      "received",
+		StoreID:         storeObjID,
+		FromPhone:       sender, // email address used as sender identifier
+		FromName:        fromName,
+		MessageType:     "text",
+		TextContent:     emailText,
+		Source:          "email",
+		Status:          "ready_to_send",
+		Products:        products,
+		CustomerID:      customerID,
+		CustomerName:    extracted.CustomerName,
+		CustomerPhone:   extracted.CustomerPhone,
+		CustomerEmail:   extracted.CustomerEmail,
+		CustomerCompany: extracted.CustomerCompany,
 	}
 
 	if err := models.CreateRFQReceived(rfq); err != nil {
@@ -756,12 +924,42 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ── Step 5: Activity log ─────────────────────────────────────────────────
+	customerLabel := fromName
+	models.AppendRFQLog(storeObjID, rfq.ID, models.RFQActivityLog{
+		Step:    "input_received",
+		Message: fmt.Sprintf("RFQ received via email from %s (subject: %s)", customerLabel, subject),
+		Icon:    "bi-envelope-fill", Color: "primary",
+		Details: map[string]interface{}{
+			"source":          "email",
+			"from":            sender,
+			"subject":         subject,
+			"products_count":  len(products),
+			"customer_linked": customerID != nil,
+		},
+	})
+	if customerID != nil {
+		models.AppendRFQLog(storeObjID, rfq.ID, models.RFQActivityLog{
+			Step:    "customer_linked",
+			Message: fmt.Sprintf("Linked to existing customer: %s", extracted.CustomerName),
+			Icon:    "bi-person-check", Color: "success",
+			Details: map[string]interface{}{"customer_id": customerID.Hex(), "customer_name": extracted.CustomerName},
+		})
+	}
+
 	BroadcastRFQData(storeObjID.Hex(), "rfq_received", map[string]interface{}{
 		"id": rfq.ID.Hex(), "from": sender, "source": "email",
 	})
-	go processRFQ(rfq, storeObjID)
 
-	json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "rfq_id": rfq.ID.Hex()})
+	// ── Step 6: Background — identify categories and find suppliers ──────────
+	go autoCategorizeAndFindSuppliers(rfq, storeObjID)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":            "ok",
+		"rfq_id":            rfq.ID.Hex(),
+		"products_extracted": len(products),
+		"customer_linked":   customerID != nil,
+	})
 }
 
 // parseInboundEmail extracts sender, subject, and plain-text body from
@@ -855,4 +1053,427 @@ func extractPlainTextFromRFC822(raw string) string {
 		}
 	}
 	return strings.TrimSpace(buf.String())
+}
+
+// ── Multi-account helpers ─────────────────────────────────────────────────────
+
+// oauthStateAccount encodes a state token for the multi-account OAuth flow.
+func oauthStateAccount(storeID string, accountID primitive.ObjectID) string {
+	return base64.URLEncoding.EncodeToString([]byte(storeID + ":acct:" + accountID.Hex()))
+}
+
+// rfqEmailWebhookURLForAccount returns the webhook URL scoped to a specific account.
+func rfqEmailWebhookURLForAccount(storeID string, accountID primitive.ObjectID) string {
+	return fmt.Sprintf("%s/v1/rfq-email/webhook?store_id=%s&account_id=%s",
+		rfqEmailAPIBase(), storeID, accountID.Hex())
+}
+
+// rfqEmailAccountUpdate updates fields on a single element inside rfq_email_accounts
+// using MongoDB's positional filtered operator ($[elem]).
+func rfqEmailAccountUpdate(storeObjID, accountID primitive.ObjectID, fields bson.M) error {
+	col := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	setDoc := bson.M{}
+	for k, v := range fields {
+		setDoc["settings.rfq_email_accounts.$[elem]."+k] = v
+	}
+	_, err := col.UpdateOne(ctx,
+		bson.M{"_id": storeObjID},
+		bson.M{"$set": setDoc},
+		options.Update().SetArrayFilters(options.ArrayFilters{
+			Filters: []interface{}{bson.M{"elem._id": accountID}},
+		}),
+	)
+	return err
+}
+
+// rfqEmailAccountRequest is the body for ConnectRFQEmailAccount.
+type rfqEmailAccountRequest struct {
+	StoreID     string `json:"store_id"`
+	Provider    string `json:"provider"`
+	CallbackURL string `json:"callback_url"` // optional: frontend passes its own origin-based URL
+	// Gmail
+	GmailClientID     string `json:"rfq_gmail_client_id"`
+	GmailClientSecret string `json:"rfq_gmail_client_secret"`
+	// Outlook
+	OutlookTenantID     string `json:"rfq_outlook_tenant_id"`
+	OutlookClientID     string `json:"rfq_outlook_client_id"`
+	OutlookClientSecret string `json:"rfq_outlook_client_secret"`
+	// Zoho
+	ZohoClientID     string `json:"rfq_zoho_client_id"`
+	ZohoClientSecret string `json:"rfq_zoho_client_secret"`
+	// Mailgun
+	MailgunAPIKey string `json:"rfq_mailgun_api_key"`
+	MailgunDomain string `json:"rfq_mailgun_domain"`
+	// SendGrid
+	SendGridAPIKey string `json:"rfq_sendgrid_api_key"`
+	// Postmark
+	PostmarkServerToken string `json:"rfq_postmark_server_token"`
+	// AWS SES
+	AWSSESAccessKeyID string `json:"rfq_aws_ses_access_key_id"`
+	AWSSESSecretKey   string `json:"rfq_aws_ses_secret_key"`
+	AWSSESRegion      string `json:"rfq_aws_ses_region"`
+	// IMAP
+	IMAPHost     string `json:"rfq_imap_host"`
+	IMAPPort     int    `json:"rfq_imap_port"`
+	IMAPUsername string `json:"rfq_imap_username"`
+	IMAPPassword string `json:"rfq_imap_password"`
+	IMAPUseSSL   bool   `json:"rfq_imap_use_ssl"`
+}
+
+// rfqEmailSafePushAccount appends acct to settings.rfq_email_accounts.
+// It first converts a null field to [] so $push never hits the
+// "field must be an array but is of type null" error.
+func rfqEmailSafePushAccount(col *mongo.Collection, storeObjID primitive.ObjectID, acct interface{}) error {
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		col.UpdateOne(ctx,
+			bson.M{"_id": storeObjID, "settings.rfq_email_accounts": nil},
+			bson.M{"$set": bson.M{"settings.rfq_email_accounts": bson.A{}}})
+		cancel()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res, err := col.UpdateOne(ctx, bson.M{"_id": storeObjID},
+		bson.M{"$push": bson.M{"settings.rfq_email_accounts": acct}})
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return fmt.Errorf("store not found")
+	}
+	return nil
+}
+
+// ConnectRFQEmailAccount creates a new email account entry and (for OAuth providers)
+// returns an OAuth URL. Webhook/IMAP providers are marked connected immediately.
+func ConnectRFQEmailAccount(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var req rfqEmailAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body"})
+		return
+	}
+	if req.StoreID == "" || req.Provider == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "store_id and provider are required"})
+		return
+	}
+	_, storeObjID, err := rfqEmailGetStore(req.StoreID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	accountID := primitive.NewObjectID()
+	redirectURI := req.CallbackURL
+	if redirectURI == "" {
+		redirectURI = rfqEmailOAuthCallbackURL()
+	}
+	state := oauthStateAccount(req.StoreID, accountID)
+	webhookURL := rfqEmailWebhookURLForAccount(req.StoreID, accountID)
+
+	col := db.Client("").Database(db.GetPosDB()).Collection("store")
+
+	switch req.Provider {
+
+	case "gmail":
+		if req.GmailClientID == "" || req.GmailClientSecret == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Client ID and Client Secret are required"})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "gmail",
+			GmailClientID: req.GmailClientID, GmailClientSecret: req.GmailClientSecret,
+			OAuthCallbackURL: redirectURI,
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect gmail: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		log.Printf("rfq_email connect gmail: saved account %s to store %s", accountID.Hex(), req.StoreID)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id": accountID.Hex(),
+			"oauth_url":  gmailOAuthURL(req.GmailClientID, state, redirectURI),
+		})
+
+	case "outlook":
+		if req.OutlookClientID == "" || req.OutlookClientSecret == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Client ID and Client Secret are required"})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "outlook",
+			OutlookTenantID: req.OutlookTenantID, OutlookClientID: req.OutlookClientID,
+			OutlookClientSecret: req.OutlookClientSecret,
+			OAuthCallbackURL: redirectURI,
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect outlook: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		log.Printf("rfq_email connect outlook: saved account %s to store %s", accountID.Hex(), req.StoreID)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id": accountID.Hex(),
+			"oauth_url":  outlookOAuthURL(req.OutlookTenantID, req.OutlookClientID, state, redirectURI),
+		})
+
+	case "zoho":
+		if req.ZohoClientID == "" || req.ZohoClientSecret == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Client ID and Client Secret are required"})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "zoho",
+			ZohoClientID: req.ZohoClientID, ZohoClientSecret: req.ZohoClientSecret,
+			OAuthCallbackURL: redirectURI,
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect zoho: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		log.Printf("rfq_email connect zoho: saved account %s to store %s", accountID.Hex(), req.StoreID)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id": accountID.Hex(),
+			"oauth_url":  zohoOAuthURL(req.ZohoClientID, state, redirectURI),
+		})
+
+	case "mailgun":
+		if req.MailgunAPIKey == "" || req.MailgunDomain == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "API Key and Domain are required"})
+			return
+		}
+		if err := mailgunValidate(req.MailgunAPIKey); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "mailgun",
+			MailgunAPIKey: req.MailgunAPIKey, MailgunDomain: req.MailgunDomain,
+			Email: "webhook@" + req.MailgunDomain,
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect mailgun: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id":  accountID.Hex(),
+			"connected":   true,
+			"email":       acct.Email,
+			"webhook_url": webhookURL,
+		})
+
+	case "sendgrid":
+		if req.SendGridAPIKey == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "API Key is required"})
+			return
+		}
+		if err := sendgridValidate(req.SendGridAPIKey); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "sendgrid",
+			SendGridAPIKey: req.SendGridAPIKey, Email: "sendgrid-inbound",
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect sendgrid: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id":  accountID.Hex(),
+			"connected":   true,
+			"email":       acct.Email,
+			"webhook_url": webhookURL,
+		})
+
+	case "postmark":
+		if req.PostmarkServerToken == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Server API Token is required"})
+			return
+		}
+		if err := postmarkValidate(req.PostmarkServerToken); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "postmark",
+			PostmarkServerToken: req.PostmarkServerToken, Email: "postmark-inbound",
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect postmark: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id":  accountID.Hex(),
+			"connected":   true,
+			"email":       acct.Email,
+			"webhook_url": webhookURL,
+		})
+
+	case "ses":
+		if req.AWSSESAccessKeyID == "" || req.AWSSESSecretKey == "" || req.AWSSESRegion == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Access Key ID, Secret, and Region are required"})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "ses",
+			AWSSESAccessKeyID: req.AWSSESAccessKeyID, AWSSESSecretKey: req.AWSSESSecretKey,
+			AWSSESRegion: req.AWSSESRegion, Email: "ses-" + req.AWSSESRegion,
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect ses: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id":  accountID.Hex(),
+			"connected":   true,
+			"email":       acct.Email,
+			"webhook_url": webhookURL,
+		})
+
+	case "imap":
+		if req.IMAPHost == "" || req.IMAPUsername == "" || req.IMAPPassword == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Host, Username, and Password are required"})
+			return
+		}
+		if req.IMAPPort == 0 {
+			req.IMAPPort = 993
+		}
+		if err := imapTestLogin(req.IMAPHost, req.IMAPPort, req.IMAPUseSSL, req.IMAPUsername, req.IMAPPassword); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "IMAP connection failed: " + err.Error()})
+			return
+		}
+		acct := models.RFQEmailAccount{
+			ID: accountID, Provider: "imap",
+			IMAPHost: req.IMAPHost, IMAPPort: req.IMAPPort,
+			IMAPUsername: req.IMAPUsername, IMAPPassword: req.IMAPPassword,
+			IMAPUseSSL: req.IMAPUseSSL, Email: req.IMAPUsername,
+		}
+		if pushErr := rfqEmailSafePushAccount(col, storeObjID, acct); pushErr != nil {
+			log.Printf("rfq_email connect imap: failed to save account %s to store %s: %v", accountID.Hex(), req.StoreID, pushErr)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save account — please try again"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"account_id": accountID.Hex(),
+			"connected":  true,
+			"email":      acct.Email,
+		})
+
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "unknown provider: " + req.Provider})
+	}
+}
+
+// GetRFQEmailAccounts returns the list of connected email accounts (without secrets).
+func GetRFQEmailAccounts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	store, _, err := rfqEmailGetStore(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	accounts := store.Settings.RFQEmailAccounts
+	if accounts == nil {
+		accounts = []models.RFQEmailAccount{}
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"accounts": accounts})
+}
+
+// DisconnectRFQEmailAccount removes a single email account from the store's account list.
+func DisconnectRFQEmailAccount(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	accountIDHex := vars["accountID"]
+	accountID, err := primitive.ObjectIDFromHex(accountIDHex)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid account id"})
+		return
+	}
+	_, storeObjID, err := rfqEmailGetStore(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	col := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = col.UpdateOne(ctx,
+		bson.M{"_id": storeObjID},
+		bson.M{"$pull": bson.M{"settings.rfq_email_accounts": bson.M{"_id": accountID}}},
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to remove account"})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+// PollRFQEmailAccountStatus is called by the frontend after OAuth to check if the account
+// now has an email address (i.e. OAuth callback completed).
+func PollRFQEmailAccountStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	accountIDHex := vars["accountID"]
+	accountID, err := primitive.ObjectIDFromHex(accountIDHex)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid account id"})
+		return
+	}
+	store, _, err := rfqEmailGetStore(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	for _, acct := range store.Settings.RFQEmailAccounts {
+		if acct.ID == accountID {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"connected": acct.Email != "",
+				"email":     acct.Email,
+				"provider":  acct.Provider,
+			})
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNotFound)
+	json.NewEncoder(w).Encode(map[string]string{"error": "account not found"})
 }

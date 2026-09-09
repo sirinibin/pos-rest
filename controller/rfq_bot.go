@@ -3132,6 +3132,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		CustomerPhone    string              `json:"customer_phone"`
 		CustomerEmail    string              `json:"customer_email"`
 		CustomerCompany  string              `json:"customer_company"`
+		CustomerRFQID    string              `json:"customer_rfq_id"`
 		TextContent      string              `json:"text_content"`
 		Products         []models.RFQProduct `json:"products"`
 		ExtractionModel  string              `json:"extraction_model"`
@@ -3153,6 +3154,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		CustomerPhone:   body.CustomerPhone,
 		CustomerEmail:   body.CustomerEmail,
 		CustomerCompany: body.CustomerCompany,
+		CustomerRFQID:   body.CustomerRFQID,
 		TextContent:     body.TextContent,
 		Products:        body.Products,
 		Status:          "ready_to_send",
@@ -3411,6 +3413,7 @@ func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		CustomerPhone   string              `json:"customer_phone"`
 		CustomerEmail   string              `json:"customer_email"`
 		CustomerCompany string              `json:"customer_company"`
+		CustomerRFQID   string              `json:"customer_rfq_id"`
 		TextContent     string              `json:"text_content"`
 		Products        []models.RFQProduct `json:"products"`
 	}
@@ -3429,6 +3432,7 @@ func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	rfq.CustomerPhone   = body.CustomerPhone
 	rfq.CustomerEmail   = body.CustomerEmail
 	rfq.CustomerCompany = body.CustomerCompany
+	rfq.CustomerRFQID   = body.CustomerRFQID
 	rfq.TextContent     = body.TextContent
 	if body.Products != nil {
 		rfq.Products = body.Products
