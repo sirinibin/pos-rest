@@ -1466,8 +1466,12 @@ func PollRFQEmailAccountStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, acct := range store.Settings.RFQEmailAccounts {
 		if acct.ID == accountID {
+			// Consider connected if we have OAuth tokens OR an email address.
+			// Email fetch may fail (scope/API) but tokens are always set after a
+			// successful OAuth exchange, so token presence is the reliable signal.
+			hasTokens := acct.GmailAccessToken != "" || acct.ZohoAccessToken != "" || acct.OutlookAccessToken != ""
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"connected": acct.Email != "",
+				"connected": acct.Email != "" || hasTokens,
 				"email":     acct.Email,
 				"provider":  acct.Provider,
 			})
