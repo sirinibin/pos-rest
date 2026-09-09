@@ -13,10 +13,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	excelize "github.com/xuri/excelize/v2"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
@@ -25,10 +27,50 @@ import (
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// rfqEvoConfig reads bot OR store-rfq evolution settings from a store.
-// role = "bot" | "store_rfq"
-func rfqEvoConfig(storeIDStr, role string) (evoURL, evoKey, instanceName string) {
-	evoURL, evoKey, instanceName = evoDefaultURL, evoGlobalKey, ""
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func mimeFromFilename(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".pdf":
+		return "application/pdf"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".mp4":
+		return "video/mp4"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".ogg":
+		return "audio/ogg"
+	case ".doc":
+		return "application/msword"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".xls":
+		return "application/vnd.ms-excel"
+	case ".xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case ".ppt":
+		return "application/vnd.ms-powerpoint"
+	case ".pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case ".txt":
+		return "text/plain"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// rfqMetaConfig returns the Meta Cloud API credentials for the given role ("bot" | "store_rfq").
+func rfqMetaConfig(storeIDStr, role string) (phoneNumberID, accessToken string) {
 	if storeIDStr == "" {
 		return
 	}
@@ -40,39 +82,24 @@ func rfqEvoConfig(storeIDStr, role string) (evoURL, evoKey, instanceName string)
 	if err != nil {
 		return
 	}
-	if role == "bot" {
-		if store.Settings.BotEvolutionAPIURL != "" {
-			evoURL = store.Settings.BotEvolutionAPIURL
-		}
-		if store.Settings.BotEvolutionAPIKey != "" {
-			evoKey = store.Settings.BotEvolutionAPIKey
-		}
-		instanceName = store.Settings.BotEvolutionInstanceName
-	} else {
-		if store.Settings.StoreRFQEvolutionAPIURL != "" {
-			evoURL = store.Settings.StoreRFQEvolutionAPIURL
-		}
-		if store.Settings.StoreRFQEvolutionAPIKey != "" {
-			evoKey = store.Settings.StoreRFQEvolutionAPIKey
-		}
-		instanceName = store.Settings.StoreRFQEvolutionInstanceName
+	if role == "store_rfq" {
+		return store.Settings.StoreRFQWABAPhoneNumberID, store.Settings.StoreRFQWABAAccessToken
 	}
-	return
+	return store.Settings.BotWABAPhoneNumberID, store.Settings.BotWABAAccessToken
 }
 
-func rfqSaveWhatsAppSettings(storeID primitive.ObjectID, role, evoURL, instanceName, token string) error {
+// rfqSaveMetaSettings persists Meta Cloud API credentials for the given role.
+func rfqSaveMetaSettings(storeID primitive.ObjectID, role, phoneNumberID, accessToken string) error {
 	var upd bson.M
-	if role == "bot" {
+	if role == "store_rfq" {
 		upd = bson.M{
-			"settings.bot_evolution_api_url":       evoURL,
-			"settings.bot_evolution_instance_name": instanceName,
-			"settings.bot_evolution_api_key":       token,
+			"settings.store_rfq_waba_phone_number_id": phoneNumberID,
+			"settings.store_rfq_waba_access_token":    accessToken,
 		}
 	} else {
 		upd = bson.M{
-			"settings.store_rfq_evolution_api_url":       evoURL,
-			"settings.store_rfq_evolution_instance_name": instanceName,
-			"settings.store_rfq_evolution_api_key":       token,
+			"settings.bot_waba_phone_number_id": phoneNumberID,
+			"settings.bot_waba_access_token":    accessToken,
 		}
 	}
 	col := db.Client("").Database(db.GetPosDB()).Collection("store")
@@ -82,19 +109,18 @@ func rfqSaveWhatsAppSettings(storeID primitive.ObjectID, role, evoURL, instanceN
 	return err
 }
 
-func rfqClearWhatsAppSettings(storeID primitive.ObjectID, role string) error {
+// rfqClearMetaSettings clears stored Meta Cloud API credentials for the given role.
+func rfqClearMetaSettings(storeID primitive.ObjectID, role string) error {
 	var upd bson.M
-	if role == "bot" {
+	if role == "store_rfq" {
 		upd = bson.M{
-			"settings.bot_evolution_api_url":       "",
-			"settings.bot_evolution_instance_name": "",
-			"settings.bot_evolution_api_key":       "",
+			"settings.store_rfq_waba_phone_number_id": "",
+			"settings.store_rfq_waba_access_token":    "",
 		}
 	} else {
 		upd = bson.M{
-			"settings.store_rfq_evolution_api_url":       "",
-			"settings.store_rfq_evolution_instance_name": "",
-			"settings.store_rfq_evolution_api_key":       "",
+			"settings.bot_waba_phone_number_id": "",
+			"settings.bot_waba_access_token":    "",
 		}
 	}
 	col := db.Client("").Database(db.GetPosDB()).Collection("store")
@@ -102,6 +128,57 @@ func rfqClearWhatsAppSettings(storeID primitive.ObjectID, role string) error {
 	defer cancel()
 	_, err := col.UpdateOne(ctx, bson.M{"_id": storeID}, bson.M{"$set": upd})
 	return err
+}
+
+// rfqCheckMetaStatus verifies Meta Cloud API credentials by fetching the phone number profile.
+// Returns connected=true, the display phone number, and the WABA business account ID on success.
+// The WABA ID fetch is best-effort and won't cause the verification to fail.
+func rfqCheckMetaStatus(phoneNumberID, accessToken string) (connected bool, phone, wabaID string) {
+	if phoneNumberID == "" || accessToken == "" {
+		return false, "", ""
+	}
+
+	// Step 1: verify credentials with a basic fields call
+	verifyURL := fmt.Sprintf(
+		"https://graph.facebook.com/v21.0/%s?fields=display_phone_number,verified_name&access_token=%s",
+		phoneNumberID, accessToken,
+	)
+	resp, err := (&http.Client{Timeout: 8 * time.Second}).Get(verifyURL)
+	if err != nil || resp.StatusCode != 200 {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return false, "", ""
+	}
+	var basic struct {
+		DisplayPhone string `json:"display_phone_number"`
+	}
+	json.NewDecoder(resp.Body).Decode(&basic)
+	resp.Body.Close()
+	phone = basic.DisplayPhone
+
+	// Step 2: try to fetch the WABA business account ID (best-effort, ignore errors)
+	wabaURL := fmt.Sprintf(
+		"https://graph.facebook.com/v21.0/%s?fields=whatsapp_business_account{id}&access_token=%s",
+		phoneNumberID, accessToken,
+	)
+	wabaResp, wabaErr := (&http.Client{Timeout: 6 * time.Second}).Get(wabaURL)
+	if wabaErr == nil && wabaResp.StatusCode == 200 {
+		var wabaData struct {
+			WABA *struct {
+				ID string `json:"id"`
+			} `json:"whatsapp_business_account"`
+		}
+		json.NewDecoder(wabaResp.Body).Decode(&wabaData)
+		wabaResp.Body.Close()
+		if wabaData.WABA != nil {
+			wabaID = wabaData.WABA.ID
+		}
+	} else if wabaResp != nil {
+		wabaResp.Body.Close()
+	}
+
+	return true, phone, wabaID
 }
 
 // buildWebhookURL constructs the public webhook URL for the bot instance.
@@ -118,21 +195,24 @@ func buildWebhookURL(r *http.Request, storeID string) string {
 	return fmt.Sprintf("%s/v1/rfq-bot/webhook?store_id=%s", strings.TrimRight(base, "/"), storeID)
 }
 
-// connectRFQWhatsApp is shared by ConnectBotWhatsApp and ConnectStoreRFQWhatsApp.
-// role = "bot" | "store_rfq"; instancePrefix = "rfqbot" | "rfqsend"
-func connectRFQWhatsApp(w http.ResponseWriter, r *http.Request, role, instancePrefix string) {
+// ── 1. Bot WhatsApp Connect / QR / Status / Disconnect ───────────────────────
+
+// connectMetaWhatsApp saves Meta Cloud API credentials for the given role ("bot" | "store_rfq").
+// It verifies the credentials against Meta's Graph API before persisting them.
+func connectMetaWhatsApp(w http.ResponseWriter, r *http.Request, role string) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var body struct {
-		StoreID string `json:"store_id"`
-		Phone   string `json:"phone"`
+		StoreID       string `json:"store_id"`
+		PhoneNumberID string `json:"phone_number_id"`
+		AccessToken   string `json:"access_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
-	if body.StoreID == "" {
-		http.Error(w, `{"error":"store_id required"}`, http.StatusBadRequest)
+	if body.StoreID == "" || body.PhoneNumberID == "" || body.AccessToken == "" {
+		http.Error(w, `{"error":"store_id, phone_number_id and access_token are required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -141,182 +221,99 @@ func connectRFQWhatsApp(w http.ResponseWriter, r *http.Request, role, instancePr
 		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
 		return
 	}
-	store, err := models.FindStoreByID(&storeObjID, bson.M{})
-	if err != nil {
+	if _, err := models.FindStoreByID(&storeObjID, bson.M{}); err != nil {
 		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
 		return
 	}
 
-	// Save the phone number to settings
-	col := db.Client("").Database(db.GetPosDB()).Collection("store")
-	phoneField := "settings.bot_whatsapp_phone"
-	if role == "store_rfq" {
-		phoneField = "settings.store_rfq_whatsapp_phone"
-	}
-	ctx0, cancel0 := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel0()
-	col.UpdateOne(ctx0, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{phoneField: body.Phone}})
-
-	evoURL := evoDefaultURL
-	if store.Settings.EvolutionAPIURL != "" {
-		evoURL = store.Settings.EvolutionAPIURL
-	}
-
-	// Build instance name: rfqbot_<code> or rfqsend_<code>
-	code := strings.ToLower(store.Code)
-	code = strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			return r
-		}
-		return '_'
-	}, code)
-	instanceName := instancePrefix + "_" + code
-
-	// Delete any previous instance silently
-	evoCall("DELETE", fmt.Sprintf("%s/instance/delete/%s", evoURL, instanceName), evoGlobalKey, nil)
-
-	// Build create payload; add webhook only for bot role
-	createMap := map[string]interface{}{
-		"instanceName": instanceName,
-		"integration":  "WHATSAPP-BAILEYS",
-	}
-	if role == "bot" {
-		webhookURL := buildWebhookURL(r, body.StoreID)
-		createMap["webhook"] = map[string]interface{}{
-			"url":     webhookURL,
-			"enabled": true,
-			"events":  []string{"MESSAGES_UPSERT"},
-		}
-	}
-	createPayload, _ := json.Marshal(createMap)
-
-	respBody, status, err := evoCall("POST", fmt.Sprintf("%s/instance/create", evoURL), evoGlobalKey, createPayload)
-	if err != nil || (status != 200 && status != 201) {
+	// Verify credentials with Meta and auto-fetch WABA Business Account ID
+	connected, phone, wabaID := rfqCheckMetaStatus(body.PhoneNumberID, body.AccessToken)
+	if !connected {
 		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprintf(w, `{"error":"Evolution API create failed","detail":%s}`, string(respBody))
+		fmt.Fprint(w, `{"error":"Meta API credentials invalid or phone number not found"}`)
 		return
 	}
 
-	var createResp struct {
-		Hash string `json:"hash"`
-	}
-	json.Unmarshal(respBody, &createResp)
-	token := createResp.Hash
-	if token == "" {
-		token = evoGlobalKey
-	}
-
-	if err := rfqSaveWhatsAppSettings(storeObjID, role, evoURL, instanceName, token); err != nil {
+	if err := rfqSaveMetaSettings(storeObjID, role, body.PhoneNumberID, body.AccessToken); err != nil {
 		http.Error(w, `{"error":"failed to save store settings"}`, http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, `{"success":true,"instance_name":%q,"token":%q}`, instanceName, token)
-}
+	// Persist WABA Business Account ID if auto-fetched (needed for template listing)
+	if wabaID != "" && role == "bot" {
+		col := db.Client("").Database(db.GetPosDB()).Collection("store")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{
+			"settings.bot_waba_business_account_id": wabaID,
+		}})
+	}
 
-// ── 1. Bot WhatsApp Connect / QR / Status / Disconnect ───────────────────────
+	webhookURL := buildWebhookURL(r, body.StoreID)
+	fmt.Fprintf(w, `{"success":true,"phone":%q,"waba_id":%q,"webhook_url":%q}`, phone, wabaID, webhookURL)
+}
 
 // POST /v1/rfq-bot/connect
 func ConnectBotWhatsApp(w http.ResponseWriter, r *http.Request) {
-	connectRFQWhatsApp(w, r, "bot", "rfqbot")
+	connectMetaWhatsApp(w, r, "bot")
 }
 
-// GET /v1/rfq-bot/qr?store_id=...
+// GET /v1/rfq-bot/qr?store_id=...  — not used with Meta Cloud API
 func GetBotWhatsAppQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	storeIDStr := r.URL.Query().Get("store_id")
-	evoURL, evoKey, instanceName := rfqEvoConfig(storeIDStr, "bot")
-	respBody, _, err := evoCall("GET",
-		fmt.Sprintf("%s/instance/connect/%s", evoURL, instanceName), evoKey, nil)
-	if err != nil {
-		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Write(evoNormalizeQR(respBody))
+	http.Error(w, `{"error":"QR code not supported with Meta Cloud API"}`, http.StatusGone)
 }
 
 // GET /v1/rfq-bot/status?store_id=...
 func GetBotWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
-	rfqWhatsAppStatus(w, r, "bot")
+	rfqMetaStatus(w, r, "bot")
 }
 
 // DELETE /v1/rfq-bot/disconnect?store_id=...
 func DisconnectBotWhatsApp(w http.ResponseWriter, r *http.Request) {
-	rfqDisconnect(w, r, "bot")
+	rfqMetaDisconnect(w, r, "bot")
 }
 
 // ── 2. Store RFQ WhatsApp Connect / QR / Status / Disconnect ─────────────────
 
 // POST /v1/rfq-store/connect
 func ConnectStoreRFQWhatsApp(w http.ResponseWriter, r *http.Request) {
-	connectRFQWhatsApp(w, r, "store_rfq", "rfqsend")
+	connectMetaWhatsApp(w, r, "store_rfq")
 }
 
-// GET /v1/rfq-store/qr?store_id=...
+// GET /v1/rfq-store/qr?store_id=...  — not used with Meta Cloud API
 func GetStoreRFQWhatsAppQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	storeIDStr := r.URL.Query().Get("store_id")
-	evoURL, evoKey, instanceName := rfqEvoConfig(storeIDStr, "store_rfq")
-	respBody, _, err := evoCall("GET",
-		fmt.Sprintf("%s/instance/connect/%s", evoURL, instanceName), evoKey, nil)
-	if err != nil {
-		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	w.Write(evoNormalizeQR(respBody))
+	http.Error(w, `{"error":"QR code not supported with Meta Cloud API"}`, http.StatusGone)
 }
 
 // GET /v1/rfq-store/status?store_id=...
 func GetStoreRFQWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
-	rfqWhatsAppStatus(w, r, "store_rfq")
+	rfqMetaStatus(w, r, "store_rfq")
 }
 
 // DELETE /v1/rfq-store/disconnect?store_id=...
 func DisconnectStoreRFQWhatsApp(w http.ResponseWriter, r *http.Request) {
-	rfqDisconnect(w, r, "store_rfq")
+	rfqMetaDisconnect(w, r, "store_rfq")
 }
 
-func rfqWhatsAppStatus(w http.ResponseWriter, r *http.Request, role string) {
+func rfqMetaStatus(w http.ResponseWriter, r *http.Request, role string) {
 	w.Header().Set("Content-Type", "application/json")
 	storeIDStr := r.URL.Query().Get("store_id")
-	evoURL, evoKey, instanceName := rfqEvoConfig(storeIDStr, role)
-	if instanceName == "" {
+	phoneNumberID, accessToken := rfqMetaConfig(storeIDStr, role)
+	if phoneNumberID == "" {
 		fmt.Fprint(w, `{"connected":false}`)
 		return
 	}
-	respBody, _, err := evoCall("GET", fmt.Sprintf("%s/instance/fetchInstances", evoURL), evoKey, nil)
-	if err != nil {
-		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
-		return
-	}
-	// Accept both v2.2.x ("name") and v2.3.x ("instanceName") field names.
-	var instances []struct {
-		Name             string `json:"name"`
-		InstanceName     string `json:"instanceName"`
-		ConnectionStatus string `json:"connectionStatus"`
-		OwnerJid         string `json:"ownerJid"`
-	}
-	if err := json.Unmarshal(respBody, &instances); err != nil {
+	connected, phone, _ := rfqCheckMetaStatus(phoneNumberID, accessToken)
+	if connected {
+		fmt.Fprintf(w, `{"connected":true,"phone":%q,"phone_number_id":%q}`, phone, phoneNumberID)
+	} else {
 		fmt.Fprint(w, `{"connected":false}`)
-		return
 	}
-	for _, inst := range instances {
-		instName := inst.Name
-		if instName == "" {
-			instName = inst.InstanceName
-		}
-		if instName == instanceName {
-			connected := inst.ConnectionStatus == "open"
-			phone := strings.TrimSuffix(inst.OwnerJid, "@s.whatsapp.net")
-			fmt.Fprintf(w, `{"connected":%v,"phone":%q,"instance_name":%q,"status":%q}`,
-				connected, phone, instanceName, inst.ConnectionStatus)
-			return
-		}
-	}
-	fmt.Fprintf(w, `{"connected":false,"instance_name":%q}`, instanceName)
 }
 
-func rfqDisconnect(w http.ResponseWriter, r *http.Request, role string) {
+func rfqMetaDisconnect(w http.ResponseWriter, r *http.Request, role string) {
 	w.Header().Set("Content-Type", "application/json")
 	storeIDStr := r.URL.Query().Get("store_id")
 	if storeIDStr == "" {
@@ -328,11 +325,7 @@ func rfqDisconnect(w http.ResponseWriter, r *http.Request, role string) {
 		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
 		return
 	}
-	evoURL, evoKey, instanceName := rfqEvoConfig(storeIDStr, role)
-	if instanceName != "" {
-		evoCall("DELETE", fmt.Sprintf("%s/instance/delete/%s", evoURL, instanceName), evoKey, nil)
-	}
-	if err := rfqClearWhatsAppSettings(storeObjID, role); err != nil {
+	if err := rfqClearMetaSettings(storeObjID, role); err != nil {
 		http.Error(w, `{"error":"failed to clear store settings"}`, http.StatusInternalServerError)
 		return
 	}
@@ -376,19 +369,70 @@ func CheckRFQLLMConnection(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// CheckWhatsAppNumber verifies whether a phone number has a WhatsApp account
-// using the store's bot Evolution API instance.
-// GET /v1/rfq-bot/check-whatsapp?store_id=...&phone=...
-func CheckWhatsAppNumber(w http.ResponseWriter, r *http.Request) {
+// TestGoogleMapsHandler verifies a Google Maps API key by running a real Places API search
+// without saving anything to the database.
+// api_key is optional — falls back to the store's saved key so the user can test a freshly
+// entered key before saving the store form.
+// GET /v1/rfq-bot/test-google-maps?store_id=...&keyword=...&market=...&api_key=...
+func TestGoogleMapsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
-	storeIDStr := r.URL.Query().Get("store_id")
-	phone := strings.TrimSpace(r.URL.Query().Get("phone"))
-	if storeIDStr == "" || phone == "" {
-		http.Error(w, `{"error":"store_id and phone are required"}`, http.StatusBadRequest)
+	storeObjID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
 		return
 	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	apiKey := strings.TrimSpace(r.URL.Query().Get("api_key"))
+	if apiKey == "" {
+		apiKey = store.Settings.GoogleMapsAPIKey
+	}
+	if apiKey == "" {
+		http.Error(w, `{"error":"Enter a Google Maps API key above first"}`, http.StatusBadRequest)
+		return
+	}
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	if keyword == "" {
+		http.Error(w, `{"error":"keyword is required"}`, http.StatusBadRequest)
+		return
+	}
+	market := strings.TrimSpace(r.URL.Query().Get("market"))
 
+	suppliers, err := searchGoogleMapsSuppliers(apiKey, keyword, market, storeObjID, 10)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+		return
+	}
+	type place struct {
+		Name    string  `json:"name"`
+		Phone   string  `json:"phone"`
+		Address string  `json:"address"`
+		Rating  float64 `json:"rating"`
+		MapsURL string  `json:"maps_url"`
+	}
+	places := make([]place, len(suppliers))
+	for i, s := range suppliers {
+		places[i] = place{Name: s.Name, Phone: s.Phone, Address: s.Address, Rating: s.Rating, MapsURL: s.GoogleMapsURL}
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"count": len(places), "keyword": keyword, "market": market, "places": places,
+	})
+}
+
+// UploadWABAMedia uploads a file to Meta's media store and returns the media ID.
+// POST /v1/rfq-bot/upload-media?store_id=...
+// multipart/form-data: field "file"
+func UploadWABAMedia(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	if storeIDStr == "" {
+		http.Error(w, `{"error":"store_id required"}`, http.StatusBadRequest)
+		return
+	}
 	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
 	if err != nil {
 		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
@@ -399,54 +443,174 @@ func CheckWhatsAppNumber(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
 		return
 	}
-
-	evoURL := store.Settings.BotEvolutionAPIURL
-	if evoURL == "" {
-		evoURL = evoDefaultURL
-	}
-	evoKey := store.Settings.BotEvolutionAPIKey
-	if evoKey == "" {
-		evoKey = evoGlobalKey
-	}
-	instance := store.Settings.BotEvolutionInstanceName
-	if instance == "" {
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
+	if phoneNumberID == "" || accessToken == "" {
 		http.Error(w, `{"error":"Bot WhatsApp not connected"}`, http.StatusBadRequest)
 		return
 	}
 
-	payload, _ := json.Marshal(map[string]interface{}{
-		"numbers": []string{phone},
-	})
-	respBody, status, err := evoCall("POST",
-		fmt.Sprintf("%s/chat/whatsappNumbers/%s", strings.TrimRight(evoURL, "/"), instance),
-		evoKey, payload)
+	r.ParseMultipartForm(20 << 20) // 20 MB limit
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, `{"error":"file required"}`, http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, `{"error":"failed to read file"}`, http.StatusInternalServerError)
+		return
+	}
+	mimeType := mimeFromFilename(header.Filename)
+	if ct := header.Header.Get("Content-Type"); ct != "" && ct != "application/octet-stream" {
+		mimeType = ct
+	}
+	mediaID, err := metaUploadMedia(phoneNumberID, accessToken, mimeType, header.Filename, data)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
 		return
 	}
-	if status != 200 && status != 201 {
-		http.Error(w, fmt.Sprintf(`{"error":"evolution API %d"}`, status), http.StatusBadGateway)
+	fmt.Fprintf(w, `{"media_id":%q,"filename":%q}`, mediaID, header.Filename)
+}
+
+// SaveWABABusinessAccountID saves the WABA Business Account ID for the given store.
+// POST /v1/rfq-bot/waba-business-account-id
+func SaveWABABusinessAccountID(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		StoreID             string `json:"store_id"`
+		WABABusinessAccountID string `json:"waba_business_account_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
-
-	// Evolution API returns: [{"exists":true,"jid":"...","number":"...","name":"..."}]
-	var result []struct {
-		Exists bool   `json:"exists"`
-		Number string `json:"number"`
-		Name   string `json:"name"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil || len(result) == 0 {
-		// Fallback: return the raw response so the frontend knows
-		w.Write([]byte(fmt.Sprintf(`{"exists":false,"raw":%q}`, string(respBody))))
+	if body.StoreID == "" {
+		http.Error(w, `{"error":"store_id required"}`, http.StatusBadRequest)
 		return
 	}
-
-	entry := result[0]
-	if entry.Exists {
-		fmt.Fprintf(w, `{"exists":true,"name":%q,"number":%q}`, entry.Name, entry.Number)
-	} else {
-		fmt.Fprintf(w, `{"exists":false}`)
+	storeObjID, err := primitive.ObjectIDFromHex(body.StoreID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
 	}
+	col := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{
+		"settings.bot_waba_business_account_id": body.WABABusinessAccountID,
+	}})
+	if err != nil {
+		http.Error(w, `{"error":"failed to save"}`, http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprint(w, `{"success":true}`)
+}
+
+// GetWABATemplates lists APPROVED WABA templates for the store's business account.
+// GET /v1/rfq-bot/waba-templates?store_id=...
+func GetWABATemplates(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	if storeIDStr == "" {
+		http.Error(w, `{"error":"store_id required"}`, http.StatusBadRequest)
+		return
+	}
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	wabaID := store.Settings.BotWABABusinessAccountID
+	accessToken := store.Settings.BotWABAAccessToken
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	if accessToken == "" {
+		http.Error(w, `{"error":"Access Token not found. Please connect the Bot WhatsApp first."}`, http.StatusBadRequest)
+		return
+	}
+	// Auto-fetch WABA ID from Meta if not stored
+	if wabaID == "" && phoneNumberID != "" {
+		_, _, fetchedWABAID := rfqCheckMetaStatus(phoneNumberID, accessToken)
+		if fetchedWABAID != "" {
+			wabaID = fetchedWABAID
+			// Persist so subsequent calls are fast
+			col := db.Client("").Database(db.GetPosDB()).Collection("store")
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{
+				"settings.bot_waba_business_account_id": wabaID,
+			}})
+		}
+	}
+	if wabaID == "" {
+		http.Error(w, `{"error":"Could not determine WABA Business Account ID. Enter it manually in the store form."}`, http.StatusBadRequest)
+		return
+	}
+	templates, err := metaListTemplates(wabaID, accessToken)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
+		return
+	}
+	out, _ := json.Marshal(map[string]interface{}{"templates": templates})
+	w.Write(out)
+}
+
+// SendWABATestMessage sends a template message to a test number.
+// POST /v1/rfq-bot/waba-test-message
+func SendWABATestMessage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var body struct {
+		StoreID      string        `json:"store_id"`
+		To           string        `json:"to"`
+		TemplateName string        `json:"template_name"`
+		LanguageCode string        `json:"language_code"`
+		Components   []interface{} `json:"components"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+	storeObjID, err := primitive.ObjectIDFromHex(body.StoreID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
+	if phoneNumberID == "" || accessToken == "" {
+		http.Error(w, `{"error":"WABA Phone Number ID and Access Token are required"}`, http.StatusBadRequest)
+		return
+	}
+	langCode := body.LanguageCode
+	if langCode == "" {
+		langCode = "en"
+	}
+	if err := metaSendTemplate(phoneNumberID, accessToken, body.To, body.TemplateName, langCode, body.Components); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
+		return
+	}
+	fmt.Fprintf(w, `{"sent":true}`)
+}
+
+// CheckWhatsAppNumber — Meta Cloud API does not expose a per-number existence check.
+// GET /v1/rfq-bot/check-whatsapp?store_id=...&phone=...
+func CheckWhatsAppNumber(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	// Meta Cloud API does not provide a public API to check if an arbitrary number
+	// has WhatsApp. Return exists=true so callers can still proceed; the send will
+	// fail naturally if the number is unreachable.
+	fmt.Fprint(w, `{"exists":true,"note":"WhatsApp number check not available with Meta Cloud API"}`)
 }
 
 func checkOpenAIConnection(apiKey string) (bool, string) {
@@ -484,9 +648,31 @@ func checkGeminiConnection(apiKey string) (bool, string) {
 	return resp.StatusCode == 200, fmt.Sprintf("HTTP %d", resp.StatusCode)
 }
 
-// ── 4. Webhook — incoming Evolution API messages ──────────────────────────────
+// ── 4. Webhook — incoming messages (Evolution API format OR Meta native format) ─
+
+// VerifyRFQBotWebhook handles Meta's one-time GET challenge to verify the webhook URL.
+// Meta sends: GET /v1/rfq-bot/webhook?hub.mode=subscribe&hub.verify_token=TOKEN&hub.challenge=XYZ
+// We respond with the raw challenge string if the token matches.
+// Set META_WEBHOOK_VERIFY_TOKEN env var to the token you enter in Meta's dashboard.
+// GET /v1/rfq-bot/webhook
+func VerifyRFQBotWebhook(w http.ResponseWriter, r *http.Request) {
+	expected := os.Getenv("META_WEBHOOK_VERIFY_TOKEN")
+	if expected == "" {
+		expected = "startpos-rfq-verify"
+	}
+	mode := r.URL.Query().Get("hub.mode")
+	token := r.URL.Query().Get("hub.verify_token")
+	challenge := r.URL.Query().Get("hub.challenge")
+	if mode == "subscribe" && token == expected {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, challenge)
+		return
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+}
 
 // POST /v1/rfq-bot/webhook?store_id=...
+// Handles incoming Meta Cloud API webhook messages.
 func HandleRFQBotWebhook(w http.ResponseWriter, r *http.Request) {
 	storeIDStr := r.URL.Query().Get("store_id")
 	w.WriteHeader(http.StatusOK)
@@ -505,50 +691,67 @@ func HandleRFQBotWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse Evolution API webhook payload
-	var payload evolutionWebhookPayload
+	// Parse Meta Cloud API webhook payload
+	var payload metaWebhookPayload
 	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
 		log.Printf("rfq_bot: webhook JSON parse error: %v body=%.300s", err, string(bodyBytes))
 		return
 	}
 
-	log.Printf("rfq_bot: webhook received event=%q msgType=%q fromMe=%v jid=%q",
-		payload.Event, payload.Data.MessageType, payload.Data.Key.FromMe, payload.Data.Key.RemoteJid)
-
-	// Only process incoming (not fromMe) text/image messages
-	if payload.Event != "messages.upsert" && payload.Event != "MESSAGES_UPSERT" {
-		log.Printf("rfq_bot: webhook skipped — unhandled event %q", payload.Event)
-		return
-	}
-	if payload.Data.Key.FromMe {
+	if payload.Object != "whatsapp_business_account" {
+		log.Printf("rfq_bot: webhook unexpected object=%q", payload.Object)
 		return
 	}
 
-	fromJID := payload.Data.Key.RemoteJid
-	fromPhone := strings.TrimSuffix(fromJID, "@s.whatsapp.net")
-	if strings.Contains(fromJID, "@g.us") {
-		log.Printf("rfq_bot: webhook skipped — group message from %s", fromJID)
-		return
-	}
-
-	// Load store for allowed-sender check and supplier-reply detection
+	// Load store once
 	store, err := models.FindStoreByID(&storeObjID, bson.M{})
 	if err != nil {
 		log.Printf("rfq_bot: webhook store load failed: %v", err)
 		return
 	}
 
-	// If the sender is replying to one of the bot's relay messages, route as a follow-up
-	// (buyer ↔ supplier conversation continuation) — never process as a new RFQ.
-	if stanzaID := extractStanzaID(payload); stanzaID != "" {
-		rfq, supplierPhone, err := models.FindRFQByBuyerRelayMsgID(storeObjID, stanzaID)
+	for _, entry := range payload.Entry {
+		for _, change := range entry.Changes {
+			if change.Field != "messages" {
+				continue
+			}
+			val := change.Value
+			for _, msg := range val.Messages {
+				go processMetaIncomingMessage(store, storeObjID, val, msg)
+			}
+		}
+	}
+}
+
+// processMetaIncomingMessage handles a single incoming message from Meta Cloud API.
+func processMetaIncomingMessage(store *models.Store, storeObjID primitive.ObjectID, val metaChangeValue, msg metaMessage) {
+	fromPhone := msg.From
+
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
+
+	// Mark as read (best-effort)
+	if msg.ID != "" && phoneNumberID != "" && accessToken != "" {
+		metaMarkRead(phoneNumberID, accessToken, msg.ID)
+	}
+
+	// Skip status updates
+	if msg.Type == "reaction" || msg.Type == "sticker" || msg.Type == "audio" || msg.Type == "voice" {
+		return
+	}
+
+	// If the sender is replying to one of the bot's relay messages, route as buyer follow-up
+	if msg.Context != nil && msg.Context.ID != "" {
+		rfq, supplierPhone, err := models.FindRFQByBuyerRelayMsgID(storeObjID, msg.Context.ID)
 		if err == nil && supplierPhone != "" {
-			go handleBuyerFollowup(store, rfq, supplierPhone, fromPhone, payload.Data.PushName, payload)
+			go handleMetaBuyerFollowup(store, rfq, supplierPhone, fromPhone, senderName(val, fromPhone), msg)
 			return
 		}
 	}
 
-	// Allowed senders whitelist: if non-empty, only those numbers are treated as buyers
+	// ── Allowed-senders whitelist routing ─────────────────────────────────────
+	// Numbers in RFQAllowedSenders are RFQ buyers; all other numbers are
+	// suppliers expected to send quotation replies.
 	if len(store.Settings.RFQAllowedSenders) > 0 {
 		allowed := false
 		for _, s := range store.Settings.RFQAllowedSenders {
@@ -558,164 +761,81 @@ func HandleRFQBotWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !allowed {
-			// Not a known buyer — check if it's a supplier replying to a forwarded RFQ
-			go handleSupplierReply(store, fromPhone, payload.Data.PushName, payload.Data.Message.Conversation, payload)
+			go handleMetaSupplierReply(store, fromPhone, senderName(val, fromPhone), msg)
 			return
 		}
 	}
 
+	// Build RFQ record
 	rfq := &models.RFQReceived{
 		StoreID:    storeObjID,
 		FromPhone:  fromPhone,
-		FromName:   payload.Data.PushName,
-		BuyerMsgID: payload.Data.Key.ID,
+		FromName:   senderName(val, fromPhone),
+		BuyerMsgID: msg.ID,
+		Source:     "whatsapp",
 		Status:     "received",
 	}
 
-	// Skip unsupported message types silently (audio, sticker, reaction, etc.)
-	msgType := strings.ToLower(payload.Data.MessageType)
-	skipTypes := map[string]bool{
-		"audiomessage": true, "pttmessage": true, "stickermessage": true,
-		"reactionmessage": true, "contactmessage": true, "locationmessage": true,
-		"livemessage": true, "pollcreationmessage": true,
-	}
-	if skipTypes[msgType] {
-		log.Printf("rfq_bot: webhook skipped — unsupported msgType=%q from %s", msgType, fromPhone)
-		return
-	}
-
-	// Extract text from all known message variants
-	msg := payload.Data.Message
-	text := ""
-	switch {
-	case msg.Conversation != "":
-		text = msg.Conversation
-	case msg.ExtendedTextMessage.Text != "":
-		text = msg.ExtendedTextMessage.Text
-	case msg.ImageMessage.Caption != "":
-		text = msg.ImageMessage.Caption
-	case msg.VideoMessage.Caption != "":
-		text = msg.VideoMessage.Caption
-	case msg.DocumentMessage.Caption != "":
-		text = msg.DocumentMessage.Caption
-	case msg.DocumentWithCaptionMessage.Message.DocumentMessage.Caption != "":
-		text = msg.DocumentWithCaptionMessage.Message.DocumentMessage.Caption
+	// Extract text content
+	var text string
+	switch msg.Type {
+	case "text":
+		if msg.Text != nil {
+			text = msg.Text.Body
+		}
+	case "image":
+		if msg.Image != nil {
+			text = msg.Image.Caption
+		}
+	case "document":
+		if msg.Document != nil {
+			text = msg.Document.Caption
+		}
 	}
 	rfq.TextContent = text
 
-	// ── Decrypt all media (images + documents) via Evolution API ──────────────
-	evoURL := store.Settings.BotEvolutionAPIURL
-	if evoURL == "" {
-		evoURL = evoDefaultURL
-	}
-	evoKey := store.Settings.BotEvolutionAPIKey
-	if evoKey == "" {
-		evoKey = evoGlobalKey
-	}
-	evoInstance := store.Settings.BotEvolutionInstanceName
-	if evoInstance == "" {
-		evoInstance = evoURL // placeholder — avoids empty string
-	}
-
-	// Parse the raw webhook envelope once so we can pass data.message to decrypt endpoints
-	var rawEnvelope struct {
-		Data struct {
-			Message json.RawMessage `json:"message"`
-		} `json:"data"`
-	}
-	rawEnvelopeOK := json.Unmarshal(bodyBytes, &rawEnvelope) == nil && len(rawEnvelope.Data.Message) > 0
-
-	// evoDecryptMedia calls Evolution API to decrypt a WhatsApp CDN message and returns a data URI.
-	// fallbackMime is used when the API doesn't return a proper data URI prefix.
-	evoDecryptMedia := func(fallbackMime string) string {
-		if !rawEnvelopeOK {
-			log.Printf("rfq_bot: data.message absent in webhook body — cannot decrypt")
-			return ""
-		}
-		mediaPayload, _ := json.Marshal(map[string]interface{}{
-			"message":      map[string]interface{}{"key": payload.Data.Key, "message": rawEnvelope.Data.Message},
-			"convertToMp4": false,
-		})
-		respBody, status, err := evoCall("POST",
-			fmt.Sprintf("%s/chat/getBase64FromMediaMessage/%s", strings.TrimRight(evoURL, "/"), evoInstance),
-			evoKey, mediaPayload)
-		if err != nil || (status != 200 && status != 201) {
-			log.Printf("rfq_bot: getBase64FromMediaMessage failed status=%d err=%v", status, err)
-			return ""
-		}
-		var mediaResp struct{ Base64 string `json:"base64"` }
-		if json.Unmarshal(respBody, &mediaResp) != nil || mediaResp.Base64 == "" {
-			log.Printf("rfq_bot: getBase64FromMediaMessage parse failed body=%.200s", string(respBody))
-			return ""
-		}
-		if strings.HasPrefix(mediaResp.Base64, "data:") {
-			return mediaResp.Base64
-		}
-		// Raw base64 — build data URI
-		mime := fallbackMime
-		if mime == "" {
-			if raw, err2 := base64.StdEncoding.DecodeString(mediaResp.Base64); err2 == nil {
-				mime = detectImageMIME(raw)
+	// Download images
+	var mediaURLs []string
+	var metaMediaIDs []string
+	if msg.Type == "image" && msg.Image != nil && msg.Image.ID != "" {
+		metaMediaIDs = append(metaMediaIDs, msg.Image.ID)
+		if accessToken != "" {
+			dataURI, _, err := metaDownloadMedia(msg.Image.ID, accessToken)
+			if err != nil {
+				log.Printf("rfq_bot: meta image download failed: %v", err)
 			} else {
-				mime = "application/octet-stream"
+				mediaURLs = append(mediaURLs, dataURI)
 			}
 		}
-		return "data:" + mime + ";base64," + mediaResp.Base64
-	}
-
-	// Collect images
-	var mediaURLs []string
-	if msg.ImageMessage.URL != "" {
-		dataURI := evoDecryptMedia(msg.ImageMessage.Mimetype)
-		if dataURI == "" {
-			dataURI = msg.ImageMessage.URL // encrypted fallback
-		}
-		mediaURLs = append(mediaURLs, dataURI)
 	}
 	rfq.MediaURLs = mediaURLs
+	rfq.MetaMediaIDs = metaMediaIDs
 
-	// Collect documents (PDF, Excel, etc.) — also decrypt so we can forward them and extract text
-	type rawDoc struct {
-		url      string
-		fileName string
-		mimeType string
-	}
-	var rawDocs []rawDoc
-	if msg.DocumentMessage.URL != "" {
-		rawDocs = append(rawDocs, rawDoc{msg.DocumentMessage.URL, msg.DocumentMessage.FileName, msg.DocumentMessage.Mimetype})
-	}
-	if inner := msg.DocumentWithCaptionMessage.Message.DocumentMessage; inner.URL != "" {
-		rawDocs = append(rawDocs, rawDoc{inner.URL, inner.FileName, inner.Mimetype})
-	}
-
+	// Download documents
 	var documents []models.RFQDocument
-	var docTextParts []string // text extracted from document contents (XLSX, CSV, etc.)
-	for _, rd := range rawDocs {
-		dataURI := evoDecryptMedia(rd.mimeType)
-		storedURL := dataURI
-		if storedURL == "" {
-			storedURL = rd.url // encrypted fallback — forwarding will fail but at least it's stored
-		}
-		documents = append(documents, models.RFQDocument{
-			URL:      storedURL,
-			FileName: rd.fileName,
-			MimeType: rd.mimeType,
-		})
-		// Extract readable text from XLSX / CSV for LLM categorization
-		if dataURI != "" {
+	var docTextParts []string
+	if msg.Type == "document" && msg.Document != nil && msg.Document.ID != "" && accessToken != "" {
+		dataURI, mimeType, err := metaDownloadMedia(msg.Document.ID, accessToken)
+		if err != nil {
+			log.Printf("rfq_bot: meta document download failed: %v", err)
+		} else {
+			if mimeType == "" {
+				mimeType = msg.Document.MimeType
+			}
+			documents = append(documents, models.RFQDocument{
+				URL:      dataURI,
+				FileName: msg.Document.Filename,
+				MimeType: mimeType,
+			})
 			_, b64data := splitDataURI(dataURI)
 			if raw, err2 := base64.StdEncoding.DecodeString(b64data); err2 == nil {
-				extracted := extractDocumentText(raw, rd.mimeType, rd.fileName)
-				if extracted != "" {
+				if extracted := extractDocumentText(raw, mimeType, msg.Document.Filename); extracted != "" {
 					docTextParts = append(docTextParts, extracted)
 				}
 			}
 		}
 	}
 	rfq.Documents = documents
-
-	// Store extracted document text (XLSX rows, CSV content) separately — used for LLM context only,
-	// NOT appended to TextContent so it doesn't pollute supplier messages when the doc is forwarded.
 	if len(docTextParts) > 0 {
 		rfq.ExtractedText = strings.Join(docTextParts, "\n\n")
 	}
@@ -723,9 +843,8 @@ func HandleRFQBotWebhook(w http.ResponseWriter, r *http.Request) {
 	hasImages := len(mediaURLs) > 0
 	hasDocs := len(documents) > 0
 
-	// Skip if there's absolutely nothing to process
 	if text == "" && !hasImages && !hasDocs {
-		log.Printf("rfq_bot: empty message from %s (type=%s) — skipping", fromPhone, payload.Data.MessageType)
+		log.Printf("rfq_bot: empty message from %s (type=%s) — skipping", fromPhone, msg.Type)
 		return
 	}
 
@@ -747,83 +866,43 @@ func HandleRFQBotWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify connected browser tabs immediately
-	BroadcastRFQEvent(storeObjID.Hex(), "rfq_received")
+	// Timeline: input received
+	srcLabel := "WhatsApp"
+	senderLabel := rfq.FromPhone
+	if rfq.FromName != "" {
+		senderLabel = rfq.FromName + " (+" + rfq.FromPhone + ")"
+	}
+	attachInfo := ""
+	if len(rfq.MediaURLs) > 0 && len(rfq.Documents) > 0 {
+		attachInfo = fmt.Sprintf(" with %d image(s) and %d document(s)", len(rfq.MediaURLs), len(rfq.Documents))
+	} else if len(rfq.MediaURLs) > 0 {
+		attachInfo = fmt.Sprintf(" with %d image(s)", len(rfq.MediaURLs))
+	} else if len(rfq.Documents) > 0 {
+		attachInfo = fmt.Sprintf(" with %d document(s)", len(rfq.Documents))
+	}
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step:    "input_received",
+		Message: fmt.Sprintf("Input received from %s via %s%s", senderLabel, srcLabel, attachInfo),
+		Icon:    "bi-whatsapp", Color: "success",
+		Details: map[string]interface{}{"source": rfq.Source, "from_phone": rfq.FromPhone, "message_type": rfq.MessageType},
+	})
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step:    "rfq_created",
+		Message: fmt.Sprintf("RFQ created with code %s", rfq.Code),
+		Icon:    "bi-file-earmark-check", Color: "primary",
+		Details: map[string]interface{}{"code": rfq.Code},
+	})
 
-	// Process in background
+	BroadcastRFQEvent(storeObjID.Hex(), "rfq_received")
 	go processRFQ(rfq, storeObjID)
 }
 
-type evolutionWebhookPayload struct {
-	Event    string `json:"event"`
-	Instance string `json:"instance"`
-	Data     struct {
-		Key struct {
-			RemoteJid string `json:"remoteJid"`
-			FromMe    bool   `json:"fromMe"`
-			ID        string `json:"id"`
-		} `json:"key"`
-		PushName string `json:"pushName"`
-		Message  struct {
-			Conversation        string `json:"conversation"`
-			ExtendedTextMessage struct {
-				Text        string `json:"text"`
-				ContextInfo struct {
-					StanzaID string `json:"stanzaId"`
-				} `json:"contextInfo"`
-			} `json:"extendedTextMessage"`
-			ImageMessage struct {
-				URL         string `json:"url"`
-				Caption     string `json:"caption"`
-				Mimetype    string `json:"mimetype"`
-				ContextInfo struct {
-					StanzaID string `json:"stanzaId"`
-				} `json:"contextInfo"`
-			} `json:"imageMessage"`
-			DocumentMessage struct {
-				URL         string `json:"url"`
-				FileName    string `json:"fileName"`
-				Mimetype    string `json:"mimetype"`
-				Caption     string `json:"caption"`
-				ContextInfo struct {
-					StanzaID string `json:"stanzaId"`
-				} `json:"contextInfo"`
-			} `json:"documentMessage"`
-			// Evolution API sometimes wraps document+caption in this type
-			DocumentWithCaptionMessage struct {
-				Message struct {
-					DocumentMessage struct {
-						URL      string `json:"url"`
-						FileName string `json:"fileName"`
-						Mimetype string `json:"mimetype"`
-						Caption  string `json:"caption"`
-					} `json:"documentMessage"`
-				} `json:"message"`
-			} `json:"documentWithCaptionMessage"`
-			// Video message (skip content, but note it arrived)
-			VideoMessage struct {
-				URL      string `json:"url"`
-				Caption  string `json:"caption"`
-				Mimetype string `json:"mimetype"`
-			} `json:"videoMessage"`
-		} `json:"message"`
-		MessageType      string `json:"messageType"`
-		MessageTimestamp int64  `json:"messageTimestamp"`
-	} `json:"data"`
-}
-
-// extractStanzaID returns the WhatsApp quoted-message ID from the payload, if the
-// sender is replying to a specific message (contextInfo.stanzaId).
-func extractStanzaID(payload evolutionWebhookPayload) string {
-	m := payload.Data.Message
-	if id := m.ExtendedTextMessage.ContextInfo.StanzaID; id != "" {
-		return id
-	}
-	if id := m.ImageMessage.ContextInfo.StanzaID; id != "" {
-		return id
-	}
-	if id := m.DocumentMessage.ContextInfo.StanzaID; id != "" {
-		return id
+// senderName extracts the contact display name for a given phone number from the Meta webhook.
+func senderName(val metaChangeValue, fromPhone string) string {
+	for _, c := range val.Contacts {
+		if c.WaID == fromPhone {
+			return c.Profile.Name
+		}
 	}
 	return ""
 }
@@ -841,20 +920,12 @@ func parseMsgIDFromEvoResponse(body []byte) string {
 	return ""
 }
 
-// handleBuyerFollowup forwards a buyer's reply (to a bot relay) to the correct supplier.
-// Triggered when contextInfo.stanzaId matches a previously saved BuyerRelayRecord.
-func handleBuyerFollowup(store *models.Store, rfq *models.RFQReceived, supplierPhone, buyerPhone, buyerName string, payload evolutionWebhookPayload) {
-	botURL := store.Settings.BotEvolutionAPIURL
-	if botURL == "" {
-		botURL = evoDefaultURL
-	}
-	botKey := store.Settings.BotEvolutionAPIKey
-	if botKey == "" {
-		botKey = evoGlobalKey
-	}
-	botInstance := store.Settings.BotEvolutionInstanceName
-	if botInstance == "" {
-		log.Printf("rfq_bot: buyer follow-up — bot instance not configured, can't relay to supplier %s", supplierPhone)
+// handleMetaBuyerFollowup forwards a buyer's reply (to a bot relay) to the correct supplier via Meta WABA.
+func handleMetaBuyerFollowup(store *models.Store, rfq *models.RFQReceived, supplierPhone, buyerPhone, buyerName string, msg metaMessage) {
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
+	if phoneNumberID == "" || accessToken == "" {
+		log.Printf("rfq_bot: buyer follow-up — WABA not configured, can't relay to supplier %s", supplierPhone)
 		return
 	}
 
@@ -864,190 +935,531 @@ func handleBuyerFollowup(store *models.Store, rfq *models.RFQReceived, supplierP
 	}
 	header := fmt.Sprintf("📩 *Follow-up from buyer %s (+%s)*\n\n", name, buyerPhone)
 
-	// Extract text
-	msg := payload.Data.Message
 	text := ""
-	switch {
-	case msg.Conversation != "":
-		text = msg.Conversation
-	case msg.ExtendedTextMessage.Text != "":
-		text = msg.ExtendedTextMessage.Text
-	case msg.ImageMessage.Caption != "":
-		text = msg.ImageMessage.Caption
-	case msg.DocumentMessage.Caption != "":
-		text = msg.DocumentMessage.Caption
+	if msg.Text != nil {
+		text = msg.Text.Body
+	} else if msg.Image != nil {
+		text = msg.Image.Caption
+	} else if msg.Document != nil {
+		text = msg.Document.Caption
 	}
-	if text == "" && msg.ImageMessage.URL == "" && msg.DocumentMessage.URL == "" {
+	if text == "" && msg.Image == nil && msg.Document == nil {
 		text = "(no text)"
 	}
 
-	// Send text to supplier
 	if text != "" {
-		textPayload, _ := json.Marshal(map[string]interface{}{
-			"number": supplierPhone,
-			"text":   header + text,
-		})
-		evoCall("POST",
-			fmt.Sprintf("%s/message/sendText/%s", strings.TrimRight(botURL, "/"), botInstance),
-			botKey, textPayload)
+		if _, err := metaSendText(phoneNumberID, accessToken, supplierPhone, header+text); err != nil {
+			log.Printf("rfq_bot: buyer follow-up text to supplier %s failed: %v", supplierPhone, err)
+		}
 	}
-
-	// Forward image if present
-	if msg.ImageMessage.URL != "" {
-		imgPayload, _ := json.Marshal(map[string]interface{}{
-			"number":    supplierPhone,
-			"mediatype": "image",
-			"mimetype":  msg.ImageMessage.Mimetype,
-			"caption":   "Image from buyer",
-			"media":     msg.ImageMessage.URL,
-		})
-		evoCall("POST",
-			fmt.Sprintf("%s/message/sendMedia/%s", strings.TrimRight(botURL, "/"), botInstance),
-			botKey, imgPayload)
+	if msg.Image != nil && msg.Image.ID != "" {
+		if dataURI, _, err := metaDownloadMedia(msg.Image.ID, accessToken); err == nil {
+			metaSendImage(phoneNumberID, accessToken, supplierPhone, dataURI, "Image from buyer")
+		}
 	}
-
-	// Forward document if present
-	docURL := msg.DocumentMessage.URL
-	if docURL != "" {
-		docPayload, _ := json.Marshal(map[string]interface{}{
-			"number":    supplierPhone,
-			"mediatype": "document",
-			"mimetype":  msg.DocumentMessage.Mimetype,
-			"fileName":  msg.DocumentMessage.FileName,
-			"caption":   "Document from buyer",
-			"media":     docURL,
-		})
-		evoCall("POST",
-			fmt.Sprintf("%s/message/sendMedia/%s", strings.TrimRight(botURL, "/"), botInstance),
-			botKey, docPayload)
+	if msg.Document != nil && msg.Document.ID != "" {
+		if dataURI, mime, err := metaDownloadMedia(msg.Document.ID, accessToken); err == nil {
+			metaSendDocument(phoneNumberID, accessToken, supplierPhone, dataURI, mime, msg.Document.Filename, "Document from buyer")
+		}
 	}
-
 	log.Printf("rfq_bot: buyer follow-up from %s relayed to supplier %s (rfq=%s)", buyerPhone, supplierPhone, rfq.ID.Hex())
 }
 
-// handleSupplierReply forwards a supplier's incoming message back to the original buyer.
-// Called when the sender is not in the RFQAllowedSenders whitelist — meaning they're
-// likely a supplier responding to an RFQ we forwarded to them.
-func handleSupplierReply(store *models.Store, supplierPhone, supplierName string, text string, payload evolutionWebhookPayload) {
-	originalRFQ, err := models.FindLatestRFQBySupplierPhone(store.ID, supplierPhone)
-	if err != nil {
-		log.Printf("rfq_bot: no forwarded RFQ found for supplier %s — ignoring reply", supplierPhone)
-		return
+// handleMetaSupplierReply forwards a supplier's message back to the original buyer via Meta WABA,
+// records the raw reply on the RFQ, and triggers async LLM price extraction.
+// supplierReplyAnalysis holds the result of the unified LLM analysis of a supplier reply.
+type supplierReplyAnalysis struct {
+	RFQCode     string                     // extracted RFQ code (e.g. "RFQ-0015"), empty if not mentioned
+	IsQuotation bool                       // true when the message contains unit prices
+	Prices      []models.SupplierReplyPrice // pre-extracted prices (zero-indexed relative to rfq.Products if available)
+}
+
+// extractRFQCodeFromText scans raw text for a pattern matching the store's RFQ code format
+// (e.g. "RFQ-0015") without needing an LLM call.
+func extractRFQCodeFromText(text, prefix string) string {
+	if prefix == "" {
+		prefix = "RFQ"
+	}
+	// Build pattern: <PREFIX>-<digits> (case-insensitive)
+	pattern := `(?i)\b` + regexp.QuoteMeta(strings.ToUpper(prefix)) + `-\d+\b`
+	re := regexp.MustCompile(pattern)
+	m := re.FindString(text)
+	if m != "" {
+		return strings.ToUpper(m)
+	}
+	return ""
+}
+
+// analyzeSupplierReply calls the store's LLM to extract RFQ reference, quotation status and prices
+// from a raw supplier reply. rfqProducts is the product list from the matched RFQ (may be nil/empty
+// when the RFQ is not yet identified; the LLM will still extract whatever is in the message).
+func analyzeSupplierReply(store *models.Store, msgText string, rfqProducts []models.RFQProduct) supplierReplyAnalysis {
+	if msgText == "" || store.Settings.RFQLLMAPIKey == "" {
+		return supplierReplyAnalysis{}
 	}
 
-	buyerPhone := originalRFQ.FromPhone
-	if buyerPhone == "" {
-		return
+	var productContext strings.Builder
+	for i, p := range rfqProducts {
+		productContext.WriteString(fmt.Sprintf("%d. %s", i+1, p.Name))
+		if p.PartNo != "" {
+			productContext.WriteString(" (part: " + p.PartNo + ")")
+		}
+		if p.Quantity > 0 {
+			productContext.WriteString(fmt.Sprintf(", qty: %.0f %s", p.Quantity, p.Unit))
+		}
+		productContext.WriteString("\n")
 	}
 
-	botURL := store.Settings.BotEvolutionAPIURL
-	if botURL == "" {
-		botURL = evoDefaultURL
+	productSection := ""
+	if productContext.Len() > 0 {
+		productSection = "\nRFQ Products (for matching):\n" + productContext.String()
 	}
-	botKey := store.Settings.BotEvolutionAPIKey
-	if botKey == "" {
-		botKey = evoGlobalKey
+
+	prompt := fmt.Sprintf(`You are a procurement assistant. Analyse the following supplier reply message.%s
+Supplier Message:
+%s
+
+Extract the following and return ONLY valid JSON (no explanation):
+{
+  "rfq_code": "<RFQ code if explicitly mentioned, e.g. RFQ-0015, or empty string>",
+  "is_quotation": <true if the message contains unit prices, false otherwise>,
+  "prices": [
+    {
+      "product_index": <0-based index from the product list above, -1 if unknown>,
+      "product_name": "<as mentioned in the message>",
+      "part_no": "<part number if mentioned, else empty>",
+      "unit_price": <numeric price, 0 if not given>,
+      "quantity": <numeric quantity if mentioned, 0 if not>,
+      "currency": "<e.g. AED, SAR, USD; default AED if not specified>",
+      "notes": "<lead time, MOQ, conditions, etc.>"
+    }
+  ]
+}
+If no prices are mentioned, return an empty prices array.`, productSection, msgText)
+
+	var responseText string
+	var llmErr error
+	switch strings.ToLower(store.Settings.RFQLLMProvider) {
+	case "openai":
+		responseText, llmErr = callOpenAI(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+	case "anthropic":
+		responseText, llmErr = callAnthropic(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+	case "gemini":
+		responseText, llmErr = callGemini(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+	default:
+		return supplierReplyAnalysis{}
 	}
-	botInstance := store.Settings.BotEvolutionInstanceName
-	if botInstance == "" {
-		log.Printf("rfq_bot: supplier reply from %s — bot instance not configured, can't relay", supplierPhone)
-		return
+	if llmErr != nil {
+		log.Printf("rfq_bot: analyzeSupplierReply LLM error: %v", llmErr)
+		return supplierReplyAnalysis{}
 	}
+
+	jsonStr := extractJSONFromLLMResponse(responseText)
+	var raw struct {
+		RFQCode     string `json:"rfq_code"`
+		IsQuotation bool   `json:"is_quotation"`
+		Prices      []struct {
+			ProductIndex int     `json:"product_index"`
+			ProductName  string  `json:"product_name"`
+			PartNo       string  `json:"part_no"`
+			UnitPrice    float64 `json:"unit_price"`
+			Quantity     float64 `json:"quantity"`
+			Currency     string  `json:"currency"`
+			Notes        string  `json:"notes"`
+		} `json:"prices"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
+		log.Printf("rfq_bot: analyzeSupplierReply JSON parse error: %v (raw=%q)", err, jsonStr)
+		return supplierReplyAnalysis{}
+	}
+
+	prices := make([]models.SupplierReplyPrice, 0, len(raw.Prices))
+	for _, p := range raw.Prices {
+		if p.UnitPrice <= 0 {
+			continue
+		}
+		idx := p.ProductIndex
+		if idx < 0 {
+			idx = 0
+		}
+		prices = append(prices, models.SupplierReplyPrice{
+			ProductIndex: idx,
+			ProductName:  p.ProductName,
+			PartNo:       p.PartNo,
+			UnitPrice:    p.UnitPrice,
+			Quantity:     p.Quantity,
+			Currency:     p.Currency,
+			Notes:        p.Notes,
+		})
+	}
+	return supplierReplyAnalysis{
+		RFQCode:     strings.TrimSpace(raw.RFQCode),
+		IsQuotation: raw.IsQuotation,
+		Prices:      prices,
+	}
+}
+
+func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName string, msg metaMessage) {
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
 
 	name := supplierName
 	if name == "" {
 		name = supplierPhone
 	}
 
-	// Build forwarding header
-	header := fmt.Sprintf("📩 *Reply from supplier %s (+%s)*\n\n", name, supplierPhone)
+	// ── Collect message text ──────────────────────────────────────────────────
+	msgText := ""
+	if msg.Text != nil {
+		msgText = msg.Text.Body
+	} else if msg.Image != nil {
+		msgText = msg.Image.Caption
+	} else if msg.Document != nil {
+		msgText = msg.Document.Caption
+	}
 
-	// Extract text from all message variants (supplier may quote the forwarded RFQ)
-	msg := payload.Data.Message
-	msgText := text
-	if msgText == "" {
-		switch {
-		case msg.ExtendedTextMessage.Text != "":
-			msgText = msg.ExtendedTextMessage.Text
-		case msg.ImageMessage.Caption != "":
-			msgText = msg.ImageMessage.Caption
-		case msg.DocumentMessage.Caption != "":
-			msgText = msg.DocumentMessage.Caption
+	// ── Step 1: try to extract RFQ code from text (regex, no LLM cost) ───────
+	rfqCodePrefix := ""
+	if store.RFQReceivedSerialNumber.Prefix != "" {
+		rfqCodePrefix = store.RFQReceivedSerialNumber.Prefix
+	}
+	codeFromText := extractRFQCodeFromText(msgText, rfqCodePrefix)
+
+	// ── Step 2: find the RFQ ──────────────────────────────────────────────────
+	var originalRFQ *models.RFQReceived
+	var routingMethod string
+
+	if codeFromText != "" {
+		if rfq, err := models.FindRFQByCode(store.ID, codeFromText); err == nil {
+			originalRFQ = rfq
+			routingMethod = "code:" + codeFromText
+			log.Printf("rfq_bot: supplier reply routed by extracted code %q to RFQ %s", codeFromText, rfq.ID.Hex())
 		}
 	}
-	if msgText == "" {
-		msgText = "(no text)"
+	if originalRFQ == nil {
+		// Fall back: most recent RFQ forwarded to this supplier's phone
+		rfq, err := models.FindLatestRFQBySupplierPhone(store.ID, supplierPhone)
+		if err != nil {
+			log.Printf("rfq_bot: no forwarded RFQ found for supplier %s — ignoring reply", supplierPhone)
+			return
+		}
+		originalRFQ = rfq
+		routingMethod = "phone"
 	}
-	textMsg := map[string]interface{}{
-		"number": buyerPhone,
-		"text":   header + msgText,
+
+	buyerPhone := originalRFQ.FromPhone
+
+	// ── Step 3: LLM analysis — extract RFQ code (if regex missed), prices ────
+	// Run with the now-known RFQ product list for better price matching.
+	analysis := analyzeSupplierReply(store, msgText, originalRFQ.Products)
+
+	// If LLM found a code that regex missed and it points to a different RFQ, re-route.
+	if analysis.RFQCode != "" && analysis.RFQCode != codeFromText && routingMethod == "phone" {
+		if rfq, err := models.FindRFQByCode(store.ID, analysis.RFQCode); err == nil {
+			originalRFQ = rfq
+			buyerPhone = rfq.FromPhone
+			routingMethod = "llm_code:" + analysis.RFQCode
+			log.Printf("rfq_bot: supplier reply re-routed by LLM-extracted code %q to RFQ %s", analysis.RFQCode, rfq.ID.Hex())
+		}
 	}
-	if originalRFQ.BuyerMsgID != "" {
-		textMsg["quoted"] = map[string]interface{}{
-			"key": map[string]interface{}{
-				"remoteJid": buyerPhone + "@s.whatsapp.net",
-				"fromMe":    false,
-				"id":        originalRFQ.BuyerMsgID,
+
+	// ── Step 4: save the reply, already enriched with LLM results ────────────
+	extractionStatus := "pending"
+	if store.Settings.RFQLLMAPIKey == "" {
+		extractionStatus = "done" // no LLM configured, nothing to extract
+	} else if analysis.IsQuotation || len(analysis.Prices) > 0 {
+		extractionStatus = "done" // already done in step 3
+	}
+
+	reply := models.SupplierReply{
+		SupplierName:     name,
+		SupplierPhone:    supplierPhone,
+		ReceivedAt:       time.Now(),
+		RawText:          msgText,
+		IsQuotation:      analysis.IsQuotation,
+		Prices:           analysis.Prices,
+		ExtractionStatus: extractionStatus,
+	}
+	if addErr := models.AddSupplierReplyToRFQ(originalRFQ.StoreID, originalRFQ.ID, reply); addErr != nil {
+		log.Printf("rfq_bot: failed to save supplier reply: %v", addErr)
+	} else {
+		models.AppendRFQLog(originalRFQ.StoreID, originalRFQ.ID, models.RFQActivityLog{
+			Step: "supplier_replied",
+			Message: fmt.Sprintf("Supplier %s (+%s) has replied (routed by %s)", name, supplierPhone, routingMethod),
+			Icon:  "bi-chat-left-text", Color: "info",
+			Details: map[string]interface{}{
+				"supplier_name":  name,
+				"supplier_phone": supplierPhone,
+				"routing":        routingMethod,
+				"is_quotation":   analysis.IsQuotation,
+				"price_count":    len(analysis.Prices),
 			},
+		})
+
+		if analysis.IsQuotation && len(analysis.Prices) > 0 {
+			modelName := store.Settings.RFQLLMModel
+			if modelName == "" {
+				modelName = store.Settings.RFQLLMProvider
+			}
+			models.AppendRFQLog(originalRFQ.StoreID, originalRFQ.ID, models.RFQActivityLog{
+				Step: "prices_extracted",
+				Message: fmt.Sprintf("Extracted %d product price(s) from %s reply using %s",
+					len(analysis.Prices), name, modelName),
+				Icon: "bi-cpu", Color: "secondary",
+				Details: map[string]interface{}{"supplier_name": name, "price_count": len(analysis.Prices), "model": modelName},
+			})
+			models.AppendRFQLog(originalRFQ.StoreID, originalRFQ.ID, models.RFQActivityLog{
+				Step: "prices_updated",
+				Message: fmt.Sprintf("Updated RFQ with unit prices from supplier: %s (%d item(s) priced)",
+					name, len(analysis.Prices)),
+				Icon: "bi-currency-dollar", Color: "success",
+				Details: map[string]interface{}{"supplier_name": name, "is_quotation": true, "price_count": len(analysis.Prices)},
+			})
+		} else if extractionStatus == "pending" {
+			// LLM didn't find prices yet — run the detailed extraction pass with full RFQ product context
+			go func() {
+				updated, err := models.FindRFQReceivedByID(originalRFQ.ID, originalRFQ.StoreID)
+				if err != nil {
+					return
+				}
+				for i := len(updated.SupplierReplies) - 1; i >= 0; i-- {
+					r := updated.SupplierReplies[i]
+					if r.SupplierPhone == supplierPhone && r.ExtractionStatus == "pending" {
+						extractSupplierPrices(store, updated, &updated.SupplierReplies[i])
+						break
+					}
+				}
+			}()
 		}
 	}
-	textPayload, _ := json.Marshal(textMsg)
-	relayBody, status, sendErr := evoCall("POST",
-		fmt.Sprintf("%s/message/sendText/%s", strings.TrimRight(botURL, "/"), botInstance),
-		botKey, textPayload)
-	if sendErr != nil || (status != 200 && status != 201) {
-		log.Printf("rfq_bot: supplier reply relay to buyer %s failed: status=%d err=%v", buyerPhone, status, sendErr)
+
+	// Relay to buyer if WABA is configured and buyer phone is known.
+	if buyerPhone != "" && phoneNumberID != "" && accessToken != "" {
+		header := fmt.Sprintf("📩 *Reply from supplier %s (+%s)*\n\n", name, supplierPhone)
+		displayText := msgText
+		if displayText == "" {
+			displayText = "(no text)"
+		}
+		relayMsgID, sendErr := metaSendText(phoneNumberID, accessToken, buyerPhone, header+displayText)
+		if sendErr != nil {
+			log.Printf("rfq_bot: supplier reply relay to buyer %s failed: %v", buyerPhone, sendErr)
+		} else if relayMsgID != "" {
+			_ = models.AddBuyerRelayToRFQ(originalRFQ.StoreID, originalRFQ.ID, models.BuyerRelayRecord{
+				MsgID:         relayMsgID,
+				SupplierPhone: supplierPhone,
+				SentAt:        time.Now(),
+			})
+		}
+		if msg.Image != nil && msg.Image.ID != "" {
+			if dataURI, _, dlErr := metaDownloadMedia(msg.Image.ID, accessToken); dlErr == nil {
+				metaSendImage(phoneNumberID, accessToken, buyerPhone, dataURI, "Image from supplier")
+			}
+		}
+		if msg.Document != nil && msg.Document.ID != "" {
+			if dataURI, mime, dlErr := metaDownloadMedia(msg.Document.ID, accessToken); dlErr == nil {
+				metaSendDocument(phoneNumberID, accessToken, buyerPhone, dataURI, mime, msg.Document.Filename, "Document from supplier")
+			}
+		}
+	}
+	log.Printf("rfq_bot: recorded and relayed supplier %s reply (rfq=%s)", supplierPhone, originalRFQ.ID.Hex())
+}
+
+// extractSupplierPrices uses the store's LLM to detect if a supplier reply is a quotation
+// and extract unit prices per product. Updates the SupplierReply in the DB.
+func extractSupplierPrices(store *models.Store, rfq *models.RFQReceived, reply *models.SupplierReply) {
+	if reply.RawText == "" || len(rfq.Products) == 0 {
+		_ = models.UpdateSupplierReplyPrices(rfq.StoreID, rfq.ID, reply.ID, nil, false, "done", "no text or no products")
 		return
 	}
-	// Save the outgoing message ID so we can route the buyer's follow-up to this supplier
-	if relayMsgID := parseMsgIDFromEvoResponse(relayBody); relayMsgID != "" {
-		_ = models.AddBuyerRelayToRFQ(originalRFQ.StoreID, originalRFQ.ID, models.BuyerRelayRecord{
-			MsgID:         relayMsgID,
-			SupplierPhone: supplierPhone,
-			SentAt:        time.Now(),
-		})
-	}
 
-	// Forward image if present
-	if msg.ImageMessage.URL != "" {
-		imgPayload, _ := json.Marshal(map[string]interface{}{
-			"number":    buyerPhone,
-			"mediatype": "image",
-			"mimetype":  msg.ImageMessage.Mimetype,
-			"caption":   "Image from supplier",
-			"media":     msg.ImageMessage.URL,
-		})
-		evoCall("POST",
-			fmt.Sprintf("%s/message/sendMedia/%s", strings.TrimRight(botURL, "/"), botInstance),
-			botKey, imgPayload)
-	}
-
-	// Forward document if present
-	docURL := msg.DocumentMessage.URL
-	docName := msg.DocumentMessage.FileName
-	if docURL == "" {
-		docURL = msg.DocumentWithCaptionMessage.Message.DocumentMessage.URL
-		docName = msg.DocumentWithCaptionMessage.Message.DocumentMessage.FileName
-	}
-	if docURL != "" {
-		mimeType := msg.DocumentMessage.Mimetype
-		if mimeType == "" {
-			mimeType = msg.DocumentWithCaptionMessage.Message.DocumentMessage.Mimetype
+	// Build product list for the prompt.
+	var productLines strings.Builder
+	for i, p := range rfq.Products {
+		productLines.WriteString(fmt.Sprintf("%d. %s", i+1, p.Name))
+		if p.PartNo != "" {
+			productLines.WriteString(" (part: " + p.PartNo + ")")
 		}
-		docPayload, _ := json.Marshal(map[string]interface{}{
-			"number":    buyerPhone,
-			"mediatype": "document",
-			"mimetype":  mimeType,
-			"fileName":  docName,
-			"caption":   "Document from supplier",
-			"media":     docURL,
-		})
-		evoCall("POST",
-			fmt.Sprintf("%s/message/sendMedia/%s", strings.TrimRight(botURL, "/"), botInstance),
-			botKey, docPayload)
+		if p.Quantity > 0 {
+			productLines.WriteString(fmt.Sprintf(", qty: %.0f %s", p.Quantity, p.Unit))
+		}
+		productLines.WriteString("\n")
 	}
 
-	log.Printf("rfq_bot: relayed supplier %s reply to buyer %s", supplierPhone, buyerPhone)
+	prompt := fmt.Sprintf(`You are a procurement assistant. The following is a supplier's reply to an RFQ.
+
+RFQ Products:
+%s
+Supplier Reply:
+%s
+
+Task:
+1. Determine if this reply contains unit prices for any products (is_quotation: true/false).
+2. For each product that has a price, extract:
+   - product_index (0-based, matching the list above)
+   - product_name
+   - part_no (if mentioned)
+   - unit_price (numeric, base currency)
+   - currency (e.g. SAR, USD; default SAR if not specified)
+   - notes (any conditions like MOQ, lead time)
+
+Return ONLY valid JSON:
+{
+  "is_quotation": true,
+  "prices": [
+    {"product_index": 0, "product_name": "...", "part_no": "...", "unit_price": 150.00, "currency": "SAR", "notes": "..."}
+  ]
+}`, productLines.String(), reply.RawText)
+
+	var responseText string
+	var llmErr error
+	switch strings.ToLower(store.Settings.RFQLLMProvider) {
+	case "openai":
+		responseText, llmErr = callOpenAI(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+	case "anthropic":
+		responseText, llmErr = callAnthropic(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+	case "gemini":
+		responseText, llmErr = callGemini(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+	default:
+		_ = models.UpdateSupplierReplyPrices(rfq.StoreID, rfq.ID, reply.ID, nil, false, "done", "LLM not configured")
+		return
+	}
+	if llmErr != nil {
+		_ = models.UpdateSupplierReplyPrices(rfq.StoreID, rfq.ID, reply.ID, nil, false, "failed", llmErr.Error())
+		return
+	}
+
+	// Parse JSON from LLM response (strip markdown code fences if present).
+	jsonStr := extractJSONFromLLMResponse(responseText)
+	var result struct {
+		IsQuotation bool `json:"is_quotation"`
+		Prices      []struct {
+			ProductIndex int     `json:"product_index"`
+			ProductName  string  `json:"product_name"`
+			PartNo       string  `json:"part_no"`
+			UnitPrice    float64 `json:"unit_price"`
+			Currency     string  `json:"currency"`
+			Notes        string  `json:"notes"`
+		} `json:"prices"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		_ = models.UpdateSupplierReplyPrices(rfq.StoreID, rfq.ID, reply.ID, nil, false, "failed", "JSON parse: "+err.Error())
+		return
+	}
+
+	prices := make([]models.SupplierReplyPrice, 0, len(result.Prices))
+	for _, p := range result.Prices {
+		prices = append(prices, models.SupplierReplyPrice{
+			ProductIndex: p.ProductIndex,
+			ProductName:  p.ProductName,
+			PartNo:       p.PartNo,
+			UnitPrice:    p.UnitPrice,
+			Currency:     p.Currency,
+			Notes:        p.Notes,
+		})
+	}
+	_ = models.UpdateSupplierReplyPrices(rfq.StoreID, rfq.ID, reply.ID, prices, result.IsQuotation, "done", "")
+	log.Printf("rfq_bot: supplier price extraction done for reply %s (is_quotation=%v, %d prices)", reply.ID.Hex(), result.IsQuotation, len(prices))
+
+	modelName := store.Settings.RFQLLMModel
+	if modelName == "" {
+		modelName = store.Settings.RFQLLMProvider
+	}
+	if result.IsQuotation && len(prices) > 0 {
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step: "prices_extracted",
+			Message: fmt.Sprintf("Extracted %d product price(s) from %s reply using LLM model: %s",
+				len(prices), reply.SupplierName, modelName),
+			Icon: "bi-cpu", Color: "secondary",
+			Details: map[string]interface{}{"supplier_name": reply.SupplierName, "price_count": len(prices), "model": modelName},
+		})
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step: "prices_updated",
+			Message: fmt.Sprintf("Updated RFQ with unit prices from supplier: %s (%d item(s) priced)",
+				reply.SupplierName, len(prices)),
+			Icon: "bi-currency-dollar", Color: "success",
+			Details: map[string]interface{}{"supplier_name": reply.SupplierName, "is_quotation": result.IsQuotation, "price_count": len(prices)},
+		})
+	} else {
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step:    "prices_extracted",
+			Message: fmt.Sprintf("Reply from %s analysed — not a quotation (no prices found)", reply.SupplierName),
+			Icon:    "bi-info-circle", Color: "secondary",
+			Details: map[string]interface{}{"supplier_name": reply.SupplierName, "is_quotation": false},
+		})
+	}
+}
+
+// extractJSONFromLLMResponse strips markdown code fences and extracts the JSON object/array.
+func extractJSONFromLLMResponse(text string) string {
+	text = strings.TrimSpace(text)
+	if idx := strings.Index(text, "```json"); idx >= 0 {
+		text = text[idx+7:]
+		if end := strings.Index(text, "```"); end >= 0 {
+			text = text[:end]
+		}
+	} else if idx := strings.Index(text, "```"); idx >= 0 {
+		text = text[idx+3:]
+		if end := strings.Index(text, "```"); end >= 0 {
+			text = text[:end]
+		}
+	}
+	text = strings.TrimSpace(text)
+	// Find first '{' or '[' and last '}' or ']'
+	start := strings.IndexAny(text, "{[")
+	end := strings.LastIndexAny(text, "}]")
+	if start >= 0 && end > start {
+		return text[start : end+1]
+	}
+	return text
+}
+
+// legacy stub — referenced by old test files; do not call in new code
+func handleBuyerFollowupLegacy(store *models.Store, rfq *models.RFQReceived, supplierPhone, buyerPhone, buyerName string) {
+	log.Printf("rfq_bot: handleBuyerFollowupLegacy called (use handleMetaBuyerFollowup instead)")
+}
+
+// legacy stub — referenced by old test files; do not call in new code
+func handleSupplierReplyLegacy(store *models.Store, supplierPhone, supplierName string, text string) {
+	log.Printf("rfq_bot: handleSupplierReplyLegacy called (use handleMetaSupplierReply instead)")
+}
+
+// --- kept for legacy test references ---
+type evolutionWebhookPayload struct {
+	Event    string `json:"event"`
+	Instance string `json:"instance"`
+	Data     struct {
+		Key struct {
+			RemoteJid string `json:"remoteJid"`
+			FromMe    bool   `json:"fromMe"`
+			ID        string `json:"id"`
+		} `json:"key"`
+		PushName    string `json:"pushName"`
+		Message     struct {
+			Conversation string `json:"conversation"`
+			DocumentWithCaptionMessage struct {
+				Message struct {
+					DocumentMessage struct {
+						URL      string `json:"url"`
+						FileName string `json:"fileName"`
+						Mimetype string `json:"mimetype"`
+						Caption  string `json:"caption"`
+					} `json:"documentMessage"`
+				} `json:"message"`
+			} `json:"documentWithCaptionMessage"`
+		} `json:"message"`
+		MessageType      string `json:"messageType"`
+		MessageTimestamp int64  `json:"messageTimestamp"`
+	} `json:"data"`
+}
+
+// handleBuyerFollowup — kept for legacy test compilation; redirects to Meta version stub.
+func handleBuyerFollowup(store *models.Store, rfq *models.RFQReceived, supplierPhone, buyerPhone, buyerName string, payload evolutionWebhookPayload) {
+	handleBuyerFollowupLegacy(store, rfq, supplierPhone, buyerPhone, buyerName)
+}
+
+// handleSupplierReply — kept for legacy test compilation; redirects to Meta version stub.
+func handleSupplierReply(store *models.Store, supplierPhone, supplierName string, text string, payload evolutionWebhookPayload) {
+	handleSupplierReplyLegacy(store, supplierPhone, supplierName, text)
 }
 
 // ── 5. RFQ Processing Pipeline ────────────────────────────────────────────────
@@ -1085,6 +1497,24 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 	// Build LLM context: original text + extracted doc content + filename hints.
 	// ExtractedText contains spreadsheet/CSV rows — useful for categorization but NOT sent to suppliers.
 	llmText := rfq.TextContent
+	// For manually created RFQs with products but no text, synthesise a description.
+	if llmText == "" && rfq.Source == "manual" && len(rfq.Products) > 0 {
+		var parts []string
+		for _, p := range rfq.Products {
+			s := p.Name
+			if p.PartNo != "" {
+				s = p.PartNo + " — " + s
+			}
+			if p.Quantity > 0 {
+				s += fmt.Sprintf(", qty %.0f", p.Quantity)
+				if p.Unit != "" {
+					s += " " + p.Unit
+				}
+			}
+			parts = append(parts, s)
+		}
+		llmText = "Request for quotation:\n" + strings.Join(parts, "\n")
+	}
 	if rfq.ExtractedText != "" {
 		if llmText != "" {
 			llmText += "\n\n" + rfq.ExtractedText
@@ -1140,7 +1570,8 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 		log.Printf("rfq_bot[%s]: %d media URL(s) but all image downloads failed — treating as RFQ (fail-open)", rfqIDStr, len(rfq.MediaURLs))
 	}
 	progress("classifying", 0, 100, "Analysing message with AI...", nil)
-	if !mediaFailOpen && !isRFQMessage(store, llmText, imageBase64s) {
+	isManual := rfq.Source == "manual"
+	if !isManual && !mediaFailOpen && !isRFQMessage(store, llmText, imageBase64s) {
 		log.Printf("rfq_bot: message from %s classified as non-RFQ — ignoring", rfq.FromPhone)
 		rfq.Status = "ignored"
 		rfq.ErrorMsg = "Message does not appear to be an RFQ (e.g. greeting or casual text)"
@@ -1169,6 +1600,19 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 	rfq.Categories = categories
 	progress("classifying", 20, 100, fmt.Sprintf("Categories identified: %s", strings.Join(categories, ", ")),
 		map[string]interface{}{"categories": categories})
+	{
+		llmModelName := store.Settings.RFQLLMModel
+		if llmModelName == "" {
+			llmModelName = store.Settings.RFQLLMProvider
+		}
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step: "categories_identified",
+			Message: fmt.Sprintf("Identified %d product categor(y/ies): %s — using LLM model: %s",
+				len(categories), strings.Join(categories, ", "), llmModelName),
+			Icon: "bi-tags", Color: "info",
+			Details: map[string]interface{}{"categories": categories, "model": llmModelName},
+		})
+	}
 
 	// Find suppliers (DB first, then Google Maps)
 	progress("finding_suppliers", 25, 100, "Searching for matching suppliers...", nil)
@@ -1210,6 +1654,30 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 	progress("finding_suppliers", 30, 100,
 		fmt.Sprintf("Found %d supplier(s) across %d market(s) × %d categor(y/ies)", len(suppliers), numMarkets, len(categories)),
 		map[string]interface{}{"supplier_count": len(suppliers)})
+	// Log per-market supplier matches
+	marketSuppliers := map[string][]string{}
+	for _, s := range suppliers {
+		mkt := s.PurchaseMarket
+		if mkt == "" {
+			mkt = "General"
+		}
+		marketSuppliers[mkt] = append(marketSuppliers[mkt], s.Name)
+	}
+	for mkt, names := range marketSuppliers {
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step: "suppliers_matched",
+			Message: fmt.Sprintf("Matched %d categor(y/ies) with %d supplier(s) in %s purchase market",
+				len(rfq.Categories), len(names), mkt),
+			Icon: "bi-shop", Color: "primary",
+			Details: map[string]interface{}{"market": mkt, "supplier_count": len(names), "supplier_names": names, "categories": rfq.Categories},
+		})
+	}
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step:    "waiting_approval",
+		Message: fmt.Sprintf("Ready to send RFQ to %d supplier(s) — waiting for system to proceed", len(suppliers)),
+		Icon:    "bi-hourglass-split", Color: "warning",
+		Details: map[string]interface{}{"total_suppliers": len(suppliers)},
+	})
 
 	// Forward RFQ to each supplier with delay
 	now := time.Now()
@@ -1257,11 +1725,24 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 		if sent {
 			record.Status = "sent"
 			log.Printf("rfq_bot[%s]: ✓ forwarded to %s (%s) [%d/%d]", rfqIDStr, sup.Name, sup.Phone, step, total)
+			models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+				Step: "rfq_sent_to_supplier",
+				Message: fmt.Sprintf("RFQ sent to supplier: %s (+%s) in %s market [%d/%d]",
+					sup.Name, sup.Phone, market, step, total),
+				Icon: "bi-send", Color: "success",
+				Details: map[string]interface{}{"supplier_name": sup.Name, "supplier_phone": sup.Phone, "market": market, "step": step, "total": total},
+			})
 		} else {
 			record.Status = "failed"
 			record.ErrorMsg = errMsg
 			rfq.Status = "forwarded" // partial forward is still "forwarded"
 			log.Printf("rfq_bot[%s]: ✗ failed to forward to %s (%s): %s [%d/%d]", rfqIDStr, sup.Name, sup.Phone, errMsg, step, total)
+			models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+				Step: "rfq_send_failed",
+				Message: fmt.Sprintf("Failed to send RFQ to supplier: %s (+%s) — %s", sup.Name, sup.Phone, errMsg),
+				Icon: "bi-exclamation-triangle", Color: "danger",
+				Details: map[string]interface{}{"supplier_name": sup.Name, "supplier_phone": sup.Phone, "error": errMsg},
+			})
 		}
 		rfq.ForwardedTo = append(rfq.ForwardedTo, record)
 		// Persist immediately so supplier replies arriving during the delay can be routed
@@ -1301,6 +1782,12 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 		"percent": 100,
 		"message": fmt.Sprintf("Done — forwarded to %d supplier(s)", total),
 	})
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step:    "waiting_replies",
+		Message: fmt.Sprintf("RFQ forwarded to %d supplier(s) — waiting for supplier replies", total),
+		Icon:    "bi-hourglass", Color: "secondary",
+		Details: map[string]interface{}{"total_suppliers": total},
+	})
 
 	// Reply to the original sender with a per-market summary via the bot instance.
 	replyRFQSummaryToSender(store, rfq)
@@ -1308,16 +1795,9 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 
 // notifyBuyerNoSuppliers sends the buyer a WhatsApp message when no matching suppliers could be found.
 func notifyBuyerNoSuppliers(store *models.Store, rfq *models.RFQReceived, categories []string) {
-	botURL := store.Settings.BotEvolutionAPIURL
-	if botURL == "" {
-		botURL = evoDefaultURL
-	}
-	botKey := store.Settings.BotEvolutionAPIKey
-	if botKey == "" {
-		botKey = evoGlobalKey
-	}
-	botInstance := store.Settings.BotEvolutionInstanceName
-	if botInstance == "" {
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
+	if phoneNumberID == "" || accessToken == "" {
 		return
 	}
 
@@ -1327,48 +1807,27 @@ func notifyBuyerNoSuppliers(store *models.Store, rfq *models.RFQReceived, catego
 		companyName = "us"
 	}
 	msg := fmt.Sprintf(
-		"Thank you for your RFQ. Unfortunately, we could not find any verified WhatsApp-enabled suppliers for *%s* at this time.\n\nWe will continue searching and get back to you as soon as we identify suitable suppliers. You may also contact %s directly for assistance.",
+		"Thank you for your RFQ. Unfortunately, we could not find any verified suppliers for *%s* at this time.\n\nWe will continue searching and get back to you as soon as we identify suitable suppliers. You may also contact %s directly for assistance.",
 		catStr, companyName,
 	)
 
-	payload, _ := json.Marshal(map[string]interface{}{
-		"number": rfq.FromPhone,
-		"text":   msg,
-		"quoted": map[string]interface{}{
-			"key": map[string]interface{}{
-				"remoteJid": rfq.FromPhone + "@s.whatsapp.net",
-				"fromMe":    false,
-				"id":        rfq.BuyerMsgID,
-			},
-		},
-	})
-	_, status, err := evoCall("POST",
-		fmt.Sprintf("%s/message/sendText/%s", strings.TrimRight(botURL, "/"), botInstance),
-		botKey, payload)
-	if err != nil || (status != 200 && status != 201) {
-		log.Printf("rfq_bot: failed to notify buyer %s of no-supplier result: status=%d err=%v", rfq.FromPhone, status, err)
+	if _, err := metaSendText(phoneNumberID, accessToken, rfq.FromPhone, msg); err != nil {
+		log.Printf("rfq_bot: failed to notify buyer %s of no-supplier result: %v", rfq.FromPhone, err)
 	}
 }
 
-// replyRFQSummaryToSender sends the forwarding summary back to the buyer through the bot WhatsApp.
+// replyRFQSummaryToSender sends the forwarding summary back to the buyer via Meta Cloud API.
 func replyRFQSummaryToSender(store *models.Store, rfq *models.RFQReceived) {
-	botURL := store.Settings.BotEvolutionAPIURL
-	if botURL == "" {
-		botURL = evoDefaultURL
-	}
-	botKey := store.Settings.BotEvolutionAPIKey
-	if botKey == "" {
-		botKey = evoGlobalKey
-	}
-	botInstance := store.Settings.BotEvolutionInstanceName
-	if botInstance == "" {
-		return // no bot instance — can't reply
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
+	if phoneNumberID == "" || accessToken == "" {
+		return
 	}
 
 	// Group successfully sent records by purchase market.
 	type supplierSummary struct {
-		name        string
-		phone       string
+		name          string
+		phone         string
 		googleMapsURL string
 	}
 	type marketEntry struct {
@@ -1389,14 +1848,14 @@ func replyRFQSummaryToSender(store *models.Store, rfq *models.RFQReceived) {
 			marketOrder = append(marketOrder, market)
 		}
 		marketMap[market].suppliers = append(marketMap[market].suppliers, supplierSummary{
-			name:        r.SupplierName,
-			phone:       r.Phone,
+			name:          r.SupplierName,
+			phone:         r.Phone,
 			googleMapsURL: r.GoogleMapsURL,
 		})
 	}
 
 	if len(marketOrder) == 0 {
-		return // nothing was sent successfully
+		return
 	}
 
 	for _, market := range marketOrder {
@@ -1407,7 +1866,6 @@ func replyRFQSummaryToSender(store *models.Store, rfq *models.RFQReceived) {
 			noun = "Supplier"
 		}
 
-		// Build numbered supplier list with phone and Maps link
 		var listLines string
 		for i, sup := range entry.suppliers {
 			line := fmt.Sprintf("\n  %d. %s", i+1, sup.name)
@@ -1426,26 +1884,9 @@ func replyRFQSummaryToSender(store *models.Store, rfq *models.RFQReceived) {
 		} else {
 			msg = fmt.Sprintf("✅ Forwarded your RFQ to %d %s in the *%s* market:%s\n\nQuotes coming soon!", count, noun, market, listLines)
 		}
-		textMsg := map[string]interface{}{
-			"number": rfq.FromPhone,
-			"text":   msg,
-		}
-		// Quote the original buyer message so the summary appears in the same RFQ thread
-		if rfq.BuyerMsgID != "" {
-			textMsg["quoted"] = map[string]interface{}{
-				"key": map[string]interface{}{
-					"remoteJid": rfq.FromPhone + "@s.whatsapp.net",
-					"fromMe":    false,
-					"id":        rfq.BuyerMsgID,
-				},
-			}
-		}
-		payload, _ := json.Marshal(textMsg)
-		_, status, err := evoCall("POST",
-			fmt.Sprintf("%s/message/sendText/%s", strings.TrimRight(botURL, "/"), botInstance),
-			botKey, payload)
-		if err != nil || (status != 200 && status != 201) {
-			log.Printf("rfq_bot: failed to send summary reply to %s: status=%d err=%v", rfq.FromPhone, status, err)
+
+		if _, err := metaSendText(phoneNumberID, accessToken, rfq.FromPhone, msg); err != nil {
+			log.Printf("rfq_bot: failed to send summary reply to %s: %v", rfq.FromPhone, err)
 		}
 	}
 }
@@ -1623,6 +2064,69 @@ A non-RFQ is a greeting, thanks, casual chat, or any message that does not reque
 		return true
 	}
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(answer)), "yes")
+}
+
+// classifyIncomingMessage uses the configured LLM to classify a WhatsApp message as
+// "rfq", "quotation", or "other", and extracts any RFQ reference code if it's a quotation.
+// Falls back to "rfq" (allow-all) when the LLM is not configured.
+func classifyIncomingMessage(store *models.Store, text string, imageBase64s []string) (msgType string, rfqCode string) {
+	provider := strings.ToLower(store.Settings.RFQLLMProvider)
+	apiKey := store.Settings.RFQLLMAPIKey
+	model := store.Settings.RFQLLMModel
+	if apiKey == "" || provider == "" {
+		// No LLM — fall back to allowing everything through as RFQ
+		return "rfq", ""
+	}
+
+	prompt := `Classify this WhatsApp message as one of:
+- "rfq": The sender wants to purchase items and is requesting prices/quotations
+- "quotation": A supplier is providing price information/unit prices for products
+- "other": Casual chat, thanks, greetings, unrelated content
+
+Also, if it's a quotation, extract any RFQ reference code (like "RFQ-0001" or "RFQ-001") mentioned.
+
+Reply with ONLY valid JSON: {"type": "rfq"|"quotation"|"other", "rfq_code": "..." or null}`
+
+	if strings.TrimSpace(text) != "" {
+		prompt += "\n\nMessage:\n" + text
+	}
+
+	answer, err := callLLMTextWithImages(apiKey, model, provider, prompt, imageBase64s)
+	if err != nil {
+		log.Printf("rfq_bot: classifyIncomingMessage LLM error: %v — defaulting to rfq", err)
+		return "rfq", ""
+	}
+
+	// Strip markdown code fences if present
+	cleaned := strings.TrimSpace(answer)
+	if idx := strings.Index(cleaned, "```"); idx != -1 {
+		cleaned = cleaned[idx:]
+		cleaned = strings.TrimPrefix(cleaned, "```json")
+		cleaned = strings.TrimPrefix(cleaned, "```")
+		if end := strings.LastIndex(cleaned, "```"); end > 0 {
+			cleaned = cleaned[:end]
+		}
+		cleaned = strings.TrimSpace(cleaned)
+	}
+
+	var result struct {
+		Type    string  `json:"type"`
+		RFQCode *string `json:"rfq_code"`
+	}
+	if err := json.Unmarshal([]byte(cleaned), &result); err != nil {
+		log.Printf("rfq_bot: classifyIncomingMessage JSON parse error: %v (raw: %s) — defaulting to rfq", err, answer)
+		return "rfq", ""
+	}
+
+	t := strings.ToLower(strings.TrimSpace(result.Type))
+	if t != "rfq" && t != "quotation" && t != "other" {
+		t = "rfq"
+	}
+	code := ""
+	if result.RFQCode != nil {
+		code = strings.TrimSpace(*result.RFQCode)
+	}
+	return t, code
 }
 
 // identifyCategories calls the configured LLM to extract product categories from an RFQ.
@@ -1891,6 +2395,100 @@ func parseCategories(raw string) []string {
 	return cats
 }
 
+// ── Generic LLM text helpers (no image support — text-only prompts) ──────────
+
+// callOpenAI calls OpenAI and returns the raw text response.
+func callOpenAI(apiKey, model, prompt, _ string) (string, error) {
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"model":      model,
+		"messages":   []map[string]interface{}{{"role": "user", "content": prompt}},
+		"max_tokens": 1000,
+	})
+	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(payload))
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 40 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var r struct {
+		Choices []struct {
+			Message struct{ Content string `json:"content"` } `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil || len(r.Choices) == 0 {
+		return "", fmt.Errorf("OpenAI error: %s", string(body))
+	}
+	return r.Choices[0].Message.Content, nil
+}
+
+// callAnthropic calls Anthropic Claude and returns the raw text response.
+func callAnthropic(apiKey, model, prompt, _ string) (string, error) {
+	if model == "" {
+		model = "claude-haiku-4-5-20251001"
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"model":      model,
+		"max_tokens": 1000,
+		"messages":   []map[string]interface{}{{"role": "user", "content": prompt}},
+	})
+	req, _ := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(payload))
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 40 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var r struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil || len(r.Content) == 0 {
+		return "", fmt.Errorf("Anthropic error: %s", string(body))
+	}
+	return r.Content[0].Text, nil
+}
+
+// callGemini calls Google Gemini and returns the raw text response.
+func callGemini(apiKey, model, prompt, _ string) (string, error) {
+	if model == "" {
+		model = "gemini-2.0-flash"
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"contents": []map[string]interface{}{{"parts": []map[string]string{{"text": prompt}}}},
+	})
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
+	req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 40 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var r struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct{ Text string `json:"text"` } `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil || len(r.Candidates) == 0 || len(r.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("Gemini error: %s", string(body))
+	}
+	return r.Candidates[0].Content.Parts[0].Text, nil
+}
+
 // ── 6. LLM Intro Generator ───────────────────────────────────────────────────
 
 // generateSupplierIntro uses the configured LLM to produce a short, unique opening
@@ -2042,42 +2640,29 @@ func rfqMinSuppliers(store *models.Store) int {
 	return 2
 }
 
-// findSuppliers collects up to `min` suppliers per (category × purchase market) pair,
-// supplementing from Google Maps when the DB doesn't have enough for a pair.
-// Target total = min × numCategories × numMarkets (fewer when not enough suppliers exist).
+// findSuppliers collects up to `min` suppliers per (category × purchase market) pair
+// from the DB, supplementing from Google Maps when DB doesn't have enough.
+// No WhatsApp validation is done here — that happens only at send time.
 func findSuppliers(store *models.Store, storeID primitive.ObjectID, categories []string) ([]models.RFQSupplier, error) {
 	min := rfqMinSuppliers(store)
 
-	// Build market list — fall back to no-market query if none configured
 	markets := store.Settings.PurchaseMarkets
 	if len(markets) == 0 {
 		markets = []string{""}
 	}
 
-	// Build category list — fall back to generic search if none identified
 	searchCategories := categories
 	if len(searchCategories) == 0 {
 		searchCategories = []string{"supplier"}
 	}
 
-	// Evo connection details for WhatsApp validation
-	evoURL := store.Settings.BotEvolutionAPIURL
-	if evoURL == "" {
-		evoURL = evoDefaultURL
-	}
-	evoKey := store.Settings.BotEvolutionAPIKey
-	if evoKey == "" {
-		evoKey = evoGlobalKey
-	}
-	botInstance := store.Settings.BotEvolutionInstanceName
-
-	// Track phones globally to avoid forwarding to the same supplier twice
+	// Deduplicate by phone across all (category × market) pairs
 	globalSeen := map[string]bool{}
 	var allSuppliers []models.RFQSupplier
 
 	for _, market := range markets {
 		for _, category := range searchCategories {
-			// 1. Look up `min` suppliers from DB for this (category, market) pair
+			// 1. DB lookup
 			dbResult, _ := models.FindRFQSuppliersByMarketAndCategories(storeID, []string{category}, market, int64(min))
 
 			var pairSuppliers []models.RFQSupplier
@@ -2085,22 +2670,16 @@ func findSuppliers(store *models.Store, storeID primitive.ObjectID, categories [
 				if s.Phone == "" || globalSeen[s.Phone] {
 					continue
 				}
-				// Mark seen immediately so Maps doesn't waste a check on the same number
 				globalSeen[s.Phone] = true
-				if !hasWhatsApp(evoURL, evoKey, botInstance, s.Phone) {
-					log.Printf("rfq_bot: db supplier %q (%s) has no WhatsApp — skipping", s.Name, s.Phone)
-					continue
-				}
 				s.MatchedCategory = category
 				pairSuppliers = append(pairSuppliers, s)
 			}
 
-			// 2. Supplement from Google Maps if DB doesn't have enough for this pair
+			// 2. Supplement from Google Maps if DB doesn't have enough
 			if len(pairSuppliers) < min && store.Settings.GoogleMapsAPIKey != "" {
-				// Fetch extra results to account for numbers without WhatsApp
-				needed := (min - len(pairSuppliers)) * 5
-				if needed < 10 {
-					needed = 10
+				needed := (min - len(pairSuppliers)) * 3
+				if needed < 5 {
+					needed = 5
 				}
 				mapsSuppliers, err := searchGoogleMapsSuppliers(store.Settings.GoogleMapsAPIKey, category, market, storeID, needed)
 				if err != nil {
@@ -2117,11 +2696,7 @@ func findSuppliers(store *models.Store, storeID primitive.ObjectID, categories [
 						if sup.Phone == "" || globalSeen[sup.Phone] {
 							continue
 						}
-						globalSeen[sup.Phone] = true // mark before WhatsApp check to avoid retrying
-						if !hasWhatsApp(evoURL, evoKey, botInstance, sup.Phone) {
-							log.Printf("rfq_bot: maps supplier %q (%s) has no WhatsApp — skipping, not saving to DB", sup.Name, sup.Phone)
-							continue
-						}
+						globalSeen[sup.Phone] = true
 						sup.MatchedCategory = category
 						models.UpsertRFQSupplierByPlaceID(sup)
 						pairSuppliers = append(pairSuppliers, *sup)
@@ -2133,7 +2708,7 @@ func findSuppliers(store *models.Store, storeID primitive.ObjectID, categories [
 				}
 			}
 
-			log.Printf("rfq_bot: market=%q cat=%q found %d/%d suppliers", market, category, len(pairSuppliers), min)
+			log.Printf("rfq_bot: market=%q cat=%q found %d suppliers", market, category, len(pairSuppliers))
 			allSuppliers = append(allSuppliers, pairSuppliers...)
 		}
 	}
@@ -2228,31 +2803,11 @@ func searchGoogleMapsSuppliers(apiKey, category, market string, storeID primitiv
 	return suppliers, nil
 }
 
-// hasWhatsApp returns true if the given phone number has an active WhatsApp account,
-// verified via Evolution API. Returns false on any error (fail-open: if the bot is
-// not configured, we don't block the supplier from being used).
-func hasWhatsApp(evoURL, evoKey, instance, phone string) bool {
-	if phone == "" {
-		return false
-	}
-	// If bot not configured we can't validate — allow the supplier through
-	if instance == "" {
-		return true
-	}
-	payload, _ := json.Marshal(map[string]interface{}{"numbers": []string{phone}})
-	body, status, err := evoCall("POST",
-		fmt.Sprintf("%s/chat/whatsappNumbers/%s", strings.TrimRight(evoURL, "/"), instance),
-		evoKey, payload)
-	if err != nil || (status != 200 && status != 201) {
-		return false
-	}
-	var result []struct {
-		Exists bool `json:"exists"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil || len(result) == 0 {
-		return false
-	}
-	return result[0].Exists
+// hasWhatsApp returns true if the given phone has a WhatsApp account.
+// Meta Cloud API does not expose a per-number existence check, so we always
+// return true for non-empty numbers and let the send fail naturally if unreachable.
+func hasWhatsApp(phone string) bool {
+	return phone != ""
 }
 
 // digitsOnly strips all non-digit characters from a phone string.
@@ -2269,27 +2824,15 @@ func digitsOnly(phone string) string {
 // ── 7. Forward RFQ to Supplier via WhatsApp ───────────────────────────────────
 
 func forwardRFQToSupplier(store *models.Store, rfq *models.RFQReceived, supplier *models.RFQSupplier, idx int) (bool, string, string) {
-	// Use the bot instance (same number that receives RFQs from buyers)
-	evoURL := store.Settings.BotEvolutionAPIURL
-	if evoURL == "" {
-		evoURL = evoDefaultURL
-	}
-	evoKey := store.Settings.BotEvolutionAPIKey
-	if evoKey == "" {
-		evoKey = evoGlobalKey
-	}
-	instance := store.Settings.BotEvolutionInstanceName
-	if instance == "" {
-		return false, "Bot WhatsApp not connected", ""
+	phoneNumberID := store.Settings.BotWABAPhoneNumberID
+	accessToken := store.Settings.BotWABAAccessToken
+	if phoneNumberID == "" || accessToken == "" {
+		return false, "Bot WhatsApp not connected (no Meta phone_number_id)", ""
 	}
 
-	// Save supplier as contact in the rfqsend WhatsApp before messaging (best-effort)
-	saveContact(evoURL, evoKey, instance, supplier.Phone, supplier.Name)
-
-	// First-contact detection: supplier was just discovered (GooglePlaceID set) or has no prior history
+	// First-contact detection: supplier was just discovered or added within the last 24h
 	firstContact := supplier.GooglePlaceID != "" || supplier.AddedAt.After(time.Now().Add(-24*time.Hour))
 
-	// Build message: LLM-generated unique intro + original message verbatim
 	intro := generateSupplierIntro(store, supplier.Name, rfq.Categories, rfq.TextContent, idx, firstContact)
 	originalContent := rfq.TextContent
 	if originalContent == "" {
@@ -2301,16 +2844,13 @@ func forwardRFQToSupplier(store *models.Store, rfq *models.RFQReceived, supplier
 		companyName = "our company"
 	}
 
-	// Use store's custom intro if set, otherwise use the auto-generated one
 	customIntro := strings.TrimSpace(store.Settings.RFQIntro)
 
 	var msg string
 	if firstContact {
-		var opening string
+		opening := fmt.Sprintf("Hello, We are from *%s*.", companyName)
 		if customIntro != "" {
 			opening = customIntro
-		} else {
-			opening = fmt.Sprintf("Hello, We are from *%s*.", companyName)
 		}
 		msg = fmt.Sprintf("%s\n\nDear %s,\n\n%s\n\n---\n%s", opening, supplier.Name, intro, originalContent)
 	} else {
@@ -2319,90 +2859,34 @@ func forwardRFQToSupplier(store *models.Store, rfq *models.RFQReceived, supplier
 		msg = fmt.Sprintf("%s %s,\n\n%s\n\n---\n%s", greeting, supplier.Name, intro, originalContent)
 	}
 
-	// Send text message (Evolution API v2.3.x flat format)
-	textPayload, _ := json.Marshal(map[string]interface{}{
-		"number": supplier.Phone,
-		"text":   msg,
-	})
-	respBody, status, err := evoCall("POST",
-		fmt.Sprintf("%s/message/sendText/%s", strings.TrimRight(evoURL, "/"), instance),
-		evoKey, textPayload)
-	if err != nil {
+	if _, err := metaSendText(phoneNumberID, accessToken, supplier.Phone, msg); err != nil {
 		return false, err.Error(), ""
 	}
-	if status != 200 && status != 201 {
-		return false, fmt.Sprintf("evolution API %d: %s", status, string(respBody)), ""
-	}
 
-	// Forward images to supplier
+	// Forward images
 	for _, mediaURL := range rfq.MediaURLs {
-		// Evolution API sendMedia expects either a public URL or raw base64 (no data: prefix).
-		// If we have a data URI, split it into MIME + raw base64.
-		mediaField := mediaURL
-		mimeType := "image/jpeg"
-		if strings.HasPrefix(mediaURL, "data:") {
-			mimeType, mediaField = splitDataURI(mediaURL)
-		}
-		imgPayload, _ := json.Marshal(map[string]interface{}{
-			"number":    supplier.Phone,
-			"mediatype": "image",
-			"mimetype":  mimeType,
-			"caption":   "RFQ Image",
-			"media":     mediaField,
-		})
-		body, status, err := evoCall("POST",
-			fmt.Sprintf("%s/message/sendMedia/%s", strings.TrimRight(evoURL, "/"), instance),
-			evoKey, imgPayload)
-		if err != nil || (status != 200 && status != 201) {
-			log.Printf("rfq_bot: sendMedia to %s failed status=%d err=%v body=%.200s", supplier.Phone, status, err, string(body))
+		if err := metaSendImage(phoneNumberID, accessToken, supplier.Phone, mediaURL, "RFQ Image"); err != nil {
+			log.Printf("rfq_bot: sendImage to %s failed: %v", supplier.Phone, err)
 		}
 		time.Sleep(2 * time.Second)
 	}
 
-	// Forward documents (PDF, Excel, etc.)
-	// doc.URL is a data URI (decrypted at webhook time) or encrypted CDN URL (fallback).
-	// Evolution API sendMedia expects raw base64 (no data: prefix) or a public URL.
+	// Forward documents
 	for _, doc := range rfq.Documents {
 		if doc.URL == "" {
 			continue
 		}
-		mediaField := doc.URL
 		mimeType := doc.MimeType
 		if mimeType == "" {
 			mimeType = "application/octet-stream"
 		}
-		if strings.HasPrefix(doc.URL, "data:") {
-			mimeType, mediaField = splitDataURI(doc.URL)
-		}
-		docPayload, _ := json.Marshal(map[string]interface{}{
-			"number":    supplier.Phone,
-			"mediatype": "document",
-			"mimetype":  mimeType,
-			"media":     mediaField,
-			"fileName":  doc.FileName,
-			"caption":   "RFQ Document",
-		})
-		body, status, err := evoCall("POST",
-			fmt.Sprintf("%s/message/sendMedia/%s", strings.TrimRight(evoURL, "/"), instance),
-			evoKey, docPayload)
-		if err != nil || (status != 200 && status != 201) {
-			log.Printf("rfq_bot: sendDoc to %s failed status=%d err=%v body=%.200s", supplier.Phone, status, err, string(body))
+		if err := metaSendDocument(phoneNumberID, accessToken, supplier.Phone, doc.URL, mimeType, doc.FileName, "RFQ Document"); err != nil {
+			log.Printf("rfq_bot: sendDoc to %s failed: %v", supplier.Phone, err)
 		}
 		time.Sleep(2 * time.Second)
 	}
 
 	return true, "", msg
-}
-
-// saveContact creates or updates a WhatsApp contact on the given instance (best-effort, errors ignored).
-func saveContact(evoURL, evoKey, instance, phone, name string) {
-	payload, _ := json.Marshal(map[string]interface{}{
-		"number":   phone,
-		"fullName": name,
-	})
-	evoCall("POST",
-		fmt.Sprintf("%s/contact/create/%s", strings.TrimRight(evoURL, "/"), instance),
-		evoKey, payload)
 }
 
 // detectImageMIME returns the MIME type of image bytes based on magic bytes.
@@ -2632,6 +3116,405 @@ func TriggerRFQProcess(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `{"success":true,"message":"Processing started"}`)
 }
 
+// CreateRFQReceivedHandler creates a manual RFQ entry.
+// POST /v1/rfq-received?store_id=...
+func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		CustomerName     string              `json:"customer_name"`
+		CustomerPhone    string              `json:"customer_phone"`
+		CustomerEmail    string              `json:"customer_email"`
+		CustomerCompany  string              `json:"customer_company"`
+		TextContent      string              `json:"text_content"`
+		Products         []models.RFQProduct `json:"products"`
+		ExtractionModel  string              `json:"extraction_model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+	if len(body.Products) == 0 && body.TextContent == "" {
+		http.Error(w, `{"error":"products or text_content required"}`, http.StatusBadRequest)
+		return
+	}
+
+	rfq := &models.RFQReceived{
+		StoreID:         storeObjID,
+		Source:          "manual",
+		MessageType:     "text",
+		CustomerName:    body.CustomerName,
+		CustomerPhone:   body.CustomerPhone,
+		CustomerEmail:   body.CustomerEmail,
+		CustomerCompany: body.CustomerCompany,
+		TextContent:     body.TextContent,
+		Products:        body.Products,
+		Status:          "ready_to_send",
+	}
+	if rfq.CustomerPhone != "" {
+		rfq.FromPhone = rfq.CustomerPhone
+	}
+	if rfq.CustomerName != "" {
+		rfq.FromName = rfq.CustomerName
+	}
+
+	if err := models.CreateRFQReceived(rfq); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Timeline logs for manual RFQ
+	inputMsg := "Input received via manual form"
+	if rfq.CustomerName != "" {
+		inputMsg = fmt.Sprintf("Input received via manual form from %s", rfq.CustomerName)
+		if rfq.CustomerPhone != "" {
+			inputMsg += " (+" + rfq.CustomerPhone + ")"
+		}
+	}
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step:    "input_received",
+		Message: inputMsg,
+		Icon:    "bi-pencil-square", Color: "secondary",
+		Details: map[string]interface{}{"source": "manual"},
+	})
+	if len(rfq.Products) > 0 {
+		totalQty := 0.0
+		prodList := make([]map[string]interface{}, len(rfq.Products))
+		for i, p := range rfq.Products {
+			totalQty += p.Quantity
+			qty := p.Quantity
+			if qty == 0 {
+				qty = 1
+			}
+			prodList[i] = map[string]interface{}{
+				"part_no":  p.PartNo,
+				"name":     p.Name,
+				"quantity": qty,
+				"unit":     p.Unit,
+			}
+		}
+		details := map[string]interface{}{
+			"products": prodList,
+		}
+		if body.ExtractionModel != "" {
+			details["llm_model"] = body.ExtractionModel
+		}
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step: "products_identified",
+			Message: fmt.Sprintf("Identified %d product(s) — total qty: %.0f",
+				len(rfq.Products), totalQty),
+			Details: details,
+		})
+	}
+	if rfq.CustomerName != "" {
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step:    "customer_identified",
+			Message: fmt.Sprintf("Customer: %s", rfq.CustomerName),
+			Icon:    "bi-person-check", Color: "info",
+			Details: map[string]interface{}{"customer_name": rfq.CustomerName, "customer_phone": rfq.CustomerPhone, "customer_company": rfq.CustomerCompany},
+		})
+	}
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step:    "rfq_created",
+		Message: fmt.Sprintf("RFQ created with code %s — ready to send to suppliers", rfq.Code),
+		Icon:    "bi-file-earmark-check", Color: "primary",
+		Details: map[string]interface{}{"code": rfq.Code, "status": "ready_to_send"},
+	})
+
+	respBytes, _ := json.Marshal(map[string]interface{}{"success": true, "id": rfq.ID.Hex(), "code": rfq.Code})
+	w.Write(respBytes)
+
+	go autoCategorizeAndFindSuppliers(rfq, storeObjID)
+}
+
+// autoCategorizeAndFindSuppliers identifies product categories via LLM and finds suppliers per
+// category per purchase market for a manually created RFQ.  Runs as a background goroutine after
+// CreateRFQReceivedHandler returns so the HTTP response is not delayed.
+func autoCategorizeAndFindSuppliers(rfq *models.RFQReceived, storeID primitive.ObjectID) {
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		log.Printf("rfq_bot[autoCategorize]: store not found: %v", err)
+		return
+	}
+
+	storeIDStr := storeID.Hex()
+	rfqIDStr := rfq.ID.Hex()
+
+	broadcast := func(stage string, pct int, msg string, extra map[string]interface{}) {
+		data := map[string]interface{}{
+			"rfq_id": rfqIDStr, "stage": stage, "percent": pct, "message": msg,
+		}
+		for k, v := range extra {
+			data[k] = v
+		}
+		BroadcastRFQData(storeIDStr, "rfq_progress", data)
+	}
+
+	if store.Settings.RFQLLMAPIKey == "" {
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step:    "ai_skipped",
+			Message: "AI categorization skipped — LLM API key not configured in store procurement settings",
+			Icon:    "bi-info-circle", Color: "secondary",
+		})
+		broadcast("ai_skipped", 0, "AI not configured — set LLM API key in store procurement settings", nil)
+		return
+	}
+
+	// Build LLM text from free-text and product list
+	llmText := rfq.TextContent
+	if len(rfq.Products) > 0 {
+		var lines []string
+		for _, p := range rfq.Products {
+			line := p.Name
+			if p.PartNo != "" {
+				line += " (Part No: " + p.PartNo + ")"
+			}
+			if p.Quantity > 0 {
+				line += fmt.Sprintf(" qty: %.0f", p.Quantity)
+			}
+			lines = append(lines, line)
+		}
+		productsText := "Products:\n" + strings.Join(lines, "\n")
+		if llmText != "" {
+			llmText = llmText + "\n\n" + productsText
+		} else {
+			llmText = productsText
+		}
+	}
+	if strings.TrimSpace(llmText) == "" {
+		return
+	}
+
+	// Step 1: Identify categories via LLM
+	broadcast("classifying", 10, "AI is identifying product categories from the RFQ...", nil)
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step:    "ai_categorizing",
+		Message: "Identifying product categories using AI...",
+		Icon:    "bi-cpu", Color: "secondary",
+	})
+	log.Printf("rfq_bot[autoCategorize][%s]: identifying categories", rfqIDStr)
+
+	categories, err := identifyCategories(store, llmText, nil)
+	if err != nil {
+		log.Printf("rfq_bot[autoCategorize][%s]: LLM error: %v", rfqIDStr, err)
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step:    "categories_error",
+			Message: "Category identification failed: " + err.Error(),
+			Icon:    "bi-exclamation-circle", Color: "danger",
+			Details: map[string]interface{}{"error": err.Error()},
+		})
+		broadcast("failed", 100, "Category identification failed: "+err.Error(), nil)
+		return
+	}
+
+	rfq.Categories = categories
+	if err := models.SetRFQCategories(rfq.StoreID, rfq.ID, categories); err != nil {
+		log.Printf("rfq_bot[autoCategorize][%s]: save categories error: %v", rfqIDStr, err)
+		return
+	}
+	llmModelName := store.Settings.RFQLLMModel
+	if llmModelName == "" {
+		llmModelName = store.Settings.RFQLLMProvider
+	}
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step: "categories_identified",
+		Message: fmt.Sprintf("Identified %d categor(y/ies): %s  [model: %s]",
+			len(categories), strings.Join(categories, ", "), llmModelName),
+		Icon: "bi-tags", Color: "info",
+		Details: map[string]interface{}{"categories": categories, "model": llmModelName},
+	})
+	broadcast("categories_identified", 40, fmt.Sprintf("Categories identified: %s", strings.Join(categories, ", ")),
+		map[string]interface{}{"categories": categories})
+
+	// Step 2: Find suppliers per category per purchase market
+	numMarkets := len(store.Settings.PurchaseMarkets)
+	if numMarkets == 0 {
+		numMarkets = 1
+	}
+	broadcast("finding_suppliers", 50,
+		fmt.Sprintf("Searching for suppliers across %d market(s) × %d categor(y/ies)...", numMarkets, len(categories)), nil)
+	log.Printf("rfq_bot[autoCategorize][%s]: finding suppliers for %v in %d market(s)", rfqIDStr, categories, numMarkets)
+
+	suppliers, err := findSuppliers(store, storeID, categories)
+	if err != nil {
+		log.Printf("rfq_bot[autoCategorize][%s]: supplier search error: %v", rfqIDStr, err)
+	}
+	// Fallback: broaden if no results
+	if len(suppliers) == 0 && store.Settings.GoogleMapsAPIKey != "" {
+		broadcast("finding_suppliers", 70, "No results for specific categories — trying broader search terms...", nil)
+		broaderCategories := broadenCategories(store, categories, llmText)
+		if len(broaderCategories) > 0 {
+			log.Printf("rfq_bot[autoCategorize][%s]: broadening to %v", rfqIDStr, broaderCategories)
+			suppliers, _ = findSuppliers(store, storeID, broaderCategories)
+		}
+	}
+
+	minRequired := rfqMinSuppliers(store)
+	if len(suppliers) == 0 {
+		models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+			Step:    "no_suppliers_found",
+			Message: fmt.Sprintf("No suppliers found in rfq-suppliers or Google Maps for: %s", strings.Join(categories, ", ")),
+			Icon:    "bi-exclamation-triangle", Color: "warning",
+			Details: map[string]interface{}{"categories": categories, "markets": store.Settings.PurchaseMarkets},
+		})
+		broadcast("suppliers_found", 100, "No suppliers found — add them manually in RFQ Suppliers page", nil)
+		return
+	}
+
+	supplierList := make([]map[string]string, 0, len(suppliers))
+	for _, s := range suppliers {
+		supplierList = append(supplierList, map[string]string{"name": s.Name, "phone": s.Phone})
+	}
+	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
+		Step: "suppliers_found",
+		Message: fmt.Sprintf("Found %d supplier(s) — %d market(s) × %d categor(y/ies) × %d min required each",
+			len(suppliers), numMarkets, len(categories), minRequired),
+		Icon: "bi-people-fill", Color: "success",
+		Details: map[string]interface{}{
+			"supplier_count": len(suppliers),
+			"markets":        store.Settings.PurchaseMarkets,
+			"categories":     categories,
+			"min_required":   minRequired,
+			"suppliers":      supplierList,
+		},
+	})
+	broadcast("suppliers_found", 100,
+		fmt.Sprintf("Found %d supplier(s) ready — %d markets × %d categories × %d min each",
+			len(suppliers), numMarkets, len(categories), minRequired),
+		map[string]interface{}{"supplier_count": len(suppliers)})
+}
+
+// UpdateRFQReceivedHandler updates editable fields of an existing RFQ.
+// PUT /v1/rfq-received/{id}?store_id=...
+func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"])
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	storeObjID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		CustomerName    string              `json:"customer_name"`
+		CustomerPhone   string              `json:"customer_phone"`
+		CustomerEmail   string              `json:"customer_email"`
+		CustomerCompany string              `json:"customer_company"`
+		TextContent     string              `json:"text_content"`
+		Products        []models.RFQProduct `json:"products"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+
+	rfq, err := models.FindRFQReceivedByID(id, storeObjID)
+	if err != nil {
+		http.Error(w, `{"error":"RFQ not found"}`, http.StatusNotFound)
+		return
+	}
+
+	rfq.CustomerName    = body.CustomerName
+	rfq.CustomerPhone   = body.CustomerPhone
+	rfq.CustomerEmail   = body.CustomerEmail
+	rfq.CustomerCompany = body.CustomerCompany
+	rfq.TextContent     = body.TextContent
+	if body.Products != nil {
+		rfq.Products = body.Products
+	}
+
+	if err := models.UpdateRFQReceived(rfq); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(rfq)
+}
+
+// AddSupplierReplyHandler manually adds a supplier reply to an RFQ and triggers price extraction.
+// POST /v1/rfq-received/{id}/supplier-reply?store_id=...
+func AddSupplierReplyHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	storeIDStr := r.URL.Query().Get("store_id")
+
+	id, err := primitive.ObjectIDFromHex(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		SupplierName  string `json:"supplier_name"`
+		SupplierPhone string `json:"supplier_phone"`
+		RawText       string `json:"raw_text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+	if body.SupplierName == "" && body.SupplierPhone == "" {
+		http.Error(w, `{"error":"supplier_name or supplier_phone required"}`, http.StatusBadRequest)
+		return
+	}
+
+	if _, err := models.FindRFQReceivedByID(id, storeObjID); err != nil {
+		http.Error(w, `{"error":"rfq not found"}`, http.StatusNotFound)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+
+	reply := models.SupplierReply{
+		SupplierName:     body.SupplierName,
+		SupplierPhone:    body.SupplierPhone,
+		ReceivedAt:       time.Now(),
+		RawText:          body.RawText,
+		ExtractionStatus: "pending",
+	}
+	if err := models.AddSupplierReplyToRFQ(storeObjID, id, reply); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Trigger async price extraction.
+	go func() {
+		updated, err := models.FindRFQReceivedByID(id, storeObjID)
+		if err != nil {
+			return
+		}
+		for i := len(updated.SupplierReplies) - 1; i >= 0; i-- {
+			r := updated.SupplierReplies[i]
+			if r.SupplierName == body.SupplierName && r.SupplierPhone == body.SupplierPhone && r.ExtractionStatus == "pending" {
+				extractSupplierPrices(store, updated, &updated.SupplierReplies[i])
+				break
+			}
+		}
+	}()
+
+	fmt.Fprint(w, `{"success":true,"message":"Reply added and price extraction started"}`)
+}
+
 // ── 9. RFQ Supplier CRUD Endpoints ───────────────────────────────────────────
 
 // GET /v1/rfq-suppliers?store_id=...&page=...&limit=...&search=...
@@ -2812,16 +3695,6 @@ func populateSuppliersFromVendors(store *models.Store, storeID primitive.ObjectI
 	total := len(vendors)
 	created := 0
 
-	evoURL := store.Settings.BotEvolutionAPIURL
-	if evoURL == "" {
-		evoURL = evoDefaultURL
-	}
-	evoKey := store.Settings.BotEvolutionAPIKey
-	if evoKey == "" {
-		evoKey = evoGlobalKey
-	}
-	botInstance := store.Settings.BotEvolutionInstanceName
-
 	markets := store.Settings.PurchaseMarkets
 	if len(markets) == 0 {
 		markets = []string{""}
@@ -2856,9 +3729,6 @@ func populateSuppliersFromVendors(store *models.Store, storeID primitive.ObjectI
 				sup.Categories = categories
 				sup.IsActive = true
 				if sup.Phone == "" {
-					continue
-				}
-				if !hasWhatsApp(evoURL, evoKey, botInstance, sup.Phone) {
 					continue
 				}
 				models.UpsertRFQSupplierByPlaceID(sup)
@@ -2977,16 +3847,6 @@ func syncVendorToRFQSupplier(store *models.Store, storeID primitive.ObjectID, ve
 		return
 	}
 
-	evoURL := store.Settings.BotEvolutionAPIURL
-	if evoURL == "" {
-		evoURL = evoDefaultURL
-	}
-	evoKey := store.Settings.BotEvolutionAPIKey
-	if evoKey == "" {
-		evoKey = evoGlobalKey
-	}
-	botInstance := store.Settings.BotEvolutionInstanceName
-
 	markets := store.Settings.PurchaseMarkets
 	if len(markets) == 0 {
 		markets = []string{""}
@@ -3005,12 +3865,396 @@ func syncVendorToRFQSupplier(store *models.Store, storeID primitive.ObjectID, ve
 			if sup.Phone == "" {
 				continue
 			}
-			if !hasWhatsApp(evoURL, evoKey, botInstance, sup.Phone) {
-				continue
-			}
 			models.UpsertRFQSupplierByPlaceID(sup)
 			BroadcastRFQEvent(storeID.Hex(), "supplier_updated")
 			break
 		}
 	}
+}
+
+// ── ExtractRFQFromFilesHandler ─────────────────────────────────────────────────
+// POST /v1/rfq-received/extract
+// Accepts multipart form with field "files" (images, PDFs, Excel, text).
+// Extracts customer + product info via LLM and returns a JSON preview for the
+// frontend to show and confirm before the user creates the RFQ.
+
+type rfqExtractResult struct {
+	CustomerName    string              `json:"customer_name"`
+	CustomerPhone   string              `json:"customer_phone"`
+	CustomerEmail   string              `json:"customer_email"`
+	CustomerCompany string              `json:"customer_company"`
+	Products        []models.RFQProduct `json:"products"`
+	TextContent     string              `json:"text_content"`
+	LLMModel        string              `json:"llm_model,omitempty"`
+}
+
+func ExtractRFQFromFilesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	if store.Settings.RFQLLMAPIKey == "" {
+		http.Error(w, `{"error":"LLM API key not configured in store settings. Please configure it under Store → Settings → RFQ Bot."}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		http.Error(w, `{"error":"failed to parse uploaded files (max 50 MB)"}`, http.StatusBadRequest)
+		return
+	}
+
+	var textParts []string
+	var imageDataURIs []string // "data:<mime>;base64,<data>"
+	var pdfBase64s []string    // raw base64, no data URI prefix
+
+	// Accept an optional plain-text content field (text_content) so the endpoint
+	// can also extract products from a typed message without any file upload.
+	if textFromField := r.FormValue("text_content"); textFromField != "" {
+		textParts = append(textParts, textFromField)
+	}
+
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 && len(textParts) == 0 {
+		http.Error(w, `{"error":"no files uploaded and no text_content provided"}`, http.StatusBadRequest)
+		return
+	}
+
+	for _, fh := range files {
+		f, err := fh.Open()
+		if err != nil {
+			continue
+		}
+		data, _ := io.ReadAll(f)
+		f.Close()
+
+		ext := strings.ToLower(filepath.Ext(fh.Filename))
+		ct := strings.ToLower(fh.Header.Get("Content-Type"))
+
+		switch {
+		case ext == ".xlsx" || ext == ".xls" ||
+			strings.Contains(ct, "spreadsheet") || strings.Contains(ct, "excel"):
+			if text, err := excelToText(fh.Filename, data); err == nil {
+				textParts = append(textParts, text)
+			}
+
+		case ext == ".pdf" || strings.Contains(ct, "pdf"):
+			pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
+
+		case ext == ".csv" || ext == ".txt" || strings.HasPrefix(ct, "text/"):
+			textParts = append(textParts, "=== "+fh.Filename+" ===\n"+string(data))
+
+		case isRFQImageExt(ext) || strings.HasPrefix(ct, "image/"):
+			mime := rfqImageMime(ext, ct)
+			b64 := base64.StdEncoding.EncodeToString(data)
+			imageDataURIs = append(imageDataURIs, "data:"+mime+";base64,"+b64)
+		}
+	}
+
+	combinedText := strings.Join(textParts, "\n\n")
+	if len(imageDataURIs)+len(pdfBase64s) == 0 && combinedText == "" {
+		http.Error(w, `{"error":"no readable content found in the uploaded files"}`, http.StatusBadRequest)
+		return
+	}
+
+	provider := strings.ToLower(store.Settings.RFQLLMProvider)
+	usedModel := store.Settings.RFQLLMModel
+	if usedModel == "" {
+		usedModel = provider
+	}
+	responseText, llmErr := callLLMExtractRFQ(
+		store.Settings.RFQLLMAPIKey,
+		store.Settings.RFQLLMModel,
+		provider,
+		combinedText,
+		imageDataURIs,
+		pdfBase64s,
+	)
+	if llmErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, llmErr.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	jsonStr := extractJSONFromLLMResponse(responseText)
+	var result rfqExtractResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		// Return the raw text so the frontend can show it in the description
+		out, _ := json.Marshal(rfqExtractResult{TextContent: responseText, LLMModel: usedModel})
+		w.Write(out)
+		return
+	}
+	result.LLMModel = usedModel
+	out, _ := json.Marshal(result)
+	w.Write(out)
+}
+
+func excelToText(filename string, data []byte) (string, error) {
+	f, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	var sb strings.Builder
+	sb.WriteString("=== " + filename + " ===\n")
+	for _, sheet := range f.GetSheetList() {
+		rows, err := f.GetRows(sheet)
+		if err != nil {
+			continue
+		}
+		if len(f.GetSheetList()) > 1 {
+			sb.WriteString("[Sheet: " + sheet + "]\n")
+		}
+		for _, row := range rows {
+			sb.WriteString(strings.Join(row, "\t"))
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String(), nil
+}
+
+func isRFQImageExt(ext string) bool {
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+		return true
+	}
+	return false
+}
+
+func rfqImageMime(ext, ct string) string {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	}
+	if strings.Contains(ct, "image/") {
+		return ct
+	}
+	return "image/jpeg"
+}
+
+func buildRFQExtractionPrompt(textContent string) string {
+	prompt := `You are an assistant that extracts RFQ (Request for Quotation) information from documents, images, or spreadsheets.
+
+Extract the following and respond with ONLY valid JSON (no markdown, no explanation):
+{
+  "customer_name": "full name of the person or company making the request",
+  "customer_phone": "phone number (international format if possible)",
+  "customer_email": "email address",
+  "customer_company": "company or organization name",
+  "products": [
+    {
+      "part_no": "part number or product code (empty string if not found)",
+      "name": "product name or description",
+      "quantity": 1,
+      "unit": "unit of measure e.g. EA, PCS, KG, M (empty string if not found)"
+    }
+  ],
+  "text_content": "a clean plain-text summary of the full enquiry"
+}
+
+Rules:
+- If a field is not found, use an empty string or 0 for quantity.
+- Extract ALL products/items mentioned; do not skip any.
+- quantity must be a number (default to 1 if not stated).
+- Do NOT wrap in markdown code blocks.`
+
+	if textContent != "" {
+		prompt += "\n\nDocument text content:\n" + textContent
+	}
+	return prompt
+}
+
+// callLLMExtractRFQ calls the configured LLM with vision+text capabilities and
+// returns the raw LLM text (expected to be JSON).
+func callLLMExtractRFQ(apiKey, model, provider, textContent string, imageDataURIs, pdfBase64s []string) (string, error) {
+	prompt := buildRFQExtractionPrompt(textContent)
+	const maxTokens = 4096
+
+	switch provider {
+	case "openai":
+		return callOpenAIExtractRFQ(apiKey, model, prompt, imageDataURIs, maxTokens)
+	case "gemini":
+		return callGeminiExtractRFQ(apiKey, model, prompt, imageDataURIs, pdfBase64s, maxTokens)
+	default: // anthropic and fallback
+		if model == "" {
+			model = "claude-haiku-4-5-20251001"
+		}
+		return callAnthropicExtractRFQ(apiKey, model, prompt, imageDataURIs, pdfBase64s, maxTokens)
+	}
+}
+
+func callOpenAIExtractRFQ(apiKey, model, prompt string, imageDataURIs []string, maxTokens int) (string, error) {
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+	type contentPart struct {
+		Type     string `json:"type"`
+		Text     string `json:"text,omitempty"`
+		ImageURL *struct {
+			URL string `json:"url"`
+		} `json:"image_url,omitempty"`
+	}
+	var parts []contentPart
+	parts = append(parts, contentPart{Type: "text", Text: prompt})
+	for _, uri := range imageDataURIs {
+		parts = append(parts, contentPart{Type: "image_url", ImageURL: &struct{ URL string `json:"url"` }{URL: uri}})
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"model":      model,
+		"messages":   []map[string]interface{}{{"role": "user", "content": parts}},
+		"max_tokens": maxTokens,
+	})
+	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(payload))
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var r struct {
+		Choices []struct {
+			Message struct{ Content string `json:"content"` } `json:"message"`
+		} `json:"choices"`
+		Error *struct{ Message string `json:"message"` } `json:"error"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", fmt.Errorf("openai parse error: %s", string(body))
+	}
+	if r.Error != nil {
+		return "", fmt.Errorf("openai: %s", r.Error.Message)
+	}
+	if len(r.Choices) == 0 {
+		return "", fmt.Errorf("openai: empty response")
+	}
+	return r.Choices[0].Message.Content, nil
+}
+
+func callAnthropicExtractRFQ(apiKey, model, prompt string, imageDataURIs, pdfBase64s []string, maxTokens int) (string, error) {
+	type blockSource struct {
+		Type      string `json:"type"`
+		MediaType string `json:"media_type"`
+		Data      string `json:"data"`
+	}
+	type block struct {
+		Type   string       `json:"type"`
+		Text   string       `json:"text,omitempty"`
+		Source *blockSource `json:"source,omitempty"`
+	}
+	var blocks []block
+	for _, uri := range imageDataURIs {
+		mime, raw := splitDataURI(uri)
+		blocks = append(blocks, block{Type: "image", Source: &blockSource{Type: "base64", MediaType: mime, Data: raw}})
+	}
+	for _, b64 := range pdfBase64s {
+		blocks = append(blocks, block{Type: "document", Source: &blockSource{Type: "base64", MediaType: "application/pdf", Data: b64}})
+	}
+	blocks = append(blocks, block{Type: "text", Text: prompt})
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"model":      model,
+		"max_tokens": maxTokens,
+		"messages":   []map[string]interface{}{{"role": "user", "content": blocks}},
+	})
+	req, _ := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(payload))
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("anthropic-beta", "pdfs-2024-09-25")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var r struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		Error *struct{ Message string `json:"message"` } `json:"error"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", fmt.Errorf("anthropic parse error: %s", string(body))
+	}
+	if r.Error != nil {
+		return "", fmt.Errorf("anthropic: %s", r.Error.Message)
+	}
+	if len(r.Content) == 0 {
+		return "", fmt.Errorf("anthropic: empty response")
+	}
+	return r.Content[0].Text, nil
+}
+
+func callGeminiExtractRFQ(apiKey, model, prompt string, imageDataURIs, pdfBase64s []string, maxTokens int) (string, error) {
+	if model == "" {
+		model = "gemini-2.0-flash"
+	}
+	type inlinePart struct {
+		Text       string `json:"text,omitempty"`
+		InlineData *struct {
+			MimeType string `json:"mime_type"`
+			Data     string `json:"data"`
+		} `json:"inlineData,omitempty"`
+	}
+	var parts []inlinePart
+	parts = append(parts, inlinePart{Text: prompt})
+	for _, uri := range imageDataURIs {
+		mime, raw := splitDataURI(uri)
+		parts = append(parts, inlinePart{InlineData: &struct {
+			MimeType string `json:"mime_type"`
+			Data     string `json:"data"`
+		}{MimeType: mime, Data: raw}})
+	}
+	for _, b64 := range pdfBase64s {
+		parts = append(parts, inlinePart{InlineData: &struct {
+			MimeType string `json:"mime_type"`
+			Data     string `json:"data"`
+		}{MimeType: "application/pdf", Data: b64}})
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"contents":         []map[string]interface{}{{"parts": parts}},
+		"generationConfig": map[string]interface{}{"maxOutputTokens": maxTokens},
+	})
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
+	req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var r struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct{ Text string `json:"text"` } `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+		Error *struct{ Message string `json:"message"` } `json:"error"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", fmt.Errorf("gemini parse error: %s", string(body))
+	}
+	if r.Error != nil {
+		return "", fmt.Errorf("gemini: %s", r.Error.Message)
+	}
+	if len(r.Candidates) == 0 || len(r.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("gemini: empty response")
+	}
+	return r.Candidates[0].Content.Parts[0].Text, nil
 }

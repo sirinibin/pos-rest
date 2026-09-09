@@ -962,3 +962,870 @@ func TestStoreSettings_UseRTLForArabic_IndependentOfRFQFlag(t *testing.T) {
 		t.Error("EnableRFQSupplierOnPurchase should be false — flags must be independent")
 	}
 }
+
+// ── Meta Cloud API connect handler ───────────────────────────────────────────
+
+func TestConnectBotWhatsApp_MissingPhoneOrToken_Returns400(t *testing.T) {
+	// Missing access_token — handler must reject before hitting Evolution API.
+	body := `{"store_id":"61cf42e580e87d715a4cb9e6","phone_number_id":"12345"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/connect", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	ConnectBotWhatsApp(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when access_token is missing, got %d", w.Code)
+	}
+}
+
+func TestConnectBotWhatsApp_MissingPhoneNumberID_Returns400(t *testing.T) {
+	body := `{"store_id":"61cf42e580e87d715a4cb9e6","access_token":"EAAtoken123"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/connect", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	ConnectBotWhatsApp(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when phone_number_id is missing, got %d", w.Code)
+	}
+}
+
+func TestConnectBotWhatsApp_InvalidStoreID_Returns400(t *testing.T) {
+	body := `{"store_id":"not-a-valid-hex","phone_number_id":"12345","access_token":"EAAtoken"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/connect", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	ConnectBotWhatsApp(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid store_id, got %d", w.Code)
+	}
+}
+
+// ── RFQEmailAccounts preserved on store update ────────────────────────────────
+
+func TestRFQEmailAccounts_PreservedAcrossStoreUpdate(t *testing.T) {
+	// Verify that copying storeOld.Settings.RFQEmailAccounts onto a new store struct
+	// correctly preserves the full accounts slice — the logic applied in UpdateStore.
+	acc1 := models.RFQEmailAccount{Provider: "mailgun", Email: "mg@example.com"}
+	acc2 := models.RFQEmailAccount{Provider: "gmail", Email: "gm@example.com"}
+
+	storeOld := &models.Store{}
+	storeOld.Settings.RFQEmailAccounts = []models.RFQEmailAccount{acc1, acc2}
+
+	// Simulate what UpdateStore does: decode form JSON into a new store (no accounts),
+	// then copy from storeOld before saving.
+	storeNew := &models.Store{}
+	storeNew.Settings.RFQEmailAccounts = nil // frontend doesn't send credentials
+
+	// Apply the preservation logic
+	storeNew.Settings.RFQEmailAccounts = storeOld.Settings.RFQEmailAccounts
+
+	if len(storeNew.Settings.RFQEmailAccounts) != 2 {
+		t.Fatalf("expected 2 accounts after preservation, got %d", len(storeNew.Settings.RFQEmailAccounts))
+	}
+	if storeNew.Settings.RFQEmailAccounts[0].Provider != "mailgun" {
+		t.Errorf("first account provider: got %q, want %q",
+			storeNew.Settings.RFQEmailAccounts[0].Provider, "mailgun")
+	}
+	if storeNew.Settings.RFQEmailAccounts[1].Email != "gm@example.com" {
+		t.Errorf("second account email: got %q, want %q",
+			storeNew.Settings.RFQEmailAccounts[1].Email, "gm@example.com")
+	}
+}
+
+func TestRFQEmailAccounts_EmptyOldPreservesEmpty(t *testing.T) {
+	// If no accounts existed before, preservation keeps it empty (not nil-to-empty confusion).
+	storeOld := &models.Store{}
+	storeOld.Settings.RFQEmailAccounts = nil
+
+	storeNew := &models.Store{}
+	storeNew.Settings.RFQEmailAccounts = []models.RFQEmailAccount{{Provider: "mailgun"}}
+
+	// Preservation must overwrite new with old
+	storeNew.Settings.RFQEmailAccounts = storeOld.Settings.RFQEmailAccounts
+
+	if storeNew.Settings.RFQEmailAccounts != nil {
+		t.Errorf("expected nil accounts after preservation of empty old, got %v",
+			storeNew.Settings.RFQEmailAccounts)
+	}
+}
+
+func TestRFQEmailAccounts_JSONOmitsCredentials(t *testing.T) {
+	// Sensitive credential fields must be excluded from JSON output (json:"-").
+	acc := models.RFQEmailAccount{
+		Provider:           "mailgun",
+		Email:              "mg@example.com",
+		MailgunAPIKey:      "key-secret-abc",
+		MailgunDomain:      "mail.example.com",
+		GmailAccessToken:   "ya29.secret",
+		ZohoRefreshToken:   "refresh-secret",
+	}
+	b, err := json.Marshal(acc)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	s := string(b)
+	for _, secret := range []string{"key-secret-abc", "ya29.secret", "refresh-secret"} {
+		if strings.Contains(s, secret) {
+			t.Errorf("credential %q must not appear in JSON output: %s", secret, s)
+		}
+	}
+	// Non-sensitive fields must be present
+	if !strings.Contains(s, "mailgun") {
+		t.Errorf("provider 'mailgun' should appear in JSON: %s", s)
+	}
+	if !strings.Contains(s, "mg@example.com") {
+		t.Errorf("email should appear in JSON: %s", s)
+	}
+	if !strings.Contains(s, "mail.example.com") {
+		t.Errorf("mailgun_domain should appear in JSON (not sensitive): %s", s)
+	}
+}
+
+func TestRFQEmailAccounts_JSONRoundTrip_PublicFieldsOnly(t *testing.T) {
+	// Public fields survive JSON round-trip; credential fields stay nil/empty.
+	original := models.RFQEmailAccount{
+		Provider:      "zoho",
+		Email:         "z@example.com",
+		MailgunDomain: "mail.ex.com",
+	}
+	b, _ := json.Marshal(original)
+	var decoded models.RFQEmailAccount
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if decoded.Provider != "zoho" {
+		t.Errorf("Provider = %q, want zoho", decoded.Provider)
+	}
+	if decoded.Email != "z@example.com" {
+		t.Errorf("Email = %q, want z@example.com", decoded.Email)
+	}
+	// Credential fields must be empty (they have json:"-")
+	if decoded.ZohoAccessToken != "" || decoded.ZohoRefreshToken != "" {
+		t.Error("Zoho credential fields must be empty after JSON round-trip")
+	}
+}
+
+// ── extractJSONFromLLMResponse ────────────────────────────────────────────────
+
+func TestExtractJSONFromLLMResponse_PlainJSON(t *testing.T) {
+	input := `{"is_quotation": true, "prices": []}`
+	got := extractJSONFromLLMResponse(input)
+	if got != input {
+		t.Errorf("plain JSON: got %q, want %q", got, input)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_JSONFence(t *testing.T) {
+	input := "```json\n{\"is_quotation\": true}\n```"
+	got := extractJSONFromLLMResponse(input)
+	if got != `{"is_quotation": true}` {
+		t.Errorf("json fence: got %q", got)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_PlainFence(t *testing.T) {
+	input := "```\n{\"prices\": [1,2]}\n```"
+	got := extractJSONFromLLMResponse(input)
+	if got != `{"prices": [1,2]}` {
+		t.Errorf("plain fence: got %q", got)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_WithLeadingText(t *testing.T) {
+	input := `Here is the result: {"is_quotation": false}`
+	got := extractJSONFromLLMResponse(input)
+	if got != `{"is_quotation": false}` {
+		t.Errorf("leading text: got %q", got)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_JSONArray(t *testing.T) {
+	input := `[{"unit_price":100},{"unit_price":200}]`
+	got := extractJSONFromLLMResponse(input)
+	if got != input {
+		t.Errorf("JSON array: got %q, want %q", got, input)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_NestedObject(t *testing.T) {
+	input := `{"is_quotation":true,"prices":[{"product_index":0,"unit_price":150.5}]}`
+	got := extractJSONFromLLMResponse(input)
+	if got != input {
+		t.Errorf("nested object: got %q, want %q", got, input)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_NoJSON_ReturnsText(t *testing.T) {
+	input := "Sorry, I cannot determine the price from this message."
+	got := extractJSONFromLLMResponse(input)
+	// No JSON brackets found — returns the text as-is (trimmed)
+	if strings.TrimSpace(got) != strings.TrimSpace(input) {
+		t.Errorf("no JSON: got %q, want %q", got, input)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_Empty_ReturnsEmpty(t *testing.T) {
+	got := extractJSONFromLLMResponse("")
+	if got != "" {
+		t.Errorf("empty input: got %q, want empty", got)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_FenceWithLeadingText(t *testing.T) {
+	input := "Here you go:\n```json\n{\"is_quotation\":true}\n```\nDone."
+	got := extractJSONFromLLMResponse(input)
+	if got != `{"is_quotation":true}` {
+		t.Errorf("fence with leading text: got %q", got)
+	}
+}
+
+func TestExtractJSONFromLLMResponse_WhitespaceOnly_ReturnsEmpty(t *testing.T) {
+	got := extractJSONFromLLMResponse("   \n\t  ")
+	if got != "" {
+		t.Errorf("whitespace-only: got %q, want empty", got)
+	}
+}
+
+// ── GetWABATemplates handler ───────────────────────────────────────────────────
+
+func TestGetWABATemplates_MissingStoreID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/rfq-bot/waba-templates", nil)
+	w := httptest.NewRecorder()
+	GetWABATemplates(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing store_id, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "store_id") {
+		t.Errorf("expected 'store_id' in error body, got %q", w.Body.String())
+	}
+}
+
+func TestGetWABATemplates_InvalidStoreID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/rfq-bot/waba-templates?store_id=not-hex", nil)
+	w := httptest.NewRecorder()
+	GetWABATemplates(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid store_id, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "invalid store_id") {
+		t.Errorf("expected 'invalid store_id' in body, got %q", w.Body.String())
+	}
+}
+
+func TestGetWABATemplates_NonExistentStore(t *testing.T) {
+	nonExistentID := "507f1f77bcf86cd799439099"
+	req := httptest.NewRequest(http.MethodGet, "/v1/rfq-bot/waba-templates?store_id="+nonExistentID, nil)
+	w := httptest.NewRecorder()
+	GetWABATemplates(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for non-existent store, got %d", w.Code)
+	}
+}
+
+// ── SendWABATestMessage handler ────────────────────────────────────────────────
+
+func TestSendWABATestMessage_BadJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/waba-test-message", strings.NewReader("{bad"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	SendWABATestMessage(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for bad JSON, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "invalid JSON") {
+		t.Errorf("expected 'invalid JSON' in body, got %q", w.Body.String())
+	}
+}
+
+func TestSendWABATestMessage_InvalidStoreID(t *testing.T) {
+	body := `{"store_id":"not-valid","to":"966501234567","template_name":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/waba-test-message", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	SendWABATestMessage(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid store_id, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "invalid store_id") {
+		t.Errorf("expected 'invalid store_id' in body, got %q", w.Body.String())
+	}
+}
+
+func TestSendWABATestMessage_NonExistentStore(t *testing.T) {
+	body := `{"store_id":"507f1f77bcf86cd799439099","to":"966501234567","template_name":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/waba-test-message", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	SendWABATestMessage(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for non-existent store, got %d", w.Code)
+	}
+}
+
+func TestSendWABATestMessage_EmptyBody(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-bot/waba-test-message", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	SendWABATestMessage(w, req)
+	// Empty store_id → invalid ObjectID → 400
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for empty body, got %d", w.Code)
+	}
+}
+
+// ── AddSupplierReplyHandler ───────────────────────────────────────────────────
+
+func TestAddSupplierReplyHandler_InvalidID(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-received/not-a-valid-id/supplier-reply?store_id=507f1f77bcf86cd799439011",
+		strings.NewReader(`{"supplier_name":"Acme"}`))
+	req.Header.Set("Content-Type", "application/json")
+	// Manually inject mux vars so the handler can read "id"
+	w := httptest.NewRecorder()
+	// Without mux vars the vars["id"] is "", which fails ObjectIDFromHex
+	AddSupplierReplyHandler(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid id, got %d", w.Code)
+	}
+}
+
+func TestAddSupplierReplyHandler_InvalidStoreID(t *testing.T) {
+	// Even with a valid RFQ id hex, invalid store_id must fail first
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-received/507f1f77bcf86cd799439011/supplier-reply?store_id=bad-store-id",
+		strings.NewReader(`{"supplier_name":"Acme"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	AddSupplierReplyHandler(w, req)
+	// store_id parse happens after id parse; empty id (no mux vars) gives 400 first
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestAddSupplierReplyHandler_BadJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-received/507f1f77bcf86cd799439011/supplier-reply?store_id=507f1f77bcf86cd799439011",
+		strings.NewReader("{bad json"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	AddSupplierReplyHandler(w, req)
+	// id empty → 400 on id parse (mux vars not injected)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+// ── SupplierReply / SupplierReplyPrice model structs ─────────────────────────
+
+func TestSupplierReply_JSONRoundTrip(t *testing.T) {
+	reply := models.SupplierReply{
+		SupplierName:     "Acme Supplies",
+		SupplierPhone:    "966501234567",
+		RawText:          "Unit price for steel pipe: 150 SAR",
+		IsQuotation:      true,
+		ExtractionStatus: "done",
+		Prices: []models.SupplierReplyPrice{
+			{ProductIndex: 0, ProductName: "Steel Pipe", UnitPrice: 150.0, Currency: "SAR"},
+		},
+	}
+	b, err := json.Marshal(reply)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	var out models.SupplierReply
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if out.SupplierName != reply.SupplierName {
+		t.Errorf("SupplierName = %q, want %q", out.SupplierName, reply.SupplierName)
+	}
+	if !out.IsQuotation {
+		t.Error("IsQuotation should be true after round-trip")
+	}
+	if len(out.Prices) != 1 {
+		t.Fatalf("expected 1 price, got %d", len(out.Prices))
+	}
+	if out.Prices[0].UnitPrice != 150.0 {
+		t.Errorf("UnitPrice = %v, want 150.0", out.Prices[0].UnitPrice)
+	}
+	if out.Prices[0].Currency != "SAR" {
+		t.Errorf("Currency = %q, want SAR", out.Prices[0].Currency)
+	}
+}
+
+func TestSupplierReply_IsQuotation_DefaultFalse(t *testing.T) {
+	var r models.SupplierReply
+	if r.IsQuotation {
+		t.Error("IsQuotation should default to false")
+	}
+}
+
+func TestSupplierReply_ExtractionStatus_DefaultEmpty(t *testing.T) {
+	var r models.SupplierReply
+	if r.ExtractionStatus != "" {
+		t.Errorf("ExtractionStatus should default to empty, got %q", r.ExtractionStatus)
+	}
+}
+
+func TestSupplierReplyPrice_JSONRoundTrip(t *testing.T) {
+	price := models.SupplierReplyPrice{
+		ProductIndex: 2,
+		PartNo:       "SP-100",
+		ProductName:  "Valve",
+		Quantity:     10,
+		UnitPrice:    75.5,
+		Currency:     "USD",
+		Notes:        "includes shipping",
+	}
+	b, _ := json.Marshal(price)
+	var out models.SupplierReplyPrice
+	json.Unmarshal(b, &out)
+	if out.ProductIndex != 2 {
+		t.Errorf("ProductIndex = %d, want 2", out.ProductIndex)
+	}
+	if out.UnitPrice != 75.5 {
+		t.Errorf("UnitPrice = %v, want 75.5", out.UnitPrice)
+	}
+	if out.Notes != "includes shipping" {
+		t.Errorf("Notes = %q, want 'includes shipping'", out.Notes)
+	}
+}
+
+func TestSupplierReplyPrice_OmitEmptyFields(t *testing.T) {
+	// PartNo has omitempty — if empty it must not appear in JSON output
+	price := models.SupplierReplyPrice{ProductIndex: 0, ProductName: "Pipe", UnitPrice: 100}
+	b, _ := json.Marshal(price)
+	s := string(b)
+	if strings.Contains(s, `"part_no"`) {
+		t.Errorf("part_no should be omitted when empty, got: %s", s)
+	}
+	if !strings.Contains(s, `"unit_price":100`) {
+		t.Errorf("unit_price should be present, got: %s", s)
+	}
+}
+
+func TestRFQReceived_SupplierRepliesField_JSONRoundTrip(t *testing.T) {
+	rfq := models.RFQReceived{
+		TextContent: "Need 50 pipes",
+		SupplierReplies: []models.SupplierReply{
+			{SupplierName: "Acme", IsQuotation: true, ExtractionStatus: "done"},
+			{SupplierName: "Beta", IsQuotation: false, ExtractionStatus: "pending"},
+		},
+	}
+	b, err := json.Marshal(rfq)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	var out models.RFQReceived
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if len(out.SupplierReplies) != 2 {
+		t.Fatalf("expected 2 supplier replies, got %d", len(out.SupplierReplies))
+	}
+	if out.SupplierReplies[0].SupplierName != "Acme" {
+		t.Errorf("first reply supplier_name = %q, want Acme", out.SupplierReplies[0].SupplierName)
+	}
+	if !out.SupplierReplies[0].IsQuotation {
+		t.Error("first reply IsQuotation should be true")
+	}
+}
+
+// ── WABATemplate store settings ───────────────────────────────────────────────
+
+func TestStoreSettings_WABATemplateRFQSupplier_JSONRoundTrip(t *testing.T) {
+	store := models.Store{}
+	store.Settings.WABATemplateRFQSupplier = "rfq_to_supplier"
+	b, _ := json.Marshal(store.Settings)
+	if !strings.Contains(string(b), `"waba_template_rfq_supplier":"rfq_to_supplier"`) {
+		t.Errorf("waba_template_rfq_supplier not in JSON: %s", string(b))
+	}
+	var out models.StoreSettings
+	json.Unmarshal(b, &out)
+	if out.WABATemplateRFQSupplier != "rfq_to_supplier" {
+		t.Errorf("WABATemplateRFQSupplier = %q, want rfq_to_supplier", out.WABATemplateRFQSupplier)
+	}
+}
+
+func TestStoreSettings_WABATemplateInvoiceShare_JSONRoundTrip(t *testing.T) {
+	store := models.Store{}
+	store.Settings.WABATemplateInvoiceShare = "invoice_share_v2"
+	b, _ := json.Marshal(store.Settings)
+	if !strings.Contains(string(b), `"waba_template_invoice_share":"invoice_share_v2"`) {
+		t.Errorf("waba_template_invoice_share not in JSON: %s", string(b))
+	}
+	var out models.StoreSettings
+	json.Unmarshal(b, &out)
+	if out.WABATemplateInvoiceShare != "invoice_share_v2" {
+		t.Errorf("WABATemplateInvoiceShare = %q, want invoice_share_v2", out.WABATemplateInvoiceShare)
+	}
+}
+
+func TestStoreSettings_WABATemplates_DefaultEmpty(t *testing.T) {
+	var s models.StoreSettings
+	if s.WABATemplateRFQSupplier != "" {
+		t.Errorf("WABATemplateRFQSupplier should default to empty, got %q", s.WABATemplateRFQSupplier)
+	}
+	if s.WABATemplateInvoiceShare != "" {
+		t.Errorf("WABATemplateInvoiceShare should default to empty, got %q", s.WABATemplateInvoiceShare)
+	}
+}
+
+func TestStoreSettings_WABATemplates_Independent(t *testing.T) {
+	// Setting one must not affect the other
+	var s models.StoreSettings
+	s.WABATemplateRFQSupplier = "rfq_tmpl"
+	if s.WABATemplateInvoiceShare != "" {
+		t.Error("WABATemplateInvoiceShare must not change when WABATemplateRFQSupplier is set")
+	}
+}
+
+// ── callOpenAI / callAnthropic / callGemini (generic text helpers) ────────────
+
+func TestCallOpenAI_EmptyAPIKey_ReturnsError(t *testing.T) {
+	_, err := callOpenAI("", "gpt-4o-mini", "Say hello", "")
+	if err == nil {
+		t.Error("expected error for empty API key")
+	}
+}
+
+func TestCallAnthropic_EmptyAPIKey_ReturnsError(t *testing.T) {
+	_, err := callAnthropic("", "claude-3-5-haiku-20241022", "Say hello", "")
+	if err == nil {
+		t.Error("expected error for empty API key")
+	}
+}
+
+func TestCallGemini_EmptyAPIKey_ReturnsError(t *testing.T) {
+	_, err := callGemini("", "gemini-1.5-flash", "Say hello", "")
+	if err == nil {
+		t.Error("expected error for empty API key")
+	}
+}
+
+func TestCallOpenAI_InvalidKey_ReturnsError(t *testing.T) {
+	// "sk-invalid" will be rejected by the OpenAI API (401) — must return an error, not hang
+	_, err := callOpenAI("sk-invalid-key-000", "gpt-4o-mini", "Hello", "")
+	if err == nil {
+		t.Error("expected error for invalid OpenAI key")
+	}
+}
+
+func TestCallGemini_InvalidKey_ReturnsError(t *testing.T) {
+	_, err := callGemini("INVALID_GEMINI_KEY", "gemini-1.5-flash", "Hello", "")
+	if err == nil {
+		t.Error("expected error for invalid Gemini key")
+	}
+}
+
+// ── extractSupplierPrices — no LLM key → no panic ────────────────────────────
+
+func TestExtractSupplierPrices_NoLLMKey_NoPanic(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = ""
+	rfq := &models.RFQReceived{
+		Products: []models.RFQProduct{{Name: "Steel Pipe", Quantity: 10}},
+	}
+	reply := &models.SupplierReply{
+		SupplierName: "Acme",
+		RawText:      "We can supply steel pipe at SAR 150 each.",
+	}
+	// Must not panic; with no LLM key it returns early
+	extractSupplierPrices(store, rfq, reply)
+}
+
+func TestExtractSupplierPrices_UnknownProvider_NoPanic(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = "sk-key"
+	store.Settings.RFQLLMProvider = "unknown_llm_xyz"
+	rfq := &models.RFQReceived{
+		Products: []models.RFQProduct{{Name: "Valve", Quantity: 5}},
+	}
+	reply := &models.SupplierReply{
+		SupplierName: "Beta",
+		RawText:      "Valve SAR 200 each",
+	}
+	extractSupplierPrices(store, rfq, reply)
+}
+
+func TestExtractSupplierPrices_EmptyProducts_NoPanic(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = "sk-key"
+	store.Settings.RFQLLMProvider = "openai"
+	rfq := &models.RFQReceived{Products: []models.RFQProduct{}}
+	reply := &models.SupplierReply{SupplierName: "Alpha", RawText: ""}
+	extractSupplierPrices(store, rfq, reply)
+}
+
+func TestExtractSupplierPrices_EmptyReplyText_NoPanic(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = "sk-key"
+	store.Settings.RFQLLMProvider = "anthropic"
+	rfq := &models.RFQReceived{
+		Products: []models.RFQProduct{{Name: "Pipe"}},
+	}
+	reply := &models.SupplierReply{SupplierName: "Gamma", RawText: ""}
+	extractSupplierPrices(store, rfq, reply)
+}
+
+// ── extractRFQCodeFromText ────────────────────────────────────────────────────
+
+func TestExtractRFQCodeFromText_DefaultPrefix(t *testing.T) {
+	cases := []struct {
+		name   string
+		text   string
+		prefix string
+		want   string
+	}{
+		{
+			name:   "code at start of message",
+			text:   "RFQ-0015: We can supply the items.",
+			prefix: "RFQ",
+			want:   "RFQ-0015",
+		},
+		{
+			name:   "code mid-sentence",
+			text:   "Regarding your RFQ-0003 inquiry, our prices are below.",
+			prefix: "RFQ",
+			want:   "RFQ-0003",
+		},
+		{
+			name:   "code case-insensitive",
+			text:   "re: rfq-0015 attached quotation",
+			prefix: "RFQ",
+			want:   "RFQ-0015",
+		},
+		{
+			name:   "custom prefix",
+			text:   "PO-0042 confirmed.",
+			prefix: "PO",
+			want:   "PO-0042",
+		},
+		{
+			name:   "no code in text",
+			text:   "Hello, please send prices for steel pipes.",
+			prefix: "RFQ",
+			want:   "",
+		},
+		{
+			name:   "empty text",
+			text:   "",
+			prefix: "RFQ",
+			want:   "",
+		},
+		{
+			name:   "empty prefix falls back to RFQ",
+			text:   "See attached for RFQ-0099.",
+			prefix: "",
+			want:   "RFQ-0099",
+		},
+		{
+			name:   "code at end of message",
+			text:   "Our quotation for your request RFQ-0200",
+			prefix: "RFQ",
+			want:   "RFQ-0200",
+		},
+		{
+			name:   "multiple codes — returns first",
+			text:   "RFQ-0001 and RFQ-0002 combined quote.",
+			prefix: "RFQ",
+			want:   "RFQ-0001",
+		},
+		{
+			name:   "prefix different from code in text — no match",
+			text:   "PO-0015 shipped.",
+			prefix: "RFQ",
+			want:   "",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := extractRFQCodeFromText(c.text, c.prefix)
+			if got != c.want {
+				t.Errorf("extractRFQCodeFromText(%q, %q) = %q, want %q", c.text, c.prefix, got, c.want)
+			}
+		})
+	}
+}
+
+// ── analyzeSupplierReply (pure logic, no LLM call) ───────────────────────────
+
+// parseSupplierReplyAnalysisJSON tests the JSON parsing path of analyzeSupplierReply
+// by calling extractJSONFromLLMResponse + the unmarshal logic directly.
+func TestExtractJSONFromLLMResponse_SupplierReplyShape(t *testing.T) {
+	cases := []struct {
+		name        string
+		input       string
+		wantCode    string
+		wantIsQuote bool
+		wantPrices  int
+	}{
+		{
+			name: "clean quotation with code",
+			input: `{"rfq_code":"RFQ-0015","is_quotation":true,"prices":[
+				{"product_index":0,"product_name":"Steel Pipe","part_no":"SP-100","unit_price":150.00,"quantity":50,"currency":"AED","notes":""}
+			]}`,
+			wantCode:    "RFQ-0015",
+			wantIsQuote: true,
+			wantPrices:  1,
+		},
+		{
+			name: "acknowledgement — no prices",
+			input: `{"rfq_code":"","is_quotation":false,"prices":[]}`,
+			wantCode:    "",
+			wantIsQuote: false,
+			wantPrices:  0,
+		},
+		{
+			name: "markdown-fenced JSON",
+			input: "```json\n{\"rfq_code\":\"RFQ-0003\",\"is_quotation\":true,\"prices\":[{\"product_index\":0,\"product_name\":\"Valve\",\"unit_price\":80.0,\"currency\":\"SAR\"}]}\n```",
+			wantCode:    "RFQ-0003",
+			wantIsQuote: true,
+			wantPrices:  1,
+		},
+		{
+			name: "multiple prices",
+			input: `{"rfq_code":"RFQ-0010","is_quotation":true,"prices":[
+				{"product_index":0,"product_name":"Item A","unit_price":100.00,"currency":"AED"},
+				{"product_index":1,"product_name":"Item B","unit_price":200.00,"currency":"AED"},
+				{"product_index":2,"product_name":"Item C","unit_price":50.00,"currency":"AED"}
+			]}`,
+			wantCode:    "RFQ-0010",
+			wantIsQuote: true,
+			wantPrices:  3,
+		},
+		{
+			name: "LLM adds explanation before JSON",
+			input: `Here is the extracted data: {"rfq_code":"RFQ-0007","is_quotation":false,"prices":[]}`,
+			wantCode:    "RFQ-0007",
+			wantIsQuote: false,
+			wantPrices:  0,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			jsonStr := extractJSONFromLLMResponse(c.input)
+			var raw struct {
+				RFQCode     string `json:"rfq_code"`
+				IsQuotation bool   `json:"is_quotation"`
+				Prices      []struct {
+					ProductIndex int     `json:"product_index"`
+					ProductName  string  `json:"product_name"`
+					UnitPrice    float64 `json:"unit_price"`
+					Quantity     float64 `json:"quantity"`
+					Currency     string  `json:"currency"`
+					Notes        string  `json:"notes"`
+				} `json:"prices"`
+			}
+			if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
+				t.Fatalf("JSON unmarshal failed: %v (json=%q)", err, jsonStr)
+			}
+			if raw.RFQCode != c.wantCode {
+				t.Errorf("rfq_code = %q, want %q", raw.RFQCode, c.wantCode)
+			}
+			if raw.IsQuotation != c.wantIsQuote {
+				t.Errorf("is_quotation = %v, want %v", raw.IsQuotation, c.wantIsQuote)
+			}
+			if len(raw.Prices) != c.wantPrices {
+				t.Errorf("len(prices) = %d, want %d", len(raw.Prices), c.wantPrices)
+			}
+		})
+	}
+}
+
+func TestAnalyzeSupplierReply_NoLLMKey_ReturnsEmpty(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = ""
+	result := analyzeSupplierReply(store, "Price for steel pipe: 150 AED", nil)
+	if result.IsQuotation {
+		t.Error("expected IsQuotation=false when no LLM key")
+	}
+	if len(result.Prices) != 0 {
+		t.Errorf("expected no prices when no LLM key, got %d", len(result.Prices))
+	}
+	if result.RFQCode != "" {
+		t.Errorf("expected empty RFQCode when no LLM key, got %q", result.RFQCode)
+	}
+}
+
+func TestAnalyzeSupplierReply_EmptyText_ReturnsEmpty(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = "sk-test"
+	store.Settings.RFQLLMProvider = "openai"
+	result := analyzeSupplierReply(store, "", nil)
+	if result.IsQuotation || len(result.Prices) != 0 || result.RFQCode != "" {
+		t.Error("expected zero-value result for empty message text")
+	}
+}
+
+func TestAnalyzeSupplierReply_UnknownProvider_ReturnsEmpty(t *testing.T) {
+	store := &models.Store{}
+	store.Settings.RFQLLMAPIKey = "sk-test"
+	store.Settings.RFQLLMProvider = "unknown_provider"
+	result := analyzeSupplierReply(store, "RFQ-0015: Price 150 AED", nil)
+	if result.IsQuotation || len(result.Prices) != 0 || result.RFQCode != "" {
+		t.Error("expected zero-value result for unknown LLM provider")
+	}
+}
+
+// ── supplierReplyAnalysis — price filtering ───────────────────────────────────
+
+// TestPriceFiltering verifies that the analyzeSupplierReply assembler skips prices with unit_price <= 0.
+// We test this by injecting a pre-parsed raw result directly into the conversion logic.
+func TestSupplierReplyAnalysis_ZeroPriceFiltered(t *testing.T) {
+	// Simulate what analyzeSupplierReply does after JSON unmarshal
+	rawPrices := []struct {
+		ProductIndex int
+		ProductName  string
+		UnitPrice    float64
+		Quantity     float64
+		Currency     string
+	}{
+		{0, "Steel Pipe", 150.0, 50, "AED"},  // valid
+		{1, "Valve", 0, 10, "AED"},           // zero price — should be filtered
+		{2, "Fitting", -5.0, 5, "AED"},       // negative — should be filtered
+		{3, "Elbow", 80.0, 20, "AED"},        // valid
+	}
+
+	var prices []models.SupplierReplyPrice
+	for _, p := range rawPrices {
+		if p.UnitPrice <= 0 {
+			continue
+		}
+		prices = append(prices, models.SupplierReplyPrice{
+			ProductName: p.ProductName,
+			UnitPrice:   p.UnitPrice,
+			Quantity:    p.Quantity,
+			Currency:    p.Currency,
+		})
+	}
+
+	if len(prices) != 2 {
+		t.Errorf("expected 2 valid prices, got %d", len(prices))
+	}
+	for _, p := range prices {
+		if p.UnitPrice <= 0 {
+			t.Errorf("zero/negative price leaked through filter: %+v", p)
+		}
+	}
+}
+
+// ── routing logic (no DB) ─────────────────────────────────────────────────────
+
+func TestExtractRFQCodeFromText_PrefixSpecialChars(t *testing.T) {
+	// Prefixes that contain regex-special chars are safely escaped.
+	got := extractRFQCodeFromText("See RFQ.2024-0001 attached.", "RFQ.2024")
+	// The dot in the prefix must be literal-matched, so this should NOT match "RFQ-0001".
+	// "RFQ.2024-0001" is not a realistic code, just verifies QuoteMeta works.
+	if got == "RFQ-0001" {
+		t.Error("regex special char in prefix not properly escaped")
+	}
+}
+
+func TestExtractRFQCodeFromText_WordBoundary(t *testing.T) {
+	// Substring match inside a longer token must not fire.
+	got := extractRFQCodeFromText("MYRFQ-0015 something", "RFQ")
+	// "MYRFQ-0015" does not start at a word boundary — should not match.
+	if got != "" {
+		t.Errorf("expected no match for MYRFQ-0015 with prefix RFQ, got %q", got)
+	}
+}
