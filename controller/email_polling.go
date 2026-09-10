@@ -96,6 +96,7 @@ func pollAllEmailAccounts() {
 type parsedEmail struct {
 	from, subject, bodyText string
 	to                      []string
+	date                    *time.Time // original send/receive time from the mail provider
 }
 
 // ─── Zoho polling ─────────────────────────────────────────────────────────────
@@ -229,11 +230,12 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase s
 	raw, _ := io.ReadAll(resp.Body)
 	var res struct {
 		Data []struct {
-			MessageID string `json:"messageId"`
-			FolderID  string `json:"folderId"`
-			Subject   string `json:"subject"`
-			Sender    string `json:"sender"`
-			ToAddress string `json:"toAddress"`
+			MessageID    string `json:"messageId"`
+			FolderID     string `json:"folderId"`
+			Subject      string `json:"subject"`
+			Sender       string `json:"sender"`
+			ToAddress    string `json:"toAddress"`
+			ReceivedTime int64  `json:"receivedTime"` // unix milliseconds
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &res); err != nil {
@@ -247,12 +249,17 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase s
 		if m.ToAddress != "" {
 			to = []string{m.ToAddress}
 		}
-		result = append(result, parsedEmail{
+		pe := parsedEmail{
 			from:     m.Sender,
 			subject:  m.Subject,
 			bodyText: content,
 			to:       to,
-		})
+		}
+		if m.ReceivedTime > 0 {
+			t := time.UnixMilli(m.ReceivedTime).UTC()
+			pe.date = &t
+		}
+		result = append(result, pe)
 	}
 	return result, nil
 }
@@ -410,6 +417,10 @@ func fetchGmailMessageContent(accessToken, msgID string) *parsedEmail {
 			pe.subject = h.Value
 		case "to":
 			pe.to = []string{h.Value}
+		case "date":
+			if t, err := parseRFC2822Date(h.Value); err == nil {
+				pe.date = &t
+			}
 		}
 	}
 
@@ -423,6 +434,24 @@ func fetchGmailMessageContent(accessToken, msgID string) *parsedEmail {
 		pe.bodyText = gmailBase64Decode(gmsg.Payload.Body.Data)
 	}
 	return pe
+}
+
+// parseRFC2822Date parses an email Date header (RFC 2822 and common variants).
+func parseRFC2822Date(s string) (time.Time, error) {
+	formats := []string{
+		"Mon, 02 Jan 2006 15:04:05 -0700",
+		"Mon, 02 Jan 2006 15:04:05 MST",
+		"02 Jan 2006 15:04:05 -0700",
+		"02 Jan 2006 15:04:05 MST",
+		time.RFC1123Z,
+		time.RFC1123,
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("cannot parse date: %q", s)
 }
 
 // gmailBase64Decode decodes Gmail's URL-safe base64.
@@ -510,7 +539,7 @@ func ensureOutlookToken(storeID primitive.ObjectID, acct models.RFQEmailAccount)
 func listOutlookMessages(accessToken string, since time.Time) ([]parsedEmail, error) {
 	sinceStr := url.QueryEscape(since.UTC().Format("2006-01-02T15:04:05Z"))
 	msURL := fmt.Sprintf(
-		"https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$filter=receivedDateTime ge %s&$select=subject,from,toRecipients,body&$top=20&$orderby=receivedDateTime desc",
+		"https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$filter=receivedDateTime ge %s&$select=subject,from,toRecipients,body,receivedDateTime&$top=20&$orderby=receivedDateTime desc",
 		sinceStr,
 	)
 	req, _ := http.NewRequest("GET", msURL, nil)
@@ -524,8 +553,9 @@ func listOutlookMessages(accessToken string, since time.Time) ([]parsedEmail, er
 
 	var res struct {
 		Value []struct {
-			Subject string `json:"subject"`
-			From    struct {
+			Subject          string `json:"subject"`
+			ReceivedDateTime string `json:"receivedDateTime"` // RFC3339
+			From             struct {
 				EmailAddress struct {
 					Address string `json:"address"`
 					Name    string `json:"name"`
@@ -551,12 +581,19 @@ func listOutlookMessages(accessToken string, since time.Time) ([]parsedEmail, er
 		for _, r := range m.ToRecipients {
 			to = append(to, r.EmailAddress.Address)
 		}
-		result = append(result, parsedEmail{
+		pe := parsedEmail{
 			from:     from,
 			subject:  m.Subject,
 			bodyText: m.Body.Content,
 			to:       to,
-		})
+		}
+		if m.ReceivedDateTime != "" {
+			if t, err := time.Parse(time.RFC3339, m.ReceivedDateTime); err == nil {
+				t = t.UTC()
+				pe.date = &t
+			}
+		}
+		result = append(result, pe)
 	}
 	return result, nil
 }
@@ -579,7 +616,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	}
 
 	// Always record in procurement log first.
-	go saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, nil, false, nil)
+	go saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, nil, false, nil, msg.date)
 
 	if !settings.EnableAIRFQBot || settings.RFQLLMAPIKey == "" {
 		return

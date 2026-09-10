@@ -136,7 +136,7 @@ func runAutoDeleteProcurementMessages(storeID primitive.ObjectID, days int) {
 
 // saveProcurementEmailMessage is called from the email webhook / polling hooks to
 // persist an email record for the messages log.
-func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider, from string, to []string, subject, bodyText string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID) {
+func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider, from string, to []string, subject, bodyText string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID, messageDate *time.Time) {
 	if attachments == nil {
 		attachments = []models.ProcurementAttachment{}
 	}
@@ -152,6 +152,7 @@ func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider
 		Attachments:    attachments,
 		ProcessedAsRFQ: processedAsRFQ,
 		RFQReceivedID:  rfqID,
+		MessageDate:    messageDate,
 		CreatedAt:      time.Now(),
 	}
 	if err := models.SaveProcurementMessage(msg); err != nil {

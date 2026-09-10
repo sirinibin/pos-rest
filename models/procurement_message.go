@@ -43,6 +43,7 @@ type ProcurementMessage struct {
 	Read           bool                `bson:"read" json:"read"`
 	ProcessedAsRFQ bool                `bson:"processed_as_rfq" json:"processed_as_rfq"`
 	RFQReceivedID  *primitive.ObjectID `bson:"rfq_received_id,omitempty" json:"rfq_received_id,omitempty"`
+	MessageDate    *time.Time          `bson:"message_date,omitempty" json:"message_date,omitempty"`
 	CreatedAt      time.Time           `bson:"created_at" json:"created_at"`
 }
 

@@ -740,6 +740,26 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		return
 	}
 
+	// Save every incoming message to the procurement inbox regardless of routing path.
+	{
+		var bodyText string
+		switch msg.Type {
+		case "text":
+			if msg.Text != nil {
+				bodyText = msg.Text.Body
+			}
+		case "image":
+			if msg.Image != nil {
+				bodyText = msg.Image.Caption
+			}
+		case "document":
+			if msg.Document != nil {
+				bodyText = msg.Document.Caption
+			}
+		}
+		go saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, bodyText, msg.Type, phoneNumberID, nil, false, nil)
+	}
+
 	// If the sender is replying to one of the bot's relay messages, route as buyer follow-up
 	if msg.Context != nil && msg.Context.ID != "" {
 		rfq, supplierPhone, err := models.FindRFQByBuyerRelayMsgID(storeObjID, msg.Context.ID)
@@ -865,10 +885,6 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		log.Printf("rfq_bot: failed to save RFQ: %v", err)
 		return
 	}
-
-	// Save to procurement inbox so it appears in Emails/WhatsApp sidebar pages.
-	rfqID := rfq.ID
-	go saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, text, msg.Type, phoneNumberID, nil, true, &rfqID)
 
 	// Timeline: input received
 	srcLabel := "WhatsApp"

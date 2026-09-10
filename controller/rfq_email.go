@@ -845,7 +845,7 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Always log every inbound email regardless of RFQ classification.
-	go saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, nil, false, nil)
+	go saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, nil, false, nil, nil)
 	go runAutoDeleteProcurementMessages(storeObjID, store.Settings.AutoDeleteProcurementMessagesDays)
 
 	emailText := fmt.Sprintf("Subject: %s\n\n%s", subject, body)
