@@ -615,8 +615,8 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return
 	}
 
-	// Always record in procurement log first.
-	go saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, nil, false, nil, msg.date)
+	// Always record in procurement log first (synchronous so we can link RFQ ↔ message).
+	procMsg := saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, nil, false, nil, msg.date)
 
 	if !settings.EnableAIRFQBot || settings.RFQLLMAPIKey == "" {
 		return
@@ -675,6 +675,10 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		CustomerPhone:   extracted.CustomerPhone,
 		CustomerEmail:   extracted.CustomerEmail,
 		CustomerCompany: extracted.CustomerCompany,
+	}
+	if procMsg != nil {
+		rfq.ProcurementMessageID = &procMsg.ID
+		rfq.ProcurementMessageCode = procMsg.Code
 	}
 	if err := models.CreateRFQReceived(rfq); err != nil {
 		log.Printf("email_polling: failed to save RFQ from %s: %v", msg.from, err)

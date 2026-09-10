@@ -741,6 +741,8 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 	}
 
 	// Save every incoming message to the procurement inbox regardless of routing path.
+	// Called synchronously so we can capture the message ID for linking to the RFQ.
+	var procMsg *models.ProcurementMessage
 	{
 		var bodyText string
 		switch msg.Type {
@@ -757,7 +759,7 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 				bodyText = msg.Document.Caption
 			}
 		}
-		go saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, bodyText, msg.Type, phoneNumberID, nil, false, nil)
+		procMsg = saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, bodyText, msg.Type, phoneNumberID, nil, false, nil)
 	}
 
 	// If the sender is replying to one of the bot's relay messages, route as buyer follow-up
@@ -879,6 +881,11 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		rfq.MessageType = "document"
 	default:
 		rfq.MessageType = "text"
+	}
+
+	if procMsg != nil {
+		rfq.ProcurementMessageID = &procMsg.ID
+		rfq.ProcurementMessageCode = procMsg.Code
 	}
 
 	if err := models.CreateRFQReceived(rfq); err != nil {

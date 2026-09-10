@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -44,7 +45,25 @@ type ProcurementMessage struct {
 	ProcessedAsRFQ bool                `bson:"processed_as_rfq" json:"processed_as_rfq"`
 	RFQReceivedID  *primitive.ObjectID `bson:"rfq_received_id,omitempty" json:"rfq_received_id,omitempty"`
 	MessageDate    *time.Time          `bson:"message_date,omitempty" json:"message_date,omitempty"`
+	// Auto-generated human-readable code, e.g. EM-000001 or WA-000001
+	Code           string              `bson:"code,omitempty" json:"code,omitempty"`
 	CreatedAt      time.Time           `bson:"created_at" json:"created_at"`
+}
+
+// MakeProcurementMessageCode generates a serial code for the message.
+// msgType should be "email" or "whatsapp"; storeID is the owning store.
+func MakeProcurementMessageCode(storeID primitive.ObjectID, msgType string) string {
+	prefix := "EM"
+	redisKey := storeID.Hex() + "_pm_em_counter"
+	if msgType == "whatsapp" {
+		prefix = "WA"
+		redisKey = storeID.Hex() + "_pm_wa_counter"
+	}
+	n, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s-%06d", prefix, n)
 }
 
 func procurementMessageCol() *mongo.Collection {
@@ -55,6 +74,9 @@ func procurementMessageCol() *mongo.Collection {
 func SaveProcurementMessage(msg *ProcurementMessage) error {
 	if msg.ID.IsZero() {
 		msg.ID = primitive.NewObjectID()
+	}
+	if msg.Code == "" {
+		msg.Code = MakeProcurementMessageCode(msg.StoreID, msg.Type)
 	}
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()

@@ -134,6 +134,9 @@ type RFQReceived struct {
 	// PreparedBy and AuthorizedBy are set when the RFQ is sent to suppliers via WABA template.
 	PreparedBy   string `bson:"prepared_by,omitempty"   json:"prepared_by,omitempty"`
 	AuthorizedBy string `bson:"authorized_by,omitempty" json:"authorized_by,omitempty"`
+	// Link to the originating procurement message (email or WhatsApp inbox record).
+	ProcurementMessageID   *primitive.ObjectID `bson:"procurement_message_id,omitempty"   json:"procurement_message_id,omitempty"`
+	ProcurementMessageCode string              `bson:"procurement_message_code,omitempty" json:"procurement_message_code,omitempty"`
 }
 
 func rfqReceivedCollection(storeID primitive.ObjectID) string {

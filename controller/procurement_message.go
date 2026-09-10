@@ -134,9 +134,8 @@ func runAutoDeleteProcurementMessages(storeID primitive.ObjectID, days int) {
 	}
 }
 
-// saveProcurementEmailMessage is called from the email webhook / polling hooks to
-// persist an email record for the messages log.
-func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider, from string, to []string, subject, bodyText string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID, messageDate *time.Time) {
+// saveProcurementEmailMessage persists an email record and returns the saved message.
+func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider, from string, to []string, subject, bodyText string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID, messageDate *time.Time) *models.ProcurementMessage {
 	if attachments == nil {
 		attachments = []models.ProcurementAttachment{}
 	}
@@ -157,11 +156,13 @@ func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider
 	}
 	if err := models.SaveProcurementMessage(msg); err != nil {
 		log.Printf("procurement_messages: failed to save email message: %v", err)
+		return nil
 	}
+	return msg
 }
 
-// saveProcurementWhatsAppMessage is called from the WhatsApp webhook to persist a message record.
-func saveProcurementWhatsAppMessage(storeID primitive.ObjectID, direction, from string, to []string, bodyText, waMessageType, wabaPNID string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID) {
+// saveProcurementWhatsAppMessage persists a WhatsApp message record and returns the saved message.
+func saveProcurementWhatsAppMessage(storeID primitive.ObjectID, direction, from string, to []string, bodyText, waMessageType, wabaPNID string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID) *models.ProcurementMessage {
 	if attachments == nil {
 		attachments = []models.ProcurementAttachment{}
 	}
@@ -185,5 +186,7 @@ func saveProcurementWhatsAppMessage(storeID primitive.ObjectID, direction, from 
 	}
 	if err := models.SaveProcurementMessage(msg); err != nil {
 		log.Printf("procurement_messages: failed to save whatsapp message: %v", err)
+		return nil
 	}
+	return msg
 }
