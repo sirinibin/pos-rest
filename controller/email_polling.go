@@ -12,6 +12,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -97,6 +99,7 @@ type parsedEmail struct {
 	from, subject, bodyText string
 	to                      []string
 	date                    *time.Time // original send/receive time from the mail provider
+	attachments             []models.ProcurementAttachment
 }
 
 // ─── Zoho polling ─────────────────────────────────────────────────────────────
@@ -131,7 +134,7 @@ func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, 
 		return
 	}
 
-	msgs, err := listZohoMessages(accessToken, zohoAccountID, since, mailBase)
+	msgs, err := listZohoMessages(accessToken, zohoAccountID, since, mailBase, storeID.Hex())
 	if err != nil {
 		log.Printf("email_polling: failed to list zoho messages for %s: %v", acct.Email, err)
 		return
@@ -210,7 +213,7 @@ func fetchZohoAccountID(accessToken, mailBase string) (string, error) {
 	return res.Data[0].AccountID, nil
 }
 
-func listZohoMessages(accessToken, accountID string, since time.Time, mailBase string) ([]parsedEmail, error) {
+func listZohoMessages(accessToken, accountID string, since time.Time, mailBase, storeIDStr string) ([]parsedEmail, error) {
 	if mailBase == "" {
 		mailBase = "https://mail.zoho.com"
 	}
@@ -250,10 +253,11 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase s
 			to = []string{m.ToAddress}
 		}
 		pe := parsedEmail{
-			from:     m.Sender,
-			subject:  m.Subject,
-			bodyText: content,
-			to:       to,
+			from:        m.Sender,
+			subject:     m.Subject,
+			bodyText:    content,
+			to:          to,
+			attachments: fetchZohoAttachments(accessToken, accountID, m.FolderID, m.MessageID, mailBase, storeIDStr),
 		}
 		if m.ReceivedTime > 0 {
 			t := time.UnixMilli(m.ReceivedTime).UTC()
@@ -290,6 +294,78 @@ func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBa
 	return stripHTMLTags(content)
 }
 
+// saveEmailAttachment writes bytes to ./attachments/{storeID}/{msgID}/{filename}
+// and returns the relative URL path (served by /attachments/ static route).
+func saveEmailAttachment(storeID, msgID, filename string, data []byte) string {
+	dir := fmt.Sprintf("./attachments/%s/%s", storeID, msgID)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return ""
+	}
+	safe := filepath.Base(filename)
+	if safe == "" || safe == "." {
+		safe = "attachment"
+	}
+	path := filepath.Join(dir, safe)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return ""
+	}
+	return "/attachments/" + storeID + "/" + msgID + "/" + safe
+}
+
+// fetchZohoAttachments returns ProcurementAttachment records for a Zoho message.
+func fetchZohoAttachments(accessToken, accountID, folderID, messageID, mailBase, storeID string) []models.ProcurementAttachment {
+	if mailBase == "" {
+		mailBase = "https://mail.zoho.com"
+	}
+	endpoint := fmt.Sprintf("%s/api/accounts/%s/folders/%s/messages/%s/attachments",
+		mailBase, accountID, folderID, messageID)
+	req, _ := http.NewRequest("GET", endpoint, nil)
+	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var res struct {
+		Data []struct {
+			AttachmentID string `json:"attachmentId"`
+			FileName     string `json:"fileName"`
+			ContentType  string `json:"contentType"`
+			Size         int64  `json:"size"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil
+	}
+
+	var atts []models.ProcurementAttachment
+	for _, a := range res.Data {
+		att := models.ProcurementAttachment{
+			Filename:    a.FileName,
+			ContentType: a.ContentType,
+			Size:        a.Size,
+		}
+		// Download attachment content
+		dlURL := fmt.Sprintf("%s/api/accounts/%s/folders/%s/messages/%s/attachments/%s",
+			mailBase, accountID, folderID, messageID, a.AttachmentID)
+		dlReq, _ := http.NewRequest("GET", dlURL, nil)
+		dlReq.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
+		dlResp, err := (&http.Client{Timeout: 30 * time.Second}).Do(dlReq)
+		if err == nil && dlResp.StatusCode == 200 {
+			data, _ := io.ReadAll(dlResp.Body)
+			dlResp.Body.Close()
+			if len(data) > 0 {
+				att.URL = saveEmailAttachment(storeID, messageID, a.FileName, data)
+			}
+		} else if dlResp != nil {
+			dlResp.Body.Close()
+		}
+		atts = append(atts, att)
+	}
+	return atts
+}
+
 // ─── Gmail polling ────────────────────────────────────────────────────────────
 
 func pollGmailAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
@@ -304,7 +380,7 @@ func pollGmailAccount(storeID primitive.ObjectID, settings models.StoreSettings,
 		return
 	}
 
-	msgs, err := listGmailMessages(accessToken, since)
+	msgs, err := listGmailMessages(accessToken, since, storeID.Hex())
 	if err != nil {
 		log.Printf("email_polling: failed to list gmail messages for %s: %v", acct.Email, err)
 		return
@@ -349,7 +425,7 @@ func ensureGmailToken(storeID primitive.ObjectID, acct models.RFQEmailAccount) (
 	return tok.AccessToken, nil
 }
 
-func listGmailMessages(accessToken string, since time.Time) ([]parsedEmail, error) {
+func listGmailMessages(accessToken string, since time.Time, storeIDStr string) ([]parsedEmail, error) {
 	afterDate := since.Format("2006/01/02")
 	listURL := fmt.Sprintf(
 		"https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:%s+in:inbox&maxResults=20",
@@ -370,14 +446,35 @@ func listGmailMessages(accessToken string, since time.Time) ([]parsedEmail, erro
 
 	var result []parsedEmail
 	for _, m := range listRes.Messages {
-		if pe := fetchGmailMessageContent(accessToken, m.ID); pe != nil {
+		if pe := fetchGmailMessageContentWithStore(accessToken, m.ID, storeIDStr); pe != nil {
 			result = append(result, *pe)
 		}
 	}
 	return result, nil
 }
 
+// gmailPart mirrors the recursive Gmail message part structure.
+type gmailPart struct {
+	PartID   string `json:"partId"`
+	MimeType string `json:"mimeType"`
+	Filename string `json:"filename"`
+	Headers  []struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	} `json:"headers"`
+	Body struct {
+		AttachmentId string `json:"attachmentId"`
+		Size         int    `json:"size"`
+		Data         string `json:"data"`
+	} `json:"body"`
+	Parts []gmailPart `json:"parts"`
+}
+
 func fetchGmailMessageContent(accessToken, msgID string) *parsedEmail {
+	return fetchGmailMessageContentWithStore(accessToken, msgID, "")
+}
+
+func fetchGmailMessageContentWithStore(accessToken, msgID, storeID string) *parsedEmail {
 	msgURL := fmt.Sprintf(
 		"https://gmail.googleapis.com/gmail/v1/users/me/messages/%s?format=full",
 		msgID,
@@ -391,18 +488,7 @@ func fetchGmailMessageContent(accessToken, msgID string) *parsedEmail {
 	defer resp.Body.Close()
 
 	var gmsg struct {
-		Payload struct {
-			Headers []struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"headers"`
-			Parts []struct {
-				MimeType string                              `json:"mimeType"`
-				Body     struct{ Data string `json:"data"` } `json:"body"`
-			} `json:"parts"`
-			Body     struct{ Data string `json:"data"` } `json:"body"`
-			MimeType string                               `json:"mimeType"`
-		} `json:"payload"`
+		Payload gmailPart `json:"payload"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&gmsg); err != nil {
 		return nil
@@ -424,12 +510,44 @@ func fetchGmailMessageContent(accessToken, msgID string) *parsedEmail {
 		}
 	}
 
-	for _, part := range gmsg.Payload.Parts {
-		if strings.HasPrefix(part.MimeType, "text/plain") && part.Body.Data != "" {
-			pe.bodyText = gmailBase64Decode(part.Body.Data)
-			break
+	// Recursively walk parts to extract body text and attachments.
+	var walkParts func(parts []gmailPart)
+	walkParts = func(parts []gmailPart) {
+		for _, part := range parts {
+			if strings.HasPrefix(part.MimeType, "multipart/") {
+				walkParts(part.Parts)
+				continue
+			}
+			if strings.HasPrefix(part.MimeType, "text/plain") && part.Body.Data != "" && pe.bodyText == "" {
+				pe.bodyText = gmailBase64Decode(part.Body.Data)
+				continue
+			}
+			if part.Filename != "" && part.Body.AttachmentId != "" {
+				// It's an attachment — download it.
+				att := models.ProcurementAttachment{
+					Filename:    part.Filename,
+					ContentType: part.MimeType,
+					Size:        int64(part.Body.Size),
+				}
+				if storeID != "" {
+					dlURL := fmt.Sprintf("https://gmail.googleapis.com/gmail/v1/users/me/messages/%s/attachments/%s", msgID, part.Body.AttachmentId)
+					dlReq, _ := http.NewRequest("GET", dlURL, nil)
+					dlReq.Header.Set("Authorization", "Bearer "+accessToken)
+					if dlResp, err := (&http.Client{Timeout: 30 * time.Second}).Do(dlReq); err == nil {
+						var attBody struct{ Data string `json:"data"` }
+						if json.NewDecoder(dlResp.Body).Decode(&attBody) == nil && attBody.Data != "" {
+							data := []byte(gmailBase64Decode(attBody.Data))
+							att.URL = saveEmailAttachment(storeID, msgID, part.Filename, data)
+						}
+						dlResp.Body.Close()
+					}
+				}
+				pe.attachments = append(pe.attachments, att)
+			}
 		}
 	}
+	walkParts(gmsg.Payload.Parts)
+
 	if pe.bodyText == "" && gmsg.Payload.Body.Data != "" {
 		pe.bodyText = gmailBase64Decode(gmsg.Payload.Body.Data)
 	}
@@ -600,6 +718,44 @@ func listOutlookMessages(accessToken string, since time.Time) ([]parsedEmail, er
 
 // ─── Shared: process a polled email through the RFQ pipeline ──────────────────
 
+// isReminderEmail asks the LLM whether a new email is a reminder or follow-up for
+// one of the recent RFQs already recorded, rather than a fresh request. Returns true
+// when the email should NOT create a new RFQ.
+func isReminderEmail(store *models.Store, fromEmail, subject, bodyText string) bool {
+	recent, err := models.FindRecentRFQsByEmail(store.ID, fromEmail, 30*24*time.Hour, 5)
+	if err != nil || len(recent) == 0 {
+		return false // no recent RFQs to compare against — treat as new
+	}
+
+	apiKey := store.Settings.RFQLLMAPIKey
+	llmModel := store.Settings.RFQLLMModel
+	provider := strings.ToLower(store.Settings.RFQLLMProvider)
+	if apiKey == "" || provider == "" {
+		return false
+	}
+
+	var sb strings.Builder
+	sb.WriteString("You are a procurement email classifier.\n\n")
+	sb.WriteString("The customer sent this new email:\n")
+	sb.WriteString(fmt.Sprintf("Subject: %s\n\n%s\n\n", subject, bodyText))
+	sb.WriteString("---\n")
+	sb.WriteString("The same customer already has these recent RFQs on record:\n")
+	for i, r := range recent {
+		sb.WriteString(fmt.Sprintf("%d. Code: %s | Date: %s | Items: %s\n",
+			i+1, r.Code, r.ReceivedAt.Format("2006-01-02"), r.TextContent))
+	}
+	sb.WriteString("\n---\n")
+	sb.WriteString("Is the new email a REMINDER or FOLLOW-UP for one of the existing RFQs above? " +
+		"Reply with ONLY \"yes\" (it is a reminder) or \"no\" (it is a new, distinct request).")
+
+	answer, err := callLLMText(apiKey, llmModel, sb.String(), provider)
+	if err != nil {
+		log.Printf("email_polling: isReminderEmail LLM error: %v — treating as new RFQ", err)
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(answer)), "yes")
+}
+
 // processPolledEmail saves the message to the procurement log and, if AI RFQ bot
 // is enabled, runs LLM classification + extraction and creates an RFQ record.
 func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSettings, provider string, msg parsedEmail) {
@@ -616,15 +772,21 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	}
 
 	// Always record in procurement log first (synchronous so we can link RFQ ↔ message).
-	procMsg := saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, nil, false, nil, msg.date)
+	procMsg := saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, msg.attachments, false, nil, msg.date)
 
 	if !settings.EnableAIRFQBot || settings.RFQLLMAPIKey == "" {
 		return
 	}
 
-	// LLM classification
+	// LLM classification — is it an RFQ at all?
 	if !isRFQMessage(store, emailText, nil) {
 		log.Printf("email_polling: email from %s is not an RFQ — skipping", msg.from)
+		return
+	}
+
+	// LLM duplicate check — is it a reminder for an existing RFQ?
+	if isReminderEmail(store, msg.from, msg.subject, msg.bodyText) {
+		log.Printf("email_polling: email from %s detected as reminder/follow-up — not creating new RFQ", msg.from)
 		return
 	}
 
@@ -637,13 +799,18 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		json.Unmarshal([]byte(jsonStr), &extracted) //nolint:errcheck
 	}
 
-	// Customer lookup
+	// Customer find-or-create: use extracted info, fall back to email sender address.
 	lookupEmail := extracted.CustomerEmail
 	if lookupEmail == "" {
 		lookupEmail = msg.from
 	}
 	var customerID *primitive.ObjectID
-	if customer, _ := store.FindCustomerByEmailOrPhone(lookupEmail, extracted.CustomerPhone, bson.M{}); customer != nil {
+	if customer, err := store.FindOrCreateCustomerFromRFQ(
+		extracted.CustomerName, lookupEmail, extracted.CustomerPhone,
+		extracted.CustomerVATNo, extracted.CustomerCompany,
+	); err != nil {
+		log.Printf("email_polling: FindOrCreateCustomerFromRFQ error: %v", err)
+	} else if customer != nil {
 		customerID = &customer.ID
 	}
 

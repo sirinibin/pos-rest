@@ -414,6 +414,61 @@ func FindRFQByCode(storeID primitive.ObjectID, code string) (*RFQReceived, error
 	return &rfq, nil
 }
 
+// FindRecentRFQsByPhone returns up to limit RFQs from a given WhatsApp phone number within
+// the lookback window, newest first. Used to detect reminder/follow-up messages.
+func FindRecentRFQsByPhone(storeID primitive.ObjectID, phone string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqReceivedCollection(storeID))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	since := time.Now().Add(-lookback)
+	filter := bson.M{
+		"store_id":    storeID,
+		"source":      "whatsapp",
+		"received_at": bson.M{"$gte": since},
+		"from_phone":  bson.M{"$regex": phone, "$options": "i"},
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQReceived
+	if err := cur.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// FindRecentRFQsByEmail returns up to limit RFQs from a given email address within the
+// lookback window, newest first. Used to detect reminder/follow-up emails.
+func FindRecentRFQsByEmail(storeID primitive.ObjectID, email string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqReceivedCollection(storeID))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	since := time.Now().Add(-lookback)
+	filter := bson.M{
+		"store_id":    storeID,
+		"source":      "email",
+		"received_at": bson.M{"$gte": since},
+		"$or": bson.A{
+			bson.M{"from_phone": bson.M{"$regex": email, "$options": "i"}},
+			bson.M{"customer_email": bson.M{"$regex": email, "$options": "i"}},
+		},
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQReceived
+	if err := cur.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 // DeleteSupplierReplyFromRFQ removes a SupplierReply from the rfq_received document by its ID.
 func DeleteSupplierReplyFromRFQ(storeID, rfqID, replyID primitive.ObjectID) error {
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")

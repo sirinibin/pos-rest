@@ -1610,6 +1610,38 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 		return
 	}
 
+	// Check if this is a reminder/follow-up for a recent RFQ from the same sender.
+	if !isManual && isReminderWhatsApp(store, rfq.FromPhone, llmText) {
+		log.Printf("rfq_bot: message from %s detected as reminder/follow-up — not creating new RFQ", rfq.FromPhone)
+		rfq.Status = "ignored"
+		rfq.ErrorMsg = "Message appears to be a reminder or follow-up for an existing RFQ — not creating a duplicate"
+		models.UpdateRFQReceived(rfq)
+		BroadcastRFQData(storeIDStr, "rfq_progress", map[string]interface{}{
+			"rfq_id": rfqIDStr, "stage": "ignored", "percent": 100,
+			"message": "Reminder/follow-up detected — existing RFQ not duplicated",
+		})
+		return
+	}
+
+	// Auto-link or create customer record using whatever info we have.
+	if rfq.CustomerID == nil {
+		custEmail := rfq.CustomerEmail
+		if custEmail == "" {
+			custEmail = rfq.FromPhone // email is not available for WhatsApp — FromPhone is used as fallback key
+		}
+		if customer, cerr := store.FindOrCreateCustomerFromRFQ(
+			rfq.CustomerName, custEmail, rfq.FromPhone, "", rfq.CustomerCompany,
+		); cerr != nil {
+			log.Printf("rfq_bot[%s]: FindOrCreateCustomerFromRFQ error: %v", rfqIDStr, cerr)
+		} else if customer != nil {
+			rfq.CustomerID = &customer.ID
+			if rfq.CustomerName == "" {
+				rfq.CustomerName = customer.Name
+			}
+			models.UpdateRFQReceived(rfq)
+		}
+	}
+
 	// Identify product categories via LLM
 	progress("classifying", 10, 100, "Identifying product categories...", nil)
 	categories, err := identifyCategories(store, llmText, imageBase64s)
@@ -2089,6 +2121,43 @@ A non-RFQ is a greeting, thanks, casual chat, or any message that does not reque
 	if err != nil {
 		log.Printf("rfq_bot: isRFQMessage LLM error: %v — allowing message through", err)
 		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(answer)), "yes")
+}
+
+// isReminderWhatsApp asks the LLM whether a new WhatsApp message is a reminder or
+// follow-up for a recent existing RFQ from the same phone number. Returns true when
+// the message should NOT create a new RFQ.
+func isReminderWhatsApp(store *models.Store, fromPhone, bodyText string) bool {
+	recent, err := models.FindRecentRFQsByPhone(store.ID, fromPhone, 30*24*time.Hour, 5)
+	if err != nil || len(recent) == 0 {
+		return false
+	}
+
+	apiKey := store.Settings.RFQLLMAPIKey
+	model := store.Settings.RFQLLMModel
+	provider := strings.ToLower(store.Settings.RFQLLMProvider)
+	if apiKey == "" || provider == "" {
+		return false
+	}
+
+	var sb strings.Builder
+	sb.WriteString("You are a procurement message classifier.\n\n")
+	sb.WriteString("The customer sent this new WhatsApp message:\n")
+	sb.WriteString(bodyText + "\n\n---\n")
+	sb.WriteString("The same customer already has these recent RFQs on record:\n")
+	for i, r := range recent {
+		sb.WriteString(fmt.Sprintf("%d. Code: %s | Date: %s | Items: %s\n",
+			i+1, r.Code, r.ReceivedAt.Format("2006-01-02"), r.TextContent))
+	}
+	sb.WriteString("\n---\n")
+	sb.WriteString("Is the new message a REMINDER or FOLLOW-UP for one of the existing RFQs above? " +
+		"Reply with ONLY \"yes\" (it is a reminder) or \"no\" (it is a new, distinct request).")
+
+	answer, err := callLLMText(apiKey, model, sb.String(), provider)
+	if err != nil {
+		log.Printf("rfq_bot: isReminderWhatsApp LLM error: %v — treating as new RFQ", err)
+		return false
 	}
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(answer)), "yes")
 }
@@ -3914,6 +3983,7 @@ type rfqExtractResult struct {
 	CustomerPhone   string              `json:"customer_phone"`
 	CustomerEmail   string              `json:"customer_email"`
 	CustomerCompany string              `json:"customer_company"`
+	CustomerVATNo   string              `json:"customer_vat_no"`
 	Products        []models.RFQProduct `json:"products"`
 	TextContent     string              `json:"text_content"`
 	LLMModel        string              `json:"llm_model,omitempty"`
@@ -4085,6 +4155,7 @@ Extract the following and respond with ONLY valid JSON (no markdown, no explanat
   "customer_phone": "phone number (international format if possible)",
   "customer_email": "email address",
   "customer_company": "company or organization name",
+  "customer_vat_no": "VAT registration number or tax ID if present (empty string if not found)",
   "products": [
     {
       "part_no": "part number or product code (empty string if not found)",

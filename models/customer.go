@@ -2597,6 +2597,108 @@ func (store *Store) FindCustomerByID(
 	return customer, err
 }
 
+// FindCustomerByEmailOrPhone finds a customer matching an email address, phone number, or both.
+// At least one of the two arguments must be non-empty; the others are ignored if empty.
+// Returns nil, nil when no match is found.
+func (store *Store) FindCustomerByEmailOrPhone(email, phone string, selectFields map[string]interface{}) (*Customer, error) {
+	var orClauses []bson.M
+	if email != "" {
+		orClauses = append(orClauses, bson.M{"email": email})
+	}
+	if phone != "" {
+		orClauses = append(orClauses, bson.M{"phone": phone}, bson.M{"phone2": phone})
+	}
+	if len(orClauses) == 0 {
+		return nil, nil
+	}
+	filter := bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+		"$or":      orClauses,
+	}
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+	var customer Customer
+	if err := collection.FindOne(ctx, filter, findOneOptions).Decode(&customer); err != nil {
+		return nil, nil
+	}
+	return &customer, nil
+}
+
+// FindOrCreateCustomerFromRFQ looks up an existing customer by email, phone, or VAT
+// number. If none is found it creates a minimal customer record and returns it.
+// Callers should update the RFQ's CustomerID with the returned customer's ID.
+func (store *Store) FindOrCreateCustomerFromRFQ(name, email, phone, vatNo, company string) (*Customer, error) {
+	// 1. Try to find by email or phone
+	existing, _ := store.FindCustomerByEmailOrPhone(email, phone, bson.M{})
+	if existing != nil {
+		return existing, nil
+	}
+
+	// 2. Try to find by VAT number if provided
+	if vatNo != "" {
+		var orClauses []bson.M
+		orClauses = append(orClauses, bson.M{"vat_no": vatNo})
+		filter := bson.M{
+			"store_id": store.ID,
+			"deleted":  bson.M{"$ne": true},
+			"$or":      orClauses,
+		}
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var byVAT Customer
+		if err := collection.FindOne(ctx, filter).Decode(&byVAT); err == nil {
+			return &byVAT, nil
+		}
+	}
+
+	// 3. Create a new customer
+	if name == "" && company != "" {
+		name = company
+	}
+	if name == "" && email != "" {
+		name = email
+	}
+	if name == "" && phone != "" {
+		name = phone
+	}
+	if name == "" {
+		name = "Unknown Customer"
+	}
+	sid := store.ID
+	c := &Customer{
+		StoreID: &sid,
+		Name:    name,
+		Email:   email,
+		Phone:   phone,
+		VATNo:   vatNo,
+	}
+	c.InitStore()
+	if err := c.MakeCode(); err != nil {
+		return nil, err
+	}
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c.ID = primitive.NewObjectID()
+	if _, err := collection.InsertOne(ctx, c); err != nil {
+		return nil, err
+	}
+	c.GenerateSearchWords()
+	c.SetAdditionalkeywords()
+	c.SetSearchLabel()
+	if err := c.Update(); err != nil {
+		log.Printf("FindOrCreateCustomerFromRFQ: update after insert failed: %v", err)
+	}
+	return c, nil
+}
+
 func (store *Store) FindCustomerByCode(
 	Code string,
 	selectFields map[string]interface{},
