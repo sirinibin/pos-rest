@@ -215,7 +215,7 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase s
 	}
 	// Zoho Mail API: list inbox messages received after `since` (unix ms).
 	endpoint := fmt.Sprintf(
-		"%s/api/accounts/%s/messages/view?limit=50&start=0&folder=Inbox&sortorder=false&receivedTime=%d",
+		"%s/api/accounts/%s/messages/view?limit=50&start=0&sortorder=false&receivedTime=%d",
 		mailBase, accountID, since.UnixMilli(),
 	)
 	req, _ := http.NewRequest("GET", endpoint, nil)
