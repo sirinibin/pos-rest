@@ -104,14 +104,7 @@ func PostingPDF(w http.ResponseWriter, r *http.Request) {
 	apiPort := env.Getenv("API_PORT", "2000")
 	printURL := fmt.Sprintf("http://localhost:%s/posting-print?key=%s", apiPort, key)
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromeBin),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.WindowSize(794, 1123), // A4 at 96dpi
-	)
-
+	opts := chromeExecOpts(chromeBin)
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancelAlloc()
 

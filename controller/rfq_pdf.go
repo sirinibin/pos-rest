@@ -15,10 +15,9 @@ import (
 	"github.com/sirinibin/startpos/backend/models"
 )
 
-// ReceiptPrintData returns the stored receipt print job for chromedp's React page.
-// No authentication required — the key itself is an unguessable random secret.
-// GET /v1/receipt/print-data/{key}
-func ReceiptPrintData(w http.ResponseWriter, r *http.Request) {
+// RFQReceivedPrintData returns the stored RFQ print job for the headless-Chrome React page.
+// GET /v1/rfq/print-data/{key}
+func RFQReceivedPrintData(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 	val, ok := printJobStore.Load(key)
 	if !ok {
@@ -34,13 +33,10 @@ func ReceiptPrintData(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ReceiptPDF accepts fully-loaded customer deposit/withdrawal data from React,
-// stores it under a random key, then uses headless Chrome to render the React
-// /receipt-print page (which reads the data via that key) and captures an A4 PDF.
-//
-// POST /v1/receipt/pdf
-// Body: { "model": {...}, "modelName": "customer_deposit", "fontSizes": {...}, "filename": "..." }
-func ReceiptPDF(w http.ResponseWriter, r *http.Request) {
+// RFQReceivedPDF generates a PDF of an RFQ document using headless Chrome.
+// POST /v1/rfq/pdf
+// Body: { "model": {...}, "modelName": "rfq_received", "fontSizes": {...}, "filename": "..." }
+func RFQReceivedPDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
 	response.Errors = make(map[string]string)
@@ -101,10 +97,11 @@ func ReceiptPDF(w http.ResponseWriter, r *http.Request) {
 	})
 	defer printJobStore.Delete(key)
 
-	apiPort := env.Getenv("API_PORT", "2000")
-	printURL := fmt.Sprintf("http://localhost:%s/receipt-print?key=%s", apiPort, key)
+	frontendPort := env.Getenv("FRONTEND_PORT", "3004")
+	printURL := fmt.Sprintf("http://localhost:%s/rfq-print?key=%s", frontendPort, key)
 
 	opts := chromeExecOpts(chromeBin)
+
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancelAlloc()
 
@@ -117,15 +114,13 @@ func ReceiptPDF(w http.ResponseWriter, r *http.Request) {
 	var pdfBuf []byte
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(printURL),
-		// React page sets this attribute when all data is rendered and ready
 		chromedp.WaitVisible(`body[data-print-ready="true"]`, chromedp.ByQuery),
-		// Extra settle time for fonts and images
 		chromedp.Sleep(500*time.Millisecond),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			buf, _, err := page.PrintToPDF().
 				WithPrintBackground(true).
-				WithPaperWidth(8.27).   // A4 width in inches  (210 mm)
-				WithPaperHeight(11.69). // A4 height in inches (297 mm)
+				WithPaperWidth(8.27).
+				WithPaperHeight(11.69).
 				WithMarginTop(0).
 				WithMarginBottom(0).
 				WithMarginLeft(0).
@@ -147,11 +142,10 @@ func ReceiptPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save to ~/Downloads/{filename}.pdf
 	savedPath := ""
 	saveFilename := reqBody.Filename
 	if saveFilename == "" {
-		saveFilename = fmt.Sprintf("receipt_%s_%d", reqBody.ModelName, time.Now().Unix())
+		saveFilename = fmt.Sprintf("rfq_%d", time.Now().Unix())
 	}
 	if homeDir, err := os.UserHomeDir(); err == nil {
 		savePath := fmt.Sprintf("%s/Downloads/%s.pdf", homeDir, saveFilename)

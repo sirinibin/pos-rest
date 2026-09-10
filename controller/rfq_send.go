@@ -210,8 +210,10 @@ func SendRFQToSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 	// If the caller provides an explicit recipient list, use it; otherwise resolve from DB.
 	var suppliers []models.RFQSupplier
 	if len(body.Recipients) > 0 {
+		seenPhone := map[string]bool{}
 		for _, r := range body.Recipients {
-			if r.Phone != "" {
+			if r.Phone != "" && !seenPhone[r.Phone] {
+				seenPhone[r.Phone] = true
 				suppliers = append(suppliers, models.RFQSupplier{Name: r.Name, Phone: r.Phone})
 			}
 		}
@@ -299,13 +301,7 @@ func SendRFQToSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 			if body.GeneratePDF {
 				// ── Auto PDF via chromedp PrintToPDF ─────────────────────────────
 				mediaType = "document"
-				opts := append(chromedp.DefaultExecAllocatorOptions[:],
-					chromedp.ExecPath(chromeBin),
-					chromedp.Flag("headless", true),
-					chromedp.Flag("disable-gpu", true),
-					chromedp.Flag("no-sandbox", true),
-					chromedp.WindowSize(794, 1123),
-				)
+				opts := chromeExecOpts(chromeBin)
 				allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 				defer cancelAlloc()
 				chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
@@ -347,14 +343,7 @@ func SendRFQToSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				// ── Auto screenshot (PNG) via chromedp ───────────────────────────
 				mediaType = "image"
-				opts := append(chromedp.DefaultExecAllocatorOptions[:],
-					chromedp.ExecPath(chromeBin),
-					chromedp.Flag("headless", true),
-					chromedp.Flag("disable-gpu", true),
-					chromedp.Flag("no-sandbox", true),
-					chromedp.Flag("force-device-scale-factor", "2"),
-					chromedp.WindowSize(794, 1123),
-				)
+				opts := append(chromeExecOpts(chromeBin), chromedp.Flag("force-device-scale-factor", "2"))
 				allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 				defer cancelAlloc()
 				chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
@@ -865,14 +854,7 @@ func SendRFQTestMessageHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			printURL := fmt.Sprintf("%s/rfq-print?key=%s", frontendURL, key)
 
-			opts := append(chromedp.DefaultExecAllocatorOptions[:],
-				chromedp.ExecPath(chromeBin),
-				chromedp.Flag("headless", true),
-				chromedp.Flag("disable-gpu", true),
-				chromedp.Flag("no-sandbox", true),
-				chromedp.Flag("force-device-scale-factor", "2"),
-				chromedp.WindowSize(794, 1123),
-			)
+			opts := append(chromeExecOpts(chromeBin), chromedp.Flag("force-device-scale-factor", "2"))
 			allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 			defer cancelAlloc()
 			chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
@@ -1046,14 +1028,7 @@ func GenerateRFQPreviewImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	printURL := fmt.Sprintf("%s/rfq-print?key=%s", frontendURL, key)
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromeBin),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("force-device-scale-factor", "2"),
-		chromedp.WindowSize(794, 1123),
-	)
+	opts := append(chromeExecOpts(chromeBin), chromedp.Flag("force-device-scale-factor", "2"))
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancelAlloc()
 	chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
@@ -1170,13 +1145,7 @@ func GenerateRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	printURL := fmt.Sprintf("%s/rfq-print?key=%s", frontendURL, key)
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromeBin),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.WindowSize(794, 1123),
-	)
+	opts := chromeExecOpts(chromeBin)
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancelAlloc()
 	chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)

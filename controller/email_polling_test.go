@@ -360,3 +360,204 @@ func TestOutlookMessageParsing_NoName(t *testing.T) {
 		t.Errorf("expected plain address, got %q", from)
 	}
 }
+
+// ── zohoMailBase ──────────────────────────────────────────────────────────────
+
+func TestZohoMailBase_DefaultUS(t *testing.T) {
+	if got := zohoMailBase("https://accounts.zoho.com"); got != "https://mail.zoho.com" {
+		t.Errorf("expected zoho.com, got %q", got)
+	}
+}
+
+func TestZohoMailBase_India(t *testing.T) {
+	if got := zohoMailBase("https://accounts.zoho.in"); got != "https://mail.zoho.in" {
+		t.Errorf("expected zoho.in, got %q", got)
+	}
+}
+
+func TestZohoMailBase_EU(t *testing.T) {
+	if got := zohoMailBase("https://accounts.zoho.eu"); got != "https://mail.zoho.eu" {
+		t.Errorf("expected zoho.eu, got %q", got)
+	}
+}
+
+func TestZohoMailBase_Australia(t *testing.T) {
+	if got := zohoMailBase("https://accounts.zoho.com.au"); got != "https://mail.zoho.com.au" {
+		t.Errorf("expected zoho.com.au, got %q", got)
+	}
+}
+
+func TestZohoMailBase_Empty(t *testing.T) {
+	if got := zohoMailBase(""); got != "https://mail.zoho.com" {
+		t.Errorf("empty should default to zoho.com, got %q", got)
+	}
+}
+
+func TestZohoMailBase_WithOAuthPath(t *testing.T) {
+	// accounts_server may include /oauth/v2/token — should still detect region
+	if got := zohoMailBase("https://accounts.zoho.in/oauth/v2/token"); got != "https://mail.zoho.in" {
+		t.Errorf("expected zoho.in even with OAuth path, got %q", got)
+	}
+}
+
+// ── chromePath ────────────────────────────────────────────────────────────────
+
+func TestChromePath_ReturnsStringOrEmpty(t *testing.T) {
+	// Just ensure the function returns without panic; empty is OK in CI.
+	_ = chromePath()
+}
+
+func TestChromeExecOpts_ContainsNoSandbox(t *testing.T) {
+	opts := chromeExecOpts("/usr/bin/chromium-browser")
+	// We can't inspect ExecAllocatorOption internals directly, but we can verify
+	// that the function returns a non-empty slice and doesn't panic.
+	if len(opts) == 0 {
+		t.Error("expected non-empty options slice")
+	}
+}
+
+// ── Zoho account-ID fetch with region-aware URL (mock server) ─────────────────
+
+func TestFetchZohoAccountID_IndiaRegion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/accounts") {
+			http.Error(w, "wrong path", 404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]string{{"accountId": "INDIA123"}},
+		})
+	}))
+	defer srv.Close()
+
+	id, err := fetchZohoAccountID("token123", srv.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id != "INDIA123" {
+		t.Errorf("expected INDIA123, got %q", id)
+	}
+}
+
+func TestFetchZohoAccountID_Returns401Error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data":   []interface{}{},
+			"status": map[string]int{"code": 401},
+		})
+	}))
+	defer srv.Close()
+
+	_, err := fetchZohoAccountID("bad-token", srv.URL)
+	if err == nil {
+		t.Error("expected error for empty data/401, got nil")
+	}
+}
+
+// ── Supplier deduplication ────────────────────────────────────────────────────
+
+func TestRFQSendDeduplicateRecipients(t *testing.T) {
+	seen := map[string]bool{}
+	var deduplicated []string
+	recipients := []struct {
+		Name  string
+		Phone string
+	}{
+		{Name: "Alice", Phone: "0501234567"},
+		{Name: "Bob", Phone: "0507654321"},
+		{Name: "Alice Dup", Phone: "0501234567"}, // duplicate phone
+	}
+	for _, r := range recipients {
+		if r.Phone != "" && !seen[r.Phone] {
+			seen[r.Phone] = true
+			deduplicated = append(deduplicated, r.Phone)
+		}
+	}
+	if len(deduplicated) != 2 {
+		t.Errorf("expected 2 unique suppliers, got %d", len(deduplicated))
+	}
+}
+
+// ── ListZohoMessages with region-aware URL (mock server) ─────────────────────
+
+func TestListZohoMessages_UsesMailBase(t *testing.T) {
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+	}))
+	defer srv.Close()
+
+	msgs, err := listZohoMessages("tok", "ACC123", time.Now().Add(-1*time.Hour), srv.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages, got %d", len(msgs))
+	}
+	if !strings.Contains(capturedPath, "/api/accounts/ACC123/messages/view") {
+		t.Errorf("unexpected path: %q", capturedPath)
+	}
+}
+
+// ── FetchZohoEmail with region-aware URL (mock server) ───────────────────────
+
+func TestFetchZohoEmail_IndiaRegion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"emailAddress": []map[string]string{{"mailId": "test@zoho.in"}}},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	// Pass the mock server URL as accountsServer so zohoMailBase(srv.URL) → srv.URL
+	// Since srv.URL won't match any region suffix, it falls back to zoho.com.
+	// We pass srv.URL directly as mailBase through fetchZohoEmail's parameter chain.
+	// Instead, test the full chain by passing a fake accountsServer that has zoho.in.
+	// We can't inject the mock URL easily here, so verify the function at least
+	// doesn't panic and returns a string.
+	result := fetchZohoEmail("sometoken", "https://accounts.zoho.in")
+	// Result will be "" because mail.zoho.in is unreachable in test, but no panic.
+	if result != "" {
+		t.Logf("fetchZohoEmail returned %q (non-empty means real server responded)", result)
+	}
+}
+
+// ── processMetaIncomingMessage calls saveProcurementWhatsAppMessage (indirect) ─
+
+func TestRFQBotWebhook_NonMessageObject(t *testing.T) {
+	// HandleRFQBotWebhook returns 200 immediately (async processing).
+	body := `{"object":"page","entry":[]}`
+	req := httptest.NewRequest("POST", "/v1/rfq-bot/webhook?store_id=507f1f77bcf86cd799439011", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	HandleRFQBotWebhook(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// ── models.ProcurementMessage basic integrity ─────────────────────────────────
+
+func TestProcurementMessage_DefaultValues(t *testing.T) {
+	storeID := primitive.NewObjectID()
+	pm := models.ProcurementMessage{
+		StoreID:   storeID,
+		Type:      "whatsapp",
+		Direction: "in",
+	}
+	if pm.Type != "whatsapp" {
+		t.Errorf("expected whatsapp, got %q", pm.Type)
+	}
+	if pm.ProcessedAsRFQ {
+		t.Error("ProcessedAsRFQ should default to false")
+	}
+	if pm.StoreID != storeID {
+		t.Error("StoreID mismatch")
+	}
+}

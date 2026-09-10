@@ -307,8 +307,9 @@ func fetchOutlookEmail(accessToken string) string {
 	return info.UserPrincipalName
 }
 
-func fetchZohoEmail(accessToken string) string {
-	req, _ := http.NewRequest("GET", "https://mail.zoho.com/api/accounts", nil)
+func fetchZohoEmail(accessToken, accountsServer string) string {
+	mailBase := zohoMailBase(accountsServer)
+	req, _ := http.NewRequest("GET", mailBase+"/api/accounts", nil)
 	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
 	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
 	if err != nil {
@@ -727,7 +728,7 @@ if(window.opener){window.opener.postMessage({rfqEmailOAuth:'error',msg:%q},'*');
 				fail(err.Error())
 				return
 			}
-			email = fetchZohoEmail(tok.AccessToken)
+			email = fetchZohoEmail(tok.AccessToken, zohoAccountsServer)
 			accessToken, refreshToken = tok.AccessToken, tok.RefreshToken
 			rfqEmailAccountUpdate(storeObjID, accountID, bson.M{
 				"zoho_access_token":    accessToken,
@@ -794,7 +795,7 @@ if(window.opener){window.opener.postMessage({rfqEmailOAuth:'error',msg:%q},'*');
 			fail(err.Error())
 			return
 		}
-		email := fetchZohoEmail(tok.AccessToken)
+		email := fetchZohoEmail(tok.AccessToken, zohoAccountsServer)
 		fields = bson.M{
 			"settings.rfq_zoho_access_token":  tok.AccessToken,
 			"settings.rfq_zoho_refresh_token": tok.RefreshToken,

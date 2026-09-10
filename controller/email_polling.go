@@ -100,6 +100,17 @@ type parsedEmail struct {
 
 // ─── Zoho polling ─────────────────────────────────────────────────────────────
 
+// zohoMailBase derives the Zoho Mail API base URL from the OAuth accounts server URL.
+// Zoho uses region-specific domains: zoho.com (US), zoho.eu (EU), zoho.in (IN), zoho.com.au (AU).
+func zohoMailBase(accountsServer string) string {
+	for _, suffix := range []string{"zoho.eu", "zoho.in", "zoho.com.au", "zoho.jp"} {
+		if strings.Contains(accountsServer, suffix) {
+			return "https://mail." + suffix
+		}
+	}
+	return "https://mail.zoho.com"
+}
+
 func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
 	since := time.Now().Add(-24 * time.Hour) // first poll looks back 24h
 	if acct.LastPolledAt != nil {
@@ -112,13 +123,14 @@ func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, 
 		return
 	}
 
-	zohoAccountID, err := fetchZohoAccountID(accessToken)
+	mailBase := zohoMailBase(acct.ZohoAccountsServer)
+	zohoAccountID, err := fetchZohoAccountID(accessToken, mailBase)
 	if err != nil {
-		log.Printf("email_polling: failed to get zoho account id for %s: %v", acct.Email, err)
+		log.Printf("email_polling: failed to get zoho account id for %s (mailBase=%s): %v", acct.Email, mailBase, err)
 		return
 	}
 
-	msgs, err := listZohoMessages(accessToken, zohoAccountID, since)
+	msgs, err := listZohoMessages(accessToken, zohoAccountID, since, mailBase)
 	if err != nil {
 		log.Printf("email_polling: failed to list zoho messages for %s: %v", acct.Email, err)
 		return
@@ -174,8 +186,11 @@ func ensureZohoToken(storeID primitive.ObjectID, acct models.RFQEmailAccount) (s
 	return tok.AccessToken, nil
 }
 
-func fetchZohoAccountID(accessToken string) (string, error) {
-	req, _ := http.NewRequest("GET", "https://mail.zoho.com/api/accounts", nil)
+func fetchZohoAccountID(accessToken, mailBase string) (string, error) {
+	if mailBase == "" {
+		mailBase = "https://mail.zoho.com"
+	}
+	req, _ := http.NewRequest("GET", mailBase+"/api/accounts", nil)
 	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
@@ -194,11 +209,14 @@ func fetchZohoAccountID(accessToken string) (string, error) {
 	return res.Data[0].AccountID, nil
 }
 
-func listZohoMessages(accessToken, accountID string, since time.Time) ([]parsedEmail, error) {
+func listZohoMessages(accessToken, accountID string, since time.Time, mailBase string) ([]parsedEmail, error) {
+	if mailBase == "" {
+		mailBase = "https://mail.zoho.com"
+	}
 	// Zoho Mail API: list inbox messages received after `since` (unix ms).
 	endpoint := fmt.Sprintf(
-		"https://mail.zoho.com/api/accounts/%s/messages/view?limit=50&start=0&folder=Inbox&sortorder=false&receivedTime=%d",
-		accountID, since.UnixMilli(),
+		"%s/api/accounts/%s/messages/view?limit=50&start=0&folder=Inbox&sortorder=false&receivedTime=%d",
+		mailBase, accountID, since.UnixMilli(),
 	)
 	req, _ := http.NewRequest("GET", endpoint, nil)
 	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
@@ -224,7 +242,7 @@ func listZohoMessages(accessToken, accountID string, since time.Time) ([]parsedE
 
 	var result []parsedEmail
 	for _, m := range res.Data {
-		content := fetchZohoMessageContent(accessToken, accountID, m.FolderID, m.MessageID)
+		content := fetchZohoMessageContent(accessToken, accountID, m.FolderID, m.MessageID, mailBase)
 		to := []string{}
 		if m.ToAddress != "" {
 			to = []string{m.ToAddress}
@@ -239,10 +257,13 @@ func listZohoMessages(accessToken, accountID string, since time.Time) ([]parsedE
 	return result, nil
 }
 
-func fetchZohoMessageContent(accessToken, accountID, folderID, messageID string) string {
+func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBase string) string {
+	if mailBase == "" {
+		mailBase = "https://mail.zoho.com"
+	}
 	endpoint := fmt.Sprintf(
-		"https://mail.zoho.com/api/accounts/%s/folders/%s/messages/%s/content",
-		accountID, folderID, messageID,
+		"%s/api/accounts/%s/folders/%s/messages/%s/content",
+		mailBase, accountID, folderID, messageID,
 	)
 	req, _ := http.NewRequest("GET", endpoint, nil)
 	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)

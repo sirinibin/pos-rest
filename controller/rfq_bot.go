@@ -866,6 +866,10 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		return
 	}
 
+	// Save to procurement inbox so it appears in Emails/WhatsApp sidebar pages.
+	rfqID := rfq.ID
+	go saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, text, msg.Type, phoneNumberID, nil, true, &rfqID)
+
 	// Timeline: input received
 	srcLabel := "WhatsApp"
 	senderLabel := rfq.FromPhone

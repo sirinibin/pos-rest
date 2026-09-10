@@ -38,26 +38,46 @@ func generatePrintKey() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// chromePath returns the path to the Chrome/Chromium binary on macOS.
+// chromePath returns the path to a Chrome/Chromium binary (macOS and Linux).
 func chromePath() string {
 	candidates := []string{
+		// macOS
 		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 		"/Applications/Chromium.app/Contents/MacOS/Chromium",
 		"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
 		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		// Linux
+		"/usr/bin/google-chrome-stable",
+		"/usr/bin/google-chrome",
+		"/usr/bin/chromium-browser",
+		"/usr/bin/chromium",
+		"/snap/bin/chromium",
 	}
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
-	if p, err := exec.LookPath("google-chrome"); err == nil {
-		return p
-	}
-	if p, err := exec.LookPath("chromium"); err == nil {
-		return p
+	for _, name := range []string{"google-chrome-stable", "google-chrome", "chromium-browser", "chromium"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
 	}
 	return ""
+}
+
+// chromeExecOpts returns chromedp allocator options for the current platform.
+// On Linux (servers) we add --disable-dev-shm-usage to avoid crashes with small /dev/shm.
+func chromeExecOpts(chromeBin string) []chromedp.ExecAllocatorOption {
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(chromeBin),
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.WindowSize(794, 1123),
+	)
+	return opts
 }
 
 // InvoicePrintData returns the stored print job for chromedp's React page.
@@ -149,14 +169,7 @@ func InvoicePDF(w http.ResponseWriter, r *http.Request) {
 	apiPort := env.Getenv("API_PORT", "2000")
 	printURL := fmt.Sprintf("http://localhost:%s/invoice-print?key=%s", apiPort, key)
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chromeBin),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("no-sandbox", true),
-		chromedp.WindowSize(794, 1123), // A4 at 96dpi
-	)
-
+	opts := chromeExecOpts(chromeBin)
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancelAlloc()
 
