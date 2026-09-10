@@ -924,6 +924,12 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ── Record message in procurement log ────────────────────────────────────
+	go func() {
+		saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, nil, true, &rfq.ID)
+		runAutoDeleteProcurementMessages(storeObjID, store.Settings.AutoDeleteProcurementMessagesDays)
+	}()
+
 	// ── Step 5: Activity log ─────────────────────────────────────────────────
 	customerLabel := fromName
 	models.AppendRFQLog(storeObjID, rfq.ID, models.RFQActivityLog{

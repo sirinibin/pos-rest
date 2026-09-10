@@ -795,6 +795,12 @@ func main() {
 	// Outgoing email – test send
 	router.HandleFunc("/v1/outgoing-email/test", controller.TestOutgoingEmailHandler).Methods("POST")
 
+	// Procurement message log (emails + WhatsApp)
+	router.HandleFunc("/v1/procurement-messages", controller.ListProcurementMessagesHandler).Methods("GET")
+	router.HandleFunc("/v1/procurement-messages/cleanup", controller.CleanupProcurementMessagesHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-messages/{id}", controller.GetProcurementMessageHandler).Methods("GET")
+	router.HandleFunc("/v1/procurement-messages/{id}", controller.DeleteProcurementMessageHandler).Methods("DELETE")
+
 	router.HandleFunc("/v1/chart-image-share", controller.ShareChartImage).Methods("POST")
 
 	// Dashboard analytics (precomputed monthly aggregation)
@@ -999,6 +1005,8 @@ func main() {
 	//log.Fatal(socketServer.Serve())
 
 	//router.Handle("/socket.io/", controller.WebSocketHandler())
+
+	controller.StartEmailPolling()
 
 	log.Printf("API serving @ http://localhost:%s\n", httpPort)
 	log.Fatal(http.ListenAndServe(":"+httpPort, corsHandler))

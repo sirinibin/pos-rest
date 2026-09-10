@@ -166,6 +166,9 @@ type RFQEmailAccount struct {
 	// OAuthCallbackURL is the redirect URI used during the OAuth flow for this account.
 	// Stored so the callback handler can use the same URL when exchanging the code.
 	OAuthCallbackURL string `bson:"oauth_callback_url,omitempty" json:"oauth_callback_url,omitempty"`
+	// LastPolledAt is updated each time the inbox is polled so the next poll
+	// only fetches emails arrived after this timestamp.
+	LastPolledAt *time.Time `bson:"last_polled_at,omitempty" json:"last_polled_at,omitempty"`
 }
 
 type StoreSettings struct {
@@ -353,6 +356,12 @@ type StoreSettings struct {
 	SidebarConfig []map[string]interface{} `bson:"sidebar_config,omitempty" json:"sidebar_config,omitempty"`
 	// When true, invoice/receivables previews show a "Created By" column next to Remarks
 	ShowCreatedByInInvoicePreview bool `bson:"show_created_by_in_invoice_preview" json:"show_created_by_in_invoice_preview"`
+
+	// ── Procurement Message Log ───────────────────────────────────────────────────────────────
+	// Auto-delete messages older than this many days (0 = disabled).
+	AutoDeleteProcurementMessagesDays int  `bson:"auto_delete_procurement_messages_days" json:"auto_delete_procurement_messages_days"`
+	ShowProcurementEmailsTab          bool `bson:"show_procurement_emails_tab" json:"show_procurement_emails_tab"`
+	ShowProcurementWhatsAppTab        bool `bson:"show_procurement_whatsapp_tab" json:"show_procurement_whatsapp_tab"`
 
 	// ── Outgoing Email (for sending emails from the app) ──────────────────────────────────────
 	// Provider: smtp | sendgrid | mailgun | ses | postmark | brevo | resend
