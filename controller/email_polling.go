@@ -101,7 +101,7 @@ type parsedEmail struct {
 // ─── Zoho polling ─────────────────────────────────────────────────────────────
 
 func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
-	since := time.Now().Add(-emailPollInterval - 30*time.Second)
+	since := time.Now().Add(-24 * time.Hour) // first poll looks back 24h
 	if acct.LastPolledAt != nil {
 		since = *acct.LastPolledAt
 	}
@@ -265,7 +265,7 @@ func fetchZohoMessageContent(accessToken, accountID, folderID, messageID string)
 // ─── Gmail polling ────────────────────────────────────────────────────────────
 
 func pollGmailAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
-	since := time.Now().Add(-emailPollInterval - 30*time.Second)
+	since := time.Now().Add(-24 * time.Hour)
 	if acct.LastPolledAt != nil {
 		since = *acct.LastPolledAt
 	}
@@ -424,7 +424,7 @@ func gmailBase64Decode(s string) string {
 // ─── Outlook polling ──────────────────────────────────────────────────────────
 
 func pollOutlookAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
-	since := time.Now().Add(-emailPollInterval - 30*time.Second)
+	since := time.Now().Add(-24 * time.Hour)
 	if acct.LastPolledAt != nil {
 		since = *acct.LastPolledAt
 	}

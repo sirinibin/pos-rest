@@ -145,7 +145,10 @@ func resolveStoreByWABAPNID(phoneNumberID string) primitive.ObjectID {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := col.FindOne(ctx, bson.M{
-		"settings.store_rfq_waba_phone_number_id": phoneNumberID,
+		"$or": bson.A{
+			bson.M{"settings.bot_waba_phone_number_id": phoneNumberID},
+			bson.M{"settings.store_rfq_waba_phone_number_id": phoneNumberID},
+		},
 	}).Decode(&result); err != nil {
 		return primitive.NilObjectID
 	}

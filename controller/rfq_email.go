@@ -843,6 +843,10 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Always log every inbound email regardless of RFQ classification.
+	go saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, nil, false, nil)
+	go runAutoDeleteProcurementMessages(storeObjID, store.Settings.AutoDeleteProcurementMessagesDays)
+
 	emailText := fmt.Sprintf("Subject: %s\n\n%s", subject, body)
 
 	// ── Step 1: LLM classification — is this email an RFQ? ──────────────────
@@ -923,12 +927,6 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "failed to save RFQ"})
 		return
 	}
-
-	// ── Record message in procurement log ────────────────────────────────────
-	go func() {
-		saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, nil, true, &rfq.ID)
-		runAutoDeleteProcurementMessages(storeObjID, store.Settings.AutoDeleteProcurementMessagesDays)
-	}()
 
 	// ── Step 5: Activity log ─────────────────────────────────────────────────
 	customerLabel := fromName
