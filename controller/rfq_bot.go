@@ -14,10 +14,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/ledongthuc/pdf"
 	excelize "github.com/xuri/excelize/v2"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/models"
@@ -735,32 +737,138 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		metaMarkRead(phoneNumberID, accessToken, msg.ID)
 	}
 
-	// Skip status updates
-	if msg.Type == "reaction" || msg.Type == "sticker" || msg.Type == "audio" || msg.Type == "voice" {
+	// Skip non-content types only (reactions, stickers have no useful payload).
+	// Audio, video, voice are now fully handled below.
+	if msg.Type == "reaction" || msg.Type == "sticker" {
 		return
 	}
 
-	// Save every incoming message to the procurement inbox regardless of routing path.
-	// Called synchronously so we can capture the message ID for linking to the RFQ.
-	var procMsg *models.ProcurementMessage
-	{
-		var bodyText string
-		switch msg.Type {
-		case "text":
-			if msg.Text != nil {
-				bodyText = msg.Text.Body
-			}
-		case "image":
-			if msg.Image != nil {
-				bodyText = msg.Image.Caption
-			}
-		case "document":
-			if msg.Document != nil {
-				bodyText = msg.Document.Caption
+	// Extract text / caption from the message.
+	var text string
+	switch msg.Type {
+	case "text":
+		if msg.Text != nil {
+			text = msg.Text.Body
+		}
+	case "image":
+		if msg.Image != nil {
+			text = msg.Image.Caption
+		}
+	case "video":
+		if msg.Video != nil {
+			text = msg.Video.Caption
+		}
+	case "document":
+		if msg.Document != nil {
+			text = msg.Document.Caption
+		}
+	}
+
+	// Parse message timestamp.
+	var msgDate *time.Time
+	if ts, err2 := strconv.ParseInt(msg.Timestamp, 10, 64); err2 == nil && ts > 0 {
+		t := time.Unix(ts, 0).UTC()
+		msgDate = &t
+	}
+
+	// Download all media, save to disk, build attachment list for the procurement inbox.
+	// Media is downloaded BEFORE saving the procurement message so attachments are stored together.
+	var procAttachments []models.ProcurementAttachment
+	var mediaURLs []string // data URIs kept for LLM image classification
+	var metaMediaIDs []string
+	var documents []models.RFQDocument
+	var docTextParts []string
+
+	saveToDisk := func(dataURI, mimeType, filename string) {
+		_, b64data := splitDataURI(dataURI)
+		raw, err := base64.StdEncoding.DecodeString(b64data)
+		if err != nil || len(raw) == 0 {
+			return
+		}
+		url := saveEmailAttachment(storeObjID.Hex(), "wa_"+msg.ID, filename, raw)
+		if url != "" {
+			procAttachments = append(procAttachments, models.ProcurementAttachment{
+				Filename:    filename,
+				ContentType: mimeType,
+				Size:        int64(len(raw)),
+				URL:         url,
+			})
+		}
+	}
+
+	switch msg.Type {
+	case "image":
+		if msg.Image != nil && msg.Image.ID != "" && accessToken != "" {
+			metaMediaIDs = append(metaMediaIDs, msg.Image.ID)
+			if dataURI, mimeType, err := metaDownloadMedia(msg.Image.ID, accessToken); err != nil {
+				log.Printf("rfq_bot: meta image download failed: %v", err)
+			} else {
+				if mimeType == "" {
+					mimeType = msg.Image.MimeType
+				}
+				filename := "image_1" + mimeTypeToExt(mimeType)
+				saveToDisk(dataURI, mimeType, filename)
+				mediaURLs = append(mediaURLs, dataURI)
 			}
 		}
-		procMsg = saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, bodyText, msg.Type, phoneNumberID, nil, false, nil)
+
+	case "audio", "voice":
+		if msg.Audio != nil && msg.Audio.ID != "" && accessToken != "" {
+			metaMediaIDs = append(metaMediaIDs, msg.Audio.ID)
+			if dataURI, mimeType, err := metaDownloadMedia(msg.Audio.ID, accessToken); err != nil {
+				log.Printf("rfq_bot: meta audio download failed: %v", err)
+			} else {
+				if mimeType == "" {
+					mimeType = msg.Audio.MimeType
+				}
+				saveToDisk(dataURI, mimeType, "audio_1"+mimeTypeToExt(mimeType))
+			}
+		}
+
+	case "video":
+		if msg.Video != nil && msg.Video.ID != "" && accessToken != "" {
+			metaMediaIDs = append(metaMediaIDs, msg.Video.ID)
+			if dataURI, mimeType, err := metaDownloadMedia(msg.Video.ID, accessToken); err != nil {
+				log.Printf("rfq_bot: meta video download failed: %v", err)
+			} else {
+				if mimeType == "" {
+					mimeType = msg.Video.MimeType
+				}
+				saveToDisk(dataURI, mimeType, "video_1"+mimeTypeToExt(mimeType))
+			}
+		}
+
+	case "document":
+		if msg.Document != nil && msg.Document.ID != "" && accessToken != "" {
+			metaMediaIDs = append(metaMediaIDs, msg.Document.ID)
+			if dataURI, mimeType, err := metaDownloadMedia(msg.Document.ID, accessToken); err != nil {
+				log.Printf("rfq_bot: meta document download failed: %v", err)
+			} else {
+				if mimeType == "" {
+					mimeType = msg.Document.MimeType
+				}
+				filename := msg.Document.Filename
+				if filename == "" {
+					filename = "document_1" + mimeTypeToExt(mimeType)
+				}
+				saveToDisk(dataURI, mimeType, filename)
+				documents = append(documents, models.RFQDocument{
+					URL:      dataURI,
+					FileName: filename,
+					MimeType: mimeType,
+				})
+				_, b64data := splitDataURI(dataURI)
+				if raw, err2 := base64.StdEncoding.DecodeString(b64data); err2 == nil {
+					if extracted := extractDocumentText(raw, mimeType, filename); extracted != "" {
+						docTextParts = append(docTextParts, extracted)
+					}
+				}
+			}
+		}
 	}
+
+	// Save every incoming message to the procurement inbox with its attachments.
+	procMsg := saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, text, msg.Type, phoneNumberID, procAttachments, false, nil, msgDate)
 
 	// If the sender is replying to one of the bot's relay messages, route as buyer follow-up
 	if msg.Context != nil && msg.Context.ID != "" {
@@ -788,7 +896,16 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		}
 	}
 
-	// Build RFQ record
+	hasImages := len(mediaURLs) > 0
+	hasDocs := len(documents) > 0
+	hasAnyMedia := len(procAttachments) > 0
+
+	if text == "" && !hasAnyMedia {
+		log.Printf("rfq_bot: empty message from %s (type=%s) — skipping RFQ flow", fromPhone, msg.Type)
+		return
+	}
+
+	// Build RFQ record using already-downloaded media.
 	rfq := &models.RFQReceived{
 		StoreID:    storeObjID,
 		FromPhone:  fromPhone,
@@ -797,77 +914,12 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		Source:     "whatsapp",
 		Status:     "received",
 	}
-
-	// Extract text content
-	var text string
-	switch msg.Type {
-	case "text":
-		if msg.Text != nil {
-			text = msg.Text.Body
-		}
-	case "image":
-		if msg.Image != nil {
-			text = msg.Image.Caption
-		}
-	case "document":
-		if msg.Document != nil {
-			text = msg.Document.Caption
-		}
-	}
 	rfq.TextContent = text
-
-	// Download images
-	var mediaURLs []string
-	var metaMediaIDs []string
-	if msg.Type == "image" && msg.Image != nil && msg.Image.ID != "" {
-		metaMediaIDs = append(metaMediaIDs, msg.Image.ID)
-		if accessToken != "" {
-			dataURI, _, err := metaDownloadMedia(msg.Image.ID, accessToken)
-			if err != nil {
-				log.Printf("rfq_bot: meta image download failed: %v", err)
-			} else {
-				mediaURLs = append(mediaURLs, dataURI)
-			}
-		}
-	}
 	rfq.MediaURLs = mediaURLs
 	rfq.MetaMediaIDs = metaMediaIDs
-
-	// Download documents
-	var documents []models.RFQDocument
-	var docTextParts []string
-	if msg.Type == "document" && msg.Document != nil && msg.Document.ID != "" && accessToken != "" {
-		dataURI, mimeType, err := metaDownloadMedia(msg.Document.ID, accessToken)
-		if err != nil {
-			log.Printf("rfq_bot: meta document download failed: %v", err)
-		} else {
-			if mimeType == "" {
-				mimeType = msg.Document.MimeType
-			}
-			documents = append(documents, models.RFQDocument{
-				URL:      dataURI,
-				FileName: msg.Document.Filename,
-				MimeType: mimeType,
-			})
-			_, b64data := splitDataURI(dataURI)
-			if raw, err2 := base64.StdEncoding.DecodeString(b64data); err2 == nil {
-				if extracted := extractDocumentText(raw, mimeType, msg.Document.Filename); extracted != "" {
-					docTextParts = append(docTextParts, extracted)
-				}
-			}
-		}
-	}
 	rfq.Documents = documents
 	if len(docTextParts) > 0 {
 		rfq.ExtractedText = strings.Join(docTextParts, "\n\n")
-	}
-
-	hasImages := len(mediaURLs) > 0
-	hasDocs := len(documents) > 0
-
-	if text == "" && !hasImages && !hasDocs {
-		log.Printf("rfq_bot: empty message from %s (type=%s) — skipping", fromPhone, msg.Type)
-		return
 	}
 
 	switch {
@@ -880,7 +932,7 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 	case hasDocs:
 		rfq.MessageType = "document"
 	default:
-		rfq.MessageType = "text"
+		rfq.MessageType = msg.Type // preserves "audio", "video", "text"
 	}
 
 	if procMsg != nil {
@@ -888,9 +940,26 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		rfq.ProcurementMessageCode = procMsg.Code
 	}
 
+	// Gate RFQ creation on auto-create flag.
+	if store.Settings.DisableAutoRFQFromWhatsApp {
+		log.Printf("rfq_bot: auto RFQ from WhatsApp disabled for store %s — skipping RFQ creation for %s", storeObjID.Hex(), fromPhone)
+		return
+	}
+
+	// Gate RFQ creation on LLM classification — same check used for emails.
+	if !isRFQMessage(store, text, mediaURLs) {
+		log.Printf("rfq_bot: WhatsApp message from %s is not an RFQ — skipping RFQ creation", fromPhone)
+		return
+	}
+
 	if err := models.CreateRFQReceived(rfq); err != nil {
 		log.Printf("rfq_bot: failed to save RFQ: %v", err)
 		return
+	}
+
+	// Back-link: update the procurement inbox message to point to this RFQ.
+	if procMsg != nil {
+		models.LinkProcurementMessageToRFQ(procMsg.ID, rfq.ID)
 	}
 
 	// Timeline: input received
@@ -2106,12 +2175,21 @@ func isRFQMessage(store *models.Store, text string, imageBase64s []string) bool 
 		return true // no LLM configured — allow all messages through
 	}
 
-	prompt := `You are a procurement assistant. Decide whether the message or image below is a Request for Quotation (RFQ) — i.e. the sender wants to buy or source specific products or services.
+	prompt := `You are a classifier for a trading/distribution company. Decide whether the message below is a genuine RFQ (Request for Quotation) — meaning the SENDER is a BUYER or CUSTOMER who wants to PURCHASE products FROM our company.
 
 Reply with ONLY the single word "yes" or "no".
 
-An RFQ asks about pricing, availability, supply quantity, or procurement of specific items. It may be a text message, a table of parts, a product list, or any document requesting quotes.
-A non-RFQ is a greeting, thanks, casual chat, or any message that does not request specific goods or services.`
+Answer "yes" ONLY if:
+- The sender is clearly a customer/buyer asking OUR company to provide a price, quote, or availability of products THEY want to buy
+- There are explicit purchase signals: "please quote", "RFQ", "requesting quotation", "need price for", "can you supply", "please send quotation", "we need X units", "kindly quote", "request for quotation"
+- The sender wants to ORDER or PROCURE something from us
+
+Answer "no" if:
+- The sender is a SUPPLIER, MANUFACTURER, FACTORY, or EXPORTER introducing themselves and offering to SELL products TO us
+- The email is a SALES PITCH, cold outreach, or supplier introduction (phrases like "we are a manufacturer", "we supply", "we offer", "factory-direct", "our products", "we would like to be your supplier")
+- A company promoting their own products/catalogue to us as a potential distributor
+- General greetings, networking, informational, or marketing messages without an explicit purchase request
+- The sender mentions producing, supplying, manufacturing, or exporting — they are the SELLER, not the BUYER`
 
 	if strings.TrimSpace(text) != "" {
 		prompt += "\n\nMessage:\n" + text
@@ -3082,6 +3160,82 @@ func extractDocumentText(data []byte, mimeType, fileName string) string {
 	return ""
 }
 
+// extractPDFText extracts plain text from PDF bytes using ledongthuc/pdf.
+// Returns at most 8000 characters.
+func extractPDFText(data []byte) string {
+	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return ""
+	}
+	var sb strings.Builder
+	for i := 1; i <= r.NumPage(); i++ {
+		page := r.Page(i)
+		if page.V.IsNull() {
+			continue
+		}
+		text, err := page.GetPlainText(nil)
+		if err != nil {
+			continue
+		}
+		sb.WriteString(text)
+		if sb.Len() >= 8000 {
+			break
+		}
+	}
+	result := sb.String()
+	if len(result) > 8000 {
+		result = result[:8000]
+	}
+	return result
+}
+
+// mimeTypeToExt returns a file extension (with leading dot) for a MIME type.
+func mimeTypeToExt(mimeType string) string {
+	m := strings.Split(strings.ToLower(mimeType), ";")[0] // strip params like "; codecs=opus"
+	switch m {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "image/heic", "image/heif":
+		return ".heic"
+	case "video/mp4":
+		return ".mp4"
+	case "video/3gpp":
+		return ".3gp"
+	case "video/quicktime":
+		return ".mov"
+	case "audio/ogg", "audio/ogg; codecs=opus":
+		return ".ogg"
+	case "audio/mpeg", "audio/mp3":
+		return ".mp3"
+	case "audio/aac":
+		return ".aac"
+	case "audio/amr":
+		return ".amr"
+	case "audio/wav", "audio/wave":
+		return ".wav"
+	case "application/pdf":
+		return ".pdf"
+	case "application/vnd.ms-excel":
+		return ".xls"
+	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+		return ".xlsx"
+	case "application/msword":
+		return ".doc"
+	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+		return ".docx"
+	case "text/plain":
+		return ".txt"
+	default:
+		return ".bin"
+	}
+}
+
 // splitDataURI splits a data URI ("data:mime/type;base64,DATA") into MIME type and raw base64.
 func splitDataURI(dataURI string) (mimeType, b64Data string) {
 	if !strings.HasPrefix(dataURI, "data:") {
@@ -3224,36 +3378,40 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		CustomerName     string              `json:"customer_name"`
-		CustomerPhone    string              `json:"customer_phone"`
-		CustomerEmail    string              `json:"customer_email"`
-		CustomerCompany  string              `json:"customer_company"`
-		CustomerRFQID    string              `json:"customer_rfq_id"`
-		TextContent      string              `json:"text_content"`
-		Products         []models.RFQProduct `json:"products"`
-		ExtractionModel  string              `json:"extraction_model"`
+		CustomerName                 string              `json:"customer_name"`
+		CustomerPhone                string              `json:"customer_phone"`
+		CustomerEmail                string              `json:"customer_email"`
+		CustomerCompany              string              `json:"customer_company"`
+		CustomerRFQID                string              `json:"customer_rfq_id"`
+		TextContent                  string              `json:"text_content"`
+		Products                     []models.RFQProduct `json:"products"`
+		ExtractionModel              string              `json:"extraction_model"`
+		AttachmentDataURIs           []string            `json:"attachment_data_uris"`
+		AdditionalAttachmentDataURIs []string            `json:"additional_attachment_data_uris"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
-	if len(body.Products) == 0 && body.TextContent == "" {
-		http.Error(w, `{"error":"products or text_content required"}`, http.StatusBadRequest)
+	if len(body.Products) == 0 && body.TextContent == "" && len(body.AttachmentDataURIs) == 0 {
+		http.Error(w, `{"error":"products, text_content, or attachment files required"}`, http.StatusBadRequest)
 		return
 	}
 
 	rfq := &models.RFQReceived{
-		StoreID:         storeObjID,
-		Source:          "manual",
-		MessageType:     "text",
-		CustomerName:    body.CustomerName,
-		CustomerPhone:   body.CustomerPhone,
-		CustomerEmail:   body.CustomerEmail,
-		CustomerCompany: body.CustomerCompany,
-		CustomerRFQID:   body.CustomerRFQID,
-		TextContent:     body.TextContent,
-		Products:        body.Products,
-		Status:          "ready_to_send",
+		StoreID:                      storeObjID,
+		Source:                       "manual",
+		MessageType:                  "text",
+		CustomerName:                 body.CustomerName,
+		CustomerPhone:                body.CustomerPhone,
+		CustomerEmail:                body.CustomerEmail,
+		CustomerCompany:              body.CustomerCompany,
+		CustomerRFQID:                body.CustomerRFQID,
+		TextContent:                  body.TextContent,
+		Products:                     body.Products,
+		AttachmentDataURIs:           body.AttachmentDataURIs,
+		AdditionalAttachmentDataURIs: body.AdditionalAttachmentDataURIs,
+		Status:                       "ready_to_send",
 	}
 	if rfq.CustomerPhone != "" {
 		rfq.FromPhone = rfq.CustomerPhone
@@ -4049,6 +4207,10 @@ func ExtractRFQFromFilesHandler(w http.ResponseWriter, r *http.Request) {
 
 		case ext == ".pdf" || strings.Contains(ct, "pdf"):
 			pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
+			// Also extract text so providers that don't support PDF binary (e.g. OpenAI) can still read the content
+			if extracted := extractPDFText(data); extracted != "" {
+				textParts = append(textParts, "=== "+fh.Filename+" (PDF text) ===\n"+extracted)
+			}
 
 		case ext == ".csv" || ext == ".txt" || strings.HasPrefix(ct, "text/"):
 			textParts = append(textParts, "=== "+fh.Filename+" ===\n"+string(data))
@@ -4359,4 +4521,23 @@ func callGeminiExtractRFQ(apiKey, model, prompt string, imageDataURIs, pdfBase64
 		return "", fmt.Errorf("gemini: empty response")
 	}
 	return r.Candidates[0].Content.Parts[0].Text, nil
+}
+
+// DeleteAllRFQReceivedHandler handles DELETE /v1/rfq-received?store_id=...
+// Hard-deletes all RFQ received records for a store (admin-only gate enforced in frontend).
+func DeleteAllRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeObjID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	deleted, err := models.DeleteAllRFQReceived(storeObjID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"deleted": deleted})
 }

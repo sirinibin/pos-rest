@@ -137,6 +137,12 @@ type RFQReceived struct {
 	// Link to the originating procurement message (email or WhatsApp inbox record).
 	ProcurementMessageID   *primitive.ObjectID `bson:"procurement_message_id,omitempty"   json:"procurement_message_id,omitempty"`
 	ProcurementMessageCode string              `bson:"procurement_message_code,omitempty" json:"procurement_message_code,omitempty"`
+	// AttachmentDataURIs holds base64 data URIs of product files (PDF/image/CSV) attached
+	// during manual RFQ creation. Shown in place of the products table in the RFQ preview/PDF.
+	AttachmentDataURIs []string `bson:"attachment_data_uris,omitempty" json:"attachment_data_uris,omitempty"`
+	// AdditionalAttachmentDataURIs holds base64 data URIs of additional detail files.
+	// Shown below the products table in the RFQ preview/PDF.
+	AdditionalAttachmentDataURIs []string `bson:"additional_attachment_data_uris,omitempty" json:"additional_attachment_data_uris,omitempty"`
 }
 
 func rfqReceivedCollection(storeID primitive.ObjectID) string {
@@ -496,4 +502,17 @@ func UpdateSupplierReplyPrices(storeID, rfqID, replyID primitive.ObjectID, price
 		}},
 	)
 	return err
+}
+
+// DeleteAllRFQReceived hard-deletes every RFQ received record for a store.
+// Returns the number of documents deleted.
+func DeleteAllRFQReceived(storeID primitive.ObjectID) (int64, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	res, err := col.DeleteMany(ctx, bson.M{"store_id": storeID})
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
 }
