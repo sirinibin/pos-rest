@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -32,6 +33,44 @@ import (
 )
 
 const emailPollInterval = 5 * time.Minute
+
+// IMAP rate limiter — prevents Zoho account blocking from rapid connection attempts.
+var (
+	imapRateMu       sync.Mutex
+	imapLastConnect  time.Time
+	imapBlockedUntil time.Time
+)
+
+const (
+	imapMinConnInterval = 5 * time.Second
+	imapBlockBackoff    = 45 * time.Minute
+)
+
+// imapAcquire serializes IMAP connections and enforces minimum spacing.
+// Returns false if the account is currently in a block backoff period.
+// Sleeps while holding the mutex to guarantee only one connection at a time.
+func imapAcquire() bool {
+	imapRateMu.Lock()
+	defer imapRateMu.Unlock()
+	now := time.Now()
+	if now.Before(imapBlockedUntil) {
+		log.Printf("imap: account in block backoff until %v — skipping", imapBlockedUntil.Format(time.RFC3339))
+		return false
+	}
+	if wait := imapLastConnect.Add(imapMinConnInterval).Sub(now); wait > 0 {
+		time.Sleep(wait)
+	}
+	imapLastConnect = time.Now()
+	return true
+}
+
+// imapSetBlocked records that Zoho blocked this account and pauses all IMAP for imapBlockBackoff.
+func imapSetBlocked() {
+	imapRateMu.Lock()
+	imapBlockedUntil = time.Now().Add(imapBlockBackoff)
+	imapRateMu.Unlock()
+	log.Printf("imap: account blocked — pausing all IMAP connections for %v", imapBlockBackoff)
+}
 
 // zohoFlexBool handles Zoho's inconsistent hasAttachment field which may be
 // a JSON boolean (true/false) or a JSON string ("true"/"false").
@@ -633,6 +672,10 @@ func fetchZohoAttachments(accessToken, accountID string, candidateFolderIDs []st
 // the message whose Subject matches msgSubject. It uses plain LOGIN when imapPassword
 // is set (preferred), falling back to XOAUTH2 with the OAuth access token.
 func fetchZohoAttachmentsViaIMAP(accessToken, imapHost, imapUsername, imapPassword, msgSubject, storeID, msgID string) []models.ProcurementAttachment {
+	if !imapAcquire() {
+		return nil
+	}
+
 	conn, err := tls.Dial("tcp", net.JoinHostPort(imapHost, "993"), &tls.Config{})
 	if err != nil {
 		log.Printf("imap: connect to %s:993 failed: %v", imapHost, err)
@@ -662,6 +705,9 @@ func fetchZohoAttachmentsViaIMAP(accessToken, imapHost, imapUsername, imapPasswo
 		authResp := readLine()
 		if !strings.Contains(authResp, "A1 OK") {
 			log.Printf("imap: LOGIN failed: %s", authResp)
+			if strings.Contains(strings.ToLower(authResp), "blocked") {
+				imapSetBlocked()
+			}
 			return nil
 		}
 	} else {
@@ -677,6 +723,9 @@ func fetchZohoAttachmentsViaIMAP(accessToken, imapHost, imapUsername, imapPasswo
 		authResp := readLine()
 		if !strings.Contains(authResp, "A1 OK") {
 			log.Printf("imap: XOAUTH2 auth failed: %s", authResp)
+			if strings.Contains(strings.ToLower(authResp), "blocked") {
+				imapSetBlocked()
+			}
 			return nil
 		}
 	}
