@@ -698,11 +698,27 @@ func fetchZohoAttachmentsViaIMAP(accessToken, imapHost, imapUsername, imapPasswo
 		return nil
 	}
 
+	// readTagged reads lines until the line starting with `tag` is seen,
+	// then returns that tagged line. Zoho sends untagged responses (e.g.
+	// "* CAPABILITY ...") before the final tagged response, so we must
+	// skip them instead of checking only the first line.
+	readTagged := func(tag string) string {
+		for {
+			line := readLine()
+			if strings.HasPrefix(line, tag) {
+				return line
+			}
+			if strings.Contains(strings.ToLower(line), "blocked") {
+				return line // surface block errors immediately
+			}
+		}
+	}
+
 	// Authenticate: plain LOGIN (password) preferred, XOAUTH2 fallback.
 	if imapPassword != "" {
 		cmd := fmt.Sprintf("A1 LOGIN %s %s", imapQuote(imapUsername), imapQuote(imapPassword))
 		writeLine(cmd)
-		authResp := readLine()
+		authResp := readTagged("A1")
 		if !strings.Contains(authResp, "A1 OK") {
 			log.Printf("imap: LOGIN failed: %s", authResp)
 			if strings.Contains(strings.ToLower(authResp), "blocked") {
@@ -720,7 +736,7 @@ func fetchZohoAttachmentsViaIMAP(accessToken, imapHost, imapUsername, imapPasswo
 			return nil
 		}
 		writeLine(saslB64)
-		authResp := readLine()
+		authResp := readTagged("A1")
 		if !strings.Contains(authResp, "A1 OK") {
 			log.Printf("imap: XOAUTH2 auth failed: %s", authResp)
 			if strings.Contains(strings.ToLower(authResp), "blocked") {
