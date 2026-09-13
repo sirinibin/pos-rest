@@ -200,7 +200,7 @@ func zohoOAuthURL(clientID, state, redirectURI string) string {
 	p := url.Values{
 		"client_id": {clientID}, "redirect_uri": {redirectURI},
 		"response_type": {"code"},
-		"scope":         {"ZohoMail.messages.READ ZohoMail.folders.READ ZohoMail.accounts.READ"},
+		"scope":         {"ZohoMail.messages.READ ZohoMail.folders.READ ZohoMail.accounts.READ ZohoMail.attachments.ALL"},
 		"access_type":   {"offline"}, "state": {state},
 	}
 	return "https://accounts.zoho.com/oauth/v2/auth?" + p.Encode()
@@ -307,27 +307,69 @@ func fetchOutlookEmail(accessToken string) string {
 	return info.UserPrincipalName
 }
 
-func fetchZohoEmail(accessToken, accountsServer string) string {
+type zohoAccountInfo struct {
+	Email        string // primary/incomingUserName — used as IMAP username
+	IMAPHost     string // e.g. imappro.zoho.in
+	IMAPEnabled  bool
+}
+
+func fetchZohoAccountInfo(accessToken, accountsServer string) zohoAccountInfo {
 	mailBase := zohoMailBase(accountsServer)
 	req, _ := http.NewRequest("GET", mailBase+"/api/accounts", nil)
 	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
 	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
 	if err != nil {
-		return ""
+		return zohoAccountInfo{}
 	}
 	defer resp.Body.Close()
 	var res struct {
 		Data []struct {
+			IncomingUserName string `json:"incomingUserName"`
+			IMAPAccessEnabled bool  `json:"imapAccessEnabled"`
 			EmailAddress []struct {
-				MailID string `json:"mailId"`
+				MailID    string `json:"mailId"`
+				IsPrimary bool   `json:"isPrimary"`
 			} `json:"emailAddress"`
 		} `json:"data"`
 	}
 	json.NewDecoder(resp.Body).Decode(&res)
-	if len(res.Data) > 0 && len(res.Data[0].EmailAddress) > 0 {
-		return res.Data[0].EmailAddress[0].MailID
+	if len(res.Data) == 0 {
+		return zohoAccountInfo{}
 	}
-	return ""
+	d := res.Data[0]
+	email := d.IncomingUserName
+	if email == "" {
+		for _, e := range d.EmailAddress {
+			if e.IsPrimary {
+				email = e.MailID
+				break
+			}
+		}
+		if email == "" && len(d.EmailAddress) > 0 {
+			email = d.EmailAddress[0].MailID
+		}
+	}
+	// Derive IMAP host from accounts server (accounts.zoho.in → imappro.zoho.in, etc.)
+	imapHost := zohoIMAPHost(accountsServer)
+	return zohoAccountInfo{Email: email, IMAPHost: imapHost, IMAPEnabled: d.IMAPAccessEnabled}
+}
+
+// zohoIMAPHost maps a Zoho accounts server URL to the correct IMAP hostname.
+func zohoIMAPHost(accountsServer string) string {
+	switch {
+	case strings.Contains(accountsServer, ".in"):
+		return "imappro.zoho.in"
+	case strings.Contains(accountsServer, ".eu"):
+		return "imap.zoho.eu"
+	case strings.Contains(accountsServer, ".au"):
+		return "imap.zoho.com.au"
+	default:
+		return "imap.zoho.com"
+	}
+}
+
+func fetchZohoEmail(accessToken, accountsServer string) string {
+	return fetchZohoAccountInfo(accessToken, accountsServer).Email
 }
 
 // ── Request body ──────────────────────────────────────────────────────────────
@@ -728,13 +770,18 @@ if(window.opener){window.opener.postMessage({rfqEmailOAuth:'error',msg:%q},'*');
 				fail(err.Error())
 				return
 			}
-			email = fetchZohoEmail(tok.AccessToken, zohoAccountsServer)
+			zohoInfo := fetchZohoAccountInfo(tok.AccessToken, zohoAccountsServer)
+			email = zohoInfo.Email
 			accessToken, refreshToken = tok.AccessToken, tok.RefreshToken
 			rfqEmailAccountUpdate(storeObjID, accountID, bson.M{
 				"zoho_access_token":    accessToken,
 				"zoho_refresh_token":   refreshToken,
 				"zoho_accounts_server": zohoAccountsServer,
 				"email":                email,
+				"imap_username":        email,
+				"imap_host":            zohoInfo.IMAPHost,
+				"imap_port":            993,
+				"imap_use_ssl":         true,
 			})
 		default:
 			fail("unknown provider: " + acct.Provider)
@@ -845,7 +892,10 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Always log every inbound email regardless of RFQ classification.
-	go func() { saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, nil, false, nil, nil) }()
+	// Webhook path doesn't download attachments so attachmentMissing=false (body check not applicable here).
+	go func() {
+		saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, "", "", nil, false, false, nil, nil)
+	}()
 	go runAutoDeleteProcurementMessages(storeObjID, store.Settings.AutoDeleteProcurementMessagesDays)
 
 	emailText := fmt.Sprintf("Subject: %s\n\n%s", subject, body)
@@ -1451,6 +1501,48 @@ func DisconnectRFQEmailAccount(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
+// UpdateRFQEmailAccountSettings updates non-secret settings (IMAP host/port/username) on a connected account.
+// PATCH /v1/rfq-email/account/{accountID}/settings?store_id=...
+func UpdateRFQEmailAccountSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	accountID, err := primitive.ObjectIDFromHex(vars["accountID"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid account id"})
+		return
+	}
+	_, storeObjID, err := rfqEmailGetStore(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	var body struct {
+		IMAPHost     string `json:"imap_host"`
+		IMAPPort     int    `json:"imap_port"`
+		IMAPUsername string `json:"imap_username"`
+		IMAPUseSSL   bool   `json:"imap_use_ssl"`
+		IMAPPassword string `json:"imap_password"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+	fields := bson.M{
+		"imap_host":     body.IMAPHost,
+		"imap_port":     body.IMAPPort,
+		"imap_username": body.IMAPUsername,
+		"imap_use_ssl":  body.IMAPUseSSL,
+	}
+	if body.IMAPPassword != "" {
+		fields["imap_password"] = body.IMAPPassword
+	}
+	if err := rfqEmailAccountUpdate(storeObjID, accountID, fields); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to update settings"})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
 // PollRFQEmailAccountStatus is called by the frontend after OAuth to check if the account
 // now has an email address (i.e. OAuth callback completed).
 func PollRFQEmailAccountStatus(w http.ResponseWriter, r *http.Request) {
@@ -1485,4 +1577,83 @@ func PollRFQEmailAccountStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNotFound)
 	json.NewEncoder(w).Encode(map[string]string{"error": "account not found"})
+}
+
+// imapUsernameForAccount returns the IMAP username to use: the explicitly saved
+// imap_username, falling back to the account's email address when not set.
+func imapUsernameForAccount(username, email string) string {
+	if username != "" {
+		return username
+	}
+	return email
+}
+
+// TestRFQEmailIMAPHandler tests the IMAP connection for a Zoho email account.
+// POST /v1/rfq-email/account/{accountID}/test-imap?store_id=...
+func TestRFQEmailIMAPHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	accountIDHex := vars["accountID"]
+	accountID, err := primitive.ObjectIDFromHex(accountIDHex)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid account id"})
+		return
+	}
+	store, storeObjID, err := rfqEmailGetStore(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	var acct models.RFQEmailAccount
+	found := false
+	for _, a := range store.Settings.RFQEmailAccounts {
+		if a.ID == accountID {
+			acct = a
+			found = true
+			break
+		}
+	}
+	if !found {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "account not found"})
+		return
+	}
+
+	if acct.IMAPHost == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "IMAP host not configured — save IMAP settings first"})
+		return
+	}
+
+	imapUsername := imapUsernameForAccount(acct.IMAPUsername, acct.Email)
+	port := acct.IMAPPort
+	if port == 0 {
+		port = 993
+	}
+
+	var testErr error
+	if acct.IMAPPassword != "" {
+		// Plain LOGIN (password-based auth — works even without XOAUTH2 scope).
+		testErr = imapTestLogin(acct.IMAPHost, port, acct.IMAPUseSSL, imapUsername, acct.IMAPPassword)
+	} else {
+		// Fall back to XOAUTH2 with the Zoho OAuth token.
+		accessToken, tokenErr := ensureZohoToken(storeObjID, acct)
+		if tokenErr != nil {
+			accessToken = acct.ZohoAccessToken
+		}
+		ok, detail := testIMAPConnection(accessToken, acct.IMAPHost, imapUsername)
+		if !ok {
+			testErr = fmt.Errorf("%s", detail)
+		}
+	}
+
+	if testErr != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{"status": "error", "message": testErr.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "IMAP connection successful"})
 }

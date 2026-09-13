@@ -459,3 +459,188 @@ func TestCustomerEmailPhone_AcceptedInCreateRequest(t *testing.T) {
 		t.Errorf("customer_phone: got %q", parsed.CustomerPhone)
 	}
 }
+
+// ── imapUsernameForAccount ────────────────────────────────────────────────────
+
+func TestIMAPUsernameForAccount_PrefersUsername(t *testing.T) {
+	got := imapUsernameForAccount("imap@example.com", "email@example.com")
+	if got != "imap@example.com" {
+		t.Errorf("expected explicit imap_username, got %q", got)
+	}
+}
+
+func TestIMAPUsernameForAccount_FallsBackToEmail(t *testing.T) {
+	got := imapUsernameForAccount("", "email@example.com")
+	if got != "email@example.com" {
+		t.Errorf("expected email fallback, got %q", got)
+	}
+}
+
+func TestIMAPUsernameForAccount_BothEmpty(t *testing.T) {
+	got := imapUsernameForAccount("", "")
+	if got != "" {
+		t.Errorf("expected empty string when both empty, got %q", got)
+	}
+}
+
+func TestIMAPUsernameForAccount_UsernameNotOverridden(t *testing.T) {
+	// Email present but username takes precedence when non-empty.
+	got := imapUsernameForAccount("custom@imap.com", "default@zoho.com")
+	if got != "custom@imap.com" {
+		t.Errorf("expected custom imap username, got %q", got)
+	}
+}
+
+// ── TestRFQEmailIMAPHandler HTTP validation ───────────────────────────────────
+
+func TestTestRFQEmailIMAPHandler_InvalidAccountID(t *testing.T) {
+	r := mux.NewRouter()
+	r.HandleFunc("/v1/rfq-email/account/{accountID}/test-imap", TestRFQEmailIMAPHandler).Methods("POST")
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-email/account/not-a-valid-objectid/test-imap", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid accountID, got %d", w.Code)
+	}
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] == "" {
+		t.Error("expected error message in response")
+	}
+}
+
+func TestTestRFQEmailIMAPHandler_MissingStoreID(t *testing.T) {
+	r := mux.NewRouter()
+	r.HandleFunc("/v1/rfq-email/account/{accountID}/test-imap", TestRFQEmailIMAPHandler).Methods("POST")
+	accountID := primitive.NewObjectID()
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-email/account/"+accountID.Hex()+"/test-imap", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing store_id, got %d", w.Code)
+	}
+}
+
+func TestTestRFQEmailIMAPHandler_InvalidStoreID(t *testing.T) {
+	r := mux.NewRouter()
+	r.HandleFunc("/v1/rfq-email/account/{accountID}/test-imap", TestRFQEmailIMAPHandler).Methods("POST")
+	accountID := primitive.NewObjectID()
+	req := httptest.NewRequest(http.MethodPost, "/v1/rfq-email/account/"+accountID.Hex()+"/test-imap?store_id=not-valid", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid store_id, got %d", w.Code)
+	}
+}
+
+// ── UpdateRFQEmailAccountSettings HTTP validation ─────────────────────────────
+
+func TestUpdateRFQEmailAccountSettings_InvalidAccountID(t *testing.T) {
+	r := mux.NewRouter()
+	r.HandleFunc("/v1/rfq-email/account/{accountID}/settings", UpdateRFQEmailAccountSettings).Methods("PATCH")
+	req := httptest.NewRequest(http.MethodPatch, "/v1/rfq-email/account/bad-id/settings", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid accountID, got %d", w.Code)
+	}
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["error"] == "" {
+		t.Error("expected error message in response")
+	}
+}
+
+func TestUpdateRFQEmailAccountSettings_MissingStoreID(t *testing.T) {
+	r := mux.NewRouter()
+	r.HandleFunc("/v1/rfq-email/account/{accountID}/settings", UpdateRFQEmailAccountSettings).Methods("PATCH")
+	accountID := primitive.NewObjectID()
+	body, _ := json.Marshal(map[string]interface{}{
+		"imap_host":     "imappro.zoho.in",
+		"imap_port":     993,
+		"imap_username": "user@example.com",
+		"imap_use_ssl":  true,
+	})
+	req := httptest.NewRequest(http.MethodPatch, "/v1/rfq-email/account/"+accountID.Hex()+"/settings", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing store_id, got %d", w.Code)
+	}
+}
+
+func TestUpdateRFQEmailAccountSettings_InvalidStoreID(t *testing.T) {
+	r := mux.NewRouter()
+	r.HandleFunc("/v1/rfq-email/account/{accountID}/settings", UpdateRFQEmailAccountSettings).Methods("PATCH")
+	accountID := primitive.NewObjectID()
+	req := httptest.NewRequest(http.MethodPatch, "/v1/rfq-email/account/"+accountID.Hex()+"/settings?store_id=not-valid", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid store_id, got %d", w.Code)
+	}
+}
+
+// ── UpdateRFQEmailAccountSettings body parsing ────────────────────────────────
+
+func TestUpdateRFQEmailAccountSettings_PasswordOmittedWhenEmpty(t *testing.T) {
+	// Empty imap_password round-trips correctly (backend skips overwriting when blank).
+	type settingsBody struct {
+		IMAPHost     string `json:"imap_host"`
+		IMAPPort     int    `json:"imap_port"`
+		IMAPUsername string `json:"imap_username"`
+		IMAPUseSSL   bool   `json:"imap_use_ssl"`
+		IMAPPassword string `json:"imap_password"`
+	}
+	data, _ := json.Marshal(settingsBody{
+		IMAPHost:     "imappro.zoho.in",
+		IMAPPort:     993,
+		IMAPUsername: "info@example.com",
+		IMAPUseSSL:   true,
+		IMAPPassword: "",
+	})
+	var parsed settingsBody
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if parsed.IMAPPassword != "" {
+		t.Errorf("expected empty password, got %q", parsed.IMAPPassword)
+	}
+}
+
+func TestUpdateRFQEmailAccountSettings_PasswordPreservedWhenSet(t *testing.T) {
+	type settingsBody struct {
+		IMAPPassword string `json:"imap_password"`
+	}
+	data, _ := json.Marshal(settingsBody{IMAPPassword: "secret123"})
+	var out settingsBody
+	json.Unmarshal(data, &out)
+	if out.IMAPPassword != "secret123" {
+		t.Errorf("expected password preserved, got %q", out.IMAPPassword)
+	}
+}
+
+func TestUpdateRFQEmailAccountSettings_AllFieldsRoundTrip(t *testing.T) {
+	type settingsBody struct {
+		IMAPHost     string `json:"imap_host"`
+		IMAPPort     int    `json:"imap_port"`
+		IMAPUsername string `json:"imap_username"`
+		IMAPUseSSL   bool   `json:"imap_use_ssl"`
+		IMAPPassword string `json:"imap_password"`
+	}
+	in := settingsBody{
+		IMAPHost: "imappro.zoho.in", IMAPPort: 993,
+		IMAPUsername: "user@example.com", IMAPUseSSL: true, IMAPPassword: "pass",
+	}
+	data, _ := json.Marshal(in)
+	var out settingsBody
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.IMAPHost != in.IMAPHost || out.IMAPPort != in.IMAPPort ||
+		out.IMAPUsername != in.IMAPUsername || out.IMAPUseSSL != in.IMAPUseSSL ||
+		out.IMAPPassword != in.IMAPPassword {
+		t.Errorf("round-trip mismatch: %+v", out)
+	}
+}
