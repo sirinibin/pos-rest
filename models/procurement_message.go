@@ -38,7 +38,10 @@ type ProcurementMessage struct {
 	WAMessageType     string `bson:"wa_message_type,omitempty" json:"wa_message_type,omitempty"` // text|image|document|audio|video
 	WABAPhoneNumberID string `bson:"waba_phone_number_id,omitempty" json:"waba_phone_number_id,omitempty"`
 	// Attachments
-	Attachments []ProcurementAttachment `bson:"attachments,omitempty" json:"attachments,omitempty"`
+	Attachments      []ProcurementAttachment `bson:"attachments,omitempty" json:"attachments,omitempty"`
+	// AttachmentMissing is true when the email body mentions attachments but none
+	// were received/downloaded. RFQ creation is blocked for such messages.
+	AttachmentMissing bool `bson:"attachment_missing,omitempty" json:"attachment_missing,omitempty"`
 	// Tracking
 	ExternalID     string              `bson:"external_id,omitempty" json:"external_id,omitempty"`
 	Read           bool                `bson:"read" json:"read"`
@@ -94,13 +97,22 @@ func SaveProcurementMessage(msg *ProcurementMessage) error {
 }
 
 // ListProcurementMessages returns paginated messages for a store.
-func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search string, page, limit int) ([]ProcurementMessage, int64, error) {
+// rfqFilter: "" = all, "yes" = processed_as_rfq=true, "no" = processed_as_rfq=false/missing.
+func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int) ([]ProcurementMessage, int64, error) {
 	filter := bson.M{"store_id": storeID}
 	if msgType != "" {
 		filter["type"] = msgType
 	}
 	if direction != "" {
 		filter["direction"] = direction
+	}
+	if rfqFilter == "yes" {
+		filter["processed_as_rfq"] = true
+	} else if rfqFilter == "no" {
+		filter["$or"] = []bson.M{
+			{"processed_as_rfq": false},
+			{"processed_as_rfq": bson.M{"$exists": false}},
+		}
 	}
 	if search != "" {
 		filter["$or"] = []bson.M{
@@ -116,7 +128,7 @@ func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, sea
 
 	skip := int64((page - 1) * limit)
 	opts := options.Find().
-		SetSort(bson.M{"created_at": -1}).
+		SetSort(bson.D{bson.E{Key: "message_date", Value: -1}, bson.E{Key: "created_at", Value: -1}}).
 		SetSkip(skip).
 		SetLimit(int64(limit))
 
@@ -133,6 +145,35 @@ func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, sea
 	return msgs, total, nil
 }
 
+// LinkProcurementMessageToRFQ marks a procurement message as processed and links it to the RFQ.
+func LinkProcurementMessageToRFQ(msgID primitive.ObjectID, rfqID primitive.ObjectID) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": msgID},
+		bson.M{"$set": bson.M{
+			"processed_as_rfq": true,
+			"rfq_received_id":  rfqID,
+		}},
+	)
+	return err
+}
+
+// ProcurementMessageExternalIDExists returns true if a message with the given
+// external_id already exists for this store, used to skip duplicate ingestion.
+func ProcurementMessageExternalIDExists(storeID primitive.ObjectID, externalID string) bool {
+	if externalID == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	n, _ := procurementMessageCol().CountDocuments(ctx, bson.M{
+		"store_id":    storeID,
+		"external_id": externalID,
+	})
+	return n > 0
+}
+
 // GetProcurementMessage returns a single message by ID.
 func GetProcurementMessage(id primitive.ObjectID) (*ProcurementMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -145,12 +186,41 @@ func GetProcurementMessage(id primitive.ObjectID) (*ProcurementMessage, error) {
 	return &msg, nil
 }
 
+// UpdateProcurementMessageAttachments updates a message's attachments and clears the attachment_missing flag.
+func UpdateProcurementMessageAttachments(id primitive.ObjectID, attachments []ProcurementAttachment) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{
+			"attachments":        attachments,
+			"attachment_missing": false,
+		}},
+	)
+	return err
+}
+
 // DeleteProcurementMessage deletes a single message.
 func DeleteProcurementMessage(id primitive.ObjectID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := procurementMessageCol().DeleteOne(ctx, bson.M{"_id": id})
 	return err
+}
+
+// FetchMessagesForCleanup returns only the _id and attachments fields of messages
+// matching the filter — used before bulk deletion to find disk files to remove.
+func FetchMessagesForCleanup(filter bson.M) ([]ProcurementMessage, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cursor, err := procurementMessageCol().Find(ctx, filter,
+		options.Find().SetProjection(bson.M{"_id": 1, "attachments": 1}))
+	if err != nil {
+		return nil, err
+	}
+	var msgs []ProcurementMessage
+	_ = cursor.All(ctx, &msgs)
+	return msgs, nil
 }
 
 // MarkProcurementMessageRead marks a message as read.
@@ -162,6 +232,21 @@ func MarkProcurementMessageRead(id primitive.ObjectID) error {
 		bson.M{"$set": bson.M{"read": true}},
 	)
 	return err
+}
+
+// DeleteAllProcurementMessages deletes ALL messages for a store (type-filtered if msgType != "").
+func DeleteAllProcurementMessages(storeID primitive.ObjectID, msgType string) (int64, error) {
+	filter := bson.M{"store_id": storeID}
+	if msgType != "" {
+		filter["type"] = msgType
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	res, err := procurementMessageCol().DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
 }
 
 // DeleteOldProcurementMessages deletes messages older than days for a store.

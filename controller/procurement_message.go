@@ -15,8 +15,35 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/models"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+// deleteAttachmentDirs removes the on-disk attachment directories for a slice of
+// procurement messages. Each attachment URL is "/attachments/{storeID}/{dir}/filename"
+// so the parent directory to remove is "./attachments/{storeID}/{dir}".
+func deleteAttachmentDirs(msgs []models.ProcurementMessage) {
+	dirs := map[string]struct{}{}
+	for _, m := range msgs {
+		for _, a := range m.Attachments {
+			if a.URL == "" {
+				continue
+			}
+			// Strip leading slash and split into segments
+			parts := strings.SplitN(strings.TrimPrefix(a.URL, "/attachments/"), "/", 3)
+			if len(parts) >= 2 {
+				dirs["./attachments/"+parts[0]+"/"+parts[1]] = struct{}{}
+			}
+		}
+	}
+	for dir := range dirs {
+		if err := os.RemoveAll(dir); err != nil {
+			log.Printf("procurement: remove attachment dir %s: %v", dir, err)
+		} else {
+			log.Printf("procurement: removed attachment dir %s", dir)
+		}
+	}
+}
 
 // ListProcurementMessagesHandler handles GET /v1/procurement-messages
 // Query params: store_id, type (email|whatsapp), direction (in|out), search, page, limit
@@ -88,6 +115,10 @@ func DeleteProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id"})
 		return
 	}
+	// Delete disk files before removing the DB record.
+	if msg, _ := models.GetProcurementMessage(id); msg != nil {
+		deleteAttachmentDirs([]models.ProcurementMessage{*msg})
+	}
 	if err := models.DeleteProcurementMessage(id); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -107,6 +138,16 @@ func DeleteAllProcurementMessagesHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	msgType := r.URL.Query().Get("type") // optional: "email" | "whatsapp"
+
+	// Fetch attachment URLs before deleting DB records so we can clean up disk.
+	filter := bson.M{"store_id": storeObjID}
+	if msgType != "" {
+		filter["type"] = msgType
+	}
+	if toClean, _ := models.FetchMessagesForCleanup(filter); len(toClean) > 0 {
+		deleteAttachmentDirs(toClean)
+	}
+
 	deleted, err := models.DeleteAllProcurementMessages(storeObjID, msgType)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -150,6 +191,12 @@ func CleanupProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 func runAutoDeleteProcurementMessages(storeID primitive.ObjectID, days int) {
 	if days <= 0 {
 		return
+	}
+	// Fetch attachment URLs of messages that will be deleted so we can remove disk files.
+	cutoff := time.Now().AddDate(0, 0, -days)
+	filter := bson.M{"store_id": storeID, "created_at": bson.M{"$lt": cutoff}}
+	if toClean, _ := models.FetchMessagesForCleanup(filter); len(toClean) > 0 {
+		deleteAttachmentDirs(toClean)
 	}
 	deleted, err := models.DeleteOldProcurementMessages(storeID, days)
 	if err != nil {
