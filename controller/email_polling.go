@@ -4,13 +4,20 @@ package controller
 // Called from main.go via go StartEmailPolling().
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime"
+	"mime/multipart"
+	"net"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -26,6 +33,16 @@ import (
 
 const emailPollInterval = 5 * time.Minute
 
+// zohoFlexBool handles Zoho's inconsistent hasAttachment field which may be
+// a JSON boolean (true/false) or a JSON string ("true"/"false").
+type zohoFlexBool bool
+
+func (f *zohoFlexBool) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	*f = zohoFlexBool(s == "true" || s == "1")
+	return nil
+}
+
 // StartEmailPolling starts the background goroutine that polls all connected
 // OAuth email accounts every emailPollInterval.
 func StartEmailPolling() {
@@ -38,6 +55,67 @@ func StartEmailPolling() {
 			time.Sleep(emailPollInterval)
 		}
 	}()
+}
+
+// TriggerEmailSyncHandler is a POST endpoint that immediately runs email polling
+// for a single store, rather than waiting for the next scheduled interval.
+// POST /v1/email-accounts/sync?store_id=...
+func TriggerEmailSyncHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	col := db.Client("").Database(db.GetPosDB()).Collection("store")
+	proj := options.FindOne().SetProjection(bson.M{
+		"_id": 1,
+		"settings.enable_ai_rfq_bot":                     1,
+		"settings.rfq_email_accounts":                    1,
+		"settings.rfq_llm_provider":                      1,
+		"settings.rfq_llm_model":                         1,
+		"settings.rfq_llm_api_key":                       1,
+		"settings.auto_delete_procurement_messages_days": 1,
+	})
+	var s struct {
+		ID       primitive.ObjectID   `bson:"_id"`
+		Settings models.StoreSettings `bson:"settings"`
+	}
+	if err := col.FindOne(ctx, bson.M{"_id": storeObjID}, proj).Decode(&s); err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+
+	go func() {
+		for _, acct := range s.Settings.RFQEmailAccounts {
+			// Manual sync: always look back 24h so the user sees recent emails
+			// regardless of when the last automatic poll ran. Deduplication by
+			// external_id prevents re-saving emails already in the DB.
+			acctCopy := acct
+			acctCopy.LastPolledAt = nil
+			switch acctCopy.Provider {
+			case "zoho":
+				if acctCopy.ZohoAccessToken != "" || acctCopy.ZohoRefreshToken != "" {
+					pollZohoAccount(s.ID, s.Settings, acctCopy)
+				}
+			case "gmail":
+				if acctCopy.GmailAccessToken != "" || acctCopy.GmailRefreshToken != "" {
+					pollGmailAccount(s.ID, s.Settings, acctCopy)
+				}
+			case "outlook":
+				if acctCopy.OutlookAccessToken != "" || acctCopy.OutlookRefreshToken != "" {
+					pollOutlookAccount(s.ID, s.Settings, acctCopy)
+				}
+			}
+		}
+	}()
+
+	w.Write([]byte(`{"status":"sync started"}`)) //nolint:errcheck
 }
 
 // pollAllEmailAccounts iterates every store with OAuth email accounts and fetches new emails.
@@ -96,10 +174,11 @@ func pollAllEmailAccounts() {
 
 // parsedEmail holds the fields extracted from a fetched email.
 type parsedEmail struct {
-	from, subject, bodyText string
-	to                      []string
-	date                    *time.Time // original send/receive time from the mail provider
-	attachments             []models.ProcurementAttachment
+	from, subject, bodyText, bodyHTML, externalID string
+	to                                            []string
+	date                                          *time.Time // original send/receive time from the mail provider
+	attachments                                   []models.ProcurementAttachment
+	hasZohoAttachment                             bool // set when Zoho reports hasAttachment=true (even if download failed)
 }
 
 // ─── Zoho polling ─────────────────────────────────────────────────────────────
@@ -116,9 +195,9 @@ func zohoMailBase(accountsServer string) string {
 }
 
 func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
-	since := time.Now().Add(-24 * time.Hour) // first poll looks back 24h
+	since := time.Now().UTC().Add(-7 * 24 * time.Hour) // no prior poll → look back 7 days in UTC
 	if acct.LastPolledAt != nil {
-		since = *acct.LastPolledAt
+		since = acct.LastPolledAt.UTC()
 	}
 
 	accessToken, err := ensureZohoToken(storeID, acct)
@@ -134,7 +213,7 @@ func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, 
 		return
 	}
 
-	msgs, err := listZohoMessages(accessToken, zohoAccountID, since, mailBase, storeID.Hex())
+	msgs, err := listZohoMessages(accessToken, zohoAccountID, since, mailBase, storeID.Hex(), acct.IMAPHost, acct.IMAPUsername, acct.IMAPPassword)
 	if err != nil {
 		log.Printf("email_polling: failed to list zoho messages for %s: %v", acct.Email, err)
 		return
@@ -213,62 +292,181 @@ func fetchZohoAccountID(accessToken, mailBase string) (string, error) {
 	return res.Data[0].AccountID, nil
 }
 
-func listZohoMessages(accessToken, accountID string, since time.Time, mailBase, storeIDStr string) ([]parsedEmail, error) {
+// fetchZohoInboxFolderID returns the real folder ID of the Inbox by querying
+// the account's folder list. The virtual folderId returned by messages/view is
+// not accepted by the attachment API, so we need the actual inbox folder ID.
+func fetchZohoInboxFolderID(accessToken, accountID, mailBase string) string {
 	if mailBase == "" {
 		mailBase = "https://mail.zoho.com"
 	}
-	// Zoho Mail API: list inbox messages received after `since` (unix ms).
-	endpoint := fmt.Sprintf(
-		"%s/api/accounts/%s/messages/view?limit=50&start=0&sortorder=false&receivedTime=%d",
-		mailBase, accountID, since.UnixMilli(),
-	)
-	req, _ := http.NewRequest("GET", endpoint, nil)
+	req, _ := http.NewRequest("GET", mailBase+"/api/accounts/"+accountID+"/folders", nil)
 	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
-		return nil, err
+		log.Printf("email_polling: zoho folder list error: %v", err)
+		return ""
 	}
 	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
 	var res struct {
 		Data []struct {
-			MessageID    string `json:"messageId"`
-			FolderID     string `json:"folderId"`
-			Subject      string `json:"subject"`
-			Sender       string `json:"sender"`
-			ToAddress    string `json:"toAddress"`
-			ReceivedTime int64  `json:"receivedTime"` // unix milliseconds
+			FolderID string `json:"folderId"`
+			Name     string `json:"folderName"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(raw, &res); err != nil {
-		return nil, fmt.Errorf("zoho list parse error: %v (body: %.200s)", err, string(raw))
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return ""
+	}
+	for _, f := range res.Data {
+		if strings.EqualFold(f.Name, "inbox") {
+			log.Printf("email_polling: zoho inbox folder id = %s", f.FolderID)
+			return f.FolderID
+		}
+	}
+	return ""
+}
+
+// fetchZohoMessageFolderID returns the folder ID where a specific Zoho message
+// currently resides by querying the message view API with the messageId filter.
+func fetchZohoMessageFolderID(accessToken, accountID, messageID, mailBase string) string {
+	if mailBase == "" {
+		mailBase = "https://mail.zoho.com"
+	}
+	endpoint := fmt.Sprintf("%s/api/accounts/%s/folders/%s/messages/%s",
+		mailBase, accountID, "0", messageID)
+	req, _ := http.NewRequest("GET", endpoint, nil)
+	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return ""
+	}
+	defer resp.Body.Close()
+	var res struct {
+		Data struct {
+			FolderID string `json:"folderId"`
+		} `json:"data"`
+	}
+	json.NewDecoder(resp.Body).Decode(&res) //nolint:errcheck
+	return res.Data.FolderID
+}
+
+func listZohoMessages(accessToken, accountID string, since time.Time, mailBase, storeIDStr, imapHost, imapUsername, imapPassword string) ([]parsedEmail, error) {
+	if mailBase == "" {
+		mailBase = "https://mail.zoho.com"
 	}
 
+	const pageSize = 50
+	const maxPages = 20 // cap at 1000 emails per poll to avoid runaway loops
+
+	// Zoho Mail API: sortorder=false = descending (newest-first).
+	// The receivedTime parameter is an UPPER bound ("before this time"), not a lower bound,
+	// so we omit it and instead stop pagination as soon as we encounter a message older than
+	// our `since` cursor — that way each poll only processes emails received since last run.
+	sinceMs := since.UnixMilli()
+
+	type zohoMsg struct {
+		MessageID     string       `json:"messageId"`
+		FolderID      string       `json:"folderId"`
+		Subject       string       `json:"subject"`
+		Sender        string       `json:"sender"`
+		ToAddress     string       `json:"toAddress"`
+		ReceivedTime  json.Number  `json:"receivedTime"`  // unix ms — Zoho returns as string
+		HasAttachment zohoFlexBool `json:"hasAttachment"` // Zoho returns string "true"/"false" or bool
+	}
+
+	// The messages/view endpoint returns a virtual folderId that Zoho's attachment
+	// API rejects with HTTP 500. Fetch the real inbox folder ID once and use it
+	// for all attachment requests (procurement emails arrive in the inbox).
+	inboxFolderID := fetchZohoInboxFolderID(accessToken, accountID, mailBase)
+
 	var result []parsedEmail
-	for _, m := range res.Data {
-		content := fetchZohoMessageContent(accessToken, accountID, m.FolderID, m.MessageID, mailBase)
-		to := []string{}
-		if m.ToAddress != "" {
-			to = []string{m.ToAddress}
+	for page := 0; page < maxPages; page++ {
+		start := page * pageSize
+		endpoint := fmt.Sprintf(
+			"%s/api/accounts/%s/messages/view?limit=%d&start=%d&sortorder=false",
+			mailBase, accountID, pageSize, start,
+		)
+		log.Printf("email_polling: zoho list page=%d URL: %s", page, endpoint)
+		req, _ := http.NewRequest("GET", endpoint, nil)
+		req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
+		resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+		if err != nil {
+			return result, fmt.Errorf("zoho list page %d: %v", page, err)
 		}
-		pe := parsedEmail{
-			from:        m.Sender,
-			subject:     m.Subject,
-			bodyText:    content,
-			to:          to,
-			attachments: fetchZohoAttachments(accessToken, accountID, m.FolderID, m.MessageID, mailBase, storeIDStr),
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			return result, fmt.Errorf("zoho list HTTP %d page %d (body: %.300s)", resp.StatusCode, page, string(raw))
 		}
-		if m.ReceivedTime > 0 {
-			t := time.UnixMilli(m.ReceivedTime).UTC()
-			pe.date = &t
+
+		var res struct {
+			Data []zohoMsg `json:"data"`
 		}
-		result = append(result, pe)
+		if err := json.Unmarshal(raw, &res); err != nil {
+			return result, fmt.Errorf("zoho list parse error page %d: %v (body: %.200s)", page, err, string(raw))
+		}
+
+		log.Printf("email_polling: zoho list page=%d returned %d messages", page, len(res.Data))
+
+		done := false
+		for _, m := range res.Data {
+			// Check message timestamp before fetching content — stop as soon as
+			// we see a message older than `since` (descending order means the
+			// rest of the pages are all older too).
+			receivedTimeMs, _ := m.ReceivedTime.Int64()
+			if receivedTimeMs > 0 && receivedTimeMs < sinceMs {
+				done = true
+				break
+			}
+
+			htmlBody, textBody := fetchZohoMessageContent(accessToken, accountID, m.FolderID, m.MessageID, mailBase)
+			to := []string{}
+			if m.ToAddress != "" {
+				to = []string{m.ToAddress}
+			}
+			pe := parsedEmail{
+				from:              m.Sender,
+				subject:           m.Subject,
+				bodyText:          textBody,
+				bodyHTML:          htmlBody,
+				externalID:        m.MessageID,
+				to:                to,
+				hasZohoAttachment: bool(m.HasAttachment),
+			}
+			// Only call the Zoho attachment API when the message actually has attachments.
+			// Try the message's actual folder ID first (from messages/view response),
+			// then the real inbox folder ID, then no folder ID.
+			if bool(m.HasAttachment) {
+				candidateFolders := []string{}
+				if m.FolderID != "" {
+					candidateFolders = append(candidateFolders, m.FolderID)
+				}
+				if inboxFolderID != "" && inboxFolderID != m.FolderID {
+					candidateFolders = append(candidateFolders, inboxFolderID)
+				}
+				candidateFolders = append(candidateFolders, "") // no-folder fallback
+				pe.attachments = fetchZohoAttachments(accessToken, accountID, candidateFolders, m.MessageID, mailBase, storeIDStr, imapHost, imapUsername, imapPassword, m.Subject)
+				log.Printf("email_polling: zoho msg %s hasAttachment=true → fetched %d attachment(s)", m.MessageID, len(pe.attachments))
+			}
+			if receivedTimeMs > 0 {
+				t := time.UnixMilli(receivedTimeMs).UTC()
+				pe.date = &t
+			}
+			result = append(result, pe)
+		}
+
+		if done || len(res.Data) < pageSize {
+			break
+		}
 	}
 	return result, nil
 }
 
-func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBase string) string {
+// fetchZohoMessageContent returns the raw HTML body and a plain-text fallback.
+func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBase string) (html, text string) {
 	if mailBase == "" {
 		mailBase = "https://mail.zoho.com"
 	}
@@ -280,7 +478,7 @@ func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBa
 	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	defer resp.Body.Close()
 
@@ -288,10 +486,11 @@ func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBa
 		Data struct{ Content string `json:"content"` } `json:"data"`
 	}
 	json.NewDecoder(resp.Body).Decode(&res) //nolint:errcheck
-	content := strings.ReplaceAll(res.Data.Content, "<br>", "\n")
-	content = strings.ReplaceAll(content, "<br/>", "\n")
-	content = strings.ReplaceAll(content, "<br />", "\n")
-	return stripHTMLTags(content)
+	rawHTML := res.Data.Content
+	plain := strings.ReplaceAll(rawHTML, "<br>", "\n")
+	plain = strings.ReplaceAll(plain, "<br/>", "\n")
+	plain = strings.ReplaceAll(plain, "<br />", "\n")
+	return rawHTML, stripHTMLTags(plain)
 }
 
 // saveEmailAttachment writes bytes to ./attachments/{storeID}/{msgID}/{filename}
@@ -313,19 +512,58 @@ func saveEmailAttachment(storeID, msgID, filename string, data []byte) string {
 }
 
 // fetchZohoAttachments returns ProcurementAttachment records for a Zoho message.
-func fetchZohoAttachments(accessToken, accountID, folderID, messageID, mailBase, storeID string) []models.ProcurementAttachment {
+// candidateFolderIDs is tried in order; "" means the no-folder URL variant.
+// imapHost/imapUsername are used as a fallback when the REST API returns a 5xx error.
+// msgSubject is used for IMAP SEARCH when the IMAP fallback is active.
+func fetchZohoAttachments(accessToken, accountID string, candidateFolderIDs []string, messageID, mailBase, storeID, imapHost, imapUsername, imapPassword, msgSubject string) []models.ProcurementAttachment {
 	if mailBase == "" {
 		mailBase = "https://mail.zoho.com"
 	}
-	endpoint := fmt.Sprintf("%s/api/accounts/%s/folders/%s/messages/%s/attachments",
-		mailBase, accountID, folderID, messageID)
-	req, _ := http.NewRequest("GET", endpoint, nil)
-	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
+	log.Printf("email_polling: zoho fetching attachments for msg %s (folderCandidates=%v)", messageID, candidateFolderIDs)
+
+	// Build candidate URLs from the provided folder ID list.
+	urls := []string{}
+	seen := map[string]bool{}
+	for _, fid := range candidateFolderIDs {
+		var u string
+		if fid != "" {
+			u = fmt.Sprintf("%s/api/accounts/%s/folders/%s/messages/%s/attachments",
+				mailBase, accountID, fid, messageID)
+		} else {
+			u = fmt.Sprintf("%s/api/accounts/%s/messages/%s/attachments",
+				mailBase, accountID, messageID)
+		}
+		if !seen[u] {
+			seen[u] = true
+			urls = append(urls, u)
+		}
+	}
+
+	var raw []byte
+	for _, endpoint := range urls {
+		req, _ := http.NewRequest("GET", endpoint, nil)
+		req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
+		resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+		if err != nil {
+			log.Printf("email_polling: zoho attachment list network error for msg %s: %v", messageID, err)
+			return nil
+		}
+		raw, _ = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == 200 {
+			break
+		}
+		log.Printf("email_polling: zoho attachment list HTTP %d for msg %s (url: %s): %.200s", resp.StatusCode, messageID, endpoint, string(raw))
+		raw = nil // clear so we don't process an error response
+	}
+	if raw == nil {
+		// REST API failed — fall back to IMAP (password auth preferred, XOAUTH2 otherwise).
+		if imapHost != "" && msgSubject != "" && (imapUsername != "" || imapPassword != "") {
+			log.Printf("email_polling: zoho REST attachments failed for %s — trying IMAP fallback (host=%s user=%s subject=%q)", messageID, imapHost, imapUsernameForAccount(imapUsername, ""), msgSubject)
+			return fetchZohoAttachmentsViaIMAP(accessToken, imapHost, imapUsername, imapPassword, msgSubject, storeID, messageID)
+		}
 		return nil
 	}
-	defer resp.Body.Close()
 
 	var res struct {
 		Data []struct {
@@ -335,7 +573,8 @@ func fetchZohoAttachments(accessToken, accountID, folderID, messageID, mailBase,
 			Size         int64  `json:"size"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+	if err := json.Unmarshal(raw, &res); err != nil {
+		log.Printf("email_polling: zoho attachment list parse error for msg %s: %v (body: %.200s)", messageID, err, string(raw))
 		return nil
 	}
 
@@ -346,22 +585,229 @@ func fetchZohoAttachments(accessToken, accountID, folderID, messageID, mailBase,
 			ContentType: a.ContentType,
 			Size:        a.Size,
 		}
-		// Download attachment content
-		dlURL := fmt.Sprintf("%s/api/accounts/%s/folders/%s/messages/%s/attachments/%s",
-			mailBase, accountID, folderID, messageID, a.AttachmentID)
-		dlReq, _ := http.NewRequest("GET", dlURL, nil)
-		dlReq.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
-		dlResp, err := (&http.Client{Timeout: 30 * time.Second}).Do(dlReq)
-		if err == nil && dlResp.StatusCode == 200 {
-			data, _ := io.ReadAll(dlResp.Body)
-			dlResp.Body.Close()
-			if len(data) > 0 {
-				att.URL = saveEmailAttachment(storeID, messageID, a.FileName, data)
+		// Download attachment content — try each candidate folder ID, then no-folder.
+		dlURLs := []string{}
+		dlSeen := map[string]bool{}
+		for _, fid := range candidateFolderIDs {
+			var u string
+			if fid != "" {
+				u = fmt.Sprintf("%s/api/accounts/%s/folders/%s/messages/%s/attachments/%s",
+					mailBase, accountID, fid, messageID, a.AttachmentID)
+			} else {
+				u = fmt.Sprintf("%s/api/accounts/%s/messages/%s/attachments/%s",
+					mailBase, accountID, messageID, a.AttachmentID)
 			}
-		} else if dlResp != nil {
+			if !dlSeen[u] {
+				dlSeen[u] = true
+				dlURLs = append(dlURLs, u)
+			}
+		}
+
+		for _, dlURL := range dlURLs {
+			dlReq, _ := http.NewRequest("GET", dlURL, nil)
+			dlReq.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
+			dlResp, dlErr := (&http.Client{Timeout: 30 * time.Second}).Do(dlReq)
+			if dlErr != nil {
+				log.Printf("email_polling: zoho attachment download network error for %s/%s: %v", messageID, a.FileName, dlErr)
+				break
+			}
+			if dlResp.StatusCode == 200 {
+				data, _ := io.ReadAll(dlResp.Body)
+				dlResp.Body.Close()
+				if len(data) > 0 {
+					att.URL = saveEmailAttachment(storeID, messageID, a.FileName, data)
+					log.Printf("email_polling: zoho attachment saved %s/%s → %s", messageID, a.FileName, att.URL)
+				}
+				break
+			}
+			body, _ := io.ReadAll(dlResp.Body)
 			dlResp.Body.Close()
+			log.Printf("email_polling: zoho attachment download HTTP %d for %s/%s url=%s: %.200s", dlResp.StatusCode, messageID, a.FileName, dlURL, string(body))
 		}
 		atts = append(atts, att)
+	}
+	return atts
+}
+
+// fetchZohoAttachmentsViaIMAP connects to Zoho IMAP and downloads attachments for
+// the message whose Subject matches msgSubject. It uses plain LOGIN when imapPassword
+// is set (preferred), falling back to XOAUTH2 with the OAuth access token.
+func fetchZohoAttachmentsViaIMAP(accessToken, imapHost, imapUsername, imapPassword, msgSubject, storeID, msgID string) []models.ProcurementAttachment {
+	conn, err := tls.Dial("tcp", net.JoinHostPort(imapHost, "993"), &tls.Config{})
+	if err != nil {
+		log.Printf("imap: connect to %s:993 failed: %v", imapHost, err)
+		return nil
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(60 * time.Second)) //nolint:errcheck
+
+	r := bufio.NewReader(conn)
+	readLine := func() string {
+		line, _ := r.ReadString('\n')
+		return strings.TrimRight(line, "\r\n")
+	}
+	writeLine := func(s string) { fmt.Fprintf(conn, "%s\r\n", s) }
+
+	// Read banner
+	banner := readLine()
+	if !strings.HasPrefix(banner, "* OK") {
+		log.Printf("imap: unexpected banner from %s: %s", imapHost, banner)
+		return nil
+	}
+
+	// Authenticate: plain LOGIN (password) preferred, XOAUTH2 fallback.
+	if imapPassword != "" {
+		cmd := fmt.Sprintf("A1 LOGIN %s %s", imapQuote(imapUsername), imapQuote(imapPassword))
+		writeLine(cmd)
+		authResp := readLine()
+		if !strings.Contains(authResp, "A1 OK") {
+			log.Printf("imap: LOGIN failed: %s", authResp)
+			return nil
+		}
+	} else {
+		saslPlain := "user=" + imapUsername + "\x01auth=Bearer " + accessToken + "\x01\x01"
+		saslB64 := base64.StdEncoding.EncodeToString([]byte(saslPlain))
+		writeLine("A1 AUTHENTICATE XOAUTH2")
+		challenge := readLine()
+		if !strings.HasPrefix(challenge, "+ ") {
+			log.Printf("imap: expected XOAUTH2 challenge, got: %s", challenge)
+			return nil
+		}
+		writeLine(saslB64)
+		authResp := readLine()
+		if !strings.Contains(authResp, "A1 OK") {
+			log.Printf("imap: XOAUTH2 auth failed: %s", authResp)
+			return nil
+		}
+	}
+	log.Printf("imap: authenticated as %s on %s", imapUsername, imapHost)
+
+	// SELECT INBOX
+	writeLine("A2 SELECT INBOX")
+	for {
+		line := readLine()
+		if strings.HasPrefix(line, "A2 ") {
+			if !strings.Contains(line, "A2 OK") {
+				log.Printf("imap: SELECT INBOX failed: %s", line)
+				return nil
+			}
+			break
+		}
+	}
+
+	// SEARCH by Subject
+	escapedSubj := strings.ReplaceAll(msgSubject, `"`, `\"`)
+	writeLine(fmt.Sprintf(`A3 UID SEARCH HEADER Subject "%s"`, escapedSubj))
+	var uids []string
+	for {
+		line := readLine()
+		if strings.HasPrefix(line, "* SEARCH") {
+			parts := strings.Fields(line)
+			if len(parts) > 2 {
+				uids = parts[2:]
+			}
+		}
+		if strings.HasPrefix(line, "A3 ") {
+			break
+		}
+	}
+	if len(uids) == 0 {
+		log.Printf("imap: no messages found for subject %q", msgSubject)
+		return nil
+	}
+	log.Printf("imap: found UIDs %v for subject %q", uids, msgSubject)
+
+	// FETCH full message RFC822 for first matching UID
+	writeLine(fmt.Sprintf("A4 UID FETCH %s RFC822", uids[0]))
+	var rawMsg []byte
+	for {
+		line := readLine()
+		if strings.Contains(line, "RFC822") {
+			// parse literal size: e.g. "* 3 FETCH (UID 42 RFC822 {12345}"
+			start := strings.LastIndex(line, "{")
+			end := strings.LastIndex(line, "}")
+			if start >= 0 && end > start {
+				var size int
+				fmt.Sscanf(line[start+1:end], "%d", &size)
+				if size > 0 {
+					rawMsg = make([]byte, size)
+					if _, err := io.ReadFull(r, rawMsg); err != nil {
+						log.Printf("imap: read RFC822 body failed: %v", err)
+						return nil
+					}
+				}
+			}
+		}
+		if strings.HasPrefix(line, "A4 ") {
+			break
+		}
+	}
+	if len(rawMsg) == 0 {
+		log.Printf("imap: empty RFC822 body for UID %s", uids[0])
+		return nil
+	}
+
+	writeLine("A5 LOGOUT")
+
+	return parseIMAPMIMEAttachments(rawMsg, storeID, msgID)
+}
+
+// parseIMAPMIMEAttachments extracts and saves attachment files from a raw RFC822 message.
+func parseIMAPMIMEAttachments(rawMsg []byte, storeID, msgID string) []models.ProcurementAttachment {
+	msg, err := mail.ReadMessage(bytes.NewReader(rawMsg))
+	if err != nil {
+		log.Printf("imap: failed to parse MIME message: %v", err)
+		return nil
+	}
+	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil || !strings.HasPrefix(mediaType, "multipart/") {
+		log.Printf("imap: message is not multipart (%s), no attachments", mediaType)
+		return nil
+	}
+	mr := multipart.NewReader(msg.Body, params["boundary"])
+	var atts []models.ProcurementAttachment
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+		disp := part.Header.Get("Content-Disposition")
+		if !strings.Contains(strings.ToLower(disp), "attachment") {
+			continue
+		}
+		_, dispParams, _ := mime.ParseMediaType(disp)
+		filename := dispParams["filename"]
+		if filename == "" {
+			filename = "attachment"
+		}
+		var data []byte
+		encoding := strings.ToLower(strings.TrimSpace(part.Header.Get("Content-Transfer-Encoding")))
+		switch encoding {
+		case "base64":
+			data, err = io.ReadAll(base64.NewDecoder(base64.StdEncoding, part))
+		case "quoted-printable":
+			data, err = io.ReadAll(part) // net/mail already decodes QP
+		default:
+			data, err = io.ReadAll(part)
+		}
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		ct := part.Header.Get("Content-Type")
+		if idx := strings.Index(ct, ";"); idx >= 0 {
+			ct = strings.TrimSpace(ct[:idx])
+		}
+		url := saveEmailAttachment(storeID, msgID, filename, data)
+		atts = append(atts, models.ProcurementAttachment{
+			Filename:    filename,
+			ContentType: ct,
+			Size:        int64(len(data)),
+			URL:         url,
+		})
+		log.Printf("imap: saved attachment %s → %s", filename, url)
 	}
 	return atts
 }
@@ -369,9 +815,9 @@ func fetchZohoAttachments(accessToken, accountID, folderID, messageID, mailBase,
 // ─── Gmail polling ────────────────────────────────────────────────────────────
 
 func pollGmailAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
-	since := time.Now().Add(-24 * time.Hour)
+	since := time.Now().UTC().Add(-7 * 24 * time.Hour)
 	if acct.LastPolledAt != nil {
-		since = *acct.LastPolledAt
+		since = acct.LastPolledAt.UTC()
 	}
 
 	accessToken, err := ensureGmailToken(storeID, acct)
@@ -427,27 +873,43 @@ func ensureGmailToken(storeID primitive.ObjectID, acct models.RFQEmailAccount) (
 
 func listGmailMessages(accessToken string, since time.Time, storeIDStr string) ([]parsedEmail, error) {
 	afterDate := since.Format("2006/01/02")
-	listURL := fmt.Sprintf(
-		"https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:%s+in:inbox&maxResults=20",
-		afterDate,
-	)
-	req, _ := http.NewRequest("GET", listURL, nil)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var listRes struct {
-		Messages []struct{ ID string `json:"id"` } `json:"messages"`
-	}
-	json.NewDecoder(resp.Body).Decode(&listRes) //nolint:errcheck
+	const gmailPageSize = 50
+	const gmailMaxPages = 20
 
 	var result []parsedEmail
-	for _, m := range listRes.Messages {
-		if pe := fetchGmailMessageContentWithStore(accessToken, m.ID, storeIDStr); pe != nil {
-			result = append(result, *pe)
+	nextPageToken := ""
+	for page := 0; page < gmailMaxPages; page++ {
+		listURL := fmt.Sprintf(
+			"https://gmail.googleapis.com/gmail/v1/users/me/messages?q=after:%s+in:inbox&maxResults=%d",
+			afterDate, gmailPageSize,
+		)
+		if nextPageToken != "" {
+			listURL += "&pageToken=" + url.QueryEscape(nextPageToken)
+		}
+		req, _ := http.NewRequest("GET", listURL, nil)
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+		if err != nil {
+			return result, err
+		}
+		var listRes struct {
+			Messages      []struct{ ID string `json:"id"` } `json:"messages"`
+			NextPageToken string                            `json:"nextPageToken"`
+		}
+		json.NewDecoder(resp.Body).Decode(&listRes) //nolint:errcheck
+		resp.Body.Close()
+
+		log.Printf("email_polling: gmail list page=%d count=%d nextPage=%v", page, len(listRes.Messages), listRes.NextPageToken != "")
+		for _, m := range listRes.Messages {
+			if pe := fetchGmailMessageContentWithStore(accessToken, m.ID, storeIDStr); pe != nil {
+				pe.externalID = m.ID
+				result = append(result, *pe)
+			}
+		}
+
+		nextPageToken = listRes.NextPageToken
+		if nextPageToken == "" {
+			break
 		}
 	}
 	return result, nil
@@ -516,6 +978,10 @@ func fetchGmailMessageContentWithStore(accessToken, msgID, storeID string) *pars
 		for _, part := range parts {
 			if strings.HasPrefix(part.MimeType, "multipart/") {
 				walkParts(part.Parts)
+				continue
+			}
+			if strings.HasPrefix(part.MimeType, "text/html") && part.Body.Data != "" && pe.bodyHTML == "" {
+				pe.bodyHTML = gmailBase64Decode(part.Body.Data)
 				continue
 			}
 			if strings.HasPrefix(part.MimeType, "text/plain") && part.Body.Data != "" && pe.bodyText == "" {
@@ -592,9 +1058,9 @@ func gmailBase64Decode(s string) string {
 // ─── Outlook polling ──────────────────────────────────────────────────────────
 
 func pollOutlookAccount(storeID primitive.ObjectID, settings models.StoreSettings, acct models.RFQEmailAccount) {
-	since := time.Now().Add(-24 * time.Hour)
+	since := time.Now().UTC().Add(-7 * 24 * time.Hour)
 	if acct.LastPolledAt != nil {
-		since = *acct.LastPolledAt
+		since = acct.LastPolledAt.UTC()
 	}
 
 	accessToken, err := ensureOutlookToken(storeID, acct)
@@ -656,67 +1122,98 @@ func ensureOutlookToken(storeID primitive.ObjectID, acct models.RFQEmailAccount)
 
 func listOutlookMessages(accessToken string, since time.Time) ([]parsedEmail, error) {
 	sinceStr := url.QueryEscape(since.UTC().Format("2006-01-02T15:04:05Z"))
-	msURL := fmt.Sprintf(
-		"https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$filter=receivedDateTime ge %s&$select=subject,from,toRecipients,body,receivedDateTime&$top=20&$orderby=receivedDateTime desc",
-		sinceStr,
-	)
-	req, _ := http.NewRequest("GET", msURL, nil)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Prefer", `outlook.body-content-type="text"`)
-	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	const outlookMaxPages = 20
 
-	var res struct {
-		Value []struct {
-			Subject          string `json:"subject"`
-			ReceivedDateTime string `json:"receivedDateTime"` // RFC3339
-			From             struct {
-				EmailAddress struct {
-					Address string `json:"address"`
-					Name    string `json:"name"`
-				} `json:"emailAddress"`
-			} `json:"from"`
-			ToRecipients []struct {
-				EmailAddress struct{ Address string `json:"address"` } `json:"emailAddress"`
-			} `json:"toRecipients"`
-			Body struct{ Content string `json:"content"` } `json:"body"`
-		} `json:"value"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return nil, err
+	type outlookMsg struct {
+		ID               string `json:"id"`
+		Subject          string `json:"subject"`
+		ReceivedDateTime string `json:"receivedDateTime"` // RFC3339
+		From             struct {
+			EmailAddress struct {
+				Address string `json:"address"`
+				Name    string `json:"name"`
+			} `json:"emailAddress"`
+		} `json:"from"`
+		ToRecipients []struct {
+			EmailAddress struct{ Address string `json:"address"` } `json:"emailAddress"`
+		} `json:"toRecipients"`
+		Body struct{ Content string `json:"content"` } `json:"body"`
 	}
 
 	var result []parsedEmail
-	for _, m := range res.Value {
-		from := m.From.EmailAddress.Address
-		if m.From.EmailAddress.Name != "" {
-			from = m.From.EmailAddress.Name + " <" + from + ">"
+	nextURL := fmt.Sprintf(
+		"https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages?$filter=receivedDateTime ge %s&$select=subject,from,toRecipients,body,receivedDateTime&$top=50&$orderby=receivedDateTime asc",
+		sinceStr,
+	)
+
+	for page := 0; page < outlookMaxPages && nextURL != ""; page++ {
+		req, _ := http.NewRequest("GET", nextURL, nil)
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		req.Header.Set("Prefer", `outlook.body-content-type="html"`)
+		resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+		if err != nil {
+			return result, err
 		}
-		to := make([]string, 0, len(m.ToRecipients))
-		for _, r := range m.ToRecipients {
-			to = append(to, r.EmailAddress.Address)
+		var res struct {
+			Value    []outlookMsg `json:"value"`
+			NextLink string       `json:"@odata.nextLink"`
 		}
-		pe := parsedEmail{
-			from:     from,
-			subject:  m.Subject,
-			bodyText: m.Body.Content,
-			to:       to,
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			resp.Body.Close()
+			return result, err
 		}
-		if m.ReceivedDateTime != "" {
-			if t, err := time.Parse(time.RFC3339, m.ReceivedDateTime); err == nil {
-				t = t.UTC()
-				pe.date = &t
+		resp.Body.Close()
+
+		log.Printf("email_polling: outlook list page=%d count=%d nextPage=%v", page, len(res.Value), res.NextLink != "")
+		for _, m := range res.Value {
+			from := m.From.EmailAddress.Address
+			if m.From.EmailAddress.Name != "" {
+				from = m.From.EmailAddress.Name + " <" + from + ">"
 			}
+			to := make([]string, 0, len(m.ToRecipients))
+			for _, r := range m.ToRecipients {
+				to = append(to, r.EmailAddress.Address)
+			}
+			pe := parsedEmail{
+				from:       from,
+				subject:    m.Subject,
+				bodyHTML:   m.Body.Content,
+				bodyText:   stripHTMLTags(m.Body.Content),
+				externalID: m.ID,
+				to:         to,
+			}
+			if m.ReceivedDateTime != "" {
+				if t, err := time.Parse(time.RFC3339, m.ReceivedDateTime); err == nil {
+					t = t.UTC()
+					pe.date = &t
+				}
+			}
+			result = append(result, pe)
 		}
-		result = append(result, pe)
+		nextURL = res.NextLink
 	}
 	return result, nil
 }
 
 // ─── Shared: process a polled email through the RFQ pipeline ──────────────────
+
+// emailMatchesKeywords returns true when the email subject or body contains at least
+// one keyword (case-insensitive). An empty keywords list means "accept all" (no filter).
+func emailMatchesKeywords(subject, bodyText string, keywords []string) bool {
+	if len(keywords) == 0 {
+		return true
+	}
+	haystack := strings.ToLower(subject + " " + bodyText)
+	for _, kw := range keywords {
+		if kw == "" {
+			continue
+		}
+		if strings.Contains(haystack, strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
+}
 
 // isReminderEmail asks the LLM whether a new email is a reminder or follow-up for
 // one of the recent RFQs already recorded, rather than a fresh request. Returns true
@@ -756,10 +1253,88 @@ func isReminderEmail(store *models.Store, fromEmail, subject, bodyText string) b
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(answer)), "yes")
 }
 
+// mentionsAttachment returns true when the email body contains phrases that
+// clearly indicate the SENDER intended to include a file attachment.
+// Single words like "attached" or "attachment" are intentionally excluded
+// because they appear frequently in email disclaimers/signatures
+// (e.g. "scan attachments (if any)") and cause false positives.
+func mentionsAttachment(bodyText string) bool {
+	lower := strings.ToLower(bodyText)
+	phrases := []string{
+		// "please find …" patterns
+		"please find attached",
+		"please find the attached",
+		"please find enclosed",
+		"kindly find attached",
+		"kindly find the attached",
+		// "find/see …" patterns
+		"find attached",
+		"find the attached",
+		"see attached",
+		"see the attached",
+		// "as/for the attached …" — catches "need quotation for the attached excel"
+		"as attached",
+		"for the attached",
+		"the attached file",
+		"the attached document",
+		"the attached spreadsheet",
+		"the attached excel",
+		"the attached sheet",
+		"the attached price",
+		"the attached list",
+		"the attached quotation",
+		"the attached pdf",
+		"the attached image",
+		"attached herewith",
+		"the attachment",
+		// "i/we have/am/are attaching/attached …"
+		"i have attached",
+		"i've attached",
+		"i am attaching",
+		"i'm attaching",
+		"we have attached",
+		"we've attached",
+		"we are attaching",
+		"we're attaching",
+		// "refer/look at …"
+		"refer to attached",
+		"refer to the attached",
+		"look at the attached",
+		// "please see …"
+		"please see attached",
+		// "enclosed …"
+		"enclosed herewith",
+		"enclosed please find",
+		"i have enclosed",
+		"i've enclosed",
+		"please find enclosed",
+		// "attached is …"
+		"attached is the",
+		"attached is a",
+		// generic "attached" as verb/adjective in clear attachment contexts
+		"with attached",
+		"is attached",
+		"are attached",
+		"sending attached",
+	}
+	for _, p := range phrases {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // processPolledEmail saves the message to the procurement log and, if AI RFQ bot
 // is enabled, runs LLM classification + extraction and creates an RFQ record.
 func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSettings, provider string, msg parsedEmail) {
 	if msg.from == "" && msg.bodyText == "" {
+		return
+	}
+
+	// Skip duplicate emails (same provider message already ingested).
+	if models.ProcurementMessageExternalIDExists(storeID, msg.externalID) {
+		log.Printf("email_polling: skipping duplicate external_id=%s", msg.externalID)
 		return
 	}
 
@@ -771,10 +1346,49 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return
 	}
 
-	// Always record in procurement log first (synchronous so we can link RFQ ↔ message).
-	procMsg := saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, msg.attachments, false, nil, msg.date)
+	// Keyword pre-filter: reject emails that don't contain any configured keyword.
+	// This happens before DB insertion to reduce storage and LLM token usage.
+	if !emailMatchesKeywords(msg.subject, msg.bodyText, store.Settings.IncomingEmailKeywords) {
+		log.Printf("email_polling: email from %s ignored — does not match incoming keyword filter", msg.from)
+		return
+	}
 
-	if !settings.EnableAIRFQBot || settings.RFQLLMAPIKey == "" {
+	// Detect missing attachments:
+	//  1. Zoho explicitly said the message has attachments (hasZohoAttachment) but none were downloaded, OR
+	//  2. The email body text mentions an attachment but no files were received.
+	hasDownloadedAttachments := false
+	for _, att := range msg.attachments {
+		if att.URL != "" {
+			hasDownloadedAttachments = true
+			break
+		}
+	}
+	attachmentMissing := !hasDownloadedAttachments && (msg.hasZohoAttachment || mentionsAttachment(msg.bodyText))
+
+	if attachmentMissing {
+		log.Printf("email_polling: email from %s has missing attachments (zohoFlag=%v, phraseMatch=%v) — flagged as attachment_missing",
+			msg.from, msg.hasZohoAttachment, mentionsAttachment(msg.bodyText))
+	}
+
+	// Always record in procurement log first (synchronous so we can link RFQ ↔ message).
+	procMsg := saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, msg.bodyHTML, msg.externalID, msg.attachments, attachmentMissing, false, nil, msg.date)
+
+	// Block RFQ creation when attachments were expected but not received.
+	if attachmentMissing {
+		log.Printf("email_polling: skipping RFQ creation for %s — waiting for missing attachments", msg.from)
+		return
+	}
+
+	if !store.Settings.EnableAIRFQBot {
+		log.Printf("email_polling: AI RFQ bot disabled for store %s — skipping RFQ creation for email from %s", storeID.Hex(), msg.from)
+		return
+	}
+	if store.Settings.RFQLLMAPIKey == "" {
+		log.Printf("email_polling: no LLM API key configured for store %s — skipping RFQ creation for email from %s", storeID.Hex(), msg.from)
+		return
+	}
+	if store.Settings.DisableAutoRFQFromEmail {
+		log.Printf("email_polling: auto RFQ from email disabled for store %s — skipping for %s", storeID.Hex(), msg.from)
 		return
 	}
 
@@ -790,10 +1404,38 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return
 	}
 
-	// LLM extraction
+	// LLM extraction — build attachment content for the LLM.
+	// Images → data URIs, PDFs → base64 blobs, Excel → plain text appended to prompt.
+	llmProvider := strings.ToLower(store.Settings.RFQLLMProvider)
+	var imageDataURIs []string
+	var pdfBase64s []string
+	for _, att := range msg.attachments {
+		if att.URL == "" {
+			continue
+		}
+		// att.URL is "/attachments/{storeID}/{msgID}/{filename}"; file lives at "./attachments/..."
+		diskPath := "." + att.URL
+		data, readErr := os.ReadFile(diskPath)
+		if readErr != nil || len(data) == 0 {
+			log.Printf("email_polling: could not read attachment %s: %v", diskPath, readErr)
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(att.Filename))
+		switch {
+		case isRFQImageExt(ext):
+			mime := rfqImageMime(ext, att.ContentType)
+			imageDataURIs = append(imageDataURIs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+		case ext == ".pdf":
+			pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
+		case ext == ".xls" || ext == ".xlsx":
+			if txt, exErr := excelToText(att.Filename, data); exErr == nil {
+				emailText += "\n\n" + txt
+			}
+		}
+	}
+
 	var extracted rfqExtractResult
-	llmProvider := strings.ToLower(settings.RFQLLMProvider)
-	raw, llmErr := callLLMExtractRFQ(settings.RFQLLMAPIKey, settings.RFQLLMModel, llmProvider, emailText, nil, nil)
+	raw, llmErr := callLLMExtractRFQ(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, llmProvider, emailText, imageDataURIs, pdfBase64s)
 	if llmErr == nil {
 		jsonStr := extractJSONFromLLMResponse(raw)
 		json.Unmarshal([]byte(jsonStr), &extracted) //nolint:errcheck
@@ -852,6 +1494,11 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return
 	}
 
+	// Back-link: update procurement message to reflect it was processed as an RFQ.
+	if procMsg != nil {
+		models.LinkProcurementMessageToRFQ(procMsg.ID, rfq.ID)
+	}
+
 	models.AppendRFQLog(storeObjID, rfq.ID, models.RFQActivityLog{
 		Step:    "input_received",
 		Message: fmt.Sprintf("RFQ received via email poll (%s) from %s", provider, msg.from),
@@ -875,6 +1522,48 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 
 func updateAccountLastPolled(storeID, accountID primitive.ObjectID, t time.Time) {
 	rfqEmailAccountUpdate(storeID, accountID, bson.M{"last_polled_at": t}) //nolint:errcheck
+}
+
+// testIMAPConnection dials imapHost:993 with TLS and authenticates via XOAUTH2.
+// Returns (true, "") on success or (false, human-readable error) on failure.
+func testIMAPConnection(accessToken, imapHost, imapUsername string) (bool, string) {
+	if imapHost == "" {
+		return false, "IMAP host is not configured"
+	}
+	conn, err := tls.Dial("tcp", net.JoinHostPort(imapHost, "993"), &tls.Config{})
+	if err != nil {
+		return false, fmt.Sprintf("Cannot connect to %s:993 — %v", imapHost, err)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(20 * time.Second)) //nolint:errcheck
+
+	r := bufio.NewReader(conn)
+	readLine := func() string {
+		line, _ := r.ReadString('\n')
+		return strings.TrimRight(line, "\r\n")
+	}
+	writeLine := func(s string) { fmt.Fprintf(conn, "%s\r\n", s) }
+
+	banner := readLine()
+	if !strings.HasPrefix(banner, "* OK") {
+		return false, fmt.Sprintf("Unexpected IMAP banner: %s", banner)
+	}
+
+	saslPlain := "user=" + imapUsername + "\x01auth=Bearer " + accessToken + "\x01\x01"
+	saslB64 := base64.StdEncoding.EncodeToString([]byte(saslPlain))
+
+	writeLine("T1 AUTHENTICATE XOAUTH2")
+	challenge := readLine()
+	if !strings.HasPrefix(challenge, "+ ") {
+		return false, fmt.Sprintf("Expected SASL challenge, got: %s", challenge)
+	}
+	writeLine(saslB64)
+	authResp := readLine()
+	if !strings.Contains(authResp, "T1 OK") {
+		return false, fmt.Sprintf("Authentication failed: %s — check that IMAP Access is enabled in Zoho Mail Settings → Mail Accounts → IMAP", authResp)
+	}
+	writeLine("T2 LOGOUT")
+	return true, ""
 }
 
 // stripHTMLTags removes HTML tags from content returned by Zoho.

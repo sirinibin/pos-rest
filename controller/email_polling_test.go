@@ -491,7 +491,7 @@ func TestListZohoMessages_UsesMailBase(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	msgs, err := listZohoMessages("tok", "ACC123", time.Now().Add(-1*time.Hour), srv.URL)
+	msgs, err := listZohoMessages("tok", "ACC123", time.Now().Add(-1*time.Hour), srv.URL, "", "", "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -559,5 +559,498 @@ func TestProcurementMessage_DefaultValues(t *testing.T) {
 	}
 	if pm.StoreID != storeID {
 		t.Error("StoreID mismatch")
+	}
+}
+
+// ── emailMatchesKeywords ──────────────────────────────────────────────────────
+
+func TestEmailMatchesKeywords_EmptyKeywords_AcceptsAll(t *testing.T) {
+	// Zero keywords = no filter: every email should pass.
+	cases := []struct{ subject, body string }{
+		{"Hello", "Just saying hi"},
+		{"Invoice #123", "Please find attached"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if !emailMatchesKeywords(c.subject, c.body, nil) {
+			t.Errorf("empty keywords should accept email with subject=%q", c.subject)
+		}
+		if !emailMatchesKeywords(c.subject, c.body, []string{}) {
+			t.Errorf("empty keywords slice should accept email with subject=%q", c.subject)
+		}
+	}
+}
+
+func TestEmailMatchesKeywords_MatchInSubject(t *testing.T) {
+	kws := []string{"quotation", "rfq", "request for quotation"}
+	cases := []string{"Quotation Request", "RFQ from customer", "REQUEST FOR QUOTATION"}
+	for _, subj := range cases {
+		if !emailMatchesKeywords(subj, "some body", kws) {
+			t.Errorf("keyword in subject should match: %q", subj)
+		}
+	}
+}
+
+func TestEmailMatchesKeywords_MatchInBody(t *testing.T) {
+	kws := []string{"quotation", "rfq"}
+	cases := []string{
+		"Please send us a quotation for the following items",
+		"This is an rfq for steel pipes",
+		"Kindly provide QUOTATION at earliest",
+	}
+	for _, body := range cases {
+		if !emailMatchesKeywords("No keyword subject", body, kws) {
+			t.Errorf("keyword in body should match: %q", body)
+		}
+	}
+}
+
+func TestEmailMatchesKeywords_CaseInsensitive(t *testing.T) {
+	kws := []string{"quotation"}
+	variants := []string{"quotation", "Quotation", "QUOTATION", "QuOtAtIoN"}
+	for _, v := range variants {
+		if !emailMatchesKeywords(v, "", kws) {
+			t.Errorf("case-insensitive match failed for %q", v)
+		}
+	}
+}
+
+func TestEmailMatchesKeywords_NoMatch_ReturnseFalse(t *testing.T) {
+	kws := []string{"quotation", "rfq", "request for quotation"}
+	cases := []struct{ subject, body string }{
+		{"Hello team", "Hope you are well"},
+		{"Invoice #456", "Payment due in 30 days"},
+		{"Newsletter May 2026", "Exciting offers this month"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if emailMatchesKeywords(c.subject, c.body, kws) {
+			t.Errorf("no keyword present — should not match: subject=%q", c.subject)
+		}
+	}
+}
+
+func TestEmailMatchesKeywords_MultiWordKeyword(t *testing.T) {
+	kws := []string{"request for quotation"}
+	if !emailMatchesKeywords("", "Please send a request for quotation by tomorrow", kws) {
+		t.Error("multi-word keyword 'request for quotation' should match in body")
+	}
+	if emailMatchesKeywords("", "Please send a request", kws) {
+		t.Error("partial multi-word keyword should NOT match")
+	}
+}
+
+func TestEmailMatchesKeywords_EmptyKeywordStringSkipped(t *testing.T) {
+	// An empty string in the keywords list should be skipped (not treat "" as matching everything).
+	kws := []string{"", "rfq"}
+	if !emailMatchesKeywords("RFQ from Acme", "body", kws) {
+		t.Error("valid keyword 'rfq' should still match even with empty string in list")
+	}
+	// If only an empty keyword exists, nothing should match.
+	// contains("hello world", "") → true in Go, but we skip kw == "".
+	if emailMatchesKeywords("hello", "world", []string{""}) {
+		t.Error("a list containing only an empty keyword should not match anything")
+	}
+}
+
+func TestEmailMatchesKeywords_KeywordInSubjectAndBody(t *testing.T) {
+	// Keyword appearing in both should still return true (not double-count or error).
+	kws := []string{"rfq"}
+	if !emailMatchesKeywords("rfq needed", "please create rfq", kws) {
+		t.Error("keyword in both subject and body should still return true")
+	}
+}
+
+func TestEmailMatchesKeywords_DefaultKeywordsMatchTypicalRFQEmail(t *testing.T) {
+	defaults := []string{"quotation", "rfq", "request for quotation"}
+	rfqEmails := []struct{ subject, body string }{
+		{"Request for Quotation — Steel Pipes", "Dear Supplier, Please provide a quotation for 500 units of 2-inch steel pipes."},
+		{"RFQ #2024-001", "We are interested in your products and request a formal RFQ response."},
+		{"Quotation Required", "Kindly send a quotation at your earliest convenience."},
+	}
+	for _, e := range rfqEmails {
+		if !emailMatchesKeywords(e.subject, e.body, defaults) {
+			t.Errorf("default keywords should match typical RFQ email: subject=%q", e.subject)
+		}
+	}
+}
+
+func TestEmailMatchesKeywords_DefaultKeywordsRejectNonRFQEmail(t *testing.T) {
+	defaults := []string{"quotation", "rfq", "request for quotation"}
+	nonRFQ := []struct{ subject, body string }{
+		{"Hello", "How are you?"},
+		{"Payment Confirmation", "Your payment of SAR 1,200 has been received."},
+		{"Newsletter", "Check out our latest products."},
+	}
+	for _, e := range nonRFQ {
+		if emailMatchesKeywords(e.subject, e.body, defaults) {
+			t.Errorf("default keywords should NOT match non-RFQ email: subject=%q", e.subject)
+		}
+	}
+}
+
+// ── IncomingEmailKeywords store settings field ────────────────────────────────
+
+func TestStoreSettings_IncomingEmailKeywords_DefaultEmpty(t *testing.T) {
+	var s models.StoreSettings
+	if len(s.IncomingEmailKeywords) != 0 {
+		t.Error("IncomingEmailKeywords should default to empty (accept all) for backward compat")
+	}
+}
+
+func TestStoreSettings_IncomingEmailKeywords_EmptyMeansNoFilter(t *testing.T) {
+	// Backward compat: existing stores with no keywords set still accept all emails.
+	var s models.StoreSettings
+	if !emailMatchesKeywords("any subject", "any body", s.IncomingEmailKeywords) {
+		t.Error("empty IncomingEmailKeywords must accept all emails (no filter)")
+	}
+}
+
+// ── mentionsAttachment — expanded phrase list ─────────────────────────────────
+
+func TestMentionsAttachment_ClassicPhrases(t *testing.T) {
+	classics := []string{
+		"please find attached",
+		"please find the attached",
+		"find attached",
+		"see attached",
+		"attached herewith",
+		"the attached file",
+		"the attachment",
+		"i have attached",
+		"we have attached",
+		"kindly find attached",
+		"enclosed herewith",
+		"attached is the",
+	}
+	for _, phrase := range classics {
+		if !mentionsAttachment(phrase) {
+			t.Errorf("mentionsAttachment should return true for classic phrase %q", phrase)
+		}
+	}
+}
+
+func TestMentionsAttachment_NewPhrases(t *testing.T) {
+	newPhrases := []string{
+		"need quotation for the attached excel sheet",
+		"please see the attached excel",
+		"the attached pdf is enclosed",
+		"with attached price list",
+		"look at the attached",
+		"refer to the attached document",
+		"is attached for your review",
+		"we are attaching the specification",
+		"i'm attaching the file",
+		"please find enclosed the document",
+		"for the attached quotation",
+		"the attached sheet contains items",
+		"for the attached image",
+	}
+	for _, phrase := range newPhrases {
+		if !mentionsAttachment(phrase) {
+			t.Errorf("mentionsAttachment should return true for new phrase %q", phrase)
+		}
+	}
+}
+
+func TestMentionsAttachment_CaseInsensitive(t *testing.T) {
+	cases := []string{
+		"PLEASE FIND ATTACHED",
+		"For The Attached Excel Sheet",
+		"THE ATTACHED FILE",
+		"I HAVE ATTACHED",
+	}
+	for _, phrase := range cases {
+		if !mentionsAttachment(phrase) {
+			t.Errorf("mentionsAttachment should be case-insensitive for %q", phrase)
+		}
+	}
+}
+
+func TestMentionsAttachment_NegativeCases(t *testing.T) {
+	// Single words / ambiguous phrases that should NOT match.
+	negatives := []string{
+		"scan all attachments if any",
+		"virus scans attachment",
+		"view attachments policy",
+		"",
+		"please send us a quotation",
+		"we need the price list",
+	}
+	for _, phrase := range negatives {
+		if mentionsAttachment(phrase) {
+			t.Errorf("mentionsAttachment should return false for ambiguous/negative phrase %q", phrase)
+		}
+	}
+}
+
+func TestMentionsAttachment_EmailBodyExample(t *testing.T) {
+	body := "Dear team,\n\nNeed quotation for the attached excel sheet.\n\nRegards,\nJohn"
+	if !mentionsAttachment(body) {
+		t.Errorf("should match 'for the attached excel sheet' in email body")
+	}
+}
+
+// ── parsedEmail.hasZohoAttachment ─────────────────────────────────────────────
+
+func TestParsedEmail_HasZohoAttachment_FieldExists(t *testing.T) {
+	// Struct field compiles and is accessible.
+	pe := parsedEmail{hasZohoAttachment: true}
+	if !pe.hasZohoAttachment {
+		t.Error("hasZohoAttachment field should be settable to true")
+	}
+	pe2 := parsedEmail{hasZohoAttachment: false}
+	if pe2.hasZohoAttachment {
+		t.Error("hasZohoAttachment field should default to false")
+	}
+}
+
+// ── attachmentMissing logic (via processPolledEmail logic replicated) ─────────
+
+// replicates the logic from processPolledEmail to test independently of DB.
+func computeAttachmentMissing(hasZohoAttachment bool, bodyText string, attachments []models.ProcurementAttachment) bool {
+	hasDownloaded := false
+	for _, att := range attachments {
+		if att.URL != "" {
+			hasDownloaded = true
+			break
+		}
+	}
+	return !hasDownloaded && (hasZohoAttachment || mentionsAttachment(bodyText))
+}
+
+func TestAttachmentMissing_ZohoFlagTrueNoDownload(t *testing.T) {
+	// Zoho says hasAttachment=true but none downloaded → missing.
+	if !computeAttachmentMissing(true, "no attachment phrase", nil) {
+		t.Error("hasZohoAttachment=true with no downloaded files should be attachment_missing")
+	}
+}
+
+func TestAttachmentMissing_ZohoFlagTrueWithDownload(t *testing.T) {
+	atts := []models.ProcurementAttachment{{URL: "/files/abc.pdf"}}
+	if computeAttachmentMissing(true, "no phrase", atts) {
+		t.Error("hasZohoAttachment=true but download succeeded should NOT be attachment_missing")
+	}
+}
+
+func TestAttachmentMissing_PhrasePresentNoDownload(t *testing.T) {
+	if !computeAttachmentMissing(false, "please find attached", nil) {
+		t.Error("body phrase present with no download should be attachment_missing")
+	}
+}
+
+func TestAttachmentMissing_PhrasePresentWithDownload(t *testing.T) {
+	atts := []models.ProcurementAttachment{{URL: "/files/abc.pdf"}}
+	if computeAttachmentMissing(false, "please find attached", atts) {
+		t.Error("body phrase present but download succeeded should NOT be attachment_missing")
+	}
+}
+
+func TestAttachmentMissing_NeitherFlagNorPhrase(t *testing.T) {
+	if computeAttachmentMissing(false, "send me the price", nil) {
+		t.Error("neither hasZohoAttachment nor phrase should be NOT attachment_missing")
+	}
+}
+
+func TestAttachmentMissing_BothFlagAndPhrase(t *testing.T) {
+	if !computeAttachmentMissing(true, "please find attached", nil) {
+		t.Error("both flag and phrase with no download should be attachment_missing")
+	}
+}
+
+func TestAttachmentMissing_AttachmentURLEmptyIsNotDownloaded(t *testing.T) {
+	// Attachment record exists but URL is empty (download failed).
+	atts := []models.ProcurementAttachment{{Filename: "file.pdf", URL: ""}}
+	if !computeAttachmentMissing(true, "", atts) {
+		t.Error("attachment with empty URL should count as not downloaded → attachment_missing")
+	}
+}
+
+// ── listZohoMessages — HTTP status check (using httptest server) ──────────────
+
+func TestListZohoMessages_HTTP401ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"status":{"code":401,"description":"UnAuthorized"}}`)) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	_, err := listZohoMessages("bad-token", "acct1", time.Now().Add(-1*time.Hour), srv.URL, "store1", "", "", "")
+	if err == nil {
+		t.Error("expected error on HTTP 401 from Zoho list endpoint")
+	}
+	if !strings.Contains(err.Error(), "401") {
+		t.Errorf("expected error to mention 401, got: %v", err)
+	}
+}
+
+func TestListZohoMessages_HTTP200EmptyData(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "folders") {
+			// inbox folder lookup
+			w.WriteHeader(200)
+			w.Write([]byte(`{"data":[{"folderId":"inbox123","folderName":"Inbox"}]}`)) //nolint:errcheck
+			return
+		}
+		w.WriteHeader(200)
+		w.Write([]byte(`{"data":[]}`)) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	msgs, err := listZohoMessages("tok", "acct1", time.Now().Add(-1*time.Hour), srv.URL, "store1", "", "", "")
+	if err != nil {
+		t.Errorf("HTTP 200 empty data should not error: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("expected 0 messages, got %d", len(msgs))
+	}
+}
+
+func TestListZohoMessages_HTTP500ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "folders") {
+			w.WriteHeader(200)
+			w.Write([]byte(`{"data":[]}`)) //nolint:errcheck
+			return
+		}
+		w.WriteHeader(500)
+		w.Write([]byte(`Internal Server Error`)) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	_, err := listZohoMessages("tok", "acct1", time.Now().Add(-1*time.Hour), srv.URL, "store1", "", "", "")
+	if err == nil {
+		t.Error("expected error on HTTP 500")
+	}
+}
+
+// ── fetchZohoAttachments — download URL fallback ──────────────────────────────
+
+func TestFetchZohoAttachments_UsesFolderURLFirst(t *testing.T) {
+	folderURLCalled := false
+	noFolderURLCalled := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.Contains(path, "/folders/") && strings.HasSuffix(path, "/attachments") {
+			// List endpoint with folder → OK with one attachment
+			w.WriteHeader(200)
+			w.Write([]byte(`{"data":[{"attachmentId":"att1","fileName":"test.pdf","contentType":"application/pdf","size":1024}]}`)) //nolint:errcheck
+			return
+		}
+		if strings.Contains(path, "/folders/") && strings.Contains(path, "/att1") {
+			// Download with folder URL
+			folderURLCalled = true
+			w.WriteHeader(200)
+			w.Write([]byte(`%PDF-1.4 test content`)) //nolint:errcheck
+			return
+		}
+		if !strings.Contains(path, "/folders/") && strings.Contains(path, "/att1") {
+			// Download without folder URL (fallback)
+			noFolderURLCalled = true
+			w.WriteHeader(200)
+			w.Write([]byte(`%PDF-1.4 test content`)) //nolint:errcheck
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	atts := fetchZohoAttachments("token", "acct1", []string{"folder1", ""}, "msg1", srv.URL, "store1", "", "", "", "")
+	_ = noFolderURLCalled
+	if !folderURLCalled {
+		t.Error("should try folder-based download URL first")
+	}
+	if len(atts) == 0 {
+		t.Error("expected at least one attachment result")
+	}
+}
+
+func TestFetchZohoAttachments_FallsBackToNoFolderURL(t *testing.T) {
+	noFolderDownloadCalled := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.Contains(path, "/folders/") && strings.HasSuffix(path, "/attachments") {
+			// List with folder → returns attachment
+			w.WriteHeader(200)
+			w.Write([]byte(`{"data":[{"attachmentId":"att2","fileName":"quote.xlsx","contentType":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","size":512}]}`)) //nolint:errcheck
+			return
+		}
+		if strings.Contains(path, "/folders/") && strings.Contains(path, "/att2") {
+			// Folder-based download fails
+			w.WriteHeader(500)
+			w.Write([]byte(`error`)) //nolint:errcheck
+			return
+		}
+		if !strings.Contains(path, "/folders/") && strings.Contains(path, "/att2") {
+			// No-folder fallback succeeds
+			noFolderDownloadCalled = true
+			w.WriteHeader(200)
+			w.Write([]byte(`PK fake xlsx content`)) //nolint:errcheck
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	atts := fetchZohoAttachments("token", "acct1", []string{"folder1", ""}, "msg1", srv.URL, "store1", "", "", "", "")
+	if !noFolderDownloadCalled {
+		t.Error("should fall back to no-folder download URL when folder-based returns 500")
+	}
+	_ = atts
+}
+
+func TestFetchZohoAttachments_EmptyFolderIDUsesNoFolderURLDirectly(t *testing.T) {
+	directCalled := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/attachments") && !strings.Contains(path, "/folders/") {
+			// No-folder list → returns one attachment
+			directCalled = true
+			w.WriteHeader(200)
+			w.Write([]byte(`{"data":[{"attachmentId":"att3","fileName":"img.jpg","contentType":"image/jpeg","size":2048}]}`)) //nolint:errcheck
+			return
+		}
+		// Download URL
+		if !strings.Contains(path, "/folders/") && strings.Contains(path, "/att3") {
+			w.WriteHeader(200)
+			w.Write([]byte(`JFIF fake jpeg`)) //nolint:errcheck
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+
+	atts := fetchZohoAttachments("token", "acct1", []string{""}, "msg1", srv.URL, "store1", "", "", "", "")
+	if !directCalled {
+		t.Error("empty folderID should call no-folder attachment list URL directly")
+	}
+	_ = atts
+}
+
+// ── Store settings: populate_suppliers_llm fields ────────────────────────────
+
+func TestStoreSettings_PopulateSuppliersLLMFields(t *testing.T) {
+	var s models.StoreSettings
+	s.PopulateSuppliersLLMProvider = "gemini"
+	s.PopulateSuppliersLLMModel = "gemini-2.5-flash"
+
+	if s.PopulateSuppliersLLMProvider != "gemini" {
+		t.Errorf("expected 'gemini', got %q", s.PopulateSuppliersLLMProvider)
+	}
+	if s.PopulateSuppliersLLMModel != "gemini-2.5-flash" {
+		t.Errorf("expected 'gemini-2.5-flash', got %q", s.PopulateSuppliersLLMModel)
+	}
+}
+
+func TestStoreSettings_PopulateSuppliersLLM_DefaultEmpty(t *testing.T) {
+	var s models.StoreSettings
+	if s.PopulateSuppliersLLMProvider != "" {
+		t.Error("PopulateSuppliersLLMProvider should default to empty string")
+	}
+	if s.PopulateSuppliersLLMModel != "" {
+		t.Error("PopulateSuppliersLLMModel should default to empty string")
 	}
 }
