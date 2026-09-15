@@ -3506,6 +3506,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		CustomerRFQID                string              `json:"customer_rfq_id"`
 		TextContent                  string              `json:"text_content"`
 		Products                     []models.RFQProduct `json:"products"`
+		Categories                   []string            `json:"product_categories"`
 		ExtractionModel              string              `json:"extraction_model"`
 		AttachmentDataURIs           []string            `json:"attachment_data_uris"`
 		AdditionalAttachmentDataURIs []string            `json:"additional_attachment_data_uris"`
@@ -3533,6 +3534,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		CustomerRFQID:                body.CustomerRFQID,
 		TextContent:                  body.TextContent,
 		Products:                     body.Products,
+		Categories:                   body.Categories,
 		AttachmentDataURIs:           body.AttachmentDataURIs,
 		AdditionalAttachmentDataURIs: body.AdditionalAttachmentDataURIs,
 		GeneralInstructions:          body.GeneralInstructions,
@@ -4368,6 +4370,7 @@ type rfqExtractResult struct {
 	CustomerCRNo            string              `json:"customer_cr_no"`
 	CustomerNationalAddress string              `json:"customer_national_address"`
 	Products                []models.RFQProduct `json:"products"`
+	Categories              []string            `json:"product_categories,omitempty"`
 	GeneralInstructions     string              `json:"general_instructions"`
 	TextContent             string              `json:"text_content"`
 	LLMModel                string              `json:"llm_model,omitempty"`
@@ -4674,6 +4677,7 @@ Extract the following and respond with ONLY valid JSON (no markdown, no explanat
     }
   ],
   "general_instructions": "instructions that apply to the whole RFQ, not to a specific product — e.g. 'provide technical datasheet, unit price, warranty, delivery lead time, delivery terms, availability'. Also include conditions like 'if exact model unavailable propose nearest equivalent'. Leave empty string if none.",
+  "product_categories": ["broad trade category 1", "broad trade category 2"],
   "text_content": "a clean plain-text summary of the full enquiry"
 }
 
@@ -4684,6 +4688,7 @@ Rules:
 - Extract ALL products/items mentioned; do not skip any.
 - quantity must be a number (default to 1 if not stated).
 - IMPORTANT: product notes = only technical specs tied to that product (power, pressure, dimensions, etc.). General requests (datasheet, warranty, delivery terms, equivalent model clause) go in general_instructions, NOT in product notes.
+- product_categories: identify 1-5 broad product trade categories the items belong to (e.g. "Valves", "Pipe Fittings", "Electrical Equipment", "Steel Pipes"). Use [] if not determinable.
 - Do NOT wrap in markdown code blocks.`
 
 	if textContent != "" {

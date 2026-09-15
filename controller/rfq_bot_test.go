@@ -2218,3 +2218,36 @@ func TestProcurementMessage_IsSupplierQuotation_SetTrue(t *testing.T) {
 		t.Errorf("is_supplier_quotation should be true, got %v", out["is_supplier_quotation"])
 	}
 }
+
+// ── rfqExtractResult categories field ────────────────────────────────────────
+
+func TestRFQExtractResult_CategoriesRoundtrip(t *testing.T) {
+	raw := `{"product_categories":["Valves","Pipe Fittings"],"customer_name":"ACME"}`
+	var r rfqExtractResult
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if len(r.Categories) != 2 {
+		t.Fatalf("expected 2 categories, got %d", len(r.Categories))
+	}
+	if r.Categories[0] != "Valves" || r.Categories[1] != "Pipe Fittings" {
+		t.Errorf("unexpected categories: %v", r.Categories)
+	}
+}
+
+func TestRFQExtractResult_CategoriesOmitEmpty(t *testing.T) {
+	r := rfqExtractResult{CustomerName: "Test"}
+	data, _ := json.Marshal(r)
+	var m map[string]interface{}
+	json.Unmarshal(data, &m) //nolint:errcheck
+	if _, ok := m["product_categories"]; ok {
+		t.Error("product_categories should be omitted when empty")
+	}
+}
+
+func TestBuildRFQExtractionPrompt_ContainsCategoriesField(t *testing.T) {
+	prompt := buildRFQExtractionPrompt("test content")
+	if !strings.Contains(prompt, "product_categories") {
+		t.Error("extraction prompt should ask for product_categories")
+	}
+}

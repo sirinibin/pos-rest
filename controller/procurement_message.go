@@ -415,6 +415,7 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 		Source:                  source,
 		Status:                  "ready_to_send",
 		Products:                products,
+		Categories:              extracted.Categories,
 		GeneralInstructions:     extracted.GeneralInstructions,
 		CustomerID:              customerID,
 		CustomerName:            extracted.CustomerName,
