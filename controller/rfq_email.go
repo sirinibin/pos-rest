@@ -387,6 +387,8 @@ type rfqEmailConnectReq struct {
 	// Zoho
 	ZohoClientID     string `json:"rfq_zoho_client_id"`
 	ZohoClientSecret string `json:"rfq_zoho_client_secret"`
+	ZohoSMTPUsername string `json:"rfq_zoho_smtp_username"`
+	ZohoSMTPPassword string `json:"rfq_zoho_smtp_password"`
 	// Mailgun
 	MailgunAPIKey string `json:"rfq_mailgun_api_key"`
 	MailgunDomain string `json:"rfq_mailgun_domain"`
@@ -478,12 +480,19 @@ func ConnectRFQEmail(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{"error": "Client ID and Client Secret are required"})
 			return
 		}
-		rfqEmailSave(storeObjID, bson.M{
+		update := bson.M{
 			"settings.rfq_email_provider":     "zoho",
 			"settings.rfq_zoho_client_id":     req.ZohoClientID,
 			"settings.rfq_zoho_client_secret": req.ZohoClientSecret,
 			"settings.rfq_email_connected":    false,
-		})
+		}
+		if req.ZohoSMTPUsername != "" {
+			update["settings.rfq_zoho_smtp_username"] = req.ZohoSMTPUsername
+		}
+		if req.ZohoSMTPPassword != "" {
+			update["settings.rfq_zoho_smtp_password"] = req.ZohoSMTPPassword
+		}
+		rfqEmailSave(storeObjID, update)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"oauth_url": zohoOAuthURL(req.ZohoClientID, state, redirectURI),
 			"message":   "Credentials saved. Complete authorization in the opened window.",
@@ -1534,6 +1543,10 @@ func UpdateRFQEmailAccountSettings(w http.ResponseWriter, r *http.Request) {
 		IMAPUsername string `json:"imap_username"`
 		IMAPUseSSL   bool   `json:"imap_use_ssl"`
 		IMAPPassword string `json:"imap_password"`
+		SMTPHost     string `json:"smtp_host"`
+		SMTPPort     int    `json:"smtp_port"`
+		SMTPUsername string `json:"smtp_username"`
+		SMTPPassword string `json:"smtp_password"`
 	}
 	json.NewDecoder(r.Body).Decode(&body)
 	fields := bson.M{
@@ -1541,9 +1554,15 @@ func UpdateRFQEmailAccountSettings(w http.ResponseWriter, r *http.Request) {
 		"imap_port":     body.IMAPPort,
 		"imap_username": body.IMAPUsername,
 		"imap_use_ssl":  body.IMAPUseSSL,
+		"smtp_host":     body.SMTPHost,
+		"smtp_port":     body.SMTPPort,
+		"smtp_username": body.SMTPUsername,
 	}
 	if body.IMAPPassword != "" {
 		fields["imap_password"] = body.IMAPPassword
+	}
+	if body.SMTPPassword != "" {
+		fields["smtp_password"] = body.SMTPPassword
 	}
 	if err := rfqEmailAccountUpdate(storeObjID, accountID, fields); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
@@ -868,7 +869,7 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 	}
 
 	// Save every incoming message to the procurement inbox with its attachments.
-	procMsg := saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, text, msg.Type, phoneNumberID, procAttachments, false, nil, msgDate)
+	procMsg := saveProcurementWhatsAppMessage(storeObjID, "in", fromPhone, []string{phoneNumberID}, text, msg.Type, phoneNumberID, msg.ID, procAttachments, false, nil, msgDate)
 
 	// If the sender is replying to one of the bot's relay messages, route as buyer follow-up
 	if msg.Context != nil && msg.Context.ID != "" {
@@ -990,7 +991,11 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 	srcLabel := "WhatsApp"
 	senderLabel := rfq.FromPhone
 	if rfq.FromName != "" {
-		senderLabel = rfq.FromName + " (+" + rfq.FromPhone + ")"
+		phone := rfq.FromPhone
+		if !strings.HasPrefix(phone, "+") {
+			phone = "+" + phone
+		}
+		senderLabel = rfq.FromName + " (" + phone + ")"
 	}
 	attachInfo := ""
 	if len(rfq.MediaURLs) > 0 && len(rfq.Documents) > 0 {
@@ -1093,6 +1098,8 @@ type supplierReplyAnalysis struct {
 	IsQuotation  bool                        // true when the message contains unit prices
 	GeneralNotes string                      // quotation-wide conditions: validity, delivery, payment terms
 	Prices       []models.SupplierReplyPrice // pre-extracted prices (zero-indexed relative to rfq.Products if available)
+	SupplierName string                      // supplier company/person name from the document
+	SupplierPhone string                     // supplier phone from the document (international format preferred)
 }
 
 // extractRFQCodeFromText scans raw text for a pattern matching the store's RFQ code format
@@ -1160,6 +1167,8 @@ func analyzeSupplierReply(store *models.Store, msgText string, pdfBase64s []stri
 Extract the following and return ONLY valid JSON (no explanation):
 {
   "rfq_code": "<RFQ code if explicitly mentioned, e.g. RFQ-0015, or empty string>",
+  "supplier_name": "<name of the company or person that issued this quotation/reply, empty string if not found>",
+  "supplier_phone": "<phone number of the supplier shown in the document, in international format if possible (e.g. 966550988062), empty string if not found>",
   "is_quotation": <true if the message contains unit prices, false otherwise>,
   "general_notes": "<quotation-wide conditions only: validity period, delivery lead time, payment terms, warranty, overall terms — e.g. 'Validity: 2 days, Delivery: 7 days'. Empty string if none.>",
   "prices": [
@@ -1167,9 +1176,10 @@ Extract the following and return ONLY valid JSON (no explanation):
       "product_index": <0-based index from the product list above, -1 if unknown>,
       "product_name": "<as mentioned in the message>",
       "part_no": "<part number if mentioned, else empty>",
-      "unit_price": <numeric price, 0 if not given>,
+      "unit_price": <numeric price EXCLUDING VAT, 0 if not given>,
       "quantity": <numeric quantity if mentioned, 0 if not>,
       "currency": "<e.g. AED, SAR, USD; default SAR if not specified>",
+      "vat_included": <false if price is excluding VAT, true if price already includes VAT>,
       "notes": "<product-specific notes only: dimensions, specs, MOQ, brand, model variant — empty string if nothing product-specific>"
     }
   ]
@@ -1218,16 +1228,19 @@ IMPORTANT: general_notes is for conditions that apply to the whole quotation (va
 
 	jsonStr := extractJSONFromLLMResponse(responseText)
 	var raw struct {
-		RFQCode      string `json:"rfq_code"`
-		IsQuotation  bool   `json:"is_quotation"`
-		GeneralNotes string `json:"general_notes"`
-		Prices       []struct {
+		RFQCode       string `json:"rfq_code"`
+		SupplierName  string `json:"supplier_name"`
+		SupplierPhone string `json:"supplier_phone"`
+		IsQuotation   bool   `json:"is_quotation"`
+		GeneralNotes  string `json:"general_notes"`
+		Prices        []struct {
 			ProductIndex int     `json:"product_index"`
 			ProductName  string  `json:"product_name"`
 			PartNo       string  `json:"part_no"`
 			UnitPrice    float64 `json:"unit_price"`
 			Quantity     float64 `json:"quantity"`
 			Currency     string  `json:"currency"`
+			VATIncluded  bool    `json:"vat_included"`
 			Notes        string  `json:"notes"`
 		} `json:"prices"`
 	}
@@ -1252,14 +1265,17 @@ IMPORTANT: general_notes is for conditions that apply to the whole quotation (va
 			UnitPrice:    p.UnitPrice,
 			Quantity:     p.Quantity,
 			Currency:     p.Currency,
+			VATIncluded:  p.VATIncluded,
 			Notes:        p.Notes,
 		})
 	}
 	return supplierReplyAnalysis{
-		RFQCode:      strings.TrimSpace(raw.RFQCode),
-		IsQuotation:  raw.IsQuotation,
-		GeneralNotes: strings.TrimSpace(raw.GeneralNotes),
-		Prices:       prices,
+		RFQCode:       strings.TrimSpace(raw.RFQCode),
+		IsQuotation:   raw.IsQuotation,
+		GeneralNotes:  strings.TrimSpace(raw.GeneralNotes),
+		Prices:        prices,
+		SupplierName:  strings.TrimSpace(raw.SupplierName),
+		SupplierPhone: strings.TrimSpace(raw.SupplierPhone),
 	}
 }
 
@@ -1593,6 +1609,19 @@ Return ONLY valid JSON:
 // extractJSONFromLLMResponse strips markdown code fences and extracts the JSON object/array.
 func extractJSONFromLLMResponse(text string) string {
 	text = strings.TrimSpace(text)
+	// Strip <think>...</think> blocks produced by reasoning models (e.g. DeepSeek R1).
+	for {
+		start := strings.Index(text, "<think>")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(text, "</think>")
+		if end < 0 {
+			text = strings.TrimSpace(text[:start])
+			break
+		}
+		text = strings.TrimSpace(text[:start] + text[end+len("</think>"):])
+	}
 	if idx := strings.Index(text, "```json"); idx >= 0 {
 		text = text[idx+7:]
 		if end := strings.Index(text, "```"); end >= 0 {
@@ -2374,10 +2403,10 @@ func classifyIncomingMessage(store *models.Store, text string, imageBase64s []st
 		return "rfq", ""
 	}
 
-	prompt := `Classify this WhatsApp message as one of:
-- "rfq": The sender wants to purchase items and is requesting prices/quotations
+	prompt := `Classify this incoming message as one of:
+- "rfq": The sender wants to purchase items and is requesting prices/quotations/offers
 - "quotation": A supplier is providing price information/unit prices for products
-- "other": Casual chat, thanks, greetings, unrelated content
+- "other": Company introduction, marketing/promotional content, newsletter, vendor cold-outreach, greetings, casual chat, thanks, or any unrelated content
 
 Also, if it's a quotation, extract any RFQ reference code (like "RFQ-0001" or "RFQ-001") mentioned.
 
@@ -2454,7 +2483,15 @@ Return ONLY a valid JSON array of strings. No explanation.`, strings.Join(specif
 	case "gemini":
 		result, err = callLLMText(apiKey, model, prompt, "gemini")
 	default:
-		return nil
+		// OpenAI-compatible providers (cloudflare, groq, xai, etc.)
+		apiKey2, baseURL := resolveExtractionEndpoint(provider, &store.Settings)
+		if apiKey2 != "" {
+			apiKey = apiKey2
+		}
+		if baseURL == "" {
+			baseURL = openAICompatBaseURL(provider)
+		}
+		result, err = callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 200, baseURL)
 	}
 	if err != nil || strings.TrimSpace(result) == "" {
 		return nil
@@ -2500,7 +2537,19 @@ Always return at least one category — never return an empty array.`
 	case "gemini":
 		return callGeminiForCategories(apiKey, model, prompt, imageBase64s)
 	default:
-		return nil, fmt.Errorf("unsupported LLM provider: %s", provider)
+		// OpenAI-compatible providers (cloudflare, groq, xai, etc.)
+		apiKey2, baseURL := resolveExtractionEndpoint(provider, &store.Settings)
+		if apiKey2 != "" {
+			apiKey = apiKey2
+		}
+		if baseURL == "" {
+			baseURL = openAICompatBaseURL(provider)
+		}
+		raw, err := callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 300, baseURL)
+		if err != nil {
+			return nil, err
+		}
+		return parseCategories(raw), nil
 	}
 }
 
@@ -2689,6 +2738,103 @@ func parseCategories(raw string) []string {
 	var cats []string
 	json.Unmarshal([]byte(raw[start:end+1]), &cats)
 	return cats
+}
+
+// ── Supplier category inference from website ──────────────────────────────────
+
+var (
+	htmlScriptStyleRe = regexp.MustCompile(`(?is)<(script|style|head)[^>]*>.*?</(script|style|head)>`)
+	htmlTagStripRe    = regexp.MustCompile(`<[^>]*>`)
+	htmlEntityRe      = regexp.MustCompile(`&[a-zA-Z0-9#]+;`)
+)
+
+// stripHTMLForText removes script/style/head blocks and all tags from HTML, returning plain text.
+func stripHTMLForText(htmlStr string) string {
+	s := htmlScriptStyleRe.ReplaceAllString(htmlStr, " ")
+	s = htmlTagStripRe.ReplaceAllString(s, " ")
+	s = htmlEntityRe.ReplaceAllString(s, " ")
+	return s
+}
+
+// inferSupplierCategoriesFromWebsite fetches the supplier's website, extracts visible text,
+// sends it to the store's configured LLM, and saves the inferred categories back to the DB.
+// Intended to be called as a goroutine when a supplier has no categories but has a website.
+func inferSupplierCategoriesFromWebsite(store *models.Store, supplier models.RFQSupplier) {
+	if supplier.Website == "" || store.Settings.RFQLLMAPIKey == "" {
+		return
+	}
+	apiKey := store.Settings.RFQLLMAPIKey
+	model := store.Settings.RFQLLMModel
+	provider := strings.ToLower(store.Settings.RFQLLMProvider)
+
+	// Fetch website — follow up to one redirect, 10 s timeout.
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", supplier.Website, nil)
+	if err != nil {
+		log.Printf("inferCategories[%s]: bad URL %s: %v", supplier.Name, supplier.Website, err)
+		return
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; StartPOS/1.0; +https://startpos.ai)")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("inferCategories[%s]: fetch error: %v", supplier.Name, err)
+		return
+	}
+	defer resp.Body.Close()
+	rawBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+
+	// Strip HTML tags and collapse whitespace.
+	text := strings.Join(strings.Fields(stripHTMLForText(string(rawBytes))), " ")
+	if len(text) > 3000 {
+		text = text[:3000]
+	}
+	if len(strings.TrimSpace(text)) < 50 {
+		log.Printf("inferCategories[%s]: website content too short to classify", supplier.Name)
+		return
+	}
+
+	prompt := fmt.Sprintf(`You are a procurement expert. Based on the following content from a supplier's website, identify 1-5 product/service categories this supplier specializes in.
+These categories will be used to match suppliers to RFQs in a B2B procurement system.
+Return ONLY a valid JSON array of short category strings (e.g. ["Industrial Valves", "Pipes & Fittings", "Steel Products"]).
+No explanation — just the JSON array.
+
+Supplier name: %s
+Website content:
+%s`, supplier.Name, text)
+
+	var raw string
+	var llmErr error
+	switch provider {
+	case "openai":
+		raw, llmErr = callLLMText(apiKey, model, prompt, "openai")
+	case "anthropic":
+		raw, llmErr = callLLMText(apiKey, model, prompt, "anthropic")
+	case "gemini":
+		raw, llmErr = callLLMText(apiKey, model, prompt, "gemini")
+	default:
+		apiKey2, baseURL := resolveExtractionEndpoint(provider, &store.Settings)
+		if apiKey2 != "" {
+			apiKey = apiKey2
+		}
+		if baseURL == "" {
+			baseURL = openAICompatBaseURL(provider)
+		}
+		raw, llmErr = callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 200, baseURL)
+	}
+	if llmErr != nil || raw == "" {
+		log.Printf("inferCategories[%s]: LLM error: %v", supplier.Name, llmErr)
+		return
+	}
+
+	categories := parseCategories(raw)
+	if len(categories) == 0 {
+		log.Printf("inferCategories[%s]: could not parse categories from LLM response", supplier.Name)
+		return
+	}
+	log.Printf("inferCategories[%s]: inferred %v", supplier.Name, categories)
+	if dbErr := models.SetRFQSupplierCategories(supplier.ID, supplier.StoreID, categories); dbErr != nil {
+		log.Printf("inferCategories[%s]: DB update error: %v", supplier.Name, dbErr)
+	}
 }
 
 // ── Generic LLM text helpers (no image support — text-only prompts) ──────────
@@ -3038,13 +3184,16 @@ func searchGoogleMapsSuppliers(apiKey, category, market string, storeID primitiv
 	}
 	if cached != nil {
 		log.Printf("rfq_bot: places cache HIT for category=%q market=%q (%d suppliers)", category, market, len(cached))
+		if maxResults > 0 && len(cached) > maxResults {
+			cached = cached[:maxResults]
+		}
 		return cachedSuppliersToRFQ(cached, category, market, storeID), nil
 	}
 	log.Printf("rfq_bot: places cache MISS for category=%q market=%q — calling Google API", category, market)
 
 	// --- live API call ---
 	const endpoint = "https://places.googleapis.com/v1/places:searchText"
-	const fieldMask = "places.id,places.displayName,places.formattedAddress,places.rating,places.location,places.internationalPhoneNumber,places.websiteUri"
+	const fieldMask = "places.id,places.displayName,places.formattedAddress,places.rating,places.location,places.internationalPhoneNumber,places.websiteUri,places.primaryType,places.types"
 
 	if maxResults < 1 {
 		maxResults = 1
@@ -3081,11 +3230,13 @@ func searchGoogleMapsSuppliers(apiKey, category, market string, storeID primitiv
 
 	var result struct {
 		Places []struct {
-			ID                 string  `json:"id"`
-			FormattedAddress   string  `json:"formattedAddress"`
-			Rating             float64 `json:"rating"`
-			InternationalPhone string  `json:"internationalPhoneNumber"`
-			WebsiteUri         string  `json:"websiteUri"`
+			ID                 string   `json:"id"`
+			FormattedAddress   string   `json:"formattedAddress"`
+			Rating             float64  `json:"rating"`
+			InternationalPhone string   `json:"internationalPhoneNumber"`
+			WebsiteUri         string   `json:"websiteUri"`
+			PrimaryType        string   `json:"primaryType"`
+			Types              []string `json:"types"`
 			DisplayName        struct {
 				Text string `json:"text"`
 			} `json:"displayName"`
@@ -3110,6 +3261,8 @@ func searchGoogleMapsSuppliers(apiKey, category, market string, storeID primitiv
 		if place.ID != "" {
 			mapsURL = "https://www.google.com/maps/place/?q=place_id:" + place.ID
 		}
+		// Build categories: search category + Google place types (filtered and humanised).
+		placeTypes := placeTypesToCategories(place.PrimaryType, place.Types, category)
 		sup := models.RFQSupplier{
 			Name:           place.DisplayName.Text,
 			Phone:          phone,
@@ -3120,8 +3273,8 @@ func searchGoogleMapsSuppliers(apiKey, category, market string, storeID primitiv
 			GooglePlaceID:  place.ID,
 			GoogleMapsURL:  mapsURL,
 			Website:        place.WebsiteUri,
-			Categories:     []string{category},
-			PurchaseMarket: market,
+			Categories:     placeTypes,
+			PurchaseMarket: marketTitleCase(market),
 			StoreID:        storeID,
 		}
 		suppliers = append(suppliers, sup)
@@ -3134,6 +3287,7 @@ func searchGoogleMapsSuppliers(apiKey, category, market string, storeID primitiv
 			Rating:  place.Rating,
 			PlaceID: place.ID,
 			Website: place.WebsiteUri,
+			Types:   placeTypes,
 		})
 	}
 
@@ -3155,6 +3309,23 @@ func cachedSuppliersToRFQ(cached []models.CachedSupplier, category, market strin
 		if c.PlaceID != "" {
 			mapsURL = "https://www.google.com/maps/place/?q=place_id:" + c.PlaceID
 		}
+		// Restore full type list from cache; fall back to search category if none stored.
+		cats := c.Types
+		if len(cats) == 0 {
+			cats = []string{category}
+		} else {
+			// Ensure the search category is always present.
+			found := false
+			for _, t := range cats {
+				if t == category {
+					found = true
+					break
+				}
+			}
+			if !found {
+				cats = append([]string{category}, cats...)
+			}
+		}
 		suppliers = append(suppliers, models.RFQSupplier{
 			Name:           c.Name,
 			Phone:          c.Phone,
@@ -3165,12 +3336,61 @@ func cachedSuppliersToRFQ(cached []models.CachedSupplier, category, market strin
 			GooglePlaceID:  c.PlaceID,
 			GoogleMapsURL:  mapsURL,
 			Website:        c.Website,
-			Categories:     []string{category},
-			PurchaseMarket: market,
+			Categories:     cats,
+			PurchaseMarket: marketTitleCase(market),
 			StoreID:        storeID,
 		})
 	}
 	return suppliers
+}
+
+// placeTypesToCategories converts Google Places primaryType / types to a de-duped
+// human-readable category list. The search category is always first.
+// Generic infrastructure types are filtered out.
+// marketTitleCase normalises a market name to Title Case ("dammam" → "Dammam").
+func marketTitleCase(s string) string {
+	words := strings.Fields(strings.TrimSpace(s))
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+func placeTypesToCategories(primaryType string, types []string, searchCategory string) []string {
+	// Types that carry no useful product/business meaning.
+	generic := map[string]bool{
+		"point_of_interest": true, "establishment": true, "geocode": true,
+		"locality": true, "political": true, "route": true, "street_address": true,
+		"sublocality": true, "sublocality_level_1": true, "sublocality_level_2": true,
+		"neighborhood": true, "premise": true, "postal_code": true,
+		"country": true, "administrative_area_level_1": true,
+		"administrative_area_level_2": true, "administrative_area_level_3": true,
+		"colloquial_area": true, "natural_feature": true,
+	}
+	toTitle := func(s string) string {
+		words := strings.Split(s, "_")
+		for i, w := range words {
+			if len(w) > 0 {
+				words[i] = strings.ToUpper(w[:1]) + w[1:]
+			}
+		}
+		return strings.Join(words, " ")
+	}
+	seen := map[string]bool{searchCategory: true}
+	result := []string{searchCategory}
+	for _, t := range append([]string{primaryType}, types...) {
+		if t == "" || generic[t] {
+			continue
+		}
+		label := toTitle(t)
+		if !seen[label] {
+			seen[label] = true
+			result = append(result, label)
+		}
+	}
+	return result
 }
 
 // hasWhatsApp returns true if the given phone has a WhatsApp account.
@@ -3497,6 +3717,25 @@ func ListRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// When customer_id is given, return RFQs received from that customer.
+	if cidStr := r.URL.Query().Get("customer_id"); cidStr != "" {
+		cidObj, err := primitive.ObjectIDFromHex(cidStr)
+		if err != nil {
+			http.Error(w, `{"error":"invalid customer_id"}`, http.StatusBadRequest)
+			return
+		}
+		rfqs, err := models.FindRFQsByCustomerID(storeObjID, cidObj, 50)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		if rfqs == nil {
+			rfqs = []models.RFQReceived{}
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"result": rfqs, "total_count": len(rfqs)})
+		return
+	}
+
 	page := int64(1)
 	limit := int64(20)
 	fmt.Sscan(r.URL.Query().Get("page"), &page)
@@ -3589,6 +3828,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
+		CustomerID                   string              `json:"customer_id"`
 		CustomerName                 string              `json:"customer_name"`
 		CustomerPhone                string              `json:"customer_phone"`
 		CustomerEmail                string              `json:"customer_email"`
@@ -3599,7 +3839,8 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		Categories                   []string            `json:"product_categories"`
 		ExtractionModel              string              `json:"extraction_model"`
 		AttachmentDataURIs           []string            `json:"attachment_data_uris"`
-		AdditionalAttachmentDataURIs []string            `json:"additional_attachment_data_uris"`
+		AdditionalAttachmentDataURIs  []string            `json:"additional_attachment_data_uris"`
+		AdditionalAttachmentFilenames []string            `json:"additional_attachment_filenames"`
 		GeneralInstructions          string              `json:"general_instructions"`
 		ProcurementMessageID         string              `json:"procurement_message_id"`
 		ProcurementMessageCode       string              `json:"procurement_message_code"`
@@ -3614,26 +3855,32 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rfq := &models.RFQReceived{
-		StoreID:                      storeObjID,
-		Source:                       "manual",
-		MessageType:                  "text",
-		CustomerName:                 body.CustomerName,
-		CustomerPhone:                body.CustomerPhone,
-		CustomerEmail:                body.CustomerEmail,
-		CustomerCompany:              body.CustomerCompany,
-		CustomerRFQID:                body.CustomerRFQID,
-		TextContent:                  body.TextContent,
-		Products:                     body.Products,
-		Categories:                   body.Categories,
-		AttachmentDataURIs:           body.AttachmentDataURIs,
-		AdditionalAttachmentDataURIs: body.AdditionalAttachmentDataURIs,
-		GeneralInstructions:          body.GeneralInstructions,
-		Status:                       "ready_to_send",
+		StoreID:                       storeObjID,
+		Source:                        "manual",
+		MessageType:                   "text",
+		CustomerName:                  body.CustomerName,
+		CustomerPhone:                 body.CustomerPhone,
+		CustomerEmail:                 body.CustomerEmail,
+		CustomerCompany:               body.CustomerCompany,
+		CustomerRFQID:                 body.CustomerRFQID,
+		TextContent:                   body.TextContent,
+		Products:                      body.Products,
+		Categories:                    body.Categories,
+		AttachmentDataURIs:            body.AttachmentDataURIs,
+		AdditionalAttachmentDataURIs:  body.AdditionalAttachmentDataURIs,
+		AdditionalAttachmentFilenames: body.AdditionalAttachmentFilenames,
+		GeneralInstructions:           body.GeneralInstructions,
+		Status:                        "ready_to_send",
 	}
 	if body.ProcurementMessageID != "" {
 		if msgObjID, err := primitive.ObjectIDFromHex(body.ProcurementMessageID); err == nil {
 			rfq.ProcurementMessageID = &msgObjID
 			rfq.ProcurementMessageCode = body.ProcurementMessageCode
+		}
+	}
+	if body.CustomerID != "" {
+		if custObjID, err2 := primitive.ObjectIDFromHex(body.CustomerID); err2 == nil {
+			rfq.CustomerID = &custObjID
 		}
 	}
 	if rfq.CustomerPhone != "" {
@@ -3656,7 +3903,11 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	if rfq.CustomerName != "" {
 		inputMsg = fmt.Sprintf("Input received via manual form from %s", rfq.CustomerName)
 		if rfq.CustomerPhone != "" {
-			inputMsg += " (+" + rfq.CustomerPhone + ")"
+			ph := rfq.CustomerPhone
+			if !strings.HasPrefix(ph, "+") {
+				ph = "+" + ph
+			}
+			inputMsg += " (" + ph + ")"
 		}
 	}
 	models.AppendRFQLog(rfq.StoreID, rfq.ID, models.RFQActivityLog{
@@ -3924,14 +4175,17 @@ func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		CustomerName        string              `json:"customer_name"`
-		CustomerPhone       string              `json:"customer_phone"`
-		CustomerEmail       string              `json:"customer_email"`
-		CustomerCompany     string              `json:"customer_company"`
-		CustomerRFQID       string              `json:"customer_rfq_id"`
-		TextContent         string              `json:"text_content"`
-		Products            []models.RFQProduct `json:"products"`
-		GeneralInstructions string              `json:"general_instructions"`
+		CustomerID                   string              `json:"customer_id"`
+		CustomerName                 string              `json:"customer_name"`
+		CustomerPhone                string              `json:"customer_phone"`
+		CustomerEmail                string              `json:"customer_email"`
+		CustomerCompany              string              `json:"customer_company"`
+		CustomerRFQID                string              `json:"customer_rfq_id"`
+		TextContent                  string              `json:"text_content"`
+		Products                     []models.RFQProduct `json:"products"`
+		GeneralInstructions          string              `json:"general_instructions"`
+		AdditionalAttachmentDataURIs  []string            `json:"additional_attachment_data_uris"`
+		AdditionalAttachmentFilenames []string            `json:"additional_attachment_filenames"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
@@ -3951,8 +4205,21 @@ func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	rfq.CustomerRFQID       = body.CustomerRFQID
 	rfq.TextContent         = body.TextContent
 	rfq.GeneralInstructions = body.GeneralInstructions
+	if body.CustomerID != "" {
+		if custObjID, err2 := primitive.ObjectIDFromHex(body.CustomerID); err2 == nil {
+			rfq.CustomerID = &custObjID
+		}
+	} else {
+		rfq.CustomerID = nil
+	}
 	if body.Products != nil {
 		rfq.Products = body.Products
+	}
+	if body.AdditionalAttachmentDataURIs != nil {
+		rfq.AdditionalAttachmentDataURIs = body.AdditionalAttachmentDataURIs
+	}
+	if body.AdditionalAttachmentFilenames != nil {
+		rfq.AdditionalAttachmentFilenames = body.AdditionalAttachmentFilenames
 	}
 
 	if err := models.UpdateRFQReceived(rfq); err != nil {
@@ -4093,12 +4360,228 @@ func CreateRFQSupplierHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"phone (WhatsApp number) is required"}`, http.StatusBadRequest)
 		return
 	}
+	if existing, _ := models.FindRFQSupplierByPhone(storeObjID, supplier.Phone); existing != nil {
+		http.Error(w, `{"error":"a supplier with this phone number already exists"}`, http.StatusConflict)
+		return
+	}
 	if err := models.CreateRFQSupplier(&supplier); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 	BroadcastRFQEvent(supplier.StoreID.Hex(), "supplier_updated")
 	respBytes, _ := json.Marshal(supplier)
+	w.Write(respBytes)
+}
+
+// POST /v1/rfq-suppliers/fetch-from-maps
+// Fetches suppliers from Google Maps for the given RFQ's categories × selected markets,
+// saves/updates them in rfq_suppliers, and returns the found list so the frontend
+// can immediately add them to the RECIPIENTS section.
+func FetchSuppliersFromMapsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var body struct {
+		RFQID    string   `json:"rfq_id"`
+		Markets  []string `json:"markets"`
+		MinCount int      `json:"min_count"`
+		MaxCount int      `json:"max_count"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+	if len(body.Markets) == 0 {
+		http.Error(w, `{"error":"select at least one market"}`, http.StatusBadRequest)
+		return
+	}
+	// Normalize market names to Title Case so "dammam" and "Dammam" are treated identically.
+	for i, m := range body.Markets {
+		body.Markets[i] = marketTitleCase(m)
+	}
+
+	store, err := models.FindStoreByID(&storeObjID, nil)
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	if store.Settings.GoogleMapsAPIKey == "" {
+		http.Error(w, `{"error":"Google Maps API key not configured in store settings"}`, http.StatusBadRequest)
+		return
+	}
+
+	rfqObjID, _ := primitive.ObjectIDFromHex(body.RFQID)
+	rfq, err := models.FindRFQReceivedByID(rfqObjID, storeObjID)
+	if err != nil {
+		http.Error(w, `{"error":"RFQ not found"}`, http.StatusNotFound)
+		return
+	}
+	if len(rfq.Categories) == 0 {
+		http.Error(w, `{"error":"RFQ has no product categories identified yet — identify categories first"}`, http.StatusBadRequest)
+		return
+	}
+
+	minPerSearch := body.MinCount
+	if minPerSearch < 1 {
+		minPerSearch = 5
+	}
+	maxPerSearch := body.MaxCount
+	if maxPerSearch < minPerSearch {
+		maxPerSearch = minPerSearch
+	}
+	if maxPerSearch < 1 {
+		maxPerSearch = 20
+	}
+	if maxPerSearch > 20 {
+		maxPerSearch = 20
+	}
+
+	type supplierEntry struct {
+		supplier   models.RFQSupplier
+		categories map[string]bool
+	}
+	addCategory := func(e *supplierEntry, cat string) {
+		if e.categories == nil {
+			e.categories = map[string]bool{}
+		}
+		e.categories[cat] = true
+	}
+
+	byKey := map[string]*supplierEntry{} // keyed by google_place_id, fallback phone
+
+	entryKey := func(s models.RFQSupplier) string {
+		if s.GooglePlaceID != "" {
+			return s.GooglePlaceID
+		}
+		return s.Phone
+	}
+
+	// Phase 1 — DB first, then Google Maps for the gap.
+	// For each RFQ category × market we first pull from our own rfq_suppliers DB.
+	// Only if the DB count is below maxPerSearch do we call Google Maps to fill the gap.
+	// This guarantees ≥1 RFQ category match and avoids unnecessary API calls.
+	for _, market := range body.Markets {
+		for _, category := range rfq.Categories {
+			// 1a. DB lookup.
+			dbSups, _ := models.FindRFQSuppliersByMarketAndCategories(storeObjID, []string{category}, market, int64(maxPerSearch))
+			for _, s := range dbSups {
+				k := entryKey(s)
+				if k == "" {
+					continue
+				}
+				if e, exists := byKey[k]; exists {
+					addCategory(e, category)
+				} else {
+					e = &supplierEntry{supplier: s}
+					addCategory(e, category)
+					byKey[k] = e
+				}
+			}
+
+			// 1b. Google Maps for the gap.
+			gap := maxPerSearch - len(dbSups)
+			if gap > 0 {
+				mapsSups, err := searchGoogleMapsSuppliers(store.Settings.GoogleMapsAPIKey, category, market, storeObjID, gap)
+				if err != nil {
+					log.Printf("FetchSuppliersFromMaps: maps error cat=%q market=%q: %v", category, market, err)
+				} else {
+					for _, s := range mapsSups {
+						k := entryKey(s)
+						if k == "" {
+							continue
+						}
+						if e, exists := byKey[k]; exists {
+							addCategory(e, category)
+						} else {
+							e = &supplierEntry{supplier: s}
+							addCategory(e, category)
+							byKey[k] = e
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Phase 2 — enrich qualifying suppliers with all other store product categories.
+	// Check DB and Google Maps for each extra category × market; add that category ONLY
+	// to already-qualifying suppliers — no new suppliers are added here.
+	if len(byKey) > 0 {
+		allStoreCategories, _ := models.GetAllProductCategoryNames(store)
+		rfqCatSet := map[string]bool{}
+		for _, c := range rfq.Categories {
+			rfqCatSet[c] = true
+		}
+		for _, market := range body.Markets {
+			for _, category := range allStoreCategories {
+				if rfqCatSet[category] {
+					continue // already covered in Phase 1
+				}
+				// DB lookup for this category+market.
+				dbSups, _ := models.FindRFQSuppliersByMarketAndCategories(storeObjID, []string{category}, market, int64(maxPerSearch))
+				for _, s := range dbSups {
+					k := entryKey(s)
+					if e, exists := byKey[k]; exists {
+						addCategory(e, category)
+					}
+				}
+				// Google Maps for the gap (only if DB didn't saturate).
+				gap := maxPerSearch - len(dbSups)
+				if gap > 0 {
+					mapsSups, err := searchGoogleMapsSuppliers(store.Settings.GoogleMapsAPIKey, category, market, storeObjID, gap)
+					if err != nil {
+						continue
+					}
+					for _, s := range mapsSups {
+						k := entryKey(s)
+						if e, exists := byKey[k]; exists {
+							addCategory(e, category)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Upsert each qualifying supplier with its full accumulated category list.
+	seenPhone := map[string]bool{}
+	var allFound []models.RFQSupplier
+	for _, entry := range byKey {
+		s := entry.supplier
+		s.Categories = make([]string, 0, len(entry.categories))
+		for c := range entry.categories {
+			s.Categories = append(s.Categories, c)
+		}
+		if s.Phone == "" || seenPhone[s.Phone] {
+			continue
+		}
+		seenPhone[s.Phone] = true
+		if uErr := models.UpsertRFQSupplierByPlaceID(&s); uErr != nil {
+			log.Printf("FetchSuppliersFromMaps: upsert error phone=%s: %v", s.Phone, uErr)
+		}
+		// When Google Maps returned no categories but the supplier has a website,
+		// crawl the website and ask the LLM to infer categories asynchronously.
+		if len(s.Categories) == 0 && s.Website != "" {
+			go inferSupplierCategoriesFromWebsite(store, s)
+		}
+		allFound = append(allFound, s)
+	}
+
+	if allFound == nil {
+		allFound = []models.RFQSupplier{}
+	}
+	BroadcastRFQEvent(storeIDStr, "supplier_updated")
+
+	respBytes, _ := json.Marshal(map[string]interface{}{
+		"found":     len(allFound),
+		"suppliers": allFound,
+	})
 	w.Write(respBytes)
 }
 
@@ -4165,6 +4648,24 @@ func DeleteRFQSupplierHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprint(w, `{"success":true}`)
+}
+
+// POST /v1/rfq-suppliers/deduplicate?store_id=...
+// Removes duplicate rfq_supplier records by phone number for the given store.
+func DeduplicateRFQSuppliersHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	removed, err := models.DeduplicateRFQSuppliers(storeObjID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "removed": removed})
 }
 
 // ── Populate RFQ Suppliers from Vendors ──────────────────────────────────────
@@ -4520,6 +5021,11 @@ func ExtractRFQFromFilesHandler(w http.ResponseWriter, r *http.Request) {
 				textParts = append(textParts, text)
 			}
 
+		case ext == ".docx" || strings.Contains(ct, "wordprocessingml"):
+			if text, err := docxToText(fh.Filename, data); err == nil {
+				textParts = append(textParts, text)
+			}
+
 		case ext == ".pdf" || strings.Contains(ct, "pdf"):
 			pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
 			// Also extract text so providers that don't support PDF binary (e.g. OpenAI) can still read the content
@@ -4585,8 +5091,8 @@ func ExtractRFQFromFilesHandler(w http.ResponseWriter, r *http.Request) {
 	jsonStr := extractJSONFromLLMResponse(responseText)
 	var result rfqExtractResult
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		// Return the raw text so the frontend can show it in the description
-		out, _ := json.Marshal(rfqExtractResult{TextContent: responseText, LLMModel: usedModel})
+		// Return the stripped text (think blocks removed) so the frontend can show it
+		out, _ := json.Marshal(rfqExtractResult{TextContent: jsonStr, LLMModel: usedModel})
 		w.Write(out)
 		return
 	}
@@ -4605,7 +5111,13 @@ func resolveExtractionEndpoint(provider string, s *models.StoreSettings) (apiKey
 	case "gemini", "anthropic":
 		// These are handled by dedicated code paths; no base URL needed.
 	case "cloudflare":
-		if s.ExtractionCloudflareAccountID != "" {
+		if s.ExtractionCloudflareAccountID == "" {
+			// Signal missing config by returning a sentinel base URL that will
+			// cause callLLMExtractRFQ to skip the openAICompatBaseURL fallback and
+			// instead error clearly. We use a non-empty string so callers can detect
+			// the misconfiguration before making a network call.
+			baseURL = "__cloudflare_missing_account_id__"
+		} else {
 			baseURL = "https://api.cloudflare.com/client/v4/accounts/" + s.ExtractionCloudflareAccountID + "/ai/v1/chat/completions"
 		}
 	default:
@@ -4695,28 +5207,201 @@ func resolveExtractionAPIKey(provider string, s *models.StoreSettings) string {
 	return s.RFQLLMAPIKey
 }
 
+// htmlToPlainText strips HTML/CSS markup and returns clean readable text.
+// It removes <style> and <script> blocks entirely, then strips all remaining
+// HTML tags, and finally normalises whitespace.
+func htmlToPlainText(s string) string {
+	// Remove <style>…</style> blocks (including inline CSS from email clients).
+	styleRe := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	s = styleRe.ReplaceAllString(s, " ")
+	// Remove <script>…</script> blocks.
+	scriptRe := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	s = scriptRe.ReplaceAllString(s, " ")
+	// Convert block-level tags to newlines before stripping.
+	blockRe := regexp.MustCompile(`(?i)<(?:br|p|div|tr|li|h[1-6])[^>]*>`)
+	s = blockRe.ReplaceAllString(s, "\n")
+	// Strip remaining tags.
+	tagRe := regexp.MustCompile(`<[^>]+>`)
+	s = tagRe.ReplaceAllString(s, " ")
+	// Decode common HTML entities.
+	s = strings.NewReplacer(
+		"&amp;", "&", "&lt;", "<", "&gt;", ">",
+		"&nbsp;", " ", "&quot;", "\"", "&#39;", "'",
+	).Replace(s)
+	// Collapse whitespace / empty lines.
+	lines := strings.Split(s, "\n")
+	var kept []string
+	for _, l := range lines {
+		l = strings.TrimSpace(l)
+		if l != "" {
+			kept = append(kept, l)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// isJunkCell returns true for cell values that carry no useful information
+// (artifacts from buggy JavaScript export tools, etc.).
+func isJunkCell(s string) bool {
+	switch strings.TrimSpace(s) {
+	case "[object Object]", "undefined", "null", "NaN", "":
+		return true
+	}
+	return false
+}
+
+// excelToText converts an Excel workbook to a plain-text markdown-style table
+// suitable for LLM consumption. It uses the first non-empty row as headers when
+// possible and formats data rows as "Header: Value" pairs. Junk cell values
+// (e.g. "[object Object]") are silently dropped. Output is capped at 12 000 chars.
 func excelToText(filename string, data []byte) (string, error) {
 	f, err := excelize.OpenReader(bytes.NewReader(data))
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
+	const maxChars = 12000
+	const maxRowsPerSheet = 300
 	var sb strings.Builder
 	sb.WriteString("=== " + filename + " ===\n")
-	for _, sheet := range f.GetSheetList() {
+	sheets := f.GetSheetList()
+	for _, sheet := range sheets {
 		rows, err := f.GetRows(sheet)
 		if err != nil {
 			continue
 		}
-		if len(f.GetSheetList()) > 1 {
+		if len(sheets) > 1 {
 			sb.WriteString("[Sheet: " + sheet + "]\n")
 		}
-		for _, row := range rows {
-			sb.WriteString(strings.Join(row, "\t"))
-			sb.WriteString("\n")
+
+		// Find header row: first row that has at least one non-junk cell.
+		var headers []string
+		dataStart := 0
+		for i, row := range rows {
+			clean := make([]string, len(row))
+			hasContent := false
+			for j, cell := range row {
+				if !isJunkCell(cell) {
+					clean[j] = strings.TrimSpace(cell)
+					hasContent = true
+				}
+			}
+			if hasContent {
+				headers = clean
+				dataStart = i + 1
+				break
+			}
+		}
+
+		// Write headers as a markdown table header row.
+		if len(headers) > 0 {
+			sb.WriteString("| " + strings.Join(headers, " | ") + " |\n")
+			sep := make([]string, len(headers))
+			for i := range sep {
+				sep[i] = "---"
+			}
+			sb.WriteString("| " + strings.Join(sep, " | ") + " |\n")
+		}
+
+		truncated := false
+		for i := dataStart; i < len(rows); i++ {
+			if i-dataStart >= maxRowsPerSheet {
+				truncated = true
+				break
+			}
+			row := rows[i]
+			// Skip rows where every cell is junk.
+			allJunk := true
+			for _, cell := range row {
+				if !isJunkCell(cell) {
+					allJunk = false
+					break
+				}
+			}
+			if allJunk {
+				continue
+			}
+			// Pad row to header length.
+			for len(row) < len(headers) {
+				row = append(row, "")
+			}
+			cells := make([]string, len(headers))
+			for j := 0; j < len(headers); j++ {
+				if j < len(row) && !isJunkCell(row[j]) {
+					cells[j] = strings.TrimSpace(row[j])
+				}
+			}
+			sb.WriteString("| " + strings.Join(cells, " | ") + " |\n")
+			if sb.Len() >= maxChars {
+				truncated = true
+				break
+			}
+		}
+		if truncated {
+			sb.WriteString("[... truncated for length ...]\n")
+		}
+		if sb.Len() >= maxChars {
+			break
 		}
 	}
 	return sb.String(), nil
+}
+
+// docxToText extracts plain text from a .docx file (an OOXML ZIP archive).
+// It reads word/document.xml, walks the XML token stream, and collects text
+// from <w:t> elements while inserting newlines at <w:p> paragraph boundaries.
+func docxToText(filename string, data []byte) (string, error) {
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return "", fmt.Errorf("docx: not a valid zip archive: %w", err)
+	}
+	for _, zf := range r.File {
+		if zf.Name != "word/document.xml" {
+			continue
+		}
+		rc, err := zf.Open()
+		if err != nil {
+			return "", err
+		}
+		xmlData, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return "", err
+		}
+		var sb strings.Builder
+		sb.WriteString("=== " + filename + " ===\n")
+		dec := xml.NewDecoder(bytes.NewReader(xmlData))
+		inText := false
+		for {
+			tok, tokErr := dec.Token()
+			if tokErr != nil {
+				break
+			}
+			switch v := tok.(type) {
+			case xml.StartElement:
+				switch v.Name.Local {
+				case "p": // paragraph → newline
+					sb.WriteString("\n")
+				case "t": // <w:t> text run
+					inText = true
+				}
+			case xml.EndElement:
+				if v.Name.Local == "t" {
+					inText = false
+				}
+			case xml.CharData:
+				if inText {
+					sb.WriteString(string(v))
+				}
+			}
+		}
+		text := strings.TrimSpace(sb.String())
+		if text == "" {
+			return "", fmt.Errorf("docx: no text content found")
+		}
+		return text, nil
+	}
+	return "", fmt.Errorf("docx: word/document.xml not found in archive")
 }
 
 func isRFQImageExt(ext string) bool {
@@ -4774,6 +5459,7 @@ Extract the following and respond with ONLY valid JSON (no markdown, no explanat
 
 Rules:
 - If a field is not found, use an empty string or 0 for quantity.
+- IMPORTANT: The CUSTOMER is the person/company who SENT this email or document — they are requesting the quotation. Use the "From:" header (email address / sender name) as the primary source for customer identity. Do NOT use the recipient's company name (the company receiving the RFQ) as the customer.
 - customer_name should be the COMPANY name whenever one is present. Only fall back to a person's name when no company is identifiable.
 - customer_contact_person is the individual's name (different from the company name).
 - Extract ALL products/items mentioned; do not skip any.
@@ -4833,7 +5519,7 @@ func openAICompatBaseURL(provider string) string {
 // which requires an account-ID in the URL); pass "" to use the provider default.
 func callLLMExtractRFQ(apiKey, model, provider, textContent string, imageDataURIs, pdfBase64s []string, baseURL string) (string, error) {
 	prompt := buildRFQExtractionPrompt(textContent)
-	const maxTokens = 4096
+	const maxTokens = 16000
 
 	switch provider {
 	case "gemini":
@@ -4854,6 +5540,9 @@ func callLLMExtractRFQ(apiKey, model, provider, textContent string, imageDataURI
 func callOpenAICompatExtractRFQ(apiKey, model, prompt string, imageDataURIs []string, maxTokens int, baseURL string) (string, error) {
 	if model == "" {
 		model = "gpt-4o-mini"
+	}
+	if baseURL == "__cloudflare_missing_account_id__" {
+		return "", fmt.Errorf("cloudflare: Cloudflare Account ID is not configured. Add it under Store → AI Models → Cloudflare Account ID")
 	}
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1/chat/completions"
@@ -4901,7 +5590,7 @@ func callOpenAICompatExtractRFQ(apiKey, model, prompt string, imageDataURIs []st
 	req, _ := http.NewRequest("POST", baseURL, bytes.NewReader(payload))
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 300 * time.Second}).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -4956,7 +5645,7 @@ func callAnthropicExtractRFQ(apiKey, model, prompt string, imageDataURIs, pdfBas
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("anthropic-beta", "pdfs-2024-09-25")
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 300 * time.Second}).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -5014,7 +5703,7 @@ func callGeminiExtractRFQ(apiKey, model, prompt string, imageDataURIs, pdfBase64
 	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
 	req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+	resp, err := (&http.Client{Timeout: 300 * time.Second}).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -5110,7 +5799,7 @@ func RefetchSupplierMapsHandler(w http.ResponseWriter, r *http.Request) {
 	var enrichErr error
 	for _, market := range markets {
 		sup.PurchaseMarket = market
-		enriched, enrichErr = enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, sup)
+		enriched, enrichErr = enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, sup, store.Settings.PurchaseMarkets...)
 		if enrichErr != nil {
 			break
 		}
@@ -5133,16 +5822,21 @@ func RefetchSupplierMapsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save"}`, http.StatusInternalServerError)
 		return
 	}
+	// If still no categories but a website is now known, infer them from the website.
+	if len(sup.Categories) == 0 && sup.Website != "" {
+		go inferSupplierCategoriesFromWebsite(store, *sup)
+	}
 	BroadcastRFQEvent(storeIDStr, "supplier_updated")
 	json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok", "supplier": sup})
 }
 
 // enrichSupplierFromGoogleMaps searches Google Maps by the supplier's name,
 // takes the best match, and mutates the supplied record with address/rating/website/maps URL.
+// If purchaseMarkets is non-empty, also sets PurchaseMarket by matching the city from address components.
 // Returns true if a match was found.
-func enrichSupplierFromGoogleMaps(apiKey string, sup *models.RFQSupplier) (bool, error) {
+func enrichSupplierFromGoogleMaps(apiKey string, sup *models.RFQSupplier, purchaseMarkets ...string) (bool, error) {
 	const endpoint = "https://places.googleapis.com/v1/places:searchText"
-	const fieldMask = "places.id,places.displayName,places.formattedAddress,places.rating,places.location,places.internationalPhoneNumber,places.websiteUri"
+	const fieldMask = "places.id,places.displayName,places.formattedAddress,places.addressComponents,places.rating,places.location,places.internationalPhoneNumber,places.websiteUri,places.primaryType,places.types"
 
 	query := sup.Name
 	if sup.PurchaseMarket != "" {
@@ -5181,6 +5875,11 @@ func enrichSupplierFromGoogleMaps(apiKey string, sup *models.RFQSupplier) (bool,
 				Latitude  float64 `json:"latitude"`
 				Longitude float64 `json:"longitude"`
 			} `json:"location"`
+			AddressComponents []struct {
+				LongText  string   `json:"longText"`
+				ShortText string   `json:"shortText"`
+				Types     []string `json:"types"`
+			} `json:"addressComponents"`
 		} `json:"places"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
@@ -5224,5 +5923,109 @@ func enrichSupplierFromGoogleMaps(apiKey string, sup *models.RFQSupplier) (bool,
 	if best.DisplayName.Text != "" && sup.Name == "" {
 		sup.Name = best.DisplayName.Text
 	}
+
+	// Extract city from address components and match against configured purchase markets.
+	if sup.PurchaseMarket == "" && len(purchaseMarkets) > 0 {
+		// Extract city: locality > sublocality > administrative_area_level_2
+		cityFromAddr := ""
+		for _, priority := range []string{"locality", "sublocality_level_1", "sublocality", "administrative_area_level_2"} {
+			for _, ac := range best.AddressComponents {
+				for _, t := range ac.Types {
+					if t == priority && ac.LongText != "" {
+						cityFromAddr = ac.LongText
+					}
+				}
+				if cityFromAddr != "" {
+					break
+				}
+			}
+			if cityFromAddr != "" {
+				break
+			}
+		}
+		if cityFromAddr != "" {
+			for _, m := range purchaseMarkets {
+				if strings.EqualFold(m, cityFromAddr) {
+					sup.PurchaseMarket = m
+					break
+				}
+				// fuzzy: market name contained in city or vice versa
+				if strings.Contains(strings.ToLower(cityFromAddr), strings.ToLower(m)) ||
+					strings.Contains(strings.ToLower(m), strings.ToLower(cityFromAddr)) {
+					sup.PurchaseMarket = m
+					break
+				}
+			}
+		}
+		log.Printf("enrichSupplierFromGoogleMaps: city=%q market=%q", cityFromAddr, sup.PurchaseMarket)
+	}
+
 	return true, nil
+}
+
+// POST /v1/rfq-suppliers/backfill-markets?store_id=...
+// Goes through all suppliers with no purchase_market and tries to set it from Google Maps.
+func BackfillSupplierMarketsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	if store.Settings.GoogleMapsAPIKey == "" {
+		http.Error(w, `{"error":"Google Maps API key not configured"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Load all suppliers for this store with no purchase_market
+	result, err := models.ListRFQSuppliers(storeObjID, 1, 500, "", nil)
+	all := []models.RFQSupplier{}
+	if result != nil {
+		all = result.Items
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	updated, skipped, failed := 0, 0, 0
+	for i := range all {
+		sup := &all[i]
+		if sup.PurchaseMarket != "" {
+			skipped++
+			continue
+		}
+		if sup.Name == "" {
+			skipped++
+			continue
+		}
+		enriched, eErr := enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, sup, store.Settings.PurchaseMarkets...)
+		if eErr != nil {
+			log.Printf("backfill-markets: enrich error for %s: %v", sup.Phone, eErr)
+			failed++
+			continue
+		}
+		if enriched && sup.PurchaseMarket != "" {
+			if uErr := models.UpsertRFQSupplierByPlaceID(sup); uErr != nil {
+				log.Printf("backfill-markets: save error for %s: %v", sup.Phone, uErr)
+				failed++
+			} else {
+				updated++
+				log.Printf("backfill-markets: set market=%q for %s (%s)", sup.PurchaseMarket, sup.Name, sup.Phone)
+			}
+		} else {
+			skipped++
+		}
+	}
+	BroadcastRFQEvent(storeObjID.Hex(), "supplier_updated")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"updated": updated,
+		"skipped": skipped,
+		"failed":  failed,
+	})
 }

@@ -799,10 +799,11 @@ func FindOrCreateCustomerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Name    string `json:"name"`
-		Phone   string `json:"phone"`
-		Email   string `json:"email"`
-		Company string `json:"company"`
+		Name          string `json:"name"`
+		Phone         string `json:"phone"`
+		Email         string `json:"email"`
+		Company       string `json:"company"`
+		ContactPerson string `json:"contact_person"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -850,7 +851,8 @@ func FindOrCreateCustomerHandler(w http.ResponseWriter, r *http.Request) {
 		normalizedPhone,
 		"",
 		strings.TrimSpace(body.Company),
-		"", "",
+		strings.TrimSpace(body.ContactPerson),
+		"",
 	)
 	if err != nil || customer == nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -890,6 +892,79 @@ func phoneNormVariants(raw string) []string {
 		variants = append(variants, strings.TrimSpace(raw))
 	}
 	return variants
+}
+
+// FindCustomerByPhoneHandler handles GET /v1/customer/by-phone?store_id=...&phone=...
+// Returns { id, name } or 404 when not found. Uses phoneNormVariants so any
+// common formatting of a Saudi number resolves to the same customer.
+func FindCustomerByPhoneHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	phone := strings.TrimSpace(r.URL.Query().Get("phone"))
+	if phone == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "phone required"})
+		return
+	}
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil || store == nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "store not found"})
+		return
+	}
+	for _, variant := range phoneNormVariants(phone) {
+		if variant == "" {
+			continue
+		}
+		c, _ := store.FindCustomerByEmailOrPhone("", variant, bson.M{"_id": 1, "name": 1})
+		if c != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{"id": c.ID.Hex(), "name": c.Name})
+			return
+		}
+	}
+	// Regex fallback: match any customer whose phone contains the same digits regardless of
+	// separators (handles phones stored as "+966 55 601 4267" or "966-55-601-4267" etc.)
+	digits := ""
+	for _, ch := range phone {
+		if ch >= '0' && ch <= '9' {
+			digits += string(ch)
+		}
+	}
+	if digits != "" {
+		c, _ := store.FindCustomerByPhoneRegex(digits, bson.M{"_id": 1, "name": 1})
+		if c != nil {
+			// Normalize the stored phone so future exact lookups work
+			go func() { models.NormalizeCustomerPhonesInStore(storeID) }() //nolint
+			json.NewEncoder(w).Encode(map[string]interface{}{"id": c.ID.Hex(), "name": c.Name})
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNotFound)
+	json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+}
+
+// NormalizeCustomerPhonesHandler handles POST /v1/customers/normalize-phones?store_id=...
+// Strips + and spaces from all customer phone numbers so lookups always work.
+func NormalizeCustomerPhonesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	n, err := models.NormalizeCustomerPhonesInStore(storeID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"normalized": n})
 }
 
 // findCustomerByNameExact searches for a customer by exact name match.

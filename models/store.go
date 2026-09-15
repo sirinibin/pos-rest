@@ -163,6 +163,11 @@ type RFQEmailAccount struct {
 	IMAPUsername string `bson:"imap_username,omitempty" json:"imap_username,omitempty"`
 	IMAPPassword string `bson:"imap_password,omitempty" json:"-"`
 	IMAPUseSSL   bool   `bson:"imap_use_ssl" json:"imap_use_ssl"`
+	// SMTP (outgoing) — optional. If blank, IMAP credentials are used to derive SMTP.
+	SMTPHost     string `bson:"smtp_host,omitempty" json:"smtp_host,omitempty"`
+	SMTPPort     int    `bson:"smtp_port,omitempty" json:"smtp_port,omitempty"`
+	SMTPUsername string `bson:"smtp_username,omitempty" json:"smtp_username,omitempty"`
+	SMTPPassword string `bson:"smtp_password,omitempty" json:"-"`
 	// OAuthCallbackURL is the redirect URI used during the OAuth flow for this account.
 	// Stored so the callback handler can use the same URL when exchanging the code.
 	OAuthCallbackURL string `bson:"oauth_callback_url,omitempty" json:"oauth_callback_url,omitempty"`
@@ -344,6 +349,10 @@ type StoreSettings struct {
 	RFQZohoClientSecret  string `bson:"rfq_zoho_client_secret" json:"rfq_zoho_client_secret,omitempty"`
 	RFQZohoAccessToken   string `bson:"rfq_zoho_access_token,omitempty" json:"-"`
 	RFQZohoRefreshToken  string `bson:"rfq_zoho_refresh_token,omitempty" json:"-"`
+
+	// Zoho SMTP — used to send email replies from the procurement inbox (smtppro.zoho.in:465 SSL)
+	RFQZohoSMTPUsername string `bson:"rfq_zoho_smtp_username,omitempty" json:"rfq_zoho_smtp_username,omitempty"`
+	RFQZohoSMTPPassword string `bson:"rfq_zoho_smtp_password,omitempty" json:"rfq_zoho_smtp_password,omitempty"`
 
 	// Mailgun (inbound webhook)
 	RFQMailgunAPIKey string `bson:"rfq_mailgun_api_key" json:"rfq_mailgun_api_key,omitempty"`

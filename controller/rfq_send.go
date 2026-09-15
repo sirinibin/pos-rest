@@ -4,7 +4,9 @@ package controller
 // GetRFQSendPreviewHandler  — GET  /v1/rfq-received/{id}/send-preview?store_id=...
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +22,8 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/gorilla/mux"
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -528,14 +532,14 @@ func SendRFQToSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 					log.Printf("rfq_send: upserted new supplier %s (%s)", sup.Name, sup.Phone)
 					// Enrich with Google Maps in the background (address, rating, website, etc.)
 					if store.Settings.GoogleMapsAPIKey != "" {
-						go func(s *models.RFQSupplier, storeIDHex string) {
-							if enriched, err := enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, s); err != nil {
+						go func(s *models.RFQSupplier, storeIDHex string, markets []string) {
+							if enriched, err := enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, s, markets...); err != nil {
 								log.Printf("rfq_send: Maps enrich error for %s: %v", s.Phone, err)
 							} else if enriched {
 								models.UpsertRFQSupplierByPlaceID(s) //nolint:errcheck
 								BroadcastRFQEvent(storeIDHex, "supplier_updated")
 							}
-						}(newSup, storeObjID.Hex())
+						}(newSup, storeObjID.Hex(), store.Settings.PurchaseMarkets)
 					}
 				}
 			}
@@ -1167,6 +1171,39 @@ func GenerateRFQPreviewImageHandler(w http.ResponseWriter, r *http.Request) {
 // GenerateRFQPDFHandler generates a PDF of the RFQ print page via headless Chrome,
 // uploads it to Meta as a document, and returns the media_id.
 // POST /v1/rfq-received/{id}/generate-pdf?store_id=...
+// mergeAdditionalPDFs appends any PDF data-URIs from additionalDataURIs to mainPDF and
+// returns the merged PDF bytes.  Non-PDF entries are silently skipped.
+// If no valid additional PDFs are found, mainPDF is returned unchanged.
+func mergeAdditionalPDFs(mainPDF []byte, additionalDataURIs []string) []byte {
+	if len(additionalDataURIs) == 0 {
+		return mainPDF
+	}
+	readers := []io.ReadSeeker{bytes.NewReader(mainPDF)}
+	for _, uri := range additionalDataURIs {
+		const prefix = "data:application/pdf;base64,"
+		if !strings.HasPrefix(uri, prefix) {
+			continue
+		}
+		raw, err := base64.StdEncoding.DecodeString(uri[len(prefix):])
+		if err != nil {
+			log.Printf("mergeAdditionalPDFs: base64 decode error: %v", err)
+			continue
+		}
+		readers = append(readers, bytes.NewReader(raw))
+	}
+	if len(readers) == 1 {
+		return mainPDF // nothing to merge
+	}
+	var out bytes.Buffer
+	conf := model.NewDefaultConfiguration()
+	conf.ValidationMode = model.ValidationRelaxed
+	if err := api.MergeRaw(readers, &out, false, conf); err != nil {
+		log.Printf("mergeAdditionalPDFs: merge error: %v — returning main PDF only", err)
+		return mainPDF
+	}
+	return out.Bytes()
+}
+
 func GenerateRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	genTokenClaims, genAuthErr := models.AuthenticateByAccessToken(r)
@@ -1276,6 +1313,9 @@ func GenerateRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Append any additional detail PDFs as extra pages.
+	pdfBuf = mergeAdditionalPDFs(pdfBuf, rfq.AdditionalAttachmentDataURIs)
+
 	fileName := fmt.Sprintf("%s.pdf", rfq.Code)
 	mediaID, uploadErr := metaUploadMedia(phoneNumberID, accessToken, "application/pdf", fileName, pdfBuf)
 	if uploadErr != nil {
@@ -1374,6 +1414,9 @@ func DownloadRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "PDF generation failed", http.StatusInternalServerError)
 		return
 	}
+
+	// Append any additional detail PDFs as extra pages.
+	pdfBuf = mergeAdditionalPDFs(pdfBuf, rfq.AdditionalAttachmentDataURIs)
 
 	fileName := fmt.Sprintf("%s.pdf", rfq.Code)
 	w.Header().Set("Content-Type", "application/pdf")

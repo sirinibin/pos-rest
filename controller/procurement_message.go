@@ -107,6 +107,8 @@ func GetProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteProcurementMessageHandler handles DELETE /v1/procurement-messages/{id}
+// Optional query param: scope=everyone — attempts to retract the message via Meta Cloud API
+// before removing it from the local database.
 func DeleteProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	id, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
@@ -115,8 +117,32 @@ func DeleteProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id"})
 		return
 	}
-	// Delete disk files before removing the DB record.
-	if msg, _ := models.GetProcurementMessage(id); msg != nil {
+
+	msg, _ := models.GetProcurementMessage(id)
+
+	// "Delete for everyone" — best-effort Meta Cloud API retraction before local delete.
+	// Only outgoing messages have a wamid (ExternalID) we can retract.
+	var retractErr string
+	if r.URL.Query().Get("scope") == "everyone" && msg != nil && msg.Direction == "out" && msg.ExternalID != "" {
+		storeIDStr := msg.StoreID.Hex()
+		phoneNumberID, accessToken := rfqMetaConfig(storeIDStr, "store_rfq")
+		if phoneNumberID == "" || accessToken == "" {
+			phoneNumberID, accessToken = rfqMetaConfig(storeIDStr, "bot")
+		}
+		if phoneNumberID != "" && accessToken != "" {
+			if rErr := metaDeleteMessage(phoneNumberID, accessToken, msg.ExternalID); rErr != nil {
+				retractErr = rErr.Error()
+				log.Printf("procurement: meta retract %s: %v", msg.ExternalID, rErr)
+			}
+		} else {
+			retractErr = "WABA not configured"
+		}
+	} else if r.URL.Query().Get("scope") == "everyone" && msg != nil && msg.ExternalID == "" {
+		retractErr = "message ID not available (only new sent messages can be retracted)"
+	}
+
+	// Delete disk files, then remove the DB record (always, regardless of retraction result).
+	if msg != nil {
 		deleteAttachmentDirs([]models.ProcurementMessage{*msg})
 	}
 	if err := models.DeleteProcurementMessage(id); err != nil {
@@ -124,7 +150,11 @@ func DeleteProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	resp := map[string]interface{}{"success": true}
+	if retractErr != "" {
+		resp["retract_warning"] = "message deleted locally; WhatsApp retraction failed: " + retractErr
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 // DeleteAllProcurementMessagesHandler handles DELETE /v1/procurement-messages?store_id=&type=
@@ -239,7 +269,8 @@ func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider
 }
 
 // saveProcurementWhatsAppMessage persists a WhatsApp message record and returns the saved message.
-func saveProcurementWhatsAppMessage(storeID primitive.ObjectID, direction, from string, to []string, bodyText, waMessageType, wabaPNID string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID, messageDate *time.Time) *models.ProcurementMessage {
+// externalID is the WhatsApp message ID (wamid) returned by the API; pass "" if not available.
+func saveProcurementWhatsAppMessage(storeID primitive.ObjectID, direction, from string, to []string, bodyText, waMessageType, wabaPNID, externalID string, attachments []models.ProcurementAttachment, processedAsRFQ bool, rfqID *primitive.ObjectID, messageDate *time.Time) *models.ProcurementMessage {
 	if attachments == nil {
 		attachments = []models.ProcurementAttachment{}
 	}
@@ -256,6 +287,7 @@ func saveProcurementWhatsAppMessage(storeID primitive.ObjectID, direction, from 
 		BodyText:          bodyText,
 		WAMessageType:     waMessageType,
 		WABAPhoneNumberID: wabaPNID,
+		ExternalID:        externalID,
 		Attachments:       attachments,
 		ProcessedAsRFQ:    processedAsRFQ,
 		RFQReceivedID:     rfqID,
@@ -327,13 +359,13 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Build text content from the procurement message.
-	emailText := procMsg.BodyText
+	// Build text content from the procurement message (strip HTML/CSS from email bodies).
+	emailText := htmlToPlainText(procMsg.BodyText)
 	if emailText == "" {
-		emailText = procMsg.BodyHTML
+		emailText = htmlToPlainText(procMsg.BodyHTML)
 	}
 
-	// For WhatsApp messages, body_text is already the text content.
+	// For WhatsApp messages, body_text is already plain text — htmlToPlainText is a no-op.
 	// Build attachment data for LLM.
 	var imageDataURIs []string
 	var pdfBase64s []string
@@ -504,11 +536,17 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build content from the email message itself.
-	emailText := procMsg.Subject
-	if procMsg.BodyText != "" {
-		emailText += "\n\n" + procMsg.BodyText
-	} else if procMsg.BodyHTML != "" {
-		emailText += "\n\n" + procMsg.BodyHTML
+	// Strip HTML/CSS from both body variants; prefer body_text, fall back to body_html.
+	emailText := "Subject: " + procMsg.Subject
+	if procMsg.From != "" {
+		emailText += "\nFrom: " + procMsg.From
+	}
+	bodyText := htmlToPlainText(procMsg.BodyText)
+	bodyHTML := htmlToPlainText(procMsg.BodyHTML)
+	if bodyText != "" {
+		emailText += "\n\n" + bodyText
+	} else if bodyHTML != "" {
+		emailText += "\n\n" + bodyHTML
 	}
 
 	var imageDataURIs []string
@@ -542,8 +580,31 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 			if txt, exErr := excelToText(att.Filename, data); exErr == nil {
 				textParts = append(textParts, txt)
 			}
+		case ext == ".docx":
+			if txt, exErr := docxToText(att.Filename, data); exErr == nil {
+				textParts = append(textParts, txt)
+			}
 		case ext == ".csv" || ext == ".txt":
 			textParts = append(textParts, "=== "+att.Filename+" ===\n"+string(data))
+		}
+	}
+
+	// Extract embedded base64 images from body_html (put there at ingestion time) for LLM vision.
+	if procMsg.BodyHTML != "" && len(imageDataURIs) < 5 {
+		remaining := procMsg.BodyHTML
+		for len(imageDataURIs) < 5 {
+			start := strings.Index(remaining, `src="data:image/`)
+			if start < 0 {
+				break
+			}
+			valStart := start + 5 // skip 'src="'
+			end := strings.Index(remaining[valStart:], `"`)
+			if end < 0 {
+				break
+			}
+			dataURI := remaining[valStart : valStart+end]
+			imageDataURIs = append(imageDataURIs, dataURI)
+			remaining = remaining[valStart+end:]
 		}
 	}
 
@@ -561,6 +622,10 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case ext == ".xlsx" || ext == ".xls" || strings.Contains(ct, "spreadsheet") || strings.Contains(ct, "excel"):
 				if txt, exErr := excelToText(fh.Filename, data); exErr == nil {
+					textParts = append(textParts, txt)
+				}
+			case ext == ".docx" || strings.Contains(ct, "wordprocessingml"):
+				if txt, exErr := docxToText(fh.Filename, data); exErr == nil {
 					textParts = append(textParts, txt)
 				}
 			case ext == ".pdf" || strings.Contains(ct, "pdf"):
@@ -599,7 +664,7 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 	jsonStr := extractJSONFromLLMResponse(responseText)
 	var result rfqExtractResult
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		result = rfqExtractResult{TextContent: responseText, LLMModel: usedModel}
+		result = rfqExtractResult{TextContent: jsonStr, LLMModel: usedModel}
 	} else {
 		result.LLMModel = usedModel
 	}
@@ -665,6 +730,10 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		case ".xlsx", ".xls":
 			if txt, exErr := excelToText(att.Filename, data); exErr == nil {
+				textParts = append(textParts, txt)
+			}
+		case ".docx":
+			if txt, exErr := docxToText(att.Filename, data); exErr == nil {
 				textParts = append(textParts, txt)
 			}
 		case ".csv", ".txt":
@@ -1022,6 +1091,10 @@ func ProcurementExtractTestHandler(w http.ResponseWriter, r *http.Request) {
 				if txt, exErr := excelToText(fh.Filename, data); exErr == nil {
 					textParts = append(textParts, txt)
 				}
+			case ext == ".docx" || strings.Contains(ct, "wordprocessingml"):
+				if txt, exErr := docxToText(fh.Filename, data); exErr == nil {
+					textParts = append(textParts, txt)
+				}
 			case ext == ".pdf" || strings.Contains(ct, "pdf"):
 				pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
 				if extracted := extractPDFText(data); extracted != "" {
@@ -1202,7 +1275,459 @@ func LinkAsQuotationHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ResolveProcurementSendersHandler handles POST /v1/procurement-messages/resolve-senders
+// Backfills sender_name / sender_type on all inbound messages that have no sender resolved.
+// Safe to call multiple times — only touches messages with empty sender_name.
+func ResolveProcurementSendersHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	if storeIDStr == "" {
+		var body struct {
+			StoreID string `json:"store_id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		storeIDStr = body.StoreID
+	}
+	storeID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	updated, err := models.BackfillProcurementSenders(storeID, 0)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "updated": updated})
+}
+
 // extractRFQCodeSimple scans free text for an "RFQ-XXXX" style code and returns it.
 func extractRFQCodeSimple(text string) string {
 	return extractRFQCodeFromText(text, "RFQ")
+}
+
+// ReplyToProcurementMessageHandler handles POST /v1/procurement-messages/{id}/reply
+// Sends a free-text WhatsApp reply to the sender of the given procurement message,
+// then saves the outbound message as a new ProcurementMessage (direction: "out").
+func ReplyToProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	msgID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id"})
+		return
+	}
+
+	var body struct {
+		Text    string `json:"text"`
+		StoreID string `json:"store_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Text) == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "text is required"})
+		return
+	}
+
+	// Allow store_id from query param as fallback
+	if body.StoreID == "" {
+		body.StoreID = r.URL.Query().Get("store_id")
+	}
+
+	origMsg, err := models.GetProcurementMessage(msgID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "message not found"})
+		return
+	}
+
+	recipientPhone := origMsg.From
+	if recipientPhone == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "original message has no sender phone"})
+		return
+	}
+
+	storeIDStr := body.StoreID
+	if storeIDStr == "" {
+		storeIDStr = origMsg.StoreID.Hex()
+	}
+
+	// Prefer Meta WhatsApp Cloud API (store_rfq → bot) then fall back to Evolution API
+	metaPhoneID, metaToken := rfqMetaConfig(storeIDStr, "store_rfq")
+	if metaPhoneID == "" || metaToken == "" {
+		metaPhoneID, metaToken = rfqMetaConfig(storeIDStr, "bot")
+	}
+	var replyWamid string
+	if metaPhoneID != "" && metaToken != "" {
+		var err error
+		replyWamid, err = metaSendText(metaPhoneID, metaToken, recipientPhone, body.Text)
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": "WhatsApp API error: " + err.Error()})
+			return
+		}
+	} else {
+		evoURL, evoKey, evoInstance := evoConfigFromStore(storeIDStr)
+		base := strings.TrimRight(evoURL, "/")
+		if strings.HasSuffix(recipientPhone, "@lid") {
+			if resolved := resolveLIDPhone(base, evoKey, evoInstance, recipientPhone); resolved != "" {
+				recipientPhone = resolved
+			}
+		}
+		payload, _ := json.Marshal(map[string]string{"number": recipientPhone, "text": body.Text})
+		respBody, status, err := evoCall("POST",
+			fmt.Sprintf("%s/message/sendText/%s", base, evoInstance),
+			evoKey, payload)
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Evolution API unreachable: " + err.Error()})
+			return
+		}
+		if status != http.StatusOK && status != http.StatusCreated {
+			w.WriteHeader(http.StatusBadGateway)
+			fmt.Fprintf(w, `{"error":"Evolution API error","detail":%s}`, string(respBody))
+			return
+		}
+	}
+
+	// Save the outbound message
+	now := time.Now()
+	storeObjID := origMsg.StoreID
+	if sid, err2 := primitive.ObjectIDFromHex(storeIDStr); err2 == nil {
+		storeObjID = sid
+	}
+	saved := saveProcurementWhatsAppMessage(
+		storeObjID, "out",
+		"", // from (our side — empty for outbound)
+		[]string{origMsg.From},
+		body.Text, "text",
+		origMsg.WABAPhoneNumberID,
+		replyWamid,
+		nil, false, nil, &now,
+	)
+
+	resp := map[string]interface{}{"success": true}
+	if saved != nil {
+		resp["message_id"] = saved.ID.Hex()
+		resp["code"] = saved.Code
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
+
+// GetProcurementDiskUsageHandler returns the total disk space used by procurement message attachments.
+// GET /v1/procurement-messages/disk-usage?store_id=X
+func GetProcurementDiskUsageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeID := r.URL.Query().Get("store_id")
+	if storeID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"error":"store_id required"}`)
+		return
+	}
+
+	dir := "./attachments/" + storeID
+	var totalBytes int64
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			totalBytes += info.Size()
+		}
+		return nil
+	})
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"total_bytes": totalBytes,
+		"formatted":   formatStorageBytes(totalBytes),
+	})
+}
+
+func formatStorageBytes(b int64) string {
+	switch {
+	case b < 1024:
+		return fmt.Sprintf("%d B", b)
+	case b < 1024*1024:
+		return fmt.Sprintf("%.1f KB", float64(b)/1024)
+	case b < 1024*1024*1024:
+		return fmt.Sprintf("%.1f MB", float64(b)/(1024*1024))
+	default:
+		return fmt.Sprintf("%.2f GB", float64(b)/(1024*1024*1024))
+	}
+}
+
+// ReplyToEmailProcurementMessageHandler handles POST /v1/procurement-messages/{id}/email-reply
+// Sends an email reply via Zoho SMTP and records the outbound message.
+// Body: { "store_id": "...", "subject": "Re: ...", "body": "..." }
+func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	msgID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id"})
+		return
+	}
+
+	var body struct {
+		StoreID string `json:"store_id"`
+		Subject string `json:"subject"`
+		Body    string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Body) == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "body is required"})
+		return
+	}
+	if body.StoreID == "" {
+		body.StoreID = r.URL.Query().Get("store_id")
+	}
+
+	origMsg, err := models.GetProcurementMessage(msgID)
+	if err != nil || origMsg == nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "message not found"})
+		return
+	}
+	if origMsg.Type != "email" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "not an email message"})
+		return
+	}
+	replyTo := origMsg.From
+	if replyTo == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "original message has no sender email"})
+		return
+	}
+
+	storeIDStr := body.StoreID
+	if storeIDStr == "" {
+		storeIDStr = origMsg.StoreID.Hex()
+	}
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "store not found"})
+		return
+	}
+
+	var sendErr error
+	var fromAddr string
+
+	smtpUser := store.Settings.RFQZohoSMTPUsername
+	smtpPass := store.Settings.RFQZohoSMTPPassword
+
+	subject := strings.TrimSpace(body.Subject)
+	if subject == "" {
+		orig := strings.TrimSpace(origMsg.Subject)
+		if strings.HasPrefix(strings.ToLower(orig), "re:") {
+			subject = orig
+		} else {
+			subject = "Re: " + orig
+		}
+	}
+
+	if smtpUser != "" && smtpPass != "" {
+		// Use dedicated Zoho SMTP credentials
+		fromAddr = smtpUser
+		sendErr = sendViaZohoSMTPReply(smtpUser, smtpPass, smtpUser, replyTo, subject, body.Body)
+	} else if store.Settings.RFQIMAPHost != "" && store.Settings.RFQIMAPUsername != "" && store.Settings.RFQIMAPPassword != "" {
+		// Derive SMTP from IMAP credentials (old-style single account)
+		fromAddr = store.Settings.RFQIMAPUsername
+		sendErr = sendViaIMAPCredentialsSMTP(
+			store.Settings.RFQIMAPHost,
+			store.Settings.RFQIMAPPort,
+			store.Settings.RFQIMAPUsername,
+			store.Settings.RFQIMAPPassword,
+			fromAddr, replyTo, subject, body.Body,
+		)
+	} else {
+		// Check per-account SMTP or IMAP credentials
+		for _, acct := range store.Settings.RFQEmailAccounts {
+			if acct.SMTPUsername != "" && acct.SMTPPassword != "" {
+				fromAddr = acct.SMTPUsername
+				smtpHost := acct.SMTPHost
+				smtpPort := acct.SMTPPort
+				if smtpHost == "" && acct.IMAPHost != "" {
+					smtpHost, smtpPort, _ = smtpHostFromIMAPHost(acct.IMAPHost)
+				}
+				if smtpPort == 0 {
+					smtpPort = 465
+				}
+				sendErr = sendViaIMAPCredentialsSMTP(smtpHost, smtpPort, acct.SMTPUsername, acct.SMTPPassword, fromAddr, replyTo, subject, body.Body)
+				break
+			}
+			if acct.IMAPHost != "" && acct.IMAPUsername != "" && acct.IMAPPassword != "" {
+				fromAddr = acct.IMAPUsername
+				port := acct.IMAPPort
+				if port == 0 {
+					port = 993
+				}
+				sendErr = sendViaIMAPCredentialsSMTP(acct.IMAPHost, port, acct.IMAPUsername, acct.IMAPPassword, fromAddr, replyTo, subject, body.Body)
+				break
+			}
+		}
+		if fromAddr == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "No outgoing email configured. Add IMAP credentials (or Zoho SMTP) in Store Settings → Procurement → Email"})
+			return
+		}
+	}
+
+	if sendErr != nil {
+		log.Printf("email-reply: SMTP error: %v", sendErr)
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to send email: " + sendErr.Error()})
+		return
+	}
+
+	// Record the outbound message.
+	now := time.Now()
+	out := &models.ProcurementMessage{
+		StoreID:               storeObjID,
+		Type:                  "email",
+		Direction:             "out",
+		Provider:              origMsg.Provider,
+		From:                  fromAddr,
+		To:                    []string{replyTo},
+		Subject:               subject,
+		BodyText:              body.Body,
+		CreatedAt:             now,
+		MessageDate:           &now,
+		LinkedRFQReceivedID:   origMsg.RFQReceivedID,
+		LinkedRFQReceivedCode: origMsg.RFQReceivedCode,
+	}
+	out.Code = models.MakeProcurementMessageCode(storeObjID, "email")
+	_ = models.SaveProcurementMessage(out)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": "sent", "to": replyTo})
+}
+
+// SendNewEmailHandler sends a new (non-reply) email to an arbitrary address.
+// POST /v1/procurement-email-send?store_id=
+// Body: { "to": "...", "subject": "...", "body": "...", "store_id": "..." }
+func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var body struct {
+		StoreID string `json:"store_id"`
+		To      string `json:"to"`
+		Subject string `json:"subject"`
+		Body    string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON"})
+		return
+	}
+	if body.StoreID == "" {
+		body.StoreID = r.URL.Query().Get("store_id")
+	}
+	if strings.TrimSpace(body.To) == "" || strings.TrimSpace(body.Body) == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "to and body are required"})
+		return
+	}
+
+	storeObjID, err := primitive.ObjectIDFromHex(body.StoreID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "store not found"})
+		return
+	}
+
+	var sendErr error
+	var fromAddr string
+
+	smtpUser := store.Settings.RFQZohoSMTPUsername
+	smtpPass := store.Settings.RFQZohoSMTPPassword
+
+	subject := strings.TrimSpace(body.Subject)
+	if subject == "" {
+		subject = "Message from StartPOS"
+	}
+
+	if smtpUser != "" && smtpPass != "" {
+		fromAddr = smtpUser
+		sendErr = sendViaZohoSMTPReply(smtpUser, smtpPass, smtpUser, body.To, subject, body.Body)
+	} else if store.Settings.RFQIMAPHost != "" && store.Settings.RFQIMAPUsername != "" && store.Settings.RFQIMAPPassword != "" {
+		fromAddr = store.Settings.RFQIMAPUsername
+		sendErr = sendViaIMAPCredentialsSMTP(
+			store.Settings.RFQIMAPHost,
+			store.Settings.RFQIMAPPort,
+			store.Settings.RFQIMAPUsername,
+			store.Settings.RFQIMAPPassword,
+			fromAddr, body.To, subject, body.Body,
+		)
+	} else {
+		// Check per-account SMTP or IMAP credentials
+		for _, acct := range store.Settings.RFQEmailAccounts {
+			if acct.SMTPUsername != "" && acct.SMTPPassword != "" {
+				fromAddr = acct.SMTPUsername
+				smtpHost := acct.SMTPHost
+				smtpPort := acct.SMTPPort
+				if smtpHost == "" && acct.IMAPHost != "" {
+					smtpHost, smtpPort, _ = smtpHostFromIMAPHost(acct.IMAPHost)
+				}
+				if smtpPort == 0 {
+					smtpPort = 465
+				}
+				sendErr = sendViaIMAPCredentialsSMTP(smtpHost, smtpPort, acct.SMTPUsername, acct.SMTPPassword, fromAddr, body.To, subject, body.Body)
+				break
+			}
+			if acct.IMAPHost != "" && acct.IMAPUsername != "" && acct.IMAPPassword != "" {
+				fromAddr = acct.IMAPUsername
+				port := acct.IMAPPort
+				if port == 0 {
+					port = 993
+				}
+				sendErr = sendViaIMAPCredentialsSMTP(acct.IMAPHost, port, acct.IMAPUsername, acct.IMAPPassword, fromAddr, body.To, subject, body.Body)
+				break
+			}
+		}
+		if fromAddr == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "No outgoing email configured in Store Settings → Procurement → Email"})
+			return
+		}
+	}
+
+	if sendErr != nil {
+		log.Printf("send-email: SMTP error: %v", sendErr)
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to send email: " + sendErr.Error()})
+		return
+	}
+
+	now := time.Now()
+	out := &models.ProcurementMessage{
+		StoreID:     storeObjID,
+		Type:        "email",
+		Direction:   "out",
+		Provider:    "imap",
+		From:        fromAddr,
+		To:          []string{body.To},
+		Subject:     subject,
+		BodyText:    body.Body,
+		CreatedAt:   now,
+		MessageDate: &now,
+	}
+	out.Code = models.MakeProcurementMessageCode(storeObjID, "email")
+	_ = models.SaveProcurementMessage(out)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": "sent", "to": body.To})
 }

@@ -2630,6 +2630,102 @@ func (store *Store) FindCustomerByEmailOrPhone(email, phone string, selectFields
 	return &customer, nil
 }
 
+// FindCustomerByPhoneRegex finds a customer whose phone/phone2 field matches the
+// given digits-only string, regardless of spaces, dashes, or leading + stored in DB.
+func (store *Store) FindCustomerByPhoneRegex(digitsOnly string, selectFields map[string]interface{}) (*Customer, error) {
+	if digitsOnly == "" {
+		return nil, nil
+	}
+	// Build a regex that matches digitsOnly with any non-digit separators in between.
+	pattern := `^[^\d]*`
+	for i, d := range digitsOnly {
+		if i > 0 {
+			pattern += `[^\d]*`
+		}
+		pattern += string(d)
+	}
+	pattern += `[^\d]*$`
+	reFilter := bson.M{"$regex": pattern}
+	filter := bson.M{
+		"store_id": store.ID,
+		"deleted":  bson.M{"$ne": true},
+		"$or": []bson.M{
+			{"phone": reFilter},
+			{"phone2": reFilter},
+		},
+	}
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	findOneOptions := options.FindOne()
+	if len(selectFields) > 0 {
+		findOneOptions.SetProjection(selectFields)
+	}
+	var customer Customer
+	if err := collection.FindOne(ctx, filter, findOneOptions).Decode(&customer); err != nil {
+		return nil, nil
+	}
+	return &customer, nil
+}
+
+// NormalizeCustomerPhonesInStore strips leading + and collapses spaces from every
+// customer's phone and phone2 in the store so lookups always work with digits-only variants.
+func NormalizeCustomerPhonesInStore(storeID primitive.ObjectID) (int, error) {
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("customer")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cur, err := collection.Find(ctx, bson.M{"deleted": bson.M{"$ne": true}}, options.Find().SetProjection(bson.M{"_id": 1, "phone": 1, "phone2": 1}))
+	if err != nil {
+		return 0, err
+	}
+	var docs []struct {
+		ID     primitive.ObjectID `bson:"_id"`
+		Phone  string             `bson:"phone"`
+		Phone2 string             `bson:"phone2"`
+	}
+	if err := cur.All(ctx, &docs); err != nil {
+		return 0, err
+	}
+	updated := 0
+	for _, d := range docs {
+		newPhone := normalizePhoneString(d.Phone)
+		newPhone2 := normalizePhoneString(d.Phone2)
+		if newPhone == d.Phone && newPhone2 == d.Phone2 {
+			continue
+		}
+		update := bson.M{}
+		if newPhone != d.Phone {
+			update["phone"] = newPhone
+		}
+		if newPhone2 != d.Phone2 {
+			update["phone2"] = newPhone2
+		}
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		_, err := collection.UpdateOne(ctx2, bson.M{"_id": d.ID}, bson.M{"$set": update})
+		cancel2()
+		if err == nil {
+			updated++
+		}
+	}
+	return updated, nil
+}
+
+// normalizePhoneString strips leading + and all spaces/dashes from a phone string.
+func normalizePhoneString(phone string) string {
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return ""
+	}
+	// Extract digits only
+	digits := ""
+	for _, ch := range phone {
+		if ch >= '0' && ch <= '9' {
+			digits += string(ch)
+		}
+	}
+	return digits
+}
+
 // FindOrCreateCustomerFromRFQ looks up an existing customer by email, phone, or VAT
 // number. If none is found it creates a minimal customer record and returns it.
 // Callers should update the RFQ's CustomerID with the returned customer's ID.
@@ -2659,7 +2755,13 @@ func (store *Store) FindOrCreateCustomerFromRFQ(name, email, phone, vatNo, compa
 	}
 
 	// 3. Create a new customer
-	if name == "" && company != "" {
+	// Company name is always the primary customer name.
+	// If an individual's name landed in `name` but a company is also known,
+	// demote the individual name to contactPerson and use the company as the name.
+	if company != "" {
+		if contactPerson == "" && name != "" && name != company {
+			contactPerson = name // person's name → contact person
+		}
 		name = company
 	}
 	if name == "" && contactPerson != "" {

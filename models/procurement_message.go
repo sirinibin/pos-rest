@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -56,7 +57,11 @@ type ProcurementMessage struct {
 	MessageDate    *time.Time          `bson:"message_date,omitempty" json:"message_date,omitempty"`
 	// Auto-generated human-readable code, e.g. EM-000001 or WA-000001
 	Code           string              `bson:"code,omitempty" json:"code,omitempty"`
-	CreatedAt      time.Time           `bson:"created_at" json:"created_at"`
+	// SenderName / SenderType are resolved by looking up the From phone number
+	// against RFQ suppliers and customers for this store.
+	SenderName string `bson:"sender_name,omitempty" json:"sender_name,omitempty"`
+	SenderType string `bson:"sender_type,omitempty" json:"sender_type,omitempty"` // "supplier" | "customer" | ""
+	CreatedAt  time.Time `bson:"created_at" json:"created_at"`
 }
 
 // MakeProcurementMessageCode generates a serial code for the message.
@@ -96,6 +101,10 @@ func SaveProcurementMessage(msg *ProcurementMessage) error {
 	if msg.Attachments == nil {
 		msg.Attachments = []ProcurementAttachment{}
 	}
+	// Resolve sender identity for inbound messages
+	if msg.Direction == "in" && msg.From != "" && msg.SenderName == "" {
+		msg.SenderName, msg.SenderType = ResolveProcurementSender(msg.StoreID, msg.From)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := procurementMessageCol().InsertOne(ctx, msg)
@@ -103,7 +112,8 @@ func SaveProcurementMessage(msg *ProcurementMessage) error {
 }
 
 // ListProcurementMessages returns paginated messages for a store.
-// rfqFilter: "" = all, "yes" = processed_as_rfq=true, "no" = processed_as_rfq=false/missing.
+// rfqFilter: "" = all, "yes" = processed_as_rfq=true, "no" = processed_as_rfq=false/missing,
+// "quotation" = is_supplier_quotation=true, "other" = not RFQ and not quotation.
 func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int) ([]ProcurementMessage, int64, error) {
 	filter := bson.M{"store_id": storeID}
 	if msgType != "" {
@@ -118,6 +128,13 @@ func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, sea
 		filter["$or"] = []bson.M{
 			{"processed_as_rfq": false},
 			{"processed_as_rfq": bson.M{"$exists": false}},
+		}
+	} else if rfqFilter == "quotation" {
+		filter["is_supplier_quotation"] = true
+	} else if rfqFilter == "other" {
+		filter["$and"] = []bson.M{
+			{"$or": []bson.M{{"processed_as_rfq": false}, {"processed_as_rfq": bson.M{"$exists": false}}}},
+			{"$or": []bson.M{{"is_supplier_quotation": bson.M{"$ne": true}}, {"is_supplier_quotation": bson.M{"$exists": false}}}},
 		}
 	}
 	if search != "" {
@@ -310,6 +327,436 @@ func DeleteOldProcurementMessages(storeID primitive.ObjectID, days int) (int64, 
 		return 0, err
 	}
 	return res.DeletedCount, nil
+}
+
+// ContactThread is a summary of all messages between this store and one contact.
+type ContactThread struct {
+	ContactPhone    string     `bson:"contact_phone" json:"contact_phone"`
+	LastMessageText string     `bson:"last_message_text" json:"last_message_text"`
+	LastMessageDate *time.Time `bson:"last_message_date" json:"last_message_date"`
+	UnreadCount     int        `bson:"unread_count" json:"unread_count"`
+	MessageCount    int        `bson:"message_count" json:"message_count"`
+	SenderName      string     `bson:"sender_name" json:"sender_name"`
+	SenderType      string     `bson:"sender_type" json:"sender_type"`
+	Pinned          bool       `bson:"pinned" json:"pinned"`
+	PinnedAt        *time.Time `bson:"pinned_at,omitempty" json:"pinned_at,omitempty"`
+}
+
+// PinnedContact stores a pinned conversation for a store.
+type PinnedContact struct {
+	ID       primitive.ObjectID `bson:"_id,omitempty"`
+	StoreID  primitive.ObjectID `bson:"store_id"`
+	Contact  string             `bson:"contact"`
+	MsgType  string             `bson:"msg_type"` // "whatsapp" | "email"
+	PinnedAt time.Time          `bson:"pinned_at"`
+}
+
+func pinnedContactsCol() *mongo.Collection {
+	return db.Client("").Database(db.GetPosDB()).Collection("procurement_pinned_contacts")
+}
+
+// PinContact marks a contact thread as pinned.
+func PinContact(storeID primitive.ObjectID, contact, msgType string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	col := pinnedContactsCol()
+	filter := bson.M{"store_id": storeID, "contact": contact, "msg_type": msgType}
+	update := bson.M{"$set": bson.M{"store_id": storeID, "contact": contact, "msg_type": msgType, "pinned_at": time.Now()}}
+	opts := options.Update().SetUpsert(true)
+	_, err := col.UpdateOne(ctx, filter, update, opts)
+	return err
+}
+
+// UnpinContact removes a pinned contact.
+func UnpinContact(storeID primitive.ObjectID, contact, msgType string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := pinnedContactsCol().DeleteOne(ctx, bson.M{"store_id": storeID, "contact": contact, "msg_type": msgType})
+	return err
+}
+
+// getPinnedContacts returns a set of pinned contact keys ("contact|type") for fast lookup.
+func getPinnedContacts(storeID primitive.ObjectID, msgType string) map[string]time.Time {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cur, err := pinnedContactsCol().Find(ctx, bson.M{"store_id": storeID, "msg_type": msgType})
+	if err != nil {
+		return nil
+	}
+	defer cur.Close(ctx)
+	var rows []PinnedContact
+	_ = cur.All(ctx, &rows)
+	m := make(map[string]time.Time, len(rows))
+	for _, r := range rows {
+		m[r.Contact] = r.PinnedAt
+	}
+	return m
+}
+
+// ListContactThreads returns one row per distinct supplier contact, sorted by last message date desc.
+func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page, limit int) ([]ContactThread, int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	col := procurementMessageCol()
+
+	matchFilter := bson.M{"store_id": storeID}
+	if msgType != "" {
+		matchFilter["type"] = msgType
+	}
+
+	contactExpr := bson.M{"$cond": bson.A{
+		bson.M{"$eq": bson.A{"$direction", "in"}},
+		"$from",
+		bson.M{"$arrayElemAt": bson.A{"$to", 0}},
+	}}
+
+	pipeline := mongo.Pipeline{
+		bson.D{bson.E{Key: "$match", Value: matchFilter}},
+		bson.D{bson.E{Key: "$group", Value: bson.M{
+			"_id":               contactExpr,
+			"last_message_text": bson.M{"$last": "$body_text"},
+			"last_message_date": bson.M{"$last": "$message_date"},
+			"unread_count": bson.M{"$sum": bson.M{"$cond": bson.A{
+				bson.M{"$and": bson.A{
+					bson.M{"$eq": bson.A{"$direction", "in"}},
+					bson.M{"$ne": bson.A{"$read", true}},
+				}},
+				1, 0,
+			}}},
+			"message_count": bson.M{"$sum": 1},
+			"sender_name":   bson.M{"$max": "$sender_name"},
+			"sender_type":   bson.M{"$max": "$sender_type"},
+		}}},
+		bson.D{bson.E{Key: "$project", Value: bson.M{
+			"_id":               0,
+			"contact_phone":     "$_id",
+			"last_message_text": 1,
+			"last_message_date": 1,
+			"unread_count":      1,
+			"message_count":     1,
+			"sender_name":       1,
+			"sender_type":       1,
+		}}},
+		bson.D{bson.E{Key: "$sort", Value: bson.M{"last_message_date": -1}}},
+	}
+
+	if search != "" {
+		pipeline = append(pipeline, bson.D{bson.E{Key: "$match", Value: bson.M{
+			"$or": bson.A{
+				bson.M{"contact_phone": bson.M{"$regex": search, "$options": "i"}},
+				bson.M{"sender_name": bson.M{"$regex": search, "$options": "i"}},
+			},
+		}}})
+	}
+
+	// Count
+	countPipeline := append(pipeline, bson.D{bson.E{Key: "$count", Value: "total"}})
+	countCur, _ := col.Aggregate(ctx, countPipeline)
+	var countResult []struct {
+		Total int64 `bson:"total"`
+	}
+	_ = countCur.All(ctx, &countResult)
+	var total int64
+	if len(countResult) > 0 {
+		total = countResult[0].Total
+	}
+
+	skip := int64((page - 1) * limit)
+	pipeline = append(pipeline,
+		bson.D{bson.E{Key: "$skip", Value: skip}},
+		bson.D{bson.E{Key: "$limit", Value: int64(limit)}},
+	)
+
+	cur, err := col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+	var threads []ContactThread
+	if err := cur.All(ctx, &threads); err != nil {
+		return nil, 0, err
+	}
+	// Annotate pinned state and sort pinned threads to the top.
+	pins := getPinnedContacts(storeID, msgType)
+	for i := range threads {
+		if t, ok := pins[threads[i].ContactPhone]; ok {
+			threads[i].Pinned = true
+			threads[i].PinnedAt = &t
+		}
+	}
+	// Stable sort: pinned first (by pin time desc), then rest (already sorted by last message)
+	pinned := threads[:0:0]
+	rest := threads[:0:0]
+	for _, th := range threads {
+		if th.Pinned {
+			pinned = append(pinned, th)
+		} else {
+			rest = append(rest, th)
+		}
+	}
+	// Sort pinned by pinned_at desc
+	for i := 0; i < len(pinned)-1; i++ {
+		for j := i + 1; j < len(pinned); j++ {
+			if pinned[j].PinnedAt != nil && (pinned[i].PinnedAt == nil || pinned[j].PinnedAt.After(*pinned[i].PinnedAt)) {
+				pinned[i], pinned[j] = pinned[j], pinned[i]
+			}
+		}
+	}
+	return append(pinned, rest...), total, nil
+}
+
+// ListThreadMessages returns all messages between this store and contactPhone in chronological order.
+func ListThreadMessages(storeID primitive.ObjectID, contactPhone, msgType string, page, limit int) ([]ProcurementMessage, int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	col := procurementMessageCol()
+
+	filter := bson.M{
+		"store_id": storeID,
+		"$or":      bson.A{bson.M{"from": contactPhone}, bson.M{"to": contactPhone}},
+	}
+	if msgType != "" {
+		filter["type"] = msgType
+	}
+
+	total, _ := col.CountDocuments(ctx, filter)
+	skip := int64((page - 1) * limit)
+	opts := options.Find().
+		SetSort(bson.M{"message_date": 1}).
+		SetSkip(skip).
+		SetLimit(int64(limit))
+
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	var msgs []ProcurementMessage
+	if err := cur.All(ctx, &msgs); err != nil {
+		return nil, 0, err
+	}
+	return msgs, total, nil
+}
+
+// MarkThreadMessagesRead marks all unread inbound messages from contactPhone as read.
+func MarkThreadMessagesRead(storeID primitive.ObjectID, contactPhone, msgType string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	filter := bson.M{
+		"store_id":  storeID,
+		"direction": "in",
+		"from":      contactPhone,
+		"read":      bson.M{"$ne": true},
+	}
+	if msgType != "" {
+		filter["type"] = msgType
+	}
+	_, err := procurementMessageCol().UpdateMany(ctx, filter, bson.M{"$set": bson.M{"read": true}})
+	return err
+}
+
+// ResolveProcurementSender looks up the given phone number in RFQ suppliers then
+// customers for the given store. Returns (name, type) where type is "supplier" or
+// "customer", or ("", "") if not found.
+func ResolveProcurementSender(storeID primitive.ObjectID, phone string) (string, string) {
+	if phone == "" {
+		return "", ""
+	}
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_suppliers")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Try supplier first (phone is international without +, e.g. "966501971075")
+	phones := phoneLookupVariants(phone)
+	var sup struct {
+		Name string `bson:"name"`
+	}
+	if err := col.FindOne(ctx, bson.M{
+		"store_id": storeID,
+		"phone":    bson.M{"$in": phones},
+	}).Decode(&sup); err == nil && sup.Name != "" {
+		return sup.Name, "supplier"
+	}
+
+	// Try customer (per-store collection) — exact match first
+	custCol := db.Client("").Database("store_"+storeID.Hex()).Collection("customer")
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+	var cust struct {
+		Name string `bson:"name"`
+	}
+	if err := custCol.FindOne(ctx2, bson.M{
+		"deleted": bson.M{"$ne": true},
+		"$or":     buildPhoneOrQuery(phones),
+	}).Decode(&cust); err == nil && cust.Name != "" {
+		return cust.Name, "customer"
+	}
+
+	// Regex fallback: match phones stored with spaces/+ (e.g. "+966 55 601 4267")
+	digits := ""
+	for _, ch := range phone {
+		if ch >= '0' && ch <= '9' {
+			digits += string(ch)
+		}
+	}
+	if digits != "" {
+		pattern := `^[^\d]*`
+		for i, d := range digits {
+			if i > 0 {
+				pattern += `[^\d]*`
+			}
+			pattern += string(d)
+		}
+		pattern += `[^\d]*$`
+		reFilter := bson.M{"$regex": pattern}
+		ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel3()
+		var cust2 struct {
+			Name string `bson:"name"`
+		}
+		if err := custCol.FindOne(ctx3, bson.M{
+			"deleted": bson.M{"$ne": true},
+			"$or":     []bson.M{{"phone": reFilter}, {"phone2": reFilter}},
+		}).Decode(&cust2); err == nil && cust2.Name != "" {
+			return cust2.Name, "customer"
+		}
+	}
+
+	return "", ""
+}
+
+// phoneLookupVariants generates multiple normalised forms of a phone number
+// to handle local vs international formats ("0501971075" ↔ "966501971075").
+func phoneLookupVariants(phone string) []string {
+	// Normalize: strip leading + and any whitespace (handles "+966 594546011" → "966594546011")
+	phone = strings.TrimPrefix(phone, "+")
+	phone = strings.ReplaceAll(phone, " ", "")
+	set := map[string]bool{
+		phone:        true,
+		"+" + phone: true, // customers may be stored with leading +
+	}
+	// Saudi: strip leading 966 → add leading 0
+	if len(phone) == 12 && phone[:3] == "966" {
+		set["0"+phone[3:]] = true
+	}
+	// Saudi: strip leading 0 → add 966
+	if len(phone) == 10 && phone[0] == '0' {
+		set["966"+phone[1:]] = true
+		set["+966"+phone[1:]] = true
+	}
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	return out
+}
+
+func buildPhoneOrQuery(phones []string) []bson.M {
+	clauses := make([]bson.M, 0, len(phones)*2)
+	for _, p := range phones {
+		clauses = append(clauses, bson.M{"phone": p}, bson.M{"phone2": p})
+	}
+	return clauses
+}
+
+// UpdateProcurementMessageSenderType saves only the sender_type (used for outbound messages
+// where the sender_name is the store itself, but we want to label the contact type).
+func UpdateProcurementMessageSenderType(id primitive.ObjectID, senderType string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{"sender_type": senderType}},
+	)
+	return err
+}
+
+// UpdateProcurementMessageSender saves resolved sender_name and sender_type back to the DB.
+func UpdateProcurementMessageSender(id primitive.ObjectID, name, senderType string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{"sender_name": name, "sender_type": senderType}},
+	)
+	return err
+}
+
+// BackfillProcurementSenders resolves sender identities for messages that have no
+// sender_name set, up to limit per call (0 = all). Returns number updated.
+func BackfillProcurementSenders(storeID primitive.ObjectID, limit int) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Process inbound messages (sender = from)
+	filter := bson.M{
+		"store_id":    storeID,
+		"direction":   "in",
+		"sender_name": bson.M{"$in": bson.A{"", nil}},
+	}
+	opts := options.Find().SetProjection(bson.M{"_id": 1, "from": 1})
+	if limit > 0 {
+		opts.SetLimit(int64(limit))
+	}
+
+	cur, err := procurementMessageCol().Find(ctx, filter, opts)
+	if err != nil {
+		return 0, err
+	}
+	var msgs []struct {
+		ID   primitive.ObjectID `bson:"_id"`
+		From string             `bson:"from"`
+	}
+	if err := cur.All(ctx, &msgs); err != nil {
+		return 0, err
+	}
+
+	updated := 0
+	for _, m := range msgs {
+		name, sType := ResolveProcurementSender(storeID, m.From)
+		if name == "" {
+			continue
+		}
+		if err := UpdateProcurementMessageSender(m.ID, name, sType); err == nil {
+			updated++
+		}
+	}
+
+	// Also process outbound messages: set sender_type based on the recipient (to[0])
+	// so outbound-only threads (e.g. a message sent to a customer) are labelled correctly.
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel2()
+	filterOut := bson.M{
+		"store_id":    storeID,
+		"direction":   "out",
+		"sender_type": bson.M{"$in": bson.A{"", nil}},
+		"to":          bson.M{"$ne": nil, "$not": bson.M{"$size": 0}},
+	}
+	optsOut := options.Find().SetProjection(bson.M{"_id": 1, "to": 1})
+	if limit > 0 {
+		optsOut.SetLimit(int64(limit))
+	}
+	curOut, err := procurementMessageCol().Find(ctx2, filterOut, optsOut)
+	if err == nil {
+		var outMsgs []struct {
+			ID primitive.ObjectID `bson:"_id"`
+			To []string           `bson:"to"`
+		}
+		if curOut.All(ctx2, &outMsgs) == nil {
+			for _, m := range outMsgs {
+				if len(m.To) == 0 {
+					continue
+				}
+				_, sType := ResolveProcurementSender(storeID, m.To[0])
+				if sType == "" {
+					continue
+				}
+				if updateErr := UpdateProcurementMessageSenderType(m.ID, sType); updateErr == nil {
+					updated++
+				}
+			}
+		}
+	}
+
+	return updated, nil
 }
 
 // EnsureProcurementMessageIndexes creates the necessary MongoDB indexes.

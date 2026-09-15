@@ -26,11 +26,12 @@ type RFQActivityLog struct {
 
 // RFQProduct is a single line item extracted from an incoming RFQ message.
 type RFQProduct struct {
-	PartNo   string  `bson:"part_no,omitempty"   json:"part_no,omitempty"`
-	Name     string  `bson:"name"                json:"name"`
-	Quantity float64 `bson:"quantity,omitempty"  json:"quantity,omitempty"`
-	Unit     string  `bson:"unit,omitempty"      json:"unit,omitempty"`
-	Notes    string  `bson:"notes,omitempty"     json:"notes,omitempty"`
+	ProductID *primitive.ObjectID `bson:"product_id,omitempty" json:"product_id,omitempty"`
+	PartNo    string              `bson:"part_no,omitempty"   json:"part_no,omitempty"`
+	Name      string              `bson:"name"                json:"name"`
+	Quantity  float64             `bson:"quantity,omitempty"  json:"quantity,omitempty"`
+	Unit      string              `bson:"unit,omitempty"      json:"unit,omitempty"`
+	Notes     string              `bson:"notes,omitempty"     json:"notes,omitempty"`
 }
 
 type RFQForwardRecord struct {
@@ -155,7 +156,8 @@ type RFQReceived struct {
 	AttachmentDataURIs []string `bson:"attachment_data_uris,omitempty" json:"attachment_data_uris,omitempty"`
 	// AdditionalAttachmentDataURIs holds base64 data URIs of additional detail files.
 	// Shown below the products table in the RFQ preview/PDF.
-	AdditionalAttachmentDataURIs []string `bson:"additional_attachment_data_uris,omitempty" json:"additional_attachment_data_uris,omitempty"`
+	AdditionalAttachmentDataURIs  []string `bson:"additional_attachment_data_uris,omitempty" json:"additional_attachment_data_uris,omitempty"`
+	AdditionalAttachmentFilenames []string `bson:"additional_attachment_filenames,omitempty" json:"additional_attachment_filenames,omitempty"`
 	// GeneralInstructions holds LLM-extracted instructions that apply to the whole RFQ
 	// (e.g. "provide datasheet, warranty, delivery terms") — not specific to any single product.
 	GeneralInstructions string `bson:"general_instructions,omitempty" json:"general_instructions,omitempty"`
@@ -566,18 +568,68 @@ func AddQuotationLinkToRFQ(storeID, rfqID, quotationID primitive.ObjectID, quota
 	return err
 }
 
+// phoneCoreSuffix extracts the significant local digits from a phone number so that
+// international (966501971075) and local (0501971075) formats match each other.
+// It strips non-digits, removes a leading zero if present, then returns the last 9 digits.
+func phoneCoreSuffix(phone string) string {
+	digits := ""
+	for _, ch := range phone {
+		if ch >= '0' && ch <= '9' {
+			digits += string(ch)
+		}
+	}
+	if digits == "" {
+		return phone
+	}
+	// Strip leading zero (local format: 0501971075 → 501971075)
+	if len(digits) > 1 && digits[0] == '0' {
+		digits = digits[1:]
+	}
+	// Use last 9 digits to tolerate different country-code lengths
+	if len(digits) > 9 {
+		digits = digits[len(digits)-9:]
+	}
+	return digits
+}
+
 // FindRFQsForwardedToPhone returns RFQs that were forwarded to the given supplier phone
 // within the lookback window, newest first. Used for matching supplier quotation replies.
+// Phone matching is format-agnostic: both international (966501971075) and local (0501971075)
+// formats resolve to the same 9-digit core and match each other.
+func FindRFQsByCustomerID(storeID, customerID primitive.ObjectID, limit int64) ([]RFQReceived, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	filter := bson.M{
+		"store_id":    storeID,
+		"customer_id": customerID,
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQReceived
+	if err := cur.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func FindRFQsForwardedToPhone(storeID primitive.ObjectID, phone string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	since := time.Now().Add(-lookback)
+	// Use the 9-digit core so both local (0501971075) and international (966501971075)
+	// formats match the same stored phone numbers.
+	phonePattern := phoneCoreSuffix(phone)
 	filter := bson.M{
 		"store_id": storeID,
 		"forwarded_to": bson.M{
 			"$elemMatch": bson.M{
-				"phone": bson.M{"$regex": phone, "$options": "i"},
+				"phone": bson.M{"$regex": phonePattern, "$options": "i"},
 			},
 		},
 		"received_at": bson.M{"$gte": since},

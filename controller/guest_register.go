@@ -30,85 +30,74 @@ type GuestRegisterRequest struct {
 	NationalAddress models.NationalAddress `json:"national_address"`
 }
 
-// GuestRegister handles POST /v1/guest-register.
-// No auth required. Creates a store + Manager user in one call.
-func GuestRegister(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var response models.Response
-	response.Errors = make(map[string]string)
+// validateGuestRegisterRequest checks all required fields except email-exists
+// (that check requires a DB call and is done separately in the handler).
+// Returns a map of field → error message; empty means no errors.
+func validateGuestRegisterRequest(req GuestRegisterRequest) map[string]string {
+	errs := make(map[string]string)
 
-	var req GuestRegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		response.Status = false
-		response.Errors["request"] = "Invalid request body: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	// Length caps — reject oversized payloads before any further processing.
+	if len(req.Name) > 200 {
+		errs["name"] = "Name is too long"
+	} else if govalidator.IsNull(req.Name) {
+		errs["name"] = "Name is required"
 	}
-
-	if govalidator.IsNull(req.Name) {
-		response.Errors["name"] = "Name is required"
-	}
-	if govalidator.IsNull(req.Email) {
-		response.Errors["email"] = "Email is required"
+	if len(req.Email) > 254 {
+		errs["email"] = "Email is too long"
+	} else if govalidator.IsNull(req.Email) {
+		errs["email"] = "Email is required"
 	} else if !govalidator.IsEmail(req.Email) {
-		response.Errors["email"] = "Invalid email address"
+		errs["email"] = "Invalid email address"
 	}
-	if govalidator.IsNull(req.Mob) {
-		response.Errors["mob"] = "Mobile number is required"
+	if len(req.Mob) > 20 {
+		errs["mob"] = "Mobile number is too long"
+	} else if govalidator.IsNull(req.Mob) {
+		errs["mob"] = "Mobile number is required"
 	}
-	if govalidator.IsNull(req.Password) {
-		response.Errors["password"] = "Password is required"
+	if len(req.Password) > 128 {
+		errs["password"] = "Password is too long"
+	} else if govalidator.IsNull(req.Password) {
+		errs["password"] = "Password is required"
 	} else if len(req.Password) < 6 {
-		response.Errors["password"] = "Password must be at least 6 characters"
+		errs["password"] = "Password must be at least 6 characters"
 	}
 	if req.ZatcaPhase != "1" && req.ZatcaPhase != "2" {
-		response.Errors["zatca_phase"] = "ZATCA phase must be 1 or 2"
+		errs["zatca_phase"] = "ZATCA phase must be 1 or 2"
 	}
 	if govalidator.IsNull(req.BusinessCategory) {
-		response.Errors["business_category"] = "Business category is required"
+		errs["business_category"] = "Business category is required"
 	}
 	if govalidator.IsNull(req.RegistrationNumber) {
-		response.Errors["registration_number"] = "Registration number (CRN) is required"
+		errs["registration_number"] = "Registration number (CRN) is required"
 	}
 	if govalidator.IsNull(req.VATNo) {
-		response.Errors["vat_no"] = "VAT number is required"
+		errs["vat_no"] = "VAT number is required"
 	} else if len(req.VATNo) != 15 {
-		response.Errors["vat_no"] = "VAT No. should be 15 digits"
+		errs["vat_no"] = "VAT No. should be 15 digits"
 	}
 	if govalidator.IsNull(req.NationalAddress.BuildingNo) {
-		response.Errors["national_address_building_no"] = "Building number is required"
+		errs["national_address_building_no"] = "Building number is required"
 	}
 	if govalidator.IsNull(req.NationalAddress.StreetName) {
-		response.Errors["national_address_street_name"] = "Street name is required"
+		errs["national_address_street_name"] = "Street name is required"
 	}
 	if govalidator.IsNull(req.NationalAddress.DistrictName) {
-		response.Errors["national_address_district_name"] = "District name is required"
+		errs["national_address_district_name"] = "District name is required"
 	}
 	if govalidator.IsNull(req.NationalAddress.CityName) {
-		response.Errors["national_address_city_name"] = "City name is required"
+		errs["national_address_city_name"] = "City name is required"
 	}
 	if govalidator.IsNull(req.NationalAddress.ZipCode) {
-		response.Errors["national_address_zipcode"] = "Zip code is required"
+		errs["national_address_zipcode"] = "Zip code is required"
 	}
 
-	if _, ok := response.Errors["email"]; !ok {
-		tempUser := &models.User{Email: req.Email}
-		exists, err := tempUser.IsEmailExists()
-		if err != nil {
-			response.Errors["email"] = err.Error()
-		} else if exists {
-			response.Errors["email"] = "Email is already in use"
-		}
-	}
+	return errs
+}
 
-	if len(response.Errors) > 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		response.Status = false
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
+// buildGuestStore constructs a Store value from a validated GuestRegisterRequest.
+// branchCode is a pre-generated short code (e.g. first 8 hex chars of a new ObjectID).
+// now is injected so callers (and tests) can control the timestamp.
+func buildGuestStore(req GuestRegisterRequest, branchCode string, now time.Time) *models.Store {
 	storeName := strings.TrimSpace(req.StoreName)
 	if storeName == "" {
 		storeName = req.Name
@@ -141,63 +130,108 @@ func GuestRegister(w http.ResponseWriter, r *http.Request) {
 		na.CityNameArabic = na.CityName
 	}
 
-	branchCode := primitive.NewObjectID().Hex()[:8]
-
-	sn := func(prefix string) models.SerialNumber {
-		return models.SerialNumber{Prefix: prefix, PaddingCount: 4, StartFromCount: 0}
+	sn := func(prefix string, padding int64, start int64) models.SerialNumber {
+		return models.SerialNumber{Prefix: prefix, PaddingCount: padding, StartFromCount: start}
 	}
 
-	now := time.Now()
+	zatcaEnv := "NonProduction"
+	if req.ZatcaPhase == "2" {
+		zatcaEnv = "Production"
+	}
 
-	store := &models.Store{
-		Name:                        storeName,
-		NameInArabic:                storeNameAr,
-		Code:                        branchCode,
-		BranchName:                  "Main Branch",
-		RegistrationNumber:          req.RegistrationNumber,
-		RegistrationNumberInArabic:  req.RegistrationNumber,
-		VATNo:                       req.VATNo,
-		VATNoInArabic:               req.VATNo,
-		VatPercent:                  15,
-		BusinessCategory:            req.BusinessCategory,
-		Email:                       req.Email,
-		Phone:                       phone,
-		PhoneInArabic:               phone,
-		CountryCode:                 countryCode,
-		CountryName:                 countryName,
-		NationalAddress:             na,
+	return &models.Store{
+		Name:                       storeName,
+		NameInArabic:               storeNameAr,
+		Code:                       branchCode,
+		BranchName:                 "Main Branch",
+		RegistrationNumber:         req.RegistrationNumber,
+		RegistrationNumberInArabic: req.RegistrationNumber,
+		VATNo:                      req.VATNo,
+		VATNoInArabic:              req.VATNo,
+		VatPercent:                 15,
+		BusinessCategory:           req.BusinessCategory,
+		Email:                      req.Email,
+		Phone:                      phone,
+		PhoneInArabic:              phone,
+		CountryCode:                countryCode,
+		CountryName:                countryName,
+		NationalAddress:            na,
 
-		SalesSerialNumber:               sn("INV"),
-		SalesReturnSerialNumber:         sn("RINV"),
-		PurchaseSerialNumber:            sn("PO"),
-		PurchaseReturnSerialNumber:      sn("RPO"),
-		PurchaseOrderSerialNumber:       sn("POO"),
-		PurchaseRequestSerialNumber:     sn("PRQ"),
-		QuotationSerialNumber:           sn("QT"),
-		QuotationSalesReturnSerialNumber: sn("RQT"),
-		CustomerSerialNumber:            sn("CUS"),
-		VendorSerialNumber:              sn("VEN"),
-		ExpenseSerialNumber:             sn("EXP"),
-		DeliveryNoteSerialNumber:        sn("DN"),
-		CustomerDepositSerialNumber:     sn("CD"),
-		CustomerWithdrawalSerialNumber:  sn("CW"),
-		CapitalDepositSerialNumber:      sn("CAP"),
-		DividentSerialNumber:            sn("DIV"),
-		StockTransferSerialNumber:       sn("ST"),
-		NonVATSalesSerialNumber:         sn("NVI"),
-		NonVATSalesReturnSerialNumber:   sn("RNVI"),
+		SalesSerialNumber:                sn("S-INV", 3, 1),
+		SalesReturnSerialNumber:          sn("SR-INV", 3, 1),
+		PurchaseSerialNumber:             sn("P-INV", 3, 1),
+		PurchaseReturnSerialNumber:       sn("PR-INV", 3, 1),
+		PurchaseOrderSerialNumber:        sn("PO", 4, 1),
+		PurchaseRequestSerialNumber:      sn("PR", 4, 1),
+		QuotationSerialNumber:            sn("QTN", 3, 1),
+		QuotationSalesReturnSerialNumber: sn("QTN-SR-INV", 3, 1),
+		CustomerSerialNumber:             sn("CUST", 4, 1),
+		VendorSerialNumber:               sn("VND", 4, 1),
+		ExpenseSerialNumber:              sn("EXP", 4, 1),
+		DeliveryNoteSerialNumber:         sn("DEL-NOTE", 6, 1),
+		CustomerDepositSerialNumber:      sn("CUST-RCVBLE", 4, 1),
+		CustomerWithdrawalSerialNumber:   sn("CUST-PAYBLE", 4, 1),
+		CapitalDepositSerialNumber:       sn("CAP-DPST", 4, 1),
+		DividentSerialNumber:             sn("CAP-DRWNG", 4, 1),
+		StockTransferSerialNumber:        sn("ST-TR", 3, 1),
+		NonVATSalesSerialNumber:          sn("NVS", 3, 1),
+		NonVATSalesReturnSerialNumber:    sn("NVS-R", 3, 1),
 
 		Zatca: models.Zatca{
 			Phase: req.ZatcaPhase,
+			Env:   zatcaEnv,
+		},
+
+		Settings: models.StoreSettings{
+			EnableAutomobileModule:    true,
+			EnableAutomobileDashboard: true,
 		},
 
 		CreatedAt: &now,
 		UpdatedAt: &now,
 	}
+}
 
-	if req.ZatcaPhase == "2" {
-		store.Zatca.Env = "Production"
+// GuestRegister handles POST /v1/guest-register.
+// No auth required. Creates a store + Manager user in one call.
+func GuestRegister(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	var req GuestRegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		response.Errors["request"] = "Invalid request body: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
 	}
+
+	for k, v := range validateGuestRegisterRequest(req) {
+		response.Errors[k] = v
+	}
+
+	if _, ok := response.Errors["email"]; !ok {
+		tempUser := &models.User{Email: req.Email}
+		exists, err := tempUser.IsEmailExists()
+		if err != nil {
+			response.Errors["email"] = err.Error()
+		} else if exists {
+			response.Errors["email"] = "Email is already in use"
+		}
+	}
+
+	if len(response.Errors) > 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		response.Status = false
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	branchCode := primitive.NewObjectID().Hex()[:8]
+	now := time.Now()
+	store := buildGuestStore(req, branchCode, now)
 
 	if err := store.Insert(); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -228,10 +262,10 @@ func GuestRegister(w http.ResponseWriter, r *http.Request) {
 		Name:       req.Name,
 		Email:      req.Email,
 		Mob:        req.Mob,
-		Password:   req.Password,
+		Password:   models.HashPassword(req.Password),
 		Role:       "Manager",
 		StoreIDs:   []*primitive.ObjectID{&storeID},
-		StoreNames: []string{storeName},
+		StoreNames: []string{store.Name},
 		CreatedAt:  &now,
 		UpdatedAt:  &now,
 	}
