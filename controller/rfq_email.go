@@ -913,11 +913,13 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	var extracted rfqExtractResult
 	if store.Settings.RFQLLMAPIKey != "" {
 		llmProvider := strings.ToLower(store.Settings.RFQLLMProvider)
+		_, legacyURL := resolveExtractionEndpoint(llmProvider, &store.Settings)
 		raw, llmErr := callLLMExtractRFQ(
 			store.Settings.RFQLLMAPIKey,
 			store.Settings.RFQLLMModel,
 			llmProvider,
 			emailText, nil, nil,
+			legacyURL,
 		)
 		if llmErr != nil {
 			log.Printf("rfq_email: LLM extraction error for email from %s: %v", sender, llmErr)
@@ -952,25 +954,33 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	fromName := extracted.CustomerName
-	if fromName == "" {
-		fromName = sender
+	// Prefer company name as the display name; fall back to contact person, then sender.
+	displayName := extracted.CustomerName // already set to company when available
+	if displayName == "" {
+		displayName = extracted.CustomerContactPerson
+	}
+	if displayName == "" {
+		displayName = sender
 	}
 
 	rfq := &models.RFQReceived{
-		StoreID:         storeObjID,
-		FromPhone:       sender, // email address used as sender identifier
-		FromName:        fromName,
-		MessageType:     "text",
-		TextContent:     emailText,
-		Source:          "email",
-		Status:          "ready_to_send",
-		Products:        products,
-		CustomerID:      customerID,
-		CustomerName:    extracted.CustomerName,
-		CustomerPhone:   extracted.CustomerPhone,
-		CustomerEmail:   extracted.CustomerEmail,
-		CustomerCompany: extracted.CustomerCompany,
+		StoreID:                 storeObjID,
+		FromPhone:               sender, // email address used as sender identifier
+		FromName:                displayName,
+		MessageType:             "text",
+		TextContent:             emailText,
+		Source:                  "email",
+		Status:                  "ready_to_send",
+		Products:                products,
+		CustomerID:              customerID,
+		CustomerName:            extracted.CustomerName,
+		CustomerContactPerson:   extracted.CustomerContactPerson,
+		CustomerPhone:           extracted.CustomerPhone,
+		CustomerEmail:           extracted.CustomerEmail,
+		CustomerCompany:         extracted.CustomerCompany,
+		CustomerVATNo:           extracted.CustomerVATNo,
+		CustomerCRNo:            extracted.CustomerCRNo,
+		CustomerNationalAddress: extracted.CustomerNationalAddress,
 	}
 
 	if err := models.CreateRFQReceived(rfq); err != nil {
@@ -980,7 +990,7 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Step 5: Activity log ─────────────────────────────────────────────────
-	customerLabel := fromName
+	customerLabel := displayName
 	models.AppendRFQLog(storeObjID, rfq.ID, models.RFQActivityLog{
 		Step:    "input_received",
 		Message: fmt.Sprintf("RFQ received via email from %s (subject: %s)", customerLabel, subject),

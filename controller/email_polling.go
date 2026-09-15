@@ -217,7 +217,8 @@ type parsedEmail struct {
 	to                                            []string
 	date                                          *time.Time // original send/receive time from the mail provider
 	attachments                                   []models.ProcurementAttachment
-	hasZohoAttachment                             bool // set when Zoho reports hasAttachment=true (even if download failed)
+	hasZohoAttachment                             bool   // set when Zoho reports hasAttachment=true (even if download failed)
+	zohoFolderID                                  string // folder where this Zoho message resides (for attachment API)
 }
 
 // ─── Zoho polling ─────────────────────────────────────────────────────────────
@@ -252,7 +253,8 @@ func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, 
 		return
 	}
 
-	msgs, err := listZohoMessages(accessToken, zohoAccountID, since, mailBase, storeID.Hex(), acct.IMAPHost, acct.IMAPUsername, acct.IMAPPassword)
+	// Phase 1: list messages (body only, no attachments) — fast, emails saved to DB immediately.
+	msgs, err := listZohoMessages(accessToken, zohoAccountID, since, mailBase)
 	if err != nil {
 		log.Printf("email_polling: failed to list zoho messages for %s: %v", acct.Email, err)
 		return
@@ -261,8 +263,43 @@ func pollZohoAccount(storeID primitive.ObjectID, settings models.StoreSettings, 
 	log.Printf("email_polling: zoho %s: %d new messages since %s", acct.Email, len(msgs), since.Format(time.RFC3339))
 
 	now := time.Now()
+
+	type savedEntry struct {
+		extID    string
+		folderID string
+		subject  string
+		dbID     primitive.ObjectID
+	}
+	var savedEntries []savedEntry
 	for _, m := range msgs {
-		processPolledEmail(storeID, settings, "zoho", m)
+		pm := processPolledEmail(storeID, settings, "zoho", m)
+		if pm != nil && m.hasZohoAttachment {
+			savedEntries = append(savedEntries, savedEntry{m.externalID, m.zohoFolderID, m.subject, pm.ID})
+		}
+	}
+
+	// Phase 2: fetch attachments for messages that need them and update DB records.
+	// Emails are already visible in the UI; attachments arrive asynchronously.
+	if len(savedEntries) > 0 {
+		inboxFolderID := fetchZohoInboxFolderID(accessToken, zohoAccountID, mailBase)
+		for _, e := range savedEntries {
+			candidateFolders := []string{}
+			if e.folderID != "" {
+				candidateFolders = append(candidateFolders, e.folderID)
+			}
+			if inboxFolderID != "" && inboxFolderID != e.folderID {
+				candidateFolders = append(candidateFolders, inboxFolderID)
+			}
+			candidateFolders = append(candidateFolders, "") // no-folder fallback
+			atts := fetchZohoAttachments(accessToken, zohoAccountID, candidateFolders, e.extID, mailBase,
+				storeID.Hex(), acct.IMAPHost, acct.IMAPUsername, acct.IMAPPassword, e.subject)
+			log.Printf("email_polling: zoho msg %s hasAttachment=true → fetched %d attachment(s)", e.extID, len(atts))
+			if len(atts) > 0 {
+				if err := models.UpdateProcurementMessageAttachments(e.dbID, atts); err != nil {
+					log.Printf("email_polling: failed to update attachments for msg %s: %v", e.extID, err)
+				}
+			}
+		}
 	}
 
 	updateAccountLastPolled(storeID, acct.ID, now)
@@ -391,7 +428,7 @@ func fetchZohoMessageFolderID(accessToken, accountID, messageID, mailBase string
 	return res.Data.FolderID
 }
 
-func listZohoMessages(accessToken, accountID string, since time.Time, mailBase, storeIDStr, imapHost, imapUsername, imapPassword string) ([]parsedEmail, error) {
+func listZohoMessages(accessToken, accountID string, since time.Time, mailBase string) ([]parsedEmail, error) {
 	if mailBase == "" {
 		mailBase = "https://mail.zoho.com"
 	}
@@ -414,11 +451,6 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase, 
 		ReceivedTime  json.Number  `json:"receivedTime"`  // unix ms — Zoho returns as string
 		HasAttachment zohoFlexBool `json:"hasAttachment"` // Zoho returns string "true"/"false" or bool
 	}
-
-	// The messages/view endpoint returns a virtual folderId that Zoho's attachment
-	// API rejects with HTTP 500. Fetch the real inbox folder ID once and use it
-	// for all attachment requests (procurement emails arrive in the inbox).
-	inboxFolderID := fetchZohoInboxFolderID(accessToken, accountID, mailBase)
 
 	var result []parsedEmail
 	for page := 0; page < maxPages; page++ {
@@ -474,21 +506,7 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase, 
 				externalID:        m.MessageID,
 				to:                to,
 				hasZohoAttachment: bool(m.HasAttachment),
-			}
-			// Only call the Zoho attachment API when the message actually has attachments.
-			// Try the message's actual folder ID first (from messages/view response),
-			// then the real inbox folder ID, then no folder ID.
-			if bool(m.HasAttachment) {
-				candidateFolders := []string{}
-				if m.FolderID != "" {
-					candidateFolders = append(candidateFolders, m.FolderID)
-				}
-				if inboxFolderID != "" && inboxFolderID != m.FolderID {
-					candidateFolders = append(candidateFolders, inboxFolderID)
-				}
-				candidateFolders = append(candidateFolders, "") // no-folder fallback
-				pe.attachments = fetchZohoAttachments(accessToken, accountID, candidateFolders, m.MessageID, mailBase, storeIDStr, imapHost, imapUsername, imapPassword, m.Subject)
-				log.Printf("email_polling: zoho msg %s hasAttachment=true → fetched %d attachment(s)", m.MessageID, len(pe.attachments))
+				zohoFolderID:      m.FolderID,
 			}
 			if receivedTimeMs > 0 {
 				t := time.UnixMilli(receivedTimeMs).UTC()
@@ -1392,15 +1410,15 @@ func mentionsAttachment(bodyText string) bool {
 
 // processPolledEmail saves the message to the procurement log and, if AI RFQ bot
 // is enabled, runs LLM classification + extraction and creates an RFQ record.
-func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSettings, provider string, msg parsedEmail) {
+func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSettings, provider string, msg parsedEmail) *models.ProcurementMessage {
 	if msg.from == "" && msg.bodyText == "" {
-		return
+		return nil
 	}
 
 	// Skip duplicate emails (same provider message already ingested).
 	if models.ProcurementMessageExternalIDExists(storeID, msg.externalID) {
 		log.Printf("email_polling: skipping duplicate external_id=%s", msg.externalID)
-		return
+		return nil
 	}
 
 	emailText := fmt.Sprintf("Subject: %s\n\n%s", msg.subject, msg.bodyText)
@@ -1408,14 +1426,14 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	store, storeObjID, err := rfqEmailGetStore(storeID.Hex())
 	if err != nil {
 		log.Printf("email_polling: store not found %s: %v", storeID.Hex(), err)
-		return
+		return nil
 	}
 
 	// Keyword pre-filter: reject emails that don't contain any configured keyword.
 	// This happens before DB insertion to reduce storage and LLM token usage.
 	if !emailMatchesKeywords(msg.subject, msg.bodyText, store.Settings.IncomingEmailKeywords) {
 		log.Printf("email_polling: email from %s ignored — does not match incoming keyword filter", msg.from)
-		return
+		return nil
 	}
 
 	// Detect missing attachments:
@@ -1441,32 +1459,32 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	// Block RFQ creation when attachments were expected but not received.
 	if attachmentMissing {
 		log.Printf("email_polling: skipping RFQ creation for %s — waiting for missing attachments", msg.from)
-		return
+		return procMsg
 	}
 
 	if !store.Settings.EnableAIRFQBot {
 		log.Printf("email_polling: AI RFQ bot disabled for store %s — skipping RFQ creation for email from %s", storeID.Hex(), msg.from)
-		return
+		return procMsg
 	}
 	if store.Settings.RFQLLMAPIKey == "" {
 		log.Printf("email_polling: no LLM API key configured for store %s — skipping RFQ creation for email from %s", storeID.Hex(), msg.from)
-		return
+		return procMsg
 	}
 	if store.Settings.DisableAutoRFQFromEmail {
 		log.Printf("email_polling: auto RFQ from email disabled for store %s — skipping for %s", storeID.Hex(), msg.from)
-		return
+		return procMsg
 	}
 
 	// LLM classification — is it an RFQ at all?
 	if !isRFQMessage(store, emailText, nil) {
 		log.Printf("email_polling: email from %s is not an RFQ — skipping", msg.from)
-		return
+		return procMsg
 	}
 
 	// LLM duplicate check — is it a reminder for an existing RFQ?
 	if isReminderEmail(store, msg.from, msg.subject, msg.bodyText) {
 		log.Printf("email_polling: email from %s detected as reminder/follow-up — not creating new RFQ", msg.from)
-		return
+		return procMsg
 	}
 
 	// LLM extraction — build attachment content for the LLM.
@@ -1500,7 +1518,8 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	}
 
 	var extracted rfqExtractResult
-	raw, llmErr := callLLMExtractRFQ(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, llmProvider, emailText, imageDataURIs, pdfBase64s)
+	_, legacyURL := resolveExtractionEndpoint(llmProvider, &store.Settings)
+	raw, llmErr := callLLMExtractRFQ(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, llmProvider, emailText, imageDataURIs, pdfBase64s, legacyURL)
 	if llmErr == nil {
 		jsonStr := extractJSONFromLLMResponse(raw)
 		json.Unmarshal([]byte(jsonStr), &extracted) //nolint:errcheck
@@ -1515,13 +1534,18 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	if customer, err := store.FindOrCreateCustomerFromRFQ(
 		extracted.CustomerName, lookupEmail, extracted.CustomerPhone,
 		extracted.CustomerVATNo, extracted.CustomerCompany,
+		extracted.CustomerContactPerson, extracted.CustomerNationalAddress,
 	); err != nil {
 		log.Printf("email_polling: FindOrCreateCustomerFromRFQ error: %v", err)
 	} else if customer != nil {
 		customerID = &customer.ID
 	}
 
+	// Prefer company name; fall back to contact person, then sender address.
 	fromName := extracted.CustomerName
+	if fromName == "" {
+		fromName = extracted.CustomerContactPerson
+	}
 	if fromName == "" {
 		fromName = msg.from
 	}
@@ -1532,23 +1556,29 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 			PartNo:   p.PartNo,
 			Quantity: p.Quantity,
 			Unit:     p.Unit,
+			Notes:    p.Notes,
 		})
 	}
 
 	rfq := &models.RFQReceived{
-		StoreID:         storeObjID,
-		FromPhone:       msg.from,
-		FromName:        fromName,
-		MessageType:     "text",
-		TextContent:     emailText,
-		Source:          "email",
-		Status:          "ready_to_send",
-		Products:        products,
-		CustomerID:      customerID,
-		CustomerName:    extracted.CustomerName,
-		CustomerPhone:   extracted.CustomerPhone,
-		CustomerEmail:   extracted.CustomerEmail,
-		CustomerCompany: extracted.CustomerCompany,
+		StoreID:             storeObjID,
+		FromPhone:           msg.from,
+		FromName:            fromName,
+		MessageType:         "text",
+		TextContent:         emailText,
+		Source:              "email",
+		Status:              "ready_to_send",
+		Products:            products,
+		GeneralInstructions: extracted.GeneralInstructions,
+		CustomerID:              customerID,
+		CustomerName:            extracted.CustomerName,
+		CustomerContactPerson:   extracted.CustomerContactPerson,
+		CustomerPhone:           extracted.CustomerPhone,
+		CustomerEmail:           extracted.CustomerEmail,
+		CustomerCompany:         extracted.CustomerCompany,
+		CustomerVATNo:           extracted.CustomerVATNo,
+		CustomerCRNo:            extracted.CustomerCRNo,
+		CustomerNationalAddress: extracted.CustomerNationalAddress,
 	}
 	if procMsg != nil {
 		rfq.ProcurementMessageID = &procMsg.ID
@@ -1556,7 +1586,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	}
 	if err := models.CreateRFQReceived(rfq); err != nil {
 		log.Printf("email_polling: failed to save RFQ from %s: %v", msg.from, err)
-		return
+		return procMsg
 	}
 
 	// Back-link: update procurement message to reflect it was processed as an RFQ.
@@ -1581,6 +1611,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	})
 	go autoCategorizeAndFindSuppliers(rfq, storeObjID)
 	log.Printf("email_polling: created RFQ %s from email %s (provider: %s)", rfq.ID.Hex(), msg.from, provider)
+	return procMsg
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

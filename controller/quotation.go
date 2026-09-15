@@ -389,6 +389,11 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		go models.MarkDashboardDirty(*quotation.StoreID, quotation.Date)
 	}
 
+	// If this quotation was created from an RFQ, update the RFQ with the back-link.
+	if quotation.RFQReceivedID != nil && !quotation.RFQReceivedID.IsZero() && quotation.StoreID != nil {
+		go models.AddQuotationLinkToRFQ(*quotation.StoreID, *quotation.RFQReceivedID, quotation.ID, quotation.Code)
+	}
+
 	response.Status = true
 	response.Result = quotation
 

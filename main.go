@@ -107,6 +107,7 @@ func main() {
 	//go models.SetIndexes()
 	go models.EnsureRFQReceivedIndexes()
 	go models.EnsureRFQSupplierIndexes()
+	go models.EnsureGooglePlacesCacheIndexes()
 
 	httpPort := env.Getenv("API_PORT", "2000")
 	httpsPort, err := strconv.Atoi(httpPort)
@@ -274,6 +275,7 @@ func main() {
 	router.HandleFunc("/v1/customer/upload-image", controller.UploadCustomerImage).Methods("POST")
 	router.HandleFunc("/v1/customer/delete-image", controller.DeleteCustomerImage).Methods("POST")
 	router.HandleFunc("/v1/customer/vat_no/name", controller.ViewCustomerByVatNoByName).Methods("GET")
+	router.HandleFunc("/v1/customer/find-or-create", controller.FindOrCreateCustomerHandler).Methods("POST")
 
 	//Product
 	router.HandleFunc("/v1/product/summary", controller.ProductSummary).Methods("GET")
@@ -712,6 +714,7 @@ func main() {
 
 	router.PathPrefix("/images/").Handler(http.StripPrefix("/images/", http.FileServer(http.Dir("./images/"))))
 	router.PathPrefix("/pdfs/").Handler(http.StripPrefix("/pdfs/", http.FileServer(http.Dir("./pdfs/"))))
+	router.PathPrefix("/attachments/").Handler(http.StripPrefix("/attachments/", http.FileServer(http.Dir("./attachments/"))))
 	router.PathPrefix("/zatca/").Handler(http.StripPrefix("/zatca/", http.FileServer(http.Dir("./zatca/"))))
 	router.PathPrefix("/html-templates/").Handler(http.StripPrefix("/html-templates/", http.FileServer(http.Dir("./html-templates/"))))
 
@@ -768,9 +771,12 @@ func main() {
 	router.HandleFunc("/v1/rfq-email/accounts", controller.GetRFQEmailAccounts).Methods("GET")
 	router.HandleFunc("/v1/rfq-email/account/{accountID}", controller.DisconnectRFQEmailAccount).Methods("DELETE")
 	router.HandleFunc("/v1/rfq-email/account/{accountID}/status", controller.PollRFQEmailAccountStatus).Methods("GET")
+	router.HandleFunc("/v1/rfq-email/account/{accountID}/settings", controller.UpdateRFQEmailAccountSettings).Methods("PATCH")
+	router.HandleFunc("/v1/rfq-email/account/{accountID}/test-imap", controller.TestRFQEmailIMAPHandler).Methods("POST")
 	// AI RFQ Bot – RFQ received list & detail
 	router.HandleFunc("/v1/rfq-received", controller.ListRFQReceivedHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-received", controller.CreateRFQReceivedHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received", controller.DeleteAllRFQReceivedHandler).Methods("DELETE")
 	router.HandleFunc("/v1/rfq-received/extract", controller.ExtractRFQFromFilesHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}", controller.GetRFQReceivedHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-received/{id}", controller.UpdateRFQReceivedHandler).Methods("PUT")
@@ -780,6 +786,7 @@ func main() {
 	router.HandleFunc("/v1/rfq-received/{id}/send-test", controller.SendRFQTestMessageHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}/generate-image", controller.GenerateRFQPreviewImageHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}/generate-pdf", controller.GenerateRFQPDFHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-received/{id}/download-pdf", controller.DownloadRFQPDFHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-received/{id}/supplier-reply", controller.AddSupplierReplyHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}/supplier-replies", controller.ListSupplierRepliesHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-received/{id}/supplier-replies", controller.AddManualSupplierReplyHandler).Methods("POST")
@@ -791,15 +798,24 @@ func main() {
 	router.HandleFunc("/v1/rfq-suppliers", controller.CreateRFQSupplierHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-suppliers/{id}", controller.UpdateRFQSupplierHandler).Methods("PUT")
 	router.HandleFunc("/v1/rfq-suppliers/{id}", controller.DeleteRFQSupplierHandler).Methods("DELETE")
+	router.HandleFunc("/v1/rfq-suppliers/{id}/refetch-maps", controller.RefetchSupplierMapsHandler).Methods("POST")
 
 	// Outgoing email – test send
 	router.HandleFunc("/v1/outgoing-email/test", controller.TestOutgoingEmailHandler).Methods("POST")
 
 	// Procurement message log (emails + WhatsApp)
 	router.HandleFunc("/v1/procurement-messages", controller.ListProcurementMessagesHandler).Methods("GET")
+	router.HandleFunc("/v1/procurement-messages", controller.DeleteAllProcurementMessagesHandler).Methods("DELETE")
 	router.HandleFunc("/v1/procurement-messages/cleanup", controller.CleanupProcurementMessagesHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-messages/{id}", controller.GetProcurementMessageHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-messages/{id}", controller.DeleteProcurementMessageHandler).Methods("DELETE")
+	router.HandleFunc("/v1/procurement-messages/{id}/create-rfq", controller.CreateRFQFromProcurementMessageHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-messages/{id}/extract", controller.ExtractProcurementMessageHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-messages/{id}/retry-attachments", controller.RetryProcurementMessageAttachmentsHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-messages/{id}/upload-attachment", controller.UploadProcurementAttachmentHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-messages/{id}/link-as-quotation", controller.LinkAsQuotationHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-extract-test", controller.ProcurementExtractTestHandler).Methods("POST")
+	router.HandleFunc("/v1/email-accounts/sync", controller.TriggerEmailSyncHandler).Methods("POST")
 
 	router.HandleFunc("/v1/chart-image-share", controller.ShareChartImage).Methods("POST")
 

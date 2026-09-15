@@ -262,6 +262,14 @@ func SendRFQToSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-detect DOCUMENT header template → always use PDF (not screenshot)
+	for _, comp := range tmpl.Components {
+		if strings.EqualFold(comp.Type, "HEADER") && strings.EqualFold(comp.Format, "DOCUMENT") {
+			body.GeneratePDF = true
+			break
+		}
+	}
+
 	// ── Generate or use pre-uploaded attachment ───────────────────────────────
 	chromeBin := chromePath()
 	var mediaID string
@@ -458,6 +466,9 @@ func SendRFQToSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
+		if compJSON, _ := json.Marshal(components); len(compJSON) > 0 {
+			log.Printf("rfq_send: components for %s: %s", supplierPhone, string(compJSON))
+		}
 		sendErr := metaSendTemplate(phoneNumberID, accessToken, supplierPhone, templateName, tmpl.Language, components)
 		sentAt := time.Now()
 		rec := models.RFQForwardRecord{
@@ -515,6 +526,17 @@ func SendRFQToSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 					log.Printf("rfq_send: failed to upsert new supplier %s: %v", sup.Phone, err)
 				} else {
 					log.Printf("rfq_send: upserted new supplier %s (%s)", sup.Name, sup.Phone)
+					// Enrich with Google Maps in the background (address, rating, website, etc.)
+					if store.Settings.GoogleMapsAPIKey != "" {
+						go func(s *models.RFQSupplier, storeIDHex string) {
+							if enriched, err := enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, s); err != nil {
+								log.Printf("rfq_send: Maps enrich error for %s: %v", s.Phone, err)
+							} else if enriched {
+								models.UpsertRFQSupplierByPlaceID(s) //nolint:errcheck
+								BroadcastRFQEvent(storeIDHex, "supplier_updated")
+							}
+						}(newSup, storeObjID.Hex())
+					}
 				}
 			}
 		}
@@ -594,32 +616,35 @@ func GetRFQSendPreviewHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate WABA credentials
+	// WABA credentials — soft-check: collect warnings but don't block supplier listing
 	phoneNumberID := store.Settings.BotWABAPhoneNumberID
 	accessToken := store.Settings.BotWABAAccessToken
 	wabaID := store.Settings.BotWABABusinessAccountID
-	if phoneNumberID == "" || accessToken == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Bot WhatsApp not connected"})
-		return
-	}
 	templateName := store.Settings.WABATemplateRFQSupplier
-	if templateName == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "RFQ to Supplier Template not set. Please configure it in Store → Procurement → WABA Template Purpose."})
-		return
+	var configWarning string
+	if phoneNumberID == "" || accessToken == "" {
+		configWarning = "Bot WhatsApp not connected"
+	} else if templateName == "" {
+		configWarning = "RFQ to Supplier Template not set. Please configure it in Store → Procurement → WABA Template Purpose."
 	}
 
-	// Resolve suppliers (same logic as send handler)
-	categories := rfq.Categories
-	if len(categories) == 0 && len(rfq.Products) > 0 {
-		for _, p := range rfq.Products {
-			if p.Name != "" {
-				categories = append(categories, strings.Fields(p.Name)[0])
+	// Resolve suppliers: use stored IDs from the bot pipeline when available
+	// (they capture suppliers from broader category searches), otherwise fall back to findSuppliers.
+	var suppliers []models.RFQSupplier
+	if len(rfq.MatchedSupplierIDs) > 0 {
+		suppliers, _ = models.FindRFQSuppliersByIDs(rfq.MatchedSupplierIDs)
+	}
+	if len(suppliers) == 0 {
+		categories := rfq.Categories
+		if len(categories) == 0 && len(rfq.Products) > 0 {
+			for _, p := range rfq.Products {
+				if p.Name != "" {
+					categories = append(categories, strings.Fields(p.Name)[0])
+				}
 			}
 		}
+		suppliers, _ = findSuppliers(store, storeObjID, categories)
 	}
-	suppliers, _ := findSuppliers(store, storeObjID, categories)
 
 	// Fetch template body text from Meta
 	templateBody := ""
@@ -691,18 +716,49 @@ func GetRFQSendPreviewHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Build supplier preview list
 	type supplierPreview struct {
-		ID       string `json:"id"`
-		Name     string `json:"name"`
-		Phone    string `json:"phone"`
-		Category string `json:"category"`
+		ID              string   `json:"id"`
+		Name            string   `json:"name"`
+		Phone           string   `json:"phone"`
+		Category        string   `json:"category"`
+		Categories      []string `json:"categories"`
+		CategoryMatched bool     `json:"category_matched"`
+		Address         string   `json:"address,omitempty"`
+		Website         string   `json:"website,omitempty"`
+		GoogleMapsURL   string   `json:"google_maps_url,omitempty"`
+		Rating          float64  `json:"rating,omitempty"`
+		PurchaseMarket  string   `json:"purchase_market,omitempty"`
+	}
+	rfqCatSet := map[string]bool{}
+	for _, c := range rfq.Categories {
+		rfqCatSet[strings.ToLower(c)] = true
 	}
 	var supList []supplierPreview
 	for _, s := range suppliers {
+		matched := false
+		for _, c := range s.Categories {
+			if rfqCatSet[strings.ToLower(c)] {
+				matched = true
+				break
+			}
+		}
+		if !matched && s.MatchedCategory != "" {
+			matched = rfqCatSet[strings.ToLower(s.MatchedCategory)]
+		}
+		if !matched {
+			matched = true // supplier was returned by findSuppliers — treat as matching
+		}
 		supList = append(supList, supplierPreview{
-			ID:       s.ID.Hex(),
-			Name:     s.Name,
-			Phone:    s.Phone,
-			Category: s.MatchedCategory,
+			ID:              s.ID.Hex(),
+			Name:            s.Name,
+			Phone:           s.Phone,
+			Category:        s.MatchedCategory,
+			Categories:      s.Categories,
+			CategoryMatched: matched,
+			Address:         s.Address,
+			Website:         s.Website,
+			GoogleMapsURL:   s.GoogleMapsURL,
+			Rating:          s.Rating,
+			PurchaseMarket:  s.PurchaseMarket,
 		})
 	}
 
@@ -720,16 +776,17 @@ func GetRFQSendPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"rfq_id":             rfq.ID.Hex(),
-		"rfq_code":           rfq.Code,
-		"template_name":      templateName,
-		"template_language":  templateLanguage,
-		"template_body":      filledBody,
+		"rfq_id":              rfq.ID.Hex(),
+		"rfq_code":            rfq.Code,
+		"template_name":       templateName,
+		"template_language":   templateLanguage,
+		"template_body":       filledBody,
 		"template_components": templateComponents,
-		"pre_filled_vars":    preFilledVars,
-		"has_image_header":   hasImageHeader,
-		"suppliers":          supList,
-		"store_name":         storeName,
+		"pre_filled_vars":     preFilledVars,
+		"has_image_header":    hasImageHeader,
+		"suppliers":           supList,
+		"store_name":          storeName,
+		"config_warning":      configWarning,
 	})
 }
 
@@ -831,13 +888,26 @@ func SendRFQTestMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate RFQ screenshot — set prepared_by from sender's name and embed store
+	// Detect template header format (IMAGE or DOCUMENT)
+	testHeaderFormat := ""
+	for _, comp := range tmpl.Components {
+		if strings.EqualFold(comp.Type, "HEADER") {
+			f := strings.ToUpper(comp.Format)
+			if f == "IMAGE" || f == "DOCUMENT" {
+				testHeaderFormat = f
+			}
+			break
+		}
+	}
+
+	// Generate RFQ media — PDF for DOCUMENT templates, screenshot for IMAGE templates
 	if rfq.PreparedBy == "" && testUserName != "" {
 		rfq.PreparedBy = testUserName
 	}
 	chromeBin := chromePath()
 	var mediaID string
-	if chromeBin != "" {
+	var testMediaType string
+	if chromeBin != "" && testHeaderFormat != "" {
 		key, keyErr := generatePrintKey()
 		if keyErr == nil {
 			type rfqForPrint struct {
@@ -854,51 +924,79 @@ func SendRFQTestMessageHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			printURL := fmt.Sprintf("%s/rfq-print?key=%s", frontendURL, key)
 
-			opts := append(chromeExecOpts(chromeBin), chromedp.Flag("force-device-scale-factor", "2"))
-			allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
-			defer cancelAlloc()
-			chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
-			defer cancelCtx()
-			chromeCtx, cancelTimeout := context.WithTimeout(chromeCtx, 60*time.Second)
-			defer cancelTimeout()
+			if testHeaderFormat == "DOCUMENT" {
+				opts := chromeExecOpts(chromeBin)
+				allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+				defer cancelAlloc()
+				chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
+				defer cancelCtx()
+				chromeCtx, cancelTimeout := context.WithTimeout(chromeCtx, 60*time.Second)
+				defer cancelTimeout()
 
-			var screenshotBuf []byte
-			if runErr := chromedp.Run(chromeCtx,
-				chromedp.Navigate(printURL),
-				chromedp.WaitVisible(`body[data-print-ready="true"]`, chromedp.ByQuery),
-				chromedp.Sleep(500*time.Millisecond),
-				chromedp.ActionFunc(func(ctx context.Context) error {
-					var err error
-					screenshotBuf, err = page.CaptureScreenshot().
-						WithFormat(page.CaptureScreenshotFormatPng).Do(ctx)
-					return err
-				}),
-			); runErr == nil && len(screenshotBuf) > 0 {
-				mid, uploadErr := metaUploadMedia(phoneNumberID, accessToken, "image/png", "rfq.png", screenshotBuf)
-				if uploadErr == nil {
-					mediaID = mid
+				var pdfBuf []byte
+				if runErr := chromedp.Run(chromeCtx,
+					chromedp.Navigate(printURL),
+					chromedp.WaitVisible(`body[data-print-ready="true"]`, chromedp.ByQuery),
+					chromedp.Sleep(500*time.Millisecond),
+					chromedp.ActionFunc(func(ctx context.Context) error {
+						var err error
+						pdfBuf, _, err = page.PrintToPDF().
+							WithPrintBackground(true).
+							WithPaperWidth(8.27).
+							WithPaperHeight(11.69).
+							WithMarginTop(0).WithMarginBottom(0).
+							WithMarginLeft(0).WithMarginRight(0).
+							Do(ctx)
+						return err
+					}),
+				); runErr == nil && len(pdfBuf) > 0 {
+					pdfName := fmt.Sprintf("%s.pdf", rfq.Code)
+					mid, uploadErr := metaUploadMedia(phoneNumberID, accessToken, "application/pdf", pdfName, pdfBuf)
+					if uploadErr == nil {
+						mediaID = mid
+						testMediaType = "document"
+						log.Printf("rfq_send_test: uploaded PDF mediaID=%s name=%s", mediaID, pdfName)
+					} else {
+						log.Printf("rfq_send_test: PDF upload failed: %v", uploadErr)
+					}
+				}
+			} else {
+				opts := append(chromeExecOpts(chromeBin), chromedp.Flag("force-device-scale-factor", "2"))
+				allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+				defer cancelAlloc()
+				chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
+				defer cancelCtx()
+				chromeCtx, cancelTimeout := context.WithTimeout(chromeCtx, 60*time.Second)
+				defer cancelTimeout()
+
+				var screenshotBuf []byte
+				if runErr := chromedp.Run(chromeCtx,
+					chromedp.Navigate(printURL),
+					chromedp.WaitVisible(`body[data-print-ready="true"]`, chromedp.ByQuery),
+					chromedp.Sleep(500*time.Millisecond),
+					chromedp.ActionFunc(func(ctx context.Context) error {
+						var err error
+						screenshotBuf, err = page.CaptureScreenshot().
+							WithFormat(page.CaptureScreenshotFormatPng).Do(ctx)
+						return err
+					}),
+				); runErr == nil && len(screenshotBuf) > 0 {
+					mid, uploadErr := metaUploadMedia(phoneNumberID, accessToken, "image/png", "rfq.png", screenshotBuf)
+					if uploadErr == nil {
+						mediaID = mid
+						testMediaType = "image"
+					}
 				}
 			}
 		}
 	}
 
-	// Build components
-	hasImageHeader := false
-	for _, comp := range tmpl.Components {
-		if strings.EqualFold(comp.Type, "HEADER") && strings.EqualFold(comp.Format, "IMAGE") {
-			hasImageHeader = true
-			break
-		}
-	}
-
+	// Build header component using the same helper as the main send
 	var components []interface{}
-	if hasImageHeader && mediaID != "" {
-		components = append(components, map[string]interface{}{
-			"type": "header",
-			"parameters": []interface{}{
-				map[string]interface{}{"type": "image", "image": map[string]interface{}{"id": mediaID}},
-			},
-		})
+	if mediaID != "" && testHeaderFormat != "" {
+		comp := buildRFQHeaderComponent(testMediaType, testHeaderFormat, mediaID, rfq.Code)
+		log.Printf("rfq_send_test: header component: %+v", comp)
+		components = append(components, comp)
 	}
 
 	ne2 := func(s, fallback string) string {
@@ -1178,7 +1276,7 @@ func GenerateRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileName := fmt.Sprintf("RFQ-%s.pdf", rfq.Code)
+	fileName := fmt.Sprintf("%s.pdf", rfq.Code)
 	mediaID, uploadErr := metaUploadMedia(phoneNumberID, accessToken, "application/pdf", fileName, pdfBuf)
 	if uploadErr != nil {
 		log.Printf("rfq_generate_pdf: upload failed: %v", uploadErr)
@@ -1193,6 +1291,95 @@ func GenerateRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 		"media_type": "document",
 		"file_name":  fileName,
 	})
+}
+
+// DownloadRFQPDFHandler generates a PDF for the RFQ and returns it as raw bytes.
+// GET /v1/rfq-received/{id}/download-pdf?store_id=...
+func DownloadRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
+	if _, err := models.AuthenticateByAccessToken(r); err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, "invalid store_id", http.StatusBadRequest)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, "store not found", http.StatusNotFound)
+		return
+	}
+	vars := mux.Vars(r)
+	rfqID, err := primitive.ObjectIDFromHex(vars["id"])
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	rfq, err := models.FindRFQReceivedByID(rfqID, storeObjID)
+	if err != nil {
+		http.Error(w, "RFQ not found", http.StatusNotFound)
+		return
+	}
+	chromeBin := chromePath()
+	if chromeBin == "" {
+		http.Error(w, "Chrome not available", http.StatusServiceUnavailable)
+		return
+	}
+	key, keyErr := generatePrintKey()
+	if keyErr != nil {
+		http.Error(w, "failed to generate print key", http.StatusInternalServerError)
+		return
+	}
+	type rfqForPDF struct {
+		*models.RFQReceived
+		Store *models.Store `json:"store"`
+	}
+	rfqJSON, _ := json.Marshal(rfqForPDF{RFQReceived: rfq, Store: store})
+	printJobStore.Store(key, printJobData{Model: rfqJSON, ModelName: "rfq_received", CreatedAt: time.Now()})
+	defer printJobStore.Delete(key)
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3004"
+	}
+	printURL := fmt.Sprintf("%s/rfq-print?key=%s", frontendURL, key)
+
+	opts := chromeExecOpts(chromeBin)
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+	defer cancelAlloc()
+	chromeCtx, cancelCtx := chromedp.NewContext(allocCtx)
+	defer cancelCtx()
+	chromeCtx, cancelTimeout := context.WithTimeout(chromeCtx, 60*time.Second)
+	defer cancelTimeout()
+
+	var pdfBuf []byte
+	if runErr := chromedp.Run(chromeCtx,
+		chromedp.Navigate(printURL),
+		chromedp.WaitVisible(`body[data-print-ready="true"]`, chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			pdfBuf, _, err = page.PrintToPDF().
+				WithPrintBackground(true).
+				WithPaperWidth(8.27).
+				WithPaperHeight(11.69).
+				WithMarginTop(0).WithMarginBottom(0).
+				WithMarginLeft(0).WithMarginRight(0).
+				Do(ctx)
+			return err
+		}),
+	); runErr != nil {
+		http.Error(w, "PDF generation failed", http.StatusInternalServerError)
+		return
+	}
+
+	fileName := fmt.Sprintf("%s.pdf", rfq.Code)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, fileName))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(pdfBuf)))
+	w.Write(pdfBuf) //nolint:errcheck
 }
 
 // UploadRFQAttachmentHandler uploads a user-supplied image or PDF to Meta and returns the media ID.

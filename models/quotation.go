@@ -120,6 +120,7 @@ type Quotation struct {
 	DeletedByName            string              `json:"deleted_by_name,omitempty" bson:"deleted_by_name,omitempty"`
 	ValidityDays             *int64              `bson:"validity_days,omitempty" json:"validity_days,omitempty"`
 	DeliveryDays             *int64              `bson:"delivery_days,omitempty" json:"delivery_days,omitempty"`
+	DeliveryFrom             string              `bson:"delivery_from,omitempty" json:"delivery_from,omitempty"`
 	Remarks                  string              `bson:"remarks" json:"remarks"`
 	Type                     string              `json:"type" bson:"type"`
 	Phone                    string              `bson:"phone" json:"phone"`
@@ -137,6 +138,9 @@ type Quotation struct {
 	KmDriven                 float64             `json:"km_driven" bson:"km_driven"`
 	RepairJobID              *primitive.ObjectID  `json:"repair_job_id,omitempty" bson:"repair_job_id,omitempty"`
 	RepairJobIDs             []primitive.ObjectID `json:"repair_job_ids,omitempty" bson:"repair_job_ids,omitempty"`
+	// RFQReceivedID / RFQReceivedCode link back to the RFQ whose price comparison generated this quotation.
+	RFQReceivedID   *primitive.ObjectID `json:"rfq_received_id,omitempty" bson:"rfq_received_id,omitempty"`
+	RFQReceivedCode string              `json:"rfq_received_code,omitempty" bson:"rfq_received_code,omitempty"`
 }
 
 func (store *Store) IfStore2QuotationSalesShouldAffectTheStock(refDate *time.Time) bool {

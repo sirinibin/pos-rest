@@ -772,3 +772,134 @@ func CustomerSummary(w http.ResponseWriter, r *http.Request) {
 	response.Result = customerStats
 	json.NewEncoder(w).Encode(response)
 }
+
+// FindOrCreateCustomerHandler handles POST /v1/customer/find-or-create?store_id=...
+// Body: { name, phone, email, company }
+// Normalizes the phone (strips non-digits, tries with/without country prefix) before
+// searching, so "+966 53 888 6816" and "0538886816" both resolve to the same customer.
+func FindOrCreateCustomerHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := models.AuthenticateByAccessToken(r); err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+		return
+	}
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "store not found"})
+		return
+	}
+
+	var body struct {
+		Name    string `json:"name"`
+		Phone   string `json:"phone"`
+		Email   string `json:"email"`
+		Company string `json:"company"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	// Normalize phone: try the raw value first, then digits-only variants.
+	rawPhone := strings.TrimSpace(body.Phone)
+	phoneVariants := phoneNormVariants(rawPhone)
+
+	// Search: try each phone variant against existing customers
+	var found *models.Customer
+	for _, ph := range phoneVariants {
+		if ph == "" {
+			continue
+		}
+		found, _ = store.FindCustomerByEmailOrPhone("", ph, bson.M{})
+		if found != nil {
+			break
+		}
+	}
+	// If email is provided and still not found, try by email
+	if found == nil && body.Email != "" {
+		found, _ = store.FindCustomerByEmailOrPhone(strings.TrimSpace(body.Email), "", bson.M{})
+	}
+	// If still not found, search by name using text search
+	if found == nil && body.Name != "" {
+		found = findCustomerByNameExact(store, strings.TrimSpace(body.Name))
+	}
+
+	if found != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{"result": found, "created": false})
+		return
+	}
+
+	// Create new customer — store the phone in the normalized digits-only form
+	normalizedPhone := rawPhone
+	if len(phoneVariants) > 0 && phoneVariants[0] != "" {
+		normalizedPhone = phoneVariants[0]
+	}
+	customer, err := store.FindOrCreateCustomerFromRFQ(
+		strings.TrimSpace(body.Name),
+		strings.TrimSpace(body.Email),
+		normalizedPhone,
+		"",
+		strings.TrimSpace(body.Company),
+		"", "",
+	)
+	if err != nil || customer == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to create customer"})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"result": customer, "created": true})
+}
+
+// phoneNormVariants returns candidate phone strings to try when looking up a customer.
+// It strips formatting and tries both with and without the leading "0" replaced by "966".
+func phoneNormVariants(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	// digits only
+	digits := ""
+	for _, ch := range raw {
+		if ch >= '0' && ch <= '9' {
+			digits += string(ch)
+		}
+	}
+	if digits == "" {
+		return []string{raw}
+	}
+	variants := []string{digits}
+	// "0XX" → "966XX" (Saudi local → international)
+	if strings.HasPrefix(digits, "0") && len(digits) >= 9 {
+		variants = append(variants, "966"+digits[1:])
+	}
+	// "966XX" → "0XX"
+	if strings.HasPrefix(digits, "966") && len(digits) >= 12 {
+		variants = append(variants, "0"+digits[3:])
+	}
+	// also include the raw trimmed value in case stored with spaces
+	if raw != digits {
+		variants = append(variants, strings.TrimSpace(raw))
+	}
+	return variants
+}
+
+// findCustomerByNameExact searches for a customer by exact name match.
+func findCustomerByNameExact(store *models.Store, name string) *models.Customer {
+	if name == "" {
+		return nil
+	}
+	c, err := store.FindCustomerByName(name, bson.M{})
+	if err != nil || c == nil {
+		return nil
+	}
+	return c
+}

@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -21,7 +23,7 @@ type RFQSupplier struct {
 	Latitude      float64             `bson:"latitude,omitempty" json:"latitude,omitempty"`
 	Longitude     float64             `bson:"longitude,omitempty" json:"longitude,omitempty"`
 	Categories    []string            `bson:"categories,omitempty" json:"categories,omitempty"`
-	Rating        float64             `bson:"rating,omitempty" json:"rating,omitempty"`
+	Rating        float64             `bson:"rating" json:"rating"`
 	GooglePlaceID   string `bson:"google_place_id,omitempty" json:"google_place_id,omitempty"`
 	GoogleMapsURL   string `bson:"google_maps_url,omitempty" json:"google_maps_url,omitempty"`
 	PurchaseMarket  string `bson:"purchase_market,omitempty" json:"purchase_market,omitempty"`
@@ -101,9 +103,13 @@ func UpsertRFQSupplierByPlaceID(supplier *RFQSupplier) error {
 		update["$addToSet"] = bson.M{"categories": bson.M{"$each": supplier.Categories}}
 	}
 
-	opts := options.Update().SetUpsert(true)
-	_, err := col.UpdateOne(ctx, filter, update, opts)
-	return err
+	// Use FindOneAndUpdate so we get back the real _id (whether newly inserted or existing).
+	fopts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	var result RFQSupplier
+	if err := col.FindOneAndUpdate(ctx, filter, update, fopts).Decode(&result); err == nil {
+		supplier.ID = result.ID
+	}
+	return nil
 }
 
 func CreateRFQSupplier(supplier *RFQSupplier) error {
@@ -196,16 +202,52 @@ func FindRFQSupplierByID(id, storeID primitive.ObjectID) (*RFQSupplier, error) {
 }
 
 // FindRFQSuppliersByCategories returns active suppliers that match any of the given categories.
+// flexCategoryRegex returns a MongoDB regex pattern that matches common plural/singular
+// variants of a category name (e.g. "System" ↔ "Systems", "Supply" ↔ "Supplies").
+// Use with "$options": "i" for case-insensitive matching.
+func flexCategoryRegex(cat string) string {
+	trimmed := strings.TrimSpace(cat)
+	if trimmed == "" {
+		return "^$"
+	}
+	lower := strings.ToLower(trimmed)
+	escaped := regexp.QuoteMeta(trimmed)
+
+	switch {
+	case strings.HasSuffix(lower, "ies") && len(lower) > 3:
+		// Supplies → also match Supply
+		base := regexp.QuoteMeta(trimmed[:len(trimmed)-3])
+		return "^(" + escaped + "|" + base + "y)$"
+	case strings.HasSuffix(lower, "y") && len(lower) > 1:
+		// Supply → also match Supplies
+		base := regexp.QuoteMeta(trimmed[:len(trimmed)-1])
+		return "^(" + escaped + "|" + base + "ies)$"
+	case strings.HasSuffix(lower, "s") && !strings.HasSuffix(lower, "ss") && len(lower) > 1:
+		// Systems → also match System
+		base := regexp.QuoteMeta(trimmed[:len(trimmed)-1])
+		return "^(" + escaped + "|" + base + ")$"
+	default:
+		// System → also match Systems
+		return "^(" + escaped + "|" + escaped + "s)$"
+	}
+}
+
 func FindRFQSuppliersByCategories(storeID primitive.ObjectID, categories []string, limit int64) ([]RFQSupplier, error) {
 	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	var catOr bson.A
+	for _, cat := range categories {
+		catOr = append(catOr, bson.M{"categories": bson.M{"$regex": flexCategoryRegex(cat), "$options": "i"}})
+	}
 	filter := bson.M{
-		"store_id":   storeID,
-		"is_active":  true,
-		"phone":      bson.M{"$ne": ""},
-		"categories": bson.M{"$in": categories},
+		"store_id":  storeID,
+		"is_active": true,
+		"phone":     bson.M{"$ne": ""},
+	}
+	if len(catOr) > 0 {
+		filter["$or"] = catOr
 	}
 	opts := options.Find().SetLimit(limit).SetSort(bson.D{{Key: "rating", Value: -1}})
 	cur, err := col.Find(ctx, filter, opts)
@@ -216,6 +258,35 @@ func FindRFQSuppliersByCategories(storeID primitive.ObjectID, categories []strin
 	var items []RFQSupplier
 	cur.All(ctx, &items)
 	return items, nil
+}
+
+// FindRFQSuppliersByIDs fetches suppliers by their ObjectID slice, preserving order.
+func FindRFQSuppliersByIDs(ids []primitive.ObjectID) ([]RFQSupplier, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cur, err := col.Find(ctx, bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQSupplier
+	cur.All(ctx, &items)
+	// reorder to match input ids
+	byID := map[primitive.ObjectID]RFQSupplier{}
+	for _, s := range items {
+		byID[s.ID] = s
+	}
+	ordered := make([]RFQSupplier, 0, len(ids))
+	for _, id := range ids {
+		if s, ok := byID[id]; ok {
+			ordered = append(ordered, s)
+		}
+	}
+	return ordered, nil
 }
 
 // FindRFQSuppliersByMarketAndCategories returns active suppliers for a specific purchase market.
@@ -232,18 +303,34 @@ func FindRFQSuppliersByMarketAndCategories(storeID primitive.ObjectID, categorie
 		"phone":     bson.M{"$ne": ""},
 	}
 
-	// Only apply category filter when categories are known; otherwise any supplier qualifies
+	// Case-insensitive category matching: build a regex OR for each category.
+	// If market is also set we combine both conditions under $and so they don't overwrite each other.
+	var categoryOr bson.A
 	if len(categories) > 0 {
-		filter["categories"] = bson.M{"$in": categories}
+		for _, cat := range categories {
+			categoryOr = append(categoryOr, bson.M{"categories": bson.M{"$regex": flexCategoryRegex(cat), "$options": "i"}})
+		}
 	}
 
-	// For a specific market: include suppliers assigned to that market OR suppliers with no market set
+	var marketOr bson.A
 	if market != "" {
-		filter["$or"] = bson.A{
+		marketOr = bson.A{
 			bson.M{"purchase_market": market},
 			bson.M{"purchase_market": bson.M{"$in": bson.A{"", nil}}},
 			bson.M{"purchase_market": bson.M{"$exists": false}},
 		}
+	}
+
+	switch {
+	case len(categoryOr) > 0 && len(marketOr) > 0:
+		filter["$and"] = bson.A{
+			bson.M{"$or": categoryOr},
+			bson.M{"$or": marketOr},
+		}
+	case len(categoryOr) > 0:
+		filter["$or"] = categoryOr
+	case len(marketOr) > 0:
+		filter["$or"] = marketOr
 	}
 
 	opts := options.Find().SetLimit(limit).SetSort(bson.D{{Key: "rating", Value: -1}})

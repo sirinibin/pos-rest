@@ -273,6 +273,33 @@ type StoreSettings struct {
 	RFQLLMProvider                              string          `bson:"rfq_llm_provider" json:"rfq_llm_provider,omitempty"`
 	RFQLLMModel                                 string          `bson:"rfq_llm_model" json:"rfq_llm_model,omitempty"`
 	RFQLLMAPIKey                                string          `bson:"rfq_llm_api_key" json:"rfq_llm_api_key,omitempty"`
+	// Per-provider API keys for the AI Models tab / Extract feature
+	ExtractionOpenAIAPIKey      string `bson:"extraction_openai_api_key" json:"extraction_openai_api_key,omitempty"`
+	ExtractionAnthropicAPIKey   string `bson:"extraction_anthropic_api_key" json:"extraction_anthropic_api_key,omitempty"`
+	ExtractionGeminiAPIKey      string `bson:"extraction_gemini_api_key" json:"extraction_gemini_api_key,omitempty"`
+	ExtractionGroqAPIKey        string `bson:"extraction_groq_api_key" json:"extraction_groq_api_key,omitempty"`
+	ExtractionXAIAPIKey         string `bson:"extraction_xai_api_key" json:"extraction_xai_api_key,omitempty"`
+	ExtractionMistralAPIKey     string `bson:"extraction_mistral_api_key" json:"extraction_mistral_api_key,omitempty"`
+	ExtractionCerebrasAPIKey    string `bson:"extraction_cerebras_api_key" json:"extraction_cerebras_api_key,omitempty"`
+	ExtractionTogetherAPIKey    string `bson:"extraction_together_api_key" json:"extraction_together_api_key,omitempty"`
+	ExtractionOpenRouterAPIKey  string `bson:"extraction_openrouter_api_key" json:"extraction_openrouter_api_key,omitempty"`
+	ExtractionSambanovaAPIKey   string `bson:"extraction_sambanova_api_key" json:"extraction_sambanova_api_key,omitempty"`
+	ExtractionFireworksAPIKey   string `bson:"extraction_fireworks_api_key" json:"extraction_fireworks_api_key,omitempty"`
+	ExtractionNvidiaAPIKey      string `bson:"extraction_nvidia_api_key" json:"extraction_nvidia_api_key,omitempty"`
+	ExtractionGitHubAPIKey      string `bson:"extraction_github_api_key" json:"extraction_github_api_key,omitempty"`
+	ExtractionHuggingFaceAPIKey string `bson:"extraction_huggingface_api_key" json:"extraction_huggingface_api_key,omitempty"`
+	ExtractionCloudflareAPIKey    string `bson:"extraction_cloudflare_api_key" json:"extraction_cloudflare_api_key,omitempty"`
+	ExtractionCloudflareAccountID string `bson:"extraction_cloudflare_account_id" json:"extraction_cloudflare_account_id,omitempty"`
+	ExtractionCohereAPIKey        string `bson:"extraction_cohere_api_key" json:"extraction_cohere_api_key,omitempty"`
+	ExtractionPerplexityAPIKey    string `bson:"extraction_perplexity_api_key" json:"extraction_perplexity_api_key,omitempty"`
+	ExtractionDeepInfraAPIKey     string `bson:"extraction_deepinfra_api_key" json:"extraction_deepinfra_api_key,omitempty"`
+	// LLM provider and model for "Populate RFQ Suppliers from Vendors" (uses per-provider extraction API key)
+	PopulateSuppliersLLMProvider string `bson:"populate_suppliers_llm_provider" json:"populate_suppliers_llm_provider,omitempty"`
+	PopulateSuppliersLLMModel    string `bson:"populate_suppliers_llm_model" json:"populate_suppliers_llm_model,omitempty"`
+	// When true, disable automatic RFQ creation from incoming emails (default false = auto-create ON)
+	DisableAutoRFQFromEmail    bool `bson:"disable_auto_rfq_from_email" json:"disable_auto_rfq_from_email"`
+	// When true, disable automatic RFQ creation from incoming WhatsApp messages (default false = auto-create ON)
+	DisableAutoRFQFromWhatsApp bool `bson:"disable_auto_rfq_from_whatsapp" json:"disable_auto_rfq_from_whatsapp"`
 	// Google Maps API key (for finding suppliers)
 	GoogleMapsAPIKey                            string          `bson:"google_maps_api_key" json:"google_maps_api_key,omitempty"`
 	// Min suppliers required before forwarding RFQ (default 2)
@@ -283,6 +310,10 @@ type StoreSettings struct {
 	RFQIntro        string   `bson:"rfq_intro" json:"rfq_intro,omitempty"`
 	// RFQAllowedSenders: only process RFQs from these WhatsApp numbers (empty = allow all)
 	RFQAllowedSenders []string `bson:"rfq_allowed_senders" json:"rfq_allowed_senders"`
+
+	// IncomingEmailKeywords: only accept incoming emails where subject or body
+	// contains at least one of these words (case-insensitive). Empty = accept all.
+	IncomingEmailKeywords []string `bson:"incoming_email_keywords" json:"incoming_email_keywords"`
 
 	// ── Email RFQ Source ──────────────────────────────────────────────────
 	// Provider: gmail | outlook | zoho | mailgun | sendgrid | postmark | ses | imap
@@ -344,6 +375,14 @@ type StoreSettings struct {
 	StoreRFQEvolutionAPIURL       string `bson:"store_rfq_evolution_api_url" json:"store_rfq_evolution_api_url,omitempty"`
 	// When true, auto-populate/update RFQ supplier whenever a purchase is created or updated
 	EnableRFQSupplierOnPurchase bool `bson:"enable_rfq_supplier_on_purchase" json:"enable_rfq_supplier_on_purchase"`
+	// EnableRFQModule controls visibility of RFQ-related sidebar menu items and index table columns.
+	EnableRFQModule bool `bson:"enable_rfq_module" json:"enable_rfq_module"`
+	// DefaultQuotationMarginPercent is used as the starting margin in the price comparison table (default 35).
+	DefaultQuotationMarginPercent float64 `bson:"default_quotation_margin_percent" json:"default_quotation_margin_percent"`
+	// QuotationLLMProvider / QuotationLLMModel are used for extracting supplier quotation content.
+	// Uses the same per-provider Extraction*APIKey as the RFQ extraction.
+	QuotationLLMProvider string `bson:"quotation_llm_provider" json:"quotation_llm_provider,omitempty"`
+	QuotationLLMModel    string `bson:"quotation_llm_model" json:"quotation_llm_model,omitempty"`
 	// When true, the UI switches to RTL layout whenever the user selects Arabic as the display language
 	UseRTLForArabic bool `bson:"use_rtl_for_arabic" json:"use_rtl_for_arabic"`
 	// When true, font/size/header/margin/page settings are synced to server instead of browser-only localStorage

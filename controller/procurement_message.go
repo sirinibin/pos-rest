@@ -362,7 +362,8 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 
 	llmProvider := strings.ToLower(store.Settings.RFQLLMProvider)
 	var extracted rfqExtractResult
-	raw, llmErr := callLLMExtractRFQ(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, llmProvider, emailText, imageDataURIs, pdfBase64s)
+	_, legacyEndpoint := resolveExtractionEndpoint(llmProvider, &store.Settings)
+	raw, llmErr := callLLMExtractRFQ(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, llmProvider, emailText, imageDataURIs, pdfBase64s, legacyEndpoint)
 	if llmErr == nil {
 		jsonStr := extractJSONFromLLMResponse(raw)
 		json.Unmarshal([]byte(jsonStr), &extracted) //nolint:errcheck
@@ -377,13 +378,18 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 	if customer, custErr := store.FindOrCreateCustomerFromRFQ(
 		extracted.CustomerName, lookupEmail, extracted.CustomerPhone,
 		extracted.CustomerVATNo, extracted.CustomerCompany,
+		extracted.CustomerContactPerson, extracted.CustomerNationalAddress,
 	); custErr != nil {
 		log.Printf("procurement_messages: FindOrCreateCustomerFromRFQ error: %v", custErr)
 	} else if customer != nil {
 		customerID = &customer.ID
 	}
 
+	// Prefer company name; fall back to contact person, then sender.
 	fromName := extracted.CustomerName
+	if fromName == "" {
+		fromName = extracted.CustomerContactPerson
+	}
 	if fromName == "" {
 		fromName = procMsg.From
 	}
@@ -394,27 +400,33 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 			PartNo:   p.PartNo,
 			Quantity: p.Quantity,
 			Unit:     p.Unit,
+			Notes:    p.Notes,
 		})
 	}
 
 	source := procurementMessageSource(procMsg.Type)
 
 	rfq := &models.RFQReceived{
-		StoreID:                storeObjID,
-		FromPhone:              procMsg.From,
-		FromName:               fromName,
-		MessageType:            "text",
-		TextContent:            emailText,
-		Source:                 source,
-		Status:                 "ready_to_send",
-		Products:               products,
-		CustomerID:             customerID,
-		CustomerName:           extracted.CustomerName,
-		CustomerPhone:          extracted.CustomerPhone,
-		CustomerEmail:          extracted.CustomerEmail,
-		CustomerCompany:        extracted.CustomerCompany,
-		ProcurementMessageID:   &procMsg.ID,
-		ProcurementMessageCode: procMsg.Code,
+		StoreID:                 storeObjID,
+		FromPhone:               procMsg.From,
+		FromName:                fromName,
+		MessageType:             "text",
+		TextContent:             emailText,
+		Source:                  source,
+		Status:                  "ready_to_send",
+		Products:                products,
+		GeneralInstructions:     extracted.GeneralInstructions,
+		CustomerID:              customerID,
+		CustomerName:            extracted.CustomerName,
+		CustomerContactPerson:   extracted.CustomerContactPerson,
+		CustomerPhone:           extracted.CustomerPhone,
+		CustomerEmail:           extracted.CustomerEmail,
+		CustomerCompany:         extracted.CustomerCompany,
+		CustomerVATNo:           extracted.CustomerVATNo,
+		CustomerCRNo:            extracted.CustomerCRNo,
+		CustomerNationalAddress: extracted.CustomerNationalAddress,
+		ProcurementMessageID:    &procMsg.ID,
+		ProcurementMessageCode:  procMsg.Code,
 	}
 	if err := models.CreateRFQReceived(rfq); err != nil {
 		log.Printf("procurement_messages: failed to create RFQ: %v", err)
@@ -438,7 +450,7 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 // ── ExtractProcurementMessageHandler ──────────────────────────────────────────
 // POST /v1/procurement-messages/{id}/extract
 // Accepts multipart form with optional "files" field for additional uploads.
-// Required form fields: llm_provider, llm_model, llm_api_key.
+// Required form fields: llm_provider, llm_model (store_id used to resolve API key).
 // Uses the email body + saved attachments + uploaded files as input to the LLM.
 // Returns the same rfqExtractResult shape as /v1/rfq-received/extract.
 func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
@@ -458,11 +470,28 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 	llmProvider := strings.ToLower(strings.TrimSpace(r.FormValue("llm_provider")))
 	llmModel := strings.TrimSpace(r.FormValue("llm_model"))
-	llmAPIKey := strings.TrimSpace(r.FormValue("llm_api_key"))
 
-	if llmAPIKey == "" || llmProvider == "" {
+	if llmProvider == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "llm_provider and llm_api_key are required"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "llm_provider is required"})
+		return
+	}
+
+	// Resolve API key from store settings (store_id required).
+	storeIDStr := r.URL.Query().Get("store_id")
+	if storeIDStr == "" {
+		storeIDStr = r.FormValue("store_id")
+	}
+	storeObjID, storeErr := primitive.ObjectIDFromHex(storeIDStr)
+	var llmAPIKey, llmEndpointURL string
+	if storeErr == nil {
+		if store, sErr := models.FindStoreByID(&storeObjID, bson.M{}); sErr == nil {
+			llmAPIKey, llmEndpointURL = resolveExtractionEndpoint(llmProvider, &store.Settings)
+		}
+	}
+	if llmAPIKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "No API key configured for the selected provider. Please add it under Store → AI Models."})
 		return
 	}
 
@@ -559,7 +588,7 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		usedModel = llmProvider
 	}
 
-	responseText, llmErr := callLLMExtractRFQ(llmAPIKey, llmModel, llmProvider, combinedText, imageDataURIs, pdfBase64s)
+	responseText, llmErr := callLLMExtractRFQ(llmAPIKey, llmModel, llmProvider, combinedText, imageDataURIs, pdfBase64s, llmEndpointURL)
 	if llmErr != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": llmErr.Error()})
@@ -772,9 +801,10 @@ func UploadProcurementAttachmentHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // ── ProcurementExtractTestHandler ─────────────────────────────────────────────
-// POST /v1/procurement-extract-test
+// POST /v1/procurement-extract-test?store_id=<id>
 // Standalone LLM extraction test — accepts free-form text + file uploads.
-// Required form fields: llm_provider, llm_model, llm_api_key.
+// Required form fields: llm_provider, llm_model.
+// Required query param: store_id (API key resolved from store settings).
 // Optional: text (free text input), files[] (images / PDFs / spreadsheets / CSV / TXT).
 // Returns the same rfqExtractResult shape.
 func ProcurementExtractTestHandler(w http.ResponseWriter, r *http.Request) {
@@ -786,12 +816,27 @@ func ProcurementExtractTestHandler(w http.ResponseWriter, r *http.Request) {
 
 	llmProvider := strings.ToLower(strings.TrimSpace(r.FormValue("llm_provider")))
 	llmModel := strings.TrimSpace(r.FormValue("llm_model"))
-	llmAPIKey := strings.TrimSpace(r.FormValue("llm_api_key"))
 	freeText := strings.TrimSpace(r.FormValue("text"))
 
-	if llmAPIKey == "" || llmProvider == "" {
+	if llmProvider == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "llm_provider and llm_api_key are required"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "llm_provider is required"})
+		return
+	}
+
+	// Resolve API key and endpoint URL from store settings
+	storeIDStr := strings.TrimSpace(r.URL.Query().Get("store_id"))
+	var llmAPIKey, llmEndpointURL string
+	if storeIDStr != "" {
+		if storeObjID, sErr := primitive.ObjectIDFromHex(storeIDStr); sErr == nil {
+			if store, sErr2 := models.FindStoreByID(&storeObjID, bson.M{}); sErr2 == nil && store != nil {
+				llmAPIKey, llmEndpointURL = resolveExtractionEndpoint(llmProvider, &store.Settings)
+			}
+		}
+	}
+	if llmAPIKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "no API key found for provider '" + llmProvider + "' — please add it in Store → AI Models tab"})
 		return
 	}
 
@@ -843,7 +888,7 @@ func ProcurementExtractTestHandler(w http.ResponseWriter, r *http.Request) {
 		usedModel = llmProvider
 	}
 
-	responseText, llmErr := callLLMExtractRFQ(llmAPIKey, llmModel, llmProvider, combinedText, imageDataURIs, pdfBase64s)
+	responseText, llmErr := callLLMExtractRFQ(llmAPIKey, llmModel, llmProvider, combinedText, imageDataURIs, pdfBase64s, llmEndpointURL)
 	if llmErr != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": llmErr.Error()})
@@ -858,4 +903,138 @@ func ProcurementExtractTestHandler(w http.ResponseWriter, r *http.Request) {
 		result.LLMModel = usedModel
 	}
 	json.NewEncoder(w).Encode(result)
+}
+
+// LinkAsQuotationHandler handles POST /v1/procurement-messages/{id}/link-as-quotation
+// Body (JSON, optional): { "rfq_id": "<hex>", "rfq_code": "<str>", "unlink": false }
+// If rfq_id/rfq_code are omitted, tries auto-match by RFQ code in text then by supplier phone.
+// The message is marked is_supplier_quotation=true and a SupplierReply is upserted in the RFQ.
+func LinkAsQuotationHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	msgID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id"}) //nolint:errcheck
+		return
+	}
+
+	msg, err := models.GetProcurementMessage(msgID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "message not found"}) //nolint:errcheck
+		return
+	}
+
+	var body struct {
+		RFQIDHex string `json:"rfq_id"`
+		RFQCode  string `json:"rfq_code"`
+		Unlink   bool   `json:"unlink"`
+	}
+	json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+
+	if body.Unlink {
+		if err := models.UnlinkMessageAsQuotation(msgID); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}) //nolint:errcheck
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]bool{"success": true}) //nolint:errcheck
+		return
+	}
+
+	storeID := msg.StoreID
+	var rfq *models.RFQReceived
+
+	if body.RFQIDHex != "" {
+		if rfqObjID, e := primitive.ObjectIDFromHex(body.RFQIDHex); e == nil {
+			rfq, _ = models.FindRFQReceivedByID(rfqObjID, storeID)
+		}
+	}
+	if rfq == nil && body.RFQCode != "" {
+		rfq, _ = models.FindRFQByCode(storeID, body.RFQCode)
+	}
+	if rfq == nil {
+		bodyText := msg.BodyText + " " + msg.Subject
+		for _, a := range msg.Attachments {
+			bodyText += " " + a.Filename
+		}
+		if code := extractRFQCodeSimple(bodyText); code != "" {
+			rfq, _ = models.FindRFQByCode(storeID, code)
+		}
+	}
+	if rfq == nil && msg.From != "" {
+		phone := strings.TrimPrefix(msg.From, "+")
+		rfqs, _ := models.FindRFQsForwardedToPhone(storeID, phone, 90*24*time.Hour, 1)
+		if len(rfqs) > 0 {
+			rfq = &rfqs[0]
+		}
+	}
+
+	var rfqIDPtr *primitive.ObjectID
+	var rfqCode string
+	if rfq != nil {
+		id := rfq.ID
+		rfqIDPtr = &id
+		rfqCode = rfq.Code
+	}
+	if err := models.LinkMessageAsQuotation(msgID, rfqIDPtr, rfqCode); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()}) //nolint:errcheck
+		return
+	}
+
+	matchedRFQCode := ""
+	matchedRFQID := ""
+	if rfq != nil {
+		matchedRFQCode = rfq.Code
+		matchedRFQID = rfq.ID.Hex()
+
+		supplierPhone := ""
+		supplierEmail := ""
+		if msg.Type == "whatsapp" {
+			supplierPhone = strings.TrimPrefix(msg.From, "+")
+		} else {
+			supplierEmail = msg.From
+		}
+
+		existing := false
+		for _, sr := range rfq.SupplierReplies {
+			if sr.ProcurementMessageID != nil && *sr.ProcurementMessageID == msgID {
+				existing = true
+				break
+			}
+		}
+		if !existing {
+			reply := models.SupplierReply{
+				SupplierName:           msg.From,
+				SupplierPhone:          supplierPhone,
+				SupplierEmail:          supplierEmail,
+				ReceivedAt:             time.Now(),
+				RawText:                msg.BodyText,
+				IsQuotation:            true,
+				ExtractionStatus:       "pending",
+				Source:                 msg.Type,
+				ProcurementMessageID:   &msgID,
+				ProcurementMessageCode: msg.Code,
+			}
+			for _, a := range msg.Attachments {
+				if a.URL != "" {
+					reply.MediaURLs = append(reply.MediaURLs, a.URL)
+				}
+			}
+			_ = models.AddSupplierReplyToRFQ(storeID, rfq.ID, reply)
+		}
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+		"success":          true,
+		"is_quotation":     true,
+		"matched_rfq_id":   matchedRFQID,
+		"matched_rfq_code": matchedRFQCode,
+	})
+}
+
+// extractRFQCodeSimple scans free text for an "RFQ-XXXX" style code and returns it.
+func extractRFQCodeSimple(text string) string {
+	return extractRFQCodeFromText(text, "RFQ")
 }

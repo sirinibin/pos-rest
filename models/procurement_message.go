@@ -45,8 +45,14 @@ type ProcurementMessage struct {
 	// Tracking
 	ExternalID     string              `bson:"external_id,omitempty" json:"external_id,omitempty"`
 	Read           bool                `bson:"read" json:"read"`
-	ProcessedAsRFQ bool                `bson:"processed_as_rfq" json:"processed_as_rfq"`
-	RFQReceivedID  *primitive.ObjectID `bson:"rfq_received_id,omitempty" json:"rfq_received_id,omitempty"`
+	ProcessedAsRFQ  bool                `bson:"processed_as_rfq" json:"processed_as_rfq"`
+	RFQReceivedID   *primitive.ObjectID `bson:"rfq_received_id,omitempty" json:"rfq_received_id,omitempty"`
+	RFQReceivedCode string              `bson:"rfq_received_code,omitempty" json:"rfq_received_code,omitempty"`
+	// IsSupplierQuotation is true when the user (or system) labels this message as a supplier quotation.
+	IsSupplierQuotation    bool                `bson:"is_supplier_quotation" json:"is_supplier_quotation"`
+	// LinkedRFQReceivedID points to the RFQReceived document this quotation was matched to.
+	LinkedRFQReceivedID   *primitive.ObjectID `bson:"linked_rfq_received_id,omitempty"   json:"linked_rfq_received_id,omitempty"`
+	LinkedRFQReceivedCode string              `bson:"linked_rfq_received_code,omitempty" json:"linked_rfq_received_code,omitempty"`
 	MessageDate    *time.Time          `bson:"message_date,omitempty" json:"message_date,omitempty"`
 	// Auto-generated human-readable code, e.g. EM-000001 or WA-000001
 	Code           string              `bson:"code,omitempty" json:"code,omitempty"`
@@ -146,15 +152,19 @@ func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, sea
 }
 
 // LinkProcurementMessageToRFQ marks a procurement message as processed and links it to the RFQ.
-func LinkProcurementMessageToRFQ(msgID primitive.ObjectID, rfqID primitive.ObjectID) error {
+func LinkProcurementMessageToRFQ(msgID primitive.ObjectID, rfqID primitive.ObjectID, rfqCode ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	update := bson.M{
+		"processed_as_rfq": true,
+		"rfq_received_id":  rfqID,
+	}
+	if len(rfqCode) > 0 && rfqCode[0] != "" {
+		update["rfq_received_code"] = rfqCode[0]
+	}
 	_, err := procurementMessageCol().UpdateOne(ctx,
 		bson.M{"_id": msgID},
-		bson.M{"$set": bson.M{
-			"processed_as_rfq": true,
-			"rfq_received_id":  rfqID,
-		}},
+		bson.M{"$set": update},
 	)
 	return err
 }
@@ -230,6 +240,40 @@ func MarkProcurementMessageRead(id primitive.ObjectID) error {
 	_, err := procurementMessageCol().UpdateOne(ctx,
 		bson.M{"_id": id},
 		bson.M{"$set": bson.M{"read": true}},
+	)
+	return err
+}
+
+// LinkMessageAsQuotation marks a procurement message as a supplier quotation and links it to an RFQ.
+func LinkMessageAsQuotation(msgID primitive.ObjectID, rfqID *primitive.ObjectID, rfqCode string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	update := bson.M{
+		"is_supplier_quotation": true,
+	}
+	if rfqID != nil {
+		update["linked_rfq_received_id"] = rfqID
+	}
+	if rfqCode != "" {
+		update["linked_rfq_received_code"] = rfqCode
+	}
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": msgID},
+		bson.M{"$set": update},
+	)
+	return err
+}
+
+// UnlinkMessageAsQuotation removes the quotation label and RFQ link from a procurement message.
+func UnlinkMessageAsQuotation(msgID primitive.ObjectID) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": msgID},
+		bson.M{
+			"$set":   bson.M{"is_supplier_quotation": false},
+			"$unset": bson.M{"linked_rfq_received_id": "", "linked_rfq_received_code": ""},
+		},
 	)
 	return err
 }

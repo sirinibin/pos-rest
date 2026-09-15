@@ -30,6 +30,7 @@ type RFQProduct struct {
 	Name     string  `bson:"name"                json:"name"`
 	Quantity float64 `bson:"quantity,omitempty"  json:"quantity,omitempty"`
 	Unit     string  `bson:"unit,omitempty"      json:"unit,omitempty"`
+	Notes    string  `bson:"notes,omitempty"     json:"notes,omitempty"`
 }
 
 type RFQForwardRecord struct {
@@ -62,6 +63,8 @@ type SupplierReplyPrice struct {
 	Quantity     float64 `bson:"quantity,omitempty"     json:"quantity,omitempty"`
 	UnitPrice    float64 `bson:"unit_price"             json:"unit_price"`
 	Currency     string  `bson:"currency,omitempty"     json:"currency,omitempty"`
+	// VATIncluded indicates whether the UnitPrice already includes VAT.
+	VATIncluded  bool    `bson:"vat_included"           json:"vat_included"`
 	Notes        string  `bson:"notes,omitempty"        json:"notes,omitempty"`
 }
 
@@ -83,6 +86,9 @@ type SupplierReply struct {
 	ExtractionError  string               `bson:"extraction_error,omitempty"  json:"extraction_error,omitempty"`
 	// Source: whatsapp | email | manual
 	Source           string               `bson:"source,omitempty"           json:"source,omitempty"`
+	// ProcurementMessageID links back to the ProcurementMessage that was labelled as this quotation.
+	ProcurementMessageID   *primitive.ObjectID `bson:"procurement_message_id,omitempty"   json:"procurement_message_id,omitempty"`
+	ProcurementMessageCode string              `bson:"procurement_message_code,omitempty" json:"procurement_message_code,omitempty"`
 }
 
 // RFQReceived stores every incoming message delivered to the Bot WhatsApp number.
@@ -112,16 +118,21 @@ type RFQReceived struct {
 	// ExtractedText holds text extracted from attached documents (XLSX, CSV) for LLM context only.
 	ExtractedText string `bson:"extracted_text,omitempty" json:"extracted_text,omitempty"`
 	// Linked customer (created/found by LLM-extracted contact info)
-	CustomerID      *primitive.ObjectID `bson:"customer_id,omitempty"      json:"customer_id,omitempty"`
-	CustomerName    string              `bson:"customer_name,omitempty"    json:"customer_name,omitempty"`
-	CustomerPhone   string              `bson:"customer_phone,omitempty"   json:"customer_phone,omitempty"`
-	CustomerEmail   string              `bson:"customer_email,omitempty"   json:"customer_email,omitempty"`
-	CustomerCompany string              `bson:"customer_company,omitempty" json:"customer_company,omitempty"`
-	CustomerAddress string              `bson:"customer_address,omitempty" json:"customer_address,omitempty"`
+	CustomerID              *primitive.ObjectID `bson:"customer_id,omitempty"               json:"customer_id,omitempty"`
+	CustomerName            string              `bson:"customer_name,omitempty"             json:"customer_name,omitempty"`
+	CustomerContactPerson   string              `bson:"customer_contact_person,omitempty"   json:"customer_contact_person,omitempty"`
+	CustomerPhone           string              `bson:"customer_phone,omitempty"            json:"customer_phone,omitempty"`
+	CustomerEmail           string              `bson:"customer_email,omitempty"            json:"customer_email,omitempty"`
+	CustomerCompany         string              `bson:"customer_company,omitempty"          json:"customer_company,omitempty"`
+	CustomerAddress         string              `bson:"customer_address,omitempty"          json:"customer_address,omitempty"`
+	CustomerVATNo           string              `bson:"customer_vat_no,omitempty"           json:"customer_vat_no,omitempty"`
+	CustomerCRNo            string              `bson:"customer_cr_no,omitempty"            json:"customer_cr_no,omitempty"`
+	CustomerNationalAddress string              `bson:"customer_national_address,omitempty" json:"customer_national_address,omitempty"`
 	// received | processing | ready_to_send | forwarded | failed | ignored
 	Status      string             `bson:"status"                  json:"status"`
 	ProcessedAt *time.Time         `bson:"processed_at,omitempty"  json:"processed_at,omitempty"`
-	ForwardedTo []RFQForwardRecord `bson:"forwarded_to,omitempty"  json:"forwarded_to,omitempty"`
+	ForwardedTo        []RFQForwardRecord   `bson:"forwarded_to,omitempty"  json:"forwarded_to,omitempty"`
+	MatchedSupplierIDs []primitive.ObjectID `bson:"matched_supplier_ids,omitempty" json:"matched_supplier_ids,omitempty"`
 	ErrorMsg    string             `bson:"error_msg,omitempty"     json:"error_msg,omitempty"`
 	// BuyerRelays tracks each message the bot sends to the buyer relaying a supplier reply.
 	BuyerRelays []BuyerRelayRecord `bson:"buyer_relays,omitempty" json:"buyer_relays,omitempty"`
@@ -143,6 +154,12 @@ type RFQReceived struct {
 	// AdditionalAttachmentDataURIs holds base64 data URIs of additional detail files.
 	// Shown below the products table in the RFQ preview/PDF.
 	AdditionalAttachmentDataURIs []string `bson:"additional_attachment_data_uris,omitempty" json:"additional_attachment_data_uris,omitempty"`
+	// GeneralInstructions holds LLM-extracted instructions that apply to the whole RFQ
+	// (e.g. "provide datasheet, warranty, delivery terms") — not specific to any single product.
+	GeneralInstructions string `bson:"general_instructions,omitempty" json:"general_instructions,omitempty"`
+	// QuotationIDs / QuotationCodes link to customer quotations created from this RFQ's price comparison.
+	QuotationIDs   []primitive.ObjectID `bson:"quotation_ids,omitempty"   json:"quotation_ids,omitempty"`
+	QuotationCodes []string             `bson:"quotation_codes,omitempty" json:"quotation_codes,omitempty"`
 }
 
 func rfqReceivedCollection(storeID primitive.ObjectID) string {
@@ -229,6 +246,19 @@ func UpdateRFQReceived(rfq *RFQReceived) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := col.ReplaceOne(ctx, bson.M{"_id": rfq.ID}, rfq)
+	return err
+}
+
+// SetRFQMatchedSupplierIDs updates only the matched_supplier_ids field, preserving activity_logs and all other fields.
+func SetRFQMatchedSupplierIDs(storeID, rfqID primitive.ObjectID, ids []primitive.ObjectID) error {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqReceivedCollection(storeID))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := col.UpdateOne(
+		ctx,
+		bson.M{"_id": rfqID, "store_id": storeID},
+		bson.M{"$set": bson.M{"matched_supplier_ids": ids}},
+	)
 	return err
 }
 
@@ -515,4 +545,50 @@ func DeleteAllRFQReceived(storeID primitive.ObjectID) (int64, error) {
 		return 0, err
 	}
 	return res.DeletedCount, nil
+}
+
+// AddQuotationLinkToRFQ appends a quotation ID+code to the rfq_received document.
+func AddQuotationLinkToRFQ(storeID, rfqID, quotationID primitive.ObjectID, quotationCode string) error {
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := col.UpdateOne(ctx,
+		bson.M{"_id": rfqID, "store_id": storeID},
+		bson.M{
+			"$addToSet": bson.M{
+				"quotation_ids":   quotationID,
+				"quotation_codes": quotationCode,
+			},
+		},
+	)
+	return err
+}
+
+// FindRFQsForwardedToPhone returns RFQs that were forwarded to the given supplier phone
+// within the lookback window, newest first. Used for matching supplier quotation replies.
+func FindRFQsForwardedToPhone(storeID primitive.ObjectID, phone string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	since := time.Now().Add(-lookback)
+	filter := bson.M{
+		"store_id": storeID,
+		"forwarded_to": bson.M{
+			"$elemMatch": bson.M{
+				"phone": bson.M{"$regex": phone, "$options": "i"},
+			},
+		},
+		"received_at": bson.M{"$gte": since},
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQReceived
+	if err := cur.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
