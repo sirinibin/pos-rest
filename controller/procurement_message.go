@@ -722,12 +722,44 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// If no RFQ code was found in the document, try to suggest one by matching
+	// the supplier's phone number to RFQs we previously forwarded to them.
+	suggestedRFQCode := ""
+	suggestedRFQID := ""
+	if analysis.RFQCode == "" && msg.LinkedRFQReceivedID == nil && msg.From != "" {
+		phone := strings.TrimPrefix(msg.From, "+")
+		if rfqs, _ := models.FindRFQsForwardedToPhone(storeObjID, phone, 90*24*time.Hour, 5); len(rfqs) > 0 {
+			// Pick the best match: if part numbers overlap, prefer that RFQ; otherwise take the newest.
+			extractedPartNos := map[string]bool{}
+			for _, p := range analysis.Prices {
+				if p.PartNo != "" {
+					extractedPartNos[strings.ToLower(strings.TrimSpace(p.PartNo))] = true
+				}
+			}
+			best := &rfqs[0]
+			if len(extractedPartNos) > 0 {
+				for i := range rfqs {
+					for _, rp := range rfqs[i].Products {
+						if extractedPartNos[strings.ToLower(strings.TrimSpace(rp.PartNo))] {
+							best = &rfqs[i]
+							break
+						}
+					}
+				}
+			}
+			suggestedRFQCode = best.Code
+			suggestedRFQID = best.ID.Hex()
+		}
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":       "ok",
-		"is_quotation": analysis.IsQuotation,
-		"rfq_code":     analysis.RFQCode,
-		"prices":       analysis.Prices,
-		"price_count":  len(analysis.Prices),
+		"status":              "ok",
+		"is_quotation":        analysis.IsQuotation,
+		"rfq_code":            analysis.RFQCode,
+		"prices":              analysis.Prices,
+		"price_count":         len(analysis.Prices),
+		"suggested_rfq_code":  suggestedRFQCode,
+		"suggested_rfq_id":    suggestedRFQID,
 	})
 }
 
