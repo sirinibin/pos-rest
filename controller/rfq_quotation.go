@@ -316,6 +316,10 @@ func ParseQuotationFileHandler(w http.ResponseWriter, r *http.Request) {
 		rfqProducts = rfq.Products
 	}
 
+	// Optional LLM provider/model overrides sent from the frontend dropdown.
+	providerOverride := strings.TrimSpace(r.URL.Query().Get("llm_provider"))
+	modelOverride := strings.TrimSpace(r.URL.Query().Get("llm_model"))
+
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		http.Error(w, `{"error":"file too large (max 20 MB)"}`, http.StatusBadRequest)
 		return
@@ -354,12 +358,12 @@ func ParseQuotationFileHandler(w http.ResponseWriter, r *http.Request) {
 		mime := rfqImageMime(ext, ct)
 		b64 := base64.StdEncoding.EncodeToString(data)
 		dataURI := "data:" + mime + ";base64," + b64
-		extractedText, err = extractTextFromContentLLM(store, []string{dataURI}, nil)
+		extractedText, err = extractTextFromContentLLM(store, []string{dataURI}, nil, providerOverride, modelOverride)
 		fileType = "image"
 
 	case ext == ".pdf" || strings.Contains(ct, "pdf"):
 		pdfB64 := base64.StdEncoding.EncodeToString(data)
-		extractedText, err = extractTextFromContentLLM(store, nil, []string{pdfB64})
+		extractedText, err = extractTextFromContentLLM(store, nil, []string{pdfB64}, providerOverride, modelOverride)
 		fileType = "pdf"
 
 	default:
@@ -378,7 +382,7 @@ func ParseQuotationFileHandler(w http.ResponseWriter, r *http.Request) {
 	if fileType == "pdf" {
 		pdfBase64sForAnalysis = []string{base64.StdEncoding.EncodeToString(data)}
 	}
-	analysis := analyzeSupplierReply(store, extractedText, pdfBase64sForAnalysis, rfqProducts, "", "")
+	analysis := analyzeSupplierReply(store, extractedText, pdfBase64sForAnalysis, rfqProducts, providerOverride, modelOverride)
 
 	resp := map[string]interface{}{
 		"extracted_text": extractedText,
@@ -392,11 +396,17 @@ func ParseQuotationFileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // extractTextFromContentLLM uses the store's configured vision LLM to extract raw text
-// from images or PDFs. Returns the plain-text content.
-func extractTextFromContentLLM(store *models.Store, imageDataURIs []string, pdfBase64s []string) (string, error) {
-	provider := strings.ToLower(store.Settings.RFQLLMProvider)
-	apiKey := store.Settings.RFQLLMAPIKey
-	model := store.Settings.RFQLLMModel
+// from images or PDFs. providerOverride/modelOverride let the caller choose a specific LLM;
+// empty strings fall back to the store's RFQ LLM setting.
+func extractTextFromContentLLM(store *models.Store, imageDataURIs []string, pdfBase64s []string, providerOverride, modelOverride string) (string, error) {
+	provider := providerOverride
+	model := modelOverride
+	if provider == "" {
+		provider = strings.ToLower(store.Settings.RFQLLMProvider)
+	} else {
+		provider = strings.ToLower(provider)
+	}
+	apiKey := resolveExtractionAPIKey(provider, &store.Settings)
 	if apiKey == "" || provider == "" {
 		return "", fmt.Errorf("LLM not configured — add API key in store settings")
 	}

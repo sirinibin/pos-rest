@@ -3482,6 +3482,21 @@ func ListRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// When supplier_phone is given, return only RFQs forwarded to that phone
+	// (used by the "Add Price to RFQ" picker in the procurement WhatsApp modal).
+	if sp := strings.TrimPrefix(r.URL.Query().Get("supplier_phone"), "+"); sp != "" {
+		rfqs, err := models.FindRFQsForwardedToPhone(storeObjID, sp, 365*24*time.Hour, 50)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		if rfqs == nil {
+			rfqs = []models.RFQReceived{}
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"items": rfqs, "total_count": len(rfqs)})
+		return
+	}
+
 	page := int64(1)
 	limit := int64(20)
 	fmt.Sscan(r.URL.Query().Get("page"), &page)
