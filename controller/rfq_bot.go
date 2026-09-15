@@ -956,9 +956,23 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		return
 	}
 
-	// Gate RFQ creation on LLM classification — same check used for emails.
-	if !isRFQMessage(store, text, mediaURLs) {
-		log.Printf("rfq_bot: WhatsApp message from %s is not an RFQ — skipping RFQ creation", fromPhone)
+	// LLM classification: "rfq" → create RFQ; "quotation" → label as Supplier Quotation; "other" → skip.
+	llmText := text
+	if llmText == "" {
+		for _, part := range docTextParts {
+			llmText += part + "\n"
+		}
+	}
+	waClassify, _ := classifyIncomingMessage(store, llmText, mediaURLs)
+	if waClassify == "quotation" {
+		log.Printf("rfq_bot: WhatsApp from %s classified as supplier quotation — labeling", fromPhone)
+		if procMsg != nil {
+			go models.LinkMessageAsQuotation(procMsg.ID, nil, "")
+		}
+		return
+	}
+	if waClassify != "rfq" {
+		log.Printf("rfq_bot: WhatsApp message from %s is not an RFQ — skipping", fromPhone)
 		return
 	}
 
@@ -1160,30 +1174,39 @@ Extract the following and return ONLY valid JSON (no explanation):
 }
 If no prices are mentioned, return an empty prices array.`, productSection, msgSection)
 
+	// For scanned PDFs (no extractable text), auto-upgrade to a vision-capable provider.
+	// Try the configured provider first; if it can't handle PDFs, switch to Gemini or Anthropic.
+	if msgText == "" && len(pdfBase64s) > 0 && provider != "gemini" && provider != "anthropic" {
+		if k := resolveExtractionAPIKey("gemini", &store.Settings); k != "" {
+			log.Printf("rfq_bot: analyzeSupplierReply: %q can't handle scanned PDF — auto-switching to Gemini", provider)
+			provider = "gemini"
+			apiKey = k
+			model = "" // let callGemini pick default
+		} else if k := resolveExtractionAPIKey("anthropic", &store.Settings); k != "" {
+			log.Printf("rfq_bot: analyzeSupplierReply: %q can't handle scanned PDF — auto-switching to Anthropic", provider)
+			provider = "anthropic"
+			apiKey = k
+			model = "" // let callAnthropic pick default
+		} else {
+			log.Printf("rfq_bot: analyzeSupplierReply: no vision-capable LLM found for scanned PDF (provider=%q)", provider)
+			return supplierReplyAnalysis{}
+		}
+	}
+
 	var responseText string
 	var llmErr error
-	// For Gemini and Anthropic use vision-capable calls so image-based PDFs are readable.
+	// For Gemini and Anthropic, use vision-capable calls so image-based PDFs are readable.
 	switch provider {
 	case "gemini":
 		responseText, llmErr = callGeminiExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, 2048)
 	case "anthropic":
 		responseText, llmErr = callAnthropicExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, 2048)
 	case "openai":
-		if msgText != "" {
-			responseText, llmErr = callOpenAI(apiKey, model, prompt, "")
-		} else {
-			log.Printf("rfq_bot: analyzeSupplierReply: OpenAI provider cannot read PDF without extractable text")
-			return supplierReplyAnalysis{}
-		}
+		responseText, llmErr = callOpenAI(apiKey, model, prompt, "")
 	default:
-		// OpenAI-compatible providers — text only
-		if msgText != "" {
-			baseURL := openAICompatBaseURL(provider)
-			responseText, llmErr = callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 2048, baseURL)
-		} else {
-			log.Printf("rfq_bot: analyzeSupplierReply: provider %q cannot read PDF without extractable text", provider)
-			return supplierReplyAnalysis{}
-		}
+		// OpenAI-compatible providers — text mode (PDFs already text-extracted above).
+		baseURL := openAICompatBaseURL(provider)
+		responseText, llmErr = callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 2048, baseURL)
 	}
 	if llmErr != nil {
 		log.Printf("rfq_bot: analyzeSupplierReply LLM error: %v", llmErr)
@@ -2193,7 +2216,7 @@ func callLLMTextWithImages(apiKey, model, provider, prompt string, imageBase64s 
 
 	case "gemini":
 		if model == "" {
-			model = "gemini-2.0-flash"
+			model = "gemini-3.6-flash"
 		}
 		type inlinePart struct {
 			Text       string `json:"text,omitempty"`
@@ -2237,7 +2260,12 @@ func callLLMTextWithImages(apiKey, model, provider, prompt string, imageBase64s 
 		}
 		return r.Candidates[0].Content.Parts[0].Text, nil
 	}
-	return "", fmt.Errorf("unknown provider: %s", provider)
+	// OpenAI-compatible providers (cloudflare, groq, xai, mistral, etc.) — text only, no vision
+	if len(imageBase64s) > 0 {
+		return "", fmt.Errorf("provider %q does not support image inputs in callLLMTextWithImages", provider)
+	}
+	baseURL := openAICompatBaseURL(provider)
+	return callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 50, baseURL)
 }
 
 func isRFQMessage(store *models.Store, text string, imageBase64s []string) bool {
@@ -2576,7 +2604,7 @@ func callAnthropicForCategories(apiKey, model, prompt string, imageBase64s []str
 
 func callGeminiForCategories(apiKey, model, prompt string, imageBase64s []string) ([]string, error) {
 	if model == "" {
-		model = "gemini-2.0-flash"
+		model = "gemini-3.6-flash"
 	}
 	type inlinePart struct {
 		Text       string `json:"text,omitempty"`
@@ -2724,7 +2752,7 @@ func callAnthropic(apiKey, model, prompt, _ string) (string, error) {
 // callGemini calls Google Gemini and returns the raw text response.
 func callGemini(apiKey, model, prompt, _ string) (string, error) {
 	if model == "" {
-		model = "gemini-2.0-flash"
+		model = "gemini-3.6-flash"
 	}
 	payload, _ := json.Marshal(map[string]interface{}{
 		"contents": []map[string]interface{}{{"parts": []map[string]string{{"text": prompt}}}},
@@ -2863,7 +2891,7 @@ func callLLMText(apiKey, model, prompt, provider string) (string, error) {
 
 	case "gemini":
 		if model == "" {
-			model = "gemini-2.0-flash"
+			model = "gemini-3.6-flash"
 		}
 		payload, _ := json.Marshal(map[string]interface{}{
 			"contents": []map[string]interface{}{{"parts": []map[string]interface{}{{"text": prompt}}}},
@@ -4713,6 +4741,7 @@ Extract the following and respond with ONLY valid JSON (no markdown, no explanat
       "part_no": "part number or product code (empty string if not found)",
       "name": "product name or description",
       "quantity": 1,
+      "unit_price": 0,
       "unit": "unit of measure e.g. EA, PCS, KG, M (empty string if not found)",
       "notes": "technical specifications for THIS specific product only — e.g. voltage, power, pressure, flow rate, temperature, dimensions, model compliance requirements (empty string if none)"
     }
@@ -4728,6 +4757,7 @@ Rules:
 - customer_contact_person is the individual's name (different from the company name).
 - Extract ALL products/items mentioned; do not skip any.
 - quantity must be a number (default to 1 if not stated).
+- unit_price must be a number (0 if not found); extract the per-unit price excluding VAT when both are shown.
 - IMPORTANT: product notes = only technical specs tied to that product (power, pressure, dimensions, etc.). General requests (datasheet, warranty, delivery terms, equivalent model clause) go in general_instructions, NOT in product notes.
 - product_categories: identify 1-5 broad product trade categories the items belong to (e.g. "Valves", "Pipe Fittings", "Electrical Equipment", "Steel Pipes"). Use [] if not determinable.
 - Do NOT wrap in markdown code blocks.`
@@ -4932,7 +4962,7 @@ func callAnthropicExtractRFQ(apiKey, model, prompt string, imageDataURIs, pdfBas
 
 func callGeminiExtractRFQ(apiKey, model, prompt string, imageDataURIs, pdfBase64s []string, maxTokens int) (string, error) {
 	if model == "" {
-		model = "gemini-2.0-flash"
+		model = "gemini-3.6-flash"
 	}
 	type inlinePart struct {
 		Text       string `json:"text,omitempty"`

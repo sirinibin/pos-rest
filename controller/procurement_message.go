@@ -1009,6 +1009,14 @@ func ProcurementExtractTestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If the PDF has no extractable text and the selected provider is not vision-capable,
+	// reject with a clear message rather than silently switching or hallucinating.
+	if combinedText == "" && len(pdfBase64s) > 0 && llmProvider != "gemini" && llmProvider != "anthropic" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "The PDF has no extractable text (it may be Arabic, scanned, or image-based). Please select Gemini or Anthropic as the provider — they can read PDFs visually."})
+		return
+	}
+
 	usedModel := llmModel
 	if usedModel == "" {
 		usedModel = llmProvider
