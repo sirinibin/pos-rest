@@ -1735,7 +1735,7 @@ func TestExtractJSONFromLLMResponse_SupplierReplyShape(t *testing.T) {
 func TestAnalyzeSupplierReply_NoLLMKey_ReturnsEmpty(t *testing.T) {
 	store := &models.Store{}
 	store.Settings.RFQLLMAPIKey = ""
-	result := analyzeSupplierReply(store, "Price for steel pipe: 150 AED", nil)
+	result := analyzeSupplierReply(store, "Price for steel pipe: 150 AED", nil, nil, "", "")
 	if result.IsQuotation {
 		t.Error("expected IsQuotation=false when no LLM key")
 	}
@@ -1751,7 +1751,7 @@ func TestAnalyzeSupplierReply_EmptyText_ReturnsEmpty(t *testing.T) {
 	store := &models.Store{}
 	store.Settings.RFQLLMAPIKey = "sk-test"
 	store.Settings.RFQLLMProvider = "openai"
-	result := analyzeSupplierReply(store, "", nil)
+	result := analyzeSupplierReply(store, "", nil, nil, "", "")
 	if result.IsQuotation || len(result.Prices) != 0 || result.RFQCode != "" {
 		t.Error("expected zero-value result for empty message text")
 	}
@@ -1761,7 +1761,7 @@ func TestAnalyzeSupplierReply_UnknownProvider_ReturnsEmpty(t *testing.T) {
 	store := &models.Store{}
 	store.Settings.RFQLLMAPIKey = "sk-test"
 	store.Settings.RFQLLMProvider = "unknown_provider"
-	result := analyzeSupplierReply(store, "RFQ-0015: Price 150 AED", nil)
+	result := analyzeSupplierReply(store, "RFQ-0015: Price 150 AED", nil, nil, "", "")
 	if result.IsQuotation || len(result.Prices) != 0 || result.RFQCode != "" {
 		t.Error("expected zero-value result for unknown LLM provider")
 	}

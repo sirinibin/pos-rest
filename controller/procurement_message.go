@@ -628,10 +628,10 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
 		return
 	}
-	if store.Settings.RFQLLMAPIKey == "" {
-		http.Error(w, `{"error":"no LLM API key configured in store settings"}`, http.StatusBadRequest)
-		return
-	}
+	// Allow overriding the LLM provider/model via query params (for the extraction modal).
+	providerOverride := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("llm_provider")))
+	modelOverride := strings.TrimSpace(r.URL.Query().Get("llm_model"))
+
 	msg, err := models.GetProcurementMessage(msgID)
 	if err != nil {
 		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
@@ -639,7 +639,9 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build text from body + attachment text extraction.
+	// Also collect PDFs as base64 for vision-capable providers (Gemini, Anthropic).
 	var textParts []string
+	var pdfBase64s []string
 	if msg.BodyText != "" {
 		textParts = append(textParts, msg.BodyText)
 	}
@@ -649,11 +651,15 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		data, readErr := os.ReadFile("." + att.URL)
 		if readErr != nil || len(data) == 0 {
+			log.Printf("ExtractQuotationHandler: cannot read attachment %q at %q: %v", att.Filename, "."+att.URL, readErr)
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(att.Filename))
 		switch ext {
 		case ".pdf":
+			// Always collect as base64 for vision providers.
+			pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
+			// Also try text extraction for text-only providers.
 			if extracted := extractPDFText(data); extracted != "" {
 				textParts = append(textParts, "=== "+att.Filename+" ===\n"+extracted)
 			}
@@ -666,7 +672,7 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	combinedText := strings.Join(textParts, "\n\n")
-	if combinedText == "" {
+	if combinedText == "" && len(pdfBase64s) == 0 {
 		http.Error(w, `{"error":"no text content found in message or attachments"}`, http.StatusBadRequest)
 		return
 	}
@@ -679,7 +685,7 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	analysis := analyzeSupplierReply(store, combinedText, rfqProducts)
+	analysis := analyzeSupplierReply(store, combinedText, pdfBase64s, rfqProducts, providerOverride, modelOverride)
 
 	// Save extracted prices to the linked RFQ's SupplierReply (if linked).
 	if msg.LinkedRFQReceivedID != nil && (analysis.IsQuotation || len(analysis.Prices) > 0) {

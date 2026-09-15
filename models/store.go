@@ -296,6 +296,10 @@ type StoreSettings struct {
 	// LLM provider and model for "Populate RFQ Suppliers from Vendors" (uses per-provider extraction API key)
 	PopulateSuppliersLLMProvider string `bson:"populate_suppliers_llm_provider" json:"populate_suppliers_llm_provider,omitempty"`
 	PopulateSuppliersLLMModel    string `bson:"populate_suppliers_llm_model" json:"populate_suppliers_llm_model,omitempty"`
+	// LLM for classifying incoming messages as "Customer RFQ", "Supplier Quotation", or "other".
+	// Reuses the per-provider extraction API keys. Falls back to rfq_llm_* if not set.
+	ClassifyLLMProvider string `bson:"classify_llm_provider" json:"classify_llm_provider,omitempty"`
+	ClassifyLLMModel    string `bson:"classify_llm_model" json:"classify_llm_model,omitempty"`
 	// When true, disable automatic RFQ creation from incoming emails (default false = auto-create ON)
 	DisableAutoRFQFromEmail    bool `bson:"disable_auto_rfq_from_email" json:"disable_auto_rfq_from_email"`
 	// When true, disable automatic RFQ creation from incoming WhatsApp messages (default false = auto-create ON)

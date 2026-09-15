@@ -1099,8 +1099,22 @@ func extractRFQCodeFromText(text, prefix string) string {
 // analyzeSupplierReply calls the store's LLM to extract RFQ reference, quotation status and prices
 // from a raw supplier reply. rfqProducts is the product list from the matched RFQ (may be nil/empty
 // when the RFQ is not yet identified; the LLM will still extract whatever is in the message).
-func analyzeSupplierReply(store *models.Store, msgText string, rfqProducts []models.RFQProduct) supplierReplyAnalysis {
-	if msgText == "" || store.Settings.RFQLLMAPIKey == "" {
+// pdfBase64s contains base64-encoded PDF bytes for vision-capable providers (Gemini, Anthropic).
+// providerOverride/modelOverride allow the caller to choose a specific LLM; empty string = use store default.
+func analyzeSupplierReply(store *models.Store, msgText string, pdfBase64s []string, rfqProducts []models.RFQProduct, providerOverride, modelOverride string) supplierReplyAnalysis {
+	provider := strings.ToLower(providerOverride)
+	model := modelOverride
+	if provider == "" {
+		provider = strings.ToLower(store.Settings.RFQLLMProvider)
+	}
+	if model == "" {
+		model = store.Settings.RFQLLMModel
+	}
+	apiKey := resolveExtractionAPIKey(provider, &store.Settings)
+	if apiKey == "" {
+		apiKey = store.Settings.RFQLLMAPIKey
+	}
+	if (msgText == "" && len(pdfBase64s) == 0) || apiKey == "" {
 		return supplierReplyAnalysis{}
 	}
 
@@ -1121,9 +1135,12 @@ func analyzeSupplierReply(store *models.Store, msgText string, rfqProducts []mod
 		productSection = "\nRFQ Products (for matching):\n" + productContext.String()
 	}
 
-	prompt := fmt.Sprintf(`You are a procurement assistant. Analyse the following supplier reply message.%s
-Supplier Message:
-%s
+	msgSection := ""
+	if msgText != "" {
+		msgSection = "\nSupplier Message:\n" + msgText
+	}
+
+	prompt := fmt.Sprintf(`You are a procurement assistant. Analyse the following supplier reply.%s%s
 
 Extract the following and return ONLY valid JSON (no explanation):
 {
@@ -1136,24 +1153,37 @@ Extract the following and return ONLY valid JSON (no explanation):
       "part_no": "<part number if mentioned, else empty>",
       "unit_price": <numeric price, 0 if not given>,
       "quantity": <numeric quantity if mentioned, 0 if not>,
-      "currency": "<e.g. AED, SAR, USD; default AED if not specified>",
+      "currency": "<e.g. AED, SAR, USD; default SAR if not specified>",
       "notes": "<lead time, MOQ, conditions, etc.>"
     }
   ]
 }
-If no prices are mentioned, return an empty prices array.`, productSection, msgText)
+If no prices are mentioned, return an empty prices array.`, productSection, msgSection)
 
 	var responseText string
 	var llmErr error
-	switch strings.ToLower(store.Settings.RFQLLMProvider) {
-	case "openai":
-		responseText, llmErr = callOpenAI(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
-	case "anthropic":
-		responseText, llmErr = callAnthropic(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+	// For Gemini and Anthropic use vision-capable calls so image-based PDFs are readable.
+	switch provider {
 	case "gemini":
-		responseText, llmErr = callGemini(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+		responseText, llmErr = callGeminiExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, 2048)
+	case "anthropic":
+		responseText, llmErr = callAnthropicExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, 2048)
+	case "openai":
+		if msgText != "" {
+			responseText, llmErr = callOpenAI(apiKey, model, prompt, "")
+		} else {
+			log.Printf("rfq_bot: analyzeSupplierReply: OpenAI provider cannot read PDF without extractable text")
+			return supplierReplyAnalysis{}
+		}
 	default:
-		return supplierReplyAnalysis{}
+		// OpenAI-compatible providers — text only
+		if msgText != "" {
+			baseURL := openAICompatBaseURL(provider)
+			responseText, llmErr = callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 2048, baseURL)
+		} else {
+			log.Printf("rfq_bot: analyzeSupplierReply: provider %q cannot read PDF without extractable text", provider)
+			return supplierReplyAnalysis{}
+		}
 	}
 	if llmErr != nil {
 		log.Printf("rfq_bot: analyzeSupplierReply LLM error: %v", llmErr)
@@ -1279,7 +1309,7 @@ func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName st
 
 	// ── Step 3: LLM analysis — extract RFQ code (if regex missed), prices ────
 	// Run with the now-known RFQ product list for better price matching.
-	analysis := analyzeSupplierReply(store, msgText, originalRFQ.Products)
+	analysis := analyzeSupplierReply(store, msgText, nil, originalRFQ.Products, "", "")
 
 	// If LLM found a code that regex missed and it points to a different RFQ, re-route.
 	if analysis.RFQCode != "" && analysis.RFQCode != codeFromText && routingMethod == "phone" {
@@ -2291,9 +2321,20 @@ func isReminderWhatsApp(store *models.Store, fromPhone, bodyText string) bool {
 // "rfq", "quotation", or "other", and extracts any RFQ reference code if it's a quotation.
 // Falls back to "rfq" (allow-all) when the LLM is not configured.
 func classifyIncomingMessage(store *models.Store, text string, imageBase64s []string) (msgType string, rfqCode string) {
-	provider := strings.ToLower(store.Settings.RFQLLMProvider)
-	apiKey := store.Settings.RFQLLMAPIKey
-	model := store.Settings.RFQLLMModel
+	// Use dedicated classification LLM when configured; fall back to the RFQ LLM.
+	provider := strings.ToLower(store.Settings.ClassifyLLMProvider)
+	model := store.Settings.ClassifyLLMModel
+	if provider == "" {
+		provider = strings.ToLower(store.Settings.RFQLLMProvider)
+	}
+	if model == "" {
+		model = store.Settings.RFQLLMModel
+	}
+	// Resolve API key: try per-provider extraction key first, then legacy RFQLLMAPIKey.
+	apiKey := resolveExtractionAPIKey(provider, &store.Settings)
+	if apiKey == "" {
+		apiKey = store.Settings.RFQLLMAPIKey
+	}
 	if apiKey == "" || provider == "" {
 		// No LLM — fall back to allowing everything through as RFQ
 		return "rfq", ""
