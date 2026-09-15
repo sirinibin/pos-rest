@@ -1475,8 +1475,14 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return procMsg
 	}
 
-	// LLM classification — is it an RFQ at all?
-	if !isRFQMessage(store, emailText, nil) {
+	// LLM classification — determine if this is a customer RFQ, supplier quotation, or neither.
+	msgType, _ := classifyIncomingMessage(store, emailText, nil)
+	if msgType == "quotation" {
+		log.Printf("email_polling: email from %s classified as supplier quotation — marking", msg.from)
+		models.LinkMessageAsQuotation(procMsg.ID, nil, "") //nolint:errcheck
+		return procMsg
+	}
+	if msgType != "rfq" {
 		log.Printf("email_polling: email from %s is not an RFQ — skipping", msg.from)
 		return procMsg
 	}

@@ -891,7 +891,17 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 			}
 		}
 		if !allowed {
-			go handleMetaSupplierReply(store, fromPhone, senderName(val, fromPhone), msg)
+			// We already know it's a supplier — mark the procurement message immediately
+			// without waiting for LLM analysis.
+			if procMsg != nil {
+				go models.LinkMessageAsQuotation(procMsg.ID, nil, "") //nolint:errcheck
+			}
+			var procMsgID *primitive.ObjectID
+			if procMsg != nil {
+				id := procMsg.ID
+				procMsgID = &id
+			}
+			go handleMetaSupplierReply(store, fromPhone, senderName(val, fromPhone), msg, procMsgID)
 			return
 		}
 	}
@@ -1195,7 +1205,7 @@ If no prices are mentioned, return an empty prices array.`, productSection, msgT
 	}
 }
 
-func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName string, msg metaMessage) {
+func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName string, msg metaMessage, procMsgID *primitive.ObjectID) {
 	phoneNumberID := store.Settings.BotWABAPhoneNumberID
 	accessToken := store.Settings.BotWABAAccessToken
 
@@ -1212,6 +1222,28 @@ func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName st
 		msgText = msg.Image.Caption
 	} else if msg.Document != nil {
 		msgText = msg.Document.Caption
+	}
+
+	// ── Download document attachment early so we can extract text for LLM ────
+	// When a supplier sends a PDF-only quotation (no caption), msgText is empty and
+	// the LLM cannot detect it as a quotation without seeing the document content.
+	var docData []byte
+	var docMIME string
+	if msg.Document != nil && msg.Document.ID != "" && accessToken != "" {
+		if dataURI, mime, dlErr := metaDownloadMedia(msg.Document.ID, accessToken); dlErr == nil {
+			docMIME = mime
+			if parts := strings.SplitN(dataURI, ",", 2); len(parts) == 2 {
+				if decoded, decErr := base64.StdEncoding.DecodeString(parts[1]); decErr == nil {
+					docData = decoded
+					if msgText == "" {
+						extracted := extractDocumentText(decoded, mime, msg.Document.Filename)
+						if extracted != "" {
+							msgText = "[Document]\n" + extracted
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// ── Step 1: try to extract RFQ code from text (regex, no LLM cost) ───────
@@ -1327,6 +1359,16 @@ func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName st
 				}
 			}()
 		}
+
+		// Auto-link the procurement message to this RFQ as a supplier quotation.
+		// The initial marking (is_supplier_quotation=true) was already done at routing time;
+		// here we add the specific RFQ link now that we know which RFQ this reply belongs to.
+		if procMsgID != nil {
+			rfqIDCopy := originalRFQ.ID
+			if linkErr := models.LinkMessageAsQuotation(*procMsgID, &rfqIDCopy, originalRFQ.Code); linkErr != nil {
+				log.Printf("rfq_bot: auto-link procurement msg %s to RFQ %s failed: %v", procMsgID.Hex(), originalRFQ.Code, linkErr)
+			}
+		}
 	}
 
 	// Relay to buyer if WABA is configured and buyer phone is known.
@@ -1352,7 +1394,11 @@ func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName st
 			}
 		}
 		if msg.Document != nil && msg.Document.ID != "" {
-			if dataURI, mime, dlErr := metaDownloadMedia(msg.Document.ID, accessToken); dlErr == nil {
+			if len(docData) > 0 {
+				// Reuse the already-downloaded document data.
+				dataURI := "data:" + docMIME + ";base64," + base64.StdEncoding.EncodeToString(docData)
+				metaSendDocument(phoneNumberID, accessToken, buyerPhone, dataURI, docMIME, msg.Document.Filename, "Document from supplier")
+			} else if dataURI, mime, dlErr := metaDownloadMedia(msg.Document.ID, accessToken); dlErr == nil {
 				metaSendDocument(phoneNumberID, accessToken, buyerPhone, dataURI, mime, msg.Document.Filename, "Document from supplier")
 			}
 		}

@@ -605,6 +605,125 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// ExtractQuotationHandler handles POST /v1/procurement-messages/{id}/extract-quotation
+// Extracts supplier prices from a procurement message (PDF/text attachments) and returns them.
+// Unlike /extract which extracts customer RFQ data, this uses the supplier price extraction prompt.
+// If the message is already linked to an RFQ, the extracted prices are saved to that RFQ's SupplierReply.
+func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	msgID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+	if store.Settings.RFQLLMAPIKey == "" {
+		http.Error(w, `{"error":"no LLM API key configured in store settings"}`, http.StatusBadRequest)
+		return
+	}
+	msg, err := models.GetProcurementMessage(msgID)
+	if err != nil {
+		http.Error(w, `{"error":"message not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Build text from body + attachment text extraction.
+	var textParts []string
+	if msg.BodyText != "" {
+		textParts = append(textParts, msg.BodyText)
+	}
+	for _, att := range msg.Attachments {
+		if att.URL == "" {
+			continue
+		}
+		data, readErr := os.ReadFile("." + att.URL)
+		if readErr != nil || len(data) == 0 {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(att.Filename))
+		switch ext {
+		case ".pdf":
+			if extracted := extractPDFText(data); extracted != "" {
+				textParts = append(textParts, "=== "+att.Filename+" ===\n"+extracted)
+			}
+		case ".xlsx", ".xls":
+			if txt, exErr := excelToText(att.Filename, data); exErr == nil {
+				textParts = append(textParts, txt)
+			}
+		case ".csv", ".txt":
+			textParts = append(textParts, string(data))
+		}
+	}
+	combinedText := strings.Join(textParts, "\n\n")
+	if combinedText == "" {
+		http.Error(w, `{"error":"no text content found in message or attachments"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Load RFQ products for context (better price matching) if linked to an RFQ.
+	var rfqProducts []models.RFQProduct
+	if msg.LinkedRFQReceivedID != nil {
+		if rfq, rfqErr := models.FindRFQReceivedByID(*msg.LinkedRFQReceivedID, storeObjID); rfqErr == nil && rfq != nil {
+			rfqProducts = rfq.Products
+		}
+	}
+
+	analysis := analyzeSupplierReply(store, combinedText, rfqProducts)
+
+	// Save extracted prices to the linked RFQ's SupplierReply (if linked).
+	if msg.LinkedRFQReceivedID != nil && (analysis.IsQuotation || len(analysis.Prices) > 0) {
+		rfq, rfqErr := models.FindRFQReceivedByID(*msg.LinkedRFQReceivedID, storeObjID)
+		if rfqErr == nil && rfq != nil {
+			supplierPhone := ""
+			if msg.Type == "whatsapp" {
+				supplierPhone = strings.TrimPrefix(msg.From, "+")
+			}
+			// Look for an existing SupplierReply linked to this procurement message.
+			saved := false
+			for _, sr := range rfq.SupplierReplies {
+				if sr.ProcurementMessageID != nil && *sr.ProcurementMessageID == msgID {
+					models.UpdateSupplierReplyPrices(storeObjID, rfq.ID, sr.ID, analysis.Prices, true, "done", "") //nolint:errcheck
+					saved = true
+					break
+				}
+			}
+			if !saved {
+				reply := models.SupplierReply{
+					SupplierName:           msg.From,
+					SupplierPhone:          supplierPhone,
+					ReceivedAt:             time.Now(),
+					RawText:                combinedText,
+					IsQuotation:            true,
+					Prices:                 analysis.Prices,
+					ExtractionStatus:       "done",
+					Source:                 msg.Type,
+					ProcurementMessageID:   &msgID,
+					ProcurementMessageCode: msg.Code,
+				}
+				models.AddSupplierReplyToRFQ(storeObjID, rfq.ID, reply) //nolint:errcheck
+			}
+		}
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":       "ok",
+		"is_quotation": analysis.IsQuotation,
+		"rfq_code":     analysis.RFQCode,
+		"prices":       analysis.Prices,
+		"price_count":  len(analysis.Prices),
+	})
+}
+
 // RetryProcurementMessageAttachmentsHandler re-fetches Zoho attachments for a
 // message that was saved with attachment_missing=true.
 // POST /v1/procurement-messages/{id}/retry-attachments

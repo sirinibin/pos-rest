@@ -811,6 +811,7 @@ func main() {
 	router.HandleFunc("/v1/procurement-messages/{id}", controller.DeleteProcurementMessageHandler).Methods("DELETE")
 	router.HandleFunc("/v1/procurement-messages/{id}/create-rfq", controller.CreateRFQFromProcurementMessageHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-messages/{id}/extract", controller.ExtractProcurementMessageHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-messages/{id}/extract-quotation", controller.ExtractQuotationHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-messages/{id}/retry-attachments", controller.RetryProcurementMessageAttachmentsHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-messages/{id}/upload-attachment", controller.UploadProcurementAttachmentHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-messages/{id}/link-as-quotation", controller.LinkAsQuotationHandler).Methods("POST")
