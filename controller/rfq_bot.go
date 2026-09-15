@@ -1089,9 +1089,10 @@ func handleMetaBuyerFollowup(store *models.Store, rfq *models.RFQReceived, suppl
 // records the raw reply on the RFQ, and triggers async LLM price extraction.
 // supplierReplyAnalysis holds the result of the unified LLM analysis of a supplier reply.
 type supplierReplyAnalysis struct {
-	RFQCode     string                     // extracted RFQ code (e.g. "RFQ-0015"), empty if not mentioned
-	IsQuotation bool                       // true when the message contains unit prices
-	Prices      []models.SupplierReplyPrice // pre-extracted prices (zero-indexed relative to rfq.Products if available)
+	RFQCode      string                      // extracted RFQ code (e.g. "RFQ-0015"), empty if not mentioned
+	IsQuotation  bool                        // true when the message contains unit prices
+	GeneralNotes string                      // quotation-wide conditions: validity, delivery, payment terms
+	Prices       []models.SupplierReplyPrice // pre-extracted prices (zero-indexed relative to rfq.Products if available)
 }
 
 // extractRFQCodeFromText scans raw text for a pattern matching the store's RFQ code format
@@ -1160,6 +1161,7 @@ Extract the following and return ONLY valid JSON (no explanation):
 {
   "rfq_code": "<RFQ code if explicitly mentioned, e.g. RFQ-0015, or empty string>",
   "is_quotation": <true if the message contains unit prices, false otherwise>,
+  "general_notes": "<quotation-wide conditions only: validity period, delivery lead time, payment terms, warranty, overall terms — e.g. 'Validity: 2 days, Delivery: 7 days'. Empty string if none.>",
   "prices": [
     {
       "product_index": <0-based index from the product list above, -1 if unknown>,
@@ -1168,11 +1170,12 @@ Extract the following and return ONLY valid JSON (no explanation):
       "unit_price": <numeric price, 0 if not given>,
       "quantity": <numeric quantity if mentioned, 0 if not>,
       "currency": "<e.g. AED, SAR, USD; default SAR if not specified>",
-      "notes": "<lead time, MOQ, conditions, etc.>"
+      "notes": "<product-specific notes only: dimensions, specs, MOQ, brand, model variant — empty string if nothing product-specific>"
     }
   ]
 }
-If no prices are mentioned, return an empty prices array.`, productSection, msgSection)
+If no prices are mentioned, return an empty prices array.
+IMPORTANT: general_notes is for conditions that apply to the whole quotation (validity, delivery, payment). Do NOT repeat them in each product's notes field.`, productSection, msgSection)
 
 	// For scanned PDFs (no extractable text), auto-upgrade to a vision-capable provider.
 	// Try the configured provider first; if it can't handle PDFs, switch to Gemini or Anthropic.
@@ -1215,9 +1218,10 @@ If no prices are mentioned, return an empty prices array.`, productSection, msgS
 
 	jsonStr := extractJSONFromLLMResponse(responseText)
 	var raw struct {
-		RFQCode     string `json:"rfq_code"`
-		IsQuotation bool   `json:"is_quotation"`
-		Prices      []struct {
+		RFQCode      string `json:"rfq_code"`
+		IsQuotation  bool   `json:"is_quotation"`
+		GeneralNotes string `json:"general_notes"`
+		Prices       []struct {
 			ProductIndex int     `json:"product_index"`
 			ProductName  string  `json:"product_name"`
 			PartNo       string  `json:"part_no"`
@@ -1252,9 +1256,10 @@ If no prices are mentioned, return an empty prices array.`, productSection, msgS
 		})
 	}
 	return supplierReplyAnalysis{
-		RFQCode:     strings.TrimSpace(raw.RFQCode),
-		IsQuotation: raw.IsQuotation,
-		Prices:      prices,
+		RFQCode:      strings.TrimSpace(raw.RFQCode),
+		IsQuotation:  raw.IsQuotation,
+		GeneralNotes: strings.TrimSpace(raw.GeneralNotes),
+		Prices:       prices,
 	}
 }
 
@@ -1358,6 +1363,7 @@ func handleMetaSupplierReply(store *models.Store, supplierPhone, supplierName st
 		ReceivedAt:       time.Now(),
 		RawText:          msgText,
 		IsQuotation:      analysis.IsQuotation,
+		GeneralNotes:     analysis.GeneralNotes,
 		Prices:           analysis.Prices,
 		ExtractionStatus: extractionStatus,
 	}

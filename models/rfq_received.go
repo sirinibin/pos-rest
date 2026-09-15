@@ -80,6 +80,8 @@ type SupplierReply struct {
 	MediaURLs        []string             `bson:"media_urls,omitempty"       json:"media_urls,omitempty"`
 	// IsQuotation indicates the LLM detected this reply is a price quotation (not just an acknowledgement).
 	IsQuotation      bool                 `bson:"is_quotation"               json:"is_quotation"`
+	// GeneralNotes holds quotation-wide conditions (validity, delivery, payment terms) that are not product-specific.
+	GeneralNotes     string               `bson:"general_notes,omitempty"    json:"general_notes,omitempty"`
 	Prices           []SupplierReplyPrice `bson:"prices,omitempty"           json:"prices,omitempty"`
 	// pending | done | failed
 	ExtractionStatus string               `bson:"extraction_status,omitempty" json:"extraction_status,omitempty"`

@@ -711,6 +711,7 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 					ReceivedAt:             time.Now(),
 					RawText:                combinedText,
 					IsQuotation:            true,
+					GeneralNotes:           analysis.GeneralNotes,
 					Prices:                 analysis.Prices,
 					ExtractionStatus:       "done",
 					Source:                 msg.Type,
@@ -758,6 +759,7 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		"rfq_code":            analysis.RFQCode,
 		"prices":              analysis.Prices,
 		"price_count":         len(analysis.Prices),
+		"general_notes":       analysis.GeneralNotes,
 		"suggested_rfq_code":  suggestedRFQCode,
 		"suggested_rfq_id":    suggestedRFQID,
 	})
