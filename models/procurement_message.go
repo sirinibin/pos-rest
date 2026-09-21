@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -45,6 +46,8 @@ type ProcurementMessage struct {
 	AttachmentMissing bool `bson:"attachment_missing,omitempty" json:"attachment_missing,omitempty"`
 	// Tracking
 	ExternalID     string              `bson:"external_id,omitempty" json:"external_id,omitempty"`
+	// RFC 2822 Message-ID header of the original email, used for reply threading (In-Reply-To / References).
+	EmailMessageID string              `bson:"email_message_id,omitempty" json:"email_message_id,omitempty"`
 	Read           bool                `bson:"read" json:"read"`
 	ProcessedAsRFQ  bool                `bson:"processed_as_rfq" json:"processed_as_rfq"`
 	RFQReceivedID   *primitive.ObjectID `bson:"rfq_received_id,omitempty" json:"rfq_received_id,omitempty"`
@@ -201,6 +204,47 @@ func ProcurementMessageExternalIDExists(storeID primitive.ObjectID, externalID s
 	return n > 0
 }
 
+// IsKnownEmailContact returns true if this email address is already in our procurement
+// thread (i.e., we have previously sent an email to them). Used as a fallback when the
+// In-Reply-To header is unavailable — if the sender is already a contact, their reply
+// bypasses keyword/LLM filters.
+func IsKnownEmailContact(storeID primitive.ObjectID, email string) bool {
+	if email == "" {
+		return false
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// Check if this email appears as a recipient in any of our outbound messages
+	// OR as a sender in any of our inbound messages.
+	n, _ := procurementMessageCol().CountDocuments(ctx, bson.M{
+		"store_id": storeID,
+		"type":     "email",
+		"$or": bson.A{
+			bson.M{"direction": "out", "to": bson.M{"$elemMatch": bson.M{"$regex": email, "$options": "i"}}},
+			bson.M{"direction": "in", "from": bson.M{"$regex": email, "$options": "i"}},
+		},
+	})
+	return n > 0
+}
+
+// IsReplyToOurMessage returns true if inReplyTo matches the email_message_id of any
+// message we have sent (direction=out) for this store. Used to bypass keyword/LLM
+// filters for legitimate customer replies to our own outbound emails.
+func IsReplyToOurMessage(storeID primitive.ObjectID, inReplyTo string) bool {
+	if inReplyTo == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	n, _ := procurementMessageCol().CountDocuments(ctx, bson.M{
+		"store_id":         storeID,
+		"direction":        "out",
+		"email_message_id": inReplyTo,
+	})
+	return n > 0
+}
+
 // GetProcurementMessage returns a single message by ID.
 func GetProcurementMessage(id primitive.ObjectID) (*ProcurementMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -282,6 +326,21 @@ func LinkMessageAsQuotation(msgID primitive.ObjectID, rfqID *primitive.ObjectID,
 }
 
 // UnlinkMessageAsQuotation removes the quotation label and RFQ link from a procurement message.
+// UnlinkRFQFromProcurementMessage clears the rfq_received_id / rfq_received_code fields
+// from a procurement message when the linked RFQ is deleted.
+func UnlinkRFQFromProcurementMessage(msgID primitive.ObjectID) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": msgID},
+		bson.M{
+			"$set":   bson.M{"processed_as_rfq": false},
+			"$unset": bson.M{"rfq_received_id": "", "rfq_received_code": ""},
+		},
+	)
+	return err
+}
+
 func UnlinkMessageAsQuotation(msgID primitive.ObjectID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -293,6 +352,17 @@ func UnlinkMessageAsQuotation(msgID primitive.ObjectID) error {
 		},
 	)
 	return err
+}
+
+// DeleteProcurementMessagesByFilter deletes all messages matching an arbitrary filter.
+func DeleteProcurementMessagesByFilter(filter bson.M) (int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	res, err := procurementMessageCol().DeleteMany(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
 }
 
 // DeleteAllProcurementMessages deletes ALL messages for a store (type-filtered if msgType != "").
@@ -404,10 +474,29 @@ func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page
 		matchFilter["type"] = msgType
 	}
 
+	// normalizeEmailExpr uses $regexFind to extract a bare email address from any
+	// "from" / "to" format: "Name <email>", "Name &lt;email&gt;", or plain "email".
+	// Falls back to the lowercased field value if no email pattern is found.
+	normalizeEmailExpr := func(fieldExpr interface{}) bson.M {
+		emailRegex := "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}"
+		regexMatch := bson.M{"$regexFind": bson.M{"input": fieldExpr, "regex": emailRegex}}
+		hasMatch := bson.M{"$ne": bson.A{regexMatch, nil}}
+		extractedEmail := bson.M{"$getField": bson.M{"field": "match", "input": regexMatch}}
+		return bson.M{
+			"$toLower": bson.M{
+				"$trim": bson.M{
+					"input": bson.M{
+						"$cond": bson.A{hasMatch, extractedEmail, fieldExpr},
+					},
+				},
+			},
+		}
+	}
+
 	contactExpr := bson.M{"$cond": bson.A{
 		bson.M{"$eq": bson.A{"$direction", "in"}},
-		"$from",
-		bson.M{"$arrayElemAt": bson.A{"$to", 0}},
+		normalizeEmailExpr("$from"),
+		normalizeEmailExpr(bson.M{"$arrayElemAt": bson.A{"$to", 0}}),
 	}}
 
 	pipeline := mongo.Pipeline{
@@ -510,9 +599,15 @@ func ListThreadMessages(storeID primitive.ObjectID, contactPhone, msgType string
 	defer cancel()
 	col := procurementMessageCol()
 
+	// Match bare email or "Name <email>" format in the from field,
+	// and any element in the to array containing the email.
+	emailPat := "(?i)(^|<)" + regexp.QuoteMeta(contactPhone) + "(>|$)"
 	filter := bson.M{
 		"store_id": storeID,
-		"$or":      bson.A{bson.M{"from": contactPhone}, bson.M{"to": contactPhone}},
+		"$or": bson.A{
+			bson.M{"from": bson.M{"$regex": emailPat}},
+			bson.M{"to": bson.M{"$regex": contactPhone, "$options": "i"}},
+		},
 	}
 	if msgType != "" {
 		filter["type"] = msgType
@@ -540,10 +635,11 @@ func ListThreadMessages(storeID primitive.ObjectID, contactPhone, msgType string
 func MarkThreadMessagesRead(storeID primitive.ObjectID, contactPhone, msgType string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	emailPat2 := "(?i)(^|<)" + regexp.QuoteMeta(contactPhone) + "(>|$)"
 	filter := bson.M{
 		"store_id":  storeID,
 		"direction": "in",
-		"from":      contactPhone,
+		"from":      bson.M{"$regex": emailPat2},
 		"read":      bson.M{"$ne": true},
 	}
 	if msgType != "" {
@@ -553,21 +649,59 @@ func MarkThreadMessagesRead(storeID primitive.ObjectID, contactPhone, msgType st
 	return err
 }
 
-// ResolveProcurementSender looks up the given phone number in RFQ suppliers then
-// customers for the given store. Returns (name, type) where type is "supplier" or
-// "customer", or ("", "") if not found.
+// ResolveProcurementSender looks up the given phone number or email address in
+// RFQ suppliers then customers for the given store.
+// Returns (name, type) where type is "supplier" or "customer", or ("", "") if not found.
 func ResolveProcurementSender(storeID primitive.ObjectID, phone string) (string, string) {
 	if phone == "" {
 		return "", ""
 	}
+
+	// Extract bare email from "Name <email>" format.
+	bareEmail := ""
+	if strings.Contains(phone, "@") {
+		if m := regexp.MustCompile(`<([^>@\s]+@[^>]+)>`).FindStringSubmatch(phone); len(m) > 1 {
+			bareEmail = strings.TrimSpace(m[1])
+		} else if strings.Contains(phone, "@") {
+			bareEmail = strings.TrimSpace(phone)
+		}
+		bareEmail = strings.ToLower(bareEmail)
+	}
+
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_suppliers")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// Email lookup: check customer collection first when input is an email address.
+	if bareEmail != "" {
+		custCol := db.Client("").Database("store_"+storeID.Hex()).Collection("customer")
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
+		var cust struct {
+			Name string `bson:"name"`
+		}
+		if err := custCol.FindOne(ctx2, bson.M{
+			"deleted": bson.M{"$ne": true},
+			"email":   bson.M{"$regex": "^" + regexp.QuoteMeta(bareEmail) + "$", "$options": "i"},
+		}).Decode(&cust); err == nil && cust.Name != "" {
+			return cust.Name, "customer"
+		}
+		// No match by email — nothing more to try for email inputs.
+		return "", ""
+	}
 
 	// Try supplier first (phone is international without +, e.g. "966501971075")
 	phones := phoneLookupVariants(phone)
 	var sup struct {
 		Name string `bson:"name"`
+	}
+	// Check phone2 first — a supplier who set phone2 explicitly takes priority over
+	// another supplier whose phone1 happens to match the same number.
+	if err := col.FindOne(ctx, bson.M{
+		"store_id": storeID,
+		"phone2":   bson.M{"$in": phones},
+	}).Decode(&sup); err == nil && sup.Name != "" {
+		return sup.Name, "supplier"
 	}
 	if err := col.FindOne(ctx, bson.M{
 		"store_id": storeID,
@@ -686,11 +820,11 @@ func BackfillProcurementSenders(storeID primitive.ObjectID, limit int) (int, err
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Process inbound messages (sender = from)
+	// Process all inbound messages (re-resolve even if sender_name already set,
+	// so that updated supplier/customer data always wins over a stale cached name).
 	filter := bson.M{
-		"store_id":    storeID,
-		"direction":   "in",
-		"sender_name": bson.M{"$in": bson.A{"", nil}},
+		"store_id":  storeID,
+		"direction": "in",
 	}
 	opts := options.Find().SetProjection(bson.M{"_id": 1, "from": 1})
 	if limit > 0 {
@@ -725,10 +859,9 @@ func BackfillProcurementSenders(storeID primitive.ObjectID, limit int) (int, err
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel2()
 	filterOut := bson.M{
-		"store_id":    storeID,
-		"direction":   "out",
-		"sender_type": bson.M{"$in": bson.A{"", nil}},
-		"to":          bson.M{"$ne": nil, "$not": bson.M{"$size": 0}},
+		"store_id":  storeID,
+		"direction": "out",
+		"to":        bson.M{"$ne": nil, "$not": bson.M{"$size": 0}},
 	}
 	optsOut := options.Find().SetProjection(bson.M{"_id": 1, "to": 1})
 	if limit > 0 {

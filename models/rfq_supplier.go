@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -17,8 +19,10 @@ import (
 type RFQSupplier struct {
 	ID            primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
 	StoreID       primitive.ObjectID  `bson:"store_id" json:"store_id"`
+	Code          string              `bson:"code,omitempty" json:"code,omitempty"` // auto-generated serial ID, e.g. SUP-000001
 	Name          string              `bson:"name" json:"name"`
-	Phone         string              `bson:"phone" json:"phone"` // WhatsApp number (international, no +)
+	Phone         string              `bson:"phone" json:"phone"`  // primary WhatsApp number (international, no +)
+	Phone2        string              `bson:"phone2,omitempty" json:"phone2,omitempty"` // secondary/alternate WhatsApp number
 	Address       string              `bson:"address,omitempty" json:"address,omitempty"`
 	Latitude      float64             `bson:"latitude,omitempty" json:"latitude,omitempty"`
 	Longitude     float64             `bson:"longitude,omitempty" json:"longitude,omitempty"`
@@ -28,6 +32,7 @@ type RFQSupplier struct {
 	GoogleMapsURL   string `bson:"google_maps_url,omitempty" json:"google_maps_url,omitempty"`
 	PurchaseMarket  string `bson:"purchase_market,omitempty" json:"purchase_market,omitempty"`
 	Website         string `bson:"website,omitempty" json:"website,omitempty"`
+	Email           string `bson:"email,omitempty" json:"email,omitempty"`
 	IsActive      bool                `bson:"is_active" json:"is_active"`
 	AddedAt       time.Time           `bson:"added_at" json:"added_at"`
 	CreatedBy     *primitive.ObjectID `bson:"created_by,omitempty" json:"created_by,omitempty"`
@@ -38,6 +43,16 @@ type RFQSupplier struct {
 
 func rfqSupplierCollection() string {
 	return "rfq_suppliers"
+}
+
+// MakeRFQSupplierCode generates a sequential serial ID for a new supplier, e.g. "SUP-000001".
+func MakeRFQSupplierCode(storeID primitive.ObjectID) string {
+	redisKey := storeID.Hex() + "_rfq_supplier_counter"
+	n, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("SUP-%06d", n)
 }
 
 // EnsureRFQSupplierIndexes creates text and supporting indexes on the rfq_suppliers collection.
@@ -58,13 +73,18 @@ func EnsureRFQSupplierIndexes() {
 		{Keys: bson.D{{Key: "store_id", Value: 1}, {Key: "purchase_market", Value: 1}}},
 		{Keys: bson.D{{Key: "store_id", Value: 1}, {Key: "google_place_id", Value: 1}}},
 		{Keys: bson.D{{Key: "store_id", Value: 1}, {Key: "is_active", Value: 1}, {Key: "categories", Value: 1}}},
+		// Phone is the primary uniqueness key — no two suppliers in the same store may share a phone number.
+		{
+			Keys:    bson.D{{Key: "store_id", Value: 1}, {Key: "phone", Value: 1}},
+			Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.M{"phone": bson.M{"$gt": ""}}).SetName("rfq_suppliers_store_phone_uniq"),
+		},
 	})
 }
 
+// UpsertRFQSupplierByPlaceID saves or updates a supplier.
+// Phone is the primary uniqueness key (per user requirement).
+// Match priority: 1) phone  2) google_place_id  3) insert new.
 func UpsertRFQSupplierByPlaceID(supplier *RFQSupplier) error {
-	if supplier.ID.IsZero() {
-		supplier.ID = primitive.NewObjectID()
-	}
 	if supplier.AddedAt.IsZero() {
 		supplier.AddedAt = time.Now()
 	}
@@ -74,19 +94,12 @@ func UpsertRFQSupplierByPlaceID(supplier *RFQSupplier) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	filter := bson.M{
-		"store_id":        supplier.StoreID,
-		"google_place_id": supplier.GooglePlaceID,
-	}
-	if supplier.GooglePlaceID == "" {
-		filter = bson.M{"store_id": supplier.StoreID, "phone": supplier.Phone}
-	}
-
 	// $set all scalar fields; $addToSet merges categories so existing ones are not lost.
 	setFields := bson.M{
 		"store_id":        supplier.StoreID,
 		"name":            supplier.Name,
 		"phone":           supplier.Phone,
+		"phone2":          supplier.Phone2,
 		"address":         supplier.Address,
 		"latitude":        supplier.Latitude,
 		"longitude":       supplier.Longitude,
@@ -95,35 +108,51 @@ func UpsertRFQSupplierByPlaceID(supplier *RFQSupplier) error {
 		"google_maps_url": supplier.GoogleMapsURL,
 		"purchase_market": supplier.PurchaseMarket,
 		"website":         supplier.Website,
-		"is_active":       supplier.IsActive,
+		"email":           supplier.Email,
+		"is_active":       true,
 		"added_at":        supplier.AddedAt,
 	}
 	update := bson.M{"$set": setFields}
 	if len(supplier.Categories) > 0 {
 		update["$addToSet"] = bson.M{"categories": bson.M{"$each": supplier.Categories}}
 	}
-
-	// Use FindOneAndUpdate so we get back the real _id (whether newly inserted or existing).
 	fopts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
-	var result RFQSupplier
-	if err := col.FindOneAndUpdate(ctx, filter, update, fopts).Decode(&result); err == nil {
-		supplier.ID = result.ID
-	}
-	return nil
-}
 
-func CreateRFQSupplier(supplier *RFQSupplier) error {
+	// 1. Phone is the uniqueness key — always try phone first.
+	if supplier.Phone != "" {
+		var result RFQSupplier
+		filter := bson.M{"store_id": supplier.StoreID, "phone": supplier.Phone}
+		if err := col.FindOneAndUpdate(ctx, filter, update, fopts).Decode(&result); err == nil {
+			supplier.ID = result.ID
+			return nil
+		}
+	}
+
+	// 2. Fallback: match by google_place_id (covers suppliers imported before phone was required).
+	if supplier.GooglePlaceID != "" {
+		var result RFQSupplier
+		filter := bson.M{"store_id": supplier.StoreID, "google_place_id": supplier.GooglePlaceID}
+		if err := col.FindOneAndUpdate(ctx, filter, update, fopts).Decode(&result); err == nil {
+			supplier.ID = result.ID
+			return nil
+		}
+	}
+
+	// 3. Nothing matched — insert new.
 	if supplier.ID.IsZero() {
 		supplier.ID = primitive.NewObjectID()
 	}
-	supplier.AddedAt = time.Now()
-	supplier.IsActive = true
-
-	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	if supplier.Code == "" {
+		supplier.Code = MakeRFQSupplierCode(supplier.StoreID)
+	}
 	_, err := col.InsertOne(ctx, supplier)
 	return err
+}
+
+// CreateRFQSupplier upserts a supplier by phone (primary uniqueness key).
+// If a supplier with the same phone already exists it is updated, not duplicated.
+func CreateRFQSupplier(supplier *RFQSupplier) error {
+	return UpsertRFQSupplierByPlaceID(supplier)
 }
 
 func UpdateRFQSupplier(supplier *RFQSupplier) error {
@@ -132,6 +161,121 @@ func UpdateRFQSupplier(supplier *RFQSupplier) error {
 	defer cancel()
 	_, err := col.ReplaceOne(ctx, bson.M{"_id": supplier.ID, "store_id": supplier.StoreID}, supplier)
 	return err
+}
+
+// SetRFQSupplierEmail saves the email field for a supplier.
+func SetRFQSupplierEmail(supplierID primitive.ObjectID, email string) error {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := col.UpdateOne(ctx,
+		bson.M{"_id": supplierID},
+		bson.M{"$set": bson.M{"email": email}},
+	)
+	return err
+}
+
+// ListSuppliersWithWebsiteNoEmail returns suppliers that have a website but no email set.
+func ListSuppliersWithWebsiteNoEmail(storeID primitive.ObjectID) ([]RFQSupplier, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cur, err := col.Find(ctx, bson.M{
+		"store_id": storeID,
+		"website":  bson.M{"$ne": "", "$exists": true},
+		"$or":      bson.A{bson.M{"email": ""}, bson.M{"email": bson.M{"$exists": false}}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var suppliers []RFQSupplier
+	_ = cur.All(ctx, &suppliers)
+	return suppliers, nil
+}
+
+// SetRFQSupplierCategories replaces the categories field for a specific supplier.
+func SetRFQSupplierCategories(supplierID, storeID primitive.ObjectID, categories []string) error {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := col.UpdateOne(ctx,
+		bson.M{"_id": supplierID, "store_id": storeID},
+		bson.M{"$set": bson.M{"categories": categories}},
+	)
+	return err
+}
+
+// DeduplicateRFQSuppliersAllStores runs DeduplicateRFQSuppliers for every active store.
+// Called once at startup to clean up any pre-existing duplicates.
+func DeduplicateRFQSuppliersAllStores() {
+	stores, err := GetAllStores()
+	if err != nil {
+		return
+	}
+	for _, s := range stores {
+		if s.Deleted {
+			continue
+		}
+		n, _ := DeduplicateRFQSuppliers(s.ID)
+		if n > 0 {
+			log.Printf("rfq_suppliers: removed %d duplicate(s) for store %s", n, s.ID.Hex())
+		}
+	}
+}
+
+// DeduplicateRFQSuppliers removes duplicate supplier records for the given store.
+// It groups by phone number, keeps the record with the most data (categories, google_place_id),
+// and deletes the rest. Returns the number of duplicates removed.
+func DeduplicateRFQSuppliers(storeID primitive.ObjectID) (int, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Aggregate: group by phone, collect all _ids, keep the one with the best data.
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"store_id": storeID, "phone": bson.M{"$gt": ""}}}},
+		{{Key: "$sort", Value: bson.D{
+			{Key: "google_place_id", Value: -1}, // prefer records with a place ID
+			{Key: "added_at", Value: 1},          // among equals, keep the oldest (first added)
+		}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":     "$phone",
+			"keep_id": bson.M{"$first": "$$ROOT._id"},
+			"all_ids": bson.M{"$push": "$$ROOT._id"},
+			"count":   bson.M{"$sum": 1},
+		}}},
+		{{Key: "$match", Value: bson.M{"count": bson.M{"$gt": 1}}}},
+	}
+	cursor, err := col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer cursor.Close(ctx)
+
+	removed := 0
+	for cursor.Next(ctx) {
+		var row struct {
+			KeepID primitive.ObjectID   `bson:"keep_id"`
+			AllIDs []primitive.ObjectID `bson:"all_ids"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			continue
+		}
+		var deleteIDs []primitive.ObjectID
+		for _, id := range row.AllIDs {
+			if id != row.KeepID {
+				deleteIDs = append(deleteIDs, id)
+			}
+		}
+		if len(deleteIDs) == 0 {
+			continue
+		}
+		res, err := col.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": deleteIDs}})
+		if err == nil {
+			removed += int(res.DeletedCount)
+		}
+	}
+	return removed, cursor.Err()
 }
 
 func DeleteRFQSupplier(id, storeID primitive.ObjectID) error {
@@ -157,6 +301,7 @@ func ListRFQSuppliers(storeID primitive.ObjectID, page, limit int64, search stri
 		filter["$or"] = bson.A{
 			bson.M{"name": bson.M{"$regex": search, "$options": "i"}},
 			bson.M{"phone": bson.M{"$regex": search, "$options": "i"}},
+			bson.M{"phone2": bson.M{"$regex": search, "$options": "i"}},
 			bson.M{"address": bson.M{"$regex": search, "$options": "i"}},
 			bson.M{"categories": bson.M{"$regex": search, "$options": "i"}},
 		}
@@ -187,6 +332,22 @@ func ListRFQSuppliers(storeID primitive.ObjectID, page, limit int64, search stri
 		items = []RFQSupplier{}
 	}
 	return &RFQSupplierListResult{Items: items, TotalCount: total}, nil
+}
+
+func FindRFQSupplierByPhone(storeID primitive.ObjectID, phone string) (*RFQSupplier, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// Check phone2 first — if a supplier explicitly configured this as their secondary number,
+	// that match is more specific and should take priority over another supplier's phone1.
+	var s RFQSupplier
+	if err := col.FindOne(ctx, bson.M{"store_id": storeID, "phone2": phone}).Decode(&s); err == nil {
+		return &s, nil
+	}
+	if err := col.FindOne(ctx, bson.M{"store_id": storeID, "phone": phone}).Decode(&s); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 func FindRFQSupplierByID(id, storeID primitive.ObjectID) (*RFQSupplier, error) {
@@ -315,7 +476,7 @@ func FindRFQSuppliersByMarketAndCategories(storeID primitive.ObjectID, categorie
 	var marketOr bson.A
 	if market != "" {
 		marketOr = bson.A{
-			bson.M{"purchase_market": market},
+			bson.M{"purchase_market": bson.M{"$regex": "^" + regexp.QuoteMeta(market) + "$", "$options": "i"}},
 			bson.M{"purchase_market": bson.M{"$in": bson.A{"", nil}}},
 			bson.M{"purchase_market": bson.M{"$exists": false}},
 		}

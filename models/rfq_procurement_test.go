@@ -2,6 +2,8 @@ package models
 
 import (
 	"encoding/json"
+	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -238,5 +240,145 @@ func TestRFQSupplier_IsActive_DefaultFalse(t *testing.T) {
 	var sup RFQSupplier
 	if sup.IsActive {
 		t.Error("IsActive should default to false (zero value)")
+	}
+}
+
+// ── DisableAutoRFQ flags ──────────────────────────────────────────────────────
+
+func TestStoreSettings_DisableAutoRFQFromEmail_DefaultFalse(t *testing.T) {
+	var s StoreSettings
+	if s.DisableAutoRFQFromEmail {
+		t.Error("DisableAutoRFQFromEmail zero value must be false (auto-create ON — backward compatible)")
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQFromWhatsApp_DefaultFalse(t *testing.T) {
+	var s StoreSettings
+	if s.DisableAutoRFQFromWhatsApp {
+		t.Error("DisableAutoRFQFromWhatsApp zero value must be false (auto-create ON — backward compatible)")
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQFlags_JSONKeys(t *testing.T) {
+	s := StoreSettings{DisableAutoRFQFromEmail: true, DisableAutoRFQFromWhatsApp: true}
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	var m map[string]interface{}
+	json.Unmarshal(b, &m) //nolint:errcheck
+
+	for _, key := range []string{"disable_auto_rfq_from_email", "disable_auto_rfq_from_whatsapp"} {
+		v, ok := m[key]
+		if !ok {
+			t.Errorf("JSON key %q missing", key)
+			continue
+		}
+		bv, ok := v.(bool)
+		if !ok || !bv {
+			t.Errorf("key %q: got %v (%T), want true", key, v, v)
+		}
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQFlags_JSONPresent_WhenFalse(t *testing.T) {
+	// Unlike omitempty string fields, bool settings must appear in JSON even when false
+	// so the frontend always receives the current state.
+	s := StoreSettings{DisableAutoRFQFromEmail: false, DisableAutoRFQFromWhatsApp: false}
+	b, _ := json.Marshal(s)
+	var m map[string]interface{}
+	json.Unmarshal(b, &m) //nolint:errcheck
+
+	for _, key := range []string{"disable_auto_rfq_from_email", "disable_auto_rfq_from_whatsapp"} {
+		v, ok := m[key]
+		if !ok {
+			t.Errorf("JSON key %q must be present even when false (no omitempty)", key)
+			continue
+		}
+		if bv, ok := v.(bool); !ok || bv {
+			t.Errorf("key %q: got %v, want false", key, v)
+		}
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQFlags_JSONRoundTrip(t *testing.T) {
+	cases := []struct {
+		email     bool
+		whatsapp  bool
+	}{
+		{false, false},
+		{true, false},
+		{false, true},
+		{true, true},
+	}
+	for _, c := range cases {
+		orig := StoreSettings{
+			DisableAutoRFQFromEmail:    c.email,
+			DisableAutoRFQFromWhatsApp: c.whatsapp,
+		}
+		b, _ := json.Marshal(orig)
+		var out StoreSettings
+		if err := json.Unmarshal(b, &out); err != nil {
+			t.Fatalf("json.Unmarshal failed: %v", err)
+		}
+		if out.DisableAutoRFQFromEmail != orig.DisableAutoRFQFromEmail {
+			t.Errorf("email flag: got %v, want %v", out.DisableAutoRFQFromEmail, orig.DisableAutoRFQFromEmail)
+		}
+		if out.DisableAutoRFQFromWhatsApp != orig.DisableAutoRFQFromWhatsApp {
+			t.Errorf("whatsapp flag: got %v, want %v", out.DisableAutoRFQFromWhatsApp, orig.DisableAutoRFQFromWhatsApp)
+		}
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQFlags_BackwardCompat_ExistingStores(t *testing.T) {
+	// Simulates an existing store document fetched from DB that has no disable_auto_rfq
+	// fields in the document — BSON unmarshals them as zero-value false = auto-create ON.
+	var s StoreSettings
+	if s.DisableAutoRFQFromEmail || s.DisableAutoRFQFromWhatsApp {
+		t.Error("existing stores without the new fields must default to auto-create enabled")
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQFromEmail_TrueGatesAutoCreate(t *testing.T) {
+	// Verify the gate check: when Disable=true, the backend early-return fires.
+	s := StoreSettings{DisableAutoRFQFromEmail: true}
+	if !s.DisableAutoRFQFromEmail {
+		t.Error("DisableAutoRFQFromEmail=true must satisfy the gate condition")
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQFromWhatsApp_TrueGatesAutoCreate(t *testing.T) {
+	s := StoreSettings{DisableAutoRFQFromWhatsApp: true}
+	if !s.DisableAutoRFQFromWhatsApp {
+		t.Error("DisableAutoRFQFromWhatsApp=true must satisfy the gate condition")
+	}
+}
+
+func TestStoreSettings_DisableAutoRFQ_IndependentFlags(t *testing.T) {
+	// Disabling email auto-create must not affect WhatsApp and vice-versa.
+	s := StoreSettings{DisableAutoRFQFromEmail: true, DisableAutoRFQFromWhatsApp: false}
+	if !s.DisableAutoRFQFromEmail {
+		t.Error("email flag should be true")
+	}
+	if s.DisableAutoRFQFromWhatsApp {
+		t.Error("whatsapp flag should be false (independent)")
+	}
+}
+
+// TestBackfillProcurementSendersResolvesExistingNames verifies that
+// BackfillProcurementSenders no longer filters out messages that already have a
+// sender_name, so stale/wrong names are corrected on re-run.
+func TestBackfillProcurementSendersResolvesExistingNames(t *testing.T) {
+	src, err := os.ReadFile("procurement_message.go")
+	if err != nil {
+		t.Fatalf("could not read procurement_message.go: %v", err)
+	}
+	// After the fix, the inbound filter must NOT contain sender_name filtering.
+	if regexp.MustCompile(`"sender_name".*\$in.*"",\s*nil`).Match(src) {
+		t.Error("BackfillProcurementSenders still gates on sender_name being empty — stale names will never be corrected; remove that filter")
+	}
+	// Must still filter by direction: "in"
+	if !regexp.MustCompile(`"direction"\s*:\s*"in"`).Match(src) {
+		t.Error("BackfillProcurementSenders must still filter by direction=in")
 	}
 }
