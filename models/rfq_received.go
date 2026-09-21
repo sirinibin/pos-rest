@@ -671,20 +671,30 @@ func FindRFQsBySupplierEmail(storeID primitive.ObjectID, email string, limit int
 }
 
 func FindRFQsForwardedToPhone(storeID primitive.ObjectID, phone string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
-	return FindRFQsForwardedToSupplier(storeID, phone, "", nil, lookback, limit)
+	return FindRFQsForwardedToSupplier(storeID, phone, "", primitive.NilObjectID, nil, limit)
 }
 
 // FindRFQsForwardedToSupplier returns RFQs forwarded to a supplier identified by any
-// combination of phones (primary + phone2) and/or supplier name. Each non-empty argument
-// adds an $or clause so that RFQs stored under any alias of the same supplier are returned.
-func FindRFQsForwardedToSupplier(storeID primitive.ObjectID, phone, supplierName string, extraPhones []string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
+// combination of supplier_id, phones (primary + phone2), and/or supplier name.
+// Each non-empty argument adds an $or clause so RFQs stored under any alias are returned.
+// lookback is no longer applied here — callers pass a limit instead (no date cutoff).
+func FindRFQsForwardedToSupplier(storeID primitive.ObjectID, phone, supplierName string, supplierID primitive.ObjectID, extraPhones []string, limit int64) ([]RFQReceived, error) {
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	since := time.Now().Add(-lookback)
 
 	// Build $or conditions for the forwarded_to $elemMatch.
 	var orClauses bson.A
+
+	// Most reliable: match by supplier ObjectID stored in forwarded_to.supplier_id.
+	if !supplierID.IsZero() {
+		orClauses = append(orClauses, bson.M{
+			"forwarded_to": bson.M{"$elemMatch": bson.M{
+				"supplier_id": supplierID,
+			}},
+		})
+	}
+
 	seen := map[string]bool{}
 	addPhone := func(p string) {
 		if p == "" {
@@ -717,9 +727,8 @@ func FindRFQsForwardedToSupplier(storeID primitive.ObjectID, phone, supplierName
 	}
 
 	filter := bson.M{
-		"store_id":    storeID,
-		"received_at": bson.M{"$gte": since},
-		"$or":         orClauses,
+		"store_id": storeID,
+		"$or":      orClauses,
 	}
 	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
 	cur, err := col.Find(ctx, filter, opts)

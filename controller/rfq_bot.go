@@ -3869,10 +3869,12 @@ func ListRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	// Resolves phone2 → primary phone so that RFQs stored under any alias are found.
 	// Also matches by supplier name as a fallback (user suggestion).
 	if sp := strings.TrimPrefix(r.URL.Query().Get("supplier_phone"), "+"); sp != "" {
-		// Resolve to supplier record to collect all known phones + name.
+		// Resolve to supplier record to collect ObjectID, all known phones + name.
 		var extraPhones []string
 		var supplierName string
+		var supplierObjID primitive.ObjectID
 		if sup, err := models.FindRFQSupplierByPhone(storeObjID, sp); err == nil && sup != nil {
+			supplierObjID = sup.ID
 			supplierName = sup.Name
 			if sup.Phone != "" && sup.Phone != sp {
 				extraPhones = append(extraPhones, sup.Phone)
@@ -3881,7 +3883,7 @@ func ListRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 				extraPhones = append(extraPhones, sup.Phone2)
 			}
 		}
-		rfqs, err := models.FindRFQsForwardedToSupplier(storeObjID, sp, supplierName, extraPhones, 365*24*time.Hour, 50)
+		rfqs, err := models.FindRFQsForwardedToSupplier(storeObjID, sp, supplierName, supplierObjID, extraPhones, 50)
 		if err != nil {
 			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
 			return
