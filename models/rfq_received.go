@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -330,10 +331,23 @@ func ListRFQReceived(storeID primitive.ObjectID, page, limit int64, statusFilter
 	total, _ := col.CountDocuments(ctx, filter)
 
 	skip := (page - 1) * limit
+	// Exclude heavy inline-blob fields (base64 attachments, raw log arrays) from list queries.
+	// These are only needed in the detail/preview views, not the index table.
+	projection := bson.M{
+		"attachment_data_uris":            0,
+		"additional_attachment_data_uris": 0,
+		"additional_attachment_filenames": 0,
+		"activity_logs":                   0,
+		"supplier_replies":                0,
+		"buyer_relays":                    0,
+		"extracted_text":                  0,
+		"meta_media_ids":                  0,
+	}
 	opts := options.Find().
 		SetSort(bson.D{{Key: "received_at", Value: -1}}).
 		SetSkip(skip).
-		SetLimit(limit)
+		SetLimit(limit).
+		SetProjection(projection)
 
 	cur, err := col.Find(ctx, filter, opts)
 	if err != nil {
@@ -551,6 +565,20 @@ func DeleteAllRFQReceived(storeID primitive.ObjectID) (int64, error) {
 	return res.DeletedCount, nil
 }
 
+// DeleteRFQReceived hard-deletes a single RFQ received record and returns it so
+// callers can unlink any connected procurement message.
+func DeleteRFQReceived(storeID, rfqID primitive.ObjectID) (*RFQReceived, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var rfq RFQReceived
+	err := col.FindOneAndDelete(ctx, bson.M{"_id": rfqID, "store_id": storeID}).Decode(&rfq)
+	if err != nil {
+		return nil, err
+	}
+	return &rfq, nil
+}
+
 // AddQuotationLinkToRFQ appends a quotation ID+code to the rfq_received document.
 func AddQuotationLinkToRFQ(storeID, rfqID, quotationID primitive.ObjectID, quotationCode string) error {
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
@@ -617,22 +645,81 @@ func FindRFQsByCustomerID(storeID, customerID primitive.ObjectID, limit int64) (
 	return items, nil
 }
 
+// FindRFQsBySupplierEmail returns RFQs where a supplier with the given email has replied.
+func FindRFQsBySupplierEmail(storeID primitive.ObjectID, email string, limit int64) ([]RFQReceived, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	emailLower := strings.ToLower(strings.TrimSpace(email))
+	filter := bson.M{
+		"store_id": storeID,
+		"supplier_replies": bson.M{"$elemMatch": bson.M{
+			"supplier_email": bson.M{"$regex": emailLower, "$options": "i"},
+		}},
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQReceived
+	if err := cur.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func FindRFQsForwardedToPhone(storeID primitive.ObjectID, phone string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
+	return FindRFQsForwardedToSupplier(storeID, phone, "", nil, lookback, limit)
+}
+
+// FindRFQsForwardedToSupplier returns RFQs forwarded to a supplier identified by any
+// combination of phones (primary + phone2) and/or supplier name. Each non-empty argument
+// adds an $or clause so that RFQs stored under any alias of the same supplier are returned.
+func FindRFQsForwardedToSupplier(storeID primitive.ObjectID, phone, supplierName string, extraPhones []string, lookback time.Duration, limit int64) ([]RFQReceived, error) {
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	since := time.Now().Add(-lookback)
-	// Use the 9-digit core so both local (0501971075) and international (966501971075)
-	// formats match the same stored phone numbers.
-	phonePattern := phoneCoreSuffix(phone)
+
+	// Build $or conditions for the forwarded_to $elemMatch.
+	var orClauses bson.A
+	seen := map[string]bool{}
+	addPhone := func(p string) {
+		if p == "" {
+			return
+		}
+		pat := phoneCoreSuffix(p)
+		if seen[pat] {
+			return
+		}
+		seen[pat] = true
+		orClauses = append(orClauses, bson.M{
+			"forwarded_to": bson.M{"$elemMatch": bson.M{
+				"phone": bson.M{"$regex": pat, "$options": "i"},
+			}},
+		})
+	}
+	addPhone(phone)
+	for _, p := range extraPhones {
+		addPhone(p)
+	}
+	if supplierName != "" {
+		orClauses = append(orClauses, bson.M{
+			"forwarded_to": bson.M{"$elemMatch": bson.M{
+				"supplier_name": bson.M{"$regex": "^" + regexp.QuoteMeta(supplierName) + "$", "$options": "i"},
+			}},
+		})
+	}
+	if len(orClauses) == 0 {
+		return []RFQReceived{}, nil
+	}
+
 	filter := bson.M{
-		"store_id": storeID,
-		"forwarded_to": bson.M{
-			"$elemMatch": bson.M{
-				"phone": bson.M{"$regex": phonePattern, "$options": "i"},
-			},
-		},
+		"store_id":    storeID,
 		"received_at": bson.M{"$gte": since},
+		"$or":         orClauses,
 	}
 	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
 	cur, err := col.Find(ctx, filter, opts)

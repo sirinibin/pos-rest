@@ -70,3 +70,38 @@ func TestRFQSupplierPhone2Field(t *testing.T) {
 		t.Error("phone and phone2 must be different numbers")
 	}
 }
+
+// TestFindRFQsForwardedToSupplierSignature verifies that the new multi-alias lookup
+// function exists and that the old single-phone wrapper still compiles.
+func TestFindRFQsForwardedToSupplierExists(t *testing.T) {
+	src, err := os.ReadFile("rfq_received.go")
+	if err != nil {
+		t.Fatalf("could not read rfq_received.go: %v", err)
+	}
+	if !regexp.MustCompile(`func FindRFQsForwardedToSupplier`).Match(src) {
+		t.Error("FindRFQsForwardedToSupplier is missing from rfq_received.go")
+	}
+	// Must match by supplier_name (user suggestion)
+	if !regexp.MustCompile(`supplier_name`).Match(src) {
+		t.Error("FindRFQsForwardedToSupplier must include supplier_name matching")
+	}
+	// Old wrapper must still exist for backward compat
+	if !regexp.MustCompile(`func FindRFQsForwardedToPhone`).Match(src) {
+		t.Error("FindRFQsForwardedToPhone backward-compat wrapper is missing")
+	}
+}
+
+// TestListRFQReceivedControllerResolvesPhone2 verifies the controller resolves
+// the incoming phone via FindRFQSupplierByPhone before calling FindRFQsForwardedToSupplier.
+func TestListRFQReceivedControllerResolvesPhone2(t *testing.T) {
+	src, err := os.ReadFile("../controller/rfq_bot.go")
+	if err != nil {
+		t.Fatalf("could not read rfq_bot.go: %v", err)
+	}
+	if !regexp.MustCompile(`FindRFQSupplierByPhone`).Match(src) {
+		t.Error("rfq_bot.go ListRFQReceived does not resolve phone via FindRFQSupplierByPhone")
+	}
+	if !regexp.MustCompile(`FindRFQsForwardedToSupplier`).Match(src) {
+		t.Error("rfq_bot.go ListRFQReceived does not call FindRFQsForwardedToSupplier")
+	}
+}

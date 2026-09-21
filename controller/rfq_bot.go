@@ -2740,6 +2740,169 @@ func parseCategories(raw string) []string {
 	return cats
 }
 
+// ── Supplier email extraction from website ────────────────────────────────────
+
+var websiteEmailRe = regexp.MustCompile(`[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}`)
+
+// skipEmailDomain returns true for common non-contact email domains that appear
+// in website HTML but are not the supplier's actual contact email.
+var skipEmailDomain = map[string]bool{
+	"example.com": true, "sentry.io": true, "w3.org": true, "schema.org": true,
+	"google.com": true, "googleapis.com": true, "facebook.com": true, "twitter.com": true,
+	"cloudflare.com": true, "jquery.com": true, "gravatar.com": true,
+}
+
+// contactLinkRe matches href attributes that look like contact pages.
+var contactLinkRe = regexp.MustCompile(`(?i)href=["']([^"'#?]+contact[^"'#?]*)["']`)
+
+// crawlWebsiteForEmail fetches the supplier's website and extracts the first
+// real contact email address found in the HTML.
+func crawlWebsiteForEmail(website string) string {
+	if website == "" {
+		return ""
+	}
+	if !strings.HasPrefix(website, "http://") && !strings.HasPrefix(website, "https://") {
+		website = "https://" + website
+	}
+	baseURL := strings.TrimRight(website, "/")
+	ua := "Mozilla/5.0 (compatible; StartPOS/1.0; +https://startpos.ai)"
+	client := &http.Client{Timeout: 12 * time.Second}
+	fetchPage := func(u string) string {
+		req, err := http.NewRequest("GET", u, nil)
+		if err != nil {
+			return ""
+		}
+		req.Header.Set("User-Agent", ua)
+		resp, err := client.Do(req)
+		if err != nil {
+			return ""
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+		return string(b)
+	}
+
+	homeHTML := fetchPage(website)
+	for _, email := range extractEmailsFromHTML(homeHTML) {
+		if email != "" {
+			return email
+		}
+	}
+
+	// Build candidate contact page URLs:
+	// 1. Links found on the home page that contain "contact" in the path
+	// 2. Common fallback paths
+	seen := map[string]bool{}
+	var candidates []string
+	for _, m := range contactLinkRe.FindAllStringSubmatch(homeHTML, -1) {
+		href := strings.TrimSpace(m[1])
+		if href == "" || strings.HasPrefix(href, "javascript") {
+			continue
+		}
+		var full string
+		if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
+			full = href
+		} else if strings.HasPrefix(href, "/") {
+			// Extract origin from baseURL
+			parts := strings.SplitN(baseURL, "/", 4)
+			if len(parts) >= 3 {
+				full = parts[0] + "//" + parts[2] + href
+			}
+		}
+		if full != "" && !seen[full] {
+			seen[full] = true
+			candidates = append(candidates, full)
+		}
+		if len(candidates) >= 3 {
+			break
+		}
+	}
+	// Fallback common paths
+	for _, suffix := range []string{"/contact", "/contact-us", "/en/contact", "/about/contact"} {
+		u := baseURL + suffix
+		if !seen[u] {
+			seen[u] = true
+			candidates = append(candidates, u)
+		}
+	}
+
+	for _, u := range candidates {
+		html := fetchPage(u)
+		for _, email := range extractEmailsFromHTML(html) {
+			if email != "" {
+				return email
+			}
+		}
+	}
+	return ""
+}
+
+func extractEmailsFromHTML(html string) []string {
+	matches := websiteEmailRe.FindAllString(html, -1)
+	seen := map[string]bool{}
+	var result []string
+	for _, m := range matches {
+		m = strings.ToLower(m)
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		parts := strings.SplitN(m, "@", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		domain := parts[1]
+		if skipEmailDomain[domain] {
+			continue
+		}
+		// Skip image/file extensions that got caught (e.g. icon.png@2x)
+		if strings.ContainsAny(parts[0], "/.") && !strings.Contains(parts[0], "+") {
+			continue
+		}
+		result = append(result, m)
+	}
+	return result
+}
+
+// crawlAndSaveSupplierEmail crawls the supplier's website for a contact email
+// and saves it to the DB if found. Intended to run as a goroutine.
+func crawlAndSaveSupplierEmail(supplier models.RFQSupplier) {
+	if supplier.Website == "" || supplier.Email != "" {
+		return
+	}
+	email := crawlWebsiteForEmail(supplier.Website)
+	if email == "" {
+		log.Printf("crawlEmail[%s]: no email found on %s", supplier.Name, supplier.Website)
+		return
+	}
+	log.Printf("crawlEmail[%s]: found email %s on %s", supplier.Name, email, supplier.Website)
+	if err := models.SetRFQSupplierEmail(supplier.ID, email); err != nil {
+		log.Printf("crawlEmail[%s]: save error: %v", supplier.Name, err)
+	}
+}
+
+// POST /v1/rfq-suppliers/backfill-emails?store_id=...
+// Finds all suppliers with a website but no email and crawls each in the background.
+func BackfillSupplierEmailsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	suppliers, err := models.ListSuppliersWithWebsiteNoEmail(storeObjID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+	count := len(suppliers)
+	for _, s := range suppliers {
+		go crawlAndSaveSupplierEmail(s)
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"queued": count}) //nolint:errcheck
+}
+
 // ── Supplier category inference from website ──────────────────────────────────
 
 var (
@@ -3702,10 +3865,23 @@ func ListRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// When supplier_phone is given, return only RFQs forwarded to that phone
-	// (used by the "Add Price to RFQ" picker in the procurement WhatsApp modal).
+	// When supplier_phone is given, return only RFQs forwarded to that supplier.
+	// Resolves phone2 → primary phone so that RFQs stored under any alias are found.
+	// Also matches by supplier name as a fallback (user suggestion).
 	if sp := strings.TrimPrefix(r.URL.Query().Get("supplier_phone"), "+"); sp != "" {
-		rfqs, err := models.FindRFQsForwardedToPhone(storeObjID, sp, 365*24*time.Hour, 50)
+		// Resolve to supplier record to collect all known phones + name.
+		var extraPhones []string
+		var supplierName string
+		if sup, err := models.FindRFQSupplierByPhone(storeObjID, sp); err == nil && sup != nil {
+			supplierName = sup.Name
+			if sup.Phone != "" && sup.Phone != sp {
+				extraPhones = append(extraPhones, sup.Phone)
+			}
+			if sup.Phone2 != "" && sup.Phone2 != sp {
+				extraPhones = append(extraPhones, sup.Phone2)
+			}
+		}
+		rfqs, err := models.FindRFQsForwardedToSupplier(storeObjID, sp, supplierName, extraPhones, 365*24*time.Hour, 50)
 		if err != nil {
 			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
 			return
@@ -4368,6 +4544,10 @@ func CreateRFQSupplierHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
+	// Crawl website for contact email in background if not already provided.
+	if supplier.Website != "" && supplier.Email == "" {
+		go crawlAndSaveSupplierEmail(supplier)
+	}
 	BroadcastRFQEvent(supplier.StoreID.Hex(), "supplier_updated")
 	respBytes, _ := json.Marshal(supplier)
 	w.Write(respBytes)
@@ -4619,6 +4799,10 @@ func UpdateRFQSupplierHandler(w http.ResponseWriter, r *http.Request) {
 	if err := models.UpdateRFQSupplier(existing); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
 		return
+	}
+	// Crawl for email in background if website was added and email is still missing.
+	if existing.Website != "" && existing.Email == "" {
+		go crawlAndSaveSupplierEmail(*existing)
 	}
 	BroadcastRFQEvent(existing.StoreID.Hex(), "supplier_updated")
 	respBytes, _ := json.Marshal(existing)
@@ -5748,6 +5932,34 @@ func DeleteAllRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"deleted": deleted})
 }
 
+// DeleteRFQReceivedHandler handles DELETE /v1/rfq-received/{id}?store_id=...
+// Hard-deletes a single RFQ and unlinks it from the connected procurement message.
+func DeleteRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"])
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	storeObjID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+	rfq, err := models.DeleteRFQReceived(storeObjID, id)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	// Unlink from the procurement message that originated this RFQ (if any).
+	if rfq.ProcurementMessageID != nil {
+		_ = models.UnlinkRFQFromProcurementMessage(*rfq.ProcurementMessageID)
+	}
+	json.NewEncoder(w).Encode(map[string]string{"result": "ok"})
+}
+
 // ── RefetchSupplierMapsHandler ─────────────────────────────────────────────
 // POST /v1/rfq-suppliers/{id}/refetch-maps
 // Searches Google Maps by the supplier's name and updates address, rating,
@@ -6004,14 +6216,28 @@ func BackfillSupplierMarketsHandler(w http.ResponseWriter, r *http.Request) {
 			skipped++
 			continue
 		}
-		enriched, eErr := enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, sup, store.Settings.PurchaseMarkets...)
+		// Mirror the G button: try each configured market, then fall back to no-location search.
+		markets := append(append([]string{}, store.Settings.PurchaseMarkets...), "")
+		var enriched bool
+		var eErr error
+		origMarket := sup.PurchaseMarket
+		for _, market := range markets {
+			sup.PurchaseMarket = market
+			enriched, eErr = enrichSupplierFromGoogleMaps(store.Settings.GoogleMapsAPIKey, sup)
+			if eErr != nil || enriched {
+				break
+			}
+		}
+		if !enriched {
+			sup.PurchaseMarket = origMarket
+		}
 		if eErr != nil {
 			log.Printf("backfill-markets: enrich error for %s: %v", sup.Phone, eErr)
 			failed++
 			continue
 		}
 		if enriched && sup.PurchaseMarket != "" {
-			if uErr := models.UpsertRFQSupplierByPlaceID(sup); uErr != nil {
+			if uErr := models.UpdateRFQSupplier(sup); uErr != nil {
 				log.Printf("backfill-markets: save error for %s: %v", sup.Phone, uErr)
 				failed++
 			} else {
