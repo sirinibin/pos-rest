@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -155,7 +156,7 @@ func applyDefaultSignature(body string, sigs []models.EmailSignature) (string, b
 	for _, sig := range sigs {
 		if sig.IsDefault && sig.Content != "" {
 			if sig.IsHtml {
-				return body + "<br><br>--<br>" + sig.Content, true
+				return buildHTMLEmailBody(body, extractHTMLBodyContent(sig.Content)), true
 			}
 			return body + "\n\n--\n" + sig.Content, false
 		}
@@ -228,12 +229,36 @@ func TestEmailSignature_HTMLSignatureAppended(t *testing.T) {
 		{ID: "1", Name: "HTML Sig", Content: "<p>Best regards,<br><b>Team</b></p>", IsDefault: true, IsHtml: true},
 	}
 	result, isHTML := applyDefaultSignature("Hello", sigs)
-	want := "Hello<br><br>--<br><p>Best regards,<br><b>Team</b></p>"
-	if result != want {
-		t.Errorf("got %q, want %q", result, want)
+	// Result must be a valid HTML document containing the message and the signature fragment
+	if !strings.Contains(result, "<!DOCTYPE html>") {
+		t.Error("expected full HTML document output")
+	}
+	if !strings.Contains(result, "Hello") {
+		t.Error("expected message body in output")
+	}
+	if !strings.Contains(result, "<p>Best regards,<br><b>Team</b></p>") {
+		t.Error("expected signature fragment in output")
 	}
 	if !isHTML {
 		t.Error("expected isHTML=true for HTML signature")
+	}
+}
+
+func TestEmailSignature_HTMLFullDocumentStripsWrappers(t *testing.T) {
+	// When signature is a full HTML document, only the <body> content is used
+	fullDoc := `<!DOCTYPE html><html><head><title>Sig</title></head><body style="margin:0"><table><tr><td>Sales Team</td></tr></table></body></html>`
+	sigs := []models.EmailSignature{
+		{ID: "1", Name: "Full Doc", Content: fullDoc, IsDefault: true, IsHtml: true},
+	}
+	result, isHTML := applyDefaultSignature("Hi there", sigs)
+	if !strings.Contains(result, "Sales Team") {
+		t.Error("expected signature body content in output")
+	}
+	if strings.Count(result, "<!DOCTYPE html>") > 1 {
+		t.Error("expected only one DOCTYPE in output, not the one from the signature")
+	}
+	if !isHTML {
+		t.Error("expected isHTML=true")
 	}
 }
 
@@ -247,5 +272,38 @@ func TestEmailSignature_HTMLFlagFalse_UsesPlainSeparator(t *testing.T) {
 	}
 	if isHTML {
 		t.Error("expected isHTML=false for plain signature")
+	}
+}
+
+func TestExtractHTMLBodyContent_FullDocument(t *testing.T) {
+	html := `<!DOCTYPE html><html><head><title>T</title></head><body style="margin:0"><p>Content here</p></body></html>`
+	got := extractHTMLBodyContent(html)
+	if got != `<p>Content here</p>` {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestExtractHTMLBodyContent_Fragment(t *testing.T) {
+	fragment := `<p>Just a fragment</p>`
+	got := extractHTMLBodyContent(fragment)
+	if got != fragment {
+		t.Errorf("expected fragment unchanged, got %q", got)
+	}
+}
+
+func TestBuildHTMLEmailBody_ContainsMessage(t *testing.T) {
+	result := buildHTMLEmailBody("Hello <World> & friends", "<p>Sig</p>")
+	if !strings.Contains(result, "Hello &lt;World&gt; &amp; friends") {
+		t.Error("expected HTML-escaped message body")
+	}
+	if !strings.Contains(result, "<p>Sig</p>") {
+		t.Error("expected signature in output")
+	}
+}
+
+func TestBuildHTMLEmailBody_NewlinesBecomeBR(t *testing.T) {
+	result := buildHTMLEmailBody("Line1\nLine2", "")
+	if !strings.Contains(result, "Line1<br>Line2") {
+		t.Errorf("expected newlines converted to <br>, got: %s", result)
 	}
 }

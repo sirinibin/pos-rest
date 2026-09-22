@@ -503,6 +503,53 @@ type emailAttachment struct {
 	Data        []byte
 }
 
+// extractHTMLBodyContent strips <!DOCTYPE>, <html>, <head>, and outer <body> wrapper
+// tags from a full HTML document, returning just the inner body content.
+// If the input has no <body> tag it is returned as-is (already a fragment).
+func extractHTMLBodyContent(html string) string {
+	lower := strings.ToLower(html)
+	start := strings.Index(lower, "<body")
+	if start < 0 {
+		return html
+	}
+	tagEnd := strings.Index(lower[start:], ">")
+	if tagEnd < 0 {
+		return html
+	}
+	inner := strings.TrimSpace(html[start+tagEnd+1:])
+	closeBody := strings.LastIndex(strings.ToLower(inner), "</body>")
+	if closeBody >= 0 {
+		inner = strings.TrimSpace(inner[:closeBody])
+	}
+	return inner
+}
+
+// buildHTMLEmailBody produces a complete, valid HTML email body that wraps the
+// plain-text message and appends an optional HTML signature fragment.
+// plainText is the user's message; htmlSig is already-extracted body content.
+func buildHTMLEmailBody(plainText, htmlSig string) string {
+	// Escape < > & in the plain-text portion before embedding in HTML
+	escaped := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+	).Replace(plainText)
+	// Convert newlines to <br> for readability
+	escaped = strings.ReplaceAll(escaped, "\n", "<br>")
+
+	var sb strings.Builder
+	sb.WriteString(`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;font-family:Arial,sans-serif;font-size:14px;color:#202124;">`)
+	sb.WriteString(`<p style="margin:0 0 16px;">`)
+	sb.WriteString(escaped)
+	sb.WriteString(`</p>`)
+	if htmlSig != "" {
+		sb.WriteString(`<p style="margin:16px 0 6px;color:#6b7280;font-size:12px;">--</p>`)
+		sb.WriteString(htmlSig)
+	}
+	sb.WriteString(`</body></html>`)
+	return sb.String()
+}
+
 // buildMIMEReplyHTML builds an RFC 2822 email identical to buildMIMEReplyMessage but
 // with Content-Type: text/html so HTML signatures and markup render in email clients.
 func buildMIMEReplyHTML(from, to, subject, body, inReplyTo, messageID string) string {

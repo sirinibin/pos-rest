@@ -1733,7 +1733,7 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 	for _, sig := range store.Settings.EmailSignatures {
 		if sig.IsDefault && strings.TrimSpace(sig.Content) != "" {
 			if sig.IsHtml {
-				emailBody = body.Body + "<br><br>--<br>" + sig.Content
+				emailBody = buildHTMLEmailBody(body.Body, extractHTMLBodyContent(sig.Content))
 				isHTML = true
 			} else {
 				emailBody = body.Body + "\n\n--\n" + sig.Content
@@ -1854,7 +1854,9 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 	for _, sig := range store.Settings.EmailSignatures {
 		if sig.IsDefault && strings.TrimSpace(sig.Content) != "" {
 			if sig.IsHtml {
-				emailBody = body.Body + "<br><br>--<br>" + sig.Content
+				// Build a proper HTML email: wrap plain-text message and append
+				// the signature body fragment (stripping any full-document wrappers).
+				emailBody = buildHTMLEmailBody(body.Body, extractHTMLBodyContent(sig.Content))
 				isHTML = true
 			} else {
 				emailBody = body.Body + "\n\n--\n" + sig.Content
