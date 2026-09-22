@@ -441,6 +441,16 @@ type StoreSettings struct {
 	OutgoingEmailBrevoAPIKey string `bson:"outgoing_email_brevo_api_key,omitempty" json:"outgoing_email_brevo_api_key,omitempty"`
 	// Resend
 	OutgoingEmailResendAPIKey string `bson:"outgoing_email_resend_api_key,omitempty" json:"outgoing_email_resend_api_key,omitempty"`
+
+	// Email Signatures
+	EmailSignatures []EmailSignature `bson:"email_signatures,omitempty" json:"email_signatures,omitempty"`
+}
+
+type EmailSignature struct {
+	ID        string `bson:"id" json:"id"`
+	Name      string `bson:"name" json:"name"`
+	Content   string `bson:"content" json:"content"`
+	IsDefault bool   `bson:"is_default" json:"is_default"`
 }
 
 type InvoiceSettings struct {

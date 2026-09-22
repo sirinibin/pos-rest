@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -157,6 +158,49 @@ func DeleteProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// DeleteThreadProcurementMessagesHandler handles DELETE /v1/procurement-messages/thread?store_id=&contact=&type=
+// Deletes all messages in a conversation thread for a given contact (admin-only, enforced in frontend).
+func DeleteThreadProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeObjID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	contact := strings.TrimSpace(r.URL.Query().Get("contact"))
+	if contact == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "contact is required"})
+		return
+	}
+	msgType := r.URL.Query().Get("type") // optional: "email" | "whatsapp"
+
+	// Build filter matching all messages for this contact (from or to).
+	filter := bson.M{
+		"store_id": storeObjID,
+		"$or": bson.A{
+			bson.M{"from": bson.M{"$regex": contact, "$options": "i"}},
+			bson.M{"to": bson.M{"$regex": contact, "$options": "i"}},
+		},
+	}
+	if msgType != "" {
+		filter["type"] = msgType
+	}
+
+	if toClean, _ := models.FetchMessagesForCleanup(filter); len(toClean) > 0 {
+		deleteAttachmentDirs(toClean)
+	}
+
+	deleted, err := models.DeleteProcurementMessagesByFilter(filter)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"deleted": deleted})
+}
+
 // DeleteAllProcurementMessagesHandler handles DELETE /v1/procurement-messages?store_id=&type=
 // Deletes all messages for the store (admin-only gate enforced in frontend; no server auth needed beyond token).
 func DeleteAllProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +283,7 @@ func runAutoDeleteProcurementMessages(storeID primitive.ObjectID, days int) {
 }
 
 // saveProcurementEmailMessage persists an email record and returns the saved message.
-func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider, from string, to []string, subject, bodyText, bodyHTML, externalID string, attachments []models.ProcurementAttachment, attachmentMissing, processedAsRFQ bool, rfqID *primitive.ObjectID, messageDate *time.Time) *models.ProcurementMessage {
+func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider, from string, to []string, subject, bodyText, bodyHTML, externalID, emailMessageID string, attachments []models.ProcurementAttachment, attachmentMissing, processedAsRFQ bool, rfqID *primitive.ObjectID, messageDate *time.Time) *models.ProcurementMessage {
 	if attachments == nil {
 		attachments = []models.ProcurementAttachment{}
 	}
@@ -254,6 +298,7 @@ func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider
 		BodyText:          bodyText,
 		BodyHTML:          bodyHTML,
 		ExternalID:        externalID,
+		EmailMessageID:    emailMessageID,
 		Attachments:       attachments,
 		AttachmentMissing: attachmentMissing,
 		ProcessedAsRFQ:    processedAsRFQ,
@@ -1458,8 +1503,7 @@ func formatStorageBytes(b int64) string {
 }
 
 // ReplyToEmailProcurementMessageHandler handles POST /v1/procurement-messages/{id}/email-reply
-// Sends an email reply via Zoho SMTP and records the outbound message.
-// Body: { "store_id": "...", "subject": "Re: ...", "body": "..." }
+// Accepts multipart/form-data: fields store_id, subject, body, to, from + optional file[] attachments.
 func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -1470,12 +1514,71 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Accept both multipart/form-data and legacy JSON
 	var body struct {
-		StoreID string `json:"store_id"`
-		Subject string `json:"subject"`
-		Body    string `json:"body"`
+		StoreID string
+		Subject string
+		Body    string
+		To      string
+		From    string
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Body) == "" {
+	var attachments []emailAttachment
+
+	ct := r.Header.Get("Content-Type")
+	if strings.Contains(ct, "multipart/form-data") {
+		const maxSize = 25 << 20 // 25 MB
+		if err := r.ParseMultipartForm(maxSize); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to parse form"})
+			return
+		}
+		body.StoreID = r.FormValue("store_id")
+		body.Subject = r.FormValue("subject")
+		body.Body = r.FormValue("body")
+		body.To = r.FormValue("to")
+		body.From = r.FormValue("from")
+		if r.MultipartForm != nil {
+			for _, fhs := range r.MultipartForm.File {
+				for _, fh := range fhs {
+					f, ferr := fh.Open()
+					if ferr != nil {
+						continue
+					}
+					data, _ := io.ReadAll(f)
+					f.Close()
+					ct := fh.Header.Get("Content-Type")
+					if ct == "" {
+						ct = "application/octet-stream"
+					}
+					attachments = append(attachments, emailAttachment{
+						Filename:    fh.Filename,
+						ContentType: ct,
+						Data:        data,
+					})
+				}
+			}
+		}
+	} else {
+		var jsonBody struct {
+			StoreID string `json:"store_id"`
+			Subject string `json:"subject"`
+			Body    string `json:"body"`
+			To      string `json:"to"`
+			From    string `json:"from"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&jsonBody); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			return
+		}
+		body.StoreID = jsonBody.StoreID
+		body.Subject = jsonBody.Subject
+		body.Body = jsonBody.Body
+		body.To = jsonBody.To
+		body.From = jsonBody.From
+	}
+
+	if strings.TrimSpace(body.Body) == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "body is required"})
 		return
@@ -1495,10 +1598,29 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 		json.NewEncoder(w).Encode(map[string]string{"error": "not an email message"})
 		return
 	}
-	replyTo := origMsg.From
+
+	// Prefer explicit To from request, fall back to origMsg.From
+	replyTo := strings.TrimSpace(body.To)
+	if replyTo == "" {
+		replyTo = origMsg.From
+	}
 	if replyTo == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "original message has no sender email"})
+		return
+	}
+	// Decode HTML entities (&lt; → <, &gt; → >) before parsing
+	replyTo = strings.ReplaceAll(replyTo, "&lt;", "<")
+	replyTo = strings.ReplaceAll(replyTo, "&gt;", ">")
+	replyTo = strings.ReplaceAll(replyTo, "&amp;", "&")
+	// Extract bare email from "Name <email@domain.com>" format
+	if addr, err := mail.ParseAddress(replyTo); err == nil {
+		replyTo = addr.Address
+	}
+	// Validate: must contain @ and a domain
+	if !strings.Contains(replyTo, "@") || strings.HasSuffix(replyTo, "@") {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid recipient email address. Please enter a valid email in the To field."})
 		return
 	}
 
@@ -1535,43 +1657,51 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	inReplyTo := origMsg.EmailMessageID // for threading: In-Reply-To / References headers
+
+	// Determine fromAddr first, then build MIME and send
+	var smtpSendHost string
+	var smtpSendPort int
+	var smtpSendUser, smtpSendPass string
+
 	if smtpUser != "" && smtpPass != "" {
-		// Use dedicated Zoho SMTP credentials
 		fromAddr = smtpUser
-		sendErr = sendViaZohoSMTPReply(smtpUser, smtpPass, smtpUser, replyTo, subject, body.Body)
+		smtpSendHost = "smtppro.zoho.in"
+		smtpSendPort = 465
+		smtpSendUser = smtpUser
+		smtpSendPass = smtpPass
 	} else if store.Settings.RFQIMAPHost != "" && store.Settings.RFQIMAPUsername != "" && store.Settings.RFQIMAPPassword != "" {
-		// Derive SMTP from IMAP credentials (old-style single account)
 		fromAddr = store.Settings.RFQIMAPUsername
-		sendErr = sendViaIMAPCredentialsSMTP(
-			store.Settings.RFQIMAPHost,
-			store.Settings.RFQIMAPPort,
-			store.Settings.RFQIMAPUsername,
-			store.Settings.RFQIMAPPassword,
-			fromAddr, replyTo, subject, body.Body,
-		)
+		smtpSendHost, smtpSendPort, _ = smtpHostFromIMAPHost(store.Settings.RFQIMAPHost)
+		if store.Settings.RFQIMAPPort == 993 || store.Settings.RFQIMAPPort == 465 {
+			smtpSendPort = 465
+		}
+		smtpSendUser = store.Settings.RFQIMAPUsername
+		smtpSendPass = store.Settings.RFQIMAPPassword
 	} else {
-		// Check per-account SMTP or IMAP credentials
 		for _, acct := range store.Settings.RFQEmailAccounts {
 			if acct.SMTPUsername != "" && acct.SMTPPassword != "" {
 				fromAddr = acct.SMTPUsername
-				smtpHost := acct.SMTPHost
-				smtpPort := acct.SMTPPort
-				if smtpHost == "" && acct.IMAPHost != "" {
-					smtpHost, smtpPort, _ = smtpHostFromIMAPHost(acct.IMAPHost)
+				smtpSendHost = acct.SMTPHost
+				smtpSendPort = acct.SMTPPort
+				if smtpSendHost == "" && acct.IMAPHost != "" {
+					smtpSendHost, smtpSendPort, _ = smtpHostFromIMAPHost(acct.IMAPHost)
 				}
-				if smtpPort == 0 {
-					smtpPort = 465
+				if smtpSendPort == 0 {
+					smtpSendPort = 465
 				}
-				sendErr = sendViaIMAPCredentialsSMTP(smtpHost, smtpPort, acct.SMTPUsername, acct.SMTPPassword, fromAddr, replyTo, subject, body.Body)
+				smtpSendUser = acct.SMTPUsername
+				smtpSendPass = acct.SMTPPassword
 				break
 			}
 			if acct.IMAPHost != "" && acct.IMAPUsername != "" && acct.IMAPPassword != "" {
 				fromAddr = acct.IMAPUsername
-				port := acct.IMAPPort
-				if port == 0 {
-					port = 993
+				smtpSendHost, smtpSendPort, _ = smtpHostFromIMAPHost(acct.IMAPHost)
+				if smtpSendPort == 587 {
+					smtpSendPort = 465
 				}
-				sendErr = sendViaIMAPCredentialsSMTP(acct.IMAPHost, port, acct.IMAPUsername, acct.IMAPPassword, fromAddr, replyTo, subject, body.Body)
+				smtpSendUser = acct.IMAPUsername
+				smtpSendPass = acct.IMAPPassword
 				break
 			}
 		}
@@ -1582,6 +1712,33 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	// Allow frontend to override the From address
+	if override := strings.TrimSpace(body.From); override != "" {
+		if addr, err := mail.ParseAddress(override); err == nil {
+			fromAddr = addr.Address
+		} else {
+			fromAddr = override
+		}
+	}
+
+	// Build and send
+	// Generate a Message-ID so customers' replies can be detected as replies to our emails.
+	now := time.Now()
+	outMsgID := primitive.NewObjectID()
+	outEmailMsgID := fmt.Sprintf("<%s.%d@startpos.local>", outMsgID.Hex(), now.UnixNano())
+
+	// Append default email signature if one is configured
+	emailBody := body.Body
+	for _, sig := range store.Settings.EmailSignatures {
+		if sig.IsDefault && strings.TrimSpace(sig.Content) != "" {
+			emailBody = emailBody + "\n\n--\n" + sig.Content
+			break
+		}
+	}
+
+	msgBytes := buildMIMEReplyFull(fromAddr, replyTo, subject, emailBody, inReplyTo, outEmailMsgID, attachments)
+	sendErr = sendSMTPRaw(smtpSendHost, smtpSendPort, smtpSendUser, smtpSendPass, fromAddr, replyTo, msgBytes)
+
 	if sendErr != nil {
 		log.Printf("email-reply: SMTP error: %v", sendErr)
 		w.WriteHeader(http.StatusBadGateway)
@@ -1590,8 +1747,30 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Record the outbound message.
-	now := time.Now()
+
+	// Save attachment files to disk so they can be viewed/downloaded later.
+	var savedAtts []models.ProcurementAttachment
+	if len(attachments) > 0 {
+		uploadDir := fmt.Sprintf("./attachments/%s/procurement/%s", storeObjID.Hex(), outMsgID.Hex())
+		if err := os.MkdirAll(uploadDir, os.ModePerm); err == nil {
+			for _, att := range attachments {
+				ext := strings.ToLower(filepath.Ext(att.Filename))
+				saveName := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+				savePath := filepath.Join(uploadDir, saveName)
+				if werr := os.WriteFile(savePath, att.Data, 0644); werr == nil {
+					savedAtts = append(savedAtts, models.ProcurementAttachment{
+						Filename:    att.Filename,
+						ContentType: att.ContentType,
+						Size:        int64(len(att.Data)),
+						URL:         fmt.Sprintf("/attachments/%s/procurement/%s/%s", storeObjID.Hex(), outMsgID.Hex(), saveName),
+					})
+				}
+			}
+		}
+	}
+
 	out := &models.ProcurementMessage{
+		ID:                    outMsgID,
 		StoreID:               storeObjID,
 		Type:                  "email",
 		Direction:             "out",
@@ -1599,7 +1778,9 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 		From:                  fromAddr,
 		To:                    []string{replyTo},
 		Subject:               subject,
-		BodyText:              body.Body,
+		BodyText:              emailBody,
+		EmailMessageID:        outEmailMsgID,
+		Attachments:           savedAtts,
 		CreatedAt:             now,
 		MessageDate:           &now,
 		LinkedRFQReceivedID:   origMsg.RFQReceivedID,
@@ -1663,7 +1844,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 
 	if smtpUser != "" && smtpPass != "" {
 		fromAddr = smtpUser
-		sendErr = sendViaZohoSMTPReply(smtpUser, smtpPass, smtpUser, body.To, subject, body.Body)
+		sendErr = sendViaZohoSMTPReply(smtpUser, smtpPass, smtpUser, body.To, subject, body.Body, "")
 	} else if store.Settings.RFQIMAPHost != "" && store.Settings.RFQIMAPUsername != "" && store.Settings.RFQIMAPPassword != "" {
 		fromAddr = store.Settings.RFQIMAPUsername
 		sendErr = sendViaIMAPCredentialsSMTP(
@@ -1671,7 +1852,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 			store.Settings.RFQIMAPPort,
 			store.Settings.RFQIMAPUsername,
 			store.Settings.RFQIMAPPassword,
-			fromAddr, body.To, subject, body.Body,
+			fromAddr, body.To, subject, body.Body, "",
 		)
 	} else {
 		// Check per-account SMTP or IMAP credentials
@@ -1686,7 +1867,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 				if smtpPort == 0 {
 					smtpPort = 465
 				}
-				sendErr = sendViaIMAPCredentialsSMTP(smtpHost, smtpPort, acct.SMTPUsername, acct.SMTPPassword, fromAddr, body.To, subject, body.Body)
+				sendErr = sendViaIMAPCredentialsSMTP(smtpHost, smtpPort, acct.SMTPUsername, acct.SMTPPassword, fromAddr, body.To, subject, body.Body, "")
 				break
 			}
 			if acct.IMAPHost != "" && acct.IMAPUsername != "" && acct.IMAPPassword != "" {
@@ -1695,7 +1876,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 				if port == 0 {
 					port = 993
 				}
-				sendErr = sendViaIMAPCredentialsSMTP(acct.IMAPHost, port, acct.IMAPUsername, acct.IMAPPassword, fromAddr, body.To, subject, body.Body)
+				sendErr = sendViaIMAPCredentialsSMTP(acct.IMAPHost, port, acct.IMAPUsername, acct.IMAPPassword, fromAddr, body.To, subject, body.Body, "")
 				break
 			}
 		}
@@ -1730,4 +1911,41 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 	_ = models.SaveProcurementMessage(out)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{"status": "sent", "to": body.To})
+}
+
+// ProcurementEmailRFQHistoryHandler handles GET /v1/procurement-rfq-history
+// Returns customer RFQs and supplier RFQs linked to a given email address.
+func ProcurementEmailRFQHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	email := strings.TrimSpace(r.URL.Query().Get("email"))
+	if storeIDStr == "" || email == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "store_id and email required"})
+		return
+	}
+	storeID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	// Strip "Name <email>" if present
+	if addr, parseErr := mail.ParseAddress(email); parseErr == nil {
+		email = addr.Address
+	}
+	email = strings.ToLower(email)
+
+	customerRFQs, _ := models.FindRecentRFQsByEmail(storeID, email, 365*24*time.Hour, 10)
+	supplierRFQs, _ := models.FindRFQsBySupplierEmail(storeID, email, 10)
+	if customerRFQs == nil {
+		customerRFQs = []models.RFQReceived{}
+	}
+	if supplierRFQs == nil {
+		supplierRFQs = []models.RFQReceived{}
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"customer_rfqs": customerRFQs,
+		"supplier_rfqs": supplierRFQs,
+	})
 }
