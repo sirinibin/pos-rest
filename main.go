@@ -706,6 +706,12 @@ func main() {
 	router.HandleFunc("/v1/migrate-rfq-attachments-to-s3", controller.MigrateRFQAttachmentsToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/migrate-entity-images-to-s3", controller.MigrateEntityImagesToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/migrate-inline-images-to-s3", controller.MigrateInlineBase64ToS3Handler).Methods("POST")
+	router.HandleFunc("/v1/verify-cleanup-disk", controller.VerifyAndCleanupDiskHandler).Methods("POST")
+	router.HandleFunc("/v1/fix-direct-s3-urls", controller.FixDirectS3URLsHandler).Methods("POST")
+	// Legacy /zatca/ paths redirect to /cdn/zatca/ so CdnFileHandler serves them.
+	router.PathPrefix("/zatca/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/cdn"+r.URL.Path, http.StatusFound)
+	})
 	router.HandleFunc("/v1/store/{id}/zatca/clear-reconnect", controller.ClearZatcaReconnect).Methods("PUT")
 	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
 	router.HandleFunc("/v1/sales-return/zatca/report/{id}", controller.ReportSalesReturnToZatca).Methods("POST")

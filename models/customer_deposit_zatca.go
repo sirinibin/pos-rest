@@ -539,20 +539,9 @@ func (deposit *CustomerDeposit) SaveClearedInvoiceData(reportingResponse ZatcaRe
 		return err
 	}
 
-	xmlResponseFilePath := "zatca/" + deposit.StoreID.Hex() + "/receivables/xml/" + deposit.Code + ".xml"
 	relKey := "zatca/" + deposit.StoreID.Hex() + "/receivables/xml/" + deposit.Code + ".xml"
 	deposit.Zatca.ClearedXMLURL = SaveFileToStorage(relKey, xmlData, "application/xml")
-	if err = os.MkdirAll("zatca/"+deposit.StoreID.Hex()+"/receivables/xml", 0755); err != nil {
-		return err
-	}
-	if err = os.WriteFile(xmlResponseFilePath, xmlData, 0644); err != nil {
-		return err
-	}
-
-	data, err := os.ReadFile(xmlResponseFilePath)
-	if err != nil {
-		return err
-	}
+	data := xmlData
 
 	var invoice InvoiceToRead
 	if err = xml.Unmarshal(data, &invoice); err != nil {
