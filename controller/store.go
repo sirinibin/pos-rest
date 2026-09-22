@@ -393,6 +393,10 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	// Preserve zatca_reconnect_required — can only be cleared by ConnectStoreToZatca
 	store.Zatca.ZatcaReconnectRequired = storeOld.Zatca.ZatcaReconnectRequired
 
+	// Never overwrite rfq_email_accounts via the store form — managed exclusively
+	// by POST/DELETE /v1/rfq-email/account endpoints which store credentials safely.
+	store.Settings.RFQEmailAccounts = storeOld.Settings.RFQEmailAccounts
+
 	// Normalize whitespace on both stores before comparing sensitive fields so that
 	// trimming done by the frontend (or legacy stored values with trailing spaces)
 	// does not produce false-positive reconnect triggers.
@@ -975,6 +979,60 @@ func UpdateStorePrintSettings(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// UpdateStoreEmailSignatures handles PUT /v1/store/{id}/email-signatures.
+// Saves email_signatures with a targeted $set to avoid touching other settings.
+func UpdateStoreEmailSignatures(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	storeID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid Store ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var payload struct {
+		EmailSignatures []models.EmailSignature `json:"email_signatures"`
+	}
+	if !utils.Decode(w, r, &payload) {
+		return
+	}
+
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = collection.UpdateOne(
+		ctx,
+		bson.M{"_id": storeID},
+		bson.M{"$set": bson.M{"settings.email_signatures": payload.EmailSignatures}},
+	)
+	if err != nil {
+		response.Status = false
+		response.Errors["update"] = "Failed to update email signatures: " + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	json.NewEncoder(w).Encode(response)
+}
+
 // UpdateStoreSidebarConfig handles PUT /v1/store/{id}/sidebar-config.
 // Saves the sidebar menu order/visibility config for a store.
 func UpdateStoreSidebarConfig(w http.ResponseWriter, r *http.Request) {
@@ -1002,7 +1060,7 @@ func UpdateStoreSidebarConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var payload struct {
-		SidebarConfig []interface{} `json:"sidebar_config"`
+		SidebarConfig []map[string]interface{} `json:"sidebar_config"`
 	}
 	if !utils.Decode(w, r, &payload) {
 		return

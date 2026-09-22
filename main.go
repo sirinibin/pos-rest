@@ -265,20 +265,21 @@ func main() {
 	router.HandleFunc("/v1/warehouse/{id}", controller.DeleteWarehouse).Methods("DELETE")
 
 	//Customer
+	// Literal customer routes MUST come before /{id} wildcard
 	router.HandleFunc("/v1/customer/summary", controller.CustomerSummary).Methods("GET")
+	router.HandleFunc("/v1/customer/by-phone", controller.FindCustomerByPhoneHandler).Methods("GET")
+	router.HandleFunc("/v1/customers/normalize-phones", controller.NormalizeCustomerPhonesHandler).Methods("POST")
+	router.HandleFunc("/v1/customer/vat_no/name", controller.ViewCustomerByVatNoByName).Methods("GET")
+	router.HandleFunc("/v1/customer/upload-image", controller.UploadCustomerImage).Methods("POST")
+	router.HandleFunc("/v1/customer/delete-image", controller.DeleteCustomerImage).Methods("POST")
+	router.HandleFunc("/v1/customer/find-or-create", controller.FindOrCreateCustomerHandler).Methods("POST")
 	router.HandleFunc("/v1/customer", controller.CreateCustomer).Methods("POST")
 	router.HandleFunc("/v1/customer", controller.ListCustomer).Methods("GET")
 	router.HandleFunc("/v1/customer/{id}/history", controller.GetCustomerHistory).Methods("GET")
+	router.HandleFunc("/v1/customer/restore/{id}", controller.RestoreCustomer).Methods("POST")
 	router.HandleFunc("/v1/customer/{id}", controller.ViewCustomer).Methods("GET")
 	router.HandleFunc("/v1/customer/{id}", controller.UpdateCustomer).Methods("PUT")
 	router.HandleFunc("/v1/customer/{id}", controller.DeleteCustomer).Methods("DELETE")
-	router.HandleFunc("/v1/customer/restore/{id}", controller.RestoreCustomer).Methods("POST")
-	router.HandleFunc("/v1/customer/upload-image", controller.UploadCustomerImage).Methods("POST")
-	router.HandleFunc("/v1/customer/delete-image", controller.DeleteCustomerImage).Methods("POST")
-	router.HandleFunc("/v1/customer/vat_no/name", controller.ViewCustomerByVatNoByName).Methods("GET")
-	router.HandleFunc("/v1/customer/find-or-create", controller.FindOrCreateCustomerHandler).Methods("POST")
-	router.HandleFunc("/v1/customer/by-phone", controller.FindCustomerByPhoneHandler).Methods("GET")
-	router.HandleFunc("/v1/customers/normalize-phones", controller.NormalizeCustomerPhonesHandler).Methods("POST")
 
 	//Product
 	router.HandleFunc("/v1/product/summary", controller.ProductSummary).Methods("GET")
@@ -696,6 +697,7 @@ func main() {
 	router.HandleFunc("/v1/store/zatca/connect", controller.ConnectStoreToZatca).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/print-settings", controller.UpdateStorePrintSettings).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}/sidebar-config", controller.UpdateStoreSidebarConfig).Methods("PUT")
+	router.HandleFunc("/v1/store/{id}/email-signatures", controller.UpdateStoreEmailSignatures).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}/zatca/clear-reconnect", controller.ClearZatcaReconnect).Methods("PUT")
 	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
 	router.HandleFunc("/v1/sales-return/zatca/report/{id}", controller.ReportSalesReturnToZatca).Methods("POST")
@@ -783,6 +785,7 @@ func main() {
 	router.HandleFunc("/v1/rfq-received/extract", controller.ExtractRFQFromFilesHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}", controller.GetRFQReceivedHandler).Methods("GET")
 	router.HandleFunc("/v1/rfq-received/{id}", controller.UpdateRFQReceivedHandler).Methods("PUT")
+	router.HandleFunc("/v1/rfq-received/{id}", controller.DeleteRFQReceivedHandler).Methods("DELETE")
 	router.HandleFunc("/v1/rfq-received/{id}/process", controller.TriggerRFQProcess).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}/send", controller.SendRFQToSuppliersHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-received/{id}/send-preview", controller.GetRFQSendPreviewHandler).Methods("GET")
@@ -806,6 +809,7 @@ func main() {
 	router.HandleFunc("/v1/rfq-suppliers/fetch-from-maps", controller.FetchSuppliersFromMapsHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-suppliers/deduplicate", controller.DeduplicateRFQSuppliersHandler).Methods("POST")
 	router.HandleFunc("/v1/rfq-suppliers/backfill-markets", controller.BackfillSupplierMarketsHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-suppliers/backfill-emails", controller.BackfillSupplierEmailsHandler).Methods("POST")
 
 	// Outgoing email – test send
 	router.HandleFunc("/v1/outgoing-email/test", controller.TestOutgoingEmailHandler).Methods("POST")
@@ -813,8 +817,10 @@ func main() {
 	// Procurement message log (emails + WhatsApp)
 	router.HandleFunc("/v1/procurement-messages", controller.ListProcurementMessagesHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-messages", controller.DeleteAllProcurementMessagesHandler).Methods("DELETE")
+	router.HandleFunc("/v1/procurement-messages/thread", controller.DeleteThreadProcurementMessagesHandler).Methods("DELETE")
 	router.HandleFunc("/v1/procurement-messages/cleanup", controller.CleanupProcurementMessagesHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-messages/resolve-senders", controller.ResolveProcurementSendersHandler).Methods("POST")
+	router.HandleFunc("/v1/procurement-rfq-history", controller.ProcurementEmailRFQHistoryHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-messages/disk-usage", controller.GetProcurementDiskUsageHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-messages/{id}", controller.GetProcurementMessageHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-messages/{id}", controller.DeleteProcurementMessageHandler).Methods("DELETE")
