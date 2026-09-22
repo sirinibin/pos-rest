@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -22,6 +23,32 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// FlexInt unmarshals a JSON field that may arrive as a number or a numeric
+// string (e.g. "587" or 587), and marshals back as a plain number.
+type FlexInt int
+
+func (f *FlexInt) UnmarshalJSON(data []byte) error {
+	var n int
+	if err := json.Unmarshal(data, &n); err == nil {
+		*f = FlexInt(n)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("FlexInt: cannot unmarshal %s", data)
+	}
+	if s == "" {
+		*f = 0
+		return nil
+	}
+	n64, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return fmt.Errorf("FlexInt: cannot parse %q as integer: %w", s, err)
+	}
+	*f = FlexInt(n64)
+	return nil
+}
 
 // Store : Store structure
 type Store struct {
@@ -422,7 +449,7 @@ type StoreSettings struct {
 	OutgoingEmailFromAddress string `bson:"outgoing_email_from_address,omitempty" json:"outgoing_email_from_address,omitempty"`
 	// SMTP
 	OutgoingEmailSMTPHost     string `bson:"outgoing_email_smtp_host,omitempty" json:"outgoing_email_smtp_host,omitempty"`
-	OutgoingEmailSMTPPort     int    `bson:"outgoing_email_smtp_port,omitempty" json:"outgoing_email_smtp_port,omitempty"`
+	OutgoingEmailSMTPPort     FlexInt `bson:"outgoing_email_smtp_port,omitempty" json:"outgoing_email_smtp_port,omitempty"`
 	OutgoingEmailSMTPUsername string `bson:"outgoing_email_smtp_username,omitempty" json:"outgoing_email_smtp_username,omitempty"`
 	OutgoingEmailSMTPPassword string `bson:"outgoing_email_smtp_password,omitempty" json:"outgoing_email_smtp_password,omitempty"`
 	OutgoingEmailSMTPUseTLS   bool   `bson:"outgoing_email_smtp_use_tls" json:"outgoing_email_smtp_use_tls"`
