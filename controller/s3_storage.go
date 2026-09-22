@@ -164,7 +164,7 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 
 // CdnFileHandler serves attachment files via the /cdn/ path.
 // If S3 is configured, proxies the file through a SigV4-signed GET (private bucket safe).
-// Falls back to local disk if the key is not found in S3.
+// If S3 is not configured, serves from local disk.
 // Registered with router.PathPrefix("/cdn/")
 func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/cdn/")
@@ -174,17 +174,14 @@ func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s := loadAdminS3Settings()
 	if s.S3Enabled && s.S3BucketName != "" {
-		if proxyS3Object(s, path, w) {
-			return
-		}
-		// Not found in S3 — fall back to local disk
+		proxyS3Object(s, path, w)
+		return
 	}
 	http.ServeFile(w, r, "./"+path)
 }
 
 // proxyS3Object fetches key from S3 using a SigV4-signed GET and streams it to w.
-// Returns true if the response was written (success or non-404 error), false if key was not found in S3.
-func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) bool {
+func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) {
 	now := time.Now().UTC()
 	dateStr := now.Format("20060102")
 	timeStr := now.Format("20060102T150405Z")
@@ -199,7 +196,7 @@ func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) bo
 	req, err := http.NewRequest("GET", getURL, nil)
 	if err != nil {
 		http.Error(w, "s3 request error", http.StatusInternalServerError)
-		return true
+		return
 	}
 	req.Header.Set("Host", host)
 	req.Header.Set("X-Amz-Date", timeStr)
@@ -229,17 +226,13 @@ func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) bo
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, "s3 fetch error", http.StatusBadGateway)
-		return true
+		return
 	}
 	defer resp.Body.Close()
 
-	// 404 from S3 means the file hasn't been migrated yet — fall back to local disk
-	if resp.StatusCode == http.StatusNotFound {
-		return false
-	}
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "s3 error", resp.StatusCode)
-		return true
+		http.Error(w, "not found", resp.StatusCode)
+		return
 	}
 
 	// Forward relevant headers
@@ -250,7 +243,6 @@ func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) bo
 	}
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, resp.Body) //nolint:errcheck
-	return true
 }
 
 // ─── Test S3 Connection ───────────────────────────────────────────────────────
