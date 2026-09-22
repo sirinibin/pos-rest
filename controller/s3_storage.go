@@ -540,6 +540,21 @@ func MigrateAllStoresAttachmentsToS3Handler(w http.ResponseWriter, r *http.Reque
 		urlMap := map[string]string{}
 		uploaded, skipped := 0, 0
 
+		// Count total files for sub-progress
+		storeTotal := 0
+		for _, localDir := range []string{"./attachments/" + storeIDStr, "./zatca/" + storeIDStr} {
+			filepath.WalkDir(localDir, func(_ string, d fs.DirEntry, e error) error { //nolint:errcheck
+				if e == nil && !d.IsDir() {
+					storeTotal++
+				}
+				return nil
+			})
+		}
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "store_total", "store_id": storeIDStr, "total": storeTotal,
+		})
+
+		storeProcessed := 0
 		// Walk both ./attachments/{storeID}/ and ./zatca/{storeID}/
 		for _, localDir := range []string{
 			"./attachments/" + storeIDStr,
@@ -552,17 +567,28 @@ func MigrateAllStoresAttachmentsToS3Handler(w http.ResponseWriter, r *http.Reque
 				data, readErr := os.ReadFile(path)
 				if readErr != nil {
 					skipped++
-					return nil
-				}
-				relKey := strings.TrimPrefix(filepath.ToSlash(path), "./")
-				s3URL, uploadErr := uploadToS3(s, relKey, data, mimeFromFilename(d.Name()))
-				if uploadErr != nil {
-					log.Printf("s3 migrate-all: failed to upload %s: %v", path, uploadErr)
-					skipped++
+					storeProcessed++
 				} else {
-					urlMap["/"+relKey] = s3URL
-					uploaded++
+					relKey := strings.TrimPrefix(filepath.ToSlash(path), "./")
+					s3URL, uploadErr := uploadToS3(s, relKey, data, mimeFromFilename(d.Name()))
+					if uploadErr != nil {
+						log.Printf("s3 migrate-all: failed to upload %s: %v", path, uploadErr)
+						skipped++
+					} else {
+						urlMap["/"+relKey] = s3URL
+						uploaded++
+					}
+					storeProcessed++
 				}
+				pct := 0
+				if storeTotal > 0 {
+					pct = storeProcessed * 100 / storeTotal
+				}
+				sendSSE(w, flusher, map[string]interface{}{
+					"type": "store_progress", "store_id": storeIDStr,
+					"processed": storeProcessed, "total": storeTotal, "percent": pct,
+					"current_file": d.Name(), "uploaded": uploaded, "skipped": skipped,
+				})
 				return nil
 			})
 		}
