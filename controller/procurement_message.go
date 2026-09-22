@@ -1729,14 +1729,20 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 
 	// Append default email signature if one is configured
 	emailBody := body.Body
+	isHTML := false
 	for _, sig := range store.Settings.EmailSignatures {
 		if sig.IsDefault && strings.TrimSpace(sig.Content) != "" {
-			emailBody = emailBody + "\n\n--\n" + sig.Content
+			if sig.IsHtml {
+				emailBody = body.Body + "<br><br>--<br>" + sig.Content
+				isHTML = true
+			} else {
+				emailBody = body.Body + "\n\n--\n" + sig.Content
+			}
 			break
 		}
 	}
 
-	msgBytes := buildMIMEReplyFull(fromAddr, replyTo, subject, emailBody, inReplyTo, outEmailMsgID, attachments)
+	msgBytes := buildMIMEReplyFull(fromAddr, replyTo, subject, emailBody, inReplyTo, outEmailMsgID, attachments, isHTML)
 	sendErr = sendSMTPRaw(smtpSendHost, smtpSendPort, smtpSendUser, smtpSendPass, fromAddr, replyTo, msgBytes)
 
 	if sendErr != nil {
@@ -1842,9 +1848,24 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 		subject = "Message from StartPOS"
 	}
 
+	// Append default email signature
+	emailBody := body.Body
+	isHTML := false
+	for _, sig := range store.Settings.EmailSignatures {
+		if sig.IsDefault && strings.TrimSpace(sig.Content) != "" {
+			if sig.IsHtml {
+				emailBody = body.Body + "<br><br>--<br>" + sig.Content
+				isHTML = true
+			} else {
+				emailBody = body.Body + "\n\n--\n" + sig.Content
+			}
+			break
+		}
+	}
+
 	if smtpUser != "" && smtpPass != "" {
 		fromAddr = smtpUser
-		sendErr = sendViaZohoSMTPReply(smtpUser, smtpPass, smtpUser, body.To, subject, body.Body, "")
+		sendErr = sendViaZohoSMTPReply(smtpUser, smtpPass, smtpUser, body.To, subject, emailBody, "", isHTML)
 	} else if store.Settings.RFQIMAPHost != "" && store.Settings.RFQIMAPUsername != "" && store.Settings.RFQIMAPPassword != "" {
 		fromAddr = store.Settings.RFQIMAPUsername
 		sendErr = sendViaIMAPCredentialsSMTP(
@@ -1852,7 +1873,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 			store.Settings.RFQIMAPPort,
 			store.Settings.RFQIMAPUsername,
 			store.Settings.RFQIMAPPassword,
-			fromAddr, body.To, subject, body.Body, "",
+			fromAddr, body.To, subject, emailBody, "", isHTML,
 		)
 	} else {
 		// Check per-account SMTP or IMAP credentials
@@ -1867,7 +1888,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 				if smtpPort == 0 {
 					smtpPort = 465
 				}
-				sendErr = sendViaIMAPCredentialsSMTP(smtpHost, smtpPort, acct.SMTPUsername, acct.SMTPPassword, fromAddr, body.To, subject, body.Body, "")
+				sendErr = sendViaIMAPCredentialsSMTP(smtpHost, smtpPort, acct.SMTPUsername, acct.SMTPPassword, fromAddr, body.To, subject, emailBody, "", isHTML)
 				break
 			}
 			if acct.IMAPHost != "" && acct.IMAPUsername != "" && acct.IMAPPassword != "" {
@@ -1876,7 +1897,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 				if port == 0 {
 					port = 993
 				}
-				sendErr = sendViaIMAPCredentialsSMTP(acct.IMAPHost, port, acct.IMAPUsername, acct.IMAPPassword, fromAddr, body.To, subject, body.Body, "")
+				sendErr = sendViaIMAPCredentialsSMTP(acct.IMAPHost, port, acct.IMAPUsername, acct.IMAPPassword, fromAddr, body.To, subject, emailBody, "", isHTML)
 				break
 			}
 		}
@@ -1903,7 +1924,7 @@ func SendNewEmailHandler(w http.ResponseWriter, r *http.Request) {
 		From:        fromAddr,
 		To:          []string{body.To},
 		Subject:     subject,
-		BodyText:    body.Body,
+		BodyText:    emailBody,
 		CreatedAt:   now,
 		MessageDate: &now,
 	}

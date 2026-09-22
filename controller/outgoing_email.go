@@ -5,11 +5,14 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"time"
 
@@ -113,6 +116,127 @@ func sendViaSMTP(s models.StoreSettings, to, subject, body string) error {
 
 	msg := buildMIMEMessage(from, s.OutgoingEmailFromName, to, subject, body)
 	return smtp.SendMail(addr, auth, s.OutgoingEmailFromAddress, []string{to}, []byte(msg))
+}
+
+// sendViaZohoSMTPReply sends an email via Zoho SMTP (smtppro.zoho.in:465 implicit TLS).
+// inReplyTo is the original email's Message-ID header; pass "" for non-reply sends.
+// isHTML selects text/html content type instead of text/plain.
+func sendViaZohoSMTPReply(username, password, from, to, subject, body, inReplyTo string, isHTML bool) error {
+	const host = "smtppro.zoho.in"
+	const port = 465
+
+	tlsConfig := &tls.Config{ServerName: host}
+	conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", host, port), tlsConfig)
+	if err != nil {
+		return fmt.Errorf("zoho smtp dial: %w", err)
+	}
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("zoho smtp client: %w", err)
+	}
+	defer client.Quit()
+
+	if err = client.Auth(smtp.PlainAuth("", username, password, host)); err != nil {
+		return fmt.Errorf("zoho smtp auth: %w", err)
+	}
+	if err = client.Mail(from); err != nil {
+		return err
+	}
+	if err = client.Rcpt(to); err != nil {
+		return err
+	}
+	wc, err := client.Data()
+	if err != nil {
+		return err
+	}
+	var mimeStr string
+	if isHTML {
+		mimeStr = buildMIMEReplyHTML(from, to, subject, body, inReplyTo, "")
+	} else {
+		mimeStr = buildMIMEReplyMessage(from, to, subject, body, inReplyTo, "")
+	}
+	_, err = wc.Write([]byte(mimeStr))
+	if err != nil {
+		return err
+	}
+	return wc.Close()
+}
+
+// smtpHostFromIMAPHost derives the outgoing SMTP host/port/TLS from an IMAP host.
+func smtpHostFromIMAPHost(imapHost string) (host string, port int, useImplicitTLS bool) {
+	switch imapHost {
+	case "imappro.zoho.in":
+		return "smtppro.zoho.in", 465, true
+	case "imap.zoho.eu":
+		return "smtp.zoho.eu", 465, true
+	case "imap.zoho.com.au":
+		return "smtp.zoho.com.au", 465, true
+	case "imap.zoho.com":
+		return "smtp.zoho.com", 465, true
+	case "imap.gmail.com":
+		return "smtp.gmail.com", 587, false
+	case "imap.mail.yahoo.com":
+		return "smtp.mail.yahoo.com", 465, true
+	case "outlook.office365.com", "imap-mail.outlook.com":
+		return "smtp.office365.com", 587, false
+	default:
+		return strings.Replace(imapHost, "imap", "smtp", 1), 587, false
+	}
+}
+
+// sendViaIMAPCredentialsSMTP sends an email using the IMAP username/password with the
+// SMTP server derived from the IMAP host. Tries implicit TLS (port 465) then STARTTLS (port 587).
+// inReplyTo is the original email's Message-ID header; pass "" for non-reply sends.
+// isHTML selects text/html content type instead of text/plain.
+func sendViaIMAPCredentialsSMTP(imapHost string, imapPort int, username, password, from, to, subject, body, inReplyTo string, isHTML bool) error {
+	smtpHost, smtpPort, useSSL := smtpHostFromIMAPHost(imapHost)
+	// If the caller provided a non-standard IMAP port, try to derive SMTP port heuristically.
+	if imapPort == 993 || imapPort == 465 {
+		useSSL = true
+		if smtpPort == 587 {
+			smtpPort = 465
+		}
+	}
+	var msg string
+	if isHTML {
+		msg = buildMIMEReplyHTML(from, to, subject, body, inReplyTo, "")
+	} else {
+		msg = buildMIMEReplyMessage(from, to, subject, body, inReplyTo, "")
+	}
+	addr := fmt.Sprintf("%s:%d", smtpHost, smtpPort)
+
+	if useSSL {
+		// Implicit TLS
+		tlsConfig := &tls.Config{ServerName: smtpHost}
+		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		if err != nil {
+			return fmt.Errorf("smtp dial %s: %w", addr, err)
+		}
+		client, err := smtp.NewClient(conn, smtpHost)
+		if err != nil {
+			return fmt.Errorf("smtp client %s: %w", addr, err)
+		}
+		defer client.Quit()
+		if err = client.Auth(smtp.PlainAuth("", username, password, smtpHost)); err != nil {
+			return fmt.Errorf("smtp auth: %w", err)
+		}
+		if err = client.Mail(from); err != nil {
+			return err
+		}
+		if err = client.Rcpt(to); err != nil {
+			return err
+		}
+		wc, err := client.Data()
+		if err != nil {
+			return err
+		}
+		if _, err = wc.Write([]byte(msg)); err != nil {
+			return err
+		}
+		return wc.Close()
+	}
+	// STARTTLS
+	return smtp.SendMail(addr, smtp.PlainAuth("", username, password, smtpHost), from, []string{to}, []byte(msg))
 }
 
 // ─── SendGrid ─────────────────────────────────────────────────────────────────
@@ -347,6 +471,152 @@ func buildMIMEMessage(from, fromName, to, subject, body string) string {
 	}
 	return fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n%s",
 		from, to, subject, base64.StdEncoding.EncodeToString([]byte(body)))
+}
+
+// buildMIMEReplyMessage builds an RFC 2822 email with In-Reply-To and References headers
+// so the reply threads correctly in the recipient's inbox. inReplyTo should be the
+// original email's Message-ID header value (e.g. "<abc@domain.com>").
+func buildMIMEReplyMessage(from, to, subject, body, inReplyTo, messageID string) string {
+	var sb strings.Builder
+	if messageID != "" {
+		sb.WriteString("Message-ID: " + messageID + "\r\n")
+	}
+	sb.WriteString("From: " + from + "\r\n")
+	sb.WriteString("To: " + to + "\r\n")
+	sb.WriteString("Subject: " + subject + "\r\n")
+	if inReplyTo != "" {
+		sb.WriteString("In-Reply-To: " + inReplyTo + "\r\n")
+		sb.WriteString("References: " + inReplyTo + "\r\n")
+	}
+	sb.WriteString("MIME-Version: 1.0\r\n")
+	sb.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	sb.WriteString("Content-Transfer-Encoding: base64\r\n")
+	sb.WriteString("\r\n")
+	sb.WriteString(base64.StdEncoding.EncodeToString([]byte(body)))
+	return sb.String()
+}
+
+// emailAttachment holds a single file to attach to an outgoing email.
+type emailAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
+// buildMIMEReplyHTML builds an RFC 2822 email identical to buildMIMEReplyMessage but
+// with Content-Type: text/html so HTML signatures and markup render in email clients.
+func buildMIMEReplyHTML(from, to, subject, body, inReplyTo, messageID string) string {
+	var sb strings.Builder
+	if messageID != "" {
+		sb.WriteString("Message-ID: " + messageID + "\r\n")
+	}
+	sb.WriteString("From: " + from + "\r\n")
+	sb.WriteString("To: " + to + "\r\n")
+	sb.WriteString("Subject: " + subject + "\r\n")
+	if inReplyTo != "" {
+		sb.WriteString("In-Reply-To: " + inReplyTo + "\r\n")
+		sb.WriteString("References: " + inReplyTo + "\r\n")
+	}
+	sb.WriteString("MIME-Version: 1.0\r\n")
+	sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+	sb.WriteString("Content-Transfer-Encoding: base64\r\n")
+	sb.WriteString("\r\n")
+	sb.WriteString(base64.StdEncoding.EncodeToString([]byte(body)))
+	return sb.String()
+}
+
+// buildMIMEReplyFull builds a complete RFC 2822 MIME message, with optional
+// In-Reply-To threading headers, a Message-ID, and file attachments.
+// isHTML selects text/html content type instead of text/plain.
+func buildMIMEReplyFull(from, to, subject, body, inReplyTo, messageID string, attachments []emailAttachment, isHTML bool) []byte {
+	if len(attachments) == 0 {
+		if isHTML {
+			return []byte(buildMIMEReplyHTML(from, to, subject, body, inReplyTo, messageID))
+		}
+		return []byte(buildMIMEReplyMessage(from, to, subject, body, inReplyTo, messageID))
+	}
+
+	bodyContentType := "text/plain; charset=UTF-8"
+	if isHTML {
+		bodyContentType = "text/html; charset=UTF-8"
+	}
+
+	// Build the multipart body first so we know the boundary
+	var bodyBuf bytes.Buffer
+	mw := multipart.NewWriter(&bodyBuf)
+	boundary := mw.Boundary()
+
+	// Body part
+	ph := make(textproto.MIMEHeader)
+	ph.Set("Content-Type", bodyContentType)
+	ph.Set("Content-Transfer-Encoding", "base64")
+	pw, _ := mw.CreatePart(ph)
+	pw.Write([]byte(base64.StdEncoding.EncodeToString([]byte(body)))) //nolint:errcheck
+
+	// Attachment parts
+	for _, att := range attachments {
+		ct := att.ContentType
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		ah := make(textproto.MIMEHeader)
+		ah.Set("Content-Type", fmt.Sprintf("%s; name=%q", ct, att.Filename))
+		ah.Set("Content-Transfer-Encoding", "base64")
+		ah.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", att.Filename))
+		aw, _ := mw.CreatePart(ah)
+		aw.Write([]byte(base64.StdEncoding.EncodeToString(att.Data))) //nolint:errcheck
+	}
+	mw.Close() //nolint:errcheck
+
+	// Now assemble headers + multipart body
+	var out bytes.Buffer
+	if messageID != "" {
+		fmt.Fprintf(&out, "Message-ID: %s\r\n", messageID)
+	}
+	fmt.Fprintf(&out, "From: %s\r\n", from)
+	fmt.Fprintf(&out, "To: %s\r\n", to)
+	fmt.Fprintf(&out, "Subject: %s\r\n", subject)
+	if inReplyTo != "" {
+		fmt.Fprintf(&out, "In-Reply-To: %s\r\n", inReplyTo)
+		fmt.Fprintf(&out, "References: %s\r\n", inReplyTo)
+	}
+	fmt.Fprintf(&out, "MIME-Version: 1.0\r\n")
+	fmt.Fprintf(&out, "Content-Type: multipart/mixed; boundary=%q\r\n", boundary)
+	fmt.Fprintf(&out, "\r\n")
+	out.Write(bodyBuf.Bytes())
+	return out.Bytes()
+}
+
+// sendSMTPRaw sends a pre-built MIME message via implicit-TLS SMTP on port 465.
+func sendSMTPRaw(smtpHost string, smtpPort int, username, password, from, to string, msgBytes []byte) error {
+	addr := fmt.Sprintf("%s:%d", smtpHost, smtpPort)
+	tlsConfig := &tls.Config{ServerName: smtpHost}
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("smtp dial %s: %w", addr, err)
+	}
+	client, err := smtp.NewClient(conn, smtpHost)
+	if err != nil {
+		return fmt.Errorf("smtp client %s: %w", addr, err)
+	}
+	defer client.Quit()
+	if err = client.Auth(smtp.PlainAuth("", username, password, smtpHost)); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	if err = client.Mail(from); err != nil {
+		return err
+	}
+	if err = client.Rcpt(to); err != nil {
+		return err
+	}
+	wc, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err = wc.Write(msgBytes); err != nil {
+		return err
+	}
+	return wc.Close()
 }
 
 func urlEncode(s string) string {

@@ -451,6 +451,7 @@ type EmailSignature struct {
 	Name      string `bson:"name" json:"name"`
 	Content   string `bson:"content" json:"content"`
 	IsDefault bool   `bson:"is_default" json:"is_default"`
+	IsHtml    bool   `bson:"is_html" json:"is_html"`
 }
 
 type InvoiceSettings struct {

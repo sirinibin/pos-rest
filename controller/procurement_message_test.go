@@ -151,19 +151,25 @@ func TestCreateRFQFromProcurementMessageHandler_ValidIDNotInDB_Returns404(t *tes
 
 // ── Email Signature appending logic ───────────────────────────────────────────
 
-func applyDefaultSignature(body string, sigs []models.EmailSignature) string {
+func applyDefaultSignature(body string, sigs []models.EmailSignature) (string, bool) {
 	for _, sig := range sigs {
 		if sig.IsDefault && sig.Content != "" {
-			return body + "\n\n--\n" + sig.Content
+			if sig.IsHtml {
+				return body + "<br><br>--<br>" + sig.Content, true
+			}
+			return body + "\n\n--\n" + sig.Content, false
 		}
 	}
-	return body
+	return body, false
 }
 
 func TestEmailSignature_NoSignatures_BodyUnchanged(t *testing.T) {
-	result := applyDefaultSignature("Hello world", nil)
+	result, isHTML := applyDefaultSignature("Hello world", nil)
 	if result != "Hello world" {
 		t.Errorf("expected unchanged body, got %q", result)
+	}
+	if isHTML {
+		t.Error("expected isHTML=false when no signatures")
 	}
 }
 
@@ -172,9 +178,12 @@ func TestEmailSignature_NoDefaultSignature_BodyUnchanged(t *testing.T) {
 		{ID: "1", Name: "Sig A", Content: "Team A", IsDefault: false},
 		{ID: "2", Name: "Sig B", Content: "Team B", IsDefault: false},
 	}
-	result := applyDefaultSignature("Hello", sigs)
+	result, isHTML := applyDefaultSignature("Hello", sigs)
 	if result != "Hello" {
 		t.Errorf("expected unchanged body, got %q", result)
+	}
+	if isHTML {
+		t.Error("expected isHTML=false")
 	}
 }
 
@@ -182,10 +191,13 @@ func TestEmailSignature_DefaultSignatureAppended(t *testing.T) {
 	sigs := []models.EmailSignature{
 		{ID: "1", Name: "Main", Content: "Best regards\nProcurement Team", IsDefault: true},
 	}
-	result := applyDefaultSignature("Hello", sigs)
+	result, isHTML := applyDefaultSignature("Hello", sigs)
 	want := "Hello\n\n--\nBest regards\nProcurement Team"
 	if result != want {
 		t.Errorf("got %q, want %q", result, want)
+	}
+	if isHTML {
+		t.Error("expected isHTML=false for plain-text signature")
 	}
 }
 
@@ -194,7 +206,7 @@ func TestEmailSignature_FirstDefaultWins(t *testing.T) {
 		{ID: "1", Name: "First Default", Content: "First Sig", IsDefault: true},
 		{ID: "2", Name: "Second Default", Content: "Second Sig", IsDefault: true},
 	}
-	result := applyDefaultSignature("Hi", sigs)
+	result, _ := applyDefaultSignature("Hi", sigs)
 	if result != "Hi\n\n--\nFirst Sig" {
 		t.Errorf("got %q", result)
 	}
@@ -205,8 +217,35 @@ func TestEmailSignature_EmptyContentSkipped(t *testing.T) {
 		{ID: "1", Name: "Empty", Content: "", IsDefault: true},
 		{ID: "2", Name: "Real", Content: "Team", IsDefault: false},
 	}
-	result := applyDefaultSignature("Hi", sigs)
+	result, _ := applyDefaultSignature("Hi", sigs)
 	if result != "Hi" {
 		t.Errorf("expected unchanged body when default sig content is empty, got %q", result)
+	}
+}
+
+func TestEmailSignature_HTMLSignatureAppended(t *testing.T) {
+	sigs := []models.EmailSignature{
+		{ID: "1", Name: "HTML Sig", Content: "<p>Best regards,<br><b>Team</b></p>", IsDefault: true, IsHtml: true},
+	}
+	result, isHTML := applyDefaultSignature("Hello", sigs)
+	want := "Hello<br><br>--<br><p>Best regards,<br><b>Team</b></p>"
+	if result != want {
+		t.Errorf("got %q, want %q", result, want)
+	}
+	if !isHTML {
+		t.Error("expected isHTML=true for HTML signature")
+	}
+}
+
+func TestEmailSignature_HTMLFlagFalse_UsesPlainSeparator(t *testing.T) {
+	sigs := []models.EmailSignature{
+		{ID: "1", Name: "Plain Sig", Content: "Best regards", IsDefault: true, IsHtml: false},
+	}
+	result, isHTML := applyDefaultSignature("Hello", sigs)
+	if result != "Hello\n\n--\nBest regards" {
+		t.Errorf("got %q", result)
+	}
+	if isHTML {
+		t.Error("expected isHTML=false for plain signature")
 	}
 }
