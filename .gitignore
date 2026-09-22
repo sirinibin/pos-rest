@@ -7,6 +7,7 @@ images/
 models/images/
 zatca/*/sales/
 .DS_Store
+controller/var/
 *.pyc
 ZatcaPython/venv_aspose_fix/
 ZatcaPython/templates/

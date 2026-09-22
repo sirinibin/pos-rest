@@ -161,6 +161,7 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 // ─── Test S3 Connection ───────────────────────────────────────────────────────
 
 // TestS3ConnectionHandler tests S3 credentials by uploading and deleting a tiny probe file.
+// Accepts the settings in the request body (so you can test before saving).
 // POST /v1/admin-settings/test-s3
 func TestS3ConnectionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -178,10 +179,14 @@ func TestS3ConnectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s := loadAdminS3Settings()
-	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
+	// Use settings from request body if provided; fall back to saved settings.
+	var s models.AdminSettings
+	if err := json.NewDecoder(r.Body).Decode(&s); err != nil || s.S3BucketName == "" {
+		s = loadAdminS3Settings()
+	}
+	if s.S3BucketName == "" || s.S3AccessKeyID == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured — enter bucket name and access key"})
 		return
 	}
 
