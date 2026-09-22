@@ -703,6 +703,7 @@ func main() {
 	router.HandleFunc("/v1/admin-settings/test-s3", controller.TestS3ConnectionHandler).Methods("POST")
 	router.PathPrefix("/cdn/").HandlerFunc(controller.CdnFileHandler).Methods("GET")
 	router.HandleFunc("/v1/store/{id}/migrate-to-s3", controller.MigrateAttachmentsToS3Handler).Methods("POST")
+	router.HandleFunc("/v1/migrate-rfq-attachments-to-s3", controller.MigrateRFQAttachmentsToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/zatca/clear-reconnect", controller.ClearZatcaReconnect).Methods("PUT")
 	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
 	router.HandleFunc("/v1/sales-return/zatca/report/{id}", controller.ReportSalesReturnToZatca).Methods("POST")

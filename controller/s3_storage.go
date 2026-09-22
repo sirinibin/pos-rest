@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -18,6 +19,7 @@ import (
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // loadAdminS3Settings fetches global S3 settings from the admin_settings collection.
@@ -418,6 +420,184 @@ func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 	sendSSE(w, flusher, map[string]interface{}{
 		"type": "done", "uploaded": uploaded, "skipped": skipped, "updated_messages": updatedMessages,
 	})
+}
+
+// MigrateRFQAttachmentsToS3Handler migrates base64 attachment_data_uris stored inline in
+// rfq_received documents to S3/disk and replaces them with /cdn/ URLs.
+// POST /v1/migrate-rfq-attachments-to-s3
+func MigrateRFQAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, _ := models.FindUserByID(&userID, bson.M{})
+	if requestingUser == nil || (!requestingUser.Admin && requestingUser.Role != "Admin") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
+		return
+	}
+
+	s := loadAdminS3Settings()
+	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured or not enabled — save your settings first"})
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "streaming not supported"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+
+	// Count documents that still have old base64 fields
+	filter := bson.M{"$or": bson.A{
+		bson.M{"attachment_data_uris": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}},
+		bson.M{"additional_attachment_data_uris": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}},
+	}}
+	total64, _ := col.CountDocuments(ctx, filter)
+	total := int(total64)
+	sendSSE(w, flusher, map[string]interface{}{"type": "start", "total": total})
+
+	if total == 0 {
+		sendSSE(w, flusher, map[string]interface{}{"type": "done", "uploaded": 0, "skipped": 0, "updated_rfqs": 0})
+		return
+	}
+
+	proj := options.Find().SetProjection(bson.M{
+		"_id": 1, "store_id": 1,
+		"attachment_data_uris":            1,
+		"additional_attachment_data_uris": 1,
+		"additional_attachment_filenames": 1,
+	})
+	cursor, err := col.Find(ctx, filter, proj)
+	if err != nil {
+		sendSSE(w, flusher, map[string]interface{}{"type": "error", "error": "cursor failed: " + err.Error()})
+		return
+	}
+	defer cursor.Close(ctx)
+
+	uploaded, skipped, processed, updatedRFQs := 0, 0, 0, 0
+	for cursor.Next(ctx) {
+		var doc struct {
+			ID                            primitive.ObjectID `bson:"_id"`
+			StoreID                       primitive.ObjectID `bson:"store_id"`
+			AttachmentDataURIs            []string           `bson:"attachment_data_uris"`
+			AdditionalAttachmentDataURIs  []string           `bson:"additional_attachment_data_uris"`
+			AdditionalAttachmentFilenames []string           `bson:"additional_attachment_filenames"`
+		}
+		if err := cursor.Decode(&doc); err != nil {
+			skipped++
+			continue
+		}
+		processed++
+		pct := 0
+		if total > 0 {
+			pct = processed * 100 / total
+		}
+
+		storeIDStr := doc.StoreID.Hex()
+		rfqIDStr := doc.ID.Hex()
+		changed := false
+		update := bson.M{}
+		unset := bson.M{}
+
+		if len(doc.AttachmentDataURIs) > 0 {
+			urls := migrateDataURIsToStorage(s, storeIDStr, rfqIDStr, "att", doc.AttachmentDataURIs, nil)
+			if len(urls) > 0 {
+				update["attachment_urls"] = urls
+				unset["attachment_data_uris"] = ""
+				uploaded += len(urls)
+				changed = true
+			} else {
+				skipped++
+			}
+		}
+		if len(doc.AdditionalAttachmentDataURIs) > 0 {
+			urls := migrateDataURIsToStorage(s, storeIDStr, rfqIDStr, "add", doc.AdditionalAttachmentDataURIs, doc.AdditionalAttachmentFilenames)
+			if len(urls) > 0 {
+				update["additional_attachment_urls"] = urls
+				unset["additional_attachment_data_uris"] = ""
+				uploaded += len(urls)
+				changed = true
+			} else {
+				skipped++
+			}
+		}
+
+		if changed {
+			upd := bson.M{"$set": update}
+			if len(unset) > 0 {
+				upd["$unset"] = unset
+			}
+			if _, err := col.UpdateOne(ctx, bson.M{"_id": doc.ID}, upd); err == nil {
+				updatedRFQs++
+			}
+		}
+
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "progress", "processed": processed, "total": total, "percent": pct,
+			"current_file": rfqIDStr[:8] + "…", "uploaded": uploaded, "skipped": skipped,
+		})
+	}
+
+	sendSSE(w, flusher, map[string]interface{}{
+		"type": "done", "uploaded": uploaded, "skipped": skipped, "updated_rfqs": updatedRFQs,
+	})
+}
+
+// migrateDataURIsToStorage decodes base64 data URIs and uploads each to S3/disk.
+func migrateDataURIsToStorage(s models.AdminSettings, storeID, rfqID, prefix string, dataURIs, filenames []string) []string {
+	urls := make([]string, 0, len(dataURIs))
+	for i, uri := range dataURIs {
+		if strings.HasPrefix(uri, "/cdn/") {
+			urls = append(urls, uri) // already migrated
+			continue
+		}
+		// Parse data URI
+		if !strings.HasPrefix(uri, "data:") {
+			continue
+		}
+		semi := strings.Index(uri, ";")
+		comma := strings.Index(uri, ",")
+		if semi < 0 || comma < 0 {
+			continue
+		}
+		mime := uri[5:semi]
+		raw, err := base64.StdEncoding.DecodeString(uri[comma+1:])
+		if err != nil {
+			log.Printf("migrateDataURIsToStorage: decode error: %v", err)
+			continue
+		}
+		filename := fmt.Sprintf("%s-%d%s", prefix, i+1, extForMIME(mime))
+		if i < len(filenames) && filenames[i] != "" {
+			filename = filepath.Base(filenames[i])
+		}
+		relKey := "attachments/" + storeID + "/rfq/" + rfqID + "/" + filename
+		url := saveAttachment(s, relKey, raw, mime)
+		if url != "" {
+			urls = append(urls, url)
+		}
+	}
+	return urls
 }
 
 // updateAttachmentURLsInMongo iterates ProcurementMessage records for the store
