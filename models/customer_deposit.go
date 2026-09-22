@@ -1442,12 +1442,10 @@ func (customerdeposit *CustomerDeposit) SaveImages() error {
 		}
 
 		baseFilename := GenerateFileName("customerdeposit_", extension)
-		diskPath := "images/" + customerdeposit.StoreID.Hex() + "/customer_deposits/" + baseFilename
-		err = SaveBase64File(diskPath, content)
-		if err != nil {
-			return err
-		}
-		customerdeposit.Images = append(customerdeposit.Images, baseFilename)
+		relKey := "images/" + customerdeposit.StoreID.Hex() + "/customer_deposits/" + baseFilename
+		mimeType := "image/" + strings.TrimPrefix(extension, ".")
+		url := SaveFileToStorage(relKey, content, mimeType)
+		customerdeposit.Images = append(customerdeposit.Images, url)
 	}
 
 	customerdeposit.ImagesContent = []string{}

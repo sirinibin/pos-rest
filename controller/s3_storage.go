@@ -635,3 +635,482 @@ func updateAttachmentURLsInMongo(storeID primitive.ObjectID, urlMap map[string]s
 	}
 	return updated
 }
+
+// ─── Migrate entity images (product/customer/vendor/expense/capital/etc.) ────
+
+// MigrateEntityImagesToS3Handler migrates locally-stored image files for
+// product, customer, vendor, expense, capital, capital_withdrawal,
+// customer_deposit, customer_withdrawal, and store logo/background,
+// as well as ZATCA XML files for sales, sales_return, receivable, payable.
+// All stores are processed in one pass.
+// POST /v1/migrate-entity-images-to-s3
+func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, _ := models.FindUserByID(&userID, bson.M{})
+	if requestingUser == nil || (!requestingUser.Admin && requestingUser.Role != "Admin") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
+		return
+	}
+
+	s := loadAdminS3Settings()
+	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured or not enabled"})
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "streaming not supported"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	defer cancel()
+
+	// Collect all local image files under ./images/ and ./zatca/
+	type fileEntry struct{ relKey, root string }
+	var files []fileEntry
+	for _, root := range []string{"images", "zatca"} {
+		_ = filepath.WalkDir("./"+root, func(p string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil || d.IsDir() {
+				return nil
+			}
+			rel, _ := filepath.Rel(".", filepath.ToSlash(p))
+			files = append(files, fileEntry{relKey: rel, root: root})
+			return nil
+		})
+	}
+
+	total := len(files)
+	sendSSE(w, flusher, map[string]interface{}{"type": "start", "total": total})
+
+	uploaded, skipped := 0, 0
+	for i, f := range files {
+		data, readErr := os.ReadFile("./" + f.relKey)
+		if readErr != nil {
+			skipped++
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(f.relKey))
+		contentType := mimeForExt(ext)
+		_, uploadErr := uploadToS3(s, f.relKey, data, contentType)
+		if uploadErr != nil {
+			log.Printf("migrate-entity-images: upload failed %s: %v", f.relKey, uploadErr)
+			skipped++
+		} else {
+			uploaded++
+		}
+		pct := (i + 1) * 100 / total
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "progress", "processed": i + 1, "total": total, "percent": pct,
+			"current_file": filepath.Base(f.relKey), "uploaded": uploaded, "skipped": skipped,
+		})
+	}
+	sendSSE(w, flusher, map[string]interface{}{
+		"type": "done", "uploaded": uploaded, "skipped": skipped,
+	})
+
+	// After uploading, update MongoDB so stored basenames become /cdn/ URLs.
+	// Run in the background — the SSE stream already reported done.
+	go updateEntityImageURLsInMongo(ctx, s)
+}
+
+// mimeForExt returns a MIME type for a file extension.
+func mimeForExt(ext string) string {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".pdf":
+		return "application/pdf"
+	case ".xml":
+		return "application/xml"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// updateEntityImageURLsInMongo rewrites bare image filenames in MongoDB to /cdn/ URLs.
+// It processes: product, customer, vendor (images + logo), store (logo + invoice_background),
+// expense, capital, capital_withdrawal, customer_deposit, customer_withdrawal (images),
+// and ZATCA cleared_xml_url for order, sales_return, customer_deposit, customer_withdrawal.
+func updateEntityImageURLsInMongo(ctx context.Context, s models.AdminSettings) {
+	posDB := db.Client("").Database(db.GetPosDB())
+
+	// Helper: for a given per-store collection name, field holding an array of filenames,
+	// and a disk path builder func, rewrite each bare filename to a /cdn/ URL.
+	updateImagesArray := func(dbName, colName, field string, pathBuilder func(storeID, entityID, filename string) string) {
+		storeCol := db.Client("").Database(dbName).Collection(colName)
+		cursor, err := storeCol.Find(ctx, bson.M{field: bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}})
+		if err != nil {
+			return
+		}
+		defer cursor.Close(ctx)
+		for cursor.Next(ctx) {
+			var doc struct {
+				ID      primitive.ObjectID `bson:"_id"`
+				StoreID primitive.ObjectID `bson:"store_id"`
+				Images  []string           `bson:"images"`
+			}
+			if colName == "vendor" {
+				// vendor uses same struct
+			}
+			if err := cursor.Decode(&doc); err != nil {
+				continue
+			}
+			newImages := make([]string, 0, len(doc.Images))
+			changed := false
+			for _, img := range doc.Images {
+				if strings.HasPrefix(img, "/cdn/") || strings.HasPrefix(img, "/images/") {
+					newImages = append(newImages, img)
+					continue
+				}
+				// bare filename — build relKey and rewrite
+				relKey := pathBuilder(doc.StoreID.Hex(), doc.ID.Hex(), img)
+				newImages = append(newImages, "/cdn/"+relKey)
+				changed = true
+			}
+			if changed {
+				storeCol.UpdateOne(ctx, bson.M{"_id": doc.ID}, bson.M{"$set": bson.M{field: newImages}})
+			}
+		}
+	}
+
+	// Process all stores
+	storeCursor, err := posDB.Collection("store").Find(ctx, bson.M{})
+	if err != nil {
+		return
+	}
+	defer storeCursor.Close(ctx)
+
+	for storeCursor.Next(ctx) {
+		var store struct {
+			ID                primitive.ObjectID `bson:"_id"`
+			Logo              string             `bson:"logo"`
+			InvoiceBackground string             `bson:"invoice_background"`
+		}
+		if err := storeCursor.Decode(&store); err != nil {
+			continue
+		}
+		sid := store.ID.Hex()
+		storeDBName := "store_" + sid
+
+		// Store logo
+		if store.Logo != "" && !strings.HasPrefix(store.Logo, "/cdn/") && !strings.HasPrefix(store.Logo, "/") {
+			relKey := "images/" + sid + "/store/" + store.Logo
+			posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
+				bson.M{"$set": bson.M{"logo": "/cdn/" + relKey}})
+		}
+		// Store invoice background
+		if store.InvoiceBackground != "" && !strings.HasPrefix(store.InvoiceBackground, "/cdn/") && !strings.HasPrefix(store.InvoiceBackground, "/") {
+			relKey := "images/" + sid + "/store/" + store.InvoiceBackground
+			posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
+				bson.M{"$set": bson.M{"invoice_background": "/cdn/" + relKey}})
+		}
+
+		// Product images
+		updateImagesArray(storeDBName, "product", "images", func(_, entityID, filename string) string {
+			return "images/" + sid + "/products/" + entityID + "/" + filename
+		})
+		// Customer images
+		updateImagesArray(storeDBName, "customer", "images", func(_, entityID, filename string) string {
+			return "images/" + sid + "/customers/" + entityID + "/" + filename
+		})
+		// Vendor images + logo
+		updateImagesArray(storeDBName, "vendor", "images", func(_, entityID, filename string) string {
+			return "images/" + sid + "/vendors/" + entityID + "/" + filename
+		})
+		vendorCursor, _ := db.Client("").Database(storeDBName).Collection("vendor").Find(ctx, bson.M{"logo": bson.M{"$exists": true, "$ne": ""}})
+		if vendorCursor != nil {
+			for vendorCursor.Next(ctx) {
+				var v struct {
+					ID   primitive.ObjectID `bson:"_id"`
+					Logo string             `bson:"logo"`
+				}
+				if vendorCursor.Decode(&v) != nil || strings.HasPrefix(v.Logo, "/cdn/") || strings.HasPrefix(v.Logo, "/") {
+					continue
+				}
+				relKey := "images/" + sid + "/vendors/" + v.Logo
+				db.Client("").Database(storeDBName).Collection("vendor").UpdateOne(ctx, bson.M{"_id": v.ID},
+					bson.M{"$set": bson.M{"logo": "/cdn/" + relKey}})
+			}
+			vendorCursor.Close(ctx)
+		}
+
+		// Expense images (basenames stored flat in images/)
+		updateImagesArray(storeDBName, "expense", "images", func(storeID, _, filename string) string {
+			return "images/" + storeID + "/expenses/" + filename
+		})
+		// Capital images
+		updateImagesArray(storeDBName, "capital", "images", func(storeID, _, filename string) string {
+			return "images/" + storeID + "/capitals/" + filename
+		})
+		// Capital withdrawal images
+		updateImagesArray(storeDBName, "capitalwithdrawal", "images", func(storeID, _, filename string) string {
+			return "images/" + storeID + "/capital_withdrawals/" + filename
+		})
+		// Customer deposit images
+		updateImagesArray(storeDBName, "customerdeposit", "images", func(storeID, _, filename string) string {
+			return "images/" + storeID + "/customer_deposits/" + filename
+		})
+		// Customer withdrawal images + inline base64 → already handled by MigrateInlineBase64ToS3
+		updateImagesArray(storeDBName, "customerwithdrawal", "images", func(storeID, _, filename string) string {
+			return "images/" + storeID + "/customer_withdrawals/" + filename
+		})
+	}
+
+	// ZATCA XML files — update cleared_xml_url in orders, sales_returns, etc.
+	// These are per-store collections.
+	storeCursor2, _ := posDB.Collection("store").Find(ctx, bson.M{})
+	if storeCursor2 != nil {
+		defer storeCursor2.Close(ctx)
+		for storeCursor2.Next(ctx) {
+			var store struct {
+				ID primitive.ObjectID `bson:"_id"`
+			}
+			if storeCursor2.Decode(&store) != nil {
+				continue
+			}
+			sid := store.ID.Hex()
+			storeDB := db.Client("").Database("store_" + sid)
+			for _, spec := range []struct {
+				col    string
+				subdir string
+			}{
+				{"order", "sales"},
+				{"salesreturn", "sales-returns"},
+				{"customerdeposit", "receivables"},
+				{"customerwithdrawal", "payables"},
+			} {
+				zatcaCursor, _ := storeDB.Collection(spec.col).Find(ctx,
+					bson.M{"code": bson.M{"$exists": true}, "zatca.cleared_xml_url": bson.M{"$exists": false}})
+				if zatcaCursor == nil {
+					continue
+				}
+				for zatcaCursor.Next(ctx) {
+					var doc struct {
+						ID   primitive.ObjectID `bson:"_id"`
+						Code string             `bson:"code"`
+					}
+					if zatcaCursor.Decode(&doc) != nil || doc.Code == "" {
+						continue
+					}
+					relKey := "zatca/" + sid + "/" + spec.subdir + "/xml/" + doc.Code + ".xml"
+					if _, err := os.Stat("./" + relKey); err != nil {
+						continue // file doesn't exist
+					}
+					storeDB.Collection(spec.col).UpdateOne(ctx, bson.M{"_id": doc.ID},
+						bson.M{"$set": bson.M{"zatca.cleared_xml_url": "/cdn/" + relKey}})
+				}
+				zatcaCursor.Close(ctx)
+			}
+		}
+	}
+}
+
+// MigrateInlineBase64ToS3Handler migrates inline base64 image data (imagescontent field)
+// stored directly in MongoDB documents for expense, capital, capital_withdrawal,
+// customer_deposit, and customer_withdrawal across all stores.
+// POST /v1/migrate-inline-images-to-s3
+func MigrateInlineBase64ToS3Handler(w http.ResponseWriter, r *http.Request) {
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, _ := models.FindUserByID(&userID, bson.M{})
+	if requestingUser == nil || (!requestingUser.Admin && requestingUser.Role != "Admin") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
+		return
+	}
+
+	s := loadAdminS3Settings()
+	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured or not enabled"})
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "streaming not supported"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	defer cancel()
+
+	type entitySpec struct {
+		colName   string // mongo collection name
+		dirName   string // images sub-directory
+		prefix    string // filename prefix
+		storeDBFn func(storeID string) string
+	}
+	specs := []entitySpec{
+		{"expense", "expenses", "expense_", func(s string) string { return "store_" + s }},
+		{"capital", "capitals", "capital_", func(s string) string { return "store_" + s }},
+		{"capitalwithdrawal", "capital_withdrawals", "capitalwithdrawal_", func(s string) string { return "store_" + s }},
+		{"customerdeposit", "customer_deposits", "customerdeposit_", func(s string) string { return "store_" + s }},
+		{"customerwithdrawal", "customer_withdrawals", "customwithdrawal_", func(s string) string { return "store_" + s }},
+	}
+
+	// Count total docs across all stores and specs
+	posDB := db.Client("").Database(db.GetPosDB())
+	storeCursor, err := posDB.Collection("store").Find(ctx, bson.M{})
+	if err != nil {
+		sendSSE(w, flusher, map[string]interface{}{"type": "error", "error": "failed to list stores"})
+		return
+	}
+	var storeIDs []string
+	for storeCursor.Next(ctx) {
+		var s2 struct {
+			ID primitive.ObjectID `bson:"_id"`
+		}
+		if storeCursor.Decode(&s2) == nil {
+			storeIDs = append(storeIDs, s2.ID.Hex())
+		}
+	}
+	storeCursor.Close(ctx)
+
+	total := 0
+	for _, sid := range storeIDs {
+		for _, spec := range specs {
+			n, _ := db.Client("").Database(spec.storeDBFn(sid)).Collection(spec.colName).CountDocuments(ctx,
+				bson.M{"imagescontent": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}})
+			total += int(n)
+		}
+	}
+
+	sendSSE(w, flusher, map[string]interface{}{"type": "start", "total": total})
+
+	uploaded, skipped, processed, updatedDocs := 0, 0, 0, 0
+	for _, sid := range storeIDs {
+		for _, spec := range specs {
+			col := db.Client("").Database(spec.storeDBFn(sid)).Collection(spec.colName)
+			filter := bson.M{"imagescontent": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}}
+			cursor, err := col.Find(ctx, filter)
+			if err != nil {
+				continue
+			}
+			for cursor.Next(ctx) {
+				var doc struct {
+					ID            primitive.ObjectID `bson:"_id"`
+					ImagesContent []string           `bson:"imagescontent"`
+					Images        []string           `bson:"images"`
+				}
+				if err := cursor.Decode(&doc); err != nil {
+					skipped++
+					continue
+				}
+				processed++
+				pct := 0
+				if total > 0 {
+					pct = processed * 100 / total
+				}
+
+				urls := migrateInlineBase64Items(s, sid, doc.ID.Hex(), spec.dirName, spec.prefix, doc.ImagesContent)
+				if len(urls) > 0 {
+					uploaded += len(urls)
+					col.UpdateOne(ctx, bson.M{"_id": doc.ID}, bson.M{
+						"$push":  bson.M{"images": bson.M{"$each": urls}},
+						"$unset": bson.M{"imagescontent": ""},
+					})
+					updatedDocs++
+				} else {
+					skipped++
+				}
+
+				sendSSE(w, flusher, map[string]interface{}{
+					"type": "progress", "processed": processed, "total": total, "percent": pct,
+					"current_file": doc.ID.Hex()[:8] + "…", "uploaded": uploaded, "skipped": skipped,
+				})
+			}
+			cursor.Close(ctx)
+		}
+	}
+
+	sendSSE(w, flusher, map[string]interface{}{
+		"type": "done", "uploaded": uploaded, "skipped": skipped, "updated_docs": updatedDocs,
+	})
+}
+
+// migrateInlineBase64Items decodes each item (data URI or raw base64) and uploads to storage.
+// Returns the list of /cdn/ URLs for successfully uploaded items.
+func migrateInlineBase64Items(s models.AdminSettings, storeID, entityID, dirName, prefix string, items []string) []string {
+	urls := make([]string, 0, len(items))
+	for i, item := range items {
+		if strings.HasPrefix(item, "/cdn/") {
+			urls = append(urls, item)
+			continue
+		}
+		var mime, b64 string
+		if strings.HasPrefix(item, "data:") {
+			semi := strings.Index(item, ";")
+			comma := strings.Index(item, ",")
+			if semi < 0 || comma < 0 {
+				continue
+			}
+			mime = item[5:semi]
+			b64 = item[comma+1:]
+		} else {
+			b64 = item
+			mime = "image/jpeg"
+		}
+		raw, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			log.Printf("migrateInlineBase64Items: base64 decode: %v", err)
+			continue
+		}
+		ext := extForMIME(mime)
+		if ext == "" {
+			if eFromData, eErr := models.GetFileExtensionFromBase64(raw); eErr == nil {
+				ext = eFromData
+			} else {
+				ext = ".jpg"
+			}
+		}
+		filename := fmt.Sprintf("%s%d%s", prefix, i+1, ext)
+		relKey := "images/" + storeID + "/" + dirName + "/" + filename
+		url := saveAttachment(s, relKey, raw, mime)
+		if url != "" {
+			urls = append(urls, url)
+		}
+	}
+	return urls
+}

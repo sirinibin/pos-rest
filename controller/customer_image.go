@@ -14,8 +14,7 @@ import (
 )
 
 func UploadCustomerImage(w http.ResponseWriter, r *http.Request) {
-	// Parse the multipart form
-	err := r.ParseMultipartForm(10 << 20) // 10MB limit
+	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)
 		return
@@ -26,14 +25,12 @@ func UploadCustomerImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Customer ID required", http.StatusBadRequest)
 		return
 	}
-
 	storeID := r.FormValue("storeID")
 	if storeID == "" {
-		http.Error(w, "Product ID required", http.StatusBadRequest)
+		http.Error(w, "Store ID required", http.StatusBadRequest)
 		return
 	}
 
-	// Get the file
 	file, handler, err := r.FormFile("image")
 	if err != nil {
 		http.Error(w, "Image file is required:"+err.Error(), http.StatusBadRequest)
@@ -41,64 +38,48 @@ func UploadCustomerImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Ensure upload directory exists
-	uploadDir := fmt.Sprintf("./images/%s/customers/%s", storeID, customerID)
-	err = os.MkdirAll(uploadDir, os.ModePerm)
+	fileBytes, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "Unable to create upload directory:"+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Create a unique filename
-	ext := getFileExtension(handler)
-	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
-	savePath := filepath.Join(uploadDir, filename)
-	// Save the file
-	out, err := os.Create(savePath)
-	if err != nil {
-		http.Error(w, "Unable to save the file:"+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer out.Close()
-	_, err = io.Copy(out, file)
-	if err != nil {
-		http.Error(w, "Failed to write the file:"+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to read file:"+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
 	if err != nil {
-		http.Error(w, "invalid store id", http.StatusInternalServerError)
+		http.Error(w, "invalid store id", http.StatusBadRequest)
 		return
-
 	}
 	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
 	if err != nil {
-		http.Error(w, "invalid store ", http.StatusInternalServerError)
+		http.Error(w, "invalid store", http.StatusInternalServerError)
 		return
 	}
-
 	customerObjectID, err := primitive.ObjectIDFromHex(customerID)
 	if err != nil {
-		http.Error(w, "invalid store id", http.StatusInternalServerError)
+		http.Error(w, "invalid customer id", http.StatusBadRequest)
 		return
 	}
 
-	fullURL := fmt.Sprintf("/images/%s/customers/%s/%s", storeID, customerID, filename)
-	if fileExists(savePath) {
-		err = store.SaveCustomerImage(&customerObjectID, filename)
-		if err != nil {
-			http.Error(w, "error saving image to db", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"url":"%s"}`, fullURL)
-	} else {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, `{"url":"not saved"}`)
+	ext := getFileExtension(handler)
+	filename := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+	mimeType := handler.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "image/jpeg"
 	}
+	relKey := fmt.Sprintf("images/%s/customers/%s/%s", storeID, customerID, filename)
+	cdnURL := models.SaveFileToStorage(relKey, fileBytes, mimeType)
+	if cdnURL == "" {
+		http.Error(w, "Failed to save image", http.StatusInternalServerError)
+		return
+	}
+
+	err = store.SaveCustomerImage(&customerObjectID, cdnURL)
+	if err != nil {
+		http.Error(w, "error saving image to db", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"url":"%s"}`, cdnURL)
 }
 
 func DeleteCustomerImage(w http.ResponseWriter, r *http.Request) {
@@ -111,38 +92,30 @@ func DeleteCustomerImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete file from disk
-	filePath := "." + imageUrl
-	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-		http.Error(w, "Error deleting image", http.StatusInternalServerError)
-		return
-	}
+	_ = os.Remove("." + imageUrl)
 
 	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
 	if err != nil {
-		if err != nil {
-			http.Error(w, "invalid store id", http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "invalid store id", http.StatusBadRequest)
+		return
 	}
 	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
 	if err != nil {
-		if err != nil {
-			http.Error(w, "invalid store ", http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "invalid store", http.StatusInternalServerError)
+		return
 	}
-
 	customerObjectID, err := primitive.ObjectIDFromHex(customerID)
 	if err != nil {
-		if err != nil {
-			http.Error(w, "invalid store id", http.StatusInternalServerError)
-			return
-		}
+		http.Error(w, "invalid customer id", http.StatusBadRequest)
+		return
 	}
 
 	customer, _ := store.FindCustomerByID(&customerObjectID, bson.M{})
-	customer.Images = removeItem(customer.Images, filepath.Base(imageUrl))
+	before := len(customer.Images)
+	customer.Images = removeItem(customer.Images, imageUrl)
+	if len(customer.Images) == before {
+		customer.Images = removeItem(customer.Images, filepath.Base(imageUrl))
+	}
 	customer.Update()
 
 	w.WriteHeader(http.StatusOK)

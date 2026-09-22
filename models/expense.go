@@ -1010,12 +1010,10 @@ func (expense *Expense) SaveImages() error {
 		}
 
 		baseFilename := GenerateFileName("expense_", extension)
-		diskPath := "images/" + expense.StoreID.Hex() + "/expenses/" + baseFilename
-		err = SaveBase64File(diskPath, content)
-		if err != nil {
-			return err
-		}
-		expense.Images = append(expense.Images, baseFilename)
+		relKey := "images/" + expense.StoreID.Hex() + "/expenses/" + baseFilename
+		mimeType := "image/" + strings.TrimPrefix(extension, ".")
+		url := SaveFileToStorage(relKey, content, mimeType)
+		expense.Images = append(expense.Images, url)
 	}
 
 	expense.ImagesContent = []string{}

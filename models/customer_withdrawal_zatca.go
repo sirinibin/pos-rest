@@ -519,6 +519,8 @@ func (withdrawal *CustomerWithdrawal) SaveClearedInvoiceData(reportingResponse Z
 	}
 
 	xmlResponseFilePath := "zatca/" + withdrawal.StoreID.Hex() + "/payables/xml/" + withdrawal.Code + ".xml"
+	relKey := "zatca/" + withdrawal.StoreID.Hex() + "/payables/xml/" + withdrawal.Code + ".xml"
+	withdrawal.Zatca.ClearedXMLURL = SaveFileToStorage(relKey, xmlData, "application/xml")
 	if err = os.MkdirAll("zatca/"+withdrawal.StoreID.Hex()+"/payables/xml", 0755); err != nil {
 		return err
 	}

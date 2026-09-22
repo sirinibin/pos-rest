@@ -815,12 +815,10 @@ func (capital *Capital) SaveImages() error {
 		}
 
 		baseFilename := GenerateFileName("capital_", extension)
-		diskPath := "images/" + capital.StoreID.Hex() + "/capitals/" + baseFilename
-		err = SaveBase64File(diskPath, content)
-		if err != nil {
-			return err
-		}
-		capital.Images = append(capital.Images, baseFilename)
+		relKey := "images/" + capital.StoreID.Hex() + "/capitals/" + baseFilename
+		mimeType := "image/" + strings.TrimPrefix(extension, ".")
+		url := SaveFileToStorage(relKey, content, mimeType)
+		capital.Images = append(capital.Images, url)
 	}
 
 	capital.ImagesContent = []string{}

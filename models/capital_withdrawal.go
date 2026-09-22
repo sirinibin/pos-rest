@@ -715,12 +715,10 @@ func (capitalwithdrawal *CapitalWithdrawal) SaveImages() error {
 		}
 
 		baseFilename := GenerateFileName("capitalwithdrawal_", extension)
-		diskPath := "images/" + capitalwithdrawal.StoreID.Hex() + "/capital_withdrawals/" + baseFilename
-		err = SaveBase64File(diskPath, content)
-		if err != nil {
-			return err
-		}
-		capitalwithdrawal.Images = append(capitalwithdrawal.Images, baseFilename)
+		relKey := "images/" + capitalwithdrawal.StoreID.Hex() + "/capital_withdrawals/" + baseFilename
+		mimeType := "image/" + strings.TrimPrefix(extension, ".")
+		url := SaveFileToStorage(relKey, content, mimeType)
+		capitalwithdrawal.Images = append(capitalwithdrawal.Images, url)
 	}
 
 	capitalwithdrawal.ImagesContent = []string{}

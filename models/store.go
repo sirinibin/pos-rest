@@ -1390,12 +1390,9 @@ func (store *Store) SaveLogoFile() error {
 	}
 
 	baseFilename := "logo_" + store.ID.Hex() + extension
-	diskPath := "images/" + store.ID.Hex() + "/store/" + baseFilename
-	err = SaveBase64File(diskPath, content)
-	if err != nil {
-		return err
-	}
-	store.Logo = baseFilename
+	relKey := "images/" + store.ID.Hex() + "/store/" + baseFilename
+	mimeType := "image/" + strings.TrimPrefix(extension, ".")
+	store.Logo = SaveFileToStorage(relKey, content, mimeType)
 	store.LogoContent = ""
 	return nil
 }
@@ -1416,12 +1413,9 @@ func (store *Store) SaveInvoiceBackgroundFile() error {
 	}
 
 	baseFilename := "invoice_background_" + store.ID.Hex() + extension
-	diskPath := "images/" + store.ID.Hex() + "/store/" + baseFilename
-	err = SaveBase64File(diskPath, content)
-	if err != nil {
-		return err
-	}
-	store.InvoiceBackground = baseFilename
+	relKey := "images/" + store.ID.Hex() + "/store/" + baseFilename
+	mimeType := "image/" + strings.TrimPrefix(extension, ".")
+	store.InvoiceBackground = SaveFileToStorage(relKey, content, mimeType)
 	store.InvoiceBackgroundContent = ""
 	return nil
 }

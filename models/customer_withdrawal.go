@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -1380,9 +1381,38 @@ func (customerwithdrawal *CustomerWithdrawal) MakeCode() error {
 	return nil
 }*/
 
+func (customerwithdrawal *CustomerWithdrawal) SaveImages() error {
+	for _, imageContent := range customerwithdrawal.ImagesContent {
+		content, err := base64.StdEncoding.DecodeString(imageContent)
+		if err != nil {
+			return err
+		}
+
+		extension, err := GetFileExtensionFromBase64(content)
+		if err != nil {
+			return err
+		}
+
+		baseFilename := GenerateFileName("customwithdrawal_", extension)
+		relKey := "images/" + customerwithdrawal.StoreID.Hex() + "/customer_withdrawals/" + baseFilename
+		mimeType := "image/" + strings.TrimPrefix(extension, ".")
+		url := SaveFileToStorage(relKey, content, mimeType)
+		customerwithdrawal.Images = append(customerwithdrawal.Images, url)
+	}
+
+	customerwithdrawal.ImagesContent = []string{}
+	return nil
+}
+
 func (customerwithdrawal *CustomerWithdrawal) Insert() (err error) {
 	collection := db.GetDB("store_" + customerwithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
 	customerwithdrawal.ID = primitive.NewObjectID()
+
+	if len(customerwithdrawal.ImagesContent) > 0 {
+		if err = customerwithdrawal.SaveImages(); err != nil {
+			return err
+		}
+	}
 
 	err = customerwithdrawal.UpdateForeignLabelFields()
 	if err != nil {
@@ -1405,6 +1435,12 @@ func (customerwithdrawal *CustomerWithdrawal) Update() error {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
 	defer cancel()
+
+	if len(customerwithdrawal.ImagesContent) > 0 {
+		if err := customerwithdrawal.SaveImages(); err != nil {
+			return err
+		}
+	}
 
 	err := customerwithdrawal.UpdateForeignLabelFields()
 	if err != nil {

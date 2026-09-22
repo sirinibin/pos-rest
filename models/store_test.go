@@ -638,9 +638,9 @@ func TestInvoiceBg_SaveInvoiceBackgroundFile(t *testing.T) {
 		if err := store.SaveInvoiceBackgroundFile(); err != nil {
 			t.Fatalf("SaveInvoiceBackgroundFile: %v", err)
 		}
-		want := "invoice_background_" + id.Hex() + ".png"
-		if store.InvoiceBackground != want {
-			t.Errorf("InvoiceBackground = %q, want %q", store.InvoiceBackground, want)
+		wantSuffix := "invoice_background_" + id.Hex() + ".png"
+		if !strings.HasSuffix(store.InvoiceBackground, wantSuffix) {
+			t.Errorf("InvoiceBackground = %q, want suffix %q", store.InvoiceBackground, wantSuffix)
 		}
 	})
 

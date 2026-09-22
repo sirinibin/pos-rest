@@ -161,6 +161,7 @@ type ZatcaReporting struct {
 	ReportingFailedCount               int64      `bson:"reporting_failed_count,omitempty" json:"reporting_failed_count,omitempty"`
 	ReportingErrors                    []string   `bson:"reporting_errors,omitempty" json:"reporting_errors,omitempty"`
 	ReportingLastFailedAt              *time.Time `bson:"reporting_last_failed_at,omitempty" json:"reporting_last_failed_at,omitempty"`
+	ClearedXMLURL                      string     `bson:"cleared_xml_url,omitempty" json:"cleared_xml_url,omitempty"`
 }
 
 func (vendor *Vendor) GetPendingPurchases() (purchases []Purchase, err error) {
