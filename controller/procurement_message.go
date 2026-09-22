@@ -1026,34 +1026,29 @@ func UploadProcurementAttachmentHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	defer f.Close()
 
-	uploadDir := fmt.Sprintf("./attachments/%s/procurement/%s", msg.StoreID.Hex(), msgID.Hex())
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+	fileData, err := io.ReadAll(f)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to create upload directory"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to read file"})
 		return
 	}
 
 	ext := strings.ToLower(filepath.Ext(fh.Filename))
 	saveName := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
-	savePath := filepath.Join(uploadDir, saveName)
-	out, err := os.Create(savePath)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to save file"})
-		return
-	}
-	defer out.Close()
-	if _, err := io.Copy(out, f); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "failed to write file"})
-		return
-	}
-
-	fileURL := fmt.Sprintf("/attachments/%s/procurement/%s/%s", msg.StoreID.Hex(), msgID.Hex(), saveName)
+	relKey := fmt.Sprintf("attachments/%s/procurement/%s/%s", msg.StoreID.Hex(), msgID.Hex(), saveName)
 	contentType := fh.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
+
+	storeSettings := loadStoreS3Settings(msg.StoreID.Hex())
+	fileURL := saveAttachment(storeSettings, relKey, fileData, contentType)
+	if fileURL == "" {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "failed to save file"})
+		return
+	}
+
 	att := models.ProcurementAttachment{
 		Filename:    fh.Filename,
 		ContentType: contentType,
@@ -1754,23 +1749,21 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 
 	// Record the outbound message.
 
-	// Save attachment files to disk so they can be viewed/downloaded later.
+	// Save attachment files so they can be viewed/downloaded later (S3 or local disk).
 	var savedAtts []models.ProcurementAttachment
 	if len(attachments) > 0 {
-		uploadDir := fmt.Sprintf("./attachments/%s/procurement/%s", storeObjID.Hex(), outMsgID.Hex())
-		if err := os.MkdirAll(uploadDir, os.ModePerm); err == nil {
-			for _, att := range attachments {
-				ext := strings.ToLower(filepath.Ext(att.Filename))
-				saveName := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
-				savePath := filepath.Join(uploadDir, saveName)
-				if werr := os.WriteFile(savePath, att.Data, 0644); werr == nil {
-					savedAtts = append(savedAtts, models.ProcurementAttachment{
-						Filename:    att.Filename,
-						ContentType: att.ContentType,
-						Size:        int64(len(att.Data)),
-						URL:         fmt.Sprintf("/attachments/%s/procurement/%s/%s", storeObjID.Hex(), outMsgID.Hex(), saveName),
-					})
-				}
+		for _, att := range attachments {
+			ext := strings.ToLower(filepath.Ext(att.Filename))
+			saveName := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
+			relKey := fmt.Sprintf("attachments/%s/procurement/%s/%s", storeObjID.Hex(), outMsgID.Hex(), saveName)
+			url := saveAttachment(store.Settings, relKey, att.Data, att.ContentType)
+			if url != "" {
+				savedAtts = append(savedAtts, models.ProcurementAttachment{
+					Filename:    att.Filename,
+					ContentType: att.ContentType,
+					Size:        int64(len(att.Data)),
+					URL:         url,
+				})
 			}
 		}
 	}

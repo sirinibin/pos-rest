@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -315,22 +314,17 @@ func SendThreadMediaHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save the sent file to disk so the sender can play/download it in the chat.
+	// Save the sent file so the sender can play/download it in the chat (S3 or local disk).
 	var attachments []models.ProcurementAttachment
-	attDir := fmt.Sprintf("./attachments/%s/%d", storeIDStr, time.Now().UnixNano())
-	if err := os.MkdirAll(attDir, 0755); err == nil {
-		destPath := filepath.Join(attDir, handler.Filename)
-		if werr := os.WriteFile(destPath, fileBytes, 0644); werr == nil {
-			att := models.ProcurementAttachment{
-				Filename:    handler.Filename,
-				ContentType: mimeType,
-				Size:        int64(len(fileBytes)),
-				URL:         "/attachments/" + storeIDStr + "/" + fmt.Sprintf("%d", time.Now().UnixNano()) + "/" + handler.Filename,
-			}
-			// Use the actual path we wrote to.
-			att.URL = "/" + strings.TrimPrefix(filepath.ToSlash(destPath), "./")
-			attachments = []models.ProcurementAttachment{att}
-		}
+	relKey := fmt.Sprintf("attachments/%s/%d/%s", storeIDStr, time.Now().UnixNano(), handler.Filename)
+	s3Settings := loadStoreS3Settings(storeIDStr)
+	if attURL := saveAttachment(s3Settings, relKey, fileBytes, mimeType); attURL != "" {
+		attachments = []models.ProcurementAttachment{{
+			Filename:    handler.Filename,
+			ContentType: mimeType,
+			Size:        int64(len(fileBytes)),
+			URL:         attURL,
+		}}
 	}
 
 	now := time.Now()

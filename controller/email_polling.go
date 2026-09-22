@@ -737,22 +737,17 @@ func embedHTTPImagesAsDataURIs(html, authHeader string, maxImages, maxBytes int)
 	return html
 }
 
-// saveEmailAttachment writes bytes to ./attachments/{storeID}/{msgID}/{filename}
-// and returns the relative URL path (served by /attachments/ static route).
+// saveEmailAttachment saves bytes for an email or WhatsApp attachment.
+// Uses S3 when the store has S3 configured, otherwise writes to ./attachments/{storeID}/{msgID}/{filename}.
+// Returns the URL to access the file.
 func saveEmailAttachment(storeID, msgID, filename string, data []byte) string {
-	dir := fmt.Sprintf("./attachments/%s/%s", storeID, msgID)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return ""
-	}
 	safe := filepath.Base(filename)
 	if safe == "" || safe == "." {
 		safe = "attachment"
 	}
-	path := filepath.Join(dir, safe)
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return ""
-	}
-	return "/attachments/" + storeID + "/" + msgID + "/" + safe
+	settings := loadStoreS3Settings(storeID)
+	relKey := "attachments/" + storeID + "/" + msgID + "/" + safe
+	return saveAttachment(settings, relKey, data, mimeFromFilename(safe))
 }
 
 // fetchZohoAttachments returns ProcurementAttachment records for a Zoho message.

@@ -698,6 +698,8 @@ func main() {
 	router.HandleFunc("/v1/store/{id}/print-settings", controller.UpdateStorePrintSettings).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}/sidebar-config", controller.UpdateStoreSidebarConfig).Methods("PUT")
 	router.HandleFunc("/v1/store/{id}/email-signatures", controller.UpdateStoreEmailSignatures).Methods("PUT")
+	router.HandleFunc("/v1/store/{id}/test-s3", controller.TestS3ConnectionHandler).Methods("POST")
+	router.HandleFunc("/v1/store/{id}/migrate-to-s3", controller.MigrateAttachmentsToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/store/{id}/zatca/clear-reconnect", controller.ClearZatcaReconnect).Methods("PUT")
 	router.HandleFunc("/v1/order/zatca/report/{id}", controller.ReportOrderToZatca).Methods("POST")
 	router.HandleFunc("/v1/sales-return/zatca/report/{id}", controller.ReportSalesReturnToZatca).Methods("POST")
