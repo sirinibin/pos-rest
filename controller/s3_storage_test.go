@@ -78,8 +78,8 @@ func TestSaveAttachment_LocalFallback_WritesFile(t *testing.T) {
 	if url == "" {
 		t.Fatal("expected a URL, got empty string")
 	}
-	if !strings.HasPrefix(url, "/") {
-		t.Errorf("local URL should start with /, got %q", url)
+	if !strings.HasPrefix(url, "/cdn/") {
+		t.Errorf("local URL should start with /cdn/, got %q", url)
 	}
 	data, err := os.ReadFile("./" + relKey)
 	if err != nil {
@@ -95,8 +95,8 @@ func TestSaveAttachment_S3DisabledFallsToLocal(t *testing.T) {
 	relKey := filepath.ToSlash(strings.TrimPrefix(dir, "/")) + "/noS3/f.txt"
 	settings := models.AdminSettings{S3Enabled: false, S3BucketName: "b", S3AccessKeyID: "k"}
 	url := saveAttachment(settings, relKey, []byte("d"), "text/plain")
-	if !strings.HasPrefix(url, "/") {
-		t.Errorf("S3 disabled — should use local URL, got %q", url)
+	if !strings.HasPrefix(url, "/cdn/") {
+		t.Errorf("S3 disabled — should use /cdn/ URL, got %q", url)
 	}
 }
 
@@ -105,8 +105,8 @@ func TestSaveAttachment_S3EnabledButNoBucket_FallsToLocal(t *testing.T) {
 	relKey := filepath.ToSlash(strings.TrimPrefix(dir, "/")) + "/nobucket/f.txt"
 	settings := models.AdminSettings{S3Enabled: true, S3BucketName: "", S3AccessKeyID: "k"}
 	url := saveAttachment(settings, relKey, []byte("d"), "text/plain")
-	if !strings.HasPrefix(url, "/") {
-		t.Errorf("no bucket — should use local URL, got %q", url)
+	if !strings.HasPrefix(url, "/cdn/") {
+		t.Errorf("no bucket — should use /cdn/ URL, got %q", url)
 	}
 }
 

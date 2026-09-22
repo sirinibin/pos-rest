@@ -137,14 +137,15 @@ func uploadToS3(s models.AdminSettings, key string, data []byte, contentType str
 
 // saveAttachment saves data to S3 if configured, or to local disk otherwise.
 // relKey is the path without leading "./" or "/" e.g. "attachments/{storeID}/{msgID}/file.pdf".
-// Returns the URL to access the file (S3 URL or "/relKey").
+// Always returns "/cdn/relKey" — the CdnFileHandler route serves the file from S3 or local disk.
 func saveAttachment(settings models.AdminSettings, relKey string, data []byte, contentType string) string {
 	if settings.S3Enabled && settings.S3BucketName != "" && settings.S3AccessKeyID != "" {
-		url, err := uploadToS3(settings, relKey, data, contentType)
+		_, err := uploadToS3(settings, relKey, data, contentType)
 		if err != nil {
 			log.Printf("s3: upload failed for %s, falling back to local disk: %v", relKey, err)
+			// Fall through to local disk below
 		} else {
-			return url
+			return "/cdn/" + relKey
 		}
 	}
 	// Local disk fallback
@@ -155,7 +156,24 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 	if err := os.WriteFile(localPath, data, 0644); err != nil {
 		return ""
 	}
-	return "/" + relKey
+	return "/cdn/" + relKey
+}
+
+// CdnFileHandler serves attachment files via the /cdn/ path.
+// If S3 is configured, redirects to the S3/CDN URL. Otherwise serves the local file.
+// Registered with router.PathPrefix("/cdn/")
+func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/cdn/")
+	if path == "" || strings.Contains(path, "..") {
+		http.NotFound(w, r)
+		return
+	}
+	s := loadAdminS3Settings()
+	if s.S3Enabled && s.S3BucketName != "" {
+		http.Redirect(w, r, s3BaseURL(s)+"/"+path, http.StatusFound)
+		return
+	}
+	http.ServeFile(w, r, "./"+path)
 }
 
 // ─── Test S3 Connection ───────────────────────────────────────────────────────
@@ -179,14 +197,31 @@ func TestS3ConnectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use settings from request body if provided; fall back to saved settings.
+	// Decode settings from request body; fill missing fields from DB.
 	var s models.AdminSettings
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil || s.S3BucketName == "" {
-		s = loadAdminS3Settings()
+		if db := loadAdminS3Settings(); db.S3BucketName != "" {
+			s = db
+		}
+	} else if s.S3SecretKey == "" {
+		// Body has bucket/key but no secret (masked) — load secret from DB
+		if db := loadAdminS3Settings(); db.S3SecretKey != "" {
+			s.S3SecretKey = db.S3SecretKey
+		}
 	}
-	if s.S3BucketName == "" || s.S3AccessKeyID == "" {
+	if s.S3BucketName == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured — enter bucket name and access key"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "Bucket name is missing — fill in your S3 settings and try again"})
+		return
+	}
+	if s.S3AccessKeyID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Access Key ID is missing — fill in your S3 settings and try again"})
+		return
+	}
+	if s.S3SecretKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Secret Key is missing — fill in your S3 settings and try again"})
 		return
 	}
 
@@ -259,15 +294,22 @@ func deleteFromS3(s models.AdminSettings, key string) error {
 	return nil
 }
 
-// ─── Migrate existing files to S3 ────────────────────────────────────────────
+// ─── Migrate existing files to S3 (streaming SSE progress) ──────────────────
+
+// sendSSE writes one Server-Sent Events data line and flushes immediately.
+func sendSSE(w http.ResponseWriter, f http.Flusher, v interface{}) {
+	b, _ := json.Marshal(v)
+	fmt.Fprintf(w, "data: %s\n\n", b)
+	f.Flush()
+}
 
 // MigrateAttachmentsToS3Handler uploads all local ./attachments/{storeID}/ files to S3
-// and updates the MongoDB ProcurementMessage records with S3 URLs.
+// and streams real-time progress via Server-Sent Events.
 // POST /v1/store/{id}/migrate-to-s3
 func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 		return
@@ -275,12 +317,14 @@ func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	requestingUser, _ := models.FindUserByID(&userID, bson.M{})
 	if requestingUser == nil || (!requestingUser.Admin && requestingUser.Role != "Admin") {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
 		return
 	}
 	storeID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
 	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store id"})
 		return
@@ -288,61 +332,91 @@ func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 
 	s := loadAdminS3Settings()
 	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured or not enabled"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured or not enabled — save your settings first"})
 		return
 	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "streaming not supported"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // disable nginx buffering
 
 	storeIDStr := storeID.Hex()
 	localDir := "./attachments/" + storeIDStr
 
-	// Build a map: localURL → s3URL for all files we successfully upload
-	urlMap := map[string]string{}
-	uploaded, skipped := 0, 0
+	// First pass: count total files
+	total := 0
+	filepath.WalkDir(localDir, func(_ string, d fs.DirEntry, e error) error { //nolint:errcheck
+		if e == nil && !d.IsDir() {
+			total++
+		}
+		return nil
+	})
+	sendSSE(w, flusher, map[string]interface{}{"type": "start", "total": total})
 
-	err = filepath.WalkDir(localDir, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() {
+	urlMap := map[string]string{}
+	uploaded, skipped, processed := 0, 0, 0
+
+	walkErr := filepath.WalkDir(localDir, func(path string, d fs.DirEntry, we error) error {
+		if we != nil || d.IsDir() {
 			return nil
 		}
+		processed++
+		pct := 0
+		if total > 0 {
+			pct = processed * 100 / total
+		}
+
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			skipped++
+			sendSSE(w, flusher, map[string]interface{}{
+				"type": "progress", "processed": processed, "total": total, "percent": pct,
+				"current_file": d.Name(), "uploaded": uploaded, "skipped": skipped,
+			})
 			return nil
 		}
-		// relKey = "attachments/{storeID}/..." (no leading ./)
 		relKey := strings.TrimPrefix(filepath.ToSlash(path), "./")
 		contentType := mimeFromFilename(d.Name())
 		s3URL, uploadErr := uploadToS3(s, relKey, data, contentType)
 		if uploadErr != nil {
 			log.Printf("s3 migrate: failed to upload %s: %v", path, uploadErr)
 			skipped++
-			return nil
+		} else {
+			localURL := "/" + relKey
+			urlMap[localURL] = s3URL
+			uploaded++
 		}
-		localURL := "/" + relKey
-		urlMap[localURL] = s3URL
-		uploaded++
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "progress", "processed": processed, "total": total, "percent": pct,
+			"current_file": d.Name(), "uploaded": uploaded, "skipped": skipped,
+		})
 		return nil
 	})
-	if err != nil && !os.IsNotExist(err) {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "walk failed: " + err.Error()})
+
+	if walkErr != nil && !os.IsNotExist(walkErr) {
+		sendSSE(w, flusher, map[string]interface{}{"type": "error", "error": "walk failed: " + walkErr.Error()})
 		return
 	}
 
-	if len(urlMap) == 0 {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"uploaded": 0, "skipped": skipped, "updated_messages": 0,
-		})
-		return
+	updatedMessages := 0
+	if len(urlMap) > 0 {
+		sendSSE(w, flusher, map[string]interface{}{"type": "progress", "message": "Updating database links…"})
+		updatedMessages = updateAttachmentURLsInMongo(storeID, urlMap)
 	}
 
-	// Update MongoDB: load all messages for this store, rewrite attachment URLs.
-	updatedMessages := updateAttachmentURLsInMongo(storeID, urlMap)
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"uploaded":         uploaded,
-		"skipped":          skipped,
-		"updated_messages": updatedMessages,
+	sendSSE(w, flusher, map[string]interface{}{
+		"type": "done", "uploaded": uploaded, "skipped": skipped, "updated_messages": updatedMessages,
 	})
 }
 
