@@ -10,38 +10,86 @@ BINARY="pos-rest"
 
 cd "$(dirname "$0")"
 
+# ─── guard: uncommitted changes ───────────────────────────────────────────────
+
+echo ""
+echo "==> Checking for uncommitted changes..."
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    echo "==> ABORTED: uncommitted changes found. Commit or stash them before deploying."
+    echo ""
+    git status --short
+    exit 1
+fi
+echo "==> Working tree is clean."
+
 # ─── 1. Tests ─────────────────────────────────────────────────────────────────
+echo ""
 echo "==> Running tests..."
 # Skip TestResolveDateKeyword_TimezoneOffset_SA — flaky near midnight UTC (SA/UTC day-boundary edge case)
 go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
 echo "==> All tests passed."
 
 # ─── 2. Build (once, reused for both environments) ────────────────────────────
+echo ""
 echo "==> Building for linux/amd64..."
-GOOS=linux GOARCH=amd64 go build -o "$BINARY" .
+build_log=$(mktemp)
+trap 'rm -f "$build_log"' EXIT
+GOOS=linux GOARCH=amd64 go build -o "$BINARY" . 2>&1 | tee "$build_log"
+# A clean go build produces no output; any output means warnings or errors.
+if [ -s "$build_log" ]; then
+    echo "==> ABORTED: build produced warnings or errors. Fix them before deploying."
+    exit 1
+fi
 echo "    Checksum: $(sha256sum ./$BINARY)"
+
+# ─── SSH options shared by all remote calls ───────────────────────────────────
+SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
 
 # ─── helper ───────────────────────────────────────────────────────────────────
 deploy_to() {
     local service="$1"
     local remote_dest="$2"
     local label="$3"
+    local tmp="$remote_dest/${BINARY}.new"
+    local local_sum
+    local_sum=$(sha256sum "./$BINARY" | awk '{print $1}')
 
-    echo ""
-    echo "==> [$label] Stopping $service..."
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$AWS_USER@$AWS_HOST" \
-        "sudo systemctl stop $service; sleep 2"
+    # ── Upload with retry (service still live — no downtime during transfer) ──
+    local attempt=1 max=3 delay=15
+    while [ "$attempt" -le "$max" ]; do
+        echo ""
+        echo "==> [$label] Uploading binary (attempt $attempt/$max, service still live)..."
+        [ "$attempt" -gt 1 ] && { echo "==> [$label] Waiting ${delay}s before retry..."; sleep "$delay"; delay=$((delay * 2)); }
 
-    echo "==> [$label] Copying binary..."
-    # Remove old binary first so scp writes to a new inode (avoids "text file busy").
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$AWS_USER@$AWS_HOST" \
-        "rm -f $remote_dest/$BINARY"
-    scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
-        "./$BINARY" "$AWS_USER@$AWS_HOST:$remote_dest/$BINARY"
+        if scp $SSH_OPTS "./$BINARY" "$AWS_USER@$AWS_HOST:$tmp"; then
+            # ── Verify checksum before touching the running service ──────────
+            # A partial upload from a dropped connection produces a corrupt binary.
+            # Never swap it in — that crashes the service.
+            local remote_sum
+            remote_sum=$(ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" "sha256sum $tmp 2>/dev/null | awk '{print \$1}'")
+            if [ "$local_sum" = "$remote_sum" ]; then
+                echo "==> [$label] Checksum verified. Proceeding to swap."
+                break
+            fi
+            echo "==> [$label] Checksum MISMATCH (local=$local_sum remote=$remote_sum) — upload was corrupted, will retry."
+            ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" "rm -f $tmp" 2>/dev/null || true
+        fi
 
-    echo "==> [$label] Starting $service..."
-    ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$AWS_USER@$AWS_HOST" \
-        "sudo systemctl start $service && sha256sum $remote_dest/$BINARY && sudo systemctl status $service --no-pager"
+        attempt=$((attempt + 1))
+        if [ "$attempt" -gt "$max" ]; then
+            echo "==> [$label] Upload FAILED after $max attempts. Aborting — service untouched."
+            return 1
+        fi
+    done
+
+    # ── Kill any stale sftp-server holding the binary open (prevents ETXTBSY) ─
+    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
+        "sudo fuser -k $remote_dest/$BINARY 2>/dev/null || true; sudo fuser -k $tmp 2>/dev/null || true"
+
+    # ── Stop → swap → start (prevents ETXTBSY race on plain restart) ──────────
+    echo "==> [$label] Stopping $service, swapping binary, starting..."
+    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
+        "sudo systemctl stop $service && mv -f $tmp $remote_dest/$BINARY && sync && sudo systemctl start $service && sha256sum $remote_dest/$BINARY && sudo systemctl status $service --no-pager"
 
     echo "==> [$label] Done."
 }
