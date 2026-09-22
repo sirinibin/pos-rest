@@ -540,46 +540,45 @@ func MigrateAllStoresAttachmentsToS3Handler(w http.ResponseWriter, r *http.Reque
 
 	for i, store := range stores {
 		storeIDStr := store.ID.Hex()
-		localDir := "./attachments/" + storeIDStr
 		sendSSE(w, flusher, map[string]interface{}{
 			"type": "store_start", "store_id": storeIDStr, "store_name": store.Name,
 			"index": i + 1, "total_stores": len(stores),
 		})
 
-		// Count files for this store
-		fileCount := 0
-		filepath.WalkDir(localDir, func(_ string, d fs.DirEntry, e error) error { //nolint:errcheck
-			if e == nil && !d.IsDir() {
-				fileCount++
-			}
-			return nil
-		})
-
 		urlMap := map[string]string{}
 		uploaded, skipped := 0, 0
-		filepath.WalkDir(localDir, func(path string, d fs.DirEntry, we error) error { //nolint:errcheck
-			if we != nil || d.IsDir() {
+
+		// Walk both ./attachments/{storeID}/ and ./zatca/{storeID}/
+		for _, localDir := range []string{
+			"./attachments/" + storeIDStr,
+			"./zatca/" + storeIDStr,
+		} {
+			filepath.WalkDir(localDir, func(path string, d fs.DirEntry, we error) error { //nolint:errcheck
+				if we != nil || d.IsDir() {
+					return nil
+				}
+				data, readErr := os.ReadFile(path)
+				if readErr != nil {
+					skipped++
+					return nil
+				}
+				relKey := strings.TrimPrefix(filepath.ToSlash(path), "./")
+				s3URL, uploadErr := uploadToS3(s, relKey, data, mimeFromFilename(d.Name()))
+				if uploadErr != nil {
+					log.Printf("s3 migrate-all: failed to upload %s: %v", path, uploadErr)
+					skipped++
+				} else {
+					urlMap["/"+relKey] = s3URL
+					uploaded++
+				}
 				return nil
-			}
-			data, readErr := os.ReadFile(path)
-			if readErr != nil {
-				skipped++
-				return nil
-			}
-			relKey := strings.TrimPrefix(filepath.ToSlash(path), "./")
-			s3URL, uploadErr := uploadToS3(s, relKey, data, mimeFromFilename(d.Name()))
-			if uploadErr != nil {
-				log.Printf("s3 migrate-all: failed to upload %s: %v", path, uploadErr)
-				skipped++
-			} else {
-				urlMap["/"+relKey] = s3URL
-				uploaded++
-			}
-			return nil
-		})
+			})
+		}
 
 		updated := 0
 		if len(urlMap) > 0 {
+			// updateAttachmentURLsInMongo handles WhatsApp/email attachment URLs.
+			// ZATCA cleared_xml_url is already /cdn/... so no URL update needed there.
 			updated = updateAttachmentURLsInMongo(store.ID, urlMap)
 		}
 
