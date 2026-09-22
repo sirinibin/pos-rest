@@ -130,6 +130,17 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	user.CreatedAt = &now
 	user.UpdatedAt = &now
 
+	// Only Admins (role=Admin) can create users with role=Admin
+	if user.Role == "Admin" {
+		requestingUser, _ := models.FindUserByID(&userID, bson.M{})
+		if requestingUser.Role != "Admin" {
+			response.Status = false
+			response.Errors["role"] = "Only admins can assign the Admin role"
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	// Validate data
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
@@ -283,6 +294,17 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	user.UpdatedBy = &accessingUserID
 	now := time.Now()
 	user.UpdatedAt = &now
+
+	// Only Admins (role=Admin) can set role=Admin
+	if user.Role == "Admin" {
+		accessingUser, _ := models.FindUserByID(&accessingUserID, bson.M{})
+		if accessingUser.Role != "Admin" {
+			response.Status = false
+			response.Errors["role"] = "Only admins can assign the Admin role"
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
 
 	// Validate data
 	if errs := user.Validate(w, r, "update"); len(errs) > 0 {
@@ -462,6 +484,267 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(response)
 
+}
+
+// ChangePassword handles PATCH /v1/user/{id}/change-password
+func ChangePassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	targetUserID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	requestingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid requesting user ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	requestingUser, err := models.FindUserByID(&requestingUserID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Requesting user not found:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	targetUser, err := models.FindUserByID(&targetUserID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Target user not found:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if !utils.Decode(w, r, &body) {
+		return
+	}
+
+	isSelf := requestingUserID == targetUserID
+	isAdmin := requestingUser.Admin || requestingUser.Role == "Admin"
+
+	if !isSelf && !isAdmin {
+		if requestingUser.Role != "Manager" {
+			response.Status = false
+			response.Errors["authorization"] = "Only Admin or Manager can change other users' passwords"
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if targetUser.Role != "Manager" && targetUser.Role != "SalesMan" {
+			response.Status = false
+			response.Errors["authorization"] = "Manager can only change passwords for Manager or SalesMan users"
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		sharedStore := false
+		for _, mStoreID := range requestingUser.StoreIDs {
+			for _, tStoreID := range targetUser.StoreIDs {
+				if mStoreID != nil && tStoreID != nil && *mStoreID == *tStoreID {
+					sharedStore = true
+					break
+				}
+			}
+			if sharedStore {
+				break
+			}
+		}
+		if !sharedStore {
+			response.Status = false
+			response.Errors["authorization"] = "Target user is not in your store"
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	if isSelf {
+		if body.CurrentPassword == "" {
+			response.Status = false
+			response.Errors["current_password"] = "Current password is required"
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if !targetUser.VerifyPassword(body.CurrentPassword) {
+			response.Status = false
+			response.Errors["current_password"] = "Current password is incorrect"
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	if body.NewPassword == "" {
+		response.Status = false
+		response.Errors["new_password"] = "New password is required"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if len(body.NewPassword) < 6 {
+		response.Status = false
+		response.Errors["new_password"] = "New password must be at least 6 characters"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	targetUser.Password = models.HashPassword(body.NewPassword)
+	now := time.Now()
+	targetUser.UpdatedAt = &now
+	targetUser.UpdatedBy = &requestingUserID
+
+	if err = targetUser.Update(); err != nil {
+		response.Status = false
+		response.Errors["update"] = "Unable to update password:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = "Password changed successfully"
+	json.NewEncoder(w).Encode(response)
+}
+
+// ToggleUserStatus handles PATCH /v1/user/{id}/toggle-status
+func ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+	targetUserID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	requestingUserID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid requesting user ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	requestingUser, err := models.FindUserByID(&requestingUserID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Requesting user not found:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	targetUser, err := models.FindUserByID(&targetUserID, bson.M{"_id": 1, "role": 1, "store_ids": 1, "deleted": 1})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Target user not found:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	isAdmin := requestingUser.Admin || requestingUser.Role == "Admin"
+	isSelf := requestingUserID == targetUserID
+
+	if isSelf {
+		response.Status = false
+		response.Errors["authorization"] = "Cannot toggle your own status"
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if !isAdmin {
+		if requestingUser.Role != "Manager" {
+			response.Status = false
+			response.Errors["authorization"] = "Only Admin or Manager can toggle user status"
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		if targetUser.Role != "Manager" && targetUser.Role != "SalesMan" {
+			response.Status = false
+			response.Errors["authorization"] = "Manager can only manage Manager or SalesMan users"
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		sharedStore := false
+		for _, mStoreID := range requestingUser.StoreIDs {
+			for _, tStoreID := range targetUser.StoreIDs {
+				if mStoreID != nil && tStoreID != nil && *mStoreID == *tStoreID {
+					sharedStore = true
+					break
+				}
+			}
+			if sharedStore {
+				break
+			}
+		}
+		if !sharedStore {
+			response.Status = false
+			response.Errors["authorization"] = "Target user is not in your store"
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	if targetUser.Deleted {
+		err = targetUser.RestoreUser(&requestingUserID)
+		if err != nil {
+			response.Status = false
+			response.Errors["update"] = "Unable to restore user:" + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		response.Status = true
+		response.Result = "User activated successfully"
+	} else {
+		err = targetUser.DeleteUser(tokenClaims)
+		if err != nil {
+			response.Status = false
+			response.Errors["update"] = "Unable to deactivate user:" + err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		response.Status = true
+		response.Result = "User deactivated successfully"
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 // LogOut : handler for DELETE /logout

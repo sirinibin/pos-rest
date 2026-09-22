@@ -74,6 +74,13 @@ func TestHandlers_Unauthenticated(t *testing.T) {
 			path:    "/v1/quotation",
 			handler: ListQuotation,
 		},
+		{
+			name:    "GetStoreSerialLocks",
+			method:  http.MethodGet,
+			path:    "/v1/store/64abc123456789001234abcd/serial-locks",
+			handler: GetStoreSerialLocks,
+			muxVars: map[string]string{"id": "64abc123456789001234abcd"},
+		},
 	}
 
 	for _, tc := range tests {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -503,7 +504,7 @@ func BIStoreSettings(w http.ResponseWriter, r *http.Request) {
 		BranchName:         store.BranchName,
 		VATNo:              store.VATNo,
 		RegistrationNumber: store.RegistrationNumber,
-		Address:            store.Address,
+		Address: strings.Join([]string{store.NationalAddress.BuildingNo, store.NationalAddress.StreetName, store.NationalAddress.DistrictName, store.NationalAddress.CityName}, ", "),
 		QuotationInvoiceAccounting: store.Settings.QuotationInvoiceAccounting,
 		DisablePurchasesOnAccounts: store.Settings.DisablePurchasesOnAccounts,
 		VatPercent:                 store.VatPercent,

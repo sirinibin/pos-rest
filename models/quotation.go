@@ -126,8 +126,10 @@ type Quotation struct {
 	Phone                    string              `bson:"phone" json:"phone"`
 	VatNo                    string              `bson:"vat_no" json:"vat_no"`
 	Address                  string              `bson:"address" json:"address"`
-	OrderID                  *primitive.ObjectID `json:"order_id" bson:"order_id"`
-	OrderCode                *string             `json:"order_code" bson:"order_code"`
+	OrderID                  *primitive.ObjectID  `json:"order_id" bson:"order_id"`
+	OrderCode                *string              `json:"order_code" bson:"order_code"`
+	OrderIDs                 []primitive.ObjectID `json:"order_ids,omitempty" bson:"order_ids,omitempty"`
+	OrderCodes               []string             `json:"order_codes,omitempty" bson:"order_codes,omitempty"`
 	ReportedToZatca          bool                `bson:"reported_to_zatca" json:"reported_to_zatca"`
 	ReportedToZatcaAt        *time.Time          `bson:"reported_to_zatca_at" json:"reported_to_zatca_at"`
 	ReturnAmount             float64             `bson:"return_amount" json:"return_amount"`
@@ -1468,7 +1470,13 @@ func (store *Store) SearchQuotation(w http.ResponseWriter, r *http.Request) (quo
 
 	ParseTextSearch(r, &criterias, "search[code]", "code")
 
-	ParseTextSearch(r, &criterias, "search[order_code]", "order_code")
+	keys, ok = r.URL.Query()["search[order_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["$or"] = []bson.M{
+			{"order_code": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"order_codes": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+	}
 
 	keys, ok = r.URL.Query()["search[invoiced]"]
 	if ok && len(keys[0]) >= 1 {
@@ -4091,7 +4099,13 @@ func (store *Store) BuildQuotationCriterias(w http.ResponseWriter, r *http.Reque
 
 	ParseTextSearch(r, &criterias, "search[code]", "code")
 
-	ParseTextSearch(r, &criterias, "search[order_code]", "order_code")
+	keys, ok = r.URL.Query()["search[order_code]"]
+	if ok && len(keys[0]) >= 1 {
+		criterias.SearchBy["$or"] = []bson.M{
+			{"order_code": bson.M{"$regex": keys[0], "$options": "i"}},
+			{"order_codes": bson.M{"$regex": keys[0], "$options": "i"}},
+		}
+	}
 
 	keys, ok = r.URL.Query()["search[reported_to_zatca]"]
 	if ok && len(keys[0]) >= 1 {

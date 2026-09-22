@@ -698,8 +698,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		order.SetProductsSalesStats()
 		orderOld.SetProductsSalesStats()
 		order.SetCustomerSalesStats()
-		order.UndoAccounting()
-		order.DoAccounting()
+		if err := order.DoAccounting(); err != nil {
+			log.Printf("ERROR: DoAccounting failed for order %s: %v", order.Code, err)
+		}
 		order.ClearProductsHistory()
 		order.CreateProductsHistory(true, orderOld)
 
@@ -843,9 +844,13 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
-	customer.SetSearchLabel()
-	order.Customer = customer
+	if order.CustomerID != nil && !order.CustomerID.IsZero() {
+		customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
+		if customer != nil {
+			customer.SetSearchLabel()
+			order.Customer = customer
+		}
+	}
 
 	response.Status = true
 	response.Result = order

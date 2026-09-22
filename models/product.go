@@ -6548,3 +6548,60 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 	return criterias, nil
 
 }
+
+// UpdateStorePricesFromRFQ updates a product's store purchase and retail prices.
+// Pass retailPrice=0 to auto-compute retail from the product's stored retail_margin_percent.
+// If EnableAutoUpdatePricesFromLastPurchase is true it also recalculates margin fields.
+func UpdateStorePricesFromRFQ(
+	productID primitive.ObjectID,
+	store *Store,
+	purchasePrice, purchasePriceWithVAT, retailPrice, retailPriceWithVAT float64,
+) error {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	storeKey := "product_stores." + store.ID.Hex()
+
+	// If no retail price supplied, load existing margin to derive it
+	if retailPrice <= 0 && purchasePrice > 0 {
+		product, err := store.FindProductByID(&productID, bson.M{
+			storeKey + ".retail_margin_percent":   1,
+			storeKey + ".wholesale_unit_price":    1,
+		})
+		if err == nil && product != nil {
+			if ps, ok := product.ProductStores[store.ID.Hex()]; ok {
+				if ps.RetailMarginPercent > 0 {
+					retailPrice = purchasePrice * (1 + ps.RetailMarginPercent/100)
+					retailPriceWithVAT = retailPrice * (1 + store.VatPercent/100)
+				}
+			}
+		}
+	}
+
+	setFields := bson.M{
+		storeKey + ".purchase_unit_price":          purchasePrice,
+		storeKey + ".purchase_unit_price_with_vat": purchasePriceWithVAT,
+		"updated_at": time.Now(),
+	}
+	if retailPrice > 0 {
+		setFields[storeKey+".retail_unit_price"]          = retailPrice
+		setFields[storeKey+".retail_unit_price_with_vat"] = retailPriceWithVAT
+	}
+
+	if store.Settings.EnableAutoUpdatePricesFromLastPurchase && purchasePrice > 0 {
+		if retailPrice > 0 {
+			setFields[storeKey+".retail_margin_percent"] = (retailPrice/purchasePrice - 1) * 100
+		}
+		// Recalculate wholesale margin from existing wholesale price
+		product, err := store.FindProductByID(&productID, bson.M{storeKey + ".wholesale_unit_price": 1})
+		if err == nil && product != nil {
+			if ps, ok := product.ProductStores[store.ID.Hex()]; ok && ps.WholesaleUnitPrice > 0 {
+				setFields[storeKey+".wholesale_margin_percent"] = (ps.WholesaleUnitPrice/purchasePrice - 1) * 100
+			}
+		}
+	}
+
+	_, err := collection.UpdateOne(ctx, bson.M{"_id": productID}, bson.M{"$set": setFields})
+	return err
+}

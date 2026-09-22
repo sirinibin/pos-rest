@@ -22,6 +22,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/models"
@@ -552,7 +553,7 @@ func MCPBIStoreSettings(w http.ResponseWriter, r *http.Request) {
 		"branch_name":                     store.BranchName,
 		"vat_no":                          store.VATNo,
 		"registration_number":             store.RegistrationNumber,
-		"address":                         store.Address,
+		"address": strings.Join([]string{store.NationalAddress.BuildingNo, store.NationalAddress.StreetName, store.NationalAddress.DistrictName, store.NationalAddress.CityName}, ", "),
 		"vat_percent":                     store.VatPercent,
 		"quotation_invoice_accounting":    store.Settings.QuotationInvoiceAccounting,
 		"disable_purchases_on_accounts":   store.Settings.DisablePurchasesOnAccounts,

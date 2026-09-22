@@ -106,6 +106,8 @@ type Vendor struct {
 
 	CategoryID   []*primitive.ObjectID `bson:"category_id" json:"category_id"`
 	CategoryName []string              `bson:"category_name" json:"category_name"`
+	// ProductCategories: free-text product category tags (like RFQ Supplier categories).
+	ProductCategories []string `bson:"product_categories,omitempty" json:"product_categories,omitempty"`
 }
 
 type VendorStats struct {

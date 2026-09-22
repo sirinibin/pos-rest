@@ -391,6 +391,9 @@ func ParseQuotationFileHandler(w http.ResponseWriter, r *http.Request) {
 		"prices":         analysis.Prices,
 		"price_count":    len(analysis.Prices),
 		"is_quotation":   analysis.IsQuotation,
+		"general_notes":  analysis.GeneralNotes,
+		"supplier_name":  analysis.SupplierName,
+		"supplier_phone": analysis.SupplierPhone,
 	}
 	json.NewEncoder(w).Encode(resp)
 }
@@ -424,4 +427,91 @@ func extractTextFromContentLLM(store *models.Store, imageDataURIs []string, pdfB
 	default:
 		return callOpenAICompatExtractRFQ(apiKey, model, textExtractPrompt, imageDataURIs, 2000, openAICompatBaseURL(provider))
 	}
+}
+
+// UpdateProductPricesFromRFQHandler updates product store prices from selected supplier prices in an RFQ.
+// PATCH /v1/rfq-received/{id}/update-product-prices?store_id=...
+func UpdateProductPricesFromRFQHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := models.AuthenticateByAccessToken(r); err != nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(vars["id"])
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	rfq, err := models.FindRFQReceivedByID(id, storeObjID)
+	if err != nil {
+		http.Error(w, `{"error":"rfq not found"}`, http.StatusNotFound)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		http.Error(w, `{"error":"store not found"}`, http.StatusNotFound)
+		return
+	}
+
+	type PriceUpdateItem struct {
+		ProductIndex    int     `json:"product_index"`
+		PurchasePrice   float64 `json:"purchase_unit_price"`
+		RetailPrice     float64 `json:"retail_unit_price"`
+		VATIncluded     bool    `json:"vat_included"` // true if purchase_unit_price already includes VAT
+	}
+	var req struct {
+		Items []PriceUpdateItem `json:"items"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+		return
+	}
+
+	vatMult := 1 + store.VatPercent/100
+
+	updated, skipped := 0, 0
+	for _, item := range req.Items {
+		if item.ProductIndex < 0 || item.ProductIndex >= len(rfq.Products) {
+			skipped++
+			continue
+		}
+		prod := rfq.Products[item.ProductIndex]
+		if prod.ProductID == nil {
+			skipped++
+			continue
+		}
+		// Normalise: purchasePrice is always excl. VAT; if vat_included, divide out
+		purchaseExcl := item.PurchasePrice
+		if item.VATIncluded && vatMult > 1 {
+			purchaseExcl = item.PurchasePrice / vatMult
+		}
+		purchaseWithVAT := purchaseExcl * vatMult
+		retailExcl := item.RetailPrice
+		retailWithVAT := retailExcl * vatMult
+		if err := models.UpdateStorePricesFromRFQ(
+			*prod.ProductID, store,
+			purchaseExcl, purchaseWithVAT,
+			retailExcl, retailWithVAT,
+		); err != nil {
+			log.Printf("UpdateStorePricesFromRFQ product %s: %v", prod.ProductID.Hex(), err)
+			skipped++
+			continue
+		}
+		updated++
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  true,
+		"updated": updated,
+		"skipped": skipped,
+	})
 }

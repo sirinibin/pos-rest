@@ -73,10 +73,26 @@ func (productBrand *ProductBrand) AttributesValueChangeEvent(productBrandOld *Pr
 	}
 
 	if productBrand.Code != productBrandOld.Code {
-		err := store.UpdateManyByCollectionName(
-			"product",
+		// Update brand_code and recompute prefix_part_number = "{new_code}-{country_code}"
+		// per product using an aggregation pipeline update (country_code varies per product).
+		collection := db.GetDB("store_" + store.ID.Hex()).Collection("product")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, err := collection.UpdateMany(
+			ctx,
 			bson.M{"brand_id": productBrand.ID},
-			bson.M{"brand_code": productBrand.Code},
+			mongo.Pipeline{
+				bson.D{{"$set", bson.D{
+					{"brand_code", productBrand.Code},
+					{"prefix_part_number", bson.D{
+						{"$cond", bson.A{
+							bson.D{{"$gt", bson.A{"$country_code", ""}}},
+							bson.D{{"$concat", bson.A{productBrand.Code, "-", "$country_code"}}},
+							productBrand.Code,
+						}},
+					}},
+				}}},
+			},
 		)
 		if err != nil {
 			return err
@@ -84,6 +100,15 @@ func (productBrand *ProductBrand) AttributesValueChangeEvent(productBrandOld *Pr
 	}
 
 	return nil
+}
+
+// BuildPartNoPrefix returns the Part No. Prefix for a product:
+// "{brandCode}-{countryCode}" when countryCode is non-empty, else just brandCode.
+func BuildPartNoPrefix(brandCode, countryCode string) string {
+	if countryCode == "" {
+		return brandCode
+	}
+	return brandCode + "-" + countryCode
 }
 
 func (store *Store) SearchProductBrand(w http.ResponseWriter, r *http.Request) (productBrands []ProductBrand, criterias SearchCriterias, err error) {

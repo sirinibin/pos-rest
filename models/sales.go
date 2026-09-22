@@ -124,8 +124,10 @@ type Order struct {
 	Address                 string              `bson:"address" json:"address"`
 	CustomerPONo           string              `bson:"customer_po_no" json:"customer_po_no"`
 	EnableReportToZatca     bool                `json:"enable_report_to_zatca" bson:"-"`
-	QuotationID             *primitive.ObjectID `json:"quotation_id" bson:"quotation_id"`
-	QuotationCode           *string             `json:"quotation_code" bson:"quotation_code"`
+	QuotationID             *primitive.ObjectID  `json:"quotation_id" bson:"quotation_id"`
+	QuotationCode           *string              `json:"quotation_code" bson:"quotation_code"`
+	QuotationIDs            []primitive.ObjectID `json:"quotation_ids,omitempty" bson:"quotation_ids,omitempty"`
+	QuotationCodes          []string             `json:"quotation_codes,omitempty" bson:"quotation_codes,omitempty"`
 	DeliveryNoteID          *primitive.ObjectID `json:"delivery_note_id" bson:"delivery_note_id"`
 	Commission              float64             `bson:"commission" json:"commission"`
 	CommissionPaymentMethod string              `bson:"commission_payment_method" json:"commission_payment_method"`
@@ -358,25 +360,48 @@ func (order *Order) ClosePurchasePayment() error {
 func (order *Order) LinkQuotation() error {
 	store, _ := FindStoreByID(order.StoreID, bson.M{})
 
-	if order.QuotationID != nil && !order.QuotationID.IsZero() {
-		quotation, err := store.FindQuotationByID(order.QuotationID, bson.M{})
+	// linkOneQuotation writes order_id/order_code back to a quotation and appends to its order_ids/order_codes arrays.
+	linkOneQuotation := func(qID primitive.ObjectID) {
+		quotation, err := store.FindQuotationByID(&qID, bson.M{})
 		if err != nil {
-			return err
+			return
 		}
-
 		quotation.OrderID = &order.ID
 		quotation.OrderCode = &order.Code
-
 		if order.Zatca.ReportingPassed {
 			quotation.ReportedToZatca = true
 			quotation.ReportedToZatcaAt = order.Zatca.ReportedAt
-
 		} else {
 			quotation.ReportedToZatca = false
 		}
-		err = quotation.Update()
-		if err != nil {
-			return err
+		_ = quotation.Update()
+		// Append to multi-sales arrays using $addToSet so the same order is never duplicated.
+		col := db.GetDB("store_" + order.StoreID.Hex()).Collection("quotation")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = col.UpdateOne(ctx,
+			bson.M{"_id": qID, "store_id": order.StoreID},
+			bson.M{"$addToSet": bson.M{
+				"order_ids":   order.ID,
+				"order_codes": order.Code,
+			}},
+		)
+	}
+
+	// Handle single QuotationID (existing behaviour, backward compat).
+	if order.QuotationID != nil && !order.QuotationID.IsZero() {
+		linkOneQuotation(*order.QuotationID)
+	}
+
+	// Handle multiple QuotationIDs (new multi-quotation import).
+	seen := map[primitive.ObjectID]bool{}
+	if order.QuotationID != nil {
+		seen[*order.QuotationID] = true
+	}
+	for _, qID := range order.QuotationIDs {
+		if !qID.IsZero() && !seen[qID] {
+			seen[qID] = true
+			linkOneQuotation(qID)
 		}
 	}
 
@@ -5259,6 +5284,13 @@ func (order *Order) GetCashDiscounts() (models []SalesCashDiscount, err error) {
 }
 
 func (order *Order) DoAccounting() error {
+	// Always undo first so this function is idempotent: if a previous call left
+	// stale ledger/posting rows (e.g. UndoAccounting failed silently in the caller),
+	// we clean them up before inserting fresh ones rather than creating duplicates.
+	if err := order.UndoAccounting(); err != nil {
+		return errors.New("error undoing accounting before redo: " + err.Error())
+	}
+
 	err := order.AdjustPayments()
 	if err != nil {
 		return errors.New("error adjusting payments: " + err.Error())

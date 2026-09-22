@@ -603,3 +603,29 @@ func (productCategory *ProductCategory) RestoreProductCategory(tokenClaims Token
 
 	return nil
 }
+
+// GetAllProductCategoryNames returns the names of all non-deleted product categories for a store.
+// Used by FetchSuppliersFromMapsHandler to tag suppliers with the full category set.
+func GetAllProductCategoryNames(store *Store) ([]string, error) {
+	col := db.GetDB("store_" + store.ID.Hex()).Collection("product_category")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cur, err := col.Find(ctx, bson.M{"deleted": bson.M{"$ne": true}},
+		options.Find().SetProjection(bson.M{"name": 1}).SetLimit(200))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var names []string
+	for cur.Next(ctx) {
+		var row struct {
+			Name string `bson:"name"`
+		}
+		if cur.Decode(&row) == nil && row.Name != "" {
+			names = append(names, row.Name)
+		}
+	}
+	return names, nil
+}

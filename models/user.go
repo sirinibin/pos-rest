@@ -486,10 +486,11 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 	accessingUser, _ := FindUserByID(&accessingUserID, bson.M{})
 
 	if accessingUser.Role != "Admin" {
-		// Show users who share a store with the accessing user OR were created by them.
+		// Show users who share a store, were created by the accessing user, OR are the accessing user themselves.
 		criterias.SearchBy["$or"] = []bson.M{
 			{"store_ids": bson.M{"$in": accessingUser.StoreIDs}},
 			{"created_by": accessingUserID},
+			{"_id": accessingUserID},
 		}
 	}
 
@@ -519,7 +520,12 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 
 	keys, ok = r.URL.Query()["search[role]"]
 	if ok && len(keys[0]) >= 1 {
-		criterias.SearchBy["role"] = bson.M{"$eq": keys[0]}
+		if keys[0] == "Manager" {
+			// Include users with missing/null role — old records stored without role due to omitempty
+			criterias.SearchBy["role"] = bson.M{"$in": []interface{}{"Manager", nil}}
+		} else {
+			criterias.SearchBy["role"] = bson.M{"$eq": keys[0]}
+		}
 	}
 
 	if err = ParseObjectIDListFilter(r, &criterias, "search[created_by]", "created_by"); err != nil {

@@ -125,7 +125,7 @@ func metaWebhookReceive(w http.ResponseWriter, r *http.Request) {
 							text = "[Video] " + msg.Image.Caption
 						}
 					}
-					saveProcurementWhatsAppMessage(storeID, "in", msg.From, nil, strings.TrimSpace(text), waType, pnID, nil, false, nil) //nolint:errcheck
+					saveProcurementWhatsAppMessage(storeID, "in", msg.From, nil, strings.TrimSpace(text), waType, pnID, msg.ID, nil, false, nil, nil) //nolint:errcheck
 				}
 				runAutoDeleteProcurementMessages(storeID, autoDays)
 			}

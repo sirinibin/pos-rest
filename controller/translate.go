@@ -14,7 +14,8 @@ import (
 )
 
 type TranslationRequest struct {
-	Text string `json:"text"`
+	Text   string `json:"text"`
+	Target string `json:"target"` // optional BCP-47 language tag (e.g. "en", "ar"); defaults to "ar"
 }
 
 type TranslationResponse struct {
@@ -47,7 +48,11 @@ func TranslateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer client.Close()
 
-	targetLang := language.Make("ar")
+	targetTag := req.Target
+	if targetTag == "" {
+		targetTag = "ar"
+	}
+	targetLang := language.Make(targetTag)
 	resp, err := client.Translate(ctx, []string{req.Text}, targetLang, nil)
 	if err != nil {
 		http.Error(w, "Failed to translate text", http.StatusInternalServerError)

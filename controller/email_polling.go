@@ -10,6 +10,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"html"
 	"fmt"
 	"io"
 	"log"
@@ -21,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -214,6 +216,8 @@ func pollAllEmailAccounts() {
 // parsedEmail holds the fields extracted from a fetched email.
 type parsedEmail struct {
 	from, subject, bodyText, bodyHTML, externalID string
+	messageID                                     string // RFC 2822 Message-ID header, for reply threading
+	inReplyTo                                     string // RFC 2822 In-Reply-To header (set when this is a reply)
 	to                                            []string
 	date                                          *time.Time // original send/receive time from the mail provider
 	attachments                                   []models.ProcurementAttachment
@@ -447,6 +451,7 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase s
 		FolderID      string       `json:"folderId"`
 		Subject       string       `json:"subject"`
 		Sender        string       `json:"sender"`
+		FromAddress   string       `json:"fromAddress"` // bare email address of the sender
 		ToAddress     string       `json:"toAddress"`
 		ReceivedTime  json.Number  `json:"receivedTime"`  // unix ms — Zoho returns as string
 		HasAttachment zohoFlexBool `json:"hasAttachment"` // Zoho returns string "true"/"false" or bool
@@ -494,16 +499,38 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase s
 			}
 
 			htmlBody, textBody := fetchZohoMessageContent(accessToken, accountID, m.FolderID, m.MessageID, mailBase)
+			// Fetch actual sender email, In-Reply-To, and RFC 2822 Message-ID — the list endpoint only returns display name.
+			fromAddr, inReplyTo, rfcMsgID := fetchZohoMessageFrom(accessToken, accountID, m.FolderID, m.MessageID, mailBase)
+			// Fall back to FromAddress from the list endpoint if detail fetch returned empty.
+			if fromAddr == "" {
+				fromAddr = html.UnescapeString(strings.TrimSpace(m.FromAddress))
+			}
+			// Use the real RFC 2822 Message-ID when available; otherwise fall back to synthetic ID.
+			emailMsgID := rfcMsgID
+			if emailMsgID == "" {
+				emailMsgID = "<" + m.MessageID + "@zoho>"
+			}
 			to := []string{}
 			if m.ToAddress != "" {
-				to = []string{m.ToAddress}
+				// Zoho HTML-encodes special chars in address fields — decode before storing.
+				to = []string{html.UnescapeString(m.ToAddress)}
+			}
+			// Build from as "Name <email>" when both are available, else whichever exists.
+			senderName := html.UnescapeString(strings.TrimSpace(m.Sender))
+			from := senderName
+			if fromAddr != "" && senderName != "" && senderName != fromAddr {
+				from = senderName + " <" + fromAddr + ">"
+			} else if fromAddr != "" {
+				from = fromAddr
 			}
 			pe := parsedEmail{
-				from:              m.Sender,
+				from:              from,
 				subject:           m.Subject,
 				bodyText:          textBody,
 				bodyHTML:          htmlBody,
 				externalID:        m.MessageID,
+				messageID:         emailMsgID,
+				inReplyTo:         inReplyTo,
 				to:                to,
 				hasZohoAttachment: bool(m.HasAttachment),
 				zohoFolderID:      m.FolderID,
@@ -520,6 +547,82 @@ func listZohoMessages(accessToken, accountID string, since time.Time, mailBase s
 		}
 	}
 	return result, nil
+}
+
+// fetchZohoMessageHeaders calls the Zoho message header endpoint and returns the
+// bare sender email address (From header), the In-Reply-To header value, and
+// the RFC 2822 Message-ID of this message (for reply threading).
+// The /header endpoint returns the raw RFC 2822 headers, including Message-ID.
+func fetchZohoMessageFrom(accessToken, accountID, folderID, messageID, mailBase string) (fromAddr, inReplyTo, rfcMessageID string) {
+	if mailBase == "" {
+		mailBase = "https://mail.zoho.com"
+	}
+	endpoint := fmt.Sprintf(
+		"%s/api/accounts/%s/folders/%s/messages/%s/header",
+		mailBase, accountID, folderID, messageID,
+	)
+	req, _ := http.NewRequest("GET", endpoint, nil)
+	req.Header.Set("Authorization", "Zoho-oauthtoken "+accessToken)
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return "", "", ""
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var res struct {
+		Data struct {
+			HeaderContent string `json:"headerContent"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &res); err != nil {
+		log.Printf("email_polling: fetchZohoMessageFrom parse error for %s: %v (body: %.300s)", messageID, err, string(raw))
+		return "", "", ""
+	}
+	// Parse RFC 2822 headers from the raw header block.
+	// Headers can be multi-line (folded with \r\n + whitespace).
+	var currentKey, currentVal string
+	flush := func() {
+		v := strings.TrimSpace(currentVal)
+		switch strings.ToLower(currentKey) {
+		case "message-id":
+			rfcMessageID = v
+		case "in-reply-to":
+			inReplyTo = v
+		case "from":
+			// Extract bare email from "Name <email>" or "email"
+			if addr, err := mail.ParseAddress(v); err == nil {
+				fromAddr = addr.Address
+			} else if idx := strings.LastIndex(v, "<"); idx >= 0 {
+				fromAddr = strings.Trim(v[idx:], "<> ")
+			} else {
+				fromAddr = v
+			}
+		}
+	}
+	for _, line := range strings.Split(res.Data.HeaderContent, "\r\n") {
+		if line == "" {
+			continue
+		}
+		if line[0] == ' ' || line[0] == '\t' {
+			// Continuation of previous header value (folded).
+			currentVal += " " + strings.TrimSpace(line)
+			continue
+		}
+		if currentKey != "" {
+			flush()
+		}
+		if idx := strings.Index(line, ":"); idx > 0 {
+			currentKey = line[:idx]
+			currentVal = strings.TrimSpace(line[idx+1:])
+		} else {
+			currentKey = ""
+			currentVal = ""
+		}
+	}
+	if currentKey != "" {
+		flush()
+	}
+	return fromAddr, inReplyTo, rfcMessageID
 }
 
 // fetchZohoMessageContent returns the raw HTML body and a plain-text fallback.
@@ -544,10 +647,94 @@ func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBa
 	}
 	json.NewDecoder(resp.Body).Decode(&res) //nolint:errcheck
 	rawHTML := res.Data.Content
+	// Embed HTTP images (e.g. Zoho CDN) as base64 data URIs so they render in any browser context.
+	rawHTML = embedHTTPImagesAsDataURIs(rawHTML, "Zoho-oauthtoken "+accessToken, 10, 512*1024)
 	plain := strings.ReplaceAll(rawHTML, "<br>", "\n")
 	plain = strings.ReplaceAll(plain, "<br/>", "\n")
 	plain = strings.ReplaceAll(plain, "<br />", "\n")
 	return rawHTML, stripHTMLTags(plain)
+}
+
+// embedHTTPImagesAsDataURIs replaces src="https://..." (or src='...') in HTML with base64 data URIs.
+// Up to maxImages images are downloaded; images larger than maxBytes are skipped.
+// authHeader is sent on every request (e.g. "Zoho-oauthtoken TOKEN"); pass "" for unauthenticated.
+var imgSrcDoubleRe = regexp.MustCompile(`(?i)\bsrc="(https?://[^">\s]+)"`)
+var imgSrcSingleRe = regexp.MustCompile(`(?i)\bsrc='(https?://[^'>\s]+)'`)
+
+func embedHTTPImagesAsDataURIs(html, authHeader string, maxImages, maxBytes int) string {
+	if html == "" {
+		return html
+	}
+	embedded := 0
+	cache := make(map[string]string) // url → data URI (or "" if failed)
+
+	downloadAndCache := func(imgURL string) string {
+		if dataURI, ok := cache[imgURL]; ok {
+			return dataURI
+		}
+		if embedded >= maxImages {
+			cache[imgURL] = ""
+			return ""
+		}
+		req, err := http.NewRequest("GET", imgURL, nil)
+		if err != nil {
+			cache[imgURL] = ""
+			return ""
+		}
+		if authHeader != "" {
+			req.Header.Set("Authorization", authHeader)
+		}
+		resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+		if err != nil || resp.StatusCode >= 400 {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			cache[imgURL] = ""
+			return ""
+		}
+		defer resp.Body.Close()
+		data, err := io.ReadAll(io.LimitReader(resp.Body, int64(maxBytes)))
+		if err != nil || len(data) == 0 {
+			cache[imgURL] = ""
+			return ""
+		}
+		mimeType := resp.Header.Get("Content-Type")
+		if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
+			mimeType = strings.TrimSpace(mimeType[:idx])
+		}
+		if mimeType == "" || !strings.HasPrefix(mimeType, "image/") {
+			cache[imgURL] = ""
+			return ""
+		}
+		dataURI := "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
+		cache[imgURL] = dataURI
+		embedded++
+		return dataURI
+	}
+
+	html = imgSrcDoubleRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := imgSrcDoubleRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		dataURI := downloadAndCache(sub[1])
+		if dataURI == "" {
+			return match
+		}
+		return `src="` + dataURI + `"`
+	})
+	html = imgSrcSingleRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := imgSrcSingleRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		dataURI := downloadAndCache(sub[1])
+		if dataURI == "" {
+			return match
+		}
+		return `src='` + dataURI + `'`
+	})
+	return html
 }
 
 // saveEmailAttachment writes bytes to ./attachments/{storeID}/{msgID}/{filename}
@@ -1052,8 +1239,13 @@ func fetchGmailMessageContentWithStore(accessToken, msgID, storeID string) *pars
 			if t, err := parseRFC2822Date(h.Value); err == nil {
 				pe.date = &t
 			}
+		case "message-id":
+			pe.messageID = h.Value
 		}
 	}
+
+	// cidMap: Content-ID → data URI for inline images embedded via cid: references.
+	cidMap := make(map[string]string)
 
 	// Recursively walk parts to extract body text and attachments.
 	var walkParts func(parts []gmailPart)
@@ -1070,6 +1262,29 @@ func fetchGmailMessageContentWithStore(accessToken, msgID, storeID string) *pars
 			if strings.HasPrefix(part.MimeType, "text/plain") && part.Body.Data != "" && pe.bodyText == "" {
 				pe.bodyText = gmailBase64Decode(part.Body.Data)
 				continue
+			}
+			// Inline image: image/* with Content-ID header — these are cid: references in the HTML body.
+			if strings.HasPrefix(part.MimeType, "image/") && part.Body.AttachmentId != "" && part.Body.Size < 1024*1024 {
+				var contentID string
+				for _, h := range part.Headers {
+					if strings.EqualFold(h.Name, "Content-ID") {
+						contentID = strings.Trim(h.Value, "<> \t")
+						break
+					}
+				}
+				if contentID != "" {
+					dlURL := fmt.Sprintf("https://gmail.googleapis.com/gmail/v1/users/me/messages/%s/attachments/%s", msgID, part.Body.AttachmentId)
+					dlReq, _ := http.NewRequest("GET", dlURL, nil)
+					dlReq.Header.Set("Authorization", "Bearer "+accessToken)
+					if dlResp, dErr := (&http.Client{Timeout: 30 * time.Second}).Do(dlReq); dErr == nil {
+						var attBody struct{ Data string `json:"data"` }
+						if json.NewDecoder(dlResp.Body).Decode(&attBody) == nil && attBody.Data != "" {
+							imgBytes := []byte(gmailBase64Decode(attBody.Data))
+							cidMap[contentID] = "data:" + part.MimeType + ";base64," + base64.StdEncoding.EncodeToString(imgBytes)
+						}
+						dlResp.Body.Close()
+					}
+				}
 			}
 			if part.Filename != "" && part.Body.AttachmentId != "" {
 				// It's an attachment — download it.
@@ -1096,6 +1311,19 @@ func fetchGmailMessageContentWithStore(accessToken, msgID, storeID string) *pars
 		}
 	}
 	walkParts(gmsg.Payload.Parts)
+
+	// Replace cid: references in HTML body with embedded base64 data URIs.
+	if pe.bodyHTML != "" && len(cidMap) > 0 {
+		for cid, dataURI := range cidMap {
+			pe.bodyHTML = strings.ReplaceAll(pe.bodyHTML, "cid:"+cid, dataURI)
+		}
+	}
+
+	// Fix relative image URLs from known email providers (e.g. Zoho Mail uses /mail/ImageDisplay?... paths).
+	if pe.bodyHTML != "" {
+		pe.bodyHTML = strings.ReplaceAll(pe.bodyHTML, `src="/mail/`, `src="https://mail.zoho.com/mail/`)
+		pe.bodyHTML = strings.ReplaceAll(pe.bodyHTML, `src='/mail/`, `src='https://mail.zoho.com/mail/`)
+	}
 
 	if pe.bodyText == "" && gmsg.Payload.Body.Data != "" {
 		pe.bodyText = gmailBase64Decode(gmsg.Payload.Body.Data)
@@ -1421,7 +1649,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return nil
 	}
 
-	emailText := fmt.Sprintf("Subject: %s\n\n%s", msg.subject, msg.bodyText)
+	emailText := fmt.Sprintf("Subject: %s\nFrom: %s\n\n%s", msg.subject, msg.from, msg.bodyText)
 
 	store, storeObjID, err := rfqEmailGetStore(storeID.Hex())
 	if err != nil {
@@ -1429,9 +1657,26 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return nil
 	}
 
+	// Detect if this is a reply email so we can bypass keyword/LLM filters.
+	// A reply is identified by any of:
+	//   1. In-Reply-To header matches one of our outbound message IDs
+	//   2. The sender is already a known contact in our procurement threads
+	//   3. Subject starts with "Re:" (universal reply indicator)
+	senderEmail := msg.from
+	if addr, err := mail.ParseAddress(msg.from); err == nil {
+		senderEmail = addr.Address
+	}
+	subjectIsReply := strings.HasPrefix(strings.ToLower(strings.TrimSpace(msg.subject)), "re:")
+	isReplyToOurs := models.IsReplyToOurMessage(storeID, msg.inReplyTo) ||
+		subjectIsReply && models.IsKnownEmailContact(storeID, senderEmail) ||
+		(msg.inReplyTo != "" && models.IsKnownEmailContact(storeID, senderEmail))
+	if isReplyToOurs {
+		log.Printf("email_polling: email from %s detected as reply (inReplyTo=%q subjectRe=%v) — bypassing keyword/LLM filters", msg.from, msg.inReplyTo, subjectIsReply)
+	}
+
 	// Keyword pre-filter: reject emails that don't contain any configured keyword.
 	// This happens before DB insertion to reduce storage and LLM token usage.
-	if !emailMatchesKeywords(msg.subject, msg.bodyText, store.Settings.IncomingEmailKeywords) {
+	if !isReplyToOurs && !emailMatchesKeywords(msg.subject, msg.bodyText, store.Settings.IncomingEmailKeywords) {
 		log.Printf("email_polling: email from %s ignored — does not match incoming keyword filter", msg.from)
 		return nil
 	}
@@ -1453,8 +1698,22 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 			msg.from, msg.hasZohoAttachment, mentionsAttachment(msg.bodyText))
 	}
 
-	// Always record in procurement log first (synchronous so we can link RFQ ↔ message).
-	procMsg := saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, msg.bodyHTML, msg.externalID, msg.attachments, attachmentMissing, false, nil, msg.date)
+	// LLM classification runs BEFORE saving to DB so that marketing / cold-outreach
+	// emails are never persisted. Replies to our own outbound messages bypass this
+	// filter — they are always legitimate regardless of content.
+	var msgType, rfqCode string
+	if isReplyToOurs {
+		msgType = "rfq" // treat reply as conversation continuation
+	} else {
+		msgType, rfqCode = classifyIncomingMessage(store, emailText, nil)
+		if msgType == "other" {
+			log.Printf("email_polling: email from %s classified as marketing/other — discarding without saving", msg.from)
+			return nil
+		}
+	}
+
+	// Record in procurement log (only rfq/quotation emails reach this point).
+	procMsg := saveProcurementEmailMessage(storeObjID, "in", provider, msg.from, msg.to, msg.subject, msg.bodyText, msg.bodyHTML, msg.externalID, msg.messageID, msg.attachments, attachmentMissing, false, nil, msg.date)
 
 	// Block RFQ creation when attachments were expected but not received.
 	if attachmentMissing {
@@ -1475,17 +1734,13 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		return procMsg
 	}
 
-	// LLM classification — determine if this is a customer RFQ, supplier quotation, or neither.
-	msgType, _ := classifyIncomingMessage(store, emailText, nil)
+	// Use pre-computed classification (already ran before save above).
 	if msgType == "quotation" {
 		log.Printf("email_polling: email from %s classified as supplier quotation — marking", msg.from)
-		models.LinkMessageAsQuotation(procMsg.ID, nil, "") //nolint:errcheck
+		models.LinkMessageAsQuotation(procMsg.ID, nil, rfqCode) //nolint:errcheck
 		return procMsg
 	}
-	if msgType != "rfq" {
-		log.Printf("email_polling: email from %s is not an RFQ — skipping", msg.from)
-		return procMsg
-	}
+	// msgType == "" (LLM unavailable — pass through as rfq) or "rfq" — continue with RFQ creation.
 
 	// LLM duplicate check — is it a reminder for an existing RFQ?
 	if isReminderEmail(store, msg.from, msg.subject, msg.bodyText) {
@@ -1670,6 +1925,12 @@ func testIMAPConnection(accessToken, imapHost, imapUsername string) (bool, strin
 
 // stripHTMLTags removes HTML tags from content returned by Zoho.
 func stripHTMLTags(s string) string {
+	// Remove entire <style>…</style> and <script>…</script> blocks (case-insensitive).
+	styleRe := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	scriptRe := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	s = styleRe.ReplaceAllString(s, "")
+	s = scriptRe.ReplaceAllString(s, "")
+
 	var b strings.Builder
 	inTag := false
 	for _, r := range s {

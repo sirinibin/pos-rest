@@ -903,7 +903,7 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	// Always log every inbound email regardless of RFQ classification.
 	// Webhook path doesn't download attachments so attachmentMissing=false (body check not applicable here).
 	go func() {
-		saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, "", "", nil, false, false, nil, nil)
+		saveProcurementEmailMessage(storeObjID, "in", provider, sender, nil, subject, body, "", "", "", nil, false, false, nil, nil)
 	}()
 	go runAutoDeleteProcurementMessages(storeObjID, store.Settings.AutoDeleteProcurementMessagesDays)
 

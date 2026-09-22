@@ -649,8 +649,10 @@ func ViewPurchase(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(response)
 			return
 		}
-		vendor.SetSearchLabel()
-		purchase.Vendor = vendor
+		if vendor != nil {
+			vendor.SetSearchLabel()
+			purchase.Vendor = vendor
+		}
 	}
 
 	response.Status = true

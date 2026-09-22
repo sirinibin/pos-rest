@@ -140,7 +140,7 @@ func GetMongoClient(dbName string) (*mongo.Client, error) {
 	//log.Println("Trying to connect to mongo db with: " + mongoConnect)
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err == nil {
-		log.Printf("Connected to mongodb with " + mongoConnect)
+		log.Printf("Connected to mongodb with %s", mongoConnect)
 	}
 
 	return client, err

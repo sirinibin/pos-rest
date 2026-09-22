@@ -219,6 +219,46 @@ func ConnectWhatsApp(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"success":true,"instance_name":%q,"token":%q}`, instanceName, token)
 }
 
+// evoNormalizeQR normalises the Evolution API /instance/connect response so the
+// frontend always receives {"base64":"...","count":N,"code":"..."}.
+//
+// v2.2.x flat format: {"code":"...","count":1,"base64":"data:image/png;base64,..."}
+// v2.3.x nested format: {"instance":{"instanceName":"...","qrcode":{"code":"...","base64":"...","count":1}}}
+func evoNormalizeQR(raw []byte) []byte {
+	var m map[string]interface{}
+	if json.Unmarshal(raw, &m) != nil {
+		return raw
+	}
+	b64, code := "", ""
+	count := 0
+	// flat (2.2.x)
+	if v, ok := m["base64"].(string); ok {
+		b64 = v
+	}
+	if v, ok := m["code"].(string); ok {
+		code = v
+	}
+	if v, ok := m["count"].(float64); ok {
+		count = int(v)
+	}
+	// nested (2.3.x)
+	if inst, ok := m["instance"].(map[string]interface{}); ok {
+		if qr, ok := inst["qrcode"].(map[string]interface{}); ok {
+			if v, ok := qr["base64"].(string); ok {
+				b64 = v
+			}
+			if v, ok := qr["code"].(string); ok {
+				code = v
+			}
+			if v, ok := qr["count"].(float64); ok {
+				count = int(v)
+			}
+		}
+	}
+	out, _ := json.Marshal(map[string]interface{}{"base64": b64, "count": count, "code": code})
+	return out
+}
+
 // ── 2. GetWhatsAppQR ─────────────────────────────────────────────────────────
 // GET /v1/whatsapp/qr?store_id=...
 // Proxies the QR code base64 from Evolution API to the frontend.
@@ -234,7 +274,7 @@ func GetWhatsAppQR(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
 		return
 	}
-	w.Write(respBody)
+	w.Write(evoNormalizeQR(respBody))
 }
 
 // ── 3. GetWhatsAppStatus ─────────────────────────────────────────────────────
@@ -258,8 +298,10 @@ func GetWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Accept both v2.2.x ("name") and v2.3.x ("instanceName") field names.
 	var instances []struct {
 		Name             string `json:"name"`
+		InstanceName     string `json:"instanceName"`
 		ConnectionStatus string `json:"connectionStatus"`
 		OwnerJid         string `json:"ownerJid"`
 	}
@@ -269,7 +311,11 @@ func GetWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, inst := range instances {
-		if inst.Name == instanceName {
+		instName := inst.Name
+		if instName == "" {
+			instName = inst.InstanceName
+		}
+		if instName == instanceName {
 			connected := inst.ConnectionStatus == "open"
 			phone := strings.TrimSuffix(inst.OwnerJid, "@s.whatsapp.net")
 			fmt.Fprintf(w, `{"connected":%v,"phone":%q,"instance_name":%q,"status":%q}`,

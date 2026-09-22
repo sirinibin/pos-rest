@@ -491,7 +491,7 @@ func TestListZohoMessages_UsesMailBase(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	msgs, err := listZohoMessages("tok", "ACC123", time.Now().Add(-1*time.Hour), srv.URL, "", "", "", "")
+	msgs, err := listZohoMessages("tok", "ACC123", time.Now().Add(-1*time.Hour), srv.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -875,7 +875,7 @@ func TestListZohoMessages_HTTP401ReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := listZohoMessages("bad-token", "acct1", time.Now().Add(-1*time.Hour), srv.URL, "store1", "", "", "")
+	_, err := listZohoMessages("bad-token", "acct1", time.Now().Add(-1*time.Hour), srv.URL)
 	if err == nil {
 		t.Error("expected error on HTTP 401 from Zoho list endpoint")
 	}
@@ -897,7 +897,7 @@ func TestListZohoMessages_HTTP200EmptyData(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	msgs, err := listZohoMessages("tok", "acct1", time.Now().Add(-1*time.Hour), srv.URL, "store1", "", "", "")
+	msgs, err := listZohoMessages("tok", "acct1", time.Now().Add(-1*time.Hour), srv.URL)
 	if err != nil {
 		t.Errorf("HTTP 200 empty data should not error: %v", err)
 	}
@@ -918,7 +918,7 @@ func TestListZohoMessages_HTTP500ReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := listZohoMessages("tok", "acct1", time.Now().Add(-1*time.Hour), srv.URL, "store1", "", "", "")
+	_, err := listZohoMessages("tok", "acct1", time.Now().Add(-1*time.Hour), srv.URL)
 	if err == nil {
 		t.Error("expected error on HTTP 500")
 	}
