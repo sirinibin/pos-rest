@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/smtp"
 	"net/textproto"
+	"regexp"
 	"strings"
 	"time"
 
@@ -496,6 +497,41 @@ func buildMIMEReplyMessage(from, to, subject, body, inReplyTo, messageID string)
 	return sb.String()
 }
 
+// cidImage holds an inline image extracted from a data: URI for embedding as a CID part.
+type cidImage struct {
+	CID         string
+	ContentType string
+	Data        []byte
+}
+
+// dataURIImgRe matches src="data:image/TYPE;base64,DATA" inside HTML attributes.
+var dataURIImgRe = regexp.MustCompile(`src="data:(image/[^;]+);base64,([^"]+)"`)
+
+// rewriteDataURIsAsCIDs replaces data: URI image sources in html with cid: references
+// and returns the modified HTML together with the extracted image payloads.
+// Images that cannot be decoded are left unchanged.
+func rewriteDataURIsAsCIDs(html string) (string, []cidImage) {
+	var images []cidImage
+	counter := 0
+	result := dataURIImgRe.ReplaceAllStringFunc(html, func(match string) string {
+		sub := dataURIImgRe.FindStringSubmatch(match)
+		if len(sub) < 3 {
+			return match
+		}
+		mimeType := sub[1]
+		b64data := strings.ReplaceAll(sub[2], "\n", "")
+		data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64data))
+		if err != nil {
+			return match
+		}
+		counter++
+		cid := fmt.Sprintf("img%d@startpos.email", counter)
+		images = append(images, cidImage{CID: cid, ContentType: mimeType, Data: data})
+		return fmt.Sprintf(`src="cid:%s"`, cid)
+	})
+	return result, images
+}
+
 // emailAttachment holds a single file to attach to an outgoing email.
 type emailAttachment struct {
 	Filename    string
@@ -550,31 +586,67 @@ func buildHTMLEmailBody(plainText, htmlSig string) string {
 	return sb.String()
 }
 
-// buildMIMEReplyHTML builds an RFC 2822 email identical to buildMIMEReplyMessage but
-// with Content-Type: text/html so HTML signatures and markup render in email clients.
+// buildMIMEReplyHTML builds an RFC 2822 HTML email.
+// When the body contains data: URI images they are extracted as CID inline parts
+// and the message is sent as multipart/related so email clients display them.
 func buildMIMEReplyHTML(from, to, subject, body, inReplyTo, messageID string) string {
-	var sb strings.Builder
+	htmlBody, images := rewriteDataURIsAsCIDs(body)
+
+	var out bytes.Buffer
 	if messageID != "" {
-		sb.WriteString("Message-ID: " + messageID + "\r\n")
+		fmt.Fprintf(&out, "Message-ID: %s\r\n", messageID)
 	}
-	sb.WriteString("From: " + from + "\r\n")
-	sb.WriteString("To: " + to + "\r\n")
-	sb.WriteString("Subject: " + subject + "\r\n")
+	fmt.Fprintf(&out, "From: %s\r\n", from)
+	fmt.Fprintf(&out, "To: %s\r\n", to)
+	fmt.Fprintf(&out, "Subject: %s\r\n", subject)
 	if inReplyTo != "" {
-		sb.WriteString("In-Reply-To: " + inReplyTo + "\r\n")
-		sb.WriteString("References: " + inReplyTo + "\r\n")
+		fmt.Fprintf(&out, "In-Reply-To: %s\r\n", inReplyTo)
+		fmt.Fprintf(&out, "References: %s\r\n", inReplyTo)
 	}
-	sb.WriteString("MIME-Version: 1.0\r\n")
-	sb.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-	sb.WriteString("Content-Transfer-Encoding: base64\r\n")
-	sb.WriteString("\r\n")
-	sb.WriteString(base64.StdEncoding.EncodeToString([]byte(body)))
-	return sb.String()
+	fmt.Fprintf(&out, "MIME-Version: 1.0\r\n")
+
+	if len(images) == 0 {
+		// Simple HTML — no inline images
+		fmt.Fprintf(&out, "Content-Type: text/html; charset=UTF-8\r\n")
+		fmt.Fprintf(&out, "Content-Transfer-Encoding: base64\r\n")
+		fmt.Fprintf(&out, "\r\n")
+		fmt.Fprintf(&out, "%s", base64.StdEncoding.EncodeToString([]byte(body)))
+		return out.String()
+	}
+
+	// Build multipart/related: HTML part + CID image parts
+	var relBuf bytes.Buffer
+	mw := multipart.NewWriter(&relBuf)
+	boundary := mw.Boundary()
+
+	ph := make(textproto.MIMEHeader)
+	ph.Set("Content-Type", "text/html; charset=UTF-8")
+	ph.Set("Content-Transfer-Encoding", "base64")
+	pw, _ := mw.CreatePart(ph)
+	pw.Write([]byte(base64.StdEncoding.EncodeToString([]byte(htmlBody)))) //nolint:errcheck
+
+	for i, img := range images {
+		ih := make(textproto.MIMEHeader)
+		ih.Set("Content-Type", img.ContentType)
+		ih.Set("Content-Transfer-Encoding", "base64")
+		ih.Set("Content-ID", fmt.Sprintf("<%s>", img.CID))
+		ih.Set("Content-Disposition", fmt.Sprintf("inline; filename=\"img%d\"", i+1))
+		iw, _ := mw.CreatePart(ih)
+		iw.Write([]byte(base64.StdEncoding.EncodeToString(img.Data))) //nolint:errcheck
+	}
+	mw.Close() //nolint:errcheck
+
+	fmt.Fprintf(&out, "Content-Type: multipart/related; type=\"text/html\"; boundary=%q\r\n", boundary)
+	fmt.Fprintf(&out, "\r\n")
+	out.Write(relBuf.Bytes()) //nolint:errcheck
+	return out.String()
 }
 
 // buildMIMEReplyFull builds a complete RFC 2822 MIME message, with optional
 // In-Reply-To threading headers, a Message-ID, and file attachments.
 // isHTML selects text/html content type instead of text/plain.
+// When the HTML body contains data: URI images they are rewritten as CID parts
+// inside a nested multipart/related structure.
 func buildMIMEReplyFull(from, to, subject, body, inReplyTo, messageID string, attachments []emailAttachment, isHTML bool) []byte {
 	if len(attachments) == 0 {
 		if isHTML {
@@ -583,22 +655,58 @@ func buildMIMEReplyFull(from, to, subject, body, inReplyTo, messageID string, at
 		return []byte(buildMIMEReplyMessage(from, to, subject, body, inReplyTo, messageID))
 	}
 
+	// Extract CID inline images from HTML body (no-op for plain text).
+	sendBody := body
+	var cidImages []cidImage
+	if isHTML {
+		sendBody, cidImages = rewriteDataURIsAsCIDs(body)
+	}
+
 	bodyContentType := "text/plain; charset=UTF-8"
 	if isHTML {
 		bodyContentType = "text/html; charset=UTF-8"
 	}
 
-	// Build the multipart body first so we know the boundary
+	// Build the multipart/mixed body
 	var bodyBuf bytes.Buffer
 	mw := multipart.NewWriter(&bodyBuf)
 	boundary := mw.Boundary()
 
-	// Body part
-	ph := make(textproto.MIMEHeader)
-	ph.Set("Content-Type", bodyContentType)
-	ph.Set("Content-Transfer-Encoding", "base64")
-	pw, _ := mw.CreatePart(ph)
-	pw.Write([]byte(base64.StdEncoding.EncodeToString([]byte(body)))) //nolint:errcheck
+	if len(cidImages) > 0 {
+		// Nest HTML + inline images in a multipart/related part
+		var relBuf bytes.Buffer
+		relMW := multipart.NewWriter(&relBuf)
+		relBoundary := relMW.Boundary()
+
+		ph := make(textproto.MIMEHeader)
+		ph.Set("Content-Type", "text/html; charset=UTF-8")
+		ph.Set("Content-Transfer-Encoding", "base64")
+		pw, _ := relMW.CreatePart(ph)
+		pw.Write([]byte(base64.StdEncoding.EncodeToString([]byte(sendBody)))) //nolint:errcheck
+
+		for i, img := range cidImages {
+			ih := make(textproto.MIMEHeader)
+			ih.Set("Content-Type", img.ContentType)
+			ih.Set("Content-Transfer-Encoding", "base64")
+			ih.Set("Content-ID", fmt.Sprintf("<%s>", img.CID))
+			ih.Set("Content-Disposition", fmt.Sprintf("inline; filename=\"img%d\"", i+1))
+			iw, _ := relMW.CreatePart(ih)
+			iw.Write([]byte(base64.StdEncoding.EncodeToString(img.Data))) //nolint:errcheck
+		}
+		relMW.Close() //nolint:errcheck
+
+		rh := make(textproto.MIMEHeader)
+		rh.Set("Content-Type", fmt.Sprintf("multipart/related; type=\"text/html\"; boundary=%q", relBoundary))
+		rw, _ := mw.CreatePart(rh)
+		rw.Write(relBuf.Bytes()) //nolint:errcheck
+	} else {
+		// Plain body part (no inline images)
+		ph := make(textproto.MIMEHeader)
+		ph.Set("Content-Type", bodyContentType)
+		ph.Set("Content-Transfer-Encoding", "base64")
+		pw, _ := mw.CreatePart(ph)
+		pw.Write([]byte(base64.StdEncoding.EncodeToString([]byte(body)))) //nolint:errcheck
+	}
 
 	// Attachment parts
 	for _, att := range attachments {
@@ -615,7 +723,7 @@ func buildMIMEReplyFull(from, to, subject, body, inReplyTo, messageID string, at
 	}
 	mw.Close() //nolint:errcheck
 
-	// Now assemble headers + multipart body
+	// Assemble headers + multipart body
 	var out bytes.Buffer
 	if messageID != "" {
 		fmt.Fprintf(&out, "Message-ID: %s\r\n", messageID)

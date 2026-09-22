@@ -288,3 +288,137 @@ func TestStoreSettings_OutgoingEmailSMTPUseTLS_DefaultFalse(t *testing.T) {
 		t.Errorf("zero value should be false")
 	}
 }
+
+// ─── rewriteDataURIsAsCIDs tests ─────────────────────────────────────────────
+
+// tiny 1×1 red PNG as base64
+const tiny1x1PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg=="
+
+func TestRewriteDataURIs_SingleImage(t *testing.T) {
+	html := `<img src="data:image/png;base64,` + tiny1x1PNG + `" alt="logo">`
+	newHTML, images := rewriteDataURIsAsCIDs(html)
+	if len(images) != 1 {
+		t.Fatalf("want 1 image, got %d", len(images))
+	}
+	if !strings.Contains(newHTML, `src="cid:img1@startpos.email"`) {
+		t.Errorf("cid reference not inserted, got: %s", newHTML)
+	}
+	if strings.Contains(newHTML, "data:image") {
+		t.Errorf("data: URI should have been removed")
+	}
+	if images[0].ContentType != "image/png" {
+		t.Errorf("wrong content type: %s", images[0].ContentType)
+	}
+	if len(images[0].Data) == 0 {
+		t.Errorf("image data is empty")
+	}
+}
+
+func TestRewriteDataURIs_MultipleImages(t *testing.T) {
+	html := `<img src="data:image/png;base64,` + tiny1x1PNG + `"><img src="data:image/jpeg;base64,` + tiny1x1PNG + `">`
+	_, images := rewriteDataURIsAsCIDs(html)
+	if len(images) != 2 {
+		t.Fatalf("want 2 images, got %d", len(images))
+	}
+	if images[0].CID == images[1].CID {
+		t.Errorf("CIDs should be unique, both are %q", images[0].CID)
+	}
+	if images[1].ContentType != "image/jpeg" {
+		t.Errorf("second image content type wrong: %s", images[1].ContentType)
+	}
+}
+
+func TestRewriteDataURIs_NoImages(t *testing.T) {
+	html := `<p>Hello world</p><img src="https://example.com/logo.png">`
+	newHTML, images := rewriteDataURIsAsCIDs(html)
+	if len(images) != 0 {
+		t.Errorf("want 0 images, got %d", len(images))
+	}
+	if newHTML != html {
+		t.Errorf("HTML should be unchanged when no data: URIs present")
+	}
+}
+
+func TestRewriteDataURIs_InvalidBase64Left(t *testing.T) {
+	html := `<img src="data:image/png;base64,!!!not-valid-base64!!!">`
+	newHTML, images := rewriteDataURIsAsCIDs(html)
+	if len(images) != 0 {
+		t.Errorf("invalid base64 should produce 0 images, got %d", len(images))
+	}
+	if newHTML != html {
+		t.Errorf("HTML with invalid base64 should be unchanged")
+	}
+}
+
+// ─── buildMIMEReplyHTML CID tests ─────────────────────────────────────────────
+
+func TestBuildMIMEReplyHTML_NoImages_SimplHTML(t *testing.T) {
+	msg := buildMIMEReplyHTML("from@x.com", "to@x.com", "Subj", "<p>Hello</p>", "", "")
+	if !strings.Contains(msg, "Content-Type: text/html") {
+		t.Errorf("expected text/html content type")
+	}
+	if strings.Contains(msg, "multipart/related") {
+		t.Errorf("should NOT be multipart/related when no inline images")
+	}
+}
+
+func TestBuildMIMEReplyHTML_WithDataURI_BecomesMultipartRelated(t *testing.T) {
+	body := `<p>Hi</p><img src="data:image/png;base64,` + tiny1x1PNG + `">`
+	msg := buildMIMEReplyHTML("from@x.com", "to@x.com", "Subj", body, "", "")
+	if !strings.Contains(msg, "multipart/related") {
+		n := 200
+		if len(msg) < n {
+			n = len(msg)
+		}
+		t.Errorf("expected multipart/related when data: URI present, got: %s", msg[:n])
+	}
+	if strings.Contains(msg, "data:image") {
+		t.Errorf("data: URI must not appear in final message")
+	}
+	if !strings.Contains(msg, "Content-Id:") && !strings.Contains(msg, "Content-ID:") {
+		t.Errorf("expected Content-Id header for inline image")
+	}
+}
+
+func TestBuildMIMEReplyHTML_InReplyTo_Included(t *testing.T) {
+	msg := buildMIMEReplyHTML("f@x.com", "t@x.com", "Re: Hi", "<p>body</p>", "<msg1@x.com>", "")
+	if !strings.Contains(msg, "In-Reply-To: <msg1@x.com>") {
+		t.Errorf("In-Reply-To header missing")
+	}
+}
+
+// ─── buildMIMEReplyFull CID + attachment tests ────────────────────────────────
+
+func TestBuildMIMEReplyFull_HTMLWithImageAndAttachment(t *testing.T) {
+	body := `<p>See logo</p><img src="data:image/png;base64,` + tiny1x1PNG + `">`
+	atts := []emailAttachment{{Filename: "quote.pdf", ContentType: "application/pdf", Data: []byte("PDF")}}
+	raw := buildMIMEReplyFull("f@x.com", "t@x.com", "Quote", body, "", "", atts, true)
+	msg := string(raw)
+	if !strings.Contains(msg, "multipart/mixed") {
+		t.Errorf("expected multipart/mixed outer structure")
+	}
+	if !strings.Contains(msg, "multipart/related") {
+		t.Errorf("expected multipart/related for HTML+images")
+	}
+	if !strings.Contains(msg, "Content-Id:") && !strings.Contains(msg, "Content-ID:") {
+		t.Errorf("expected Content-Id header for inline image")
+	}
+	if !strings.Contains(msg, "quote.pdf") {
+		t.Errorf("expected attachment filename in message")
+	}
+	if strings.Contains(msg, "data:image") {
+		t.Errorf("data: URI must not appear in final message")
+	}
+}
+
+func TestBuildMIMEReplyFull_HTMLNoImagesNoAttachments_DelegatesToSimpleHTML(t *testing.T) {
+	raw := buildMIMEReplyFull("f@x.com", "t@x.com", "Hi", "<p>body</p>", "", "", nil, true)
+	msg := string(raw)
+	if strings.Contains(msg, "multipart/mixed") {
+		t.Errorf("should not be multipart/mixed with no attachments")
+	}
+	if !strings.Contains(msg, "text/html") {
+		t.Errorf("expected text/html content type")
+	}
+}
+
