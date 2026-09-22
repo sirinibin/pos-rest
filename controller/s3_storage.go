@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -162,7 +163,8 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 }
 
 // CdnFileHandler serves attachment files via the /cdn/ path.
-// If S3 is configured, redirects to the S3/CDN URL. Otherwise serves the local file.
+// If S3 is configured, proxies the file through a SigV4-signed GET (private bucket safe).
+// Otherwise serves the local file.
 // Registered with router.PathPrefix("/cdn/")
 func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/cdn/")
@@ -172,10 +174,75 @@ func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s := loadAdminS3Settings()
 	if s.S3Enabled && s.S3BucketName != "" {
-		http.Redirect(w, r, s3BaseURL(s)+"/"+path, http.StatusFound)
+		proxyS3Object(s, path, w)
 		return
 	}
 	http.ServeFile(w, r, "./"+path)
+}
+
+// proxyS3Object fetches key from S3 using a SigV4-signed GET and streams it to w.
+func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) {
+	now := time.Now().UTC()
+	dateStr := now.Format("20060102")
+	timeStr := now.Format("20060102T150405Z")
+	region := s.S3Region
+	if region == "" {
+		region = "us-east-1"
+	}
+	emptyHash := fmt.Sprintf("%x", sha256sum([]byte{}))
+	host := s3Host(s)
+	getURL := s3PutURL(s, key)
+
+	req, err := http.NewRequest("GET", getURL, nil)
+	if err != nil {
+		http.Error(w, "s3 request error", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Host", host)
+	req.Header.Set("X-Amz-Date", timeStr)
+	req.Header.Set("X-Amz-Content-Sha256", emptyHash)
+
+	urlPath := "/" + key
+	if s.S3Endpoint != "" {
+		urlPath = "/" + s.S3BucketName + "/" + key
+	}
+	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n", host, emptyHash, timeStr)
+	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
+	canonicalRequest := strings.Join([]string{"GET", urlPath, "", canonicalHeaders, signedHeaders, emptyHash}, "\n")
+
+	credentialScope := strings.Join([]string{dateStr, region, "s3", "aws4_request"}, "/")
+	stringToSign := strings.Join([]string{
+		"AWS4-HMAC-SHA256", timeStr, credentialScope,
+		fmt.Sprintf("%x", sha256sum([]byte(canonicalRequest))),
+	}, "\n")
+	signingKey := hmacSHA256(hmacSHA256(hmacSHA256(hmacSHA256(
+		[]byte("AWS4"+s.S3SecretKey), []byte(dateStr)),
+		[]byte(region)), []byte("s3")), []byte("aws4_request"))
+	signature := fmt.Sprintf("%x", hmacSHA256(signingKey, []byte(stringToSign)))
+	req.Header.Set("Authorization", fmt.Sprintf(
+		"AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		s.S3AccessKeyID, credentialScope, signedHeaders, signature))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "s3 fetch error", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "s3 error", resp.StatusCode)
+		return
+	}
+
+	// Forward relevant headers
+	for _, h := range []string{"Content-Type", "Content-Length", "Last-Modified", "ETag", "Cache-Control"} {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, resp.Body) //nolint:errcheck
 }
 
 // ─── Test S3 Connection ───────────────────────────────────────────────────────
@@ -419,6 +486,108 @@ func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 
 	sendSSE(w, flusher, map[string]interface{}{
 		"type": "done", "uploaded": uploaded, "skipped": skipped, "updated_messages": updatedMessages,
+	})
+}
+
+// MigrateAllStoresAttachmentsToS3Handler runs MigrateAttachmentsToS3 for every store.
+// POST /v1/migrate-all-stores-to-s3
+func MigrateAllStoresAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, _ := models.FindUserByID(&userID, bson.M{})
+	if requestingUser == nil || (!requestingUser.Admin && requestingUser.Role != "Admin") {
+		http.Error(w, "admin only", http.StatusForbidden)
+		return
+	}
+
+	s := loadAdminS3Settings()
+	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured"})
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	stores, err := models.GetAllStores()
+	if err != nil {
+		sendSSE(w, flusher, map[string]interface{}{"type": "error", "error": "failed to list stores: " + err.Error()})
+		return
+	}
+
+	totalUploaded, totalSkipped, totalUpdated := 0, 0, 0
+
+	for i, store := range stores {
+		storeIDStr := store.ID.Hex()
+		localDir := "./attachments/" + storeIDStr
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "store_start", "store_id": storeIDStr, "store_name": store.Name,
+			"index": i + 1, "total_stores": len(stores),
+		})
+
+		// Count files for this store
+		fileCount := 0
+		filepath.WalkDir(localDir, func(_ string, d fs.DirEntry, e error) error { //nolint:errcheck
+			if e == nil && !d.IsDir() {
+				fileCount++
+			}
+			return nil
+		})
+
+		urlMap := map[string]string{}
+		uploaded, skipped := 0, 0
+		filepath.WalkDir(localDir, func(path string, d fs.DirEntry, we error) error { //nolint:errcheck
+			if we != nil || d.IsDir() {
+				return nil
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				skipped++
+				return nil
+			}
+			relKey := strings.TrimPrefix(filepath.ToSlash(path), "./")
+			s3URL, uploadErr := uploadToS3(s, relKey, data, mimeFromFilename(d.Name()))
+			if uploadErr != nil {
+				log.Printf("s3 migrate-all: failed to upload %s: %v", path, uploadErr)
+				skipped++
+			} else {
+				urlMap["/"+relKey] = s3URL
+				uploaded++
+			}
+			return nil
+		})
+
+		updated := 0
+		if len(urlMap) > 0 {
+			updated = updateAttachmentURLsInMongo(store.ID, urlMap)
+		}
+
+		totalUploaded += uploaded
+		totalSkipped += skipped
+		totalUpdated += updated
+
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "store_done", "store_id": storeIDStr, "store_name": store.Name,
+			"uploaded": uploaded, "skipped": skipped, "updated_messages": updated,
+		})
+	}
+
+	sendSSE(w, flusher, map[string]interface{}{
+		"type": "done", "stores": len(stores),
+		"uploaded": totalUploaded, "skipped": totalSkipped, "updated_messages": totalUpdated,
 	})
 }
 

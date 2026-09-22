@@ -703,6 +703,7 @@ func main() {
 	router.HandleFunc("/v1/admin-settings/test-s3", controller.TestS3ConnectionHandler).Methods("POST")
 	router.PathPrefix("/cdn/").HandlerFunc(controller.CdnFileHandler).Methods("GET")
 	router.HandleFunc("/v1/store/{id}/migrate-to-s3", controller.MigrateAttachmentsToS3Handler).Methods("POST")
+	router.HandleFunc("/v1/migrate-all-stores-to-s3", controller.MigrateAllStoresAttachmentsToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/migrate-rfq-attachments-to-s3", controller.MigrateRFQAttachmentsToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/migrate-entity-images-to-s3", controller.MigrateEntityImagesToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/migrate-inline-images-to-s3", controller.MigrateInlineBase64ToS3Handler).Methods("POST")
