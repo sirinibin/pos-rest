@@ -152,12 +152,12 @@ type RFQReceived struct {
 	// Link to the originating procurement message (email or WhatsApp inbox record).
 	ProcurementMessageID   *primitive.ObjectID `bson:"procurement_message_id,omitempty"   json:"procurement_message_id,omitempty"`
 	ProcurementMessageCode string              `bson:"procurement_message_code,omitempty" json:"procurement_message_code,omitempty"`
-	// AttachmentDataURIs holds base64 data URIs of product files (PDF/image/CSV) attached
-	// during manual RFQ creation. Shown in place of the products table in the RFQ preview/PDF.
-	AttachmentDataURIs []string `bson:"attachment_data_uris,omitempty" json:"attachment_data_uris,omitempty"`
-	// AdditionalAttachmentDataURIs holds base64 data URIs of additional detail files.
+	// AttachmentURLs holds /cdn/ URLs of product files (PDF/image/CSV) attached during manual RFQ creation.
+	// Shown in place of the products table in the RFQ preview/PDF.
+	AttachmentURLs []string `bson:"attachment_urls,omitempty" json:"attachment_urls,omitempty"`
+	// AdditionalAttachmentURLs holds /cdn/ URLs of additional detail files.
 	// Shown below the products table in the RFQ preview/PDF.
-	AdditionalAttachmentDataURIs  []string `bson:"additional_attachment_data_uris,omitempty" json:"additional_attachment_data_uris,omitempty"`
+	AdditionalAttachmentURLs  []string `bson:"additional_attachment_urls,omitempty" json:"additional_attachment_urls,omitempty"`
 	AdditionalAttachmentFilenames []string `bson:"additional_attachment_filenames,omitempty" json:"additional_attachment_filenames,omitempty"`
 	// GeneralInstructions holds LLM-extracted instructions that apply to the whole RFQ
 	// (e.g. "provide datasheet, warranty, delivery terms") — not specific to any single product.
@@ -334,8 +334,6 @@ func ListRFQReceived(storeID primitive.ObjectID, page, limit int64, statusFilter
 	// Exclude heavy inline-blob fields (base64 attachments, raw log arrays) from list queries.
 	// These are only needed in the detail/preview views, not the index table.
 	projection := bson.M{
-		"attachment_data_uris":            0,
-		"additional_attachment_data_uris": 0,
 		"additional_attachment_filenames": 0,
 		"activity_logs":                   0,
 		"supplier_replies":                0,

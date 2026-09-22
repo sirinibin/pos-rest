@@ -3851,6 +3851,60 @@ func downloadImageAsBase64(imageURL string) (string, error) {
 
 // ── 8. RFQ Received CRUD Endpoints ───────────────────────────────────────────
 
+// saveRFQAttachments decodes base64 data URIs and saves them via saveAttachment.
+// Items that are already /cdn/ URLs are passed through unchanged.
+// Returns a slice of /cdn/... URLs in the same order as the input.
+func saveRFQAttachments(storeID, rfqID string, dataURIs, filenames []string) []string {
+	settings := loadAdminS3Settings()
+	urls := make([]string, 0, len(dataURIs))
+	for i, item := range dataURIs {
+		if strings.HasPrefix(item, "/cdn/") {
+			urls = append(urls, item) // already stored
+			continue
+		}
+		mime, b64 := splitDataURI(item)
+		raw, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			log.Printf("saveRFQAttachments: base64 decode error: %v", err)
+			continue
+		}
+		filename := fmt.Sprintf("attachment-%d%s", i+1, extForMIME(mime))
+		if i < len(filenames) && filenames[i] != "" {
+			filename = filepath.Base(filenames[i])
+		}
+		relKey := "attachments/" + storeID + "/rfq/" + rfqID + "/" + filename
+		url := saveAttachment(settings, relKey, raw, mime)
+		if url != "" {
+			urls = append(urls, url)
+		}
+	}
+	return urls
+}
+
+// extForMIME returns a file extension for common MIME types.
+func extForMIME(mime string) string {
+	switch mime {
+	case "application/pdf":
+		return ".pdf"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+		return ".xlsx"
+	case "application/vnd.ms-excel":
+		return ".xls"
+	case "text/csv":
+		return ".csv"
+	default:
+		return ".bin"
+	}
+}
+
 // GET /v1/rfq-received?store_id=...&page=...&limit=...&status=...
 func ListRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -4033,6 +4087,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rfq := &models.RFQReceived{
+		ID:                            primitive.NewObjectID(),
 		StoreID:                       storeObjID,
 		Source:                        "manual",
 		MessageType:                   "text",
@@ -4044,11 +4099,16 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		TextContent:                   body.TextContent,
 		Products:                      body.Products,
 		Categories:                    body.Categories,
-		AttachmentDataURIs:            body.AttachmentDataURIs,
-		AdditionalAttachmentDataURIs:  body.AdditionalAttachmentDataURIs,
 		AdditionalAttachmentFilenames: body.AdditionalAttachmentFilenames,
 		GeneralInstructions:           body.GeneralInstructions,
 		Status:                        "ready_to_send",
+	}
+	rfqID := rfq.ID.Hex()
+	if len(body.AttachmentDataURIs) > 0 {
+		rfq.AttachmentURLs = saveRFQAttachments(storeIDStr, rfqID, body.AttachmentDataURIs, nil)
+	}
+	if len(body.AdditionalAttachmentDataURIs) > 0 {
+		rfq.AdditionalAttachmentURLs = saveRFQAttachments(storeIDStr, rfqID, body.AdditionalAttachmentDataURIs, body.AdditionalAttachmentFilenames)
 	}
 	if body.ProcurementMessageID != "" {
 		if msgObjID, err := primitive.ObjectIDFromHex(body.ProcurementMessageID); err == nil {
@@ -4394,7 +4454,7 @@ func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		rfq.Products = body.Products
 	}
 	if body.AdditionalAttachmentDataURIs != nil {
-		rfq.AdditionalAttachmentDataURIs = body.AdditionalAttachmentDataURIs
+		rfq.AdditionalAttachmentURLs = saveRFQAttachments(storeObjID.Hex(), rfq.ID.Hex(), body.AdditionalAttachmentDataURIs, body.AdditionalAttachmentFilenames)
 	}
 	if body.AdditionalAttachmentFilenames != nil {
 		rfq.AdditionalAttachmentFilenames = body.AdditionalAttachmentFilenames

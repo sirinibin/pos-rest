@@ -6,7 +6,6 @@ package controller
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1171,22 +1170,36 @@ func GenerateRFQPreviewImageHandler(w http.ResponseWriter, r *http.Request) {
 // GenerateRFQPDFHandler generates a PDF of the RFQ print page via headless Chrome,
 // uploads it to Meta as a document, and returns the media_id.
 // POST /v1/rfq-received/{id}/generate-pdf?store_id=...
-// mergeAdditionalPDFs appends any PDF data-URIs from additionalDataURIs to mainPDF and
+// fetchCdnFileBytes reads the bytes for a /cdn/... URL from S3 or local disk.
+func fetchCdnFileBytes(cdnURL string) ([]byte, error) {
+	relKey := strings.TrimPrefix(cdnURL, "/cdn/")
+	s := loadAdminS3Settings()
+	if s.S3Enabled && s.S3BucketName != "" {
+		resp, err := (&http.Client{Timeout: 30 * time.Second}).Get(s3BaseURL(s) + "/" + relKey)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		return io.ReadAll(resp.Body)
+	}
+	return os.ReadFile("./" + relKey)
+}
+
+// mergeAdditionalPDFs appends any PDF /cdn/ URLs from additionalURLs to mainPDF and
 // returns the merged PDF bytes.  Non-PDF entries are silently skipped.
 // If no valid additional PDFs are found, mainPDF is returned unchanged.
-func mergeAdditionalPDFs(mainPDF []byte, additionalDataURIs []string) []byte {
-	if len(additionalDataURIs) == 0 {
+func mergeAdditionalPDFs(mainPDF []byte, additionalURLs []string) []byte {
+	if len(additionalURLs) == 0 {
 		return mainPDF
 	}
 	readers := []io.ReadSeeker{bytes.NewReader(mainPDF)}
-	for _, uri := range additionalDataURIs {
-		const prefix = "data:application/pdf;base64,"
-		if !strings.HasPrefix(uri, prefix) {
+	for _, url := range additionalURLs {
+		if !strings.HasSuffix(strings.ToLower(url), ".pdf") {
 			continue
 		}
-		raw, err := base64.StdEncoding.DecodeString(uri[len(prefix):])
+		raw, err := fetchCdnFileBytes(url)
 		if err != nil {
-			log.Printf("mergeAdditionalPDFs: base64 decode error: %v", err)
+			log.Printf("mergeAdditionalPDFs: fetch error for %s: %v", url, err)
 			continue
 		}
 		readers = append(readers, bytes.NewReader(raw))
@@ -1314,7 +1327,7 @@ func GenerateRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Append any additional detail PDFs as extra pages.
-	pdfBuf = mergeAdditionalPDFs(pdfBuf, rfq.AdditionalAttachmentDataURIs)
+	pdfBuf = mergeAdditionalPDFs(pdfBuf, rfq.AdditionalAttachmentURLs)
 
 	fileName := fmt.Sprintf("%s.pdf", rfq.Code)
 	mediaID, uploadErr := metaUploadMedia(phoneNumberID, accessToken, "application/pdf", fileName, pdfBuf)
@@ -1416,7 +1429,7 @@ func DownloadRFQPDFHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Append any additional detail PDFs as extra pages.
-	pdfBuf = mergeAdditionalPDFs(pdfBuf, rfq.AdditionalAttachmentDataURIs)
+	pdfBuf = mergeAdditionalPDFs(pdfBuf, rfq.AdditionalAttachmentURLs)
 
 	fileName := fmt.Sprintf("%s.pdf", rfq.Code)
 	w.Header().Set("Content-Type", "application/pdf")
