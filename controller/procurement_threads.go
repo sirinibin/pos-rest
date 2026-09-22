@@ -317,7 +317,7 @@ func SendThreadMediaHandler(w http.ResponseWriter, r *http.Request) {
 	// Save the sent file so the sender can play/download it in the chat (S3 or local disk).
 	var attachments []models.ProcurementAttachment
 	relKey := fmt.Sprintf("attachments/%s/%d/%s", storeIDStr, time.Now().UnixNano(), handler.Filename)
-	s3Settings := loadStoreS3Settings(storeIDStr)
+	s3Settings := loadAdminS3Settings()
 	if attURL := saveAttachment(s3Settings, relKey, fileBytes, mimeType); attURL != "" {
 		attachments = []models.ProcurementAttachment{{
 			Filename:    handler.Filename,

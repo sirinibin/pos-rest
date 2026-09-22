@@ -1041,7 +1041,7 @@ func UploadProcurementAttachmentHandler(w http.ResponseWriter, r *http.Request) 
 		contentType = "application/octet-stream"
 	}
 
-	storeSettings := loadStoreS3Settings(msg.StoreID.Hex())
+	storeSettings := loadAdminS3Settings()
 	fileURL := saveAttachment(storeSettings, relKey, fileData, contentType)
 	if fileURL == "" {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -1756,7 +1756,7 @@ func ReplyToEmailProcurementMessageHandler(w http.ResponseWriter, r *http.Reques
 			ext := strings.ToLower(filepath.Ext(att.Filename))
 			saveName := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
 			relKey := fmt.Sprintf("attachments/%s/procurement/%s/%s", storeObjID.Hex(), outMsgID.Hex(), saveName)
-			url := saveAttachment(store.Settings, relKey, att.Data, att.ContentType)
+			url := saveAttachment(loadAdminS3Settings(), relKey, att.Data, att.ContentType)
 			if url != "" {
 				savedAtts = append(savedAtts, models.ProcurementAttachment{
 					Filename:    att.Filename,

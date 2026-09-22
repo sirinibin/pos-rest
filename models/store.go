@@ -472,14 +472,6 @@ type StoreSettings struct {
 	// Email Signatures
 	EmailSignatures []EmailSignature `bson:"email_signatures,omitempty" json:"email_signatures,omitempty"`
 
-	// AWS S3 file storage
-	S3Enabled       bool   `bson:"s3_enabled" json:"s3_enabled"`
-	S3BucketName    string `bson:"s3_bucket_name,omitempty" json:"s3_bucket_name,omitempty"`
-	S3Region        string `bson:"s3_region,omitempty" json:"s3_region,omitempty"`
-	S3AccessKeyID   string `bson:"s3_access_key_id,omitempty" json:"s3_access_key_id,omitempty"`
-	S3SecretKey     string `bson:"s3_secret_key,omitempty" json:"s3_secret_key,omitempty"`
-	S3Endpoint      string `bson:"s3_endpoint,omitempty" json:"s3_endpoint,omitempty"`      // custom endpoint (MinIO, DigitalOcean Spaces, etc.)
-	S3PublicBaseURL string `bson:"s3_public_base_url,omitempty" json:"s3_public_base_url,omitempty"` // CDN / custom domain prefix
 }
 
 type EmailSignature struct {

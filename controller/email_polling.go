@@ -745,7 +745,7 @@ func saveEmailAttachment(storeID, msgID, filename string, data []byte) string {
 	if safe == "" || safe == "." {
 		safe = "attachment"
 	}
-	settings := loadStoreS3Settings(storeID)
+	settings := loadAdminS3Settings()
 	relKey := "attachments/" + storeID + "/" + msgID + "/" + safe
 	return saveAttachment(settings, relKey, data, mimeFromFilename(safe))
 }

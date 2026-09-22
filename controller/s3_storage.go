@@ -20,31 +20,18 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// loadStoreS3Settings fetches only the S3-related settings for a store by its hex ID.
-// Returns an empty StoreSettings on any error (safe to use — S3 will be disabled).
-func loadStoreS3Settings(storeIDStr string) models.StoreSettings {
-	id, err := primitive.ObjectIDFromHex(storeIDStr)
-	if err != nil {
-		return models.StoreSettings{}
+// loadAdminS3Settings fetches global S3 settings from the admin_settings collection.
+// Returns an empty AdminSettings on any error (safe to use — S3 will be disabled).
+func loadAdminS3Settings() models.AdminSettings {
+	s, err := models.GetAdminSettings()
+	if err != nil || s == nil {
+		return models.AdminSettings{}
 	}
-	proj := map[string]interface{}{
-		"settings.s3_enabled":        1,
-		"settings.s3_bucket_name":    1,
-		"settings.s3_region":         1,
-		"settings.s3_access_key_id":  1,
-		"settings.s3_secret_key":     1,
-		"settings.s3_endpoint":       1,
-		"settings.s3_public_base_url": 1,
-	}
-	store, err := models.FindStoreByID(&id, proj)
-	if err != nil || store == nil {
-		return models.StoreSettings{}
-	}
-	return store.Settings
+	return *s
 }
 
 // s3BaseURL returns the base URL for the bucket, honoring custom endpoint / public base URL.
-func s3BaseURL(s models.StoreSettings) string {
+func s3BaseURL(s models.AdminSettings) string {
 	if s.S3PublicBaseURL != "" {
 		return strings.TrimRight(s.S3PublicBaseURL, "/")
 	}
@@ -56,7 +43,7 @@ func s3BaseURL(s models.StoreSettings) string {
 }
 
 // s3Host returns the HTTPS host for signing requests.
-func s3Host(s models.StoreSettings) string {
+func s3Host(s models.AdminSettings) string {
 	if s.S3Endpoint != "" {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
 		ep = strings.TrimPrefix(ep, "https://")
@@ -67,7 +54,7 @@ func s3Host(s models.StoreSettings) string {
 }
 
 // s3PutURL returns the URL for a PutObject request.
-func s3PutURL(s models.StoreSettings, key string) string {
+func s3PutURL(s models.AdminSettings, key string) string {
 	if s.S3Endpoint != "" {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
 		return ep + "/" + s.S3BucketName + "/" + key
@@ -76,7 +63,7 @@ func s3PutURL(s models.StoreSettings, key string) string {
 }
 
 // uploadToS3 uploads data to S3 using SigV4-signed PUT, returns the public file URL.
-func uploadToS3(s models.StoreSettings, key string, data []byte, contentType string) (string, error) {
+func uploadToS3(s models.AdminSettings, key string, data []byte, contentType string) (string, error) {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -151,7 +138,7 @@ func uploadToS3(s models.StoreSettings, key string, data []byte, contentType str
 // saveAttachment saves data to S3 if configured, or to local disk otherwise.
 // relKey is the path without leading "./" or "/" e.g. "attachments/{storeID}/{msgID}/file.pdf".
 // Returns the URL to access the file (S3 URL or "/relKey").
-func saveAttachment(settings models.StoreSettings, relKey string, data []byte, contentType string) string {
+func saveAttachment(settings models.AdminSettings, relKey string, data []byte, contentType string) string {
 	if settings.S3Enabled && settings.S3BucketName != "" && settings.S3AccessKeyID != "" {
 		url, err := uploadToS3(settings, relKey, data, contentType)
 		if err != nil {
@@ -174,27 +161,24 @@ func saveAttachment(settings models.StoreSettings, relKey string, data []byte, c
 // ─── Test S3 Connection ───────────────────────────────────────────────────────
 
 // TestS3ConnectionHandler tests S3 credentials by uploading and deleting a tiny probe file.
-// POST /v1/store/{id}/test-s3
+// POST /v1/admin-settings/test-s3
 func TestS3ConnectionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if _, err := models.AuthenticateByAccessToken(r); err != nil {
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 		return
 	}
-	storeID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store id"})
+	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, _ := models.FindUserByID(&userID, bson.M{})
+	if requestingUser == nil || (!requestingUser.Admin && requestingUser.Role != "Admin") {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
 		return
 	}
-	store, err := models.FindStoreByID(&storeID, bson.M{})
-	if err != nil || store == nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "store not found"})
-		return
-	}
-	s := store.Settings
+
+	s := loadAdminS3Settings()
 	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured"})
@@ -214,7 +198,7 @@ func TestS3ConnectionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteFromS3 sends a DELETE request for the given key.
-func deleteFromS3(s models.StoreSettings, key string) error {
+func deleteFromS3(s models.AdminSettings, key string) error {
 	now := time.Now().UTC()
 	dateStr := now.Format("20060102")
 	timeStr := now.Format("20060102T150405Z")
@@ -277,9 +261,17 @@ func deleteFromS3(s models.StoreSettings, key string) error {
 // POST /v1/store/{id}/migrate-to-s3
 func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if _, err := models.AuthenticateByAccessToken(r); err != nil {
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, _ := models.FindUserByID(&userID, bson.M{})
+	if requestingUser == nil || (!requestingUser.Admin && requestingUser.Role != "Admin") {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
 		return
 	}
 	storeID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
@@ -288,13 +280,8 @@ func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store id"})
 		return
 	}
-	store, err := models.FindStoreByID(&storeID, bson.M{})
-	if err != nil || store == nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "store not found"})
-		return
-	}
-	s := store.Settings
+
+	s := loadAdminS3Settings()
 	if !s.S3Enabled || s.S3BucketName == "" || s.S3AccessKeyID == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "S3 not configured or not enabled"})
