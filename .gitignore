@@ -1,4 +1,11 @@
 startpos-api
+pos-rest
+pos-rest-linux
+startpos-backend
+attachments/
+images/
+models/images/
+zatca/*/sales/
 .DS_Store
 *.pyc
 ZatcaPython/venv_aspose_fix/
