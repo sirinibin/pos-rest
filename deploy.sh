@@ -7,6 +7,8 @@ SSH_KEY="$HOME/Downloads/startuptech-v2.pem"
 AWS_USER="ubuntu"
 AWS_HOST="ec2-13-42-39-69.eu-west-2.compute.amazonaws.com"
 BINARY="pos-rest"
+HEALTH_BINARY="pos-health-monitor"
+HEALTH_DEST="/home/ubuntu/go/src/github.com/sirinibin/pos-rest"
 
 cd "$(dirname "$0")"
 
@@ -29,18 +31,25 @@ echo "==> Running tests..."
 go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
 echo "==> All tests passed."
 
-# ─── 2. Build (once, reused for both environments) ────────────────────────────
+# ─── 2. Build (main API + health monitor) ────────────────────────────────────
 echo ""
 echo "==> Building for linux/amd64..."
 build_log=$(mktemp)
-trap 'rm -f "$build_log"' EXIT
+trap 'rm -f "$build_log" "$build_log.hm"' EXIT
+
 GOOS=linux GOARCH=amd64 go build -o "$BINARY" . 2>&1 | tee "$build_log"
-# A clean go build produces no output; any output means warnings or errors.
 if [ -s "$build_log" ]; then
-    echo "==> ABORTED: build produced warnings or errors. Fix them before deploying."
+    echo "==> ABORTED: main API build produced warnings or errors. Fix them before deploying."
     exit 1
 fi
-echo "    Checksum: $(sha256sum ./$BINARY)"
+echo "    Main API checksum: $(sha256sum ./$BINARY)"
+
+GOOS=linux GOARCH=amd64 go build -o "$HEALTH_BINARY" ./health-monitor/ 2>&1 | tee "$build_log.hm"
+if [ -s "$build_log.hm" ]; then
+    echo "==> ABORTED: health-monitor build produced warnings or errors. Fix them before deploying."
+    exit 1
+fi
+echo "    Health monitor checksum: $(sha256sum ./$HEALTH_BINARY)"
 
 # ─── SSH options shared by all remote calls ───────────────────────────────────
 SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
@@ -123,9 +132,27 @@ deploy_to() {
     echo "==> [$label] Done."
 }
 
-# ─── 3. Deploy ────────────────────────────────────────────────────────────────
+# ─── 3. Deploy main API ──────────────────────────────────────────────────────
 deploy_to "start-api-test" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest-test" "TEST"
 deploy_to "start-api"      "/home/ubuntu/go/src/github.com/sirinibin/pos-rest"      "PRODUCTION"
 
+# ─── 4. Deploy health monitor (single shared instance) ────────────────────────
 echo ""
-echo "==> Both test and production API deployed successfully."
+echo "==> [HEALTH-MONITOR] Deploying..."
+HM_TMP="$HEALTH_DEST/${HEALTH_BINARY}.new"
+HM_SUM=$(sha256sum "./$HEALTH_BINARY" | awk '{print $1}')
+
+scp $SSH_OPTS "./$HEALTH_BINARY" "$AWS_USER@$AWS_HOST:$HM_TMP"
+remote_hm_sum=$(ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" "sha256sum $HM_TMP | awk '{print \$1}'")
+if [ "$HM_SUM" != "$remote_hm_sum" ]; then
+    echo "==> [HEALTH-MONITOR] Checksum MISMATCH — upload corrupted. Health monitor not updated."
+else
+    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
+        "sudo systemctl stop start-health-monitor.service || true; mv -f $HM_TMP $HEALTH_DEST/$HEALTH_BINARY && sync"
+    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
+        "sudo systemctl start start-health-monitor.service && sudo systemctl is-active start-health-monitor.service"
+    echo "==> [HEALTH-MONITOR] Done."
+fi
+
+echo ""
+echo "==> Both test and production API + health monitor deployed successfully."

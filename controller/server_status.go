@@ -137,30 +137,55 @@ func buildServerStatus(name, service string, port int) ServerStatus {
 	return s
 }
 
-// requireAdmin is a helper that authenticates and verifies the caller is admin.
-// Returns true if OK, false + already wrote an error response if not.
-func requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	tokenClaims, err := models.AuthenticateByAccessToken(r)
+// requireAdminStateless authenticates using JWT signature only — no Redis, no MongoDB.
+// Works even when those services are degraded, which is exactly when this endpoint matters.
+// Admin/role are embedded in the JWT at login time (see generateJWTToken).
+// Falls back to a full DB lookup for tokens that pre-date the admin-claim change.
+func requireAdminStateless(w http.ResponseWriter, r *http.Request) bool {
+	tokenStr, err := models.ParseAccessTokenFromRequest(r)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 		return false
 	}
-	userID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
-	user, _ := models.FindUserByID(&userID, bson.M{})
-	if user == nil || (!user.Admin && user.Role != "Admin") {
+
+	jwtToken, err := models.IsJWTTokenValid(tokenStr)
+	if err != nil || !jwtToken.Valid {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired token"})
+		return false
+	}
+
+	claims, _ := models.GetJWTClaims(jwtToken)
+
+	// Fast path: admin flag is embedded in the JWT (tokens issued after the claim change).
+	if claims.Admin || claims.Role == "Admin" {
+		return true
+	}
+
+	// Slow path: old token without embedded admin claim — try MongoDB lookup.
+	// If MongoDB is down this will fail, but that's acceptable for pre-change tokens.
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
 		return false
 	}
-	return true
+	user, _ := models.FindUserByID(&userID, bson.M{})
+	if user != nil && (user.Admin || user.Role == "Admin") {
+		return true
+	}
+
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]string{"error": "admin only"})
+	return false
 }
 
 // GetServerStatusHandler — GET /v1/admin/server-status
 // Returns health for both production and test environments.
 func GetServerStatusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if !requireAdmin(w, r) {
+	if !requireAdminStateless(w, r) {
 		return
 	}
 
@@ -179,7 +204,7 @@ func GetServerStatusHandler(w http.ResponseWriter, r *http.Request) {
 // For production, the process will die during restart — the 202 is flushed first.
 func RestartServerHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if !requireAdmin(w, r) {
+	if !requireAdminStateless(w, r) {
 		return
 	}
 

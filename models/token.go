@@ -27,6 +27,8 @@ type TokenClaims struct {
 	Mob        string
 	Exp        int64
 	Type       string // values: access_token | refresh_token | auth_code
+	Admin      bool   // embedded at login for stateless admin checks
+	Role       string // embedded at login for stateless admin checks
 }
 
 func AuthenticateByJWTToken(tokenStr string) (tokenClaims TokenClaims, err error) {
@@ -71,6 +73,12 @@ func IsJWTTokenValid(tokenStr string) (*jwt.Token, error) {
 	return jwtToken, err
 }
 
+// GetJWTClaims extracts TokenClaims from an already-validated jwt.Token.
+// Exported for use in handlers that need stateless auth (e.g. server-status).
+func GetJWTClaims(jwtToken *jwt.Token) (TokenClaims, error) {
+	return getJWTTokenClaims(jwtToken)
+}
+
 func getJWTTokenClaims(jwtToken *jwt.Token) (tokenClaims TokenClaims, err error) {
 
 	claims, ok := jwtToken.Claims.(jwt.MapClaims)
@@ -110,6 +118,10 @@ func getJWTTokenClaims(jwtToken *jwt.Token) (tokenClaims TokenClaims, err error)
 			return tokenClaims, errors.New("Not able extract type from token")
 		}
 
+		// Optional fields — only present in tokens issued after the admin-claim change.
+		// Old tokens simply produce zero values (false / ""), which is safe.
+		tokenClaims.Admin, _ = claims["admin"].(bool)
+		tokenClaims.Role, _ = claims["role"].(string)
 	}
 
 	return tokenClaims, err
@@ -146,6 +158,8 @@ func generateJWTToken(email string, expiresAt time.Time, tokenType string) (toke
 	claims["email"] = user.Email
 	claims["exp"] = expiresAt.Unix()
 	claims["type"] = tokenType
+	claims["admin"] = user.Admin
+	claims["role"] = user.Role
 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
