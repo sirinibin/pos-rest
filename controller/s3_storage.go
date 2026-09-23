@@ -876,9 +876,6 @@ func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
-	defer cancel()
-
 	// Collect all local image files under ./images/ and ./zatca/
 	type fileEntry struct{ relKey, root string }
 	var files []fileEntry
@@ -923,8 +920,12 @@ func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// After uploading, update MongoDB so stored basenames become /cdn/ URLs.
-	// Run in the background — the SSE stream already reported done.
-	go updateEntityImageURLsInMongo(ctx, s)
+	// Use a fresh context — the handler's ctx is cancelled when defer fires.
+	go func() {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer bgCancel()
+		updateEntityImageURLsInMongo(bgCtx, s)
+	}()
 }
 
 // mimeForExt returns a MIME type for a file extension.
@@ -978,7 +979,18 @@ func updateEntityImageURLsInMongo(ctx context.Context, s models.AdminSettings) {
 			newImages := make([]string, 0, len(doc.Images))
 			changed := false
 			for _, img := range doc.Images {
-				if strings.HasPrefix(img, "/cdn/") || strings.HasPrefix(img, "/images/") {
+				if strings.HasPrefix(img, "/cdn/") {
+					newImages = append(newImages, img)
+					continue
+				}
+				if strings.HasPrefix(img, "/images/") {
+					// Already has /images/ prefix — strip leading slash to get S3 key
+					newImages = append(newImages, "/cdn/"+img[1:])
+					changed = true
+					continue
+				}
+				if strings.HasPrefix(img, "/") {
+					// Unknown absolute path — keep as-is
 					newImages = append(newImages, img)
 					continue
 				}
@@ -1013,16 +1025,41 @@ func updateEntityImageURLsInMongo(ctx context.Context, s models.AdminSettings) {
 		storeDBName := "store_" + sid
 
 		// Store logo
-		if store.Logo != "" && !strings.HasPrefix(store.Logo, "/cdn/") && !strings.HasPrefix(store.Logo, "/") {
-			relKey := "images/" + sid + "/store/" + store.Logo
-			posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
-				bson.M{"$set": bson.M{"logo": "/cdn/" + relKey}})
+		if store.Logo != "" && !strings.HasPrefix(store.Logo, "/cdn/") {
+			var relKey string
+			if strings.HasPrefix(store.Logo, "/images/") {
+				relKey = store.Logo[1:] // strip leading slash: /images/... → images/...
+			} else if !strings.HasPrefix(store.Logo, "/") {
+				// Bare filename: try standard path first, then search
+				standard := "images/" + sid + "/store/" + store.Logo
+				if _, err := os.Stat("./" + standard); err == nil {
+					relKey = standard
+				} else if matches, _ := filepath.Glob("images/*/store/" + store.Logo); len(matches) > 0 {
+					relKey = filepath.ToSlash(matches[0])
+				}
+			}
+			if relKey != "" {
+				posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
+					bson.M{"$set": bson.M{"logo": "/cdn/" + relKey}})
+			}
 		}
 		// Store invoice background
-		if store.InvoiceBackground != "" && !strings.HasPrefix(store.InvoiceBackground, "/cdn/") && !strings.HasPrefix(store.InvoiceBackground, "/") {
-			relKey := "images/" + sid + "/store/" + store.InvoiceBackground
-			posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
-				bson.M{"$set": bson.M{"invoice_background": "/cdn/" + relKey}})
+		if store.InvoiceBackground != "" && !strings.HasPrefix(store.InvoiceBackground, "/cdn/") {
+			var relKey string
+			if strings.HasPrefix(store.InvoiceBackground, "/images/") {
+				relKey = store.InvoiceBackground[1:]
+			} else if !strings.HasPrefix(store.InvoiceBackground, "/") {
+				standard := "images/" + sid + "/store/" + store.InvoiceBackground
+				if _, err := os.Stat("./" + standard); err == nil {
+					relKey = standard
+				} else if matches, _ := filepath.Glob("images/*/store/" + store.InvoiceBackground); len(matches) > 0 {
+					relKey = filepath.ToSlash(matches[0])
+				}
+			}
+			if relKey != "" {
+				posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
+					bson.M{"$set": bson.M{"invoice_background": "/cdn/" + relKey}})
+			}
 		}
 
 		// Product images
@@ -1044,10 +1081,17 @@ func updateEntityImageURLsInMongo(ctx context.Context, s models.AdminSettings) {
 					ID   primitive.ObjectID `bson:"_id"`
 					Logo string             `bson:"logo"`
 				}
-				if vendorCursor.Decode(&v) != nil || strings.HasPrefix(v.Logo, "/cdn/") || strings.HasPrefix(v.Logo, "/") {
+				if vendorCursor.Decode(&v) != nil || strings.HasPrefix(v.Logo, "/cdn/") {
 					continue
 				}
-				relKey := "images/" + sid + "/vendors/" + v.Logo
+				var relKey string
+				if strings.HasPrefix(v.Logo, "/images/") {
+					relKey = v.Logo[1:]
+				} else if strings.HasPrefix(v.Logo, "/") {
+					continue
+				} else {
+					relKey = "images/" + sid + "/vendors/" + v.Logo
+				}
 				db.Client("").Database(storeDBName).Collection("vendor").UpdateOne(ctx, bson.M{"_id": v.ID},
 					bson.M{"$set": bson.M{"logo": "/cdn/" + relKey}})
 			}
