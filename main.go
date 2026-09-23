@@ -701,6 +701,8 @@ func main() {
 	router.HandleFunc("/v1/admin-settings", controller.GetAdminSettingsHandler).Methods("GET")
 	router.HandleFunc("/v1/admin-settings", controller.UpdateAdminSettingsHandler).Methods("PUT")
 	router.HandleFunc("/v1/admin-settings/test-s3", controller.TestS3ConnectionHandler).Methods("POST")
+	router.HandleFunc("/v1/admin/server-status", controller.GetServerStatusHandler).Methods("GET")
+	router.HandleFunc("/v1/admin/server-restart", controller.RestartServerHandler).Methods("POST")
 	router.PathPrefix("/cdn/").HandlerFunc(controller.CdnFileHandler).Methods("GET")
 	router.HandleFunc("/v1/store/{id}/migrate-to-s3", controller.MigrateAttachmentsToS3Handler).Methods("POST")
 	router.HandleFunc("/v1/migrate-all-stores-to-s3", controller.MigrateAllStoresAttachmentsToS3Handler).Methods("POST")
