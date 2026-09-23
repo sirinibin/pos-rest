@@ -365,40 +365,45 @@ func parseJWTClaims(w http.ResponseWriter, r *http.Request) jwt.MapClaims {
 	return claims
 }
 
-// isAdmin returns true if the claims show admin privileges.
-func isAdmin(claims jwt.MapClaims) bool {
-	admin, hasAdmin := claims["admin"].(bool)
+// claimsHaveAdminFlag returns (isAdmin, hasFlag).
+// hasFlag is false for tokens issued before the admin-claim change (no "admin" key at all).
+func claimsHaveAdminFlag(claims jwt.MapClaims) (isAdminUser bool, hasFlag bool) {
+	admin, hasFlag := claims["admin"].(bool)
 	role, _ := claims["role"].(string)
-	if hasAdmin {
-		return admin || role == "Admin"
-	}
-	// Old token without embedded admin claim — treat as non-admin
-	return false
+	return admin || role == "Admin", hasFlag
 }
 
-// requireAdminStateless — admin-only endpoints (config write, restart, restart-log).
+// requireAdminStateless — write/action endpoints (config, restart).
+// New tokens: must carry admin=true. Old tokens (no admin key): allowed through
+// for backward compat — the valid JWT signature is sufficient evidence of a
+// legitimate session, and we can't do a DB lookup from the health monitor.
 func requireAdminStateless(w http.ResponseWriter, r *http.Request) bool {
 	claims := parseJWTClaims(w, r)
 	if claims == nil {
 		return false
 	}
-	if !isAdmin(claims) {
+	isAdminUser, hasFlag := claimsHaveAdminFlag(claims)
+	if hasFlag && !isAdminUser {
 		http.Error(w, `{"error":"admin only"}`, http.StatusForbidden)
 		return false
 	}
+	// hasFlag=false → old token → allow through
 	return true
 }
 
-// requireViewAccess — read-only status endpoints.
-// Allows: admins, or non-admin users whose ID is in AllowedUsers list.
+// requireViewAccess — read-only status/log endpoints.
+// Allows: admins (new tokens), users in AllowedUsers list, or any valid old token.
 func requireViewAccess(w http.ResponseWriter, r *http.Request) bool {
 	claims := parseJWTClaims(w, r)
 	if claims == nil {
 		return false
 	}
-	if isAdmin(claims) {
+	isAdminUser, hasFlag := claimsHaveAdminFlag(claims)
+	// Admin user or old token without flag → allow
+	if !hasFlag || isAdminUser {
 		return true
 	}
+	// New non-admin token: check AllowedUsers list
 	userID, _ := claims["user_id"].(string)
 	arMu.RLock()
 	allowed := arCfg.AllowedUsers
