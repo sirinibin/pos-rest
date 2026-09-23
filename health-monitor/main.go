@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -26,6 +27,114 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
+
+// ─── auto-restart config (persisted to health-monitor-config.json) ───────────
+
+type AutoRestartConfig struct {
+	Enabled bool `json:"enabled"`
+	Minutes int  `json:"minutes"` // how many minutes down before auto-restart
+}
+
+const configFile = "health-monitor-config.json"
+
+var (
+	arCfg   = AutoRestartConfig{Enabled: false, Minutes: 8}
+	arMu    sync.RWMutex
+	// downSince tracks when each env first went down (key: "production" | "test")
+	downSince   = map[string]time.Time{}
+	downSinceMu sync.Mutex
+)
+
+func loadConfigFromDisk() {
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		return // no file yet — defaults stay
+	}
+	var cfg AutoRestartConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("[health-monitor] config parse error: %v", err)
+		return
+	}
+	if cfg.Minutes < 1 {
+		cfg.Minutes = 1
+	}
+	arMu.Lock()
+	arCfg = cfg
+	arMu.Unlock()
+	log.Printf("[health-monitor] loaded config: enabled=%v minutes=%d", cfg.Enabled, cfg.Minutes)
+}
+
+func saveConfigToDisk(cfg AutoRestartConfig) error {
+	if cfg.Minutes < 1 {
+		cfg.Minutes = 1
+	}
+	if cfg.Minutes > 1440 {
+		cfg.Minutes = 1440
+	}
+	arMu.Lock()
+	arCfg = cfg
+	arMu.Unlock()
+	data, _ := json.MarshalIndent(cfg, "", "  ")
+	return os.WriteFile(configFile, data, 0644)
+}
+
+// autoRestartLoop runs in the background, checking both services every 30s.
+// If a service has been continuously down for >= configured minutes, it restarts it.
+func autoRestartLoop() {
+	type env struct{ name, service string }
+	envs := []env{
+		{"production", "start-api.service"},
+		{"test", "start-api-test.service"},
+	}
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		arMu.RLock()
+		cfg := arCfg
+		arMu.RUnlock()
+		if !cfg.Enabled {
+			// Clear trackers so timers reset when re-enabled
+			downSinceMu.Lock()
+			for k := range downSince {
+				delete(downSince, k)
+			}
+			downSinceMu.Unlock()
+			continue
+		}
+		threshold := time.Duration(cfg.Minutes) * time.Minute
+		for _, e := range envs {
+			state := checkServiceState(e.service)
+			if state == "active" {
+				downSinceMu.Lock()
+				delete(downSince, e.name)
+				downSinceMu.Unlock()
+				continue
+			}
+			// Service is not active — track how long it has been down
+			downSinceMu.Lock()
+			if _, tracked := downSince[e.name]; !tracked {
+				downSince[e.name] = time.Now()
+				downSinceMu.Unlock()
+				log.Printf("[health-monitor] %s went down, will auto-restart in %dm if still down", e.service, cfg.Minutes)
+				continue
+			}
+			elapsed := time.Since(downSince[e.name])
+			if elapsed >= threshold {
+				delete(downSince, e.name) // reset before restarting
+				downSinceMu.Unlock()
+				log.Printf("[health-monitor] auto-restart %s (down for %v >= %dm)", e.service, elapsed.Round(time.Second), cfg.Minutes)
+				out, err := exec.Command("systemctl", "restart", e.service).CombinedOutput()
+				if err != nil {
+					log.Printf("[health-monitor] auto-restart %s FAILED: %v — %s", e.service, err, out)
+				} else {
+					log.Printf("[health-monitor] auto-restart %s OK", e.service)
+				}
+			} else {
+				downSinceMu.Unlock()
+			}
+		}
+	}
+}
 
 // ─── data types ──────────────────────────────────────────────────────────────
 
@@ -262,6 +371,46 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+// configHandler — GET/POST /health-monitor/config
+// Reads or writes the auto-restart configuration (persisted to disk).
+func configHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		cors(w)
+		return
+	}
+	cors(w)
+	if !requireAdminStateless(w, r) {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		arMu.RLock()
+		cfg := arCfg
+		arMu.RUnlock()
+		json.NewEncoder(w).Encode(cfg)
+
+	case http.MethodPost:
+		var cfg AutoRestartConfig
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		if err := saveConfigToDisk(cfg); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "failed to save: " + err.Error()})
+			return
+		}
+		arMu.RLock()
+		saved := arCfg
+		arMu.RUnlock()
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "config": saved})
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 func getenv(key, fallback string) string {
@@ -274,9 +423,13 @@ func getenv(key, fallback string) string {
 func main() {
 	port := getenv("HEALTH_MONITOR_PORT", "2998")
 
+	loadConfigFromDisk()
+	go autoRestartLoop()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health-monitor/status", statusHandler)
 	mux.HandleFunc("/health-monitor/restart", restartHandler)
+	mux.HandleFunc("/health-monitor/config", configHandler)
 	mux.HandleFunc("/health-monitor/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
