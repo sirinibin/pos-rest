@@ -69,17 +69,36 @@ type metaStatus struct {
 }
 
 type metaMessage struct {
-	From      string          `json:"from"`
-	ID        string          `json:"id"`
-	Timestamp string          `json:"timestamp"`
-	Type      string          `json:"type"`
-	Text      *metaTextMsg    `json:"text,omitempty"`
-	Image     *metaMediaMsg   `json:"image,omitempty"`
-	Document  *metaDocMsg     `json:"document,omitempty"`
-	Audio     *metaMediaMsg   `json:"audio,omitempty"`
-	Video     *metaMediaMsg   `json:"video,omitempty"`
-	Sticker   *metaMediaMsg   `json:"sticker,omitempty"`
-	Context   *metaContext    `json:"context,omitempty"`
+	From      string               `json:"from"`
+	ID        string               `json:"id"`
+	Timestamp string               `json:"timestamp"`
+	Type      string               `json:"type"`
+	Text      *metaTextMsg         `json:"text,omitempty"`
+	Image     *metaMediaMsg        `json:"image,omitempty"`
+	Document  *metaDocMsg          `json:"document,omitempty"`
+	Audio     *metaMediaMsg        `json:"audio,omitempty"`
+	Video     *metaMediaMsg        `json:"video,omitempty"`
+	Sticker   *metaMediaMsg        `json:"sticker,omitempty"`
+	Context   *metaContext         `json:"context,omitempty"`
+	Contacts  []metaContactPayload `json:"contacts,omitempty"`
+}
+
+// metaContactPayload represents a contact card sent via WhatsApp (type: "contacts").
+type metaContactPayload struct {
+	Name   metaContactName    `json:"name"`
+	Phones []metaContactPhone `json:"phones"`
+}
+
+type metaContactName struct {
+	FormattedName string `json:"formatted_name"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+}
+
+type metaContactPhone struct {
+	Phone string `json:"phone"`
+	Type  string `json:"type"`
+	WaID  string `json:"wa_id"`
 }
 
 type metaTextMsg struct {

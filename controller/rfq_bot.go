@@ -763,6 +763,31 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 		if msg.Document != nil {
 			text = msg.Document.Caption
 		}
+	case "contacts":
+		// Build a human-readable summary so the conversation window can display the contact(s).
+		var parts []string
+		for _, c := range msg.Contacts {
+			name := c.Name.FormattedName
+			if name == "" {
+				name = strings.TrimSpace(c.Name.FirstName + " " + c.Name.LastName)
+			}
+			var phones []string
+			for _, p := range c.Phones {
+				if p.Phone != "" {
+					phones = append(phones, p.Phone)
+				}
+			}
+			entry := "📇 " + name
+			if len(phones) > 0 {
+				entry += " · " + strings.Join(phones, ", ")
+			}
+			parts = append(parts, entry)
+		}
+		if len(parts) > 0 {
+			text = strings.Join(parts, "\n")
+		} else {
+			text = "📇 Contact"
+		}
 	}
 
 	// Parse message timestamp.
