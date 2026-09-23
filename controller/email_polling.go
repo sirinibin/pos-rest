@@ -647,8 +647,11 @@ func fetchZohoMessageContent(accessToken, accountID, folderID, messageID, mailBa
 	}
 	json.NewDecoder(resp.Body).Decode(&res) //nolint:errcheck
 	rawHTML := res.Data.Content
+	// Convert Zoho relative image paths to absolute before embedding, so they're caught by the regex.
+	rawHTML = strings.ReplaceAll(rawHTML, `src="/mail/`, `src="https://mail.zoho.com/mail/`)
+	rawHTML = strings.ReplaceAll(rawHTML, `src='/mail/`, `src='https://mail.zoho.com/mail/`)
 	// Embed HTTP images (e.g. Zoho CDN) as base64 data URIs so they render in any browser context.
-	rawHTML = embedHTTPImagesAsDataURIs(rawHTML, "Zoho-oauthtoken "+accessToken, 10, 512*1024)
+	rawHTML = embedHTTPImagesAsDataURIs(rawHTML, "Zoho-oauthtoken "+accessToken, 20, 1024*1024)
 	plain := strings.ReplaceAll(rawHTML, "<br>", "\n")
 	plain = strings.ReplaceAll(plain, "<br/>", "\n")
 	plain = strings.ReplaceAll(plain, "<br />", "\n")

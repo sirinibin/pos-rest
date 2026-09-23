@@ -2,6 +2,8 @@ package controller
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -143,4 +145,99 @@ func TestAdminSettings_S3Enabled_DefaultFalse(t *testing.T) {
 	if s.S3Enabled {
 		t.Errorf("S3Enabled should default to false")
 	}
+}
+
+// ─── proxyS3Object returns false on non-200 ───────────────────────────────────
+
+func TestProxyS3Object_ReturnsFalseOnNon200(t *testing.T) {
+	// Spin up a fake S3 that returns 404
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	s := models.AdminSettings{
+		S3Enabled:     true,
+		S3BucketName:  "bucket",
+		S3Region:      "us-east-1",
+		S3AccessKeyID: "KEY",
+		S3SecretKey:   "SECRET",
+		S3Endpoint:    srv.URL,
+	}
+	w := httptest.NewRecorder()
+	ok := proxyS3Object(s, "test/key.txt", w)
+	if ok {
+		t.Error("proxyS3Object should return false for 404 response")
+	}
+	if w.Body.Len() != 0 {
+		t.Errorf("proxyS3Object must not write to w when returning false, body=%q", w.Body.String())
+	}
+}
+
+func TestProxyS3Object_ReturnsTrueOn200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("PDF content")) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	s := models.AdminSettings{
+		S3Enabled:     true,
+		S3BucketName:  "bucket",
+		S3Region:      "us-east-1",
+		S3AccessKeyID: "KEY",
+		S3SecretKey:   "SECRET",
+		S3Endpoint:    srv.URL,
+	}
+	w := httptest.NewRecorder()
+	ok := proxyS3Object(s, "test/key.txt", w)
+	if !ok {
+		t.Error("proxyS3Object should return true for 200 response")
+	}
+	if w.Body.String() != "PDF content" {
+		t.Errorf("expected body 'PDF content', got %q", w.Body.String())
+	}
+}
+
+// ─── CdnFileHandler disk fallback ─────────────────────────────────────────────
+
+// TestProxyS3Object_DoesNotWriteOnFailure guards the CdnFileHandler disk-fallback contract:
+// when proxyS3Object returns false it must not have written anything to w, so the
+// caller can still serve from disk.
+func TestProxyS3Object_DoesNotWriteOnFailure(t *testing.T) {
+	for _, code := range []int{http.StatusNotFound, http.StatusForbidden, http.StatusInternalServerError} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(code)
+		}))
+		s := models.AdminSettings{
+			S3Enabled:     true,
+			S3BucketName:  "bucket",
+			S3Region:      "us-east-1",
+			S3AccessKeyID: "KEY",
+			S3SecretKey:   "SECRET",
+			S3Endpoint:    srv.URL,
+		}
+		w := httptest.NewRecorder()
+		if ok := proxyS3Object(s, "test/key.txt", w); ok {
+			t.Errorf("status %d: proxyS3Object should return false", code)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("status %d: must not write body when returning false, got %q", code, w.Body.String())
+		}
+		srv.Close()
+	}
+}
+
+// ─── deleteS3Attachments no-op when S3 disabled ───────────────────────────────
+
+func TestDeleteS3Attachments_NoopWhenS3Disabled(t *testing.T) {
+	// loadAdminS3Settings returns empty settings (S3Enabled=false) in test env.
+	// deleteS3Attachments should return without attempting any S3 call.
+	// We use a message with a /cdn/ URL to exercise the S3-disabled early-return path.
+	msgs := []models.ProcurementMessage{
+		{Attachments: []models.ProcurementAttachment{{URL: "/cdn/attachments/store1/msg1/file.pdf"}}},
+	}
+	// Should not panic or error — just a no-op
+	deleteS3Attachments(msgs)
 }

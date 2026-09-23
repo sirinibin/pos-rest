@@ -643,6 +643,28 @@ func FindRFQsByCustomerID(storeID, customerID primitive.ObjectID, limit int64) (
 	return items, nil
 }
 
+// FindRFQsByCustomerEmail returns RFQs received from a customer identified by email.
+func FindRFQsByCustomerEmail(storeID primitive.ObjectID, email string, limit int64) ([]RFQReceived, error) {
+	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	filter := bson.M{
+		"store_id":       storeID,
+		"customer_email": bson.M{"$regex": strings.TrimSpace(email), "$options": "i"},
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "received_at", Value: -1}}).SetLimit(limit)
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQReceived
+	if err := cur.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 // FindRFQsBySupplierEmail returns RFQs where a supplier with the given email has replied.
 func FindRFQsBySupplierEmail(storeID primitive.ObjectID, email string, limit int64) ([]RFQReceived, error) {
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")

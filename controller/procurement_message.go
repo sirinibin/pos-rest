@@ -20,6 +20,27 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// deleteS3Attachments deletes S3 objects for all attachments in msgs whose URL
+// begins with /cdn/ (meaning the file was stored in S3 or local disk via saveAttachment).
+// No-ops when S3 is not configured.
+func deleteS3Attachments(msgs []models.ProcurementMessage) {
+	s := loadAdminS3Settings()
+	if !s.S3Enabled || s.S3BucketName == "" {
+		return
+	}
+	for _, m := range msgs {
+		for _, a := range m.Attachments {
+			if a.URL == "" || !strings.HasPrefix(a.URL, "/cdn/") {
+				continue
+			}
+			key := strings.TrimPrefix(a.URL, "/cdn/")
+			if err := deleteFromS3(s, key); err != nil {
+				log.Printf("procurement: delete S3 %s: %v", key, err)
+			}
+		}
+	}
+}
+
 // deleteAttachmentDirs removes the on-disk attachment directories for a slice of
 // procurement messages. Each attachment URL is "/attachments/{storeID}/{dir}/filename"
 // so the parent directory to remove is "./attachments/{storeID}/{dir}".
@@ -142,9 +163,10 @@ func DeleteProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		retractErr = "message ID not available (only new sent messages can be retracted)"
 	}
 
-	// Delete disk files, then remove the DB record (always, regardless of retraction result).
+	// Delete disk and S3 files, then remove the DB record.
 	if msg != nil {
 		deleteAttachmentDirs([]models.ProcurementMessage{*msg})
+		deleteS3Attachments([]models.ProcurementMessage{*msg})
 	}
 	if err := models.DeleteProcurementMessage(id); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -190,6 +212,7 @@ func DeleteThreadProcurementMessagesHandler(w http.ResponseWriter, r *http.Reque
 
 	if toClean, _ := models.FetchMessagesForCleanup(filter); len(toClean) > 0 {
 		deleteAttachmentDirs(toClean)
+		deleteS3Attachments(toClean)
 	}
 
 	deleted, err := models.DeleteProcurementMessagesByFilter(filter)
@@ -220,6 +243,7 @@ func DeleteAllProcurementMessagesHandler(w http.ResponseWriter, r *http.Request)
 	}
 	if toClean, _ := models.FetchMessagesForCleanup(filter); len(toClean) > 0 {
 		deleteAttachmentDirs(toClean)
+		deleteS3Attachments(toClean)
 	}
 
 	deleted, err := models.DeleteAllProcurementMessages(storeObjID, msgType)
@@ -271,6 +295,7 @@ func runAutoDeleteProcurementMessages(storeID primitive.ObjectID, days int) {
 	filter := bson.M{"store_id": storeID, "created_at": bson.M{"$lt": cutoff}}
 	if toClean, _ := models.FetchMessagesForCleanup(filter); len(toClean) > 0 {
 		deleteAttachmentDirs(toClean)
+		deleteS3Attachments(toClean)
 	}
 	deleted, err := models.DeleteOldProcurementMessages(storeID, days)
 	if err != nil {

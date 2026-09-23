@@ -3949,6 +3949,20 @@ func ListRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// When customer_email is given, return RFQs received from that customer email.
+	if email := strings.TrimSpace(r.URL.Query().Get("customer_email")); email != "" {
+		rfqs, err := models.FindRFQsByCustomerEmail(storeObjID, email, 50)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+		if rfqs == nil {
+			rfqs = []models.RFQReceived{}
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"result": rfqs, "total_count": len(rfqs)})
+		return
+	}
+
 	// When customer_id is given, return RFQs received from that customer.
 	if cidStr := r.URL.Query().Get("customer_id"); cidStr != "" {
 		cidObj, err := primitive.ObjectIDFromHex(cidStr)
