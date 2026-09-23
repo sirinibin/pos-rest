@@ -138,20 +138,21 @@ func uploadToS3(s models.AdminSettings, key string, data []byte, contentType str
 	return s3BaseURL(s) + "/" + key, nil
 }
 
-// saveAttachment saves data to S3 if configured, or to local disk otherwise.
+// saveAttachment saves data to S3 when configured, otherwise to local disk.
+// When S3 is configured but upload fails the function returns "" (empty URL) so the
+// caller can mark the attachment as missing and allow the user to retry.
 // relKey is the path without leading "./" or "/" e.g. "attachments/{storeID}/{msgID}/file.pdf".
-// Always returns "/cdn/relKey" — the CdnFileHandler route serves the file from S3 or local disk.
 func saveAttachment(settings models.AdminSettings, relKey string, data []byte, contentType string) string {
 	if settings.S3Enabled && settings.S3BucketName != "" && settings.S3AccessKeyID != "" {
 		_, err := uploadToS3(settings, relKey, data, contentType)
 		if err != nil {
-			log.Printf("s3: upload failed for %s, falling back to local disk: %v", relKey, err)
-			// Fall through to local disk below
-		} else {
-			return "/cdn/" + relKey
+			log.Printf("s3: upload FAILED for %s (bucket=%q region=%q): %v — attachment not stored; use retry-attachments to re-fetch",
+				relKey, settings.S3BucketName, settings.S3Region, err)
+			return ""
 		}
+		return "/cdn/" + relKey
 	}
-	// Local disk fallback
+	// S3 not configured — save to local disk
 	localPath := "./" + relKey
 	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
 		return ""
@@ -163,7 +164,8 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 }
 
 // CdnFileHandler serves attachment files via the /cdn/ path.
-// If S3 is configured, tries S3 first; falls back to local disk when the object is absent.
+// When S3 is configured, files are served exclusively from S3 (no disk fallback).
+// When S3 is not configured, files are served from local disk.
 // Registered with router.PathPrefix("/cdn/")
 func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/cdn/")
@@ -173,10 +175,10 @@ func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s := loadAdminS3Settings()
 	if s.S3Enabled && s.S3BucketName != "" {
-		if proxyS3Object(s, path, w) {
-			return
+		if !proxyS3Object(s, path, w) {
+			http.NotFound(w, r)
 		}
-		// S3 didn't have the file — fall back to local disk
+		return
 	}
 	http.ServeFile(w, r, "./"+path)
 }

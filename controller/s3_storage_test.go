@@ -112,6 +112,36 @@ func TestSaveAttachment_S3EnabledButNoBucket_FallsToLocal(t *testing.T) {
 	}
 }
 
+// When S3 is configured but the upload fails, saveAttachment must return "" (no disk fallback).
+// This allows callers to mark the attachment as missing so the user can retry later.
+func TestSaveAttachment_S3FailureReturnsEmpty(t *testing.T) {
+	// Fake S3 that rejects uploads with 403
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("<Error>AccessDenied</Error>")) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	relKey := filepath.ToSlash(strings.TrimPrefix(dir, "/")) + "/s3fail/f.txt"
+	settings := models.AdminSettings{
+		S3Enabled:     true,
+		S3BucketName:  "bucket",
+		S3Region:      "us-east-1",
+		S3AccessKeyID: "KEY",
+		S3SecretKey:   "SECRET",
+		S3Endpoint:    srv.URL,
+	}
+	url := saveAttachment(settings, relKey, []byte("data"), "text/plain")
+	if url != "" {
+		t.Errorf("S3 upload failed — expected empty URL (no disk fallback), got %q", url)
+	}
+	// Confirm file was NOT written to disk either
+	if _, err := os.Stat("./" + relKey); err == nil {
+		t.Error("file should NOT have been written to disk when S3 is configured")
+	}
+}
+
 // ─── AdminSettings S3 fields JSON ────────────────────────────────────────────
 
 func TestAdminSettings_S3Fields_JSONKeys(t *testing.T) {
