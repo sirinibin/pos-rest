@@ -657,7 +657,7 @@ func MigrateRFQAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
 	defer cancel()
 
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
@@ -962,7 +962,7 @@ func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch store names for display
-	entityCtx, entityCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	entityCtx, entityCancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer entityCancel()
 	entityPosDB := db.Client("").Database(db.GetPosDB())
 	entityStoreNames := map[string]string{}
@@ -1013,8 +1013,12 @@ func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reqCtx := r.Context()
 	uploaded, skipped := 0, 0
 	for i, sg := range entityStoreGroups {
+		if reqCtx.Err() != nil {
+			break
+		}
 		sendSSE(w, flusher, map[string]interface{}{
 			"type": "store_start", "store_id": sg.storeID, "store_name": sg.storeName,
 			"index": i + 1, "total_stores": len(entityStoreGroups),
@@ -1023,6 +1027,9 @@ func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
 
 		storeUploaded, storeSkipped := 0, 0
 		for j, f := range sg.files {
+			if reqCtx.Err() != nil {
+				break
+			}
 			data, readErr := os.ReadFile("./" + f.relKey)
 			if readErr != nil {
 				storeSkipped++
@@ -1347,7 +1354,7 @@ func MigrateInlineBase64ToS3Handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Minute)
 	defer cancel()
 
 	type entitySpec struct {

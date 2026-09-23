@@ -118,7 +118,7 @@ func VerifyAndCleanupDiskHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Minute)
 	defer cancel()
 
 	// verifyCDNAndDelete HEAD-checks S3 and removes the local disk copy if confirmed.
@@ -564,7 +564,7 @@ func FixDirectS3URLsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
 	defer cancel()
 
 	// baseURL is the S3 bucket root that old code stored as a URL prefix.
