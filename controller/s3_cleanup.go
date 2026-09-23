@@ -139,16 +139,19 @@ func VerifyAndCleanupDiskHandler(w http.ResponseWriter, r *http.Request) {
 
 	posDB := db.Client("").Database(db.GetPosDB())
 
-	// Collect all store IDs
+	// Collect all store IDs and names
 	storeRows, _ := posDB.Collection("store").Find(ctx, bson.M{})
 	var storeIDs []string
+	storeNames := map[string]string{}
 	if storeRows != nil {
 		for storeRows.Next(ctx) {
 			var row struct {
-				ID primitive.ObjectID `bson:"_id"`
+				ID   primitive.ObjectID `bson:"_id"`
+				Name string             `bson:"name"`
 			}
 			if storeRows.Decode(&row) == nil {
 				storeIDs = append(storeIDs, row.ID.Hex())
+				storeNames[row.ID.Hex()] = row.Name
 			}
 		}
 		storeRows.Close(ctx)
@@ -174,6 +177,7 @@ func VerifyAndCleanupDiskHandler(w http.ResponseWriter, r *http.Request) {
 		st := entityCleanupStats{Name: name}
 		proj := options.Find().SetProjection(bson.M{"_id": 1, "images": 1})
 		for _, sid := range storeIDs {
+			sendSSE(w, flusher, map[string]interface{}{"type": "store_progress", "store_id": sid, "store_name": storeNames[sid]})
 			col := db.Client("").Database("store_" + sid).Collection(colName)
 			cur, err := col.Find(ctx, bson.M{"images": bson.M{"$exists": true, "$ne": nil}}, proj)
 			if err != nil {
@@ -214,6 +218,7 @@ func VerifyAndCleanupDiskHandler(w http.ResponseWriter, r *http.Request) {
 		proj := options.Find().SetProjection(bson.M{"_id": 1, "zatca.cleared_xml_url": 1})
 		filter := bson.M{"zatca.cleared_xml_url": bson.M{"$exists": true, "$ne": ""}}
 		for _, sid := range storeIDs {
+			sendSSE(w, flusher, map[string]interface{}{"type": "store_progress", "store_id": sid, "store_name": storeNames[sid]})
 			col := db.Client("").Database("store_" + sid).Collection(colName)
 			cur, err := col.Find(ctx, filter, proj)
 			if err != nil {
@@ -260,6 +265,7 @@ func VerifyAndCleanupDiskHandler(w http.ResponseWriter, r *http.Request) {
 		// also vendor.logo (single string)
 		proj := options.Find().SetProjection(bson.M{"_id": 1, "logo": 1})
 		for _, sid := range storeIDs {
+			sendSSE(w, flusher, map[string]interface{}{"type": "store_progress", "store_id": sid, "store_name": storeNames[sid]})
 			col := db.Client("").Database("store_" + sid).Collection("vendor")
 			cur, err := col.Find(ctx, bson.M{"logo": bson.M{"$regex": "^/cdn/"}}, proj)
 			if err == nil && cur != nil {
@@ -580,13 +586,16 @@ func FixDirectS3URLsHandler(w http.ResponseWriter, r *http.Request) {
 
 	storeRows, _ := posDB.Collection("store").Find(ctx, bson.M{})
 	var storeIDs []string
+	fixStoreNames := map[string]string{}
 	if storeRows != nil {
 		for storeRows.Next(ctx) {
 			var row struct {
-				ID primitive.ObjectID `bson:"_id"`
+				ID   primitive.ObjectID `bson:"_id"`
+				Name string             `bson:"name"`
 			}
 			if storeRows.Decode(&row) == nil {
 				storeIDs = append(storeIDs, row.ID.Hex())
+				fixStoreNames[row.ID.Hex()] = row.Name
 			}
 		}
 		storeRows.Close(ctx)
@@ -599,6 +608,7 @@ func FixDirectS3URLsHandler(w http.ResponseWriter, r *http.Request) {
 	fixImagesArray := func(colName string) {
 		proj := options.Find().SetProjection(bson.M{"_id": 1, "images": 1})
 		for _, sid := range storeIDs {
+			sendSSE(w, flusher, map[string]interface{}{"type": "store_progress", "store_id": sid, "store_name": fixStoreNames[sid]})
 			col := db.Client("").Database("store_" + sid).Collection(colName)
 			cur, err := col.Find(ctx, bson.M{"images": bson.M{"$exists": true, "$ne": nil}}, proj)
 			if err != nil {
@@ -642,6 +652,7 @@ func FixDirectS3URLsHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Vendor logos (single string)
 	for _, sid := range storeIDs {
+		sendSSE(w, flusher, map[string]interface{}{"type": "store_progress", "store_id": sid, "store_name": fixStoreNames[sid]})
 		col := db.Client("").Database("store_" + sid).Collection("vendor")
 		cur, err := col.Find(ctx, bson.M{"logo": bson.M{"$exists": true, "$ne": ""}},
 			options.Find().SetProjection(bson.M{"_id": 1, "logo": 1}))
@@ -700,6 +711,7 @@ func FixDirectS3URLsHandler(w http.ResponseWriter, r *http.Request) {
 	// ZATCA cleared_xml_url
 	for _, colName := range []string{"order", "salesreturn", "customerdeposit", "customerwithdrawal"} {
 		for _, sid := range storeIDs {
+			sendSSE(w, flusher, map[string]interface{}{"type": "store_progress", "store_id": sid, "store_name": fixStoreNames[sid]})
 			col := db.Client("").Database("store_" + sid).Collection(colName)
 			cur, err := col.Find(ctx, bson.M{"zatca.cleared_xml_url": bson.M{"$exists": true, "$ne": ""}},
 				options.Find().SetProjection(bson.M{"_id": 1, "zatca.cleared_xml_url": 1}))

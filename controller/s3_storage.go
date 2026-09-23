@@ -661,14 +661,40 @@ func MigrateRFQAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	col := db.Client("").Database(db.GetPosDB()).Collection("rfq_received")
+	posDB := db.Client("").Database(db.GetPosDB())
 
-	// Count documents that still have old base64 fields
-	filter := bson.M{"$or": bson.A{
+	// Collect stores with names
+	type rfqStoreRow struct {
+		ID   primitive.ObjectID `bson:"_id"`
+		Name string             `bson:"name"`
+	}
+	rfqStoreCur, _ := posDB.Collection("store").Find(ctx, bson.M{})
+	var rfqStores []rfqStoreRow
+	if rfqStoreCur != nil {
+		for rfqStoreCur.Next(ctx) {
+			var row rfqStoreRow
+			if rfqStoreCur.Decode(&row) == nil {
+				rfqStores = append(rfqStores, row)
+			}
+		}
+		rfqStoreCur.Close(ctx)
+	}
+
+	baseRFQFilter := bson.M{"$or": bson.A{
 		bson.M{"attachment_data_uris": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}},
 		bson.M{"additional_attachment_data_uris": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}},
 	}}
-	total64, _ := col.CountDocuments(ctx, filter)
-	total := int(total64)
+
+	// Pre-compute per-store totals
+	rfqStoreTotals := make([]int, len(rfqStores))
+	total := 0
+	for i, st := range rfqStores {
+		storeFilter := bson.M{"$and": bson.A{bson.M{"store_id": st.ID}, baseRFQFilter}}
+		n, _ := col.CountDocuments(ctx, storeFilter)
+		rfqStoreTotals[i] = int(n)
+		total += int(n)
+	}
+
 	sendSSE(w, flusher, map[string]interface{}{"type": "start", "total": total})
 
 	if total == 0 {
@@ -682,74 +708,112 @@ func MigrateRFQAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 		"additional_attachment_data_uris": 1,
 		"additional_attachment_filenames": 1,
 	})
-	cursor, err := col.Find(ctx, filter, proj)
-	if err != nil {
-		sendSSE(w, flusher, map[string]interface{}{"type": "error", "error": "cursor failed: " + err.Error()})
-		return
-	}
-	defer cursor.Close(ctx)
 
-	uploaded, skipped, processed, updatedRFQs := 0, 0, 0, 0
-	for cursor.Next(ctx) {
-		var doc struct {
-			ID                            primitive.ObjectID `bson:"_id"`
-			StoreID                       primitive.ObjectID `bson:"store_id"`
-			AttachmentDataURIs            []string           `bson:"attachment_data_uris"`
-			AdditionalAttachmentDataURIs  []string           `bson:"additional_attachment_data_uris"`
-			AdditionalAttachmentFilenames []string           `bson:"additional_attachment_filenames"`
-		}
-		if err := cursor.Decode(&doc); err != nil {
-			skipped++
-			continue
-		}
-		processed++
-		pct := 0
-		if total > 0 {
-			pct = processed * 100 / total
-		}
-
-		storeIDStr := doc.StoreID.Hex()
-		rfqIDStr := doc.ID.Hex()
-		changed := false
-		update := bson.M{}
-		unset := bson.M{}
-
-		if len(doc.AttachmentDataURIs) > 0 {
-			urls := migrateDataURIsToStorage(s, storeIDStr, rfqIDStr, "att", doc.AttachmentDataURIs, nil)
-			if len(urls) > 0 {
-				update["attachment_urls"] = urls
-				unset["attachment_data_uris"] = ""
-				uploaded += len(urls)
-				changed = true
-			} else {
-				skipped++
-			}
-		}
-		if len(doc.AdditionalAttachmentDataURIs) > 0 {
-			urls := migrateDataURIsToStorage(s, storeIDStr, rfqIDStr, "add", doc.AdditionalAttachmentDataURIs, doc.AdditionalAttachmentFilenames)
-			if len(urls) > 0 {
-				update["additional_attachment_urls"] = urls
-				unset["additional_attachment_data_uris"] = ""
-				uploaded += len(urls)
-				changed = true
-			} else {
-				skipped++
-			}
-		}
-
-		if changed {
-			upd := bson.M{"$set": update}
-			if len(unset) > 0 {
-				upd["$unset"] = unset
-			}
-			if _, err := col.UpdateOne(ctx, bson.M{"_id": doc.ID}, upd); err == nil {
-				updatedRFQs++
-			}
+	uploaded, skipped, updatedRFQs := 0, 0, 0
+	for i, st := range rfqStores {
+		storeTotal := rfqStoreTotals[i]
+		sid := st.ID.Hex()
+		storeName := st.Name
+		if storeName == "" {
+			storeName = sid
 		}
 
 		sendSSE(w, flusher, map[string]interface{}{
-			"type": "progress", "processed": processed, "total": total, "percent": pct,
-			"current_file": rfqIDStr[:8] + "…", "uploaded": uploaded, "skipped": skipped,
+			"type": "store_start", "store_id": sid, "store_name": storeName,
+			"index": i + 1, "total_stores": len(rfqStores),
+		})
+		sendSSE(w, flusher, map[string]interface{}{"type": "store_total", "total": storeTotal})
+
+		if storeTotal == 0 {
+			sendSSE(w, flusher, map[string]interface{}{
+				"type": "store_done", "store_id": sid, "store_name": storeName, "index": i + 1,
+				"uploaded": 0, "skipped": 0,
+			})
+			continue
+		}
+
+		storeFilter := bson.M{"$and": bson.A{bson.M{"store_id": st.ID}, baseRFQFilter}}
+		cursor, err := col.Find(ctx, storeFilter, proj)
+		if err != nil {
+			sendSSE(w, flusher, map[string]interface{}{
+				"type": "store_done", "store_id": sid, "store_name": storeName, "index": i + 1,
+				"uploaded": 0, "skipped": 0,
+			})
+			continue
+		}
+
+		storeProcessed, storeUploaded, storeSkipped := 0, 0, 0
+		for cursor.Next(ctx) {
+			var doc struct {
+				ID                            primitive.ObjectID `bson:"_id"`
+				StoreID                       primitive.ObjectID `bson:"store_id"`
+				AttachmentDataURIs            []string           `bson:"attachment_data_uris"`
+				AdditionalAttachmentDataURIs  []string           `bson:"additional_attachment_data_uris"`
+				AdditionalAttachmentFilenames []string           `bson:"additional_attachment_filenames"`
+			}
+			if err := cursor.Decode(&doc); err != nil {
+				storeSkipped++
+				skipped++
+				continue
+			}
+			storeProcessed++
+			storePct := 0
+			if storeTotal > 0 {
+				storePct = storeProcessed * 100 / storeTotal
+			}
+
+			rfqIDStr := doc.ID.Hex()
+			changed := false
+			update := bson.M{}
+			unset := bson.M{}
+
+			if len(doc.AttachmentDataURIs) > 0 {
+				urls := migrateDataURIsToStorage(s, sid, rfqIDStr, "att", doc.AttachmentDataURIs, nil)
+				if len(urls) > 0 {
+					update["attachment_urls"] = urls
+					unset["attachment_data_uris"] = ""
+					storeUploaded += len(urls)
+					uploaded += len(urls)
+					changed = true
+				} else {
+					storeSkipped++
+					skipped++
+				}
+			}
+			if len(doc.AdditionalAttachmentDataURIs) > 0 {
+				urls := migrateDataURIsToStorage(s, sid, rfqIDStr, "add", doc.AdditionalAttachmentDataURIs, doc.AdditionalAttachmentFilenames)
+				if len(urls) > 0 {
+					update["additional_attachment_urls"] = urls
+					unset["additional_attachment_data_uris"] = ""
+					storeUploaded += len(urls)
+					uploaded += len(urls)
+					changed = true
+				} else {
+					storeSkipped++
+					skipped++
+				}
+			}
+
+			if changed {
+				upd := bson.M{"$set": update}
+				if len(unset) > 0 {
+					upd["$unset"] = unset
+				}
+				if _, err := col.UpdateOne(ctx, bson.M{"_id": doc.ID}, upd); err == nil {
+					updatedRFQs++
+				}
+			}
+
+			sendSSE(w, flusher, map[string]interface{}{
+				"type": "store_progress", "processed": storeProcessed, "total": storeTotal, "percent": storePct,
+				"current_file": rfqIDStr[:8] + "…", "uploaded": storeUploaded, "skipped": storeSkipped,
+			})
+		}
+		cursor.Close(ctx)
+
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "store_done", "store_id": sid, "store_name": storeName, "index": i + 1,
+			"uploaded": storeUploaded, "skipped": storeSkipped,
 		})
 	}
 
@@ -876,51 +940,123 @@ func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Collect all local image files under ./images/ and ./zatca/
-	type fileEntry struct{ relKey, root string }
-	var files []fileEntry
+	// Walk ./images/ and ./zatca/ and group files by storeID (second path component)
+	type entityFileEntry struct{ relKey, root string }
+	filesByStore := map[string][]entityFileEntry{}
+	var entityUnknownFiles []entityFileEntry
+
 	for _, root := range []string{"images", "zatca"} {
 		_ = filepath.WalkDir("./"+root, func(p string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil || d.IsDir() {
 				return nil
 			}
 			rel, _ := filepath.Rel(".", filepath.ToSlash(p))
-			files = append(files, fileEntry{relKey: rel, root: root})
+			parts := strings.SplitN(rel, "/", 3)
+			if len(parts) >= 2 && len(parts[1]) == 24 {
+				filesByStore[parts[1]] = append(filesByStore[parts[1]], entityFileEntry{relKey: rel, root: root})
+			} else {
+				entityUnknownFiles = append(entityUnknownFiles, entityFileEntry{relKey: rel, root: root})
+			}
 			return nil
 		})
 	}
 
-	total := len(files)
+	// Fetch store names for display
+	entityCtx, entityCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer entityCancel()
+	entityPosDB := db.Client("").Database(db.GetPosDB())
+	entityStoreNames := map[string]string{}
+	if cur, err2 := entityPosDB.Collection("store").Find(entityCtx, bson.M{}); err2 == nil {
+		for cur.Next(entityCtx) {
+			var row struct {
+				ID   primitive.ObjectID `bson:"_id"`
+				Name string             `bson:"name"`
+			}
+			if cur.Decode(&row) == nil {
+				entityStoreNames[row.ID.Hex()] = row.Name
+			}
+		}
+		cur.Close(entityCtx)
+	}
+
+	// Build ordered store groups
+	type entityStoreGroup struct {
+		storeID   string
+		storeName string
+		files     []entityFileEntry
+	}
+	var entityStoreGroups []entityStoreGroup
+	for sid, files := range filesByStore {
+		name := entityStoreNames[sid]
+		if name == "" {
+			name = sid
+		}
+		entityStoreGroups = append(entityStoreGroups, entityStoreGroup{storeID: sid, storeName: name, files: files})
+	}
+	if len(entityUnknownFiles) > 0 {
+		entityStoreGroups = append(entityStoreGroups, entityStoreGroup{storeID: "", storeName: "Other Files", files: entityUnknownFiles})
+	}
+
+	total := 0
+	for _, sg := range entityStoreGroups {
+		total += len(sg.files)
+	}
 	sendSSE(w, flusher, map[string]interface{}{"type": "start", "total": total})
 
+	if total == 0 {
+		sendSSE(w, flusher, map[string]interface{}{"type": "done", "uploaded": 0, "skipped": 0})
+		go func() {
+			bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer bgCancel()
+			updateEntityImageURLsInMongo(bgCtx, s)
+		}()
+		return
+	}
+
 	uploaded, skipped := 0, 0
-	for i, f := range files {
-		data, readErr := os.ReadFile("./" + f.relKey)
-		if readErr != nil {
-			skipped++
-			continue
-		}
-		ext := strings.ToLower(filepath.Ext(f.relKey))
-		contentType := mimeForExt(ext)
-		_, uploadErr := uploadToS3(s, f.relKey, data, contentType)
-		if uploadErr != nil {
-			log.Printf("migrate-entity-images: upload failed %s: %v", f.relKey, uploadErr)
-			skipped++
-		} else {
-			uploaded++
-		}
-		pct := (i + 1) * 100 / total
+	for i, sg := range entityStoreGroups {
 		sendSSE(w, flusher, map[string]interface{}{
-			"type": "progress", "processed": i + 1, "total": total, "percent": pct,
-			"current_file": filepath.Base(f.relKey), "uploaded": uploaded, "skipped": skipped,
+			"type": "store_start", "store_id": sg.storeID, "store_name": sg.storeName,
+			"index": i + 1, "total_stores": len(entityStoreGroups),
+		})
+		sendSSE(w, flusher, map[string]interface{}{"type": "store_total", "total": len(sg.files)})
+
+		storeUploaded, storeSkipped := 0, 0
+		for j, f := range sg.files {
+			data, readErr := os.ReadFile("./" + f.relKey)
+			if readErr != nil {
+				storeSkipped++
+				skipped++
+			} else {
+				ext := strings.ToLower(filepath.Ext(f.relKey))
+				contentType := mimeForExt(ext)
+				if _, uploadErr := uploadToS3(s, f.relKey, data, contentType); uploadErr != nil {
+					log.Printf("migrate-entity-images: upload failed %s: %v", f.relKey, uploadErr)
+					storeSkipped++
+					skipped++
+				} else {
+					storeUploaded++
+					uploaded++
+				}
+			}
+			storePct := (j + 1) * 100 / len(sg.files)
+			sendSSE(w, flusher, map[string]interface{}{
+				"type": "store_progress", "processed": j + 1, "total": len(sg.files), "percent": storePct,
+				"current_file": filepath.Base(f.relKey), "uploaded": storeUploaded, "skipped": storeSkipped,
+			})
+		}
+
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "store_done", "store_id": sg.storeID, "store_name": sg.storeName,
+			"index": i + 1, "uploaded": storeUploaded, "skipped": storeSkipped,
 		})
 	}
+
 	sendSSE(w, flusher, map[string]interface{}{
 		"type": "done", "uploaded": uploaded, "skipped": skipped,
 	})
 
 	// After uploading, update MongoDB so stored basenames become /cdn/ URLs.
-	// Use a fresh context — the handler's ctx is cancelled when defer fires.
 	go func() {
 		bgCtx, bgCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer bgCancel()
@@ -1228,37 +1364,58 @@ func MigrateInlineBase64ToS3Handler(w http.ResponseWriter, r *http.Request) {
 		{"customerwithdrawal", "customer_withdrawals", "customwithdrawal_", func(s string) string { return "store_" + s }},
 	}
 
-	// Count total docs across all stores and specs
 	posDB := db.Client("").Database(db.GetPosDB())
+
+	// Collect stores with names
+	type inlineStoreRow struct {
+		ID   primitive.ObjectID `bson:"_id"`
+		Name string             `bson:"name"`
+	}
 	storeCursor, err := posDB.Collection("store").Find(ctx, bson.M{})
 	if err != nil {
 		sendSSE(w, flusher, map[string]interface{}{"type": "error", "error": "failed to list stores"})
 		return
 	}
-	var storeIDs []string
+	var inlineStores []inlineStoreRow
 	for storeCursor.Next(ctx) {
-		var s2 struct {
-			ID primitive.ObjectID `bson:"_id"`
-		}
+		var s2 inlineStoreRow
 		if storeCursor.Decode(&s2) == nil {
-			storeIDs = append(storeIDs, s2.ID.Hex())
+			inlineStores = append(inlineStores, s2)
 		}
 	}
 	storeCursor.Close(ctx)
 
+	// Pre-compute per-store doc counts
+	inlineStoreTotals := make([]int, len(inlineStores))
 	total := 0
-	for _, sid := range storeIDs {
+	for i, st := range inlineStores {
+		sid := st.ID.Hex()
 		for _, spec := range specs {
 			n, _ := db.Client("").Database(spec.storeDBFn(sid)).Collection(spec.colName).CountDocuments(ctx,
 				bson.M{"imagescontent": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}})
-			total += int(n)
+			inlineStoreTotals[i] += int(n)
 		}
+		total += inlineStoreTotals[i]
 	}
 
 	sendSSE(w, flusher, map[string]interface{}{"type": "start", "total": total})
 
-	uploaded, skipped, processed, updatedDocs := 0, 0, 0, 0
-	for _, sid := range storeIDs {
+	uploaded, skipped, updatedDocs := 0, 0, 0
+	for i, st := range inlineStores {
+		sid := st.ID.Hex()
+		storeName := st.Name
+		if storeName == "" {
+			storeName = sid
+		}
+		storeTotal := inlineStoreTotals[i]
+
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "store_start", "store_id": sid, "store_name": storeName,
+			"index": i + 1, "total_stores": len(inlineStores),
+		})
+		sendSSE(w, flusher, map[string]interface{}{"type": "store_total", "total": storeTotal})
+
+		storeProcessed, storeUploaded, storeSkipped := 0, 0, 0
 		for _, spec := range specs {
 			col := db.Client("").Database(spec.storeDBFn(sid)).Collection(spec.colName)
 			filter := bson.M{"imagescontent": bson.M{"$exists": true, "$ne": nil, "$not": bson.M{"$size": 0}}}
@@ -1273,17 +1430,19 @@ func MigrateInlineBase64ToS3Handler(w http.ResponseWriter, r *http.Request) {
 					Images        []string           `bson:"images"`
 				}
 				if err := cursor.Decode(&doc); err != nil {
+					storeSkipped++
 					skipped++
 					continue
 				}
-				processed++
-				pct := 0
-				if total > 0 {
-					pct = processed * 100 / total
+				storeProcessed++
+				storePct := 0
+				if storeTotal > 0 {
+					storePct = storeProcessed * 100 / storeTotal
 				}
 
 				urls := migrateInlineBase64Items(s, sid, doc.ID.Hex(), spec.dirName, spec.prefix, doc.ImagesContent)
 				if len(urls) > 0 {
+					storeUploaded += len(urls)
 					uploaded += len(urls)
 					col.UpdateOne(ctx, bson.M{"_id": doc.ID}, bson.M{
 						"$push":  bson.M{"images": bson.M{"$each": urls}},
@@ -1291,16 +1450,22 @@ func MigrateInlineBase64ToS3Handler(w http.ResponseWriter, r *http.Request) {
 					})
 					updatedDocs++
 				} else {
+					storeSkipped++
 					skipped++
 				}
 
 				sendSSE(w, flusher, map[string]interface{}{
-					"type": "progress", "processed": processed, "total": total, "percent": pct,
-					"current_file": doc.ID.Hex()[:8] + "…", "uploaded": uploaded, "skipped": skipped,
+					"type": "store_progress", "processed": storeProcessed, "total": storeTotal, "percent": storePct,
+					"current_file": doc.ID.Hex()[:8] + "…", "uploaded": storeUploaded, "skipped": storeSkipped,
 				})
 			}
 			cursor.Close(ctx)
 		}
+
+		sendSSE(w, flusher, map[string]interface{}{
+			"type": "store_done", "store_id": sid, "store_name": storeName, "index": i + 1,
+			"uploaded": storeUploaded, "skipped": storeSkipped,
+		})
 	}
 
 	sendSSE(w, flusher, map[string]interface{}{
