@@ -35,7 +35,21 @@ type AutoRestartConfig struct {
 	Minutes int  `json:"minutes"` // how many minutes down before auto-restart
 }
 
-const configFile = "health-monitor-config.json"
+const (
+	configFile     = "health-monitor-config.json"
+	restartLogFile = "health-monitor-restarts.json"
+	maxLogEntries  = 200
+)
+
+// RestartLogEntry records one restart event (auto or manual).
+type RestartLogEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Env       string    `json:"env"`     // "production" | "test"
+	Service   string    `json:"service"`
+	Trigger   string    `json:"trigger"` // "auto" | "manual"
+	Success   bool      `json:"success"`
+	Error     string    `json:"error,omitempty"`
+}
 
 var (
 	arCfg   = AutoRestartConfig{Enabled: false, Minutes: 8}
@@ -43,7 +57,40 @@ var (
 	// downSince tracks when each env first went down (key: "production" | "test")
 	downSince   = map[string]time.Time{}
 	downSinceMu sync.Mutex
+	// restart log (newest first, capped at maxLogEntries)
+	rstLog   []RestartLogEntry
+	rstLogMu sync.Mutex
 )
+
+func loadRestartLog() {
+	data, err := os.ReadFile(restartLogFile)
+	if err != nil {
+		return
+	}
+	var entries []RestartLogEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		log.Printf("[health-monitor] restart log parse error: %v", err)
+		return
+	}
+	rstLogMu.Lock()
+	rstLog = entries
+	rstLogMu.Unlock()
+}
+
+func appendRestartLog(entry RestartLogEntry) {
+	rstLogMu.Lock()
+	rstLog = append([]RestartLogEntry{entry}, rstLog...) // newest first
+	if len(rstLog) > maxLogEntries {
+		rstLog = rstLog[:maxLogEntries]
+	}
+	snapshot := make([]RestartLogEntry, len(rstLog))
+	copy(snapshot, rstLog)
+	rstLogMu.Unlock()
+	data, _ := json.MarshalIndent(snapshot, "", "  ")
+	if err := os.WriteFile(restartLogFile, data, 0644); err != nil {
+		log.Printf("[health-monitor] failed to save restart log: %v", err)
+	}
+}
 
 func loadConfigFromDisk() {
 	data, err := os.ReadFile(configFile)
@@ -124,11 +171,20 @@ func autoRestartLoop() {
 				downSinceMu.Unlock()
 				log.Printf("[health-monitor] auto-restart %s (down for %v >= %dm)", e.service, elapsed.Round(time.Second), cfg.Minutes)
 				out, err := exec.Command("systemctl", "restart", e.service).CombinedOutput()
+				entry := RestartLogEntry{
+					Timestamp: time.Now(),
+					Env:       e.name,
+					Service:   e.service,
+					Trigger:   "auto",
+					Success:   err == nil,
+				}
 				if err != nil {
+					entry.Error = strings.TrimSpace(string(out))
 					log.Printf("[health-monitor] auto-restart %s FAILED: %v — %s", e.service, err, out)
 				} else {
 					log.Printf("[health-monitor] auto-restart %s OK", e.service)
 				}
+				appendRestartLog(entry)
 			} else {
 				downSinceMu.Unlock()
 			}
@@ -360,14 +416,24 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Restart initiated for " + service})
 
+	env := req.Env
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		out, err := exec.Command("systemctl", "restart", service).CombinedOutput()
+		entry := RestartLogEntry{
+			Timestamp: time.Now(),
+			Env:       env,
+			Service:   service,
+			Trigger:   "manual",
+			Success:   err == nil,
+		}
 		if err != nil {
+			entry.Error = strings.TrimSpace(string(out))
 			log.Printf("[health-monitor] restart %s failed: %v — %s", service, err, out)
 		} else {
 			log.Printf("[health-monitor] restart %s OK", service)
 		}
+		appendRestartLog(entry)
 	}()
 }
 
@@ -411,6 +477,27 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// restartLogHandler — GET /health-monitor/restart-log
+// Returns the last 200 restart events (newest first).
+func restartLogHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		cors(w)
+		return
+	}
+	cors(w)
+	if !requireAdminStateless(w, r) {
+		return
+	}
+	rstLogMu.Lock()
+	snapshot := make([]RestartLogEntry, len(rstLog))
+	copy(snapshot, rstLog)
+	rstLogMu.Unlock()
+	if snapshot == nil {
+		snapshot = []RestartLogEntry{}
+	}
+	json.NewEncoder(w).Encode(snapshot)
+}
+
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 func getenv(key, fallback string) string {
@@ -423,6 +510,7 @@ func getenv(key, fallback string) string {
 func main() {
 	port := getenv("HEALTH_MONITOR_PORT", "2998")
 
+	loadRestartLog()
 	loadConfigFromDisk()
 	go autoRestartLoop()
 
@@ -430,6 +518,7 @@ func main() {
 	mux.HandleFunc("/health-monitor/status", statusHandler)
 	mux.HandleFunc("/health-monitor/restart", restartHandler)
 	mux.HandleFunc("/health-monitor/config", configHandler)
+	mux.HandleFunc("/health-monitor/restart-log", restartLogHandler)
 	mux.HandleFunc("/health-monitor/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
