@@ -86,10 +86,39 @@ deploy_to() {
     ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
         "sudo fuser -k $remote_dest/$BINARY 2>/dev/null || true; sudo fuser -k $tmp 2>/dev/null || true"
 
-    # ── Stop → swap → start (prevents ETXTBSY race on plain restart) ──────────
-    echo "==> [$label] Stopping $service, swapping binary, starting..."
+    # ── Step 1: Stop and swap ────────────────────────────────────────────────
+    # Deliberately a separate SSH connection from step 2 (start). If this
+    # connection drops after stop but before start, the retry loop below still
+    # starts the service on its own fresh connection.
+    # Use "|| true" on stop so a pre-stopped service (e.g. from a prior failed
+    # deploy) doesn't abort the mv+sync.
+    echo "==> [$label] Stopping $service, swapping binary..."
     ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-        "sudo systemctl stop $service && mv -f $tmp $remote_dest/$BINARY && sync && sudo systemctl start $service && sha256sum $remote_dest/$BINARY && sudo systemctl status $service --no-pager"
+        "sudo systemctl stop $service || true; mv -f $tmp $remote_dest/$BINARY && sync"
+
+    # ── Step 2: Start with retry ─────────────────────────────────────────────
+    # Separate SSH call so a dropped connection in step 1 never leaves the
+    # service permanently dead.
+    local start_ok=0 start_try=1
+    while [ "$start_try" -le 3 ]; do
+        echo "==> [$label] Starting $service (attempt $start_try/3)..."
+        if ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
+            "sudo systemctl start $service && sudo systemctl is-active --quiet $service"; then
+            start_ok=1
+            break
+        fi
+        echo "==> [$label] Start attempt $start_try/3 failed, retrying in 5s..."
+        start_try=$((start_try + 1))
+        sleep 5
+    done
+
+    if [ "$start_ok" -eq 0 ]; then
+        echo "==> [$label] ERROR: $service failed to start after 3 attempts. Manual intervention required!"
+        return 1
+    fi
+
+    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
+        "sha256sum $remote_dest/$BINARY && sudo systemctl status $service --no-pager"
 
     echo "==> [$label] Done."
 }
