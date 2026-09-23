@@ -117,7 +117,7 @@ func SaveProcurementMessage(msg *ProcurementMessage) error {
 // ListProcurementMessages returns paginated messages for a store.
 // rfqFilter: "" = all, "yes" = processed_as_rfq=true, "no" = processed_as_rfq=false/missing,
 // "quotation" = is_supplier_quotation=true, "other" = not RFQ and not quotation.
-func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int) ([]ProcurementMessage, int64, error) {
+func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int, hasAttachments bool) ([]ProcurementMessage, int64, error) {
 	filter := bson.M{"store_id": storeID}
 	if msgType != "" {
 		filter["type"] = msgType
@@ -146,6 +146,9 @@ func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, sea
 			{"subject": bson.M{"$regex": search, "$options": "i"}},
 			{"body_text": bson.M{"$regex": search, "$options": "i"}},
 		}
+	}
+	if hasAttachments {
+		filter["attachments"] = bson.M{"$exists": true, "$not": bson.M{"$size": 0}}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -83,6 +83,7 @@ func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	direction := r.URL.Query().Get("direction")
 	search := r.URL.Query().Get("search")
 	rfqFilter := r.URL.Query().Get("rfq_filter") // "yes" | "no" | ""
+	hasAttachments := r.URL.Query().Get("has_attachments") == "true"
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -92,7 +93,7 @@ func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 
-	msgs, total, err := models.ListProcurementMessages(storeObjID, msgType, direction, search, rfqFilter, page, limit)
+	msgs, total, err := models.ListProcurementMessages(storeObjID, msgType, direction, search, rfqFilter, page, limit, hasAttachments)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
