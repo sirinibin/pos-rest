@@ -31,8 +31,25 @@ import (
 // ─── auto-restart config (persisted to health-monitor-config.json) ───────────
 
 type AutoRestartConfig struct {
-	Enabled bool `json:"enabled"`
-	Minutes int  `json:"minutes"` // how many minutes down before auto-restart
+	Enabled      bool     `json:"enabled"`
+	Minutes      int      `json:"minutes"`         // how many minutes down before auto-restart
+	AllowedUsers []string `json:"allowed_users"`   // non-admin user IDs permitted to view status
+	RedisService string   `json:"redis_service"`   // default: "redis.service"
+	MongoService string   `json:"mongo_service"`   // default: "mongod.service"
+}
+
+func (c *AutoRestartConfig) redisService() string {
+	if c.RedisService != "" {
+		return c.RedisService
+	}
+	return "redis.service"
+}
+
+func (c *AutoRestartConfig) mongoService() string {
+	if c.MongoService != "" {
+		return c.MongoService
+	}
+	return "mongod.service"
 }
 
 const (
@@ -125,14 +142,53 @@ func saveConfigToDisk(cfg AutoRestartConfig) error {
 	return os.WriteFile(configFile, data, 0644)
 }
 
-// autoRestartLoop runs in the background, checking both services every 30s.
-// If a service has been continuously down for >= configured minutes, it restarts it.
-func autoRestartLoop() {
-	type env struct{ name, service string }
-	envs := []env{
-		{"production", "start-api.service"},
-		{"test", "start-api-test.service"},
+// tryAutoRestart checks whether a named service (by downSince key) is down.
+// If it has been down longer than threshold it issues systemctl restart and logs the result.
+// Returns true if the service is currently active (no restart needed).
+func tryAutoRestart(key, service, envName string, threshold time.Duration, cfg AutoRestartConfig) {
+	state := checkServiceState(service)
+	if state == "active" {
+		downSinceMu.Lock()
+		delete(downSince, key)
+		downSinceMu.Unlock()
+		return
 	}
+	downSinceMu.Lock()
+	if _, tracked := downSince[key]; !tracked {
+		downSince[key] = time.Now()
+		downSinceMu.Unlock()
+		log.Printf("[health-monitor] %s is down, will auto-restart in %dm if still down", service, cfg.Minutes)
+		return
+	}
+	elapsed := time.Since(downSince[key])
+	if elapsed < threshold {
+		downSinceMu.Unlock()
+		return
+	}
+	delete(downSince, key)
+	downSinceMu.Unlock()
+	log.Printf("[health-monitor] auto-restart %s (down for %v >= %dm)", service, elapsed.Round(time.Second), cfg.Minutes)
+	out, err := exec.Command("systemctl", "restart", service).CombinedOutput()
+	entry := RestartLogEntry{
+		Timestamp: time.Now(),
+		Env:       envName,
+		Service:   service,
+		Trigger:   "auto",
+		Success:   err == nil,
+	}
+	if err != nil {
+		entry.Error = strings.TrimSpace(string(out))
+		log.Printf("[health-monitor] auto-restart %s FAILED: %v — %s", service, err, out)
+	} else {
+		log.Printf("[health-monitor] auto-restart %s OK", service)
+	}
+	appendRestartLog(entry)
+}
+
+// autoRestartLoop runs in the background every 30s.
+// Checks API services per-environment, plus the shared Redis and MongoDB services.
+// Only restarts services that are actually down and have been for >= configured minutes.
+func autoRestartLoop() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -140,7 +196,6 @@ func autoRestartLoop() {
 		cfg := arCfg
 		arMu.RUnlock()
 		if !cfg.Enabled {
-			// Clear trackers so timers reset when re-enabled
 			downSinceMu.Lock()
 			for k := range downSince {
 				delete(downSince, k)
@@ -149,46 +204,12 @@ func autoRestartLoop() {
 			continue
 		}
 		threshold := time.Duration(cfg.Minutes) * time.Minute
-		for _, e := range envs {
-			state := checkServiceState(e.service)
-			if state == "active" {
-				downSinceMu.Lock()
-				delete(downSince, e.name)
-				downSinceMu.Unlock()
-				continue
-			}
-			// Service is not active — track how long it has been down
-			downSinceMu.Lock()
-			if _, tracked := downSince[e.name]; !tracked {
-				downSince[e.name] = time.Now()
-				downSinceMu.Unlock()
-				log.Printf("[health-monitor] %s went down, will auto-restart in %dm if still down", e.service, cfg.Minutes)
-				continue
-			}
-			elapsed := time.Since(downSince[e.name])
-			if elapsed >= threshold {
-				delete(downSince, e.name) // reset before restarting
-				downSinceMu.Unlock()
-				log.Printf("[health-monitor] auto-restart %s (down for %v >= %dm)", e.service, elapsed.Round(time.Second), cfg.Minutes)
-				out, err := exec.Command("systemctl", "restart", e.service).CombinedOutput()
-				entry := RestartLogEntry{
-					Timestamp: time.Now(),
-					Env:       e.name,
-					Service:   e.service,
-					Trigger:   "auto",
-					Success:   err == nil,
-				}
-				if err != nil {
-					entry.Error = strings.TrimSpace(string(out))
-					log.Printf("[health-monitor] auto-restart %s FAILED: %v — %s", e.service, err, out)
-				} else {
-					log.Printf("[health-monitor] auto-restart %s OK", e.service)
-				}
-				appendRestartLog(entry)
-			} else {
-				downSinceMu.Unlock()
-			}
-		}
+		// Per-environment API services
+		tryAutoRestart("production-api", "start-api.service", "production", threshold, cfg)
+		tryAutoRestart("test-api", "start-api-test.service", "test", threshold, cfg)
+		// Shared infrastructure — only restart once per cycle, not per env
+		tryAutoRestart("redis", cfg.redisService(), "shared", threshold, cfg)
+		tryAutoRestart("mongo", cfg.mongoService(), "shared", threshold, cfg)
 	}
 }
 
@@ -313,18 +334,15 @@ func jwtSecret() []byte {
 	return []byte(s)
 }
 
-// requireAdminStateless verifies the Bearer JWT by signature only.
-// No Redis or MongoDB lookup — admin/role are embedded in the token claim.
-// Falls back gracefully: if the admin claim is absent (old token) it still
-// allows through any authenticated user (acceptable for health monitor only).
-func requireAdminStateless(w http.ResponseWriter, r *http.Request) bool {
+// parseJWTClaims validates the Bearer token and returns its claims.
+// Returns nil claims and writes the error response if invalid.
+func parseJWTClaims(w http.ResponseWriter, r *http.Request) jwt.MapClaims {
 	authHeader := r.Header.Get("Authorization")
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 	if tokenStr == "" || tokenStr == authHeader {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-		return false
+		return nil
 	}
-
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -333,35 +351,65 @@ func requireAdminStateless(w http.ResponseWriter, r *http.Request) bool {
 	})
 	if err != nil || !token.Valid {
 		http.Error(w, `{"error":"invalid or expired token"}`, http.StatusUnauthorized)
-		return false
+		return nil
 	}
-
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		http.Error(w, `{"error":"invalid token claims"}`, http.StatusUnauthorized)
-		return false
+		return nil
 	}
-
-	// Verify token type
 	if ttype, _ := claims["type"].(string); ttype != "access_token" {
 		http.Error(w, `{"error":"invalid token type"}`, http.StatusUnauthorized)
+		return nil
+	}
+	return claims
+}
+
+// isAdmin returns true if the claims show admin privileges.
+func isAdmin(claims jwt.MapClaims) bool {
+	admin, hasAdmin := claims["admin"].(bool)
+	role, _ := claims["role"].(string)
+	if hasAdmin {
+		return admin || role == "Admin"
+	}
+	// Old token without embedded admin claim — treat as non-admin
+	return false
+}
+
+// requireAdminStateless — admin-only endpoints (config write, restart, restart-log).
+func requireAdminStateless(w http.ResponseWriter, r *http.Request) bool {
+	claims := parseJWTClaims(w, r)
+	if claims == nil {
 		return false
 	}
+	if !isAdmin(claims) {
+		http.Error(w, `{"error":"admin only"}`, http.StatusForbidden)
+		return false
+	}
+	return true
+}
 
-	// Check admin claim (embedded since the admin-claim change).
-	// If absent (old token without the claim), fall back to allowing any valid user
-	// — health monitor access is less sensitive than write operations.
-	isAdmin, hasAdminClaim := claims["admin"].(bool)
-	role, _ := claims["role"].(string)
-	if hasAdminClaim {
-		if !isAdmin && role != "Admin" {
-			http.Error(w, `{"error":"admin only"}`, http.StatusForbidden)
-			return false
+// requireViewAccess — read-only status endpoints.
+// Allows: admins, or non-admin users whose ID is in AllowedUsers list.
+func requireViewAccess(w http.ResponseWriter, r *http.Request) bool {
+	claims := parseJWTClaims(w, r)
+	if claims == nil {
+		return false
+	}
+	if isAdmin(claims) {
+		return true
+	}
+	userID, _ := claims["user_id"].(string)
+	arMu.RLock()
+	allowed := arCfg.AllowedUsers
+	arMu.RUnlock()
+	for _, id := range allowed {
+		if id == userID {
+			return true
 		}
 	}
-	// No admin claim → old token → allow through (user authenticated the system)
-
-	return true
+	http.Error(w, `{"error":"access denied"}`, http.StatusForbidden)
+	return false
 }
 
 // ─── handlers ────────────────────────────────────────────────────────────────
@@ -378,7 +426,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cors(w)
-	if !requireAdminStateless(w, r) {
+	if !requireViewAccess(w, r) {
 		return
 	}
 	production := buildStatus("Production", "start-api.service", 2000)
@@ -408,32 +456,84 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	service := "start-api-test.service"
+	apiService := "start-api-test.service"
 	if req.Env == "production" {
-		service = "start-api.service"
+		apiService = "start-api.service"
 	}
 
-	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Restart initiated for " + service})
+	arMu.RLock()
+	cfg := arCfg
+	arMu.RUnlock()
 
-	env := req.Env
+	// Determine which services are actually down — only restart those.
+	type target struct{ service, key string }
+	var toRestart []target
+	var skipped []string
+
+	if checkServiceState(apiService) != "active" {
+		toRestart = append(toRestart, target{apiService, req.Env + "-api"})
+	} else {
+		skipped = append(skipped, apiService)
+	}
+	if checkServiceState(cfg.redisService()) != "active" {
+		toRestart = append(toRestart, target{cfg.redisService(), "redis"})
+	} else {
+		skipped = append(skipped, cfg.redisService())
+	}
+	if checkServiceState(cfg.mongoService()) != "active" {
+		toRestart = append(toRestart, target{cfg.mongoService(), "mongo"})
+	} else {
+		skipped = append(skipped, cfg.mongoService())
+	}
+
+	if len(toRestart) == 0 {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":      true,
+			"message": "All services are already running — nothing to restart.",
+			"skipped": skipped,
+		})
+		return
+	}
+
+	restartNames := make([]string, len(toRestart))
+	for i, t := range toRestart {
+		restartNames[i] = t.service
+	}
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":        true,
+		"restarted": restartNames,
+		"skipped":   skipped,
+	})
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	envName := req.Env
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-		out, err := exec.Command("systemctl", "restart", service).CombinedOutput()
-		entry := RestartLogEntry{
-			Timestamp: time.Now(),
-			Env:       env,
-			Service:   service,
-			Trigger:   "manual",
-			Success:   err == nil,
+		for _, t := range toRestart {
+			out, err := exec.Command("systemctl", "restart", t.service).CombinedOutput()
+			entry := RestartLogEntry{
+				Timestamp: time.Now(),
+				Env:       envName,
+				Service:   t.service,
+				Trigger:   "manual",
+				Success:   err == nil,
+			}
+			if err != nil {
+				entry.Error = strings.TrimSpace(string(out))
+				log.Printf("[health-monitor] restart %s failed: %v — %s", t.service, err, out)
+			} else {
+				// Clear auto-restart downSince so the loop doesn't re-trigger immediately
+				downSinceMu.Lock()
+				delete(downSince, t.key)
+				downSinceMu.Unlock()
+				log.Printf("[health-monitor] restart %s OK", t.service)
+			}
+			appendRestartLog(entry)
 		}
-		if err != nil {
-			entry.Error = strings.TrimSpace(string(out))
-			log.Printf("[health-monitor] restart %s failed: %v — %s", service, err, out)
-		} else {
-			log.Printf("[health-monitor] restart %s OK", service)
-		}
-		appendRestartLog(entry)
 	}()
 }
 
@@ -478,14 +578,14 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // restartLogHandler — GET /health-monitor/restart-log
-// Returns the last 200 restart events (newest first).
+// Returns the last 200 restart events (newest first). Allowed for all view-access users.
 func restartLogHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		cors(w)
 		return
 	}
 	cors(w)
-	if !requireAdminStateless(w, r) {
+	if !requireViewAccess(w, r) {
 		return
 	}
 	rstLogMu.Lock()
