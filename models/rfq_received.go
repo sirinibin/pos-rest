@@ -132,6 +132,7 @@ type RFQReceived struct {
 	CustomerVATNo           string              `bson:"customer_vat_no,omitempty"           json:"customer_vat_no,omitempty"`
 	CustomerCRNo            string              `bson:"customer_cr_no,omitempty"            json:"customer_cr_no,omitempty"`
 	CustomerNationalAddress string              `bson:"customer_national_address,omitempty" json:"customer_national_address,omitempty"`
+	CustomerCity            string              `bson:"customer_city,omitempty"             json:"customer_city,omitempty"`
 	// received | processing | ready_to_send | forwarded | failed | ignored
 	Status      string             `bson:"status"                  json:"status"`
 	ProcessedAt *time.Time         `bson:"processed_at,omitempty"  json:"processed_at,omitempty"`

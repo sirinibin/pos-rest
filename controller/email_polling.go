@@ -1793,7 +1793,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	if customer, err := store.FindOrCreateCustomerFromRFQ(
 		extracted.CustomerName, lookupEmail, extracted.CustomerPhone,
 		extracted.CustomerVATNo, extracted.CustomerCompany,
-		extracted.CustomerContactPerson, extracted.CustomerNationalAddress,
+		extracted.CustomerContactPerson, extracted.CustomerNationalAddress, extracted.CustomerCity,
 	); err != nil {
 		log.Printf("email_polling: FindOrCreateCustomerFromRFQ error: %v", err)
 	} else if customer != nil {
@@ -1838,6 +1838,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 		CustomerVATNo:           extracted.CustomerVATNo,
 		CustomerCRNo:            extracted.CustomerCRNo,
 		CustomerNationalAddress: extracted.CustomerNationalAddress,
+		CustomerCity:            extracted.CustomerCity,
 	}
 	if procMsg != nil {
 		rfq.ProcurementMessageID = &procMsg.ID

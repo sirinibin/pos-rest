@@ -1834,7 +1834,7 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 		}
 		if customer, cerr := store.FindOrCreateCustomerFromRFQ(
 			rfq.CustomerName, custEmail, rfq.FromPhone, rfq.CustomerVATNo, rfq.CustomerCompany,
-			rfq.CustomerContactPerson, rfq.CustomerNationalAddress,
+			rfq.CustomerContactPerson, rfq.CustomerNationalAddress, rfq.CustomerCity,
 		); cerr != nil {
 			log.Printf("rfq_bot[%s]: FindOrCreateCustomerFromRFQ error: %v", rfqIDStr, cerr)
 		} else if customer != nil {
@@ -4090,6 +4090,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		GeneralInstructions          string              `json:"general_instructions"`
 		ProcurementMessageID         string              `json:"procurement_message_id"`
 		ProcurementMessageCode       string              `json:"procurement_message_code"`
+		CustomerCity                 string              `json:"customer_city"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
@@ -4116,6 +4117,7 @@ func CreateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		AdditionalAttachmentFilenames: body.AdditionalAttachmentFilenames,
 		GeneralInstructions:           body.GeneralInstructions,
 		Status:                        "ready_to_send",
+		CustomerCity:                  body.CustomerCity,
 	}
 	rfqID := rfq.ID.Hex()
 	if len(body.AttachmentDataURIs) > 0 {
@@ -4438,6 +4440,7 @@ func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 		GeneralInstructions          string              `json:"general_instructions"`
 		AdditionalAttachmentDataURIs  []string            `json:"additional_attachment_data_uris"`
 		AdditionalAttachmentFilenames []string            `json:"additional_attachment_filenames"`
+		CustomerCity                  string              `json:"customer_city"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
@@ -4457,6 +4460,7 @@ func UpdateRFQReceivedHandler(w http.ResponseWriter, r *http.Request) {
 	rfq.CustomerRFQID       = body.CustomerRFQID
 	rfq.TextContent         = body.TextContent
 	rfq.GeneralInstructions = body.GeneralInstructions
+	rfq.CustomerCity        = body.CustomerCity
 	if body.CustomerID != "" {
 		if custObjID, err2 := primitive.ObjectIDFromHex(body.CustomerID); err2 == nil {
 			rfq.CustomerID = &custObjID
@@ -5220,6 +5224,7 @@ type rfqExtractResult struct {
 	CustomerVATNo           string              `json:"customer_vat_no"`
 	CustomerCRNo            string              `json:"customer_cr_no"`
 	CustomerNationalAddress string              `json:"customer_national_address"`
+	CustomerCity            string              `json:"customer_city"`
 	Products                []models.RFQProduct `json:"products"`
 	Categories              []string            `json:"product_categories,omitempty"`
 	GeneralInstructions     string              `json:"general_instructions"`
@@ -5702,6 +5707,7 @@ Extract the following and respond with ONLY valid JSON (no markdown, no explanat
   "customer_vat_no": "VAT registration number or tax ID if present (empty string if not found)",
   "customer_cr_no": "Commercial Registration (CR) number if present (empty string if not found)",
   "customer_national_address": "full national/postal address as a single string if present (empty string if not found)",
+  "customer_city": "city name extracted from the address or contact info (empty string if not found)",
   "products": [
     {
       "part_no": "part number or product code (empty string if not found)",

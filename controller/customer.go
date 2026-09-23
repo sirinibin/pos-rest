@@ -804,6 +804,7 @@ func FindOrCreateCustomerHandler(w http.ResponseWriter, r *http.Request) {
 		Email         string `json:"email"`
 		Company       string `json:"company"`
 		ContactPerson string `json:"contact_person"`
+		CityName      string `json:"city_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -853,6 +854,7 @@ func FindOrCreateCustomerHandler(w http.ResponseWriter, r *http.Request) {
 		strings.TrimSpace(body.Company),
 		strings.TrimSpace(body.ContactPerson),
 		"",
+		strings.TrimSpace(body.CityName),
 	)
 	if err != nil || customer == nil {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -2729,7 +2729,7 @@ func normalizePhoneString(phone string) string {
 // FindOrCreateCustomerFromRFQ looks up an existing customer by email, phone, or VAT
 // number. If none is found it creates a minimal customer record and returns it.
 // Callers should update the RFQ's CustomerID with the returned customer's ID.
-func (store *Store) FindOrCreateCustomerFromRFQ(name, email, phone, vatNo, company, contactPerson, nationalAddressStr string) (*Customer, error) {
+func (store *Store) FindOrCreateCustomerFromRFQ(name, email, phone, vatNo, company, contactPerson, nationalAddressStr, cityName string) (*Customer, error) {
 	// 1. Try to find by email or phone
 	existing, _ := store.FindCustomerByEmailOrPhone(email, phone, bson.M{})
 	if existing != nil {
@@ -2788,6 +2788,9 @@ func (store *Store) FindOrCreateCustomerFromRFQ(name, email, phone, vatNo, compa
 	// Store free-text national address in the street name field as a best-effort mapping.
 	if nationalAddressStr != "" {
 		c.NationalAddress.StreetName = nationalAddressStr
+	}
+	if cityName != "" {
+		c.NationalAddress.CityName = cityName
 	}
 	c.InitStore()
 	if err := c.MakeCode(); err != nil {

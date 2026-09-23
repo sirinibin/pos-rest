@@ -480,7 +480,7 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 	if customer, custErr := store.FindOrCreateCustomerFromRFQ(
 		extracted.CustomerName, lookupEmail, extracted.CustomerPhone,
 		extracted.CustomerVATNo, extracted.CustomerCompany,
-		extracted.CustomerContactPerson, extracted.CustomerNationalAddress,
+		extracted.CustomerContactPerson, extracted.CustomerNationalAddress, extracted.CustomerCity,
 	); custErr != nil {
 		log.Printf("procurement_messages: FindOrCreateCustomerFromRFQ error: %v", custErr)
 	} else if customer != nil {
@@ -528,6 +528,7 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 		CustomerVATNo:           extracted.CustomerVATNo,
 		CustomerCRNo:            extracted.CustomerCRNo,
 		CustomerNationalAddress: extracted.CustomerNationalAddress,
+		CustomerCity:            extracted.CustomerCity,
 		ProcurementMessageID:    &procMsg.ID,
 		ProcurementMessageCode:  procMsg.Code,
 	}
