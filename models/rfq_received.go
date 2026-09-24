@@ -467,6 +467,54 @@ func FindRFQByCode(storeID primitive.ObjectID, code string) (*RFQReceived, error
 	return &rfq, nil
 }
 
+// FindRFQsByPhones returns RFQs that have any of the given phones in their forwarded_to list
+// or as customer_phone. Used to map unread WhatsApp threads back to RFQs.
+func FindRFQsByPhones(storeID primitive.ObjectID, phones []string) ([]RFQReceived, error) {
+	if len(phones) == 0 {
+		return nil, nil
+	}
+	col := db.Client("").Database(db.GetPosDB()).Collection(rfqReceivedCollection(storeID))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Build $in variants: with and without leading "+" for each phone
+	variants := make(bson.A, 0, len(phones)*2)
+	for _, p := range phones {
+		variants = append(variants, p)
+		if !strings.HasPrefix(p, "+") {
+			variants = append(variants, "+"+p)
+		} else {
+			variants = append(variants, strings.TrimPrefix(p, "+"))
+		}
+	}
+
+	filter := bson.M{
+		"store_id": storeID,
+		"$or": bson.A{
+			bson.M{"forwarded_to.phone": bson.M{"$in": variants}},
+			bson.M{"customer_phone": bson.M{"$in": variants}},
+		},
+	}
+	opts := options.Find().
+		SetSort(bson.D{{Key: "received_at", Value: -1}}).
+		SetLimit(200).
+		SetProjection(bson.M{
+			"_id": 1, "code": 1,
+			"customer_name": 1, "customer_phone": 1,
+			"forwarded_to": 1,
+		})
+	cur, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var items []RFQReceived
+	if err := cur.All(ctx, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 // FindRecentRFQsByPhone returns up to limit RFQs from a given WhatsApp phone number within
 // the lookback window, newest first. Used to detect reminder/follow-up messages.
 func FindRecentRFQsByPhone(storeID primitive.ObjectID, phone string, lookback time.Duration, limit int64) ([]RFQReceived, error) {

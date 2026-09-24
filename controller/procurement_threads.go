@@ -70,6 +70,112 @@ func ListProcurementThreadsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// RFQUnreadSummary represents unread WhatsApp messages for one supplier/customer of an RFQ.
+type RFQUnreadSummary struct {
+	RFQID       string `json:"rfq_id"`
+	RFQCode     string `json:"rfq_code"`
+	Phone       string `json:"phone"`
+	ContactName string `json:"contact_name"`
+	PhoneType   string `json:"phone_type"` // "supplier" | "customer"
+	UnreadCount int    `json:"unread_count"`
+	LastMsgDate string `json:"last_message_date,omitempty"`
+	LastMsgText string `json:"last_message_text,omitempty"`
+}
+
+func fmtThreadDate(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+// GET /v1/rfq-whatsapp-unread
+// Returns unread WhatsApp message summaries grouped by RFQ.
+func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+
+	// Step 1: get all WhatsApp threads with unread messages
+	threads, _, err := models.ListContactThreads(storeID, "whatsapp", "", 1, 1000, nil)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	// Keep only threads with unread messages
+	var unreadPhones []string
+	unreadByPhone := map[string]models.ContactThread{}
+	for _, t := range threads {
+		if t.UnreadCount > 0 {
+			norm := strings.TrimPrefix(t.ContactPhone, "+")
+			unreadPhones = append(unreadPhones, norm)
+			unreadByPhone[norm] = t
+		}
+	}
+
+	if len(unreadPhones) == 0 {
+		json.NewEncoder(w).Encode(map[string]interface{}{"items": []RFQUnreadSummary{}, "total_unread": 0})
+		return
+	}
+
+	// Step 2: find RFQs whose forwarded_to phones or customer_phone match the unread phones
+	rfqs, err := models.FindRFQsByPhones(storeID, unreadPhones)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	normalise := func(p string) string { return strings.TrimPrefix(p, "+") }
+
+	var items []RFQUnreadSummary
+	totalUnread := 0
+	for _, rfq := range rfqs {
+		for _, s := range rfq.ForwardedTo {
+			norm := normalise(s.Phone)
+			if t, ok := unreadByPhone[norm]; ok {
+				items = append(items, RFQUnreadSummary{
+					RFQID:       rfq.ID.Hex(),
+					RFQCode:     rfq.Code,
+					Phone:       s.Phone,
+					ContactName: s.SupplierName,
+					PhoneType:   "supplier",
+					UnreadCount: t.UnreadCount,
+					LastMsgDate: fmtThreadDate(t.LastMessageDate),
+					LastMsgText: t.LastMessageText,
+				})
+				totalUnread += t.UnreadCount
+			}
+		}
+		if rfq.CustomerPhone != "" {
+			norm := normalise(rfq.CustomerPhone)
+			if t, ok := unreadByPhone[norm]; ok {
+				items = append(items, RFQUnreadSummary{
+					RFQID:       rfq.ID.Hex(),
+					RFQCode:     rfq.Code,
+					Phone:       rfq.CustomerPhone,
+					ContactName: rfq.CustomerName,
+					PhoneType:   "customer",
+					UnreadCount: t.UnreadCount,
+					LastMsgDate: fmtThreadDate(t.LastMessageDate),
+					LastMsgText: t.LastMessageText,
+				})
+				totalUnread += t.UnreadCount
+			}
+		}
+	}
+	if items == nil {
+		items = []RFQUnreadSummary{}
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": totalUnread})
+}
+
 // GET /v1/procurement-message-threads/{phone}
 // Returns all messages in the thread with the given contact phone, chronologically.
 func GetThreadMessagesHandler(w http.ResponseWriter, r *http.Request) {

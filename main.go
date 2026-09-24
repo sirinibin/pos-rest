@@ -850,6 +850,7 @@ func main() {
 	router.HandleFunc("/v1/procurement-messages/{id}/reply", controller.ReplyToProcurementMessageHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-messages/{id}/email-reply", controller.ReplyToEmailProcurementMessageHandler).Methods("POST")
 	router.HandleFunc("/v1/procurement-email-send", controller.SendNewEmailHandler).Methods("POST")
+	router.HandleFunc("/v1/rfq-whatsapp-unread", controller.GetRFQWhatsAppUnreadHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-message-threads", controller.ListProcurementThreadsHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-message-threads/{phone}", controller.GetThreadMessagesHandler).Methods("GET")
 	router.HandleFunc("/v1/procurement-message-threads/{phone}/send", controller.SendThreadMessageHandler).Methods("POST")
