@@ -297,16 +297,19 @@ func FetchMessagesForCleanup(filter bson.M) ([]ProcurementMessage, error) {
 	return msgs, nil
 }
 
-// ListUnreadEmailMessages returns inbound email messages that have not been read yet.
+// ListUnreadEmailMessages returns inbound email messages that have not been read yet
+// and are not already connected to an RFQ.
 func ListUnreadEmailMessages(storeID primitive.ObjectID, limit int64) ([]ProcurementMessage, int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	col := procurementMessageCol()
 	filter := bson.M{
-		"store_id":  storeID,
-		"type":      "email",
-		"direction": "in",
-		"read":      bson.M{"$ne": true},
+		"store_id":         storeID,
+		"type":             "email",
+		"direction":        "in",
+		"read":             bson.M{"$ne": true},
+		"processed_as_rfq": bson.M{"$ne": true},
+		"rfq_received_id":  bson.M{"$exists": false},
 	}
 	total, _ := col.CountDocuments(ctx, filter)
 	opts := options.Find().SetSort(bson.D{{Key: "message_date", Value: -1}}).SetLimit(limit)
