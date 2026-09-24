@@ -197,7 +197,7 @@ func GetEmailUnreadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msgs, _, err := models.ListUnreadEmailMessages(storeID, 50)
+	msgs, totalUnread, err := models.ListUnreadEmailMessages(storeID, 50)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -220,7 +220,7 @@ func GetEmailUnreadHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": len(msgs)})
+	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": totalUnread})
 }
 
 // GET /v1/procurement-message-threads/{phone}

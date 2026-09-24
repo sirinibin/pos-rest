@@ -190,34 +190,64 @@ func (store *Store) NotifyUsers(event string) error {
 	return nil
 }
 
-// NotifyStoreUsersWAUnread broadcasts "wa_unread_changed" to all online users of a store.
-// Called whenever a new inbound WhatsApp message arrives so the header badge updates in real time.
-func NotifyStoreUsersWAUnread(storeID primitive.ObjectID) {
-	users, err := GetOnlineUsersByStoreID(&storeID)
-	if err != nil {
-		return
+// emitToStoreUsers sends an event to all currently connected WebSocket clients that belong to
+// the given store. It uses the in-memory Clients map as the source of truth for live connections
+// (more reliable than iterating user.Devices from the DB, which can be stale).
+func emitToStoreUsers(storeID primitive.ObjectID, event string) {
+	// Snapshot connected userIDs under the mutex so we don't hold it during DB calls.
+	mutex.Lock()
+	userIDs := make([]string, 0, len(Clients))
+	for uid := range Clients {
+		userIDs = append(userIDs, uid)
 	}
-	for _, user := range users {
-		for _, device := range user.Devices {
-			if device.Connected {
-				Emit(user.ID.Hex(), device.DeviceID, "wa_unread_changed", nil)
+	mutex.Unlock()
+
+	for _, userIDStr := range userIDs {
+		objID, err := primitive.ObjectIDFromHex(userIDStr)
+		if err != nil {
+			continue
+		}
+		user, err := FindUserByID(&objID, bson.M{"store_ids": 1, "role": 1, "admin": 1})
+		if err != nil {
+			continue
+		}
+		// Check if user belongs to this store or is an admin.
+		belongs := user.Admin || user.Role == "Admin"
+		if !belongs {
+			for _, sid := range user.StoreIDs {
+				if sid != nil && *sid == storeID {
+					belongs = true
+					break
+				}
 			}
+		}
+		if !belongs {
+			continue
+		}
+		// Emit to all open device connections for this user.
+		mutex.Lock()
+		deviceMap, ok := Clients[userIDStr]
+		deviceIDs := make([]string, 0, len(deviceMap))
+		if ok {
+			for did := range deviceMap {
+				deviceIDs = append(deviceIDs, did)
+			}
+		}
+		mutex.Unlock()
+		for _, did := range deviceIDs {
+			Emit(userIDStr, did, event, nil)
 		}
 	}
 }
 
-// NotifyStoreUsersEmailUnread broadcasts "email_unread_changed" to all online users of a store.
+// NotifyStoreUsersWAUnread broadcasts "wa_unread_changed" to all connected users of a store.
+// Called whenever a new inbound WhatsApp message arrives so the header badge updates in real time.
+func NotifyStoreUsersWAUnread(storeID primitive.ObjectID) {
+	emitToStoreUsers(storeID, "wa_unread_changed")
+}
+
+// NotifyStoreUsersEmailUnread broadcasts "email_unread_changed" to all connected users of a store.
 // Called when a new inbound email arrives or when an email is marked as read.
 func NotifyStoreUsersEmailUnread(storeID primitive.ObjectID) {
-	users, err := GetOnlineUsersByStoreID(&storeID)
-	if err != nil {
-		return
-	}
-	for _, user := range users {
-		for _, device := range user.Devices {
-			if device.Connected {
-				Emit(user.ID.Hex(), device.DeviceID, "email_unread_changed", nil)
-			}
-		}
-	}
+	emitToStoreUsers(storeID, "email_unread_changed")
 }
