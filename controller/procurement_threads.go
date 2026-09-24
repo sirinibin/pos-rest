@@ -42,7 +42,18 @@ func ListProcurementThreadsHandler(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 
-	threads, total, err := models.ListContactThreads(storeID, msgType, search, page, limit)
+	phonesStr := strings.TrimSpace(r.URL.Query().Get("phones"))
+	var phones []string
+	if phonesStr != "" {
+		for _, p := range strings.Split(phonesStr, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				phones = append(phones, p)
+			}
+		}
+	}
+
+	threads, total, err := models.ListContactThreads(storeID, msgType, search, page, limit, phones)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

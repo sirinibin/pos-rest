@@ -467,7 +467,7 @@ func getPinnedContacts(storeID primitive.ObjectID, msgType string) map[string]ti
 }
 
 // ListContactThreads returns one row per distinct supplier contact, sorted by last message date desc.
-func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page, limit int) ([]ContactThread, int64, error) {
+func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page, limit int, phones []string) ([]ContactThread, int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	col := procurementMessageCol()
@@ -530,6 +530,16 @@ func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page
 			"sender_type":       1,
 		}}},
 		bson.D{bson.E{Key: "$sort", Value: bson.M{"last_message_date": -1}}},
+	}
+
+	if len(phones) > 0 {
+		phonesIface := make(bson.A, len(phones))
+		for i, p := range phones {
+			phonesIface[i] = p
+		}
+		pipeline = append(pipeline, bson.D{bson.E{Key: "$match", Value: bson.M{
+			"contact_phone": bson.M{"$in": phonesIface},
+		}}})
 	}
 
 	if search != "" {
