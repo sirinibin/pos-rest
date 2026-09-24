@@ -369,6 +369,10 @@ func saveProcurementWhatsAppMessage(storeID primitive.ObjectID, direction, from 
 		log.Printf("procurement_messages: failed to save whatsapp message: %v", err)
 		return nil
 	}
+	// Push real-time unread count update to all online store users
+	if direction == "in" {
+		go models.NotifyStoreUsersWAUnread(storeID)
+	}
 	return msg
 }
 

@@ -189,3 +189,19 @@ func (store *Store) NotifyUsers(event string) error {
 
 	return nil
 }
+
+// NotifyStoreUsersWAUnread broadcasts "wa_unread_changed" to all online users of a store.
+// Called whenever a new inbound WhatsApp message arrives so the header badge updates in real time.
+func NotifyStoreUsersWAUnread(storeID primitive.ObjectID) {
+	users, err := GetOnlineUsersByStoreID(&storeID)
+	if err != nil {
+		return
+	}
+	for _, user := range users {
+		for _, device := range user.Devices {
+			if device.Connected {
+				Emit(user.ID.Hex(), device.DeviceID, "wa_unread_changed", nil)
+			}
+		}
+	}
+}
