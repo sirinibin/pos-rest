@@ -205,3 +205,19 @@ func NotifyStoreUsersWAUnread(storeID primitive.ObjectID) {
 		}
 	}
 }
+
+// NotifyStoreUsersEmailUnread broadcasts "email_unread_changed" to all online users of a store.
+// Called when a new inbound email arrives or when an email is marked as read.
+func NotifyStoreUsersEmailUnread(storeID primitive.ObjectID) {
+	users, err := GetOnlineUsersByStoreID(&storeID)
+	if err != nil {
+		return
+	}
+	for _, user := range users {
+		for _, device := range user.Devices {
+			if device.Connected {
+				Emit(user.ID.Hex(), device.DeviceID, "email_unread_changed", nil)
+			}
+		}
+	}
+}

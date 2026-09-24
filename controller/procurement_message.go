@@ -124,8 +124,13 @@ func GetProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 		return
 	}
-	// Mark as read
-	models.MarkProcurementMessageRead(id) //nolint:errcheck
+	// Mark as read and notify header badge update
+	if !msg.Read {
+		models.MarkProcurementMessageRead(id) //nolint:errcheck
+		if msg.Type == "email" && msg.Direction == "in" {
+			go models.NotifyStoreUsersEmailUnread(msg.StoreID)
+		}
+	}
 	json.NewEncoder(w).Encode(msg)
 }
 
@@ -335,6 +340,9 @@ func saveProcurementEmailMessage(storeID primitive.ObjectID, direction, provider
 	if err := models.SaveProcurementMessage(msg); err != nil {
 		log.Printf("procurement_messages: failed to save email message: %v", err)
 		return nil
+	}
+	if direction == "in" {
+		go models.NotifyStoreUsersEmailUnread(storeID)
 	}
 	return msg
 }

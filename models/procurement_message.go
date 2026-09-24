@@ -297,6 +297,28 @@ func FetchMessagesForCleanup(filter bson.M) ([]ProcurementMessage, error) {
 	return msgs, nil
 }
 
+// ListUnreadEmailMessages returns inbound email messages that have not been read yet.
+func ListUnreadEmailMessages(storeID primitive.ObjectID, limit int64) ([]ProcurementMessage, int64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	col := procurementMessageCol()
+	filter := bson.M{
+		"store_id":  storeID,
+		"type":      "email",
+		"direction": "in",
+		"read":      bson.M{"$ne": true},
+	}
+	total, _ := col.CountDocuments(ctx, filter)
+	opts := options.Find().SetSort(bson.D{{Key: "message_date", Value: -1}}).SetLimit(limit)
+	cursor, err := col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, total, err
+	}
+	var msgs []ProcurementMessage
+	_ = cursor.All(ctx, &msgs)
+	return msgs, total, nil
+}
+
 // MarkProcurementMessageRead marks a message as read.
 func MarkProcurementMessageRead(id primitive.ObjectID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

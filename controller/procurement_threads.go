@@ -176,6 +176,53 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": totalUnread})
 }
 
+// EmailUnreadSummary represents one unread inbound email shown in the app header badge dropdown.
+type EmailUnreadSummary struct {
+	ID          string `json:"id"`
+	Subject     string `json:"subject,omitempty"`
+	From        string `json:"from"`
+	Snippet     string `json:"snippet,omitempty"`
+	MessageDate string `json:"message_date,omitempty"`
+	Code        string `json:"code,omitempty"`
+}
+
+// GET /v1/email-unread
+// Returns unread inbound email messages for the store.
+func GetEmailUnreadHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeID, err := primitive.ObjectIDFromHex(r.URL.Query().Get("store_id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+
+	msgs, _, err := models.ListUnreadEmailMessages(storeID, 50)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	items := []EmailUnreadSummary{}
+	for _, m := range msgs {
+		snippet := m.BodyText
+		if len([]rune(snippet)) > 100 {
+			snippet = string([]rune(snippet)[:100]) + "…"
+		}
+		items = append(items, EmailUnreadSummary{
+			ID:          m.ID.Hex(),
+			Subject:     m.Subject,
+			From:        m.From,
+			Snippet:     snippet,
+			MessageDate: fmtThreadDate(m.MessageDate),
+			Code:        m.Code,
+		})
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": len(msgs)})
+}
+
 // GET /v1/procurement-message-threads/{phone}
 // Returns all messages in the thread with the given contact phone, chronologically.
 func GetThreadMessagesHandler(w http.ResponseWriter, r *http.Request) {
