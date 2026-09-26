@@ -562,21 +562,16 @@ func TestProcurementMessage_DefaultValues(t *testing.T) {
 	}
 }
 
-// ── emailMatchesKeywords ──────────────────────────────────────────────────────
+// ── emailMatchesKeywords (subject-only, case-insensitive) ─────────────────────
 
 func TestEmailMatchesKeywords_EmptyKeywords_AcceptsAll(t *testing.T) {
-	// Zero keywords = no filter: every email should pass.
-	cases := []struct{ subject, body string }{
-		{"Hello", "Just saying hi"},
-		{"Invoice #123", "Please find attached"},
-		{"", ""},
-	}
-	for _, c := range cases {
-		if !emailMatchesKeywords(c.subject, c.body, nil) {
-			t.Errorf("empty keywords should accept email with subject=%q", c.subject)
+	subjects := []string{"Hello", "Invoice #123", ""}
+	for _, subj := range subjects {
+		if !emailMatchesKeywords(subj, nil) {
+			t.Errorf("empty keywords should accept email with subject=%q", subj)
 		}
-		if !emailMatchesKeywords(c.subject, c.body, []string{}) {
-			t.Errorf("empty keywords slice should accept email with subject=%q", c.subject)
+		if !emailMatchesKeywords(subj, []string{}) {
+			t.Errorf("empty keywords slice should accept email with subject=%q", subj)
 		}
 	}
 }
@@ -585,23 +580,17 @@ func TestEmailMatchesKeywords_MatchInSubject(t *testing.T) {
 	kws := []string{"quotation", "rfq", "request for quotation"}
 	cases := []string{"Quotation Request", "RFQ from customer", "REQUEST FOR QUOTATION"}
 	for _, subj := range cases {
-		if !emailMatchesKeywords(subj, "some body", kws) {
+		if !emailMatchesKeywords(subj, kws) {
 			t.Errorf("keyword in subject should match: %q", subj)
 		}
 	}
 }
 
-func TestEmailMatchesKeywords_MatchInBody(t *testing.T) {
+func TestEmailMatchesKeywords_BodyNotChecked(t *testing.T) {
+	// Keywords in body only must NOT match — filter is subject-only.
 	kws := []string{"quotation", "rfq"}
-	cases := []string{
-		"Please send us a quotation for the following items",
-		"This is an rfq for steel pipes",
-		"Kindly provide QUOTATION at earliest",
-	}
-	for _, body := range cases {
-		if !emailMatchesKeywords("No keyword subject", body, kws) {
-			t.Errorf("keyword in body should match: %q", body)
-		}
+	if emailMatchesKeywords("No keyword subject", kws) {
+		t.Error("keyword not in subject should not match even if it were in the body")
 	}
 }
 
@@ -609,82 +598,62 @@ func TestEmailMatchesKeywords_CaseInsensitive(t *testing.T) {
 	kws := []string{"quotation"}
 	variants := []string{"quotation", "Quotation", "QUOTATION", "QuOtAtIoN"}
 	for _, v := range variants {
-		if !emailMatchesKeywords(v, "", kws) {
+		if !emailMatchesKeywords(v, kws) {
 			t.Errorf("case-insensitive match failed for %q", v)
 		}
 	}
 }
 
-func TestEmailMatchesKeywords_NoMatch_ReturnseFalse(t *testing.T) {
+func TestEmailMatchesKeywords_NoMatch_ReturnsFalse(t *testing.T) {
 	kws := []string{"quotation", "rfq", "request for quotation"}
-	cases := []struct{ subject, body string }{
-		{"Hello team", "Hope you are well"},
-		{"Invoice #456", "Payment due in 30 days"},
-		{"Newsletter May 2026", "Exciting offers this month"},
-		{"", ""},
-	}
-	for _, c := range cases {
-		if emailMatchesKeywords(c.subject, c.body, kws) {
-			t.Errorf("no keyword present — should not match: subject=%q", c.subject)
+	subjects := []string{"Hello team", "Invoice #456", "Newsletter May 2026", ""}
+	for _, subj := range subjects {
+		if emailMatchesKeywords(subj, kws) {
+			t.Errorf("no keyword in subject — should not match: %q", subj)
 		}
 	}
 }
 
 func TestEmailMatchesKeywords_MultiWordKeyword(t *testing.T) {
 	kws := []string{"request for quotation"}
-	if !emailMatchesKeywords("", "Please send a request for quotation by tomorrow", kws) {
-		t.Error("multi-word keyword 'request for quotation' should match in body")
+	if !emailMatchesKeywords("Please send a request for quotation", kws) {
+		t.Error("multi-word keyword 'request for quotation' should match in subject")
 	}
-	if emailMatchesKeywords("", "Please send a request", kws) {
+	if emailMatchesKeywords("Please send a request", kws) {
 		t.Error("partial multi-word keyword should NOT match")
 	}
 }
 
 func TestEmailMatchesKeywords_EmptyKeywordStringSkipped(t *testing.T) {
-	// An empty string in the keywords list should be skipped (not treat "" as matching everything).
 	kws := []string{"", "rfq"}
-	if !emailMatchesKeywords("RFQ from Acme", "body", kws) {
+	if !emailMatchesKeywords("RFQ from Acme", kws) {
 		t.Error("valid keyword 'rfq' should still match even with empty string in list")
 	}
-	// If only an empty keyword exists, nothing should match.
-	// contains("hello world", "") → true in Go, but we skip kw == "".
-	if emailMatchesKeywords("hello", "world", []string{""}) {
+	if emailMatchesKeywords("hello world", []string{""}) {
 		t.Error("a list containing only an empty keyword should not match anything")
-	}
-}
-
-func TestEmailMatchesKeywords_KeywordInSubjectAndBody(t *testing.T) {
-	// Keyword appearing in both should still return true (not double-count or error).
-	kws := []string{"rfq"}
-	if !emailMatchesKeywords("rfq needed", "please create rfq", kws) {
-		t.Error("keyword in both subject and body should still return true")
 	}
 }
 
 func TestEmailMatchesKeywords_DefaultKeywordsMatchTypicalRFQEmail(t *testing.T) {
 	defaults := []string{"quotation", "rfq", "request for quotation"}
-	rfqEmails := []struct{ subject, body string }{
-		{"Request for Quotation — Steel Pipes", "Dear Supplier, Please provide a quotation for 500 units of 2-inch steel pipes."},
-		{"RFQ #2024-001", "We are interested in your products and request a formal RFQ response."},
-		{"Quotation Required", "Kindly send a quotation at your earliest convenience."},
+	subjects := []string{
+		"Request for Quotation — Steel Pipes",
+		"RFQ #2024-001",
+		"Quotation Required",
 	}
-	for _, e := range rfqEmails {
-		if !emailMatchesKeywords(e.subject, e.body, defaults) {
-			t.Errorf("default keywords should match typical RFQ email: subject=%q", e.subject)
+	for _, subj := range subjects {
+		if !emailMatchesKeywords(subj, defaults) {
+			t.Errorf("default keywords should match typical RFQ subject: %q", subj)
 		}
 	}
 }
 
 func TestEmailMatchesKeywords_DefaultKeywordsRejectNonRFQEmail(t *testing.T) {
 	defaults := []string{"quotation", "rfq", "request for quotation"}
-	nonRFQ := []struct{ subject, body string }{
-		{"Hello", "How are you?"},
-		{"Payment Confirmation", "Your payment of SAR 1,200 has been received."},
-		{"Newsletter", "Check out our latest products."},
-	}
-	for _, e := range nonRFQ {
-		if emailMatchesKeywords(e.subject, e.body, defaults) {
-			t.Errorf("default keywords should NOT match non-RFQ email: subject=%q", e.subject)
+	subjects := []string{"Hello", "Payment Confirmation", "Newsletter"}
+	for _, subj := range subjects {
+		if emailMatchesKeywords(subj, defaults) {
+			t.Errorf("default keywords should NOT match non-RFQ subject: %q", subj)
 		}
 	}
 }
@@ -699,9 +668,8 @@ func TestStoreSettings_IncomingEmailKeywords_DefaultEmpty(t *testing.T) {
 }
 
 func TestStoreSettings_IncomingEmailKeywords_EmptyMeansNoFilter(t *testing.T) {
-	// Backward compat: existing stores with no keywords set still accept all emails.
 	var s models.StoreSettings
-	if !emailMatchesKeywords("any subject", "any body", s.IncomingEmailKeywords) {
+	if !emailMatchesKeywords("any subject", s.IncomingEmailKeywords) {
 		t.Error("empty IncomingEmailKeywords must accept all emails (no filter)")
 	}
 }

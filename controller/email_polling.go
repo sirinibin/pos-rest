@@ -1508,11 +1508,11 @@ func listOutlookMessages(accessToken string, since time.Time) ([]parsedEmail, er
 
 // emailMatchesKeywords returns true when the email subject or body contains at least
 // one keyword (case-insensitive). An empty keywords list means "accept all" (no filter).
-func emailMatchesKeywords(subject, bodyText string, keywords []string) bool {
+func emailMatchesKeywords(subject string, keywords []string) bool {
 	if len(keywords) == 0 {
 		return true
 	}
-	haystack := strings.ToLower(subject + " " + bodyText)
+	haystack := strings.ToLower(subject)
 	for _, kw := range keywords {
 		if kw == "" {
 			continue
@@ -1674,7 +1674,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 
 	// Keyword pre-filter: reject emails that don't contain any configured keyword.
 	// This happens before DB insertion to reduce storage and LLM token usage.
-	if !isReplyToOurs && !emailMatchesKeywords(msg.subject, msg.bodyText, store.Settings.IncomingEmailKeywords) {
+	if !isReplyToOurs && !emailMatchesKeywords(msg.subject, store.Settings.IncomingEmailKeywords) {
 		log.Printf("email_polling: email from %s ignored — does not match incoming keyword filter", msg.from)
 		return nil
 	}
@@ -1811,11 +1811,12 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 	var products []models.RFQProduct
 	for _, p := range extracted.Products {
 		products = append(products, models.RFQProduct{
-			Name:     p.Name,
-			PartNo:   p.PartNo,
-			Quantity: p.Quantity,
-			Unit:     p.Unit,
-			Notes:    p.Notes,
+			Name:         p.Name,
+			NameInArabic: lookupProductArabicName(storeObjID, p.Name),
+			PartNo:       p.PartNo,
+			Quantity:     p.Quantity,
+			Unit:         p.Unit,
+			Notes:        p.Notes,
 		})
 	}
 

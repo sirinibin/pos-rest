@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -956,10 +957,11 @@ func HandleRFQEmailWebhook(w http.ResponseWriter, r *http.Request) {
 	var products []models.RFQProduct
 	for _, p := range extracted.Products {
 		products = append(products, models.RFQProduct{
-			Name:     p.Name,
-			PartNo:   p.PartNo,
-			Quantity: p.Quantity,
-			Unit:     p.Unit,
+			Name:         p.Name,
+			NameInArabic: lookupProductArabicName(storeObjID, p.Name),
+			PartNo:       p.PartNo,
+			Quantity:     p.Quantity,
+			Unit:         p.Unit,
 		})
 	}
 
@@ -1685,4 +1687,28 @@ func TestRFQEmailIMAPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "message": "IMAP connection successful"})
+}
+
+// lookupProductArabicName does a best-effort case-insensitive name lookup in the
+// store's product catalog and returns the Arabic name for the matched product.
+// Returns "" when no match is found so callers can use omitempty safely.
+func lookupProductArabicName(storeID primitive.ObjectID, name string) string {
+	if name == "" {
+		return ""
+	}
+	collection := db.GetDB("store_" + storeID.Hex()).Collection("product")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var result struct {
+		NameInArabic string `bson:"name_in_arabic"`
+	}
+	err := collection.FindOne(ctx, bson.M{
+		"name":    bson.M{"$regex": "^" + regexp.QuoteMeta(name) + "$", "$options": "i"},
+		"deleted": bson.M{"$ne": true},
+	}, options.FindOne().SetProjection(bson.M{"name_in_arabic": 1})).Decode(&result)
+	if err != nil {
+		return ""
+	}
+	return result.NameInArabic
 }

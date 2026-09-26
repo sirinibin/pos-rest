@@ -778,9 +778,14 @@ func GetRFQSendPreviewHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	rfqCategories := rfq.Categories
+	if rfqCategories == nil {
+		rfqCategories = []string{}
+	}
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"rfq_id":              rfq.ID.Hex(),
 		"rfq_code":            rfq.Code,
+		"rfq_categories":      rfqCategories,
 		"template_name":       templateName,
 		"template_language":   templateLanguage,
 		"template_body":       filledBody,

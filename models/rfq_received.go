@@ -27,12 +27,13 @@ type RFQActivityLog struct {
 
 // RFQProduct is a single line item extracted from an incoming RFQ message.
 type RFQProduct struct {
-	ProductID *primitive.ObjectID `bson:"product_id,omitempty" json:"product_id,omitempty"`
-	PartNo    string              `bson:"part_no,omitempty"   json:"part_no,omitempty"`
-	Name      string              `bson:"name"                json:"name"`
-	Quantity  float64             `bson:"quantity,omitempty"  json:"quantity,omitempty"`
-	Unit      string              `bson:"unit,omitempty"      json:"unit,omitempty"`
-	Notes     string              `bson:"notes,omitempty"     json:"notes,omitempty"`
+	ProductID    *primitive.ObjectID `bson:"product_id,omitempty"    json:"product_id,omitempty"`
+	PartNo       string              `bson:"part_no,omitempty"       json:"part_no,omitempty"`
+	Name         string              `bson:"name"                    json:"name"`
+	NameInArabic string              `bson:"name_in_arabic,omitempty" json:"name_in_arabic,omitempty"`
+	Quantity     float64             `bson:"quantity,omitempty"      json:"quantity,omitempty"`
+	Unit         string              `bson:"unit,omitempty"          json:"unit,omitempty"`
+	Notes        string              `bson:"notes,omitempty"         json:"notes,omitempty"`
 }
 
 type RFQForwardRecord struct {
