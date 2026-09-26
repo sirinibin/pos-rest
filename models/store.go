@@ -341,7 +341,8 @@ type StoreSettings struct {
 	// Min suppliers required before forwarding RFQ (default 2)
 	RFQMinSuppliers                             int             `bson:"rfq_min_suppliers" json:"rfq_min_suppliers"`
 	// Purchase markets for Google Maps supplier search (e.g. ["Jeddah","Dammam","Riyadh"])
-	PurchaseMarkets []string `bson:"purchase_markets" json:"purchase_markets"`
+	PurchaseMarkets    []string `bson:"purchase_markets" json:"purchase_markets"`
+	RFQForwardMarkets  []string `bson:"rfq_forward_markets" json:"rfq_forward_markets"`
 	// RFQIntro is shown in first-contact messages to introduce the company to new suppliers
 	RFQIntro        string   `bson:"rfq_intro" json:"rfq_intro,omitempty"`
 	// RFQAllowedSenders: only process RFQs from these WhatsApp numbers (empty = allow all)
@@ -441,6 +442,12 @@ type StoreSettings struct {
 	AutoDeleteProcurementMessagesDays int  `bson:"auto_delete_procurement_messages_days" json:"auto_delete_procurement_messages_days"`
 	ShowProcurementEmailsTab          bool `bson:"show_procurement_emails_tab" json:"show_procurement_emails_tab"`
 	ShowProcurementWhatsAppTab        bool `bson:"show_procurement_whatsapp_tab" json:"show_procurement_whatsapp_tab"`
+
+	// ── Purchase Bills (WhatsApp) ─────────────────────────────────────────────────────────────
+	// When true, the "Purchase Bill images/PDFs" tab is shown and images/PDFs from
+	// PurchaseBillsManagerNumbers are treated as purchase bills.
+	EnablePurchaseBillsTracking  bool     `bson:"enable_purchase_bills_tracking" json:"enable_purchase_bills_tracking"`
+	PurchaseBillsManagerNumbers  []string `bson:"purchase_bills_manager_numbers" json:"purchase_bills_manager_numbers,omitempty"`
 
 	// ── Outgoing Email (for sending emails from the app) ──────────────────────────────────────
 	// Provider: smtp | sendgrid | mailgun | ses | postmark | brevo | resend
