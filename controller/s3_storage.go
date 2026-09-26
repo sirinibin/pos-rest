@@ -166,7 +166,7 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 }
 
 // CdnFileHandler serves attachment files via the /cdn/ path.
-// When S3 is configured, files are served exclusively from S3 (no disk fallback).
+// When S3 is configured, it tries S3 first then falls back to local disk.
 // When S3 is not configured, files are served from local disk.
 // Registered with router.PathPrefix("/cdn/")
 func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
@@ -177,10 +177,10 @@ func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s := loadAdminS3Settings()
 	if s.S3Enabled && s.S3BucketName != "" {
-		if !proxyS3Object(s, path, w) {
-			http.NotFound(w, r)
+		if proxyS3Object(s, path, w) {
+			return
 		}
-		return
+		// S3 unavailable — fall back to local disk.
 	}
 	http.ServeFile(w, r, "./"+path)
 }
