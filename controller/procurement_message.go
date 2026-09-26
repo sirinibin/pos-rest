@@ -20,22 +20,26 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// deleteS3Attachments deletes S3 objects for all attachments in msgs whose URL
-// begins with /cdn/ (meaning the file was stored in S3 or local disk via saveAttachment).
-// No-ops when S3 is not configured.
+// deleteS3Attachments deletes stored files for all attachments in msgs whose URL
+// begins with /cdn/ (stored via saveAttachment). Deletes from S3 when configured,
+// otherwise removes the local disk file.
 func deleteS3Attachments(msgs []models.ProcurementMessage) {
 	s := loadAdminS3Settings()
-	if !s.S3Enabled || s.S3BucketName == "" {
-		return
-	}
 	for _, m := range msgs {
 		for _, a := range m.Attachments {
 			if a.URL == "" || !strings.HasPrefix(a.URL, "/cdn/") {
 				continue
 			}
 			key := strings.TrimPrefix(a.URL, "/cdn/")
-			if err := deleteFromS3(s, key); err != nil {
-				log.Printf("procurement: delete S3 %s: %v", key, err)
+			if s.S3Enabled && s.S3BucketName != "" {
+				if err := deleteFromS3(s, key); err != nil {
+					log.Printf("procurement: delete S3 %s: %v", key, err)
+				}
+			} else {
+				localPath := "./" + key
+				if err := os.Remove(localPath); err != nil && !os.IsNotExist(err) {
+					log.Printf("procurement: delete local %s: %v", localPath, err)
+				}
 			}
 		}
 	}
@@ -289,6 +293,14 @@ func CleanupProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		if err2 == nil {
 			days = store.Settings.AutoDeleteProcurementMessagesDays
 		}
+	}
+
+	// Clean up attachments (S3 or local disk) before removing DB records.
+	cutoff := time.Now().AddDate(0, 0, -days)
+	cleanFilter := bson.M{"store_id": storeObjID, "created_at": bson.M{"$lt": cutoff}}
+	if toClean, _ := models.FetchMessagesForCleanup(cleanFilter); len(toClean) > 0 {
+		deleteAttachmentDirs(toClean)
+		deleteS3Attachments(toClean)
 	}
 
 	deleted, err := models.DeleteOldProcurementMessages(storeObjID, days)
