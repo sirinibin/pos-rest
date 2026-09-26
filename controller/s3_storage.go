@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,13 +57,24 @@ func s3Host(s models.AdminSettings) string {
 	return fmt.Sprintf("%s.s3.%s.amazonaws.com", s.S3BucketName, s.S3Region)
 }
 
+// s3URIEncodeKey URI-encodes each segment of an S3 key path for AWS SigV4 canonical URI.
+// Slashes between segments are preserved; spaces and other special chars are percent-encoded.
+func s3URIEncodeKey(key string) string {
+	parts := strings.Split(key, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
+}
+
 // s3PutURL returns the URL for a PutObject request.
 func s3PutURL(s models.AdminSettings, key string) string {
+	encoded := s3URIEncodeKey(key)
 	if s.S3Endpoint != "" {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
-		return ep + "/" + s.S3BucketName + "/" + key
+		return ep + "/" + s.S3BucketName + "/" + encoded
 	}
-	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.S3BucketName, s.S3Region, key)
+	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.S3BucketName, s.S3Region, encoded)
 }
 
 // uploadToS3 uploads data to S3 using SigV4-signed PUT, returns the public file URL.
@@ -98,9 +110,11 @@ func uploadToS3(s models.AdminSettings, key string, data []byte, contentType str
 	signedHeaders := "content-type;host;x-amz-content-sha256;x-amz-date"
 
 	// For path-style (custom endpoint), the path includes bucket; for virtual-hosted it doesn't.
-	urlPath := "/" + key
+	// URI-encode the key so the canonical URI matches what Go's HTTP client sends on the wire.
+	encodedKey := s3URIEncodeKey(key)
+	urlPath := "/" + encodedKey
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + encodedKey
 	}
 
 	canonicalRequest := strings.Join([]string{"PUT", urlPath, "", canonicalHeaders, signedHeaders, bodyHash}, "\n")
@@ -139,20 +153,19 @@ func uploadToS3(s models.AdminSettings, key string, data []byte, contentType str
 }
 
 // saveAttachment saves data to S3 when configured, otherwise to local disk.
-// When S3 is configured but upload fails the function returns "" (empty URL) so the
-// caller can mark the attachment as missing and allow the user to retry.
+// When S3 is configured but upload fails the function returns "" so the caller
+// can mark the attachment as missing.
 // relKey is the path without leading "./" or "/" e.g. "attachments/{storeID}/{msgID}/file.pdf".
 func saveAttachment(settings models.AdminSettings, relKey string, data []byte, contentType string) string {
 	if settings.S3Enabled && settings.S3BucketName != "" && settings.S3AccessKeyID != "" {
 		if _, err := uploadToS3(settings, relKey, data, contentType); err != nil {
-			log.Printf("s3: upload FAILED for %s (bucket=%q region=%q): %v — falling back to local disk",
+			log.Printf("s3: upload FAILED for %s (bucket=%q region=%q): %v — attachment not stored; use retry-attachments to re-fetch",
 				relKey, settings.S3BucketName, settings.S3Region, err)
-			// Fall through to local-disk save so the file is never silently dropped.
-		} else {
-			return "/cdn/" + relKey
+			return ""
 		}
+		return "/cdn/" + relKey
 	}
-	// S3 not configured (or upload failed) — save to local disk.
+	// S3 not configured — save to local disk.
 	localPath := "./" + relKey
 	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
 		log.Printf("saveAttachment: mkdir failed for %s: %v", localPath, err)
@@ -166,7 +179,7 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 }
 
 // CdnFileHandler serves attachment files via the /cdn/ path.
-// When S3 is configured, it tries S3 first then falls back to local disk.
+// When S3 is configured, files are served exclusively from S3.
 // When S3 is not configured, files are served from local disk.
 // Registered with router.PathPrefix("/cdn/")
 func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
@@ -177,10 +190,10 @@ func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s := loadAdminS3Settings()
 	if s.S3Enabled && s.S3BucketName != "" {
-		if proxyS3Object(s, path, w) {
-			return
+		if !proxyS3Object(s, path, w) {
+			http.NotFound(w, r)
 		}
-		// S3 unavailable — fall back to local disk.
+		return
 	}
 	http.ServeFile(w, r, "./"+path)
 }
@@ -208,9 +221,10 @@ func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) bo
 	req.Header.Set("X-Amz-Date", timeStr)
 	req.Header.Set("X-Amz-Content-Sha256", emptyHash)
 
-	urlPath := "/" + key
+	encodedKey := s3URIEncodeKey(key)
+	urlPath := "/" + encodedKey
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + encodedKey
 	}
 	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n", host, emptyHash, timeStr)
 	signedHeaders := "host;x-amz-content-sha256;x-amz-date"

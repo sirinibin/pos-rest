@@ -49,6 +49,32 @@ func TestS3BaseURL_TrailingSlashStripped(t *testing.T) {
 	}
 }
 
+// ─── s3URIEncodeKey tests ─────────────────────────────────────────────────────
+
+func TestS3URIEncodeKey_SpacesEncoded(t *testing.T) {
+	key := "attachments/store1/wa_msg1/Cable Comnnection..pdf"
+	got := s3URIEncodeKey(key)
+	if strings.Contains(got, " ") {
+		t.Errorf("spaces should be encoded, got %q", got)
+	}
+	if !strings.Contains(got, "Cable%20Comnnection..pdf") {
+		t.Errorf("expected %%20 for space, got %q", got)
+	}
+	// Slashes between segments must be preserved
+	parts := strings.Split(got, "/")
+	if len(parts) != 4 {
+		t.Errorf("expected 4 segments, got %d in %q", len(parts), got)
+	}
+}
+
+func TestS3URIEncodeKey_NoSpecialChars_Unchanged(t *testing.T) {
+	key := "attachments/store1/msg1/UMLJ-Quotation.pdf"
+	got := s3URIEncodeKey(key)
+	if got != key {
+		t.Errorf("no special chars — key should be unchanged, got %q", got)
+	}
+}
+
 // ─── s3PutURL tests ───────────────────────────────────────────────────────────
 
 func TestS3PutURL_StandardAWS(t *testing.T) {
@@ -114,9 +140,7 @@ func TestSaveAttachment_S3EnabledButNoBucket_FallsToLocal(t *testing.T) {
 
 // When S3 is configured but the upload fails, saveAttachment must return "" (no disk fallback).
 // This allows callers to mark the attachment as missing so the user can retry later.
-func TestSaveAttachment_S3FailureFallsBackToDisk(t *testing.T) {
-	// Fake S3 that rejects uploads with 403 — we now fall back to local disk
-	// so the file is never silently dropped.
+func TestSaveAttachment_S3FailureReturnsEmpty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte("<Error>AccessDenied</Error>")) //nolint:errcheck
@@ -134,15 +158,14 @@ func TestSaveAttachment_S3FailureFallsBackToDisk(t *testing.T) {
 		S3Endpoint:    srv.URL,
 	}
 	got := saveAttachment(settings, relKey, []byte("data"), "text/plain")
-	if got == "" {
-		t.Error("S3 upload failed but disk fallback should have returned a /cdn/ URL, got empty")
+	if got != "" {
+		t.Errorf("S3 upload failed — saveAttachment should return empty URL, got %q", got)
 	}
-	// File must have been written to disk as fallback.
-	if _, err := os.Stat("./" + relKey); err != nil {
-		t.Errorf("file should have been written to disk as S3 fallback: %v", err)
+	// File must NOT have been written to disk (S3-only mode).
+	if _, err := os.Stat("./" + relKey); err == nil {
+		t.Error("file should NOT be written to disk when S3 is configured and upload fails")
+		os.Remove("./" + relKey)
 	}
-	// Cleanup
-	os.Remove("./" + relKey)
 }
 
 // ─── AdminSettings S3 fields JSON ────────────────────────────────────────────
