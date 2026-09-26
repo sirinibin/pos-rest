@@ -264,6 +264,77 @@ func proxyS3Object(s models.AdminSettings, key string, w http.ResponseWriter) bo
 	return true
 }
 
+// downloadFromS3 fetches the bytes for a key stored in S3.
+func downloadFromS3(s models.AdminSettings, key string) ([]byte, error) {
+	now := time.Now().UTC()
+	dateStr := now.Format("20060102")
+	timeStr := now.Format("20060102T150405Z")
+	region := s.S3Region
+	if region == "" {
+		region = "us-east-1"
+	}
+	emptyHash := fmt.Sprintf("%x", sha256sum([]byte{}))
+	host := s3Host(s)
+	getURL := s3PutURL(s, key)
+
+	req, err := http.NewRequest("GET", getURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Host", host)
+	req.Header.Set("X-Amz-Date", timeStr)
+	req.Header.Set("X-Amz-Content-Sha256", emptyHash)
+
+	encodedKey := s3URIEncodeKey(key)
+	urlPath := "/" + encodedKey
+	if s.S3Endpoint != "" {
+		urlPath = "/" + s.S3BucketName + "/" + encodedKey
+	}
+	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n", host, emptyHash, timeStr)
+	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
+	canonicalRequest := strings.Join([]string{"GET", urlPath, "", canonicalHeaders, signedHeaders, emptyHash}, "\n")
+
+	credentialScope := strings.Join([]string{dateStr, region, "s3", "aws4_request"}, "/")
+	stringToSign := strings.Join([]string{
+		"AWS4-HMAC-SHA256", timeStr, credentialScope,
+		fmt.Sprintf("%x", sha256sum([]byte(canonicalRequest))),
+	}, "\n")
+	signingKey := hmacSHA256(hmacSHA256(hmacSHA256(hmacSHA256(
+		[]byte("AWS4"+s.S3SecretKey), []byte(dateStr)),
+		[]byte(region)), []byte("s3")), []byte("aws4_request"))
+	signature := fmt.Sprintf("%x", hmacSHA256(signingKey, []byte(stringToSign)))
+	req.Header.Set("Authorization", fmt.Sprintf(
+		"AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s",
+		s.S3AccessKeyID, credentialScope, signedHeaders, signature))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("s3 GET %s: status %d", key, resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// downloadAttachment fetches the raw bytes for a stored attachment whose URL is "/cdn/<relKey>".
+// Tries S3 first when configured; falls back to local disk (covers files saved before S3 was set up).
+func downloadAttachment(s models.AdminSettings, relURL string) ([]byte, error) {
+	key := strings.TrimPrefix(relURL, "/cdn/")
+	if key == "" || key == relURL {
+		return nil, fmt.Errorf("downloadAttachment: unexpected URL format %q", relURL)
+	}
+	if s.S3Enabled && s.S3BucketName != "" && s.S3AccessKeyID != "" {
+		data, err := downloadFromS3(s, key)
+		if err == nil && len(data) > 0 {
+			return data, nil
+		}
+		log.Printf("downloadAttachment: S3 fetch failed for %q (%v) — trying local disk fallback", key, err)
+	}
+	return os.ReadFile("./" + key)
+}
+
 // ─── Test S3 Connection ───────────────────────────────────────────────────────
 
 // TestS3ConnectionHandler tests S3 credentials by uploading and deleting a tiny probe file.

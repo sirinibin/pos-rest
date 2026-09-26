@@ -5858,6 +5858,70 @@ Rules:
 	return prompt
 }
 
+// buildPurchaseBillExtractionPrompt returns an LLM prompt for extracting vendor invoice data.
+func buildPurchaseBillExtractionPrompt(textContent string) string {
+	prompt := `You are an assistant that extracts vendor invoice information from purchase bill images, PDFs, or documents.
+
+Extract the following and respond with ONLY valid JSON (no markdown, no explanation):
+{
+  "vendor_company_name": "company or business name of the VENDOR (seller/supplier) who issued this invoice",
+  "vendor_vat_no": "VAT registration number or tax ID of the vendor (empty string if not found)",
+  "vendor_mobile": "mobile or phone number of the vendor (empty string if not found)",
+  "vendor_cr_no": "Commercial Registration (CR) number of the vendor (empty string if not found)",
+  "vendor_national_address": "full address of the vendor as a single string (empty string if not found)",
+  "invoice_number": "invoice or bill number (empty string if not found)",
+  "invoice_date": "invoice date in YYYY-MM-DD format (empty string if not found)",
+  "total_amount": 0.0,
+  "tax_amount": 0.0,
+  "products": [
+    {
+      "part_no": "part number or product code (empty string if not found)",
+      "name": "product name or description",
+      "quantity": 1,
+      "unit_price": 0.0,
+      "unit": "unit of measure (empty string if not found)",
+      "notes": "any notes specific to this product (empty string if none)"
+    }
+  ],
+  "text_content": "a clean plain-text summary of the invoice"
+}
+
+Rules:
+- vendor_company_name is the SELLER/SUPPLIER who ISSUED this invoice, not the buyer.
+- total_amount is the grand total (including tax) as a number (0.0 if not found).
+- tax_amount is the VAT/tax portion as a number (0.0 if not found).
+- unit_price is the per-unit price excluding tax as a number (0.0 if not found).
+- Extract ALL products/line items; do not skip any.
+- quantity must be a number (default to 1 if not stated).
+- Do NOT wrap in markdown code blocks.`
+
+	if textContent != "" {
+		prompt += "\n\nDocument text content:\n" + textContent
+	}
+	return prompt
+}
+
+// callLLMExtractPurchaseBill calls the configured LLM to extract vendor invoice data.
+func callLLMExtractPurchaseBill(apiKey, model, provider, textContent string, imageDataURIs, pdfBase64s []string, baseURL string) (string, error) {
+	prompt := buildPurchaseBillExtractionPrompt(textContent)
+	const maxTokens = 16000
+
+	switch provider {
+	case "gemini":
+		return callGeminiExtractRFQ(apiKey, model, prompt, imageDataURIs, pdfBase64s, maxTokens)
+	case "anthropic":
+		if model == "" {
+			model = "claude-haiku-4-5-20251001"
+		}
+		return callAnthropicExtractRFQ(apiKey, model, prompt, imageDataURIs, pdfBase64s, maxTokens)
+	default:
+		if baseURL == "" {
+			baseURL = openAICompatBaseURL(provider)
+		}
+		return callOpenAICompatExtractRFQ(apiKey, model, prompt, imageDataURIs, maxTokens, baseURL)
+	}
+}
+
 // openAICompatBaseURL returns the chat completions base URL for OpenAI-compatible providers.
 func openAICompatBaseURL(provider string) string {
 	switch provider {

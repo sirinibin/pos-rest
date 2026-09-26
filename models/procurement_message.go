@@ -60,11 +60,46 @@ type ProcurementMessage struct {
 	MessageDate    *time.Time          `bson:"message_date,omitempty" json:"message_date,omitempty"`
 	// Auto-generated human-readable code, e.g. EM-000001 or WA-000001
 	Code           string              `bson:"code,omitempty" json:"code,omitempty"`
+	// Auto-generated serial for purchase-bill messages, e.g. PB-000001
+	PurchaseBillCode string `bson:"purchase_bill_code,omitempty" json:"purchase_bill_code,omitempty"`
+	// Purchase linked from this bill
+	LinkedPurchaseID   *primitive.ObjectID `bson:"linked_purchase_id,omitempty" json:"linked_purchase_id,omitempty"`
+	LinkedPurchaseCode string              `bson:"linked_purchase_code,omitempty" json:"linked_purchase_code,omitempty"`
 	// SenderName / SenderType are resolved by looking up the From phone number
 	// against RFQ suppliers and customers for this store.
 	SenderName string `bson:"sender_name,omitempty" json:"sender_name,omitempty"`
 	SenderType string `bson:"sender_type,omitempty" json:"sender_type,omitempty"` // "supplier" | "customer" | ""
 	CreatedAt  time.Time `bson:"created_at" json:"created_at"`
+}
+
+// MakePurchaseBillCode generates a serial code for a purchase-bill message, e.g. PB-000001.
+func MakePurchaseBillCode(storeID primitive.ObjectID) string {
+	n, err := db.RedisClient.Incr(storeID.Hex() + "_pm_pb_counter").Result()
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("PB-%06d", n)
+}
+
+// EnsurePurchaseBillCodes assigns PB codes to any messages in msgs that are missing one,
+// persisting the codes to the database. Call after listing purchase-bill messages.
+func EnsurePurchaseBillCodes(msgs []ProcurementMessage) {
+	for i := range msgs {
+		if msgs[i].PurchaseBillCode != "" {
+			continue
+		}
+		code := MakePurchaseBillCode(msgs[i].StoreID)
+		if code == "" {
+			continue
+		}
+		msgs[i].PurchaseBillCode = code
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_, _ = procurementMessageCol().UpdateOne(ctx,
+			bson.M{"_id": msgs[i].ID},
+			bson.M{"$set": bson.M{"purchase_bill_code": code}},
+		)
+		cancel()
+	}
 }
 
 // MakeProcurementMessageCode generates a serial code for the message.
@@ -114,16 +149,47 @@ func SaveProcurementMessage(msg *ProcurementMessage) error {
 	return err
 }
 
+// LinkPurchaseToMessage records the purchase created from this bill on the procurement message.
+func LinkPurchaseToMessage(msgID, purchaseID primitive.ObjectID, purchaseCode string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	upd := bson.M{"linked_purchase_id": purchaseID}
+	if purchaseCode != "" {
+		upd["linked_purchase_code"] = purchaseCode
+	}
+	_, err := procurementMessageCol().UpdateOne(ctx,
+		bson.M{"_id": msgID},
+		bson.M{"$set": upd},
+	)
+	return err
+}
+
 // ListProcurementMessages returns paginated messages for a store.
 // rfqFilter: "" = all, "yes" = processed_as_rfq=true, "no" = processed_as_rfq=false/missing,
 // "quotation" = is_supplier_quotation=true, "other" = not RFQ and not quotation.
-func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int, hasAttachments bool) ([]ProcurementMessage, int64, error) {
+// fromNumbers: when non-empty, only messages whose From field matches one of these numbers are returned.
+// purchaseBillsMode: when true, also includes manually-uploaded purchase bills (type=manual).
+func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int, hasAttachments bool, fromNumbers []string, purchaseBillsMode bool) ([]ProcurementMessage, int64, error) {
 	filter := bson.M{"store_id": storeID}
-	if msgType != "" {
-		filter["type"] = msgType
-	}
-	if direction != "" {
-		filter["direction"] = direction
+
+	if purchaseBillsMode {
+		// In purchase-bills mode include: WhatsApp messages from manager numbers AND manually uploaded bills.
+		var orClauses []bson.M
+		if len(fromNumbers) > 0 {
+			orClauses = append(orClauses, bson.M{"from": bson.M{"$in": fromNumbers}})
+		}
+		orClauses = append(orClauses, bson.M{"type": "manual"})
+		filter["$or"] = orClauses
+	} else {
+		if msgType != "" {
+			filter["type"] = msgType
+		}
+		if direction != "" {
+			filter["direction"] = direction
+		}
+		if len(fromNumbers) > 0 {
+			filter["from"] = bson.M{"$in": fromNumbers}
+		}
 	}
 	if rfqFilter == "yes" {
 		filter["processed_as_rfq"] = true
@@ -170,6 +236,9 @@ func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, sea
 	var msgs []ProcurementMessage
 	if err := cur.All(ctx, &msgs); err != nil {
 		return nil, 0, err
+	}
+	if len(fromNumbers) > 0 {
+		EnsurePurchaseBillCodes(msgs)
 	}
 	return msgs, total, nil
 }

@@ -84,6 +84,7 @@ func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	rfqFilter := r.URL.Query().Get("rfq_filter") // "yes" | "no" | ""
 	hasAttachments := r.URL.Query().Get("has_attachments") == "true"
+	purchaseBills := r.URL.Query().Get("purchase_bills") == "true"
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -93,7 +94,16 @@ func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 
-	msgs, total, err := models.ListProcurementMessages(storeObjID, msgType, direction, search, rfqFilter, page, limit, hasAttachments)
+	var fromNumbers []string
+	if purchaseBills {
+		store, sErr := models.FindStoreByID(&storeObjID, bson.M{})
+		if sErr == nil && len(store.Settings.PurchaseBillsManagerNumbers) > 0 {
+			fromNumbers = store.Settings.PurchaseBillsManagerNumbers
+		}
+		// Continue even with no manager numbers — manual uploads always show up.
+	}
+
+	msgs, total, err := models.ListProcurementMessages(storeObjID, msgType, direction, search, rfqFilter, page, limit, hasAttachments, fromNumbers, purchaseBills)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -456,8 +466,7 @@ func CreateRFQFromProcurementMessageHandler(w http.ResponseWriter, r *http.Reque
 		if att.URL == "" {
 			continue
 		}
-		diskPath := "." + att.URL
-		data, readErr := os.ReadFile(diskPath)
+		data, readErr := downloadAttachment(loadAdminS3Settings(), att.URL)
 		if readErr != nil || len(data) == 0 {
 			continue
 		}
@@ -640,13 +649,12 @@ func ExtractProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		textParts = append(textParts, emailText)
 	}
 
-	// Load existing saved attachments from disk.
+	// Load existing saved attachments (S3 or disk).
 	for _, att := range procMsg.Attachments {
 		if att.URL == "" {
 			continue
 		}
-		diskPath := "." + att.URL
-		data, readErr := os.ReadFile(diskPath)
+		data, readErr := downloadAttachment(loadAdminS3Settings(), att.URL)
 		if readErr != nil || len(data) == 0 {
 			continue
 		}
@@ -798,9 +806,9 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		if att.URL == "" {
 			continue
 		}
-		data, readErr := os.ReadFile("." + att.URL)
+		data, readErr := downloadAttachment(loadAdminS3Settings(), att.URL)
 		if readErr != nil || len(data) == 0 {
-			log.Printf("ExtractQuotationHandler: cannot read attachment %q at %q: %v", att.Filename, "."+att.URL, readErr)
+			log.Printf("ExtractQuotationHandler: cannot read attachment %q: %v", att.Filename, readErr)
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(att.Filename))
@@ -916,6 +924,271 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 		"suggested_rfq_code":  suggestedRFQCode,
 		"suggested_rfq_id":    suggestedRFQID,
 	})
+}
+
+// purchaseBillExtractResult holds vendor invoice data extracted from a purchase bill.
+type purchaseBillExtractResult struct {
+	VendorCompanyName     string              `json:"vendor_company_name"`
+	VendorVATNo           string              `json:"vendor_vat_no"`
+	VendorMobile          string              `json:"vendor_mobile"`
+	VendorCRNo            string              `json:"vendor_cr_no"`
+	VendorNationalAddress string              `json:"vendor_national_address"`
+	InvoiceNumber         string              `json:"invoice_number"`
+	InvoiceDate           string              `json:"invoice_date"`
+	TotalAmount           float64             `json:"total_amount"`
+	TaxAmount             float64             `json:"tax_amount"`
+	Products              []models.RFQProduct `json:"products"`
+	TextContent           string              `json:"text_content"`
+	LLMModel              string              `json:"llm_model,omitempty"`
+}
+
+// ExtractPurchaseBillHandler handles POST /v1/procurement-messages/{id}/extract-purchase-bill
+// Extracts vendor invoice info (company name, VAT, mobile, CR, address, products) from a
+// purchase bill image or PDF attachment using LLM vision.
+func ExtractPurchaseBillHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	msgID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id"})
+		return
+	}
+
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		r.ParseForm() //nolint:errcheck
+	}
+
+	llmProvider := strings.ToLower(strings.TrimSpace(r.FormValue("llm_provider")))
+	llmModel := strings.TrimSpace(r.FormValue("llm_model"))
+
+	if llmProvider == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "llm_provider is required"})
+		return
+	}
+
+	storeIDStr := r.URL.Query().Get("store_id")
+	if storeIDStr == "" {
+		storeIDStr = r.FormValue("store_id")
+	}
+	storeObjID, storeErr := primitive.ObjectIDFromHex(storeIDStr)
+	var llmAPIKey, llmEndpointURL string
+	if storeErr == nil {
+		if store, sErr := models.FindStoreByID(&storeObjID, bson.M{}); sErr == nil {
+			llmAPIKey, llmEndpointURL = resolveExtractionEndpoint(llmProvider, &store.Settings)
+		}
+	}
+	if llmAPIKey == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "No API key configured for the selected provider. Please add it under Store → AI Models."})
+		return
+	}
+
+	procMsg, err := models.GetProcurementMessage(msgID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "message not found"})
+		return
+	}
+
+	var imageDataURIs []string
+	var pdfBase64s []string
+	var textParts []string
+
+	msgText := procMsg.BodyText
+	if msgText == "" {
+		msgText = htmlToPlainText(procMsg.BodyHTML)
+	}
+	if msgText != "" {
+		textParts = append(textParts, msgText)
+	}
+
+	for _, att := range procMsg.Attachments {
+		if att.URL == "" {
+			continue
+		}
+		data, readErr := downloadAttachment(loadAdminS3Settings(), att.URL)
+		if readErr != nil || len(data) == 0 {
+			log.Printf("ExtractPurchaseBillHandler: cannot load attachment %q (url=%q): %v", att.Filename, att.URL, readErr)
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(att.Filename))
+		switch {
+		case isRFQImageExt(ext):
+			mime := rfqImageMime(ext, att.ContentType)
+			imageDataURIs = append(imageDataURIs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+		case ext == ".pdf":
+			pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
+			if extracted := extractPDFText(data); extracted != "" {
+				textParts = append(textParts, "=== "+att.Filename+" (PDF text) ===\n"+extracted)
+			}
+		case ext == ".xls" || ext == ".xlsx":
+			if txt, exErr := excelToText(att.Filename, data); exErr == nil {
+				textParts = append(textParts, txt)
+			}
+		case ext == ".docx":
+			if txt, exErr := docxToText(att.Filename, data); exErr == nil {
+				textParts = append(textParts, txt)
+			}
+		case ext == ".csv" || ext == ".txt":
+			textParts = append(textParts, "=== "+att.Filename+" ===\n"+string(data))
+		}
+	}
+
+	if r.MultipartForm != nil {
+		for _, fh := range r.MultipartForm.File["files"] {
+			f, ferr := fh.Open()
+			if ferr != nil {
+				continue
+			}
+			data, _ := io.ReadAll(f)
+			f.Close()
+			ext := strings.ToLower(filepath.Ext(fh.Filename))
+			ct := strings.ToLower(fh.Header.Get("Content-Type"))
+			switch {
+			case ext == ".pdf" || strings.Contains(ct, "pdf"):
+				pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
+				if extracted := extractPDFText(data); extracted != "" {
+					textParts = append(textParts, "=== "+fh.Filename+" (PDF text) ===\n"+extracted)
+				}
+			case isRFQImageExt(ext) || strings.HasPrefix(ct, "image/"):
+				mime := rfqImageMime(ext, ct)
+				imageDataURIs = append(imageDataURIs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
+			case ext == ".csv" || ext == ".txt" || strings.HasPrefix(ct, "text/"):
+				textParts = append(textParts, "=== "+fh.Filename+" ===\n"+string(data))
+			}
+		}
+	}
+
+	combinedText := strings.Join(textParts, "\n\n")
+	if len(imageDataURIs)+len(pdfBase64s) == 0 && combinedText == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "no content to extract from"})
+		return
+	}
+
+	usedModel := llmModel
+	if usedModel == "" {
+		usedModel = llmProvider
+	}
+
+	responseText, llmErr := callLLMExtractPurchaseBill(llmAPIKey, llmModel, llmProvider, combinedText, imageDataURIs, pdfBase64s, llmEndpointURL)
+	if llmErr != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": llmErr.Error()})
+		return
+	}
+
+	jsonStr := extractJSONFromLLMResponse(responseText)
+	var result purchaseBillExtractResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		result = purchaseBillExtractResult{TextContent: jsonStr, LLMModel: usedModel}
+	} else {
+		result.LLMModel = usedModel
+	}
+	json.NewEncoder(w).Encode(result)
+}
+
+// UploadManualPurchaseBillHandler handles POST /v1/procurement-messages/upload-purchase-bill
+// Creates one ProcurementMessage record per uploaded file (type=manual).
+// Files are uploaded after client-side compression; they are stored via S3/disk.
+func UploadManualPurchaseBillHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	storeIDStr := r.URL.Query().Get("store_id")
+	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+		return
+	}
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "cannot parse multipart form"})
+		return
+	}
+	s3Settings := loadAdminS3Settings()
+	var created []models.ProcurementMessage
+	for _, fh := range r.MultipartForm.File["files"] {
+		f, ferr := fh.Open()
+		if ferr != nil {
+			continue
+		}
+		data, _ := io.ReadAll(f)
+		f.Close()
+		if len(data) == 0 {
+			continue
+		}
+		ct := fh.Header.Get("Content-Type")
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		now := time.Now()
+		relKey := fmt.Sprintf("attachments/%s/procurement/manual/%s/%s",
+			storeObjID.Hex(), now.Format("20060102"), fh.Filename)
+		fileURL := saveAttachment(s3Settings, relKey, data, ct)
+		att := models.ProcurementAttachment{
+			Filename:    fh.Filename,
+			ContentType: ct,
+			Size:        fh.Size,
+			URL:         fileURL,
+		}
+		msg := &models.ProcurementMessage{
+			StoreID:     storeObjID,
+			Type:        "manual",
+			Direction:   "in",
+			Provider:    "manual",
+			From:        tokenClaims.Email,
+			Attachments: []models.ProcurementAttachment{att},
+			MessageDate: &now,
+			CreatedAt:   now,
+		}
+		if err2 := models.SaveProcurementMessage(msg); err2 != nil {
+			log.Printf("UploadManualPurchaseBill: save error: %v", err2)
+			continue
+		}
+		created = append(created, *msg)
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"created": created, "count": len(created)})
+}
+
+// LinkPurchaseToMessageHandler handles POST /v1/procurement-messages/{id}/link-purchase
+// Records the purchase created from this bill on the procurement message record.
+func LinkPurchaseToMessageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	msgID, err := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid id"})
+		return
+	}
+	var body struct {
+		PurchaseID   string `json:"purchase_id"`
+		PurchaseCode string `json:"purchase_code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PurchaseID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "purchase_id required"})
+		return
+	}
+	purchaseObjID, err := primitive.ObjectIDFromHex(body.PurchaseID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid purchase_id"})
+		return
+	}
+	if err := models.LinkPurchaseToMessage(msgID, purchaseObjID, body.PurchaseCode); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
 // RetryProcurementMessageAttachmentsHandler re-fetches Zoho attachments for a
