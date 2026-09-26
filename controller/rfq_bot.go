@@ -824,71 +824,139 @@ func processMetaIncomingMessage(store *models.Store, storeObjID primitive.Object
 
 	switch msg.Type {
 	case "image":
-		if msg.Image != nil && msg.Image.ID != "" && accessToken != "" {
-			metaMediaIDs = append(metaMediaIDs, msg.Image.ID)
-			if dataURI, mimeType, err := metaDownloadMedia(msg.Image.ID, accessToken); err != nil {
-				log.Printf("rfq_bot: meta image download failed: %v", err)
-			} else {
-				if mimeType == "" {
-					mimeType = msg.Image.MimeType
+		if msg.Image != nil && msg.Image.ID != "" {
+			mimeType := msg.Image.MimeType
+			if mimeType == "" {
+				mimeType = "image/jpeg"
+			}
+			filename := "image_1" + mimeTypeToExt(mimeType)
+			if accessToken != "" {
+				metaMediaIDs = append(metaMediaIDs, msg.Image.ID)
+				if dataURI, mt, err := metaDownloadMedia(msg.Image.ID, accessToken); err != nil {
+					log.Printf("rfq_bot: meta image download failed: %v", err)
+					// Placeholder so the bubble shows the type even without the file.
+					procAttachments = append(procAttachments, models.ProcurementAttachment{
+						Filename:    filename,
+						ContentType: mimeType,
+					})
+				} else {
+					if mt != "" {
+						mimeType = mt
+						filename = "image_1" + mimeTypeToExt(mimeType)
+					}
+					saveToDisk(dataURI, mimeType, filename)
+					mediaURLs = append(mediaURLs, dataURI)
 				}
-				filename := "image_1" + mimeTypeToExt(mimeType)
-				saveToDisk(dataURI, mimeType, filename)
-				mediaURLs = append(mediaURLs, dataURI)
+			} else {
+				procAttachments = append(procAttachments, models.ProcurementAttachment{
+					Filename:    filename,
+					ContentType: mimeType,
+				})
 			}
 		}
 
 	case "audio", "voice":
-		if msg.Audio != nil && msg.Audio.ID != "" && accessToken != "" {
-			metaMediaIDs = append(metaMediaIDs, msg.Audio.ID)
-			if dataURI, mimeType, err := metaDownloadMedia(msg.Audio.ID, accessToken); err != nil {
-				log.Printf("rfq_bot: meta audio download failed: %v", err)
-			} else {
-				if mimeType == "" {
-					mimeType = msg.Audio.MimeType
+		if msg.Audio != nil && msg.Audio.ID != "" {
+			mimeType := msg.Audio.MimeType
+			if mimeType == "" {
+				mimeType = "audio/ogg"
+			}
+			filename := "audio_1" + mimeTypeToExt(mimeType)
+			if accessToken != "" {
+				metaMediaIDs = append(metaMediaIDs, msg.Audio.ID)
+				if dataURI, mt, err := metaDownloadMedia(msg.Audio.ID, accessToken); err != nil {
+					log.Printf("rfq_bot: meta audio download failed: %v", err)
+					procAttachments = append(procAttachments, models.ProcurementAttachment{
+						Filename:    filename,
+						ContentType: mimeType,
+					})
+				} else {
+					if mt != "" {
+						mimeType = mt
+						filename = "audio_1" + mimeTypeToExt(mimeType)
+					}
+					saveToDisk(dataURI, mimeType, filename)
 				}
-				saveToDisk(dataURI, mimeType, "audio_1"+mimeTypeToExt(mimeType))
+			} else {
+				procAttachments = append(procAttachments, models.ProcurementAttachment{
+					Filename:    filename,
+					ContentType: mimeType,
+				})
 			}
 		}
 
 	case "video":
-		if msg.Video != nil && msg.Video.ID != "" && accessToken != "" {
-			metaMediaIDs = append(metaMediaIDs, msg.Video.ID)
-			if dataURI, mimeType, err := metaDownloadMedia(msg.Video.ID, accessToken); err != nil {
-				log.Printf("rfq_bot: meta video download failed: %v", err)
-			} else {
-				if mimeType == "" {
-					mimeType = msg.Video.MimeType
+		if msg.Video != nil && msg.Video.ID != "" {
+			mimeType := msg.Video.MimeType
+			if mimeType == "" {
+				mimeType = "video/mp4"
+			}
+			filename := "video_1" + mimeTypeToExt(mimeType)
+			if accessToken != "" {
+				metaMediaIDs = append(metaMediaIDs, msg.Video.ID)
+				if dataURI, mt, err := metaDownloadMedia(msg.Video.ID, accessToken); err != nil {
+					log.Printf("rfq_bot: meta video download failed: %v", err)
+					procAttachments = append(procAttachments, models.ProcurementAttachment{
+						Filename:    filename,
+						ContentType: mimeType,
+					})
+				} else {
+					if mt != "" {
+						mimeType = mt
+						filename = "video_1" + mimeTypeToExt(mimeType)
+					}
+					saveToDisk(dataURI, mimeType, filename)
 				}
-				saveToDisk(dataURI, mimeType, "video_1"+mimeTypeToExt(mimeType))
+			} else {
+				procAttachments = append(procAttachments, models.ProcurementAttachment{
+					Filename:    filename,
+					ContentType: mimeType,
+				})
 			}
 		}
 
 	case "document":
-		if msg.Document != nil && msg.Document.ID != "" && accessToken != "" {
-			metaMediaIDs = append(metaMediaIDs, msg.Document.ID)
-			if dataURI, mimeType, err := metaDownloadMedia(msg.Document.ID, accessToken); err != nil {
-				log.Printf("rfq_bot: meta document download failed: %v", err)
-			} else {
-				if mimeType == "" {
-					mimeType = msg.Document.MimeType
-				}
-				filename := msg.Document.Filename
-				if filename == "" {
-					filename = "document_1" + mimeTypeToExt(mimeType)
-				}
-				saveToDisk(dataURI, mimeType, filename)
-				documents = append(documents, models.RFQDocument{
-					URL:      dataURI,
-					FileName: filename,
-					MimeType: mimeType,
-				})
-				_, b64data := splitDataURI(dataURI)
-				if raw, err2 := base64.StdEncoding.DecodeString(b64data); err2 == nil {
-					if extracted := extractDocumentText(raw, mimeType, filename); extracted != "" {
-						docTextParts = append(docTextParts, extracted)
+		if msg.Document != nil && msg.Document.ID != "" {
+			mimeType := msg.Document.MimeType
+			if mimeType == "" {
+				mimeType = "application/octet-stream"
+			}
+			filename := msg.Document.Filename
+			if filename == "" {
+				filename = "document_1" + mimeTypeToExt(mimeType)
+			}
+			if accessToken != "" {
+				metaMediaIDs = append(metaMediaIDs, msg.Document.ID)
+				if dataURI, mt, err := metaDownloadMedia(msg.Document.ID, accessToken); err != nil {
+					log.Printf("rfq_bot: meta document download failed: %v", err)
+					// Still store filename/type so the UI shows a meaningful card.
+					procAttachments = append(procAttachments, models.ProcurementAttachment{
+						Filename:    filename,
+						ContentType: mimeType,
+					})
+				} else {
+					if mt != "" {
+						mimeType = mt
+					}
+					saveToDisk(dataURI, mimeType, filename)
+					documents = append(documents, models.RFQDocument{
+						URL:      dataURI,
+						FileName: filename,
+						MimeType: mimeType,
+					})
+					_, b64data := splitDataURI(dataURI)
+					if raw, err2 := base64.StdEncoding.DecodeString(b64data); err2 == nil {
+						if extracted := extractDocumentText(raw, mimeType, filename); extracted != "" {
+							docTextParts = append(docTextParts, extracted)
+						}
 					}
 				}
+			} else {
+				// No access token — save filename/type so UI is not blank.
+				procAttachments = append(procAttachments, models.ProcurementAttachment{
+					Filename:    filename,
+					ContentType: mimeType,
+				})
 			}
 		}
 	}
