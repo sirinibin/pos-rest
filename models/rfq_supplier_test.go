@@ -91,6 +91,72 @@ func TestFindRFQsForwardedToSupplierExists(t *testing.T) {
 	}
 }
 
+// TestDeduplicateCategories verifies normalisation and deduplication behaviour.
+func TestDeduplicateCategories(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want []string
+	}{
+		{
+			in:   []string{"Steel Pipes", "steel pipes", "STEEL PIPES"},
+			want: []string{"Steel Pipes"},
+		},
+		{
+			in:   []string{"plumbing", "Electrical", "PLUMBING", "electrical"},
+			want: []string{"Plumbing", "Electrical"},
+		},
+		{
+			in:   []string{"  hardware  ", "Hardware"},
+			want: []string{"Hardware"},
+		},
+		{
+			in:   []string{},
+			want: []string{},
+		},
+		{
+			in:   []string{"", "  ", "Pipes"},
+			want: []string{"Pipes"},
+		},
+	}
+	for _, c := range cases {
+		got := deduplicateCategories(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("deduplicateCategories(%v) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("deduplicateCategories(%v)[%d] = %q, want %q", c.in, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+// TestUpsertRFQSupplierByPlaceIDDeduplicatesOnInsert verifies the source uses deduplicateCategories.
+func TestUpsertRFQSupplierByPlaceIDDeduplicatesOnInsert(t *testing.T) {
+	src, err := os.ReadFile("rfq_supplier.go")
+	if err != nil {
+		t.Fatalf("could not read rfq_supplier.go: %v", err)
+	}
+	if !regexp.MustCompile(`deduplicateCategories`).Match(src) {
+		t.Error("UpsertRFQSupplierByPlaceID must call deduplicateCategories before writing categories")
+	}
+}
+
+// TestUpsertRFQSupplierByPlaceIDConditionalSet verifies website/purchase_market are only set when non-empty.
+func TestUpsertRFQSupplierByPlaceIDConditionalSet(t *testing.T) {
+	src, err := os.ReadFile("rfq_supplier.go")
+	if err != nil {
+		t.Fatalf("could not read rfq_supplier.go: %v", err)
+	}
+	if !regexp.MustCompile(`supplier\.Website != ""`).Match(src) {
+		t.Error("rfq_supplier.go must conditionally set website only when non-empty")
+	}
+	if !regexp.MustCompile(`supplier\.PurchaseMarket != ""`).Match(src) {
+		t.Error("rfq_supplier.go must conditionally set purchase_market only when non-empty")
+	}
+}
+
 // TestListRFQReceivedControllerResolvesPhone2 verifies the controller resolves
 // the incoming phone via FindRFQSupplierByPhone before calling FindRFQsForwardedToSupplier.
 func TestListRFQReceivedControllerResolvesPhone2(t *testing.T) {

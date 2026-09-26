@@ -81,6 +81,22 @@ func EnsureRFQSupplierIndexes() {
 	})
 }
 
+// deduplicateCategories normalises categories to Title Case and removes duplicates.
+// "steel pipes" and "Steel Pipes" become a single "Steel Pipes" entry.
+func deduplicateCategories(cats []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(cats))
+	for _, c := range cats {
+		key := strings.ToLower(strings.TrimSpace(c))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, strings.Title(key))
+	}
+	return out
+}
+
 // UpsertRFQSupplierByPlaceID saves or updates a supplier.
 // Phone is the primary uniqueness key (per user requirement).
 // Match priority: 1) phone  2) google_place_id  3) insert new.
@@ -90,11 +106,16 @@ func UpsertRFQSupplierByPlaceID(supplier *RFQSupplier) error {
 	}
 	supplier.IsActive = true
 
+	// Deduplicate and normalise categories before any DB write.
+	supplier.Categories = deduplicateCategories(supplier.Categories)
+
 	col := db.Client("").Database(db.GetPosDB()).Collection(rfqSupplierCollection())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// $set all scalar fields; $addToSet merges categories so existing ones are not lost.
+	// $set scalar fields; $addToSet merges normalised categories without duplicates.
+	// purchase_market and website are only set when non-empty to avoid overwriting
+	// existing valid data with empty strings when a later call lacks those fields.
 	setFields := bson.M{
 		"store_id":        supplier.StoreID,
 		"name":            supplier.Name,
@@ -106,11 +127,15 @@ func UpsertRFQSupplierByPlaceID(supplier *RFQSupplier) error {
 		"rating":          supplier.Rating,
 		"google_place_id": supplier.GooglePlaceID,
 		"google_maps_url": supplier.GoogleMapsURL,
-		"purchase_market": supplier.PurchaseMarket,
-		"website":         supplier.Website,
 		"email":           supplier.Email,
 		"is_active":       true,
 		"added_at":        supplier.AddedAt,
+	}
+	if supplier.PurchaseMarket != "" {
+		setFields["purchase_market"] = supplier.PurchaseMarket
+	}
+	if supplier.Website != "" {
+		setFields["website"] = supplier.Website
 	}
 	update := bson.M{"$set": setFields}
 	if len(supplier.Categories) > 0 {
