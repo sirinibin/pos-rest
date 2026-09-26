@@ -863,6 +863,7 @@ func main() {
 	router.HandleFunc("/v1/procurement-message-threads/{phone}/pin", controller.UnpinThreadHandler).Methods("DELETE")
 	router.HandleFunc("/v1/procurement-extract-test", controller.ProcurementExtractTestHandler).Methods("POST")
 	router.HandleFunc("/v1/email-accounts/sync", controller.TriggerEmailSyncHandler).Methods("POST")
+	router.HandleFunc("/v1/proxy-image", controller.ProxyImageHandler).Methods("GET")
 
 	router.HandleFunc("/v1/chart-image-share", controller.ShareChartImage).Methods("POST")
 
