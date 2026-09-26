@@ -5862,38 +5862,41 @@ Rules:
 func buildPurchaseBillExtractionPrompt(textContent string) string {
 	prompt := `You are an assistant that extracts vendor invoice information from purchase bill images, PDFs, or documents.
 
+CRITICAL RULE: Extract ONLY information you can CLEARLY SEE in the provided document. If a field is not visible or readable, return an empty string or 0.0. NEVER invent, guess, or fill in example data. If the document is unclear, unreadable, or does not appear to be an invoice, return all fields as empty strings and 0.0 values.
+
 Extract the following and respond with ONLY valid JSON (no markdown, no explanation):
 {
-  "vendor_company_name": "company or business name of the VENDOR (seller/supplier) who issued this invoice",
-  "vendor_vat_no": "VAT registration number or tax ID of the vendor (empty string if not found)",
-  "vendor_mobile": "mobile or phone number of the vendor (empty string if not found)",
-  "vendor_cr_no": "Commercial Registration (CR) number of the vendor (empty string if not found)",
-  "vendor_national_address": "full address of the vendor as a single string (empty string if not found)",
-  "invoice_number": "invoice or bill number (empty string if not found)",
-  "invoice_date": "invoice date in YYYY-MM-DD format (empty string if not found)",
+  "vendor_company_name": "company or business name of the VENDOR (seller/supplier) who issued this invoice — extract exactly as written, including Arabic if present",
+  "vendor_vat_no": "VAT registration number or tax ID of the vendor (empty string if not visible)",
+  "vendor_mobile": "mobile or phone number of the vendor (empty string if not visible)",
+  "vendor_cr_no": "Commercial Registration (CR) number of the vendor (empty string if not visible)",
+  "vendor_national_address": "full address of the vendor as a single string (empty string if not visible)",
+  "invoice_number": "invoice or bill number (empty string if not visible)",
+  "invoice_date": "invoice date in YYYY-MM-DD format (empty string if not visible)",
   "total_amount": 0.0,
   "tax_amount": 0.0,
   "products": [
     {
-      "part_no": "part number or product code (empty string if not found)",
-      "name": "product name or description",
+      "part_no": "part number or product code (empty string if not visible)",
+      "name": "product name or description — extract exactly as written",
       "quantity": 1,
       "unit_price": 0.0,
-      "unit": "unit of measure (empty string if not found)",
+      "unit": "unit of measure (empty string if not visible)",
       "notes": "any notes specific to this product (empty string if none)"
     }
   ],
-  "text_content": "a clean plain-text summary of the invoice"
+  "text_content": "a clean plain-text transcription of the key invoice details"
 }
 
 Rules:
 - vendor_company_name is the SELLER/SUPPLIER who ISSUED this invoice, not the buyer.
-- total_amount is the grand total (including tax) as a number (0.0 if not found).
-- tax_amount is the VAT/tax portion as a number (0.0 if not found).
-- unit_price is the per-unit price excluding tax as a number (0.0 if not found).
+- total_amount is the grand total (including tax) as a number (0.0 if not visible).
+- tax_amount is the VAT/tax portion as a number (0.0 if not visible).
+- unit_price is the per-unit price excluding tax as a number (0.0 if not visible).
 - Extract ALL products/line items; do not skip any.
 - quantity must be a number (default to 1 if not stated).
-- Do NOT wrap in markdown code blocks.`
+- Do NOT wrap in markdown code blocks.
+- Do NOT use placeholder, sample, or example values. Only real data from the document.`
 
 	if textContent != "" {
 		prompt += "\n\nDocument text content:\n" + textContent

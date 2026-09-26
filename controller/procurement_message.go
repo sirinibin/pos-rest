@@ -1014,14 +1014,19 @@ func ExtractPurchaseBillHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(att.Filename))
+		ct := strings.ToLower(att.ContentType)
 		switch {
-		case isRFQImageExt(ext):
+		case isRFQImageExt(ext) || strings.HasPrefix(ct, "image/"):
 			mime := rfqImageMime(ext, att.ContentType)
 			imageDataURIs = append(imageDataURIs, "data:"+mime+";base64,"+base64.StdEncoding.EncodeToString(data))
-		case ext == ".pdf":
+			log.Printf("ExtractPurchaseBillHandler: loaded image attachment %q (%d bytes)", att.Filename, len(data))
+		case ext == ".pdf" || strings.Contains(ct, "pdf"):
 			pdfBase64s = append(pdfBase64s, base64.StdEncoding.EncodeToString(data))
 			if extracted := extractPDFText(data); extracted != "" {
 				textParts = append(textParts, "=== "+att.Filename+" (PDF text) ===\n"+extracted)
+				log.Printf("ExtractPurchaseBillHandler: extracted %d chars of text from PDF %q", len(extracted), att.Filename)
+			} else {
+				log.Printf("ExtractPurchaseBillHandler: PDF text extraction returned empty for %q (may be scanned/image-based)", att.Filename)
 			}
 		case ext == ".xls" || ext == ".xlsx":
 			if txt, exErr := excelToText(att.Filename, data); exErr == nil {
@@ -1067,6 +1072,17 @@ func ExtractPurchaseBillHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "no content to extract from"})
 		return
 	}
+
+	// For OpenAI-compatible providers, PDFs are not natively supported — only text extracted from them reaches the model.
+	// Warn if we have PDFs but no extractable text and no images.
+	isOpenAICompat := llmProvider != "gemini" && llmProvider != "anthropic"
+	if isOpenAICompat && len(pdfBase64s) > 0 && len(imageDataURIs) == 0 && combinedText == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "PDF text extraction failed (the PDF may be scanned or image-based). For scanned PDFs use Anthropic Claude or Gemini — they can read PDF images directly. Alternatively upload the bill as a JPG image."})
+		return
+	}
+
+	log.Printf("ExtractPurchaseBillHandler: sending to %s/%s — images=%d pdfBase64s=%d textLen=%d", llmProvider, llmModel, len(imageDataURIs), len(pdfBase64s), len(combinedText))
 
 	usedModel := llmModel
 	if usedModel == "" {
