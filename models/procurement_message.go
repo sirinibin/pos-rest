@@ -431,6 +431,7 @@ func DeleteOldProcurementMessages(storeID primitive.ObjectID, days int) (int64, 
 type ContactThread struct {
 	ContactPhone    string     `bson:"contact_phone" json:"contact_phone"`
 	LastMessageText string     `bson:"last_message_text" json:"last_message_text"`
+	LastMessageType string     `bson:"last_message_type" json:"last_message_type"`
 	LastMessageDate *time.Time `bson:"last_message_date" json:"last_message_date"`
 	UnreadCount     int        `bson:"unread_count" json:"unread_count"`
 	MessageCount    int        `bson:"message_count" json:"message_count"`
@@ -532,6 +533,7 @@ func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page
 		bson.D{bson.E{Key: "$group", Value: bson.M{
 			"_id":               contactExpr,
 			"last_message_text": bson.M{"$last": "$body_text"},
+			"last_message_type": bson.M{"$last": "$wa_message_type"},
 			"last_message_date": bson.M{"$last": "$message_date"},
 			"unread_count": bson.M{"$sum": bson.M{"$cond": bson.A{
 				bson.M{"$and": bson.A{
@@ -548,6 +550,7 @@ func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page
 			"_id":               0,
 			"contact_phone":     "$_id",
 			"last_message_text": 1,
+			"last_message_type": 1,
 			"last_message_date": 1,
 			"unread_count":      1,
 			"message_count":     1,

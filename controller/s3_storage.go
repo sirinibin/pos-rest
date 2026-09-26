@@ -144,20 +144,22 @@ func uploadToS3(s models.AdminSettings, key string, data []byte, contentType str
 // relKey is the path without leading "./" or "/" e.g. "attachments/{storeID}/{msgID}/file.pdf".
 func saveAttachment(settings models.AdminSettings, relKey string, data []byte, contentType string) string {
 	if settings.S3Enabled && settings.S3BucketName != "" && settings.S3AccessKeyID != "" {
-		_, err := uploadToS3(settings, relKey, data, contentType)
-		if err != nil {
-			log.Printf("s3: upload FAILED for %s (bucket=%q region=%q): %v — attachment not stored; use retry-attachments to re-fetch",
+		if _, err := uploadToS3(settings, relKey, data, contentType); err != nil {
+			log.Printf("s3: upload FAILED for %s (bucket=%q region=%q): %v — falling back to local disk",
 				relKey, settings.S3BucketName, settings.S3Region, err)
-			return ""
+			// Fall through to local-disk save so the file is never silently dropped.
+		} else {
+			return "/cdn/" + relKey
 		}
-		return "/cdn/" + relKey
 	}
-	// S3 not configured — save to local disk
+	// S3 not configured (or upload failed) — save to local disk.
 	localPath := "./" + relKey
 	if err := os.MkdirAll(filepath.Dir(localPath), 0755); err != nil {
+		log.Printf("saveAttachment: mkdir failed for %s: %v", localPath, err)
 		return ""
 	}
 	if err := os.WriteFile(localPath, data, 0644); err != nil {
+		log.Printf("saveAttachment: write failed for %s: %v", localPath, err)
 		return ""
 	}
 	return "/cdn/" + relKey
