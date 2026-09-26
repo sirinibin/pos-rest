@@ -3331,16 +3331,17 @@ func findSuppliers(store *models.Store, storeID primitive.ObjectID, categories [
 						}
 						globalSeen[sup.Phone] = true
 						sup.MatchedCategory = category
-						// Persist the matched category so future DB lookups find this supplier
-						hasCat := false
+						// Persist ALL RFQ categories so future DB lookups find this supplier
+						// for any of the RFQ's categories — not just the one that matched this round.
+						catSet := map[string]bool{}
 						for _, c := range sup.Categories {
-							if strings.EqualFold(c, category) {
-								hasCat = true
-								break
-							}
+							catSet[strings.ToLower(c)] = true
 						}
-						if !hasCat {
-							sup.Categories = append(sup.Categories, category)
+						for _, cat := range categories {
+							if !catSet[strings.ToLower(cat)] {
+								sup.Categories = append(sup.Categories, cat)
+								catSet[strings.ToLower(cat)] = true
+							}
 						}
 						models.UpsertRFQSupplierByPlaceID(sup)
 						pairSuppliers = append(pairSuppliers, *sup)
@@ -4730,6 +4731,7 @@ func FetchSuppliersFromMapsHandler(w http.ResponseWriter, r *http.Request) {
 	type supplierEntry struct {
 		supplier   models.RFQSupplier
 		categories map[string]bool
+		fromDB     bool // true = first found via DB lookup; false = first found via Google Maps
 	}
 	addCategory := func(e *supplierEntry, cat string) {
 		if e.categories == nil {
@@ -4763,7 +4765,7 @@ func FetchSuppliersFromMapsHandler(w http.ResponseWriter, r *http.Request) {
 				if e, exists := byKey[k]; exists {
 					addCategory(e, category)
 				} else {
-					e = &supplierEntry{supplier: s}
+					e = &supplierEntry{supplier: s, fromDB: true}
 					addCategory(e, category)
 					byKey[k] = e
 				}
@@ -4784,7 +4786,8 @@ func FetchSuppliersFromMapsHandler(w http.ResponseWriter, r *http.Request) {
 						if e, exists := byKey[k]; exists {
 							addCategory(e, category)
 						} else {
-							e = &supplierEntry{supplier: s}
+							// fromDB=false: first seen via Maps (may already exist in DB but wasn't returned by our DB query)
+							e = &supplierEntry{supplier: s, fromDB: false}
 							addCategory(e, category)
 							byKey[k] = e
 						}
@@ -4834,9 +4837,23 @@ func FetchSuppliersFromMapsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Ensure every found supplier carries ALL RFQ categories — not just the one(s) that
+	// matched during the per-category search rounds. This means next time we look up any
+	// of this RFQ's categories we will find the supplier in our DB without hitting Maps again.
+	for _, e := range byKey {
+		for _, cat := range rfq.Categories {
+			if e.categories == nil {
+				e.categories = map[string]bool{}
+			}
+			e.categories[cat] = true
+		}
+	}
+
 	// Upsert each qualifying supplier with its full accumulated category list.
 	seenPhone := map[string]bool{}
 	var allFound []models.RFQSupplier
+	fromDBCount := 0
+	fromMapsCount := 0
 	for _, entry := range byKey {
 		s := entry.supplier
 		s.Categories = make([]string, 0, len(entry.categories))
@@ -4855,6 +4872,11 @@ func FetchSuppliersFromMapsHandler(w http.ResponseWriter, r *http.Request) {
 		if len(s.Categories) == 0 && s.Website != "" {
 			go inferSupplierCategoriesFromWebsite(store, s)
 		}
+		if entry.fromDB {
+			fromDBCount++
+		} else {
+			fromMapsCount++
+		}
 		allFound = append(allFound, s)
 	}
 
@@ -4864,8 +4886,10 @@ func FetchSuppliersFromMapsHandler(w http.ResponseWriter, r *http.Request) {
 	BroadcastRFQEvent(storeIDStr, "supplier_updated")
 
 	respBytes, _ := json.Marshal(map[string]interface{}{
-		"found":     len(allFound),
-		"suppliers": allFound,
+		"found":      len(allFound),
+		"from_db":    fromDBCount,
+		"from_maps":  fromMapsCount,
+		"suppliers":  allFound,
 	})
 	w.Write(respBytes)
 }
