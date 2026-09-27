@@ -850,6 +850,90 @@ func DeleteQuotation(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// UnlinkOrderFromQuotation handles DELETE /v1/quotation/{id}/order/{order_id}
+func UnlinkOrderFromQuotation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	_, err := models.AuthenticateByAccessToken(r)
+	if err != nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	params := mux.Vars(r)
+
+	quotationID, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["quotation_id"] = "Invalid Quotation ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	orderID, err := primitive.ObjectIDFromHex(params["order_id"])
+	if err != nil {
+		response.Status = false
+		response.Errors["order_id"] = "Invalid Order ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Accept store_id from either ?store_id= or ?search[store_id]= (legacy ParseStore format)
+	q := r.URL.Query()
+	rawStoreID := q.Get("store_id")
+	if rawStoreID == "" {
+		rawStoreID = q.Get("search[store_id]")
+	}
+	if rawStoreID == "" {
+		response.Status = false
+		response.Errors["store_id"] = "store_id is required"
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	storeObjID, err := primitive.ObjectIDFromHex(rawStoreID)
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	store, err := models.FindStoreByID(&storeObjID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["store_id"] = "Store not found:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	quotation, err := store.FindQuotationByID(&quotationID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to find quotation:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if err = quotation.UnlinkOrder(orderID); err != nil {
+		response.Status = false
+		response.Errors["unlink"] = "Unable to unlink order:" + err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Status = true
+	response.Result = quotation
+	json.NewEncoder(w).Encode(response)
+}
+
 // CreateOrder : handler for POST /order
 func CalculateQuotationNetTotal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

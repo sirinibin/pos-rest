@@ -484,6 +484,7 @@ func main() {
 	router.HandleFunc("/v1/quotation/{id}", controller.ViewQuotation).Methods("GET")
 	router.HandleFunc("/v1/quotation/{id}", controller.UpdateQuotation).Methods("PUT")
 	router.HandleFunc("/v1/quotation/{id}", controller.DeleteQuotation).Methods("DELETE")
+	router.HandleFunc("/v1/quotation/{id}/order/{order_id}", controller.UnlinkOrderFromQuotation).Methods("DELETE")
 	router.HandleFunc("/v1/previous-quotation/{id}", controller.ViewPreviousQuotation).Methods("GET")
 	router.HandleFunc("/v1/next-quotation/{id}", controller.ViewNextQuotation).Methods("GET")
 	router.HandleFunc("/v1/last-quotation", controller.ViewLastQuotation).Methods("GET")

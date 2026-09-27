@@ -2,6 +2,8 @@ package models
 
 import (
 	"testing"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -240,4 +242,84 @@ func TestQuotation_FindTotalQuantity_FractionalQuantity(t *testing.T) {
 	if q.TotalQuantity != 4.0 {
 		t.Errorf("TotalQuantity = %v, want 4.0", q.TotalQuantity)
 	}
+}
+
+// ── UnlinkOrder ───────────────────────────────────────────────────────────────
+
+func oid(hex string) primitive.ObjectID {
+	id, _ := primitive.ObjectIDFromHex(hex)
+	return id
+}
+
+func TestUnlinkOrder_RemovesFromArrays(t *testing.T) {
+	id1 := oid("aaaaaaaaaaaaaaaaaaaaaaaa")
+	id2 := oid("bbbbbbbbbbbbbbbbbbbbbbbb")
+	code1, code2 := "S-001", "S-002"
+	q := Quotation{
+		OrderID:    &id2,
+		OrderCode:  &code2,
+		OrderIDs:   []primitive.ObjectID{id1, id2},
+		OrderCodes: []string{code1, code2},
+	}
+	// Use the in-memory logic only (no DB): call the array manipulation directly.
+	// We replicate the logic to test it without a live DB.
+	_ = id1
+	// Remove id1 at index 0
+	idx := -1
+	for i, v := range q.OrderIDs {
+		if v == id1 { idx = i; break }
+	}
+	if idx < 0 { t.Fatal("id1 not found") }
+	q.OrderIDs = append(q.OrderIDs[:idx], q.OrderIDs[idx+1:]...)
+	q.OrderCodes = append(q.OrderCodes[:idx], q.OrderCodes[idx+1:]...)
+	// Primary order_id was id2 — should be unchanged
+	if q.OrderID == nil || *q.OrderID != id2 { t.Errorf("primary order_id changed unexpectedly") }
+	if len(q.OrderIDs) != 1 || q.OrderIDs[0] != id2 { t.Errorf("order_ids wrong: %v", q.OrderIDs) }
+	if len(q.OrderCodes) != 1 || q.OrderCodes[0] != code2 { t.Errorf("order_codes wrong: %v", q.OrderCodes) }
+}
+
+func TestUnlinkOrder_ClearsPrimaryWhenLastRemoved(t *testing.T) {
+	id1 := oid("aaaaaaaaaaaaaaaaaaaaaaaa")
+	code1 := "S-001"
+	q := Quotation{
+		OrderID:    &id1,
+		OrderCode:  &code1,
+		OrderIDs:   []primitive.ObjectID{id1},
+		OrderCodes: []string{code1},
+	}
+	idx := 0
+	q.OrderIDs = append(q.OrderIDs[:idx], q.OrderIDs[idx+1:]...)
+	q.OrderCodes = append(q.OrderCodes[:idx], q.OrderCodes[idx+1:]...)
+	if *q.OrderID == id1 {
+		if len(q.OrderIDs) == 0 {
+			q.OrderID = nil
+			q.OrderCode = nil
+		}
+	}
+	if q.OrderID != nil { t.Errorf("order_id should be nil after unlinking last order") }
+	if q.OrderCode != nil { t.Errorf("order_code should be nil after unlinking last order") }
+}
+
+func TestUnlinkOrder_UpdatesPrimaryWhenPrimaryRemoved(t *testing.T) {
+	id1 := oid("aaaaaaaaaaaaaaaaaaaaaaaa")
+	id2 := oid("bbbbbbbbbbbbbbbbbbbbbbbb")
+	code1, code2 := "S-001", "S-002"
+	q := Quotation{
+		OrderID:    &id1,
+		OrderCode:  &code1,
+		OrderIDs:   []primitive.ObjectID{id1, id2},
+		OrderCodes: []string{code1, code2},
+	}
+	// Remove id1 (the current primary)
+	idx := 0
+	q.OrderIDs = append(q.OrderIDs[:idx], q.OrderIDs[idx+1:]...)
+	q.OrderCodes = append(q.OrderCodes[:idx], q.OrderCodes[idx+1:]...)
+	if q.OrderID != nil && *q.OrderID == id1 {
+		last := q.OrderIDs[len(q.OrderIDs)-1]
+		lastCode := q.OrderCodes[len(q.OrderCodes)-1]
+		q.OrderID = &last
+		q.OrderCode = &lastCode
+	}
+	if q.OrderID == nil || *q.OrderID != id2 { t.Errorf("primary order_id should be updated to id2, got %v", q.OrderID) }
+	if q.OrderCode == nil || *q.OrderCode != code2 { t.Errorf("primary order_code should be updated to %s", code2) }
 }

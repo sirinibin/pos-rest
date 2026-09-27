@@ -2225,6 +2225,56 @@ func (quotation *Quotation) Update() error {
 	return nil
 }
 
+// UnlinkOrder removes a specific sales order from this quotation's order_ids/order_codes arrays.
+// If order_id also matches, it is updated to the last remaining linked order (or cleared if none left).
+func (quotation *Quotation) UnlinkOrder(orderID primitive.ObjectID) error {
+	// Find the index in the parallel arrays.
+	idx := -1
+	for i, id := range quotation.OrderIDs {
+		if id == orderID {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		quotation.OrderIDs = append(quotation.OrderIDs[:idx], quotation.OrderIDs[idx+1:]...)
+		if idx < len(quotation.OrderCodes) {
+			quotation.OrderCodes = append(quotation.OrderCodes[:idx], quotation.OrderCodes[idx+1:]...)
+		}
+	}
+
+	// If the primary order_id matched, update it to the last remaining or clear it.
+	if quotation.OrderID != nil && *quotation.OrderID == orderID {
+		if len(quotation.OrderIDs) > 0 {
+			last := quotation.OrderIDs[len(quotation.OrderIDs)-1]
+			quotation.OrderID = &last
+			if len(quotation.OrderCodes) > 0 {
+				lastCode := quotation.OrderCodes[len(quotation.OrderCodes)-1]
+				quotation.OrderCode = &lastCode
+			} else {
+				quotation.OrderCode = nil
+			}
+		} else {
+			quotation.OrderID = nil
+			quotation.OrderCode = nil
+		}
+	}
+
+	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := collection.UpdateOne(ctx,
+		bson.M{"_id": quotation.ID},
+		bson.M{"$set": bson.M{
+			"order_id":    quotation.OrderID,
+			"order_code":  quotation.OrderCode,
+			"order_ids":   quotation.OrderIDs,
+			"order_codes": quotation.OrderCodes,
+		}},
+	)
+	return err
+}
+
 func (quotation *Quotation) DeleteQuotation(tokenClaims TokenClaims) (err error) {
 	collection := db.GetDB("store_" + quotation.StoreID.Hex()).Collection("quotation")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
