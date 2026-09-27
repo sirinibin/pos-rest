@@ -32,11 +32,13 @@ import (
 // ─── auto-restart config (persisted to health-monitor-config.json) ───────────
 
 type AutoRestartConfig struct {
-	Enabled      bool     `json:"enabled"`
-	Minutes      int      `json:"minutes"`         // how many minutes down before auto-restart
-	AllowedUsers []string `json:"allowed_users"`   // non-admin user IDs permitted to view status
-	RedisService string   `json:"redis_service"`   // default: "redis.service"
-	MongoService string   `json:"mongo_service"`   // default: "mongod.service"
+	Enabled                bool     `json:"enabled"`
+	Minutes                int      `json:"minutes"`                  // how many minutes down before auto-restart
+	AllowedUsers           []string `json:"allowed_users"`            // non-admin user IDs permitted to view status
+	RedisService           string   `json:"redis_service"`            // default: "redis.service"
+	MongoService           string   `json:"mongo_service"`            // default: "mongod.service"
+	FrontendAutoFix        bool     `json:"frontend_auto_fix"`        // auto-repair build/ when index.html missing
+	FrontendAutoFixMinutes int      `json:"frontend_auto_fix_minutes"` // minutes before repair triggers (default 3)
 }
 
 func (c *AutoRestartConfig) redisService() string {
@@ -70,11 +72,14 @@ type RestartLogEntry struct {
 }
 
 var (
-	arCfg   = AutoRestartConfig{Enabled: false, Minutes: 8}
+	arCfg   = AutoRestartConfig{Enabled: false, Minutes: 8, FrontendAutoFixMinutes: 3}
 	arMu    sync.RWMutex
 	// downSince tracks when each env first went down (key: "production" | "test")
 	downSince   = map[string]time.Time{}
 	downSinceMu sync.Mutex
+	// frontendDownSince tracks when each env's frontend first went missing
+	frontendDownSince   = map[string]time.Time{}
+	frontendDownSinceMu sync.Mutex
 	// restart log (newest first, capped at maxLogEntries)
 	rstLog   []RestartLogEntry
 	rstLogMu sync.Mutex
@@ -211,6 +216,63 @@ func autoRestartLoop() {
 		// Shared infrastructure — only restart once per cycle, not per env
 		tryAutoRestart("redis", cfg.redisService(), "shared", threshold, cfg)
 		tryAutoRestart("mongo", cfg.mongoService(), "shared", threshold, cfg)
+	}
+}
+
+// frontendAutoFixLoop runs every 5 seconds.
+// When FrontendAutoFix is enabled and an env's build directory has been missing
+// its index.html for >= FrontendAutoFixMinutes, it calls repairFrontendBuild.
+func frontendAutoFixLoop() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		arMu.RLock()
+		cfg := arCfg
+		arMu.RUnlock()
+		if !cfg.FrontendAutoFix {
+			frontendDownSinceMu.Lock()
+			for k := range frontendDownSince {
+				delete(frontendDownSince, k)
+			}
+			frontendDownSinceMu.Unlock()
+			continue
+		}
+		minutes := cfg.FrontendAutoFixMinutes
+		if minutes < 1 {
+			minutes = 3
+		}
+		threshold := time.Duration(minutes) * time.Minute
+		for _, env := range []string{"production", "test"} {
+			buildDir := frontendBuildDir(env)
+			st := checkFrontendBuild(buildDir)
+			if st.OK {
+				frontendDownSinceMu.Lock()
+				delete(frontendDownSince, env)
+				frontendDownSinceMu.Unlock()
+				continue
+			}
+			frontendDownSinceMu.Lock()
+			if _, tracked := frontendDownSince[env]; !tracked {
+				frontendDownSince[env] = time.Now()
+				frontendDownSinceMu.Unlock()
+				log.Printf("[health-monitor] frontend %s is broken, will auto-fix in %dm if still broken", env, minutes)
+				continue
+			}
+			elapsed := time.Since(frontendDownSince[env])
+			if elapsed < threshold {
+				frontendDownSinceMu.Unlock()
+				continue
+			}
+			delete(frontendDownSince, env)
+			frontendDownSinceMu.Unlock()
+			log.Printf("[health-monitor] auto-fixing frontend %s (broken for %v >= %dm)", env, elapsed.Round(time.Second), minutes)
+			result := repairFrontendBuild(buildDir)
+			if result.Fixed {
+				log.Printf("[health-monitor] frontend %s auto-fix OK: %s", env, result.Message)
+			} else {
+				log.Printf("[health-monitor] frontend %s auto-fix FAILED: %s", env, result.Message)
+			}
+		}
 	}
 }
 
@@ -711,6 +773,7 @@ func main() {
 	loadRestartLog()
 	loadConfigFromDisk()
 	go autoRestartLoop()
+	go frontendAutoFixLoop()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health-monitor/status", statusHandler)
