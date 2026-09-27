@@ -37,14 +37,32 @@ type ServerStatus struct {
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
-// checkFrontendBuild reports whether the live build directory has an index.html.
+// isBuildHealthy returns true only when the directory has a non-empty index.html,
+// at least one JS bundle under static/js/, and one CSS bundle under static/css/.
+func isBuildHealthy(dir string) (bool, string) {
+	info, err := os.Stat(filepath.Join(dir, "index.html"))
+	if err != nil || info.Size() == 0 {
+		return false, "index.html missing or empty"
+	}
+	jsMatches, _ := filepath.Glob(filepath.Join(dir, "static", "js", "*.js"))
+	if len(jsMatches) == 0 {
+		return false, "no JS bundle found in static/js/"
+	}
+	cssMatches, _ := filepath.Glob(filepath.Join(dir, "static", "css", "*.css"))
+	if len(cssMatches) == 0 {
+		return false, "no CSS bundle found in static/css/"
+	}
+	return true, "OK"
+}
+
+// checkFrontendBuild reports whether the live build directory is fully intact.
 func checkFrontendBuild(buildDir string) ComponentStatus {
 	if buildDir == "" {
 		return ComponentStatus{true, "N/A"}
 	}
-	info, err := os.Stat(filepath.Join(buildDir, "index.html"))
-	if err != nil || info.Size() == 0 {
-		return ComponentStatus{false, "index.html missing — build directory not deployed"}
+	ok, reason := isBuildHealthy(buildDir)
+	if !ok {
+		return ComponentStatus{false, reason + " — build directory not deployed"}
 	}
 	return ComponentStatus{true, "OK"}
 }
@@ -316,29 +334,22 @@ type repairResult struct {
 // repairFrontendBuild ensures the live build directory has a valid index.html.
 // It creates the directory and copies content from build_new or build_old if needed.
 func repairFrontendBuild(buildDir string) repairResult {
-	indexPath := filepath.Join(buildDir, "index.html")
-
-	// Already healthy — nothing to do
-	if info, err := os.Stat(indexPath); err == nil && info.Size() > 0 {
+	if ok, _ := isBuildHealthy(buildDir); ok {
 		return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
 	}
 
-	// Ensure the directory exists
 	if err := os.MkdirAll(buildDir, 0755); err != nil {
 		return repairResult{Message: "Failed to create build directory: " + err.Error()}
 	}
 
-	// Try build_new first (most recent), then build_old
 	base := filepath.Dir(buildDir)
 	for _, src := range []string{
 		filepath.Join(base, "build_new"),
 		filepath.Join(base, "build_old"),
 	} {
-		srcIndex := filepath.Join(src, "index.html")
-		if info, err := os.Stat(srcIndex); err != nil || info.Size() == 0 {
+		if ok, _ := isBuildHealthy(src); !ok {
 			continue
 		}
-		// Copy the source tree into the live build dir
 		out, err := exec.Command("cp", "-a", src+"/.", buildDir+"/").CombinedOutput()
 		if err != nil {
 			return repairResult{Message: "cp failed from " + src + ": " + err.Error() + " — " + string(out)}
@@ -346,5 +357,5 @@ func repairFrontendBuild(buildDir string) repairResult {
 		return repairResult{Fixed: true, Message: "Restored from " + filepath.Base(src) + "."}
 	}
 
-	return repairResult{Message: "No valid source found (build_new and build_old are both missing or empty)."}
+	return repairResult{Message: "No valid source found (build_new and build_old are both missing or incomplete)."}
 }

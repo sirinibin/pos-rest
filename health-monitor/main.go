@@ -306,13 +306,33 @@ func frontendBuildDir(env string) string {
 	return ""
 }
 
+// isBuildHealthy returns true only when the directory has:
+//   - a non-empty index.html
+//   - at least one .js  file under static/js/
+//   - at least one .css file under static/css/
+func isBuildHealthy(dir string) (bool, string) {
+	info, err := os.Stat(filepath.Join(dir, "index.html"))
+	if err != nil || info.Size() == 0 {
+		return false, "index.html missing or empty"
+	}
+	jsMatches, _ := filepath.Glob(filepath.Join(dir, "static", "js", "*.js"))
+	if len(jsMatches) == 0 {
+		return false, "no JS bundle found in static/js/"
+	}
+	cssMatches, _ := filepath.Glob(filepath.Join(dir, "static", "css", "*.css"))
+	if len(cssMatches) == 0 {
+		return false, "no CSS bundle found in static/css/"
+	}
+	return true, "OK"
+}
+
 func checkFrontendBuild(buildDir string) ComponentStatus {
 	if buildDir == "" {
 		return ComponentStatus{true, "N/A"}
 	}
-	info, err := os.Stat(filepath.Join(buildDir, "index.html"))
-	if err != nil || info.Size() == 0 {
-		return ComponentStatus{false, "index.html missing — build directory not deployed"}
+	ok, reason := isBuildHealthy(buildDir)
+	if !ok {
+		return ComponentStatus{false, reason + " — build directory not deployed"}
 	}
 	return ComponentStatus{true, "OK"}
 }
@@ -324,8 +344,7 @@ type repairResult struct {
 }
 
 func repairFrontendBuild(buildDir string) repairResult {
-	indexPath := filepath.Join(buildDir, "index.html")
-	if info, err := os.Stat(indexPath); err == nil && info.Size() > 0 {
+	if ok, _ := isBuildHealthy(buildDir); ok {
 		return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
 	}
 	if err := os.MkdirAll(buildDir, 0755); err != nil {
@@ -336,8 +355,8 @@ func repairFrontendBuild(buildDir string) repairResult {
 		filepath.Join(base, "build_new"),
 		filepath.Join(base, "build_old"),
 	} {
-		srcIndex := filepath.Join(src, "index.html")
-		if info, err := os.Stat(srcIndex); err != nil || info.Size() == 0 {
+		if ok, reason := isBuildHealthy(src); !ok {
+			log.Printf("[health-monitor] skipping %s as restore source: %s", filepath.Base(src), reason)
 			continue
 		}
 		out, err := exec.Command("cp", "-a", src+"/.", buildDir+"/").CombinedOutput()
@@ -346,7 +365,7 @@ func repairFrontendBuild(buildDir string) repairResult {
 		}
 		return repairResult{Fixed: true, Message: "Restored from " + filepath.Base(src) + "."}
 	}
-	return repairResult{Message: "No valid source found (build_new and build_old are both missing or empty)."}
+	return repairResult{Message: "No valid source found (build_new and build_old are both missing or incomplete)."}
 }
 
 // ─── health checks ───────────────────────────────────────────────────────────
