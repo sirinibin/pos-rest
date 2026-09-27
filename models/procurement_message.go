@@ -169,7 +169,7 @@ func LinkPurchaseToMessage(msgID, purchaseID primitive.ObjectID, purchaseCode st
 // "quotation" = is_supplier_quotation=true, "other" = not RFQ and not quotation.
 // fromNumbers: when non-empty, only messages whose From field matches one of these numbers are returned.
 // purchaseBillsMode: when true, also includes manually-uploaded purchase bills (type=manual).
-func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int, hasAttachments bool, fromNumbers []string, purchaseBillsMode bool) ([]ProcurementMessage, int64, error) {
+func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, search, rfqFilter string, page, limit int, hasAttachments bool, fromNumbers []string, purchaseBillsMode bool, dateFrom, dateTo *time.Time) ([]ProcurementMessage, int64, error) {
 	filter := bson.M{"store_id": storeID}
 
 	if purchaseBillsMode {
@@ -215,6 +215,18 @@ func ListProcurementMessages(storeID primitive.ObjectID, msgType, direction, sea
 	}
 	if hasAttachments {
 		filter["attachments"] = bson.M{"$exists": true, "$not": bson.M{"$size": 0}}
+	}
+	if dateFrom != nil || dateTo != nil {
+		dateRange := bson.M{}
+		if dateFrom != nil {
+			dateRange["$gte"] = *dateFrom
+		}
+		if dateTo != nil {
+			// include the full end day
+			endOfDay := dateTo.Add(24*time.Hour - time.Second)
+			dateRange["$lte"] = endOfDay
+		}
+		filter["message_date"] = dateRange
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -562,7 +574,7 @@ func getPinnedContacts(storeID primitive.ObjectID, msgType string) map[string]ti
 }
 
 // ListContactThreads returns one row per distinct supplier contact, sorted by last message date desc.
-func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page, limit int, phones []string) ([]ContactThread, int64, error) {
+func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page, limit int, phones []string, dateFrom, dateTo *time.Time) ([]ContactThread, int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	col := procurementMessageCol()
@@ -570,6 +582,17 @@ func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page
 	matchFilter := bson.M{"store_id": storeID}
 	if msgType != "" {
 		matchFilter["type"] = msgType
+	}
+	if dateFrom != nil || dateTo != nil {
+		dateRange := bson.M{}
+		if dateFrom != nil {
+			dateRange["$gte"] = *dateFrom
+		}
+		if dateTo != nil {
+			endOfDay := dateTo.Add(24*time.Hour - time.Second)
+			dateRange["$lte"] = endOfDay
+		}
+		matchFilter["message_date"] = dateRange
 	}
 
 	// normalizeEmailExpr uses $regexFind to extract a bare email address from any

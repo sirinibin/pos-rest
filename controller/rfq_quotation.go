@@ -384,6 +384,24 @@ func ParseQuotationFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	analysis := analyzeSupplierReply(store, extractedText, pdfBase64sForAnalysis, rfqProducts, providerOverride, modelOverride)
 
+	// Second LLM pass: match any prices the first pass could not assign (product_index == -1).
+	// Run in a goroutine with a timeout so a slow LLM never delays the whole response.
+	if len(rfqProducts) > 0 && len(analysis.Prices) > 0 {
+		pricesCopy := make([]models.SupplierReplyPrice, len(analysis.Prices))
+		copy(pricesCopy, analysis.Prices)
+		done := make(chan []models.SupplierReplyPrice, 1)
+		go func() {
+			matchPricesToProducts(store, pricesCopy, rfqProducts, providerOverride, modelOverride)
+			done <- pricesCopy
+		}()
+		select {
+		case matched := <-done:
+			analysis.Prices = matched
+		case <-time.After(20 * time.Second):
+			log.Printf("rfq_quotation: matchPricesToProducts timed out after 20s — returning original product_index values")
+		}
+	}
+
 	resp := map[string]interface{}{
 		"extracted_text": extractedText,
 		"file_name":      fh.Filename,
@@ -425,7 +443,8 @@ func extractTextFromContentLLM(store *models.Store, imageDataURIs []string, pdfB
 		}
 		return callAnthropicExtractRFQ(apiKey, model, textExtractPrompt, imageDataURIs, pdfBase64s, 2000)
 	default:
-		return callOpenAICompatExtractRFQ(apiKey, model, textExtractPrompt, imageDataURIs, 2000, openAICompatBaseURL(provider))
+		// Pass PDFs via OpenAI's "file" content block (GPT-4.1+).
+		return callOpenAICompatExtractRFQWithFiles(apiKey, model, textExtractPrompt, imageDataURIs, pdfBase64s, 4096, openAICompatBaseURL(provider))
 	}
 }
 

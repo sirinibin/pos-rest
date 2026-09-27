@@ -89,6 +89,18 @@ func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	rfqFilter := r.URL.Query().Get("rfq_filter") // "yes" | "no" | ""
 	hasAttachments := r.URL.Query().Get("has_attachments") == "true"
 	purchaseBills := r.URL.Query().Get("purchase_bills") == "true"
+
+	var dateFrom, dateTo *time.Time
+	if s := r.URL.Query().Get("date_from"); s != "" {
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			dateFrom = &t
+		}
+	}
+	if s := r.URL.Query().Get("date_to"); s != "" {
+		if t, err := time.Parse("2006-01-02", s); err == nil {
+			dateTo = &t
+		}
+	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -107,7 +119,7 @@ func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		// Continue even with no manager numbers — manual uploads always show up.
 	}
 
-	msgs, total, err := models.ListProcurementMessages(storeObjID, msgType, direction, search, rfqFilter, page, limit, hasAttachments, fromNumbers, purchaseBills)
+	msgs, total, err := models.ListProcurementMessages(storeObjID, msgType, direction, search, rfqFilter, page, limit, hasAttachments, fromNumbers, purchaseBills, dateFrom, dateTo)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -938,20 +950,30 @@ func ExtractQuotationHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// purchaseBillProduct holds one line item extracted from a purchase bill, including the unit price.
+type purchaseBillProduct struct {
+	PartNo    string  `json:"part_no"`
+	Name      string  `json:"name"`
+	Quantity  float64 `json:"quantity"`
+	UnitPrice float64 `json:"unit_price"`
+	Unit      string  `json:"unit"`
+	Notes     string  `json:"notes"`
+}
+
 // purchaseBillExtractResult holds vendor invoice data extracted from a purchase bill.
 type purchaseBillExtractResult struct {
-	VendorCompanyName     string              `json:"vendor_company_name"`
-	VendorVATNo           string              `json:"vendor_vat_no"`
-	VendorMobile          string              `json:"vendor_mobile"`
-	VendorCRNo            string              `json:"vendor_cr_no"`
-	VendorNationalAddress string              `json:"vendor_national_address"`
-	InvoiceNumber         string              `json:"invoice_number"`
-	InvoiceDate           string              `json:"invoice_date"`
-	TotalAmount           float64             `json:"total_amount"`
-	TaxAmount             float64             `json:"tax_amount"`
-	Products              []models.RFQProduct `json:"products"`
-	TextContent           string              `json:"text_content"`
-	LLMModel              string              `json:"llm_model,omitempty"`
+	VendorCompanyName     string                `json:"vendor_company_name"`
+	VendorVATNo           string                `json:"vendor_vat_no"`
+	VendorMobile          string                `json:"vendor_mobile"`
+	VendorCRNo            string                `json:"vendor_cr_no"`
+	VendorNationalAddress string                `json:"vendor_national_address"`
+	InvoiceNumber         string                `json:"invoice_number"`
+	InvoiceDate           string                `json:"invoice_date"`
+	TotalAmount           float64               `json:"total_amount"`
+	TaxAmount             float64               `json:"tax_amount"`
+	Products              []purchaseBillProduct `json:"products"`
+	TextContent           string                `json:"text_content"`
+	LLMModel              string                `json:"llm_model,omitempty"`
 }
 
 // ExtractPurchaseBillHandler handles POST /v1/procurement-messages/{id}/extract-purchase-bill

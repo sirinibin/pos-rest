@@ -815,6 +815,33 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 		return errs
 	}
 
+	// Duplicate guard: reject if an identical record was saved within the last 30 seconds
+	if scenario == "create" {
+		dupFilter := bson.M{
+			"store_id":  customerWithdrawal.StoreID,
+			"type":      customerWithdrawal.Type,
+			"net_total": customerWithdrawal.NetTotal,
+			"created_at": bson.M{"$gte": time.Now().Add(-30 * time.Second)},
+		}
+		switch customerWithdrawal.Type {
+		case "customer":
+			dupFilter["customer_id"] = customerWithdrawal.CustomerID
+		case "vendor":
+			dupFilter["vendor_id"] = customerWithdrawal.VendorID
+		case "employee":
+			dupFilter["employee_id"] = customerWithdrawal.EmployeeID
+		}
+		col := db.GetDB("store_" + customerWithdrawal.StoreID.Hex()).Collection("customerwithdrawal")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		count, _ := col.CountDocuments(ctx, dupFilter)
+		if count > 0 {
+			w.WriteHeader(http.StatusConflict)
+			errs["duplicate"] = "A duplicate payable with the same amount was just created. Please refresh and check before saving again."
+			return errs
+		}
+	}
+
 	if customerWithdrawal.Type == "customer" && (customerWithdrawal.CustomerID == nil || customerWithdrawal.CustomerID.IsZero()) {
 		errs["customer_id"] = "Customer is required"
 	}

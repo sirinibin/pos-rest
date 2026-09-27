@@ -53,7 +53,19 @@ func ListProcurementThreadsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	threads, total, err := models.ListContactThreads(storeID, msgType, search, page, limit, phones)
+	var dateFrom, dateTo *time.Time
+	if s := r.URL.Query().Get("date_from"); s != "" {
+		if t, err2 := time.Parse("2006-01-02", s); err2 == nil {
+			dateFrom = &t
+		}
+	}
+	if s := r.URL.Query().Get("date_to"); s != "" {
+		if t, err2 := time.Parse("2006-01-02", s); err2 == nil {
+			dateTo = &t
+		}
+	}
+
+	threads, total, err := models.ListContactThreads(storeID, msgType, search, page, limit, phones, dateFrom, dateTo)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -101,7 +113,7 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Step 1: get all WhatsApp threads with unread messages
-	threads, _, err := models.ListContactThreads(storeID, "whatsapp", "", 1, 1000, nil)
+	threads, _, err := models.ListContactThreads(storeID, "whatsapp", "", 1, 1000, nil, nil, nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

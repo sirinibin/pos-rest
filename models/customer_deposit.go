@@ -848,6 +848,33 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 		return errs
 	}
 
+	// Duplicate guard: reject if an identical record was saved within the last 30 seconds
+	if scenario == "create" {
+		dupFilter := bson.M{
+			"store_id":  customerDeposit.StoreID,
+			"type":      customerDeposit.Type,
+			"net_total": customerDeposit.NetTotal,
+			"created_at": bson.M{"$gte": time.Now().Add(-30 * time.Second)},
+		}
+		switch customerDeposit.Type {
+		case "customer":
+			dupFilter["customer_id"] = customerDeposit.CustomerID
+		case "vendor":
+			dupFilter["vendor_id"] = customerDeposit.VendorID
+		case "employee":
+			dupFilter["employee_id"] = customerDeposit.EmployeeID
+		}
+		col := db.GetDB("store_" + customerDeposit.StoreID.Hex()).Collection("customerdeposit")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		count, _ := col.CountDocuments(ctx, dupFilter)
+		if count > 0 {
+			w.WriteHeader(http.StatusConflict)
+			errs["duplicate"] = "A duplicate receivable with the same amount was just created. Please refresh and check before saving again."
+			return errs
+		}
+	}
+
 	if customerDeposit.Type == "customer" && (customerDeposit.CustomerID == nil || customerDeposit.CustomerID.IsZero()) {
 		errs["customer_id"] = "Customer is required"
 	}

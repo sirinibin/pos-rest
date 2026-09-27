@@ -1235,7 +1235,9 @@ func analyzeSupplierReply(store *models.Store, msgText string, pdfBase64s []stri
 
 	var productContext strings.Builder
 	for i, p := range rfqProducts {
-		productContext.WriteString(fmt.Sprintf("%d. %s", i+1, p.Name))
+		// Use 0-based index in the list so the LLM's product_index values align
+		// with what the frontend expects (prices[product_index] == products[i]).
+		productContext.WriteString(fmt.Sprintf("index %d: %s", i, p.Name))
 		if p.PartNo != "" {
 			productContext.WriteString(" (part: " + p.PartNo + ")")
 		}
@@ -1266,10 +1268,10 @@ Extract the following and return ONLY valid JSON (no explanation):
   "general_notes": "<quotation-wide conditions only: validity period, delivery lead time, payment terms, warranty, overall terms — e.g. 'Validity: 2 days, Delivery: 7 days'. Empty string if none.>",
   "prices": [
     {
-      "product_index": <0-based index from the product list above, -1 if unknown>,
-      "product_name": "<as mentioned in the message>",
-      "part_no": "<part number if mentioned, else empty>",
-      "unit_price": <numeric price EXCLUDING VAT, 0 if not given>,
+      "product_index": <0-based index from the product list above; match by normalising part numbers (strip hyphens/spaces/case, e.g. FC5723 = FC-5723) and by name similarity; -1 only if truly no match>,
+      "product_name": "<description as shown in the supplier document>",
+      "part_no": "<part/item code from the supplier document — extract it even if not in a dedicated column (e.g. the code at the start of a description line); empty if none>",
+      "unit_price": <numeric unit price EXCLUDING VAT, 0 if not given>,
       "quantity": <numeric quantity if mentioned, 0 if not>,
       "currency": "<e.g. AED, SAR, USD; default SAR if not specified>",
       "vat_included": <false if price is excluding VAT, true if price already includes VAT>,
@@ -1302,17 +1304,19 @@ IMPORTANT: general_notes is for conditions that apply to the whole quotation (va
 	var responseText string
 	var llmErr error
 	// For Gemini and Anthropic, use vision-capable calls so image-based PDFs are readable.
+	// 16 384 output tokens: a 39-product quotation in JSON needs ~7 000 tokens; 4 096 was too low.
+	const extractMaxTokens = 16384
 	switch provider {
 	case "gemini":
-		responseText, llmErr = callGeminiExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, 2048)
+		responseText, llmErr = callGeminiExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, extractMaxTokens)
 	case "anthropic":
-		responseText, llmErr = callAnthropicExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, 2048)
+		responseText, llmErr = callAnthropicExtractRFQ(apiKey, model, prompt, nil, pdfBase64s, extractMaxTokens)
 	case "openai":
-		responseText, llmErr = callOpenAI(apiKey, model, prompt, "")
+		responseText, llmErr = callOpenAICompatExtractRFQWithFiles(apiKey, model, prompt, nil, pdfBase64s, extractMaxTokens, openAICompatBaseURL("openai"))
 	default:
-		// OpenAI-compatible providers — text mode (PDFs already text-extracted above).
+		// OpenAI-compatible providers — pass PDFs via file content blocks when supported.
 		baseURL := openAICompatBaseURL(provider)
-		responseText, llmErr = callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 2048, baseURL)
+		responseText, llmErr = callOpenAICompatExtractRFQWithFiles(apiKey, model, prompt, nil, pdfBase64s, extractMaxTokens, baseURL)
 	}
 	if llmErr != nil {
 		log.Printf("rfq_bot: analyzeSupplierReply LLM error: %v", llmErr)
@@ -1347,12 +1351,8 @@ IMPORTANT: general_notes is for conditions that apply to the whole quotation (va
 		if p.UnitPrice <= 0 {
 			continue
 		}
-		idx := p.ProductIndex
-		if idx < 0 {
-			idx = 0
-		}
 		prices = append(prices, models.SupplierReplyPrice{
-			ProductIndex: idx,
+			ProductIndex: p.ProductIndex, // keep -1 for unmatched; matchPricesToProducts will fix them
 			ProductName:  p.ProductName,
 			PartNo:       p.PartNo,
 			UnitPrice:    p.UnitPrice,
@@ -1369,6 +1369,99 @@ IMPORTANT: general_notes is for conditions that apply to the whole quotation (va
 		Prices:        prices,
 		SupplierName:  strings.TrimSpace(raw.SupplierName),
 		SupplierPhone: strings.TrimSpace(raw.SupplierPhone),
+	}
+}
+
+// matchPricesToProducts uses the LLM to assign a product_index to each price that still has -1.
+// prices is modified in place; no-op if all prices are already matched or rfqProducts is empty.
+func matchPricesToProducts(store *models.Store, prices []models.SupplierReplyPrice, rfqProducts []models.RFQProduct, providerOverride, modelOverride string) {
+	if len(rfqProducts) == 0 {
+		return
+	}
+	// Collect indices of unmatched prices.
+	var unmatchedIdx []int
+	for i, p := range prices {
+		if p.ProductIndex < 0 {
+			unmatchedIdx = append(unmatchedIdx, i)
+		}
+	}
+	if len(unmatchedIdx) == 0 {
+		return
+	}
+
+	provider := strings.ToLower(providerOverride)
+	model := modelOverride
+	if provider == "" {
+		provider = strings.ToLower(store.Settings.RFQLLMProvider)
+	}
+	if model == "" {
+		model = store.Settings.RFQLLMModel
+	}
+	apiKey := resolveExtractionAPIKey(provider, &store.Settings)
+	if apiKey == "" {
+		apiKey = store.Settings.RFQLLMAPIKey
+	}
+	if apiKey == "" {
+		return
+	}
+
+	var productList strings.Builder
+	for i, p := range rfqProducts {
+		productList.WriteString(fmt.Sprintf("%d: %s", i, p.Name))
+		if p.PartNo != "" {
+			productList.WriteString(fmt.Sprintf(" (internal code: %s)", p.PartNo))
+		}
+		productList.WriteString("\n")
+	}
+
+	var priceList strings.Builder
+	for _, pi := range unmatchedIdx {
+		p := prices[pi]
+		priceList.WriteString(fmt.Sprintf("%d: name=%q part_no=%q price=%.2f\n", pi, p.ProductName, p.PartNo, p.UnitPrice))
+	}
+
+	prompt := fmt.Sprintf(`Match each supplier price entry to the correct RFQ product index.
+The product name may contain the real part number (e.g. "Fuel Filter (FC-5723)") even when the supplier uses a slightly different format (e.g. "FC5723").
+Normalize hyphens and spaces when comparing.
+
+RFQ Products:
+%s
+Unmatched Supplier Price Entries:
+%s
+Return ONLY a valid JSON array — no explanation:
+[{"price_index": <integer from the price list>, "product_index": <matching RFQ product 0-based index, or -1 if no match>}]`,
+		productList.String(), priceList.String())
+
+	var responseText string
+	var llmErr error
+	switch provider {
+	case "gemini":
+		responseText, llmErr = callGeminiExtractRFQ(apiKey, model, prompt, nil, nil, 1024)
+	case "anthropic":
+		responseText, llmErr = callAnthropicExtractRFQ(apiKey, model, prompt, nil, nil, 1024)
+	default:
+		baseURL := openAICompatBaseURL(provider)
+		responseText, llmErr = callOpenAICompatExtractRFQ(apiKey, model, prompt, nil, 1024, baseURL)
+	}
+	if llmErr != nil {
+		log.Printf("rfq_bot: matchPricesToProducts LLM error: %v", llmErr)
+		return
+	}
+
+	jsonStr := extractJSONFromLLMResponse(responseText)
+	var matches []struct {
+		PriceIndex   int `json:"price_index"`
+		ProductIndex int `json:"product_index"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &matches); err != nil {
+		log.Printf("rfq_bot: matchPricesToProducts JSON parse error: %v (raw=%q)", err, jsonStr)
+		return
+	}
+
+	for _, m := range matches {
+		if m.PriceIndex >= 0 && m.PriceIndex < len(prices) && m.ProductIndex >= 0 {
+			prices[m.PriceIndex].ProductIndex = m.ProductIndex
+		}
 	}
 }
 
@@ -1624,7 +1717,7 @@ Return ONLY valid JSON:
 	var llmErr error
 	switch strings.ToLower(store.Settings.RFQLLMProvider) {
 	case "openai":
-		responseText, llmErr = callOpenAI(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
+		responseText, llmErr = callOpenAICompatExtractRFQ(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, nil, 4096, openAICompatBaseURL("openai"))
 	case "anthropic":
 		responseText, llmErr = callAnthropic(store.Settings.RFQLLMAPIKey, store.Settings.RFQLLMModel, prompt, "")
 	case "gemini":
@@ -5633,17 +5726,18 @@ func isJunkCell(s string) bool {
 }
 
 // excelToText converts an Excel workbook to a plain-text markdown-style table
-// suitable for LLM consumption. It uses the first non-empty row as headers when
-// possible and formats data rows as "Header: Value" pairs. Junk cell values
-// (e.g. "[object Object]") are silently dropped. Output is capped at 12 000 chars.
+// suitable for LLM consumption. It identifies the header row as the widest row
+// (most non-junk cells) so that title/subtitle rows above the real table header
+// are emitted as preamble rather than misidentified as column names.
+// Output is capped at 50 000 chars.
 func excelToText(filename string, data []byte) (string, error) {
 	f, err := excelize.OpenReader(bytes.NewReader(data))
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	const maxChars = 12000
-	const maxRowsPerSheet = 300
+	const maxChars = 50000
+	const maxRowsPerSheet = 500
 	var sb strings.Builder
 	sb.WriteString("=== " + filename + " ===\n")
 	sheets := f.GetSheetList()
@@ -5656,23 +5750,49 @@ func excelToText(filename string, data []byte) (string, error) {
 			sb.WriteString("[Sheet: " + sheet + "]\n")
 		}
 
-		// Find header row: first row that has at least one non-junk cell.
-		var headers []string
-		dataStart := 0
-		for i, row := range rows {
-			clean := make([]string, len(row))
-			hasContent := false
-			for j, cell := range row {
+		// Find the header row: the row with the most non-junk cells.
+		// Title / subtitle rows typically have only 1 merged cell; the actual
+		// column-header row has many cells and will win this comparison.
+		// Limit the search to the first 20 rows to avoid treating a data row as headers.
+		headerIdx := -1
+		maxCells := 0
+		searchLimit := len(rows)
+		if searchLimit > 20 {
+			searchLimit = 20
+		}
+		for i := 0; i < searchLimit; i++ {
+			count := 0
+			for _, cell := range rows[i] {
 				if !isJunkCell(cell) {
-					clean[j] = strings.TrimSpace(cell)
-					hasContent = true
+					count++
 				}
 			}
-			if hasContent {
-				headers = clean
-				dataStart = i + 1
-				break
+			if count > maxCells {
+				maxCells = count
+				headerIdx = i
 			}
+		}
+
+		// Emit rows before the header as plain preamble lines.
+		for i := 0; i < headerIdx; i++ {
+			for _, cell := range rows[i] {
+				if !isJunkCell(cell) {
+					sb.WriteString(strings.TrimSpace(cell) + "\n")
+				}
+			}
+		}
+
+		var headers []string
+		dataStart := 0
+		if headerIdx >= 0 {
+			for _, cell := range rows[headerIdx] {
+				if !isJunkCell(cell) {
+					headers = append(headers, strings.TrimSpace(cell))
+				} else {
+					headers = append(headers, "")
+				}
+			}
+			dataStart = headerIdx + 1
 		}
 
 		// Write headers as a markdown table header row.
@@ -5988,6 +6108,12 @@ func callLLMExtractRFQ(apiKey, model, provider, textContent string, imageDataURI
 }
 
 func callOpenAICompatExtractRFQ(apiKey, model, prompt string, imageDataURIs []string, maxTokens int, baseURL string) (string, error) {
+	return callOpenAICompatExtractRFQWithFiles(apiKey, model, prompt, imageDataURIs, nil, maxTokens, baseURL)
+}
+
+// callOpenAICompatExtractRFQWithFiles is the full implementation; callers that don't need
+// PDF support use the wrapper above which passes nil for pdfBase64s.
+func callOpenAICompatExtractRFQWithFiles(apiKey, model, prompt string, imageDataURIs, pdfBase64s []string, maxTokens int, baseURL string) (string, error) {
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
@@ -6020,17 +6146,34 @@ func callOpenAICompatExtractRFQ(apiKey, model, prompt string, imageDataURIs []st
 			break
 		}
 	}
+	// content parts use json.RawMessage so we can mix image_url and file blocks.
+	type imageURLVal struct {
+		URL string `json:"url"`
+	}
+	type fileVal struct {
+		Filename string `json:"filename"`
+		FileData string `json:"file_data"`
+	}
 	type contentPart struct {
-		Type     string `json:"type"`
-		Text     string `json:"text,omitempty"`
-		ImageURL *struct {
-			URL string `json:"url"`
-		} `json:"image_url,omitempty"`
+		Type     string       `json:"type"`
+		Text     string       `json:"text,omitempty"`
+		ImageURL *imageURLVal `json:"image_url,omitempty"`
+		File     *fileVal     `json:"file,omitempty"`
 	}
 	var parts []contentPart
 	parts = append(parts, contentPart{Type: "text", Text: prompt})
 	for _, uri := range imageDataURIs {
-		parts = append(parts, contentPart{Type: "image_url", ImageURL: &struct{ URL string `json:"url"` }{URL: uri}})
+		parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURLVal{URL: uri}})
+	}
+	// PDFs: use OpenAI's "file" content block (supported by GPT-4.1+ models).
+	for i, b64 := range pdfBase64s {
+		parts = append(parts, contentPart{
+			Type: "file",
+			File: &fileVal{
+				Filename: fmt.Sprintf("document%d.pdf", i+1),
+				FileData: "data:application/pdf;base64," + b64,
+			},
+		})
 	}
 	payload, _ := json.Marshal(map[string]interface{}{
 		"model":      model,
