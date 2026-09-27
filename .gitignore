@@ -2,6 +2,7 @@ startpos-api
 pos-rest
 pos-rest-linux
 pos-health-monitor
+health-monitor/health-monitor
 startpos-backend
 attachments/
 images/
