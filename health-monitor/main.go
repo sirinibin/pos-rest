@@ -266,7 +266,7 @@ func frontendAutoFixLoop() {
 			delete(frontendDownSince, env)
 			frontendDownSinceMu.Unlock()
 			log.Printf("[health-monitor] auto-fixing frontend %s (broken for %v >= %dm)", env, elapsed.Round(time.Second), minutes)
-			result := repairFrontendBuild(buildDir)
+			result := repairFrontendBuild(buildDir, frontendSiteURL(env))
 			if result.Fixed {
 				log.Printf("[health-monitor] frontend %s auto-fix OK: %s", env, result.Message)
 			} else {
@@ -306,6 +306,33 @@ func frontendBuildDir(env string) string {
 	return ""
 }
 
+func frontendSiteURL(env string) string {
+	switch env {
+	case "production":
+		return "https://startpos.startuptech.uk/"
+	case "test":
+		return "https://startpos-test.startuptech.uk/"
+	}
+	return ""
+}
+
+// checkSiteHTTP does a GET to url and returns an error if it gets a 5xx response.
+func checkSiteHTTP(url string) error {
+	if url == "" {
+		return nil
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("site returned HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // isBuildHealthy returns true only when the directory has:
 //   - a non-empty index.html
 //   - at least one .js  file under static/js/
@@ -343,9 +370,12 @@ type repairResult struct {
 	Message   string `json:"message"`
 }
 
-func repairFrontendBuild(buildDir string) repairResult {
+func repairFrontendBuild(buildDir, siteURL string) repairResult {
 	if ok, _ := isBuildHealthy(buildDir); ok {
-		return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
+		if err := checkSiteHTTP(siteURL); err == nil {
+			return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
+		}
+		// Files look fine but site is returning 5xx — fall through to restore
 	}
 	if err := os.MkdirAll(buildDir, 0755); err != nil {
 		return repairResult{Message: "Failed to create build directory: " + err.Error()}
@@ -361,11 +391,17 @@ func repairFrontendBuild(buildDir string) repairResult {
 		}
 		out, err := exec.Command("cp", "-a", src+"/.", buildDir+"/").CombinedOutput()
 		if err != nil {
-			return repairResult{Message: "cp failed from " + src + ": " + err.Error() + " — " + string(out)}
+			log.Printf("[health-monitor] cp from %s failed: %v — %s", filepath.Base(src), err, out)
+			continue
+		}
+		// Verify the site actually responds OK after the copy
+		if httpErr := checkSiteHTTP(siteURL); httpErr != nil {
+			log.Printf("[health-monitor] restored from %s but site still broken (%v) — trying next source", filepath.Base(src), httpErr)
+			continue
 		}
 		return repairResult{Fixed: true, Message: "Restored from " + filepath.Base(src) + "."}
 	}
-	return repairResult{Message: "No valid source found (build_new and build_old are both missing or incomplete)."}
+	return repairResult{Message: "No valid source found (build_new and build_old are both missing, incomplete, or still return 500)."}
 }
 
 // ─── health checks ───────────────────────────────────────────────────────────
@@ -772,7 +808,7 @@ func repairFrontendHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	results := map[string]interface{}{}
 	for _, env := range envs {
-		results[env] = repairFrontendBuild(frontendBuildDir(env))
+		results[env] = repairFrontendBuild(frontendBuildDir(env), frontendSiteURL(env))
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{"results": results})
 }

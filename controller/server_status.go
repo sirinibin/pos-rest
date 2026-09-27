@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -76,6 +77,32 @@ func frontendBuildDir(env string) string {
 		return "/home/ubuntu/reactjs-pos-test/build"
 	}
 	return ""
+}
+
+func frontendSiteURL(env string) string {
+	switch env {
+	case "production":
+		return "https://startpos.startuptech.uk/"
+	case "test":
+		return "https://startpos-test.startuptech.uk/"
+	}
+	return ""
+}
+
+func checkSiteHTTP(url string) error {
+	if url == "" {
+		return nil
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("site returned HTTP %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // checkServiceState returns the raw systemctl is-active string (active, inactive, failed, etc.).
@@ -319,7 +346,7 @@ func RepairFrontendHandler(w http.ResponseWriter, r *http.Request) {
 	results := map[string]interface{}{}
 	for _, env := range envs {
 		buildDir := frontendBuildDir(env)
-		status := repairFrontendBuild(buildDir)
+		status := repairFrontendBuild(buildDir, frontendSiteURL(env))
 		results[env] = status
 	}
 	json.NewEncoder(w).Encode(map[string]interface{}{"results": results})
@@ -333,9 +360,12 @@ type repairResult struct {
 
 // repairFrontendBuild ensures the live build directory has a valid index.html.
 // It creates the directory and copies content from build_new or build_old if needed.
-func repairFrontendBuild(buildDir string) repairResult {
+func repairFrontendBuild(buildDir, siteURL string) repairResult {
 	if ok, _ := isBuildHealthy(buildDir); ok {
-		return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
+		if err := checkSiteHTTP(siteURL); err == nil {
+			return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
+		}
+		// Files look fine but site is returning 5xx — fall through to restore
 	}
 
 	if err := os.MkdirAll(buildDir, 0755); err != nil {
@@ -352,10 +382,14 @@ func repairFrontendBuild(buildDir string) repairResult {
 		}
 		out, err := exec.Command("cp", "-a", src+"/.", buildDir+"/").CombinedOutput()
 		if err != nil {
-			return repairResult{Message: "cp failed from " + src + ": " + err.Error() + " — " + string(out)}
+			continue
+		}
+		_ = out
+		if httpErr := checkSiteHTTP(siteURL); httpErr != nil {
+			continue
 		}
 		return repairResult{Fixed: true, Message: "Restored from " + filepath.Base(src) + "."}
 	}
 
-	return repairResult{Message: "No valid source found (build_new and build_old are both missing or incomplete)."}
+	return repairResult{Message: "No valid source found (build_new and build_old are both missing, incomplete, or still return 500)."}
 }
