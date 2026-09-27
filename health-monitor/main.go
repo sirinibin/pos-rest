@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -229,7 +230,61 @@ type ServerStatus struct {
 	API       ComponentStatus `json:"api"`
 	Redis     ComponentStatus `json:"redis"`
 	MongoDB   ComponentStatus `json:"mongodb"`
+	Frontend  ComponentStatus `json:"frontend"`
 	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+func frontendBuildDir(env string) string {
+	switch env {
+	case "production":
+		return "/home/ubuntu/reactjs-pos/build"
+	case "test":
+		return "/home/ubuntu/reactjs-pos-test/build"
+	}
+	return ""
+}
+
+func checkFrontendBuild(buildDir string) ComponentStatus {
+	if buildDir == "" {
+		return ComponentStatus{true, "N/A"}
+	}
+	info, err := os.Stat(filepath.Join(buildDir, "index.html"))
+	if err != nil || info.Size() == 0 {
+		return ComponentStatus{false, "index.html missing — build directory not deployed"}
+	}
+	return ComponentStatus{true, "OK"}
+}
+
+type repairResult struct {
+	Fixed     bool   `json:"fixed"`
+	AlreadyOK bool   `json:"already_ok"`
+	Message   string `json:"message"`
+}
+
+func repairFrontendBuild(buildDir string) repairResult {
+	indexPath := filepath.Join(buildDir, "index.html")
+	if info, err := os.Stat(indexPath); err == nil && info.Size() > 0 {
+		return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
+	}
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		return repairResult{Message: "Failed to create build directory: " + err.Error()}
+	}
+	base := filepath.Dir(buildDir)
+	for _, src := range []string{
+		filepath.Join(base, "build_new"),
+		filepath.Join(base, "build_old"),
+	} {
+		srcIndex := filepath.Join(src, "index.html")
+		if info, err := os.Stat(srcIndex); err != nil || info.Size() == 0 {
+			continue
+		}
+		out, err := exec.Command("cp", "-a", src+"/.", buildDir+"/").CombinedOutput()
+		if err != nil {
+			return repairResult{Message: "cp failed from " + src + ": " + err.Error() + " — " + string(out)}
+		}
+		return repairResult{Fixed: true, Message: "Restored from " + filepath.Base(src) + "."}
+	}
+	return repairResult{Message: "No valid source found (build_new and build_old are both missing or empty)."}
 }
 
 // ─── health checks ───────────────────────────────────────────────────────────
@@ -272,8 +327,9 @@ func checkMongoDB() ComponentStatus {
 	return ComponentStatus{true, "OK"}
 }
 
-func buildStatus(name, service string, port int) ServerStatus {
+func buildStatus(name, service string, port int, buildDir string) ServerStatus {
 	s := ServerStatus{Name: name, Service: service, Port: port, UpdatedAt: time.Now()}
+	s.Frontend = checkFrontendBuild(buildDir)
 
 	state := checkServiceState(service)
 	switch state {
@@ -434,8 +490,8 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireViewAccess(w, r) {
 		return
 	}
-	production := buildStatus("Production", "start-api.service", 2000)
-	test := buildStatus("Test", "start-api-test.service", 2002)
+	production := buildStatus("Production", "start-api.service", 2000, frontendBuildDir("production"))
+	test := buildStatus("Test", "start-api-test.service", 2002, frontendBuildDir("test"))
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"production": production,
 		"test":       test,
@@ -603,6 +659,43 @@ func restartLogHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(snapshot)
 }
 
+// repairFrontendHandler — POST /health-monitor/repair-frontend
+// Body: {"env": "production" | "test" | "both"}
+func repairFrontendHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		cors(w)
+		return
+	}
+	cors(w)
+	if !requireAdminStateless(w, r) {
+		return
+	}
+	var req struct {
+		Env string `json:"env"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
+		return
+	}
+	var envs []string
+	switch req.Env {
+	case "production", "test":
+		envs = []string{req.Env}
+	case "both", "":
+		envs = []string{"production", "test"}
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "env must be production, test, or both"})
+		return
+	}
+	results := map[string]interface{}{}
+	for _, env := range envs {
+		results[env] = repairFrontendBuild(frontendBuildDir(env))
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"results": results})
+}
+
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 func getenv(key, fallback string) string {
@@ -624,6 +717,7 @@ func main() {
 	mux.HandleFunc("/health-monitor/restart", restartHandler)
 	mux.HandleFunc("/health-monitor/config", configHandler)
 	mux.HandleFunc("/health-monitor/restart-log", restartLogHandler)
+	mux.HandleFunc("/health-monitor/repair-frontend", repairFrontendHandler)
 	mux.HandleFunc("/health-monitor/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"ok": "true"})

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,12 +27,37 @@ type ServerStatus struct {
 	Name      string          `json:"name"`
 	Service   string          `json:"service"`
 	Port      int             `json:"port"`
-	Overall   string          `json:"overall"`        // running | degraded | down | starting | stopping | restarting
+	BuildDir  string          `json:"build_dir"`
+	Overall   string          `json:"overall"`          // running | degraded | down | starting | stopping | restarting
 	Reason    string          `json:"reason,omitempty"` // non-empty only when not "running"
 	API       ComponentStatus `json:"api"`
 	Redis     ComponentStatus `json:"redis"`
 	MongoDB   ComponentStatus `json:"mongodb"`
+	Frontend  ComponentStatus `json:"frontend"`
 	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+// checkFrontendBuild reports whether the live build directory has an index.html.
+func checkFrontendBuild(buildDir string) ComponentStatus {
+	if buildDir == "" {
+		return ComponentStatus{true, "N/A"}
+	}
+	info, err := os.Stat(filepath.Join(buildDir, "index.html"))
+	if err != nil || info.Size() == 0 {
+		return ComponentStatus{false, "index.html missing — build directory not deployed"}
+	}
+	return ComponentStatus{true, "OK"}
+}
+
+// frontendBuildDir maps env name to its live build path on disk.
+func frontendBuildDir(env string) string {
+	switch env {
+	case "production":
+		return "/home/ubuntu/reactjs-pos/build"
+	case "test":
+		return "/home/ubuntu/reactjs-pos-test/build"
+	}
+	return ""
 }
 
 // checkServiceState returns the raw systemctl is-active string (active, inactive, failed, etc.).
@@ -67,13 +94,15 @@ func checkMongoDB() ComponentStatus {
 }
 
 // buildServerStatus performs all health checks for one environment.
-func buildServerStatus(name, service string, port int) ServerStatus {
+func buildServerStatus(name, service string, port int, buildDir string) ServerStatus {
 	s := ServerStatus{
 		Name:      name,
 		Service:   service,
 		Port:      port,
+		BuildDir:  buildDir,
 		UpdatedAt: time.Now(),
 	}
+	s.Frontend = checkFrontendBuild(buildDir)
 
 	// --- API service state via systemctl ---
 	state := checkServiceState(service)
@@ -189,8 +218,8 @@ func GetServerStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	production := buildServerStatus("Production", "start-api.service", 2000)
-	test := buildServerStatus("Test", "start-api-test.service", 2002)
+	production := buildServerStatus("Production", "start-api.service", 2000, frontendBuildDir("production"))
+	test := buildServerStatus("Test", "start-api-test.service", 2002, frontendBuildDir("test"))
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"production": production,
@@ -236,4 +265,86 @@ func RestartServerHandler(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(300 * time.Millisecond)
 		exec.Command("systemctl", "restart", service).Run()
 	}()
+}
+
+// RepairFrontendHandler — POST /v1/admin/repair-frontend
+// Body: {"env": "production" | "test" | "both"}
+// Ensures the live build directory exists and has an index.html.
+// If the directory is empty or missing, restores from build_new or build_old.
+func RepairFrontendHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if !requireAdminStateless(w, r) {
+		return
+	}
+
+	var req struct {
+		Env string `json:"env"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid body"})
+		return
+	}
+
+	var envs []string
+	switch req.Env {
+	case "production", "test":
+		envs = []string{req.Env}
+	case "both", "":
+		envs = []string{"production", "test"}
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "env must be production, test, or both"})
+		return
+	}
+
+	results := map[string]interface{}{}
+	for _, env := range envs {
+		buildDir := frontendBuildDir(env)
+		status := repairFrontendBuild(buildDir)
+		results[env] = status
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"results": results})
+}
+
+type repairResult struct {
+	Fixed   bool   `json:"fixed"`
+	AlreadyOK bool `json:"already_ok"`
+	Message string `json:"message"`
+}
+
+// repairFrontendBuild ensures the live build directory has a valid index.html.
+// It creates the directory and copies content from build_new or build_old if needed.
+func repairFrontendBuild(buildDir string) repairResult {
+	indexPath := filepath.Join(buildDir, "index.html")
+
+	// Already healthy — nothing to do
+	if info, err := os.Stat(indexPath); err == nil && info.Size() > 0 {
+		return repairResult{AlreadyOK: true, Message: "Build directory is healthy, no action needed."}
+	}
+
+	// Ensure the directory exists
+	if err := os.MkdirAll(buildDir, 0755); err != nil {
+		return repairResult{Message: "Failed to create build directory: " + err.Error()}
+	}
+
+	// Try build_new first (most recent), then build_old
+	base := filepath.Dir(buildDir)
+	for _, src := range []string{
+		filepath.Join(base, "build_new"),
+		filepath.Join(base, "build_old"),
+	} {
+		srcIndex := filepath.Join(src, "index.html")
+		if info, err := os.Stat(srcIndex); err != nil || info.Size() == 0 {
+			continue
+		}
+		// Copy the source tree into the live build dir
+		out, err := exec.Command("cp", "-a", src+"/.", buildDir+"/").CombinedOutput()
+		if err != nil {
+			return repairResult{Message: "cp failed from " + src + ": " + err.Error() + " — " + string(out)}
+		}
+		return repairResult{Fixed: true, Message: "Restored from " + filepath.Base(src) + "."}
+	}
+
+	return repairResult{Message: "No valid source found (build_new and build_old are both missing or empty)."}
 }
