@@ -507,7 +507,6 @@ func MigrateAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no") // disable nginx buffering
 
 	storeIDStr := storeID.Hex()
@@ -609,7 +608,6 @@ func MigrateAllStoresAttachmentsToS3Handler(w http.ResponseWriter, r *http.Reque
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	stores, err := models.GetAllStores()
@@ -744,7 +742,6 @@ func MigrateRFQAttachmentsToS3Handler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Minute)
@@ -1027,7 +1024,6 @@ func MigrateEntityImagesToS3Handler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	// Walk ./images/ and ./zatca/ and group files by storeID (second path component)
@@ -1441,7 +1437,6 @@ func MigrateInlineBase64ToS3Handler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Minute)

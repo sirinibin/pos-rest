@@ -28,6 +28,22 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// Shared HTTP clients — reuse transports for connection pooling and HTTP/2
+var (
+	// llmHTTPClient is used for all LLM/AI API calls (OpenAI, Anthropic, etc.)
+	llmHTTPClient = &http.Client{
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          20,
+			MaxIdleConnsPerHost:   5,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
+)
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 func min(a, b int) int {
@@ -1894,20 +1910,38 @@ func processRFQ(rfq *models.RFQReceived, storeID primitive.ObjectID) {
 	rfq.Status = "processing"
 	models.UpdateRFQReceived(rfq)
 
-	// Download images for LLM (vision models)
+	// Download images for LLM (vision models) — parallel fan-out
+	type imgResult struct {
+		idx int
+		b64 string
+	}
+	imgCh := make(chan imgResult, len(rfq.MediaURLs))
+	for idx, u := range rfq.MediaURLs {
+		go func(idx int, url string) {
+			b64, err := downloadImageAsBase64(url)
+			if err != nil {
+				log.Printf("rfq_bot[%s]: image download failed (%v)", rfq.ID.Hex(), err)
+				imgCh <- imgResult{idx, ""}
+				return
+			}
+			if b64 == "" {
+				log.Printf("rfq_bot[%s]: image download returned empty", rfq.ID.Hex())
+			} else {
+				log.Printf("rfq_bot[%s]: image ready len=%d prefix=%.40s", rfq.ID.Hex(), len(b64), b64)
+			}
+			imgCh <- imgResult{idx, b64}
+		}(idx, u)
+	}
+	imgSlice := make([]string, len(rfq.MediaURLs))
+	for range rfq.MediaURLs {
+		r := <-imgCh
+		imgSlice[r.idx] = r.b64
+	}
 	var imageBase64s []string
-	for _, u := range rfq.MediaURLs {
-		b64, err := downloadImageAsBase64(u)
-		if err != nil {
-			log.Printf("rfq_bot[%s]: image download failed (%v)", rfq.ID.Hex(), err)
-			continue
+	for _, b64 := range imgSlice {
+		if b64 != "" {
+			imageBase64s = append(imageBase64s, b64)
 		}
-		if b64 == "" {
-			log.Printf("rfq_bot[%s]: image download returned empty", rfq.ID.Hex())
-			continue
-		}
-		log.Printf("rfq_bot[%s]: image ready len=%d prefix=%.40s", rfq.ID.Hex(), len(b64), b64)
-		imageBase64s = append(imageBase64s, b64)
 	}
 
 	// Build LLM context: original text + extracted doc content + filename hints.
@@ -2371,7 +2405,7 @@ func callLLMTextWithImages(apiKey, model, provider, prompt string, imageBase64s 
 		req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(payload))
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+		resp, err := llmHTTPClient.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -2418,7 +2452,7 @@ func callLLMTextWithImages(apiKey, model, provider, prompt string, imageBase64s 
 		req.Header.Set("x-api-key", apiKey)
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+		resp, err := llmHTTPClient.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -2461,7 +2495,7 @@ func callLLMTextWithImages(apiKey, model, provider, prompt string, imageBase64s 
 		apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
 		req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+		resp, err := llmHTTPClient.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -2766,7 +2800,7 @@ func callOpenAIForCategories(apiKey, model, prompt string, imageBase64s []string
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	resp, err := llmHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -2824,7 +2858,7 @@ func callAnthropicForCategories(apiKey, model, prompt string, imageBase64s []str
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	resp, err := llmHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -2872,7 +2906,7 @@ func callGeminiForCategories(apiKey, model, prompt string, imageBase64s []string
 	req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	resp, err := llmHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -2953,8 +2987,8 @@ func crawlWebsiteForEmail(website string) string {
 	baseURL := strings.TrimRight(website, "/")
 	ua := "Mozilla/5.0 (compatible; StartPOS/1.0; +https://startpos.ai)"
 	client := &http.Client{Timeout: 12 * time.Second}
-	fetchPage := func(u string) string {
-		req, err := http.NewRequest("GET", u, nil)
+	fetchPage := func(ctx context.Context, u string) string {
+		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 		if err != nil {
 			return ""
 		}
@@ -2968,7 +3002,8 @@ func crawlWebsiteForEmail(website string) string {
 		return string(b)
 	}
 
-	homeHTML := fetchPage(website)
+	bgCtx := context.Background()
+	homeHTML := fetchPage(bgCtx, website)
 	for _, email := range extractEmailsFromHTML(homeHTML) {
 		if email != "" {
 			return email
@@ -3012,12 +3047,29 @@ func crawlWebsiteForEmail(website string) string {
 		}
 	}
 
+	if len(candidates) == 0 {
+		return ""
+	}
+	// Fetch all candidate pages in parallel; cancel remaining when first email found
+	ctx, cancel := context.WithCancel(bgCtx)
+	defer cancel()
+	emailCh := make(chan string, len(candidates))
 	for _, u := range candidates {
-		html := fetchPage(u)
-		for _, email := range extractEmailsFromHTML(html) {
-			if email != "" {
-				return email
+		go func(u string) {
+			html := fetchPage(ctx, u)
+			for _, email := range extractEmailsFromHTML(html) {
+				if email != "" {
+					emailCh <- email
+					return
+				}
 			}
+			emailCh <- ""
+		}(u)
+	}
+	for range candidates {
+		if email := <-emailCh; email != "" {
+			cancel()
+			return email
 		}
 	}
 	return ""
@@ -3201,7 +3253,7 @@ func callOpenAI(apiKey, model, prompt, _ string) (string, error) {
 	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(payload))
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 40 * time.Second}).Do(req)
+	resp, err := llmHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -3232,7 +3284,7 @@ func callAnthropic(apiKey, model, prompt, _ string) (string, error) {
 	req.Header.Set("x-api-key", apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 40 * time.Second}).Do(req)
+	resp, err := llmHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -3261,7 +3313,7 @@ func callGemini(apiKey, model, prompt, _ string) (string, error) {
 	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
 	req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 40 * time.Second}).Do(req)
+	resp, err := llmHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -3345,7 +3397,7 @@ func callLLMText(apiKey, model, prompt, provider string) (string, error) {
 		req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewReader(payload))
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+		resp, err := llmHTTPClient.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -3374,7 +3426,7 @@ func callLLMText(apiKey, model, prompt, provider string) (string, error) {
 		req.Header.Set("x-api-key", apiKey)
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+		resp, err := llmHTTPClient.Do(req)
 		if err != nil {
 			return "", err
 		}
@@ -3400,7 +3452,7 @@ func callLLMText(apiKey, model, prompt, provider string) (string, error) {
 		apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
 		req, _ := http.NewRequest("POST", apiURL, bytes.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+		resp, err := llmHTTPClient.Do(req)
 		if err != nil {
 			return "", err
 		}

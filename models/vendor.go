@@ -1964,11 +1964,13 @@ func (store *Store) FindVendorByNameByVatNo(
 		findOneOptions.SetProjection(selectFields)
 	}
 
+	// store_id is intentionally omitted: the collection is already store-scoped
+	// (db "store_<id>"), so old records created without store_id in the document
+	// are still reachable. IsVendorExistsByVatNoByName uses the same approach.
 	err = collection.FindOne(ctx,
 		bson.M{
-			"name":     Name,
-			"vat_no":   VatNo,
-			"store_id": store.ID,
+			"name":   Name,
+			"vat_no": VatNo,
 		}, findOneOptions).
 		Decode(&vendor)
 	if err != nil {
