@@ -31,7 +31,7 @@ import (
 func rfqEmailAPIBase() string {
 	base := os.Getenv("REACT_APP_API_URL")
 	if base == "" {
-		base = "https://startpos-api.startuptech.uk"
+		base = "https://api.gulfunionozone.com"
 	}
 	return base
 }

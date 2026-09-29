@@ -120,14 +120,16 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Keep only threads with unread messages
+	// Keep only threads with unread messages; sum total across ALL threads for the badge count.
 	var unreadPhones []string
 	unreadByPhone := map[string]models.ContactThread{}
+	allThreadsUnread := 0
 	for _, t := range threads {
 		if t.UnreadCount > 0 {
 			norm := strings.TrimPrefix(t.ContactPhone, "+")
 			unreadPhones = append(unreadPhones, norm)
 			unreadByPhone[norm] = t
+			allThreadsUnread += t.UnreadCount
 		}
 	}
 
@@ -147,7 +149,6 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 	normalise := func(p string) string { return strings.TrimPrefix(p, "+") }
 
 	var items []RFQUnreadSummary
-	totalUnread := 0
 	for _, rfq := range rfqs {
 		for _, s := range rfq.ForwardedTo {
 			norm := normalise(s.Phone)
@@ -162,7 +163,6 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 					LastMsgDate: fmtThreadDate(t.LastMessageDate),
 					LastMsgText: t.LastMessageText,
 				})
-				totalUnread += t.UnreadCount
 			}
 		}
 		if rfq.CustomerPhone != "" {
@@ -178,14 +178,33 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 					LastMsgDate: fmtThreadDate(t.LastMessageDate),
 					LastMsgText: t.LastMessageText,
 				})
-				totalUnread += t.UnreadCount
 			}
 		}
 	}
 	if items == nil {
 		items = []RFQUnreadSummary{}
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": totalUnread})
+	// Include unread threads that had no matching RFQ so the list never appears empty
+	// while the badge count is > 0.  These show with phone as contact name and no RFQ code.
+	matchedPhones := map[string]bool{}
+	for _, it := range items {
+		matchedPhones[normalise(it.Phone)] = true
+	}
+	for norm, t := range unreadByPhone {
+		if !matchedPhones[norm] {
+			items = append(items, RFQUnreadSummary{
+				Phone:       t.ContactPhone,
+				ContactName: t.ContactPhone,
+				PhoneType:   "supplier",
+				UnreadCount: t.UnreadCount,
+				LastMsgDate: fmtThreadDate(t.LastMessageDate),
+				LastMsgText: t.LastMessageText,
+			})
+		}
+	}
+	// total_unread counts ALL unread WhatsApp threads (not just RFQ-linked ones) so the
+	// header badge reflects every incoming message, including ones not yet tied to an RFQ.
+	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": allThreadsUnread})
 }
 
 // EmailUnreadSummary represents one unread inbound email shown in the app header badge dropdown.

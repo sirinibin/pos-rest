@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -345,14 +346,47 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = order.MakeCode()
-	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
-		response.Status = false
-		response.Errors["code"] = "Error making code: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	if store.Settings.EnableCustomSalesInvoiceID && strings.TrimSpace(order.Code) != "" {
+		// User-supplied invoice ID — validate uniqueness before accepting.
+		order.Code = strings.TrimSpace(order.Code)
+		if existing, _ := store.FindOrderByCode(order.Code, bson.M{"_id": 1}); existing != nil {
+			queue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			response.Status = false
+			response.Errors["code"] = "Invoice ID already exists: " + order.Code
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	} else if store.Settings.EnableCustomSalesInvoiceID {
+		// Setting is on but user left code empty — auto-generate with retry in case
+		// the counter lands on a slot already taken by a custom invoice ID.
+		const maxCodeRetries = 10
+		for attempt := 0; attempt < maxCodeRetries; attempt++ {
+			err = order.MakeCode()
+			if err != nil {
+				queue.Pop()
+				CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+				response.Status = false
+				response.Errors["code"] = "Error making code: " + err.Error()
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			if existing, _ := store.FindOrderByCode(order.Code, bson.M{"_id": 1}); existing == nil {
+				break // code is free
+			}
+			// Code taken by a custom ID; advance the counter and try again.
+		}
+	} else {
+		// Setting disabled — original path, unchanged.
+		err = order.MakeCode()
+		if err != nil {
+			queue.Pop()
+			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			response.Status = false
+			response.Errors["code"] = "Error making code: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	err = order.CalculateOrderProfit()
@@ -560,8 +594,33 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capture the original code before the client payload overwrites it.
+	originalCode := order.Code
+
 	if !utils.Decode(w, r, &order) {
 		return
+	}
+
+	// Handle custom invoice ID on update.
+	if store.Settings.EnableCustomSalesInvoiceID {
+		newCode := strings.TrimSpace(order.Code)
+		if newCode == "" {
+			// Cannot clear the invoice ID on update — restore original.
+			order.Code = originalCode
+		} else if newCode != originalCode {
+			// Code changed — validate uniqueness against other orders.
+			if existing, _ := store.FindOrderByCode(newCode, bson.M{"_id": 1}); existing != nil {
+				response.Status = false
+				response.Errors["code"] = "Invoice ID already exists: " + newCode
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			order.Code = newCode
+		}
+	} else {
+		// Setting disabled — always preserve the existing code.
+		order.Code = originalCode
 	}
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)

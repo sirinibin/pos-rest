@@ -82,9 +82,9 @@ func frontendBuildDir(env string) string {
 func frontendSiteURL(env string) string {
 	switch env {
 	case "production":
-		return "https://startpos.startuptech.uk/"
+		return "https://startpos.gulfunionozone.com/"
 	case "test":
-		return "https://startpos-test.startuptech.uk/"
+		return "https://test.gulfunionozone.com/"
 	}
 	return ""
 }

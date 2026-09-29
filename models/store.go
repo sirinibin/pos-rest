@@ -231,6 +231,7 @@ type StoreSettings struct {
 	Invoice                                     InvoiceSettings `bson:"invoice" json:"invoice"`
 	EnableAutoTranslationToArabic               bool            `bson:"enable_auto_translation_to_arabic" json:"enable_auto_translation_to_arabic"`
 	EnableWarehouseModule                       bool            `bson:"enable_warehouse_module" json:"enable_warehouse_module"`
+	EnableCustomSalesInvoiceID                  bool            `bson:"enable_custom_sales_invoice_id" json:"enable_custom_sales_invoice_id"`
 	ShowWarehouseStockInSelectedProducts        bool            `bson:"show_warehouse_stock_in_selected_products" json:"show_warehouse_stock_in_selected_products"`
 	EnablePurchaseOrderModule                   bool            `bson:"enable_purchase_order_module" json:"enable_purchase_order_module"`
 	EnablePurchaseRequestModule                 bool            `bson:"enable_purchase_request_module" json:"enable_purchase_request_module"`

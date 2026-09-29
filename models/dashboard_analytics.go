@@ -21,6 +21,7 @@ type DashboardProductSummary struct {
 }
 
 type DashboardCustomerSummary struct {
+	CustomerID   string  `bson:"customer_id"   json:"customer_id,omitempty"`
 	CustomerName string  `bson:"customer_name" json:"customer_name"`
 	SalesAmount  float64 `bson:"sales_amount"  json:"sales_amount"`
 	QtnAmount    float64 `bson:"qtn_amount"    json:"qtn_amount"`
@@ -321,11 +322,16 @@ func GetDashboardOutstanding(storeID primitive.ObjectID, limit int) ([]Dashboard
 	var out []DashboardCustomerSummary
 	for cur.Next(ctx) {
 		var c struct {
-			Name          string  `bson:"name"`
-			CreditBalance float64 `bson:"credit_balance"`
+			ID            primitive.ObjectID `bson:"_id"`
+			Name          string             `bson:"name"`
+			CreditBalance float64            `bson:"credit_balance"`
 		}
 		if cur.Decode(&c) == nil {
-			out = append(out, DashboardCustomerSummary{CustomerName: c.Name, Outstanding: c.CreditBalance})
+			out = append(out, DashboardCustomerSummary{
+				CustomerID:   c.ID.Hex(),
+				CustomerName: c.Name,
+				Outstanding:  c.CreditBalance,
+			})
 		}
 	}
 	return out, nil
@@ -432,32 +438,39 @@ func GetDashboardEmployee(storeID primitive.ObjectID) (*DashboardEmployee, error
 	return result, nil
 }
 
+// GetDashboardAccounts returns real-time cash and bank balances by querying
+// the posting collection, bypassing the stale stored balance field.
 func GetDashboardAccounts(storeID primitive.ObjectID) ([]DashboardAccountSummary, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	pipe := []bson.M{
-		{"$match": bson.M{"deleted": bson.M{"$ne": true}}},
-		{"$group": bson.M{
-			"_id":     "$type",
-			"balance": bson.M{"$sum": bson.M{"$abs": "$balance"}},
-		}},
-		{"$sort": bson.M{"balance": -1}},
-	}
-	cur, err := db.GetDB("store_"+storeID.Hex()).Collection("account").Aggregate(ctx, pipe)
-	if err != nil {
-		return nil, err
-	}
-	defer cur.Close(ctx)
+	storeDB := db.GetDB("store_" + storeID.Hex())
+
 	var out []DashboardAccountSummary
-	for cur.Next(ctx) {
-		var r struct {
-			Type    string  `bson:"_id"`
-			Balance float64 `bson:"balance"`
+	for _, entry := range []struct{ name, accountType string }{
+		{"CASH", "cash"},
+		{"BANK", "bank"},
+	} {
+		var acc Account
+		err := storeDB.Collection("account").FindOne(ctx, bson.M{
+			"name":    entry.name,
+			"deleted": bson.M{"$ne": true},
+		}).Decode(&acc)
+		if err == mongo.ErrNoDocuments {
+			continue
 		}
-		if cur.Decode(&r) == nil && r.Balance > 0 {
-			out = append(out, DashboardAccountSummary{AccountType: r.Type, Balance: r.Balance})
+		if err != nil {
+			continue
 		}
+		acc.StoreID = &storeID
+
+		if err := acc.CalculateBalance(nil, nil); err != nil {
+			continue
+		}
+		out = append(out, DashboardAccountSummary{
+			AccountType: entry.accountType,
+			Balance:     acc.Balance,
+		})
 	}
 	return out, nil
 }
