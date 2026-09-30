@@ -1,7 +1,10 @@
 package models
 
 import (
+	"net/http"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -714,3 +717,35 @@ func TestResolveDateKeyword_TimezoneOffset_SA(t *testing.T) {
 	_ = endSA
 	_ = end0
 }
+
+// ── customer_name search ──────────────────────────────────────────────────────
+
+func TestParseTextSearch_CustomerName_SetsRegexFilter(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/?search%5Bcustomer_name%5D=Ahmed", nil)
+	criterias := SearchCriterias{SearchBy: map[string]interface{}{}}
+	ParseTextSearch(req, &criterias, "search[customer_name]", "customer_name")
+	val, ok := criterias.SearchBy["customer_name"]
+	if !ok {
+		t.Fatal("customer_name not set in SearchBy")
+	}
+	m, ok := val.(primitive.M)
+	if !ok {
+		t.Fatalf("expected primitive.M, got %T", val)
+	}
+	if m["$regex"] != "Ahmed" {
+		t.Errorf("regex = %v, want Ahmed", m["$regex"])
+	}
+	if m["$options"] != "i" {
+		t.Errorf("options = %v, want i", m["$options"])
+	}
+}
+
+func TestParseTextSearch_CustomerName_EmptyParam_NotSet(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/", nil)
+	criterias := SearchCriterias{SearchBy: map[string]interface{}{}}
+	ParseTextSearch(req, &criterias, "search[customer_name]", "customer_name")
+	if _, ok := criterias.SearchBy["customer_name"]; ok {
+		t.Error("customer_name should not be set when param is absent")
+	}
+}
+

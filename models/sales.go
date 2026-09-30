@@ -1202,6 +1202,7 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 	}
 
 	ParseTextSearch(r, &criterias, "search[code]", "code")
+	ParseTextSearch(r, &criterias, "search[customer_name]", "customer_name")
 
 	keys, ok = r.URL.Query()["search[net_total]"]
 	if ok && len(keys[0]) >= 1 {
@@ -1706,6 +1707,7 @@ func (store *Store) BuildSalesCriterias(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ParseTextSearch(r, &criterias, "search[code]", "code")
+	ParseTextSearch(r, &criterias, "search[customer_name]", "customer_name")
 
 	keys, ok = r.URL.Query()["search[net_total]"]
 	if ok && len(keys[0]) >= 1 {
