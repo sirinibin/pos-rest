@@ -250,6 +250,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order.CreatedBy = &userID
 	order.UpdatedBy = &userID
+	if order.DeliveredBy == nil || order.DeliveredBy.IsZero() {
+		order.DeliveredBy = &userID
+	}
 	now := time.Now()
 	order.CreatedAt = &now
 	order.UpdatedAt = &now

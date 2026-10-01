@@ -51,7 +51,15 @@ func (orderProduct OrderProduct) GetZatcaUnit() string {
 	case "session", "package", "visit":
 		return "C62"
 	// Direct UN/CEFACT Rec 20 codes — pass through when unit is already stored as a code
-	case "C62", "HUR", "DAY", "WEE", "MON", "ANN", "EA":
+	case "C62", "HUR", "DAY", "WEE", "MON", "ANN", "EA",
+		// Weight
+		"GRM", "MGM", "KGM", "TNE",
+		// Length / area
+		"MTR", "INH", "FOT", "MTK", "CMK",
+		// Volume
+		"LTR", "MLT", "CLT",
+		// Packaging
+		"PCE", "DRM", "SET", "BOX", "DZN", "RLL", "PR", "BG", "CAN", "BTL", "PK", "SHT", "CTN", "BAG":
 		return orderProduct.Unit
 	}
 
