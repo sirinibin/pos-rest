@@ -803,6 +803,10 @@ func (order *Order) FindNetTotal() {
 		}
 	*/
 
+	if order.VatPercent == nil {
+		return
+	}
+
 	// Apply discount to the base amount first
 	baseTotal := order.Total + order.ShippingOrHandlingFees - order.Discount
 	//baseTotal = RoundTo8Decimals(baseTotal)
