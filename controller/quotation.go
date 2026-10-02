@@ -732,7 +732,6 @@ func ViewQuotation(w http.ResponseWriter, r *http.Request) {
 
 	_, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
 		w.WriteHeader(http.StatusUnauthorized)

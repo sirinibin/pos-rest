@@ -27,3 +27,12 @@ backend/deploy.sh   # deploys to both test and production
 2. `go test ./...` to verify.
 3. Commit all changed files.
 4. Run `backend/deploy.sh`.
+
+## API Test Sync Rule (non-negotiable)
+**Every time a backend API is enhanced or a new endpoint is added:**
+- Add or update test cases in `controller/*_test.go` for the changed handler
+- New validation rules → new table-driven test row
+- New response field → updated assertion
+- New endpoint → new `_Unauthenticated` test + pure-function tests + integration stub
+- The test suite must stay at 0 failures after every commit
+- Run `go test ./... -count=1` before and after every change to confirm
