@@ -4803,14 +4803,27 @@ func AddSupplierReplyHandler(w http.ResponseWriter, r *http.Request) {
 // GET /v1/rfq-suppliers?store_id=...&page=...&limit=...&search=...
 func ListRFQSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	var response models.Response
+	response.Errors = make(map[string]string)
+
+	// Accept both flat store_id= and the standard search[store_id]= format.
 	storeIDStr := r.URL.Query().Get("store_id")
 	if storeIDStr == "" {
-		http.Error(w, `{"error":"store_id required"}`, http.StatusBadRequest)
+		storeIDStr = r.URL.Query().Get("search[store_id]")
+	}
+	if storeIDStr == "" {
+		response.Status = false
+		response.Errors["store_id"] = "store_id is required"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 	storeObjID, err := primitive.ObjectIDFromHex(storeIDStr)
 	if err != nil {
-		http.Error(w, `{"error":"invalid store_id"}`, http.StatusBadRequest)
+		response.Status = false
+		response.Errors["store_id"] = "invalid store_id"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -4825,11 +4838,16 @@ func ListRFQSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 
 	result, err := models.ListRFQSuppliers(storeObjID, page, limit, search, nil)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["error"] = err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
-	respBytes, _ := json.Marshal(result)
-	w.Write(respBytes)
+	response.Status = true
+	response.Result = result.Items
+	response.TotalCount = result.TotalCount
+	json.NewEncoder(w).Encode(response)
 }
 
 // POST /v1/rfq-suppliers

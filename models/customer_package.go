@@ -16,9 +16,24 @@ import (
 )
 
 type CustomerPackage struct {
-	ID            primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
-	Name          string              `bson:"name,omitempty" json:"name,omitempty"`
-	TabIDs        []string            `bson:"tab_ids" json:"tab_ids"`
+	ID             primitive.ObjectID  `json:"id,omitempty" bson:"_id,omitempty"`
+	StoreID        *primitive.ObjectID `json:"store_id,omitempty" bson:"store_id,omitempty"`
+	Code           string              `json:"code,omitempty" bson:"code,omitempty"`
+	Name           string              `bson:"name,omitempty" json:"name,omitempty"`
+	NameInArabic   string              `json:"name_in_arabic,omitempty" bson:"name_in_arabic,omitempty"`
+	TabIDs         []string            `bson:"tab_ids,omitempty" json:"tab_ids,omitempty"`
+	// Subscription fields (StartERP customer packages)
+	CustomerID       *primitive.ObjectID `json:"customer_id,omitempty" bson:"customer_id,omitempty"`
+	CustomerName     string              `json:"customer_name,omitempty" bson:"customer_name,omitempty"`
+	CustomerNameAr   string              `json:"customer_name_ar,omitempty" bson:"customer_name_ar,omitempty"`
+	Services         []string            `json:"services,omitempty" bson:"services,omitempty"`
+	Price            float64             `json:"price,omitempty" bson:"price,omitempty"`
+	Visits           int                 `json:"visits,omitempty" bson:"visits,omitempty"`
+	Used             int                 `json:"used,omitempty" bson:"used,omitempty"`
+	ValidFrom        string              `json:"valid_from,omitempty" bson:"valid_from,omitempty"`
+	ValidDays        int                 `json:"valid_days,omitempty" bson:"valid_days,omitempty"`
+	Status           string              `json:"status,omitempty" bson:"status,omitempty"`
+	Notes            string              `json:"notes,omitempty" bson:"notes,omitempty"`
 	Deleted       bool                `bson:"deleted,omitempty" json:"deleted,omitempty"`
 	DeletedBy     *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser *User               `json:"deleted_by_user,omitempty"`
@@ -67,6 +82,14 @@ func SearchCustomerPackage(w http.ResponseWriter, r *http.Request) (packages []C
 
 	var keys []string
 	var ok bool
+
+	keys, ok = r.URL.Query()["search[store_id]"]
+	if ok && len(keys[0]) >= 1 {
+		storeObjID, err := primitive.ObjectIDFromHex(keys[0])
+		if err == nil {
+			criterias.SearchBy["store_id"] = storeObjID
+		}
+	}
 
 	ParseTextSearch(r, &criterias, "search[name]", "name")
 
