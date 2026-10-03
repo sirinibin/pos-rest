@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strings"
@@ -55,7 +56,18 @@ func ParseAuthCodeFromRequest(r *http.Request) (string, error) {
 		if len(strArr) == 1 {
 			tokenStr = strArr[0]
 		} else if len(strArr) == 2 {
-			tokenStr = strArr[1]
+			scheme, encoded := strArr[0], strArr[1]
+			if strings.EqualFold(scheme, "Basic") {
+				// RFC 7617: Basic base64(code + ":")
+				decoded, err := base64.StdEncoding.DecodeString(encoded)
+				if err == nil {
+					tokenStr = strings.TrimSuffix(string(decoded), ":")
+				} else {
+					tokenStr = encoded
+				}
+			} else {
+				tokenStr = encoded
+			}
 		}
 	}
 
