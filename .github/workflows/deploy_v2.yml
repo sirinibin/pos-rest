@@ -1,9 +1,9 @@
-name: Build and Deploy Go Application to production
+name: Build and Deploy Go Application to v2 (startpos-api-v2.gulfunionozone.com)
 
 on:
   push:
     branches:
-      - master
+      - v2
     paths:
       - "**.go"
       - "**.mod"
@@ -31,7 +31,7 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
-      # ── Tests — skip flaky timezone test (matches deploy.sh) ──────────────────
+      # ── Tests — skip flaky timezone test (matches deploy_v2.sh) ──────────────
       - name: Run tests
         run: go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
 
@@ -48,7 +48,7 @@ jobs:
           fi
           if [ -s "$BUILD_LOG" ]; then
             cat "$BUILD_LOG"
-            echo "Build produced warnings — aborting (matches deploy.sh gate)."
+            echo "Build produced warnings — aborting (matches deploy_v2.sh gate)."
             exit 1
           fi
           sha256sum ./pos-rest
@@ -60,12 +60,19 @@ jobs:
           chmod 600 private_key
           ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
 
+      # ── Ensure dest dir exists and is writable by ubuntu ─────────────────────
+      - name: Prepare destination directory
+        run: |
+          ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sudo mkdir -p ${{ secrets.AWS_GO_API_V2_DEST_PATH }} && sudo chown -R ${{ secrets.AWS_USER }}:${{ secrets.AWS_USER }} ${{ secrets.AWS_GO_API_V2_DEST_PATH }}"
+
       # ── Upload binary while service is still live (no downtime during transfer) ──
       - name: Upload binary to staging path
         run: |
           scp -i private_key -o StrictHostKeyChecking=no \
             pos-rest \
-            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_PROD_DEST_PATH }}/pos-rest.new
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_V2_DEST_PATH }}/pos-rest.new
 
       # ── Verify checksum before touching the running service ───────────────────
       - name: Verify remote checksum
@@ -73,7 +80,7 @@ jobs:
           LOCAL_SUM=$(sha256sum ./pos-rest | awk '{print $1}')
           REMOTE_SUM=$(ssh -i private_key -o StrictHostKeyChecking=no \
             ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
-            "sha256sum ${{ secrets.AWS_GO_API_PROD_DEST_PATH }}/pos-rest.new | awk '{print \$1}'")
+            "sha256sum ${{ secrets.AWS_GO_API_V2_DEST_PATH }}/pos-rest.new | awk '{print \$1}'")
           if [ "$LOCAL_SUM" != "$REMOTE_SUM" ]; then
             echo "Checksum MISMATCH — upload was corrupted. Aborting."
             echo "  local : $LOCAL_SUM"
@@ -83,6 +90,7 @@ jobs:
           echo "Checksum verified: $LOCAL_SUM"
 
       # ── Atomic swap + service restart (downtime = systemd restart time, ~1 s) ──
+      # No time-window restriction — v2 deploys any time a push lands on the branch.
       - name: Swap binary and restart service
         uses: appleboy/ssh-action@v0.1.5
         with:
@@ -91,24 +99,24 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            DEST="${{ secrets.AWS_GO_API_PROD_DEST_PATH }}"
+            DEST="${{ secrets.AWS_GO_API_V2_DEST_PATH }}"
 
             # Kill any stale file handle that would cause ETXTBSY on swap
             sudo fuser -k "$DEST/pos-rest"     2>/dev/null || true
             sudo fuser -k "$DEST/pos-rest.new" 2>/dev/null || true
 
             # Stop → swap → sync  (service is down for the duration of this line only)
-            sudo systemctl stop start-api || true
+            sudo systemctl stop start-api-v2 || true
             mv -f "$DEST/pos-rest.new" "$DEST/pos-rest"
             sync
 
             # Start with up to 3 retries
             for attempt in 1 2 3; do
-              sudo systemctl start start-api && break
+              sudo systemctl start start-api-v2 && break
               echo "Start attempt $attempt/3 failed, retrying in 5 s..."
               sleep 5
             done
 
-            sudo systemctl is-active start-api
+            sudo systemctl is-active start-api-v2
             sha256sum "$DEST/pos-rest"
-            sudo systemctl status start-api --no-pager
+            sudo systemctl status start-api-v2 --no-pager

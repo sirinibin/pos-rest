@@ -47,6 +47,9 @@ func rfqSupplierCollection() string {
 
 // MakeRFQSupplierCode generates a sequential serial ID for a new supplier, e.g. "SUP-000001".
 func MakeRFQSupplierCode(storeID primitive.ObjectID) string {
+	if db.RedisClient == nil {
+		return ""
+	}
 	redisKey := storeID.Hex() + "_rfq_supplier_counter"
 	n, err := db.RedisClient.Incr(redisKey).Result()
 	if err != nil {
