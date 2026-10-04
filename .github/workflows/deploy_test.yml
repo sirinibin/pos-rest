@@ -3,7 +3,7 @@ name: Build and Deploy Go Application to test
 on:
   push:
     branches:
-      - test # Change to your test branch
+      - test
     paths:
       - "**.go"
       - "**.mod"
@@ -14,11 +14,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Go
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -26,47 +24,111 @@ jobs:
 
       - name: Clean Go cache
         run: go clean -cache -modcache -i -r
-      - name: Clean Build Directory
+
+      - name: Clean build directory
         run: rm -rf ./bin ./build ./pos-rest
-      - name: Clear GitHub Actions Cache
-        uses: actions/cache@v4
-        with:
-          path: ./build
-          key: ${{ runner.os }}-build-${{ github.run_id }}
-      # Step 3: Install dependencies and build
+
       - name: Install dependencies
+        run: go mod tidy
+
+      # ── Tests — skip flaky timezone test (matches deploy.sh) ──────────────────
+      - name: Run tests
+        run: go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+
+      # ── Build — abort if go build produces any output (warnings = abort) ──────
+      - name: Build
         run: |
-          go mod tidy
-      # Step 3: Install dependencies and build
-      - name: Building
+          BUILD_LOG=$(mktemp)
+          if ! GOOS=linux GOARCH=amd64 go build \
+                -ldflags="-X 'main.version=${{ github.sha }}'" \
+                -o pos-rest . 2>"$BUILD_LOG"; then
+            cat "$BUILD_LOG"
+            echo "Build FAILED — aborting."
+            exit 1
+          fi
+          if [ -s "$BUILD_LOG" ]; then
+            cat "$BUILD_LOG"
+            echo "Build produced warnings — aborting (matches deploy.sh gate)."
+            exit 1
+          fi
+          sha256sum ./pos-rest
+
+      # ── Time window: only deploy test between 10 PM and 6 AM Saudi time ───────
+      # Matches deploy.sh: Saudi Arabia is UTC+3; allowed hours are 22-23, 0-5.
+      - name: Check test-deploy window (10 PM – 6 AM Saudi time)
+        id: window
         run: |
-          go build -ldflags="-X 'main.version=${{ github.sha }}'"  -o pos-rest
-      - name: Log Build Checksum
-        run: sha256sum ./pos-rest
+          SA_HOUR=$(TZ='Asia/Riyadh' date +%H)
+          SA_HOUR=$((10#$SA_HOUR))
+          SA_TIME=$(TZ='Asia/Riyadh' date '+%H:%M')
+          if [ "$SA_HOUR" -ge 6 ] && [ "$SA_HOUR" -lt 22 ]; then
+            echo "in_window=false" >> "$GITHUB_OUTPUT"
+            echo "Outside test deploy window (current Saudi time: $SA_TIME). Deploy skipped."
+          else
+            echo "in_window=true" >> "$GITHUB_OUTPUT"
+            echo "Within test deploy window ($SA_TIME Saudi time). Proceeding with deploy."
+          fi
 
       - name: Set up SSH
+        if: steps.window.outputs.in_window == 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
           chmod 600 private_key
           ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
-        # Stop Service
-      - name: Stop Service
-        run: |
-          ssh -v -i private_key ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} "sudo systemctl stop start-api-test"
 
-        # Copy build file to server
-      - name: Copy build file to server
+      # ── Upload binary while service is still live (no downtime during transfer) ──
+      - name: Upload binary to staging path
+        if: steps.window.outputs.in_window == 'true'
         run: |
-          scp -v -i private_key -o StrictHostKeyChecking=no pos-rest ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{secrets.AWS_GO_API_TEST_DEST_PATH}}
-        # Start service & Verify the service status
-      - name: Start service & Verify service status
+          scp -i private_key -o StrictHostKeyChecking=no \
+            pos-rest \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_TEST_DEST_PATH }}/pos-rest.new
+
+      # ── Verify checksum before touching the running service ───────────────────
+      - name: Verify remote checksum
+        if: steps.window.outputs.in_window == 'true'
+        run: |
+          LOCAL_SUM=$(sha256sum ./pos-rest | awk '{print $1}')
+          REMOTE_SUM=$(ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sha256sum ${{ secrets.AWS_GO_API_TEST_DEST_PATH }}/pos-rest.new | awk '{print \$1}'")
+          if [ "$LOCAL_SUM" != "$REMOTE_SUM" ]; then
+            echo "Checksum MISMATCH — upload was corrupted. Aborting."
+            echo "  local : $LOCAL_SUM"
+            echo "  remote: $REMOTE_SUM"
+            exit 1
+          fi
+          echo "Checksum verified: $LOCAL_SUM"
+
+      # ── Atomic swap + service restart (downtime = systemd restart time, ~1 s) ──
+      - name: Swap binary and restart service
+        if: steps.window.outputs.in_window == 'true'
         uses: appleboy/ssh-action@v0.1.5
         with:
           host: ${{ secrets.AWS_HOST }}
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            sudo systemctl start start-api-test 
-            sha256sum ${{secrets.AWS_GO_API_TEST_DEST_PATH}}/pos-rest
-            sudo systemctl status start-api-test
+            set -e
+            DEST="${{ secrets.AWS_GO_API_TEST_DEST_PATH }}"
+
+            # Kill any stale file handle that would cause ETXTBSY on swap
+            sudo fuser -k "$DEST/pos-rest"     2>/dev/null || true
+            sudo fuser -k "$DEST/pos-rest.new" 2>/dev/null || true
+
+            # Stop → swap → sync  (service is down for the duration of this line only)
+            sudo systemctl stop start-api-test || true
+            mv -f "$DEST/pos-rest.new" "$DEST/pos-rest"
+            sync
+
+            # Start with up to 3 retries
+            for attempt in 1 2 3; do
+              sudo systemctl start start-api-test && break
+              echo "Start attempt $attempt/3 failed, retrying in 5 s..."
+              sleep 5
+            done
+
+            sudo systemctl is-active start-api-test
+            sha256sum "$DEST/pos-rest"
+            sudo systemctl status start-api-test --no-pager
