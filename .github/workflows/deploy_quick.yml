@@ -1,0 +1,148 @@
+name: "⚡ Quick Deploy (Emergency — Tests Skipped)"
+
+# MANUAL TRIGGER ONLY — never runs on push.
+# Use only when a critical fix must ship immediately.
+# Go to Actions → "⚡ Quick Deploy (Emergency — Tests Skipped)" → Run workflow → pick branch.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "yes" to confirm emergency deploy (tests will be skipped)'
+        required: true
+        default: ""
+
+jobs:
+  quick-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Abort if not confirmed
+        if: ${{ github.event.inputs.confirm != 'yes' }}
+        run: |
+          echo "ERROR: You must type exactly 'yes' to confirm. Got: '${{ github.event.inputs.confirm }}'"
+          exit 1
+
+      - name: Show emergency warning
+        run: |
+          echo "╔══════════════════════════════════════════════════════════════════════╗"
+          echo "║  ⚠  EMERGENCY QUICK DEPLOY — TESTS SKIPPED — branch: ${{ github.ref_name }}"
+          echo "╚══════════════════════════════════════════════════════════════════════╝"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      # ── Route: branch → service name + dest secret ────────────────────────────
+      - name: Set branch-specific variables
+        id: vars
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          case "$BRANCH" in
+            master)
+              echo "dest_secret=AWS_GO_API_PROD_DEST_PATH" >> "$GITHUB_OUTPUT"
+              echo "service=start-api" >> "$GITHUB_OUTPUT"
+              echo "label=PRODUCTION" >> "$GITHUB_OUTPUT"
+              ;;
+            test)
+              echo "dest_secret=AWS_GO_API_TEST_DEST_PATH" >> "$GITHUB_OUTPUT"
+              echo "service=start-api-test" >> "$GITHUB_OUTPUT"
+              echo "label=TEST" >> "$GITHUB_OUTPUT"
+              ;;
+            v2)
+              echo "dest_secret=AWS_GO_API_V2_DEST_PATH" >> "$GITHUB_OUTPUT"
+              echo "service=start-api-v2" >> "$GITHUB_OUTPUT"
+              echo "label=V2" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "ERROR: Branch '$BRANCH' is not supported. Use master, test, or v2."
+              exit 1
+              ;;
+          esac
+
+      # ── Build only — no tests ──────────────────────────────────────────────────
+      - name: Build (no tests)
+        run: |
+          BUILD_LOG=$(mktemp)
+          if ! GOOS=linux GOARCH=amd64 go build \
+                -ldflags="-X 'main.version=${{ github.sha }}'" \
+                -o pos-rest . 2>"$BUILD_LOG"; then
+            cat "$BUILD_LOG"
+            echo "Build FAILED — aborting."
+            exit 1
+          fi
+          if [ -s "$BUILD_LOG" ]; then
+            cat "$BUILD_LOG"
+            echo "Build produced warnings — aborting."
+            exit 1
+          fi
+          sha256sum ./pos-rest
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Prepare destination directory
+        run: |
+          DEST_PATH="${{ secrets[steps.vars.outputs.dest_secret] }}"
+          ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sudo mkdir -p ${DEST_PATH} && sudo chown -R ${{ secrets.AWS_USER }}:${{ secrets.AWS_USER }} ${DEST_PATH}"
+
+      - name: Upload binary to staging path
+        run: |
+          DEST_PATH="${{ secrets[steps.vars.outputs.dest_secret] }}"
+          scp -i private_key -o StrictHostKeyChecking=no \
+            pos-rest \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${DEST_PATH}/pos-rest.new
+
+      - name: Verify remote checksum
+        run: |
+          DEST_PATH="${{ secrets[steps.vars.outputs.dest_secret] }}"
+          LOCAL_SUM=$(sha256sum ./pos-rest | awk '{print $1}')
+          REMOTE_SUM=$(ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sha256sum ${DEST_PATH}/pos-rest.new | awk '{print \$1}'")
+          if [ "$LOCAL_SUM" != "$REMOTE_SUM" ]; then
+            echo "Checksum MISMATCH — aborting."
+            exit 1
+          fi
+          echo "Checksum verified: $LOCAL_SUM"
+
+      - name: Swap binary and restart service
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            DEST="${{ secrets[steps.vars.outputs.dest_secret] }}"
+            SERVICE="${{ steps.vars.outputs.service }}"
+
+            sudo fuser -k "$DEST/pos-rest"     2>/dev/null || true
+            sudo fuser -k "$DEST/pos-rest.new" 2>/dev/null || true
+
+            sudo systemctl stop $SERVICE || true
+            mv -f "$DEST/pos-rest.new" "$DEST/pos-rest"
+            sync
+
+            for attempt in 1 2 3; do
+              sudo systemctl start $SERVICE && break
+              echo "Start attempt $attempt/3 failed, retrying in 5 s..."
+              sleep 5
+            done
+
+            sudo systemctl is-active $SERVICE
+            sha256sum "$DEST/pos-rest"
+            sudo systemctl status $SERVICE --no-pager
+            echo "[${{ steps.vars.outputs.label }}] Quick deploy complete. Run full deploy.sh when stable."
