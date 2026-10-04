@@ -60,6 +60,13 @@ jobs:
           chmod 600 private_key
           ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
 
+      # ── Ensure dest dir exists and is writable by ubuntu ─────────────────────
+      - name: Prepare destination directory
+        run: |
+          ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sudo mkdir -p ${{ secrets.AWS_GO_API_V2_DEST_PATH }} && sudo chown -R ${{ secrets.AWS_USER }}:${{ secrets.AWS_USER }} ${{ secrets.AWS_GO_API_V2_DEST_PATH }}"
+
       # ── Upload binary while service is still live (no downtime during transfer) ──
       - name: Upload binary to staging path
         run: |
