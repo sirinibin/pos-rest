@@ -262,8 +262,11 @@ func zatcaSensitiveFieldsChanged(oldStore, newStore models.Store, isAdmin bool) 
 		oldStore.NationalAddress.ShortCode != newStore.NationalAddress.ShortCode ||
 		oldStore.NationalAddress.BuildingNo != newStore.NationalAddress.BuildingNo ||
 		oldStore.NationalAddress.StreetName != newStore.NationalAddress.StreetName ||
+		oldStore.NationalAddress.StreetNameArabic != newStore.NationalAddress.StreetNameArabic ||
 		oldStore.NationalAddress.DistrictName != newStore.NationalAddress.DistrictName ||
+		oldStore.NationalAddress.DistrictNameArabic != newStore.NationalAddress.DistrictNameArabic ||
 		oldStore.NationalAddress.CityName != newStore.NationalAddress.CityName ||
+		oldStore.NationalAddress.CityNameArabic != newStore.NationalAddress.CityNameArabic ||
 		oldStore.NationalAddress.ZipCode != newStore.NationalAddress.ZipCode ||
 		oldStore.NationalAddress.AdditionalNo != newStore.NationalAddress.AdditionalNo ||
 		oldStore.NationalAddress.UnitNo != newStore.NationalAddress.UnitNo {

@@ -213,6 +213,48 @@ func TestZatcaSensitiveFieldsChanged(t *testing.T) {
 			}(),
 			wantTrue: true,
 		},
+		{
+			name: "NationalAddress.StreetNameArabic changed",
+			old:  base,
+			new_: func() models.Store {
+				s := base
+				s.NationalAddress.StreetNameArabic = "شارع الملك"
+				return s
+			}(),
+			wantTrue: true,
+		},
+		{
+			name: "NationalAddress.DistrictNameArabic changed",
+			old:  base,
+			new_: func() models.Store {
+				s := base
+				s.NationalAddress.DistrictNameArabic = "العليا"
+				return s
+			}(),
+			wantTrue: true,
+		},
+		{
+			name: "NationalAddress.CityNameArabic changed",
+			old:  base,
+			new_: func() models.Store {
+				s := base
+				s.NationalAddress.CityNameArabic = "جدة"
+				return s
+			}(),
+			wantTrue: true,
+		},
+		{
+			name: "Non-ZATCA fields (phone, email, title) changed",
+			old:  base,
+			new_: func() models.Store {
+				s := base
+				s.Phone = "0551234567"
+				s.Email = "new@example.com"
+				s.Title = "Tax Invoice"
+				return s
+			}(),
+			wantTrue: false,
+		},
 
 		// ── Serial numbers — admin-only gate ──────────────────────────────────
 		{

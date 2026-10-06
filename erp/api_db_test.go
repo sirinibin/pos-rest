@@ -675,7 +675,8 @@ func TestAPI_ZatcaActions(t *testing.T) {
 		ctx, cancel := dbctx()
 		defer cancel()
 		_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{"zatca.connected": true, "zatca.phase": "2",
-			"zatca.production_request_id": int64(777), "zatca.last_connected_at": time.Now()}})
+			"zatca.production_request_id": int64(777), "zatca.last_connected_at": time.Now(),
+			"zatca.zatca_reconnect_required": false}}) // like controller.ConnectStoreToZatca
 		writeJSON(w, 200, M{"status": true, "result": "connected"})
 	}
 	c := call(t, "POST", "/stores/"+storeA()+"/zatca/connect", admin, M{"otp": "123456"})
@@ -704,6 +705,42 @@ func TestAPI_ZatcaActions(t *testing.T) {
 	again := call(t, "POST", "/sales/"+fx.OrderA2.Hex()+"/zatca/report", tok, M{})
 	if again.Code != 200 || reportedID != "" {
 		t.Fatalf("idempotent report: %d called=%q", again.Code, reportedID)
+	}
+	// changing a ZATCA-sensitive store field (here the Arabic street name)
+	// marks the connected Phase 2 store for re-connection
+	gs := call(t, "GET", "/stores/"+storeA(), admin, nil)
+	addr := cloneM(sub(gs.Body, "address"))
+	addr["streetAr"] = "شارع العليا الجديد"
+	ps := call(t, "PATCH", "/stores/"+storeA(), admin, M{"address": addr}, "If-Match", str(gs.Body["version"]), "X-Change-Reason", "address")
+	if ps.Code != 200 || get(ps.Body, "zatca.reconnectNeeded") != true {
+		t.Fatalf("sensitive change must mark reconnect: %d %s", ps.Code, ps.Raw)
+	}
+	// a non-sensitive change keeps the mark (only a reconnect clears it)
+	gs = call(t, "GET", "/stores/"+storeA(), admin, nil)
+	ps = call(t, "PATCH", "/stores/"+storeA(), admin, M{"email": "ops@example.com"}, "If-Match", str(gs.Body["version"]), "X-Change-Reason", "email")
+	if ps.Code != 200 || get(ps.Body, "zatca.reconnectNeeded") != true {
+		t.Fatalf("reconnect mark must persist: %d %s", ps.Code, ps.Raw)
+	}
+	// sales, sales returns, debit notes (deposits) and credit notes (withdrawals)
+	// are all refused until the store reconnects
+	reportedID = ""
+	for _, u := range []string{"/sales/" + fx.OrderA1.Hex(), "/sales-returns/" + fx.SalesReturnA1.Hex(),
+		"/deposits/" + fx.DepositA1.Hex(), "/withdrawals/" + fx.WithdrawalA1.Hex()} {
+		if r := call(t, "POST", u+"/zatca/report", tok, M{}); r.Code != 409 || r.errCode() != "zatca_reconnect_required" {
+			t.Fatalf("%s while reconnect required: %d %s", u, r.Code, r.Raw)
+		}
+	}
+	if reportedID != "" {
+		t.Fatalf("legacy reporter must not run while reconnect is required")
+	}
+	// reconnecting with a new OTP clears the mark and reporting works again
+	c2 := call(t, "POST", "/stores/"+storeA()+"/zatca/connect", admin, M{"otp": "654321"})
+	if c2.Code != 200 || get(c2.Body, "zatca.reconnectNeeded") != false {
+		t.Fatalf("reconnect: %d %s", c2.Code, c2.Raw)
+	}
+	// (OrderA1 is already cleared in the fixture, so it comes back as-is)
+	if r := call(t, "POST", "/sales/"+fx.OrderA1.Hex()+"/zatca/report", tok, M{}); r.Code != 200 || get(r.Body, "zatca.status") != "cleared" {
+		t.Fatalf("report after reconnect: %d %s", r.Code, r.Raw)
 	}
 	// failure path: legacy error → 200 with zatca.status failed + message
 	zatcaReporters["sales"] = func(w http.ResponseWriter, r *http.Request) {
