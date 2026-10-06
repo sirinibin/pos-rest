@@ -19,6 +19,8 @@ type ListQuery struct {
 	IncludeDeleted bool
 	From           *time.Time
 	Select         fieldSelect // ?select= (empty = every field)
+	Search         string      // ?q= search text (pickers), see search.go
+	IDs            []string    // ?ids= only these records
 }
 
 // WriteMeta carries per-write request metadata.
@@ -194,6 +196,9 @@ func parseListQuery(r *http.Request, res *Resource) (ListQuery, error) {
 		return q, err
 	}
 	q.Select = sel
+	if q.Search, q.IDs, err = parseSearch(v.Get("q"), v.Get("ids")); err != nil {
+		return q, err
+	}
 	if s := v.Get("from"); s != "" && res.DateField != "" {
 		t, err := parseClientTime(s)
 		if err != nil {

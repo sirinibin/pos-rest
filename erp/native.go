@@ -57,6 +57,12 @@ func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	if q.From != nil && b.dateField != "" {
 		f[nativeDateKey] = bson.M{"$gte": *q.From}
 	}
+	if sf := searchFilter(q.Search, nativeSearchKeys); sf != nil {
+		f["$or"] = sf["$or"]
+	}
+	if len(q.IDs) > 0 {
+		f["_id"] = bson.M{"$in": q.IDs}
+	}
 	ctx, cancel := dbctx()
 	defer cancel()
 	col := b.col(storeHex)

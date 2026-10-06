@@ -474,6 +474,7 @@ func productToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) 
 
 func newProductsResource() *Resource {
 	b := &legacyBackend{coll: "product", deletedKey: "deleted", sortKey: "_id",
+		searchKeys: []string{"name", "name_in_arabic", "item_code", "part_number", "bar_code"}, searchSort: "name",
 		toC: productToContract, toL: productToLegacy, known: productKnown, validate: productValidate,
 		hybrid: knownSet("pricing", "stock"),
 		v1: v1Ops{path: "/v1/product", create: controller.CreateProduct, update: controller.UpdateProduct,
@@ -514,6 +515,9 @@ func (x *mapCtx) freeTextProduct(name, nameAr string, price float64, unit string
 }
 
 // ---- customers / vendors ----
+
+// partySearchKeys: legacy keys ?q= matches for customers and vendors.
+var partySearchKeys = []string{"name", "name_in_arabic", "code", "phone", "phone2", "vat_no", "email"}
 
 var customerFields = []fld{
 	{c: "code", l: "code", ro: true}, {c: "nameEn", l: "name"}, {c: "nameAr", l: "name_in_arabic"},
@@ -612,6 +616,7 @@ var partyErrExtra = map[string]string{"national_address_building_no": "address.b
 
 func newCustomersResource() *Resource {
 	b := &legacyBackend{coll: "customer", deletedKey: "deleted", sortKey: "_id",
+		searchKeys: partySearchKeys, searchSort: "name",
 		toC: simpleToC(customerFields, partyAddressToC), toL: simpleToL(customerFields, partyAddressToL),
 		known: fieldKeys(customerFields, "address", "addressText", "phoneAr", "phone2Ar"), validate: partyValidate,
 		hybrid: knownSet("address"),
@@ -668,6 +673,7 @@ func vendorExtraToL(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M
 
 func newVendorsResource() *Resource {
 	b := &legacyBackend{coll: "vendor", deletedKey: "deleted", sortKey: "_id",
+		searchKeys: partySearchKeys, searchSort: "name",
 		toC: simpleToC(vendorFields, vendorExtraToC), toL: simpleToL(vendorFields, vendorExtraToL),
 		known: fieldKeys(vendorFields, "address", "addressText", "phoneAr", "category", "vatPercent"), validate: partyValidate,
 		hybrid: knownSet("address", "category"),
@@ -683,7 +689,8 @@ func newVendorsResource() *Resource {
 func newCategoriesResource() *Resource {
 	fields := []fld{{c: "nameEn", l: "name"}, {c: "parentId", l: "parent_id", k: kRef, ref: "product_category"}}
 	b := &legacyBackend{coll: "product_category", orgOverStores: true, deletedKey: "deleted", sortKey: "_id",
-		toC: simpleToC(fields, nil), toL: simpleToL(fields, nil), known: fieldKeys(fields),
+		searchKeys: []string{"name", "name_in_arabic"},
+		toC:        simpleToC(fields, nil), toL: simpleToL(fields, nil), known: fieldKeys(fields),
 		validate: func(x *mapCtx, rec M, prev M) map[string]string {
 			e := map[string]string{}
 			if strings.TrimSpace(str(rec["nameEn"])) == "" {
@@ -704,7 +711,8 @@ func newCategoriesResource() *Resource {
 func newBrandsResource() *Resource {
 	fields := []fld{{c: "name", l: "name"}, {c: "code", l: "code"}}
 	b := &legacyBackend{coll: "product_brand", orgOverStores: true, deletedKey: "deleted", sortKey: "_id",
-		toC: simpleToC(fields, nil),
+		searchKeys: []string{"name", "name_in_arabic", "code"},
+		toC:        simpleToC(fields, nil),
 		toL: simpleToL(fields, func(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M) error {
 			if str(p["code"]) == "" && (create || ch["name"]) {
 				// legacy requires a brand code; the contract has none
@@ -766,8 +774,9 @@ func newAccountsResource() *Resource {
 		{c: "balance", l: "balance", k: kNum}, {c: "debitOrCredit", l: "debit_or_credit_balance"},
 		{c: "referenceModel", l: "reference_model"}, {c: "referenceId", l: "reference_id", k: kRef}}
 	b := &legacyBackend{coll: "account", orgOverStores: true, deletedKey: "deleted", sortKey: "number", readOnly: true,
-		toC:   simpleToC(fields, func(x *mapCtx, d M, rec M) { rec["openingBalance"] = 0; rec["storeHint"] = x.storeHex }),
-		known: fieldKeys(fields)}
+		searchKeys: []string{"name", "number"},
+		toC:        simpleToC(fields, func(x *mapCtx, d M, rec M) { rec["openingBalance"] = 0; rec["storeHint"] = x.storeHex }),
+		known:      fieldKeys(fields)}
 	return &Resource{Name: "accounts", Path: "accounts", Scope: "org", Module: "finance", Legacy: "store DBs `account` (read-only)", Backend: b,
 		ReadOnly: "Accounts are maintained by the ledger of the existing system."}
 }
@@ -785,6 +794,7 @@ var employeeFields = []fld{
 
 func newEmployeesResource() *Resource {
 	b := &legacyBackend{coll: "employee", deletedKey: "deleted", sortKey: "_id",
+		searchKeys: []string{"name", "name_in_arabic", "code", "mob1", "mob2", "iqama_no"}, searchSort: "name",
 		toC: simpleToC(employeeFields, func(x *mapCtx, d M, rec M) {
 			if boolv(d["is_active"]) || d["is_active"] == nil {
 				rec["status"] = "active"
@@ -844,6 +854,7 @@ var vehicleFields = []fld{
 
 func newVehiclesResource() *Resource {
 	b := &legacyBackend{coll: "vehicle", deletedKey: "deleted", sortKey: "_id",
+		searchKeys: []string{"vehicle_number", "brand", "model", "chassis_number", "customer_name", "customer_name_arabic"}, searchSort: "vehicle_number",
 		toC: simpleToC(vehicleFields, nil),
 		toL: simpleToL(vehicleFields, func(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M) error {
 			if v, ok := p["vehicle_number"]; ok {
@@ -924,7 +935,8 @@ var packageFields = []fld{
 
 func newPackagesResource() *Resource {
 	b := &legacyBackend{coll: "customer_package", inMain: true, mainStoreKey: "store_id", deletedKey: "deleted", sortKey: "_id",
-		toC: simpleToC(packageFields, nil),
+		searchKeys: []string{"code", "name", "name_in_arabic", "customer_name", "customer_name_ar"},
+		toC:        simpleToC(packageFields, nil),
 		toL: simpleToL(packageFields, func(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M) error {
 			p["store_id"] = x.storeHex
 			return nil
@@ -971,6 +983,7 @@ var rfqSupplierFields = []fld{
 
 func newRFQSuppliersResource() *Resource {
 	b := &legacyBackend{coll: "rfq_suppliers", inMain: true, mainStoreKey: "store_id", sortKey: "_id", adapterSoftDelete: true,
+		searchKeys: []string{"name", "phone", "email", "code", "purchase_market"}, searchSort: "name",
 		toC: simpleToC(rfqSupplierFields, func(x *mapCtx, d M, rec M) {
 			rec["source"] = "manual"
 			if str(d["google_place_id"]) != "" {
