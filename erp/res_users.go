@@ -17,8 +17,25 @@ func userRoleID(u M) string {
 	return legacyRoleToContract(str(u["role"]), boolv(u["admin"]))
 }
 
+// adminStoreIDs lists every store a legacy admin can access. accessibleStores
+// ignores store_ids for admins, so storeIds must follow suit: the UI filters
+// the header store switcher (and other store pickers) by storeIds, and the
+// legacy store_ids subset hid the admin's other stores.
+func adminStoreIDs(stores []M) []string {
+	all := make([]string, 0, len(stores))
+	for _, s := range stores {
+		all = append(all, hexOf(s["_id"]))
+	}
+	return all
+}
+
 func userToContract(x *mapCtx, u M) M {
 	storeIDs := ids(u["store_ids"])
+	if isLegacyAdmin(u) && x != nil && x.c != nil {
+		// the viewer's accessible stores: all of them when the viewer is an
+		// admin, otherwise the ones the viewer can see anyway
+		storeIDs = adminStoreIDs(x.c.Stores)
+	}
 	rec := M{
 		"name": str(u["name"]), "email": strings.ToLower(str(u["email"])), "phone": str(u["mob"]),
 		"role": userRoleID(u), "storeIds": storeIDs, "status": userStatus(u),
@@ -35,12 +52,8 @@ func userToContract(x *mapCtx, u M) M {
 func userToContractFull(u M, stores []M) M {
 	rec := applyEnvelope(userToContract(nil, u), u, boolv(u["deleted"]))
 	rec["id"] = hexOf(u["_id"])
-	if ids, ok := rec["storeIds"].([]string); ok && len(ids) == 0 && isLegacyAdmin(u) {
-		all := []string{}
-		for _, s := range stores {
-			all = append(all, hexOf(s["_id"]))
-		}
-		rec["storeIds"] = all
+	if isLegacyAdmin(u) {
+		rec["storeIds"] = adminStoreIDs(stores)
 	}
 	delete(rec, "password")
 	return rec
