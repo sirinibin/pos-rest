@@ -46,6 +46,9 @@ func Register(router *mux.Router) {
 	s.HandleFunc("/stores/{id}/zatca/connect", handleZatcaConnect).Methods("POST")
 	s.HandleFunc("/stores/{id}/zatca/disconnect", handleZatcaDisconnect).Methods("POST")
 
+	// Subscription billing by bank transfer (billing.go)
+	registerBilling(s)
+
 	// Drafts (§2.1b): separate *_draft collections, never touch real data
 	s.HandleFunc("/drafts/{docType}", handleDraftList).Methods("GET")
 	s.HandleFunc("/drafts/{docType}", handleDraftCreate).Methods("POST")

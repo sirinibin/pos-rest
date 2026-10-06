@@ -554,6 +554,9 @@ func newStoresResource() *Resource {
 	return &Resource{Name: "stores", Path: "stores", Scope: "org", Module: "settings", Legacy: "main DB `store`", Backend: &storesBackend{b}}
 }
 
+// storeBillingFields are kept from the stored record on every PATCH/PUT.
+var storeBillingFields = []string{"plan", "trialEndsAt", "subscription"}
+
 // storesBackend: stores are never created/deleted through the contract;
 // PATCH keeps `short` (and other unmapped fields) in erp.x.
 type storesBackend struct{ *legacyBackend }
@@ -577,6 +580,15 @@ func (s *storesBackend) HardDelete(c *Ctx, storeHex, id string, meta WriteMeta) 
 // taken from the client; connected/pcsid/connectedAt/certExpires/snapshot are
 // restored from the current record before anything is persisted.
 func (s *storesBackend) Update(c *Ctx, storeHex, id string, prev, next M, changed []string, meta WriteMeta) (M, error) {
+	// billing fields are server-owned: only an accepted bank-transfer
+	// payment (billing.go) changes them
+	for _, k := range storeBillingFields {
+		if v, ok := prev[k]; ok {
+			next[k] = v
+		} else {
+			delete(next, k)
+		}
+	}
 	if nz, ok := next["zatca"].(M); ok {
 		z := cloneM(sub(prev, "zatca"))
 		if ph, ok := nz["phase"]; ok {

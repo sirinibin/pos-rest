@@ -55,6 +55,8 @@ func userToContractFull(u M, stores []M) M {
 	if isLegacyAdmin(u) {
 		rec["storeIds"] = adminStoreIDs(stores)
 	}
+	// platform admins verify subscription payments (billing.go)
+	rec["platformAdmin"] = isLegacyAdmin(u)
 	delete(rec, "password")
 	return rec
 }
