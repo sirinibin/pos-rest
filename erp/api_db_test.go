@@ -580,6 +580,57 @@ func TestAPI_StoresPatch(t *testing.T) {
 	}
 }
 
+// Settings → WhatsApp round trip: the default channel, connection status and
+// WABA details are preserved state and must survive a reload; the mapped
+// evolution fields go to legacy settings with the key masked.
+func TestAPI_StoresPatch_WhatsappRoundTrip(t *testing.T) {
+	requireDB(t)
+	admin := login(t, fx.AdminEmail)
+	g := call(t, "GET", "/stores/"+storeA(), admin, nil)
+	if g.Code != 200 {
+		t.Fatalf("get store: %d", g.Code)
+	}
+	if p := get(g.Body, "emailSettings.smtp.port"); p != nil && num(p) < 1 {
+		t.Fatalf("unset smtp port must be null, got %#v", p)
+	}
+	wa := M{"mode": "waba",
+		"evolution": M{"url": "https://wa.example", "instance": "shop1", "apiKey": "evo-secret", "status": "connected"},
+		"waba":      M{"phoneNumberId": "1098765432101", "businessAccountId": "2233445566778", "token": "t", "verified": true}}
+	r := call(t, "PATCH", "/stores/"+storeA(), admin, M{"whatsapp": wa}, "If-Match", str(g.Body["version"]), "X-Change-Reason", "settings")
+	if r.Code != 200 {
+		t.Fatalf("patch store: %d %s", r.Code, r.Raw)
+	}
+	g2 := call(t, "GET", "/stores/"+storeA(), admin, nil)
+	for path, want := range map[string]interface{}{
+		"whatsapp.mode": "waba", "whatsapp.evolution.status": "connected", "whatsapp.evolution.url": "https://wa.example",
+		"whatsapp.evolution.instance": "shop1", "whatsapp.evolution.apiKey": masked, "whatsapp.waba.verified": true,
+		"whatsapp.waba.phoneNumberId": "1098765432101",
+	} {
+		if got := get(g2.Body, path); got != want {
+			t.Errorf("%s=%#v want %#v", path, got, want)
+		}
+	}
+	oid, _ := oidOf(storeA())
+	var raw bson.M
+	ctx, cancel := dbctx()
+	defer cancel()
+	_ = mainDB().Collection("store").FindOne(ctx, bson.M{"_id": oid}).Decode(&raw)
+	d := normDoc(raw)
+	if get(d, "settings.evolution_api_url") != "https://wa.example" || get(d, "settings.evolution_api_key") != "evo-secret" {
+		t.Fatalf("legacy evolution settings: %v", get(d, "settings"))
+	}
+	// re-saving with the masked key keeps the real key
+	r = call(t, "PATCH", "/stores/"+storeA(), admin, M{"whatsapp": M{"mode": "evolution", "evolution": M{"url": "https://wa2.example", "instance": "shop1", "apiKey": masked}}},
+		"If-Match", str(r.Body["version"]), "X-Change-Reason", "settings")
+	if r.Code != 200 || get(r.Body, "whatsapp.mode") != "evolution" {
+		t.Fatalf("second patch: %d mode=%v", r.Code, get(r.Body, "whatsapp.mode"))
+	}
+	_ = mainDB().Collection("store").FindOne(ctx, bson.M{"_id": oid}).Decode(&raw)
+	if get(normDoc(raw), "settings.evolution_api_key") != "evo-secret" {
+		t.Fatalf("masked key overwrote the real one")
+	}
+}
+
 func TestAPI_UnsupportedLegacyOperations(t *testing.T) {
 	requireDB(t)
 	tok := login(t, fx.ManagerEmail)
