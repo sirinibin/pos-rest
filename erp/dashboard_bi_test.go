@@ -83,7 +83,7 @@ func TestBITotals_MatchesClientComputeTotals(t *testing.T) {
 
 func TestBIDocOf(t *testing.T) {
 	d := BIDocOf(M{"id": "s1", "code": "INV-1", "date": "2026-10-05T14:30", "customerId": "c1", "customerName": "A",
-		"items": []interface{}{M{"productId": "p1", "qty": 3.0, "unitPrice": 10.0, "unitDiscount": 1.0, "purchasePrice": 4.0}},
+		"items":    []interface{}{M{"productId": "p1", "qty": 3.0, "unitPrice": 10.0, "unitDiscount": 1.0, "purchasePrice": 4.0}},
 		"orderIds": []interface{}{"o1"}, "status": "accepted"})
 	if d.Day != "2026-10-05" || d.month() != "2026-10" || d.CustomerID != "c1" || len(d.Lines) != 1 {
 		t.Fatalf("%+v", d)
@@ -121,7 +121,7 @@ func TestComputeBI_Customers(t *testing.T) {
 		},
 		Customers: []BICustomer{{ID: "c1", NameEn: "Master name"}},
 	}
-	r := ComputeBI(in, p)
+	r := ComputeBI(in, p, BISettings{})
 	c := r.Customers
 	if len(c.Rows) != 3 {
 		t.Fatalf("walk-in sales must not become a customer: %+v", c.Rows)
@@ -173,7 +173,7 @@ func TestComputeBI_ProductsAgingQuotationsAsk(t *testing.T) {
 	}
 	in := BIInput{
 		Sales: []BIDoc{
-			biSale("a", "2025-01-01", "c1", 500, 500, l("p1", 1, 500, 100)),    // outside the months, open 640 days
+			biSale("a", "2025-01-01", "c1", 500, 500, l("p1", 1, 500, 100)),     // outside the months, open 640 days
 			biSale("b", "2026-09-15", "c1", 1000, 1150, l("p1", 10, 1000, 400)), // last month
 			biSale("c", "2026-10-01", "c2", 200, 230, l("p2", 2, 200, 50)),
 			biSale("d", "2026-10-02", "c2", 300, 345, l("p2", 3, 300, 90)),
@@ -195,7 +195,7 @@ func TestComputeBI_ProductsAgingQuotationsAsk(t *testing.T) {
 			"svc":  {ID: "svc", NameEn: "Service", Stock: 10, Purchase: 30, IsService: true},
 		},
 	}
-	r := ComputeBI(in, p)
+	r := ComputeBI(in, p, BISettings{})
 
 	if len(r.Products) != 3 || r.Products[0].ID != "p1" || r.Products[0].Rev != 1000 {
 		t.Fatalf("products by revenue, months only: %+v", r.Products)
@@ -247,7 +247,7 @@ func TestComputeBI_ProductsAgingQuotationsAsk(t *testing.T) {
 }
 
 func TestComputeBI_Empty(t *testing.T) {
-	r := ComputeBI(BIInput{}, biTestPeriod())
+	r := ComputeBI(BIInput{}, biTestPeriod(), BISettings{})
 	if r.Customers.Rows == nil || r.Products == nil || len(r.Aging) != 4 || r.Aging[0].Rows == nil ||
 		len(r.Customers.NewVsReturning) != 12 || len(r.Customers.Clv) != 6 || r.Customers.Cohorts == nil ||
 		r.Ask.Overdue == nil || r.Ask.Slow == nil || len(r.Quotations.ByStatus) != 7 {
@@ -352,6 +352,31 @@ func TestAPI_DashboardBI(t *testing.T) {
 		t.Errorf("must never be cached: %q", r.Header.Get("Cache-Control"))
 	}
 
+	if st := sub(r.Body, "settings"); st["months"] != 12.0 || st["activeDays"] != 90.0 {
+		t.Errorf("default settings echoed: %v", st)
+	}
+	// the store's BI settings (store.bi, kept in erp.x.bi) shape the period
+	if _, err := mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{
+		"erp.x.bi": bson.M{"months": 6, "overdueDays": 400}}}); err != nil {
+		t.Fatal(err)
+	}
+	r = call(t, "GET", "/dashboard/bi?storeId="+sid, owner, nil)
+	if ms := arr(sub(r.Body, "period")["months"]); len(ms) != 6 || sub(r.Body, "settings")["overdueDays"] != 365.0 {
+		t.Errorf("store settings: %v %v", ms, r.Body["settings"])
+	}
+
+	// saved from Store settings → BI dashboard (PATCH /stores/{id} {bi: …})
+	if r := call(t, "PATCH", "/stores/"+sid, owner, M{"bi": M{"months": 18.0, "activeDays": 60.0}}); r.Code != 200 {
+		t.Fatalf("save bi settings: %d %s", r.Code, r.Raw)
+	}
+	r = call(t, "GET", "/dashboard/bi?storeId="+sid, owner, nil)
+	if ms := arr(sub(r.Body, "period")["months"]); len(ms) != 18 || sub(r.Body, "settings")["activeDays"] != 60.0 {
+		t.Errorf("settings saved through the stores API: %v %v", len(ms), r.Body["settings"])
+	}
+	if r := call(t, "GET", "/stores/"+sid, owner, nil); sub(r.Body, "bi")["months"] != 18.0 {
+		t.Errorf("store.bi reads back: %s", r.Raw)
+	}
+
 	// validation and access
 	if r := call(t, "GET", "/dashboard/bi", owner, nil); r.Code != 400 || r.errField("storeId") == "" {
 		t.Errorf("missing storeId: %d %s", r.Code, r.Raw)
@@ -361,5 +386,87 @@ func TestAPI_DashboardBI(t *testing.T) {
 	}
 	if r := call(t, "GET", "/dashboard/bi?storeId="+fx.StoreA.Hex(), login(t, fx.AdminEmail), nil); r.Code != 200 {
 		t.Errorf("admin: %d %s", r.Code, r.Raw)
+	}
+}
+
+func TestBISettings_Normalized(t *testing.T) {
+	def := BISettings{}.Normalized()
+	if def != (BISettings{Months: 12, ActiveDays: 90, ChurnMediumDays: 45, ChurnHighDays: 120, OverdueDays: 30, SlowMonths: 3}) {
+		t.Errorf("defaults %+v", def)
+	}
+	for _, c := range []struct {
+		in, want BISettings
+	}{
+		{BISettings{Months: 1}, BISettings{Months: 3}},
+		{BISettings{Months: 99}, BISettings{Months: 36}},
+		{BISettings{ChurnMediumDays: 200, ChurnHighDays: 100}, BISettings{ChurnMediumDays: 200, ChurnHighDays: 201}},
+		{BISettings{OverdueDays: -5, SlowMonths: 40}, BISettings{OverdueDays: 1, SlowMonths: 12}},
+	} {
+		got := c.in.Normalized()
+		if c.want.Months != 0 && got.Months != c.want.Months ||
+			c.want.ChurnHighDays != 0 && (got.ChurnHighDays != c.want.ChurnHighDays || got.ChurnMediumDays != c.want.ChurnMediumDays) ||
+			c.want.OverdueDays != 0 && (got.OverdueDays != c.want.OverdueDays || got.SlowMonths != c.want.SlowMonths) {
+			t.Errorf("%+v → %+v", c.in, got)
+		}
+	}
+	st := M{"erp": M{"x": M{"bi": M{"months": 6.0, "activeDays": int32(30), "overdueDays": 60.0}}}}
+	if s := BISettingsOf(st); s.Months != 6 || s.ActiveDays != 30 || s.OverdueDays != 60 || s.ChurnHighDays != 120 {
+		t.Errorf("from store %+v", s)
+	}
+	if s := BISettingsOf(nil); s != def {
+		t.Errorf("no store %+v", s)
+	}
+}
+
+func TestComputeBI_SettingsChangeFigures(t *testing.T) {
+	p := NewBIPeriod(time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC), time.UTC, 6)
+	if len(p.Months) != 6 || p.Months[0] != "2026-05" {
+		t.Fatalf("6-month period %+v", p)
+	}
+	in := BIInput{Sales: []BIDoc{
+		biSale("a", "2026-08-01", "c1", 100, 100), biSale("b", "2026-08-02", "c1", 100, 0), // 66 days, 2 orders
+		biSale("c", "2026-09-20", "c2", 100, 0), // 16 days
+	}, Customers: []BICustomer{{ID: "c1"}, {ID: "c2"}}}
+	def := ComputeBI(in, p, BISettings{})
+	if def.Customers.Risk["high"] != 1 || def.Customers.Active != 2 || len(def.Ask.Overdue) != 1 {
+		t.Errorf("defaults: risk %v active %d overdue %v", def.Customers.Risk, def.Customers.Active, def.Ask.Overdue)
+	}
+	strict := ComputeBI(in, p, BISettings{ActiveDays: 10, ChurnMediumDays: 10, ChurnHighDays: 200, OverdueDays: 90})
+	if strict.Customers.Risk["medium"] != 2 || strict.Customers.Active != 0 || len(strict.Ask.Overdue) != 0 {
+		t.Errorf("custom: risk %v active %d overdue %v", strict.Customers.Risk, strict.Customers.Active, strict.Ask.Overdue)
+	}
+	if strict.Settings.ActiveDays != 10 || len(strict.Customers.NewVsReturning) != 6 {
+		t.Errorf("settings echoed: %+v", strict.Settings)
+	}
+}
+
+func TestIsWalkInCustomer(t *testing.T) {
+	for _, c := range []struct {
+		en, ar string
+		cat    []string
+		want   bool
+	}{
+		{"Walk-in customer", "", nil, true},
+		{"WALK IN", "", nil, true},
+		{"Walkin", "", nil, true},
+		{"Cash Customer", "", nil, true},
+		{"", "عميل نقدي", nil, true},
+		{"", "عميل عابر", nil, true},
+		{"Any name", "", []string{"Cash"}, true},
+		{"Walker Industries", "", nil, false},
+		{"Cashew Traders", "", nil, false},
+		{"Al Noor", "النور", []string{"Corporate"}, false},
+	} {
+		if got := IsWalkInCustomer(c.en, c.ar, c.cat); got != c.want {
+			t.Errorf("%q %q %v = %v", c.en, c.ar, c.cat, got)
+		}
+	}
+	p := biTestPeriod()
+	r := ComputeBI(BIInput{
+		Sales:     []BIDoc{biSale("a", "2026-10-01", "w", 100, 0), biSale("b", "2026-10-01", "c", 100, 0), {ID: "x", Day: "2026-10-01", CustomerID: "z", NameEn: "Walk-in"}},
+		Customers: []BICustomer{{ID: "w", NameEn: "Counter", WalkIn: true}, {ID: "c", NameEn: "Real"}},
+	}, p, BISettings{})
+	if len(r.Customers.Rows) != 1 || r.Customers.Rows[0].ID != "c" {
+		t.Errorf("walk-in customer records left out of customer analytics: %+v", r.Customers.Rows)
 	}
 }

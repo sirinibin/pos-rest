@@ -19,7 +19,9 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -27,8 +29,57 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// BIMonths is how many calendar months (ending with the current one) the page covers.
+// BIMonths is how many calendar months (ending with the current one) the page
+// covers unless the store's BI settings say otherwise.
 const BIMonths = 12
+
+// BISettings are the store's BI dashboard settings (store.bi in the contract,
+// kept in the store's erp.x.bi). Zero values take the defaults.
+type BISettings struct {
+	Months          int `json:"months"`          // 6–24 calendar months shown, default 12
+	ActiveDays      int `json:"activeDays"`      // "active customer" bought within, default 90
+	ChurnMediumDays int `json:"churnMediumDays"` // medium churn risk after, default 45
+	ChurnHighDays   int `json:"churnHighDays"`   // high churn risk after, default 120
+	OverdueDays     int `json:"overdueDays"`     // "overdue" invoices older than, default 30
+	SlowMonths      int `json:"slowMonths"`      // slow stock: no sale for, default 3 months
+}
+
+func clampInt(v, lo, hi, def int) int {
+	if v == 0 {
+		return def
+	}
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// Normalized fills defaults and keeps every value in range (high risk after medium).
+func (s BISettings) Normalized() BISettings {
+	out := BISettings{
+		Months:          clampInt(s.Months, 3, 36, BIMonths),
+		ActiveDays:      clampInt(s.ActiveDays, 7, 365, 90),
+		ChurnMediumDays: clampInt(s.ChurnMediumDays, 7, 365, 45),
+		ChurnHighDays:   clampInt(s.ChurnHighDays, 14, 730, 120),
+		OverdueDays:     clampInt(s.OverdueDays, 1, 365, 30),
+		SlowMonths:      clampInt(s.SlowMonths, 1, 12, 3),
+	}
+	if out.ChurnHighDays <= out.ChurnMediumDays {
+		out.ChurnHighDays = out.ChurnMediumDays + 1
+	}
+	return out
+}
+
+// BISettingsOf reads a store's BI settings from its stored record.
+func BISettingsOf(store M) BISettings {
+	b := sub(sub(sub(store, envKey), "x"), "bi")
+	return BISettings{Months: int(intv(b["months"])), ActiveDays: int(intv(b["activeDays"])),
+		ChurnMediumDays: int(intv(b["churnMediumDays"])), ChurnHighDays: int(intv(b["churnHighDays"])),
+		OverdueDays: int(intv(b["overdueDays"])), SlowMonths: int(intv(b["slowMonths"]))}.Normalized()
+}
 
 // ---- period ----
 
@@ -174,6 +225,24 @@ type BICustomer struct {
 	ID             string
 	NameEn, NameAr string
 	Opening        float64 // receivable positive, payable negative
+	WalkIn         bool    // the counter's cash / walk-in customer record
+}
+
+var (
+	reWalkInEn = regexp.MustCompile(`(?i)\bwalk[\s-]*in\b|\bcash\s+(customer|client|sales?)\b`)
+	reWalkInAr = regexp.MustCompile(`عميل\s*(نقدي|عابر)`)
+)
+
+// IsWalkInCustomer: the shared counter customer POS sales are booked to (category
+// "Cash", or named like "Walk-in customer" / "عميل نقدي"). Its sales are not one
+// customer's history, so customer analytics leave it out.
+func IsWalkInCustomer(nameEn, nameAr string, category []string) bool {
+	for _, c := range category {
+		if strings.EqualFold(strings.TrimSpace(c), "cash") {
+			return true
+		}
+	}
+	return reWalkInEn.MatchString(nameEn) || reWalkInAr.MatchString(nameAr)
 }
 
 // BIProduct is a product master record (names, stock on hand, purchase price).
@@ -314,7 +383,7 @@ type BISlow struct {
 type BIAsk struct {
 	LastMonth    string         `json:"lastMonth"`
 	TopLastMonth []BIProductRow `json:"topLastMonth"`
-	Overdue      []BIOverdue    `json:"overdue"` // open more than 30 days
+	Overdue      []BIOverdue    `json:"overdue"` // open more than OverdueDays
 	Monthly      []BIMonthRow   `json:"monthly"`
 	SlowCount    int            `json:"slowCount"`
 	SlowValue    float64        `json:"slowValue"`
@@ -330,12 +399,14 @@ type BIResult struct {
 	Receivables float64        `json:"receivables"`
 	Quotations  BIQuotations   `json:"quotations"`
 	Ask         BIAsk          `json:"ask"`
+	Settings    BISettings     `json:"settings"`
 }
 
 // ---- computation (pure) ----
 
 // ComputeBI works out every dashboard figure from the store's records.
-func ComputeBI(in BIInput, p BIPeriod) BIResult {
+func ComputeBI(in BIInput, p BIPeriod, set BISettings) BIResult {
+	set = set.Normalized()
 	// sales after order credits: deposits against the invoice and open returns of it
 	credits := map[string]float64{}
 	for _, d := range in.Deposits {
@@ -362,16 +433,17 @@ func ComputeBI(in BIInput, p BIPeriod) BIResult {
 	}
 	return BIResult{
 		Period:      p,
-		Customers:   biCustomers(all, custByID, p),
+		Customers:   biCustomers(all, custByID, p, set),
 		Products:    biProducts(all, in.Returns, in.Products, p.Months, p.has),
 		Aging:       biAging(sales, p.Today),
 		Receivables: biReceivables(sales, p.Today),
 		Quotations:  biQuotations(in.Quotations, p),
-		Ask:         biAsk(all, sales, in, p),
+		Ask:         biAsk(all, sales, in, p, set),
+		Settings:    set,
 	}
 }
 
-func biCustomers(all []BIDoc, custByID map[string]BICustomer, p BIPeriod) BICustomers {
+func biCustomers(all []BIDoc, custByID map[string]BICustomer, p BIPeriod, set BISettings) BICustomers {
 	type acc struct {
 		row    BICustomerRow
 		months map[string]bool
@@ -379,8 +451,11 @@ func biCustomers(all []BIDoc, custByID map[string]BICustomer, p BIPeriod) BICust
 	by := map[string]*acc{}
 	order := []string{}
 	for _, d := range all {
-		// walk-in sales carry no customer: they are not a customer's history
+		// walk-in sales (no customer, or the counter's cash customer) are not a customer's history
 		if d.CustomerID == "" || d.Day == "" {
+			continue
+		}
+		if c, ok := custByID[d.CustomerID]; ok && c.WalkIn || !ok && IsWalkInCustomer(d.NameEn, d.NameAr, nil) {
 			continue
 		}
 		a := by[d.CustomerID]
@@ -418,15 +493,15 @@ func biCustomers(all []BIDoc, custByID map[string]BICustomer, p BIPeriod) BICust
 		r.Net = round2(r.Net)
 		r.Recency = biDays(r.Last, p.Today)
 		switch {
-		case r.Recency > 120 || (r.Recency > 60 && r.Orders <= 2):
+		case r.Recency > set.ChurnHighDays || (r.Recency > set.ChurnHighDays/2 && r.Orders <= 2):
 			r.Tier = "high"
-		case r.Recency > 45:
+		case r.Recency > set.ChurnMediumDays:
 			r.Tier = "medium"
 		default:
 			r.Tier = "low"
 		}
 		out.Risk[r.Tier]++
-		if r.Recency <= 90 {
+		if r.Recency <= set.ActiveDays {
 			out.Active++
 		}
 		if r.Orders > 1 {
@@ -641,7 +716,7 @@ func biQuotations(qs []BIDoc, p BIPeriod) BIQuotations {
 	return out
 }
 
-func biAsk(all, sales []BIDoc, in BIInput, p BIPeriod) BIAsk {
+func biAsk(all, sales []BIDoc, in BIInput, p BIPeriod, set BISettings) BIAsk {
 	out := BIAsk{LastMonth: biAddMonths(p.ThisMonth, -1), TopLastMonth: []BIProductRow{}, Overdue: []BIOverdue{},
 		Monthly: []BIMonthRow{}, Slow: []BISlow{}}
 	lm := out.LastMonth
@@ -671,7 +746,7 @@ func biAsk(all, sales []BIDoc, in BIInput, p BIPeriod) BIAsk {
 			}
 		}
 		bal = round2(bal)
-		if days := biDays(oldest, p.Today); bal > 0.004 && days > 30 {
+		if days := biDays(oldest, p.Today); bal > 0.004 && days > set.OverdueDays {
 			out.Overdue = append(out.Overdue, BIOverdue{ID: c.ID, NameEn: c.NameEn, NameAr: c.NameAr, Balance: bal, Days: days})
 		}
 	}
@@ -698,7 +773,7 @@ func biAsk(all, sales []BIDoc, in BIInput, p BIPeriod) BIAsk {
 	}
 
 	// stocked products with no sale in the last three months
-	since := biAddMonths(p.ThisMonth, -3) + "-01"
+	since := biAddMonths(p.ThisMonth, -set.SlowMonths) + "-01"
 	sold := map[string]bool{}
 	for _, d := range all {
 		if d.Day >= since {
@@ -799,7 +874,8 @@ func LoadBI(c *Ctx, storeHex string, p BIPeriod, loc *time.Location) (BIInput, e
 				if str(rec["openingBalanceType"]) == "payable" {
 					o = -o
 				}
-				in.Customers = append(in.Customers, BICustomer{ID: str(rec["id"]), NameEn: str(rec["nameEn"]), NameAr: str(rec["nameAr"]), Opening: o})
+				in.Customers = append(in.Customers, BICustomer{ID: str(rec["id"]), NameEn: str(rec["nameEn"]), NameAr: str(rec["nameAr"]), Opening: o,
+					WalkIn: IsWalkInCustomer(str(rec["nameEn"]), str(rec["nameAr"]), strs(rec["category"]))})
 			})
 		},
 	}
@@ -868,12 +944,13 @@ func handleDashboardBI(c *Ctx, w http.ResponseWriter, r *http.Request) error {
 	}
 	loc := c.storeLoc(storeHex)
 	now := time.Now()
-	p := NewBIPeriod(now, loc, BIMonths)
+	set := BISettingsOf(c.store(storeHex))
+	p := NewBIPeriod(now, loc, set.Months)
 	in, err := LoadBI(c, storeHex, p, loc)
 	if err != nil {
 		return errInternal("Unable to calculate the BI dashboard.")
 	}
-	res := ComputeBI(in, p)
+	res := ComputeBI(in, p, set)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, M{
 		"storeId":     storeHex,
@@ -886,6 +963,7 @@ func handleDashboardBI(c *Ctx, w http.ResponseWriter, r *http.Request) error {
 		"receivables": res.Receivables,
 		"quotations":  res.Quotations,
 		"ask":         res.Ask,
+		"settings":    res.Settings,
 	})
 	return nil
 }
