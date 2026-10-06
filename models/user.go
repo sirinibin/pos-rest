@@ -848,3 +848,26 @@ func (user *User) RestoreUser(updatedBy *primitive.ObjectID) error {
 	)
 	return err
 }
+
+// ErpRole returns the StartERP contract role (user.erp.role, e.g. "r_admin"
+// for a store Administrator) that the /v1/erp adapter keeps on the user
+// document; "" when unset or on lookup errors.
+func (user *User) ErpRole() string {
+	if user == nil || user.ID.IsZero() {
+		return ""
+	}
+	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var doc struct {
+		Erp struct {
+			Role string `bson:"role"`
+		} `bson:"erp"`
+	}
+	err := collection.FindOne(ctx, bson.M{"_id": user.ID},
+		options.FindOne().SetProjection(bson.M{"erp.role": 1})).Decode(&doc)
+	if err != nil {
+		return ""
+	}
+	return doc.Erp.Role
+}

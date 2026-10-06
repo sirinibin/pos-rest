@@ -915,10 +915,15 @@ func TestAPI_ZatcaEnvironment(t *testing.T) {
 	if r := patch(userB, storeB(), M{"zatca": M{"env": "simulation"}}); r.Code != 200 || get(r.Body, "zatca.env") != "Simulation" {
 		t.Fatalf("first env: %d %s", r.Code, r.Raw)
 	}
-	if r := patch(userB, storeB(), M{"zatca": M{"env": "Production"}}); r.Code != 403 || !strings.Contains(r.errField("zatca.env"), "Only admins") {
-		t.Fatalf("non-admin change: %d %s", r.Code, r.Raw)
+	// the store's Administrator may change it too, but not while the store has
+	// sales, sales returns, debit notes or credit notes
+	if r := patch(userB, storeB(), M{"zatca": M{"env": "Production"}}); r.Code != 400 || !strings.Contains(r.errField("zatca.env"), "can't be changed") {
+		t.Fatalf("store Administrator change with documents: %d %s", r.Code, r.Raw)
 	}
-	// with no ZATCA documents an admin may switch it
+	if rawEnv(fx.StoreB) != "Simulation" {
+		t.Fatalf("refused change was stored: %q", rawEnv(fx.StoreB))
+	}
+	// with no ZATCA documents the store Administrator and a platform admin may switch it
 	ctx, cancel := dbctx()
 	defer cancel()
 	away := primitive.NewObjectID()
@@ -928,7 +933,10 @@ func TestAPI_ZatcaEnvironment(t *testing.T) {
 	if g := call(t, "GET", "/stores/"+storeB(), admin, nil); get(g.Body, "zatca.envLocked") != false {
 		t.Fatalf("store B without documents must not be locked: %v", g.Body["zatca"])
 	}
-	if r := patch(admin, storeB(), M{"zatca": M{"env": "Production"}}); r.Code != 200 || rawEnv(fx.StoreB) != "Production" {
+	if r := patch(userB, storeB(), M{"zatca": M{"env": "Production"}}); r.Code != 200 || rawEnv(fx.StoreB) != "Production" {
+		t.Fatalf("store Administrator env change without documents: %d %s", r.Code, r.Raw)
+	}
+	if r := patch(admin, storeB(), M{"zatca": M{"env": "NonProduction"}}); r.Code != 200 || rawEnv(fx.StoreB) != "NonProduction" {
 		t.Fatalf("admin env change without documents: %d %s", r.Code, r.Raw)
 	}
 }

@@ -539,7 +539,8 @@ func TestZatcaEnvChangeError(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			st, field, msg := zatcaEnvChangeError(c.oldEnv, c.newEnv, c.admin, c.count)
+			admin := c.admin
+			st, field, msg := zatcaEnvChangeError(c.oldEnv, c.newEnv, func() bool { return admin }, c.count)
 			if st != c.wantStatus || !strings.Contains(msg, c.wantMsg) || (c.wantMsg == "" && msg != "") {
 				t.Fatalf("got %d %q %q, want %d %q", st, field, msg, c.wantStatus, c.wantMsg)
 			}
@@ -551,19 +552,28 @@ func TestZatcaEnvChangeError(t *testing.T) {
 }
 
 func TestCanChangeZatcaEnv(t *testing.T) {
+	role := func(r string) func() string { return func() string { return r } }
+	noLookup := func() string { t.Fatal("erp role must not be looked up for platform admins"); return "" }
 	for _, c := range []struct {
+		name string
 		u    *models.User
+		erp  func() string
 		want bool
 	}{
-		{nil, false},
-		{&models.User{Role: "Admin"}, true},
-		{&models.User{Role: "admin"}, true},
-		{&models.User{Admin: true, Role: "Manager"}, true},
-		{&models.User{Role: "Manager"}, false},
-		{&models.User{Role: "SalesMan"}, false},
+		{"nil user", nil, role("r_admin"), false},
+		{"platform admin role", &models.User{Role: "Admin"}, noLookup, true},
+		{"platform admin role lowercase", &models.User{Role: "admin"}, noLookup, true},
+		{"platform admin flag", &models.User{Admin: true, Role: "Manager"}, noLookup, true},
+		{"store Administrator", &models.User{Role: "Manager"}, role("r_admin"), true},
+		{"store manager", &models.User{Role: "Manager"}, role("r_manager"), false},
+		{"no erp role", &models.User{Role: "Manager"}, role(""), false},
+		{"salesman", &models.User{Role: "SalesMan"}, role("r_salesman"), false},
+		{"no lookup available", &models.User{Role: "Manager"}, nil, false},
 	} {
-		if got := canChangeZatcaEnv(c.u); got != c.want {
-			t.Fatalf("%+v: got %v", c.u, got)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if got := canChangeZatcaEnv(c.u, c.erp); got != c.want {
+				t.Fatalf("got %v, want %v", got, c.want)
+			}
+		})
 	}
 }

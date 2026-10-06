@@ -304,22 +304,31 @@ func zatcaSensitiveFieldsChanged(oldStore, newStore models.Store, isAdmin bool) 
 	return false
 }
 
-// canChangeZatcaEnv: only platform admins (legacy Admin role or admin flag)
-// may switch a store between NonProduction, Simulation and Production.
-func canChangeZatcaEnv(u *models.User) bool {
-	return u != nil && (u.Admin || strings.EqualFold(u.Role, "Admin"))
+// canChangeZatcaEnv: platform admins (legacy Admin role or admin flag) and
+// store Administrators (StartERP role r_admin, kept in user.erp.role) may
+// switch a store between NonProduction, Simulation and Production. erpRole is
+// only looked up for users who are not platform admins.
+func canChangeZatcaEnv(u *models.User, erpRole func() string) bool {
+	if u == nil {
+		return false
+	}
+	if u.Admin || strings.EqualFold(u.Role, "Admin") {
+		return true
+	}
+	return erpRole != nil && erpRole() == "r_admin"
 }
 
 // zatcaEnvChangeError validates a ZATCA environment change. Setting it for the
 // first time (old value empty) is always allowed; changing it needs an admin
 // and a store with no sales, sales returns, debit notes or credit notes.
-// docCount is only called when the change is otherwise allowed.
-func zatcaEnvChangeError(oldEnv, newEnv string, isAdmin bool, docCount func() (int64, error)) (int, string, string) {
+// isAdmin and docCount are only called when the environment actually changes
+// (docCount only for admins).
+func zatcaEnvChangeError(oldEnv, newEnv string, isAdmin func() bool, docCount func() (int64, error)) (int, string, string) {
 	oldEnv, newEnv = strings.TrimSpace(oldEnv), strings.TrimSpace(newEnv)
 	if oldEnv == "" || newEnv == oldEnv {
 		return 0, "", ""
 	}
-	if !isAdmin {
+	if !isAdmin() {
 		return http.StatusForbidden, "zatca_env", "Only admins can change the ZATCA environment"
 	}
 	n, err := docCount()
@@ -468,7 +477,8 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	// ZATCA environment: admins only, and never once the store has documents
 	// that are (or would be) reported to ZATCA.
 	if status, field, msg := zatcaEnvChangeError(storeOld.Zatca.Env, store.Zatca.Env,
-		canChangeZatcaEnv(accessingUser), storeOld.CountZatcaDocuments); msg != "" {
+		func() bool { return canChangeZatcaEnv(accessingUser, accessingUser.ErpRole) },
+		storeOld.CountZatcaDocuments); msg != "" {
 		w.WriteHeader(status)
 		response.Status = false
 		response.Errors[field] = msg
