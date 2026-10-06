@@ -25,7 +25,6 @@ import (
 
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // TotalExpenseFlags are the store settings that change the calculation.
@@ -138,29 +137,12 @@ func DashboardDateRange(from, to string, tzOffset float64) (bson.M, error) {
 }
 
 func handleDashboardTotalExpense(c *Ctx, w http.ResponseWriter, r *http.Request) error {
-	q := r.URL.Query()
-	storeHex := q.Get("storeId")
-	if storeHex == "" {
-		return errBadRequest("storeId is required.", map[string]string{"storeId": "required"})
-	}
-	if c.store(storeHex) == nil {
-		return errNotFound()
-	}
-	if !c.Admin && !c.can("reports", "view") {
-		return errForbidden("")
-	}
-	oid, err := primitive.ObjectIDFromHex(storeHex)
-	if err != nil {
-		return errNotFound()
-	}
-	store, err := models.FindStoreByID(&oid, bson.M{})
-	if err != nil || store == nil {
-		return errNotFound()
-	}
-	dateRange, err := DashboardDateRange(q.Get("from"), q.Get("to"), models.CountryTimezoneOffset(store.CountryCode))
+	store, dateRange, err := dashboardStore(c, r)
 	if err != nil {
 		return err
 	}
+	q := r.URL.Query()
+	storeHex := store.ID.Hex()
 	flags := TotalExpenseFlags{
 		DisablePurchasesOnAccounts: store.Settings.DisablePurchasesOnAccounts,
 		SalesInQuotation:           store.Settings.EnableSalesInQuotation,
@@ -189,13 +171,7 @@ func handleDashboardTotalExpense(c *Ctx, w http.ResponseWriter, r *http.Request)
 
 // loadTotalExpenseInputs reads the legacy stats the formula needs, in parallel.
 func loadTotalExpenseInputs(store *models.Store, dateRange bson.M, f TotalExpenseFlags) (TotalExpenseInputs, error) {
-	filter := func() map[string]interface{} {
-		m := map[string]interface{}{"deleted": bson.M{"$ne": true}, "store_id": store.ID}
-		if dateRange != nil {
-			m["date"] = dateRange
-		}
-		return m
-	}
+	filter := func() map[string]interface{} { return dashboardFilter(store, dateRange) }
 	var (
 		in    TotalExpenseInputs
 		mu    sync.Mutex
