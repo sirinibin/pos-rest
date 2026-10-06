@@ -249,12 +249,25 @@ func storeToContract(x *mapCtx, d M) M {
 		zc["disconnectedAt"] = t
 	}
 	rec["zatca"] = zc
-	rec["whatsapp"] = M{"mode": "evolution", "evolution": M{
+	// mode, evolution.status and waba have no legacy field: they live in erp.x
+	// and are merged in by applyEnvelope, where mapped keys win. So the default
+	// mode is only filled when the client never saved one.
+	waMode := str(get(d, envKey+".x.whatsapp.mode"))
+	if waMode == "" {
+		waMode = "evolution"
+	}
+	rec["whatsapp"] = M{"mode": waMode, "evolution": M{
 		"url": str(st["evolution_api_url"]), "instance": str(st["evolution_instance_name"]),
 		"apiKey": mask(str(st["evolution_api_key"])),
 	}}
+	// an unset SMTP port is null, not 0: the client rejects port 0 (1..65535),
+	// which blocked saving any settings tab
+	var smtpPort interface{}
+	if p := intv(st["outgoing_email_smtp_port"]); p > 0 {
+		smtpPort = p
+	}
 	rec["emailSettings"] = M{"smtp": M{
-		"host": str(st["outgoing_email_smtp_host"]), "port": intv(st["outgoing_email_smtp_port"]),
+		"host": str(st["outgoing_email_smtp_host"]), "port": smtpPort,
 		"user": str(st["outgoing_email_smtp_username"]), "fromName": str(st["outgoing_email_from_name"]),
 		"fromEmail": str(st["outgoing_email_from_address"]), "tls": boolv(st["outgoing_email_smtp_use_tls"]),
 	}}
