@@ -224,7 +224,7 @@ func storeToContract(x *mapCtx, d M) M {
 			return 15
 		}(),
 		"currency": M{"code": "SAR", "nameEn": "Saudi Riyal", "nameAr": "ريال سعودي", "fractionEn": "Halala", "fractionAr": "هللة"},
-		// derived from the legacy country_code; server-owned (not writable)
+		// timezone follows country_code (server-owned); countryCode is editable
 		"timezone":    storeTimezoneName(d),
 		"countryCode": storeCountryOrSA(d),
 		"bank": M{"name": str(get(d, "bank_account.bank_name")), "accountName": str(get(d, "bank_account.account_name")),
@@ -347,6 +347,12 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 			e["category"] = "choose a business category from the list"
 		}
 	}
+	// country: picks the store's timezone, so it must be one TimezoneMap knows
+	if c, ok := rec["countryCode"]; ok && str(c) != "" {
+		if _, known := models.TimezoneMap[strings.ToUpper(strings.TrimSpace(str(c)))]; !known {
+			e["countryCode"] = "choose a country from the list"
+		}
+	}
 	if s := str(rec["short"]); s != "" && !reShort.MatchString(s) {
 		e["short"] = "2-5 capital letters"
 	}
@@ -431,6 +437,11 @@ func storeToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M
 		p["national_address"] = addressToLegacy(a)
 		if c := str(a["countryEn"]); c != "" {
 			p["country_name"] = c
+		}
+	}
+	if ch["countryCode"] {
+		if c := strings.ToUpper(strings.TrimSpace(str(rec["countryCode"]))); c != "" {
+			p["country_code"] = c
 		}
 	}
 	if ch["bank"] {

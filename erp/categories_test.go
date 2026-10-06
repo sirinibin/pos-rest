@@ -210,3 +210,53 @@ func TestValidatePosFields(t *testing.T) {
 		t.Fatal("productValidate must check POS fields")
 	}
 }
+
+func TestStoreValidate_Country(t *testing.T) {
+	x := newMapCtx(nil, "")
+	tests := []struct {
+		name string
+		code interface{}
+		err  string
+	}{
+		{"Saudi Arabia", "SA", ""},
+		{"lower case", "ae", ""},
+		{"United Kingdom", "GB", ""},
+		{"India", "IN", ""},
+		{"not sent", nil, ""},
+		{"empty", "", ""},
+		{"unknown code", "ZZ", "choose a country from the list"},
+		{"a name, not a code", "Saudi Arabia", "choose a country from the list"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := M{"nameEn": "A", "category": "Grocery"}
+			if tc.code != nil {
+				rec["countryCode"] = tc.code
+			}
+			if e := storeValidate(x, rec, nil); e["countryCode"] != tc.err {
+				t.Fatalf("countryCode error %q, want %q", e["countryCode"], tc.err)
+			}
+		})
+	}
+}
+
+func TestStoreToLegacy_Country(t *testing.T) {
+	x := newMapCtx(nil, "")
+	p, err := storeToLegacy(x, M{"countryCode": " ae ", "address": M{"countryEn": "United Arab Emirates"}}, M{},
+		map[string]bool{"countryCode": true, "address": true}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p["country_code"] != "AE" || p["country_name"] != "United Arab Emirates" {
+		t.Errorf("country: %v / %v", p["country_code"], p["country_name"])
+	}
+	// the zone the store then reports follows the new country
+	if got := storeTimezoneName(M{"country_code": p["country_code"]}); got != "Asia/Dubai" {
+		t.Errorf("timezone %q, want Asia/Dubai", got)
+	}
+	// unchanged country: nothing written
+	p, _ = storeToLegacy(x, M{"countryCode": "AE"}, M{}, map[string]bool{}, false)
+	if _, ok := p["country_code"]; ok {
+		t.Errorf("unchanged country written: %v", p)
+	}
+}

@@ -86,15 +86,15 @@ func TestZatcaSensitiveFieldsChanged(t *testing.T) {
 
 		// ── Core identity fields ──────────────────────────────────────────────
 		{
-			name: "Name changed",
-			old:  base,
-			new_: func() models.Store { s := base; s.Name = "Changed Store"; return s }(),
+			name:     "Name changed",
+			old:      base,
+			new_:     func() models.Store { s := base; s.Name = "Changed Store"; return s }(),
 			wantTrue: true,
 		},
 		{
-			name: "NameInArabic changed",
-			old:  base,
-			new_: func() models.Store { s := base; s.NameInArabic = "تغيير"; return s }(),
+			name:     "NameInArabic changed",
+			old:      base,
+			new_:     func() models.Store { s := base; s.NameInArabic = "تغيير"; return s }(),
 			wantTrue: true,
 		},
 		{
@@ -104,21 +104,21 @@ func TestZatcaSensitiveFieldsChanged(t *testing.T) {
 			wantTrue: true,
 		},
 		{
-			name: "BranchName changed",
-			old:  base,
-			new_: func() models.Store { s := base; s.BranchName = "Branch2"; return s }(),
+			name:     "BranchName changed",
+			old:      base,
+			new_:     func() models.Store { s := base; s.BranchName = "Branch2"; return s }(),
 			wantTrue: true,
 		},
 		{
-			name: "RegistrationNumber changed",
-			old:  base,
-			new_: func() models.Store { s := base; s.RegistrationNumber = "REG999"; return s }(),
+			name:     "RegistrationNumber changed",
+			old:      base,
+			new_:     func() models.Store { s := base; s.RegistrationNumber = "REG999"; return s }(),
 			wantTrue: true,
 		},
 		{
-			name: "VATNo changed",
-			old:  base,
-			new_: func() models.Store { s := base; s.VATNo = "VAT999999"; return s }(),
+			name:     "VATNo changed",
+			old:      base,
+			new_:     func() models.Store { s := base; s.VATNo = "VAT999999"; return s }(),
 			wantTrue: true,
 		},
 
@@ -451,6 +451,18 @@ func TestZatcaSensitiveFieldsChanged(t *testing.T) {
 			}(),
 			isAdmin:  true,
 			wantTrue: true,
+		},
+		{
+			name:     "Country changed",
+			old:      func() models.Store { s := base; s.CountryCode = "SA"; return s }(),
+			new_:     func() models.Store { s := base; s.CountryCode = "AE"; return s }(),
+			wantTrue: true,
+		},
+		{
+			name:     "Country only differs in case or spaces",
+			old:      func() models.Store { s := base; s.CountryCode = "SA"; return s }(),
+			new_:     func() models.Store { s := base; s.CountryCode = " sa "; return s }(),
+			wantTrue: false,
 		},
 		{
 			name: "No core change non-admin serial change",

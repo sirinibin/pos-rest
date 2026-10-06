@@ -261,6 +261,7 @@ func zatcaSensitiveFieldsChanged(oldStore, newStore models.Store, isAdmin bool) 
 		oldStore.RegistrationNumber != newStore.RegistrationNumber ||
 		oldStore.VATNo != newStore.VATNo ||
 		oldStore.BusinessCategory != newStore.BusinessCategory ||
+		!strings.EqualFold(strings.TrimSpace(oldStore.CountryCode), strings.TrimSpace(newStore.CountryCode)) ||
 		oldStore.NationalAddress.ShortCode != newStore.NationalAddress.ShortCode ||
 		oldStore.NationalAddress.BuildingNo != newStore.NationalAddress.BuildingNo ||
 		oldStore.NationalAddress.StreetName != newStore.NationalAddress.StreetName ||
