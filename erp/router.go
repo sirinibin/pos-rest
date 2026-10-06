@@ -52,6 +52,7 @@ func Register(router *mux.Router) {
 	// Dashboard figures computed like the old business dashboard (dashboard_expense.go)
 	s.HandleFunc("/dashboard/total-expense", authed(handleDashboardTotalExpense)).Methods("GET")
 	s.HandleFunc("/dashboard/vat", authed(handleDashboardVat)).Methods("GET")
+	s.HandleFunc("/dashboard/revenue", authed(handleDashboardRevenue)).Methods("GET")
 	s.HandleFunc("/dashboard/salary-balance", authed(handleDashboardSalaryBalance)).Methods("GET")
 	s.HandleFunc("/dashboard/bi", authed(handleDashboardBI)).Methods("GET")
 
