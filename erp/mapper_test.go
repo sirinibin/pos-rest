@@ -773,3 +773,60 @@ func TestPaymentMethodEnum(t *testing.T) {
 		}
 	}
 }
+
+// The WhatsApp settings tab reads whatsapp.mode / evolution.status / waba.*.
+// Those have no legacy field and are preserved in erp.x; the mapped part must
+// not clobber them, and an unset SMTP port must be null (the client rejects 0).
+func TestStoreToContract_WhatsappAndSmtpPort(t *testing.T) {
+	sid := hexID()
+	cases := []struct {
+		name     string
+		doc      M
+		wantMode string
+		wantPort interface{}
+	}{
+		{"fresh store", M{"_id": sid, "name": "A"}, "evolution", nil},
+		{"port 0", M{"_id": sid, "name": "A", "settings": M{"outgoing_email_smtp_port": int32(0)}}, "evolution", nil},
+		{"port set", M{"_id": sid, "name": "A", "settings": M{"outgoing_email_smtp_port": int32(587)}}, "evolution", int64(587)},
+		{"saved waba mode", M{"_id": sid, "name": "A", envKey: M{"x": M{"whatsapp": M{"mode": "waba"}}}}, "waba", nil},
+		{"saved empty mode", M{"_id": sid, "name": "A", envKey: M{"x": M{"whatsapp": M{"mode": ""}}}}, "evolution", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := storeToContract(testX(sid, tc.doc), tc.doc)
+			if got := get(rec, "whatsapp.mode"); got != tc.wantMode {
+				t.Errorf("mode=%v want %v", got, tc.wantMode)
+			}
+			if got := get(rec, "emailSettings.smtp.port"); got != tc.wantPort {
+				t.Errorf("port=%#v want %#v", got, tc.wantPort)
+			}
+			// mapped evolution never carries status: that is preserved state
+			if _, ok := sub(rec, "whatsapp.evolution")["status"]; ok {
+				t.Errorf("mapped evolution must not set status")
+			}
+		})
+	}
+}
+
+func TestStoreEnvelope_PreservesWhatsappState(t *testing.T) {
+	sid := hexID()
+	doc := M{"_id": sid, "name": "A",
+		"settings": M{"evolution_api_url": "https://wa.example", "evolution_instance_name": "shop1", "evolution_api_key": "real-key"},
+		envKey: M{"v": int64(3), "x": M{"whatsapp": M{
+			"mode":      "waba",
+			"evolution": M{"url": "stale", "instance": "stale", "apiKey": "real-key", "status": "connected"},
+			"waba":      M{"phoneNumberId": "1098765432101", "businessAccountId": "2233445566778", "verified": true},
+		}}}}
+	rec := applyEnvelope(storeToContract(testX(sid, doc), doc), doc, false)
+	checks := map[string]interface{}{
+		"whatsapp.mode": "waba", "whatsapp.evolution.status": "connected",
+		"whatsapp.evolution.url": "https://wa.example", "whatsapp.evolution.instance": "shop1",
+		"whatsapp.evolution.apiKey": masked, "whatsapp.waba.verified": true,
+		"whatsapp.waba.phoneNumberId": "1098765432101",
+	}
+	for path, want := range checks {
+		if got := get(rec, path); got != want {
+			t.Errorf("%s=%#v want %#v", path, got, want)
+		}
+	}
+}
