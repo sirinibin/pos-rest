@@ -1016,6 +1016,8 @@ func main() {
 	// Dashboard analytics: start the dirty-month worker, drain any persisted dirty
 	// months from a previous crash, then clear old data and backfill from scratch.
 	models.StartDashboardDirtyWorker()
+	// StartERP dashboards: ready-made snapshots, rebuilt on writes and checked on a schedule
+	erp.StartDashboardSnapshots()
 	go models.DrainPersistedDirtyDates()
 	/*go models.ClearDashboardMonthlyForAllStores() // clears old monthly dashboard data
 	go func() {

@@ -49,12 +49,12 @@ func Register(router *mux.Router) {
 	// Subscription billing by bank transfer (billing.go)
 	registerBilling(s)
 
-	// Dashboard figures computed like the old business dashboard (dashboard_expense.go)
-	s.HandleFunc("/dashboard/total-expense", authed(handleDashboardTotalExpense)).Methods("GET")
-	s.HandleFunc("/dashboard/vat", authed(handleDashboardVat)).Methods("GET")
-	s.HandleFunc("/dashboard/revenue", authed(handleDashboardRevenue)).Methods("GET")
-	s.HandleFunc("/dashboard/salary-balance", authed(handleDashboardSalaryBalance)).Methods("GET")
-	s.HandleFunc("/dashboard/bi", authed(handleDashboardBI)).Methods("GET")
+	// Dashboard figures computed like the old business dashboard (dashboard_expense.go),
+	// the BI dashboard (dashboard_bi.go) and the main dashboard's data (dashboard_feed.go),
+	// all served from ready-made snapshots (dashboard_snapshots.go)
+	for _, k := range dashboardKinds() {
+		s.HandleFunc("/dashboard/"+k.Name, authed(snapshotted(k))).Methods("GET")
+	}
 
 	// Drafts (§2.1b): separate *_draft collections, never touch real data
 	s.HandleFunc("/drafts/{docType}", handleDraftList).Methods("GET")
@@ -75,6 +75,18 @@ func Register(router *mux.Router) {
 		s.HandleFunc("/"+res.Path+"/{id}/restore", func(w http.ResponseWriter, r *http.Request) { handleRestore(w, r, res) }).Methods("POST")
 	}
 	s.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeErr(w, errNotFound()) })
+}
+
+// dashboardKinds are the dashboard endpoints served from snapshots.
+func dashboardKinds() []*dashKind {
+	return []*dashKind{
+		registerDashKind(&dashKind{Name: "total-expense", Params: []string{"from", "to"}, Handler: handleDashboardTotalExpense}),
+		registerDashKind(&dashKind{Name: "vat", Params: []string{"from", "to"}, Handler: handleDashboardVat}),
+		registerDashKind(&dashKind{Name: "revenue", Params: []string{"from", "to"}, Handler: handleDashboardRevenue}),
+		registerDashKind(&dashKind{Name: "salary-balance", Handler: handleDashboardSalaryBalance}),
+		registerDashKind(&dashKind{Name: "bi", Daily: true, Handler: handleDashboardBI}),
+		registerDashKind(&dashKind{Name: "feed", Daily: true, Handler: handleDashboardFeed}),
+	}
 }
 
 // Adapter-specific limiters (same policy as the legacy /v1/authorize and

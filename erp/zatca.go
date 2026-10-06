@@ -69,6 +69,7 @@ func handleZatcaReport(path string) http.HandlerFunc {
 				hex = str(doc["id"])
 			}
 			lr, _ := callV1(c, zatcaReporters[path], "POST", zatcaReportPaths[path]+hex, map[string]string{"id": hex}, storeHex, M{})
+			dashboardTouched(res, storeHex, hex)
 			out, gerr := res.Backend.Get(c, storeHex, hex, true)
 			if gerr != nil || out == nil {
 				return 0, nil, errInternal("reported document could not be reloaded")

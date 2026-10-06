@@ -37,6 +37,8 @@ func TestMain(m *testing.M) {
 	loginLimiter = controller.NewRateLimiter(100000, time.Minute)
 	signupLimiter = controller.NewRateLimiter(100000, time.Minute)
 	testRouter = NewRouter()
+	// a direct database change shows on the very next dashboard read
+	SnapshotVerifyAfter = 0
 	code := 0
 	if os.Getenv("ERP_TEST_DB") == "1" {
 		name := os.Getenv("MONGO_DB")

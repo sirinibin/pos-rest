@@ -63,9 +63,36 @@ func StartDashboardDirtyWorker() {
 	})
 }
 
+// dirtyListeners hear about every store whose dashboard data changed (the
+// StartERP adapter's dashboard snapshots, erp/dashboard_snapshots.go).
+var (
+	dirtyListenersMu sync.RWMutex
+	dirtyListeners   []func(storeHex string)
+)
+
+// OnDashboardDirty registers fn to be called (in its own goroutine) whenever a
+// store's dashboard data changes.
+func OnDashboardDirty(fn func(storeHex string)) {
+	dirtyListenersMu.Lock()
+	defer dirtyListenersMu.Unlock()
+	dirtyListeners = append(dirtyListeners, fn)
+}
+
+func notifyDashboardDirty(storeID primitive.ObjectID) {
+	if storeID.IsZero() {
+		return
+	}
+	dirtyListenersMu.RLock()
+	defer dirtyListenersMu.RUnlock()
+	for _, fn := range dirtyListeners {
+		go fn(storeID.Hex())
+	}
+}
+
 // MarkDashboardDirty queues a dashboard recomputation for the given store and
 // UTC transaction time. Non-blocking.
 func MarkDashboardDirty(storeID primitive.ObjectID, txTimeUTC *time.Time) {
+	notifyDashboardDirty(storeID)
 	if txTimeUTC == nil || dirtyQueue == nil {
 		return
 	}
@@ -81,6 +108,7 @@ func MarkDashboardDirty(storeID primitive.ObjectID, txTimeUTC *time.Time) {
 
 // MarkDashboardDirtyMonth queues a recomputation for a pre-formatted local month string ("2025-01").
 func MarkDashboardDirtyMonth(storeID primitive.ObjectID, localMonthStr string) {
+	notifyDashboardDirty(storeID)
 	if localMonthStr == "" || dirtyQueue == nil {
 		return
 	}

@@ -322,6 +322,7 @@ func handleCreate(w http.ResponseWriter, r *http.Request, res *Resource) {
 			return 0, nil, err
 		}
 		remember(res, str(rec["id"]), storeHex)
+		dashboardTouched(res, storeHex, str(rec["id"]))
 		return http.StatusCreated, rec, nil
 	})
 }
@@ -420,6 +421,7 @@ func handleUpdate(w http.ResponseWriter, r *http.Request, res *Resource, replace
 		if err != nil {
 			return 0, nil, err
 		}
+		dashboardTouched(res, storeHex, id)
 		return http.StatusOK, rec, nil
 	})
 }
@@ -449,6 +451,7 @@ func handleDelete(w http.ResponseWriter, r *http.Request, res *Resource) {
 			if err := res.Backend.HardDelete(c, storeHex, id, WriteMeta{Action: "hard deleted"}); err != nil {
 				return 0, nil, err
 			}
+			dashboardTouched(res, storeHex, id)
 			return http.StatusNoContent, nil, nil
 		}
 		prev, err := res.Backend.Get(c, storeHex, id, false)
@@ -465,6 +468,7 @@ func handleDelete(w http.ResponseWriter, r *http.Request, res *Resource) {
 		if err != nil {
 			return 0, nil, err
 		}
+		dashboardTouched(res, storeHex, id)
 		return http.StatusOK, rec, nil
 	})
 }
@@ -496,6 +500,7 @@ func handleRestore(w http.ResponseWriter, r *http.Request, res *Resource) {
 		if err != nil {
 			return 0, nil, err
 		}
+		dashboardTouched(res, storeHex, id)
 		return http.StatusOK, rec, nil
 	})
 }

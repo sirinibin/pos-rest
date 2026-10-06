@@ -323,6 +323,7 @@ func handleDraftFinalize(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err // draft stays untouched
 		}
+		dashboardTouched(res, s, str(rec["id"]))
 		oid, _ := oidOf(id)
 		ctx, cancel := dbctx()
 		defer cancel()
