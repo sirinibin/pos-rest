@@ -25,16 +25,16 @@ func stockTransferToContract(x *mapCtx, d M) M {
 		items = append(items, M{"productId": idOrNil(lm["product_id"]), "nameEn": str(lm["name"]), "nameAr": str(lm["name_in_arabic"]),
 			"partNo": str(lm["part_number"]), "unit": str(lm["unit"]), "qty": num(lm["quantity"]), "unitPrice": num(lm["unit_price"])})
 	}
-	return M{"code": str(d["code"]), "date": fmtDT(d["date"]), "items": items, "remarks": str(d["remarks"]),
+	return M{"code": str(d["code"]), "date": x.fmtDT(d["date"]), "items": items, "remarks": str(d["remarks"]),
 		"fromWarehouseId": x.whContractID(d["from_warehouse_id"], d["from_warehouse_code"]),
 		"toWarehouseId":   x.whContractID(d["to_warehouse_id"], d["to_warehouse_code"]),
-		"vatPercent":      docVAT(d, 0), "status": "completed", "completedAt": fmtDT(d["created_at"]),
+		"vatPercent":      docVAT(d, 0), "status": "completed", "completedAt": x.fmtDT(d["created_at"]),
 		"completedBy": str(d["created_by_name"])}
 }
 
 func stockTransferToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M, error) {
 	p := M{}
-	ds, err := toLegacyDateStr(str(rec["date"]))
+	ds, err := x.legacyDateStr(str(rec["date"]))
 	if err != nil {
 		return nil, errBadRequest("", map[string]string{"date": "required"})
 	}
@@ -116,7 +116,7 @@ func (s *stockTransfersBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M,
 	if err != nil {
 		return nil, 0, err
 	}
-	pend, ptotal, err := s.pending.List(c, storeHex, ListQuery{Limit: 5000, Page: 1, IncludeDeleted: q.IncludeDeleted, From: q.From})
+	pend, ptotal, err := s.pending.List(c, storeHex, ListQuery{Limit: 5000, Page: 1, IncludeDeleted: q.IncludeDeleted, From: q.From, FromRaw: q.FromRaw})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -232,13 +232,13 @@ func repairToContract(x *mapCtx, d M) M {
 			"qty": num(pm["qty"]), "purchasePrice": num(pm["purchase_unit_price"]), "unitPrice": num(pm["unit_price"]),
 			"unitDiscount": num(pm["unit_discount"]), "warehouseId": mainStoreWarehouseID(x.storeHex)})
 	}
-	return M{"code": str(d["job_number"]), "title": str(d["title"]), "date": fmtDT(d["date"]), "status": str(d["status"]),
+	return M{"code": str(d["job_number"]), "title": str(d["title"]), "date": x.fmtDT(d["date"]), "status": str(d["status"]),
 		"vehicleId": idOrNil(d["vehicle_id"]), "plate": str(d["vehicle_number"]), "make": str(d["brand"]), "model": str(d["model"]),
 		"customerId": idOrNil(d["customer_id"]), "customerName": str(d["customer_name"]), "odometer": num(d["km"]),
 		"complaint": str(d["complaint"]), "inspection": str(d["inspection"]), "workDone": str(d["work_done"]),
 		"technicianIds": ids(d["technician_ids"]), "parts": parts, "labour": num(d["labour_charge"]),
 		"vatPercent": num(d["vat_percent"]), "saleId": idOrNil(d["order_id"]), "quotationId": idOrNil(d["quotation_id"]),
-		"nonvatId": idOrNil(d["non_vat_sales_id"]), "estDelivery": fmtDay(d["estimated_delivery"]), "archived": boolv(d["archived"])}
+		"nonvatId": idOrNil(d["non_vat_sales_id"]), "estDelivery": x.fmtDay(d["estimated_delivery"]), "archived": boolv(d["archived"])}
 }
 
 func repairToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M, error) {
@@ -249,7 +249,7 @@ func repairToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (
 		}
 	}
 	if create || ch["date"] {
-		ds, err := toLegacyDateStr(str(rec["date"]))
+		ds, err := x.legacyDateStr(str(rec["date"]))
 		if err != nil {
 			return nil, errBadRequest("", map[string]string{"date": "required"})
 		}
@@ -304,7 +304,7 @@ func repairToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (
 	}
 	if create || ch["estDelivery"] {
 		if s := str(rec["estDelivery"]); s != "" {
-			ds, err := toLegacyDateStr(s)
+			ds, err := x.legacyDateStr(s)
 			if err != nil {
 				return nil, errBadRequest("", map[string]string{"estDelivery": "invalid date"})
 			}
@@ -390,7 +390,7 @@ func rfqToContract(x *mapCtx, d M) M {
 		status = xs // status changes made in StartERP (legacy status is owned by the RFQ pipeline)
 	}
 	return M{"code": str(d["code"]), "customerName": str(d["customer_name"]), "customerId": idOrNil(d["customer_id"]),
-		"source": str(d["source"]), "receivedAt": fmtDT(d["received_at"]), "status": status,
+		"source": str(d["source"]), "receivedAt": x.fmtDT(d["received_at"]), "status": status,
 		"message": str(d["text_content"]), "items": items, "supplierIds": ids(d["matched_supplier_ids"]),
 		"quotationIds": ids(d["quotation_ids"])}
 }

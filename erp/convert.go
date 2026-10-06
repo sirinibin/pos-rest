@@ -17,7 +17,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/sirinibin/startpos/backend/models"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -289,7 +292,53 @@ func roundN(x float64, n int) float64 {
 
 // ---- time ----
 
-func toTime(v interface{}) (time.Time, bool) {
+var tzCache sync.Map // IANA name -> *time.Location
+
+// storeLocation is the store's country timezone (models.TimezoneMap by
+// country_code); Asia/Riyadh when missing, unknown or unloadable.
+func storeLocation(store M) *time.Location {
+	name := models.TimezoneMap[storeCountry(store)]
+	if name == "" {
+		return riyadh
+	}
+	if l, ok := tzCache.Load(name); ok {
+		return l.(*time.Location)
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return riyadh
+	}
+	tzCache.Store(name, loc)
+	return loc
+}
+
+// storeTimezoneName is the IANA name of storeLocation.
+func storeTimezoneName(store M) string { return storeLocation(store).String() }
+
+// storeCountry is the upper-cased country_code ("" when unset).
+func storeCountry(store M) string {
+	return strings.ToUpper(strings.TrimSpace(str(get(store, "country_code"))))
+}
+
+// storeCountryOrSA is storeCountry defaulting to "SA".
+func storeCountryOrSA(store M) string {
+	if c := storeCountry(store); c != "" {
+		return c
+	}
+	return "SA"
+}
+
+func orRiyadh(loc *time.Location) *time.Location {
+	if loc == nil {
+		return riyadh
+	}
+	return loc
+}
+
+func toTime(v interface{}) (time.Time, bool) { return toTimeIn(riyadh, v) }
+
+// toTimeIn is toTime with zone-less strings read as loc wall-clock time.
+func toTimeIn(loc *time.Location, v interface{}) (time.Time, bool) {
 	switch t := v.(type) {
 	case primitive.DateTime:
 		return t.Time(), true
@@ -301,7 +350,7 @@ func toTime(v interface{}) (time.Time, bool) {
 		}
 		return *t, !t.IsZero()
 	case string:
-		if tt, err := parseClientTime(t); err == nil {
+		if tt, err := parseClientTimeIn(loc, t); err == nil {
 			return tt, true
 		}
 	}
@@ -309,17 +358,26 @@ func toTime(v interface{}) (time.Time, bool) {
 }
 
 // fmtDT returns the contract's local datetime string (Asia/Riyadh,
-// "YYYY-MM-DDTHH:mm") or "" when v is not a time.
-func fmtDT(v interface{}) string {
-	if t, ok := toTime(v); ok {
-		return t.In(riyadh).Format(layoutDT)
+// "YYYY-MM-DDTHH:mm") or "" when v is not a time. Platform-level only;
+// store data uses fmtDTIn / mapCtx.fmtDT.
+func fmtDT(v interface{}) string { return fmtDTIn(riyadh, v) }
+
+func fmtDay(v interface{}) string { return fmtDayIn(riyadh, v) }
+
+// fmtDTIn formats v as "YYYY-MM-DDTHH:mm" wall-clock time in loc.
+func fmtDTIn(loc *time.Location, v interface{}) string {
+	loc = orRiyadh(loc)
+	if t, ok := toTimeIn(loc, v); ok {
+		return t.In(loc).Format(layoutDT)
 	}
 	return ""
 }
 
-func fmtDay(v interface{}) string {
-	if t, ok := toTime(v); ok {
-		return t.In(riyadh).Format(layoutDay)
+// fmtDayIn formats v as the "YYYY-MM-DD" calendar day in loc.
+func fmtDayIn(loc *time.Location, v interface{}) string {
+	loc = orRiyadh(loc)
+	if t, ok := toTimeIn(loc, v); ok {
+		return t.In(loc).Format(layoutDay)
 	}
 	return ""
 }
@@ -333,7 +391,11 @@ var localLayouts = []string{
 
 // parseClientTime parses contract date/datetime strings. Strings without a
 // zone are interpreted as Asia/Riyadh wall-clock time.
-func parseClientTime(s string) (time.Time, error) {
+func parseClientTime(s string) (time.Time, error) { return parseClientTimeIn(riyadh, s) }
+
+// parseClientTimeIn is parseClientTime with zone-less strings read in loc.
+func parseClientTimeIn(loc *time.Location, s string) (time.Time, error) {
+	loc = orRiyadh(loc)
 	s = strings.TrimSpace(arabicDigits.Replace(s))
 	if s == "" {
 		return time.Time{}, fmt.Errorf("empty date")
@@ -344,7 +406,7 @@ func parseClientTime(s string) (time.Time, error) {
 		}
 	}
 	for _, l := range localLayouts {
-		if t, err := time.ParseInLocation(l, s, riyadh); err == nil {
+		if t, err := time.ParseInLocation(l, s, loc); err == nil {
 			return t, nil
 		}
 	}
@@ -353,12 +415,16 @@ func parseClientTime(s string) (time.Time, error) {
 
 // toLegacyDateStr converts a contract date to the RFC3339 string the legacy
 // handlers expect in *_str fields ("2006-01-02T15:04:05Z07:00").
-func toLegacyDateStr(s string) (string, error) {
-	t, err := parseClientTime(s)
+func toLegacyDateStr(s string) (string, error) { return toLegacyDateStrIn(riyadh, s) }
+
+// toLegacyDateStrIn is toLegacyDateStr for a store in loc.
+func toLegacyDateStrIn(loc *time.Location, s string) (string, error) {
+	loc = orRiyadh(loc)
+	t, err := parseClientTimeIn(loc, s)
 	if err != nil {
 		return "", err
 	}
-	return t.In(riyadh).Format(time.RFC3339), nil
+	return t.In(loc).Format(time.RFC3339), nil
 }
 
 // ---- ids ----

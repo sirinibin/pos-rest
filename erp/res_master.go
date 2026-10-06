@@ -74,7 +74,7 @@ var warehouseFields = []fld{
 func virtualWarehouse(storeHex string, st M) M {
 	return M{"id": mainStoreWarehouseID(storeHex), "storeId": storeHex, "nameEn": "Main store", "nameAr": "المستودع الرئيسي",
 		"code": "MAIN", "address": "", "manager": "", "virtual": true, "version": int64(1), "deleted": false,
-		"history": []interface{}{}, "createdAt": fmtDT(st["created_at"]), "createdBy": "", "updatedAt": "", "updatedBy": ""}
+		"history": []interface{}{}, "createdAt": fmtDTIn(storeLocation(st), st["created_at"]), "createdBy": "", "updatedAt": "", "updatedBy": ""}
 }
 
 // warehousesBackend prepends the virtual "main store" warehouse (legacy
@@ -294,7 +294,7 @@ func productStoreEntry(x *mapCtx, prev M) M {
 		}
 		ja := toJSONMap(am)
 		if t, ok := toTime(am["date"]); ok {
-			ja["date_str"] = t.Format("2006-01-02T15:04:05Z07:00")
+			ja["date_str"] = t.In(x.loc()).Format(time.RFC3339)
 		}
 		adj = append(adj, ja)
 	}
@@ -424,7 +424,7 @@ func productToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) 
 				cur = sub(productToContract(x, prev), "stock")
 			}
 			adjs := arr(ps["stock_adjustments"])
-			now := nowFn()
+			now := nowFn().In(x.loc())
 			for whID, v := range sub(rec, "stock") {
 				vm, _ := v.(M)
 				want := roundN(num(vm["qty"]), 4)
@@ -815,7 +815,7 @@ func newEmployeesResource() *Resource {
 			}
 			if create || ch["joinDate"] {
 				if s := str(rec["joinDate"]); s != "" {
-					ds, err := toLegacyDateStr(s)
+					ds, err := x.legacyDateStr(s)
 					if err != nil {
 						return errBadRequest("", map[string]string{"joinDate": "invalid date"})
 					}

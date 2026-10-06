@@ -17,7 +17,8 @@ type ListQuery struct {
 	Limit          int
 	Page           int
 	IncludeDeleted bool
-	From           *time.Time
+	From           *time.Time  // ?from= read as Asia/Riyadh; see fromIn
+	FromRaw        string      // ?from= as sent (zone-less = store wall clock)
 	Select         fieldSelect // ?select= (empty = every field)
 	Search         string      // ?q= search text (pickers), see search.go
 	IDs            []string    // ?ids= only these records
@@ -204,9 +205,20 @@ func parseListQuery(r *http.Request, res *Resource) (ListQuery, error) {
 		if err != nil {
 			return q, errBadRequest("Invalid from date.", map[string]string{"from": "expected YYYY-MM-DD"})
 		}
-		q.From = &t
+		q.From, q.FromRaw = &t, s
 	}
 	return q, nil
+}
+
+// fromIn is ?from= with a zone-less value read in the store zone loc.
+func (q ListQuery) fromIn(loc *time.Location) *time.Time {
+	if q.FromRaw == "" {
+		return q.From
+	}
+	if t, err := parseClientTimeIn(loc, q.FromRaw); err == nil {
+		return &t
+	}
+	return q.From
 }
 
 func (res *Resource) checkPerm(c *Ctx, verb string) error {

@@ -53,17 +53,7 @@ func ListProcurementThreadsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var dateFrom, dateTo *time.Time
-	if s := r.URL.Query().Get("date_from"); s != "" {
-		if t, err2 := time.Parse("2006-01-02", s); err2 == nil {
-			dateFrom = &t
-		}
-	}
-	if s := r.URL.Query().Get("date_to"); s != "" {
-		if t, err2 := time.Parse("2006-01-02", s); err2 == nil {
-			dateTo = &t
-		}
-	}
+	dateFrom, dateTo := procurementDateRange(storeID, r.URL.Query().Get("date_from"), r.URL.Query().Get("date_to"))
 
 	threads, total, err := models.ListContactThreads(storeID, msgType, search, page, limit, phones, dateFrom, dateTo)
 	if err != nil {

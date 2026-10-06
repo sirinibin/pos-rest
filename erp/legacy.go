@@ -49,6 +49,23 @@ func loadStoreRaw(hex string) M {
 	return normDoc(raw)
 }
 
+// loc is the store's timezone (Asia/Riyadh without a store).
+func (x *mapCtx) loc() *time.Location {
+	if x == nil {
+		return riyadh
+	}
+	return storeLocation(x.store)
+}
+
+func (x *mapCtx) fmtDT(v interface{}) string  { return fmtDTIn(x.loc(), v) }
+func (x *mapCtx) fmtDay(v interface{}) string { return fmtDayIn(x.loc(), v) }
+func (x *mapCtx) parseTime(s string) (time.Time, error) {
+	return parseClientTimeIn(x.loc(), s)
+}
+func (x *mapCtx) legacyDateStr(s string) (string, error) {
+	return toLegacyDateStrIn(x.loc(), s)
+}
+
 func (x *mapCtx) vatPercent() float64 {
 	if x.store != nil {
 		if v, ok := x.store["vat_percent"]; ok && num(v) > 0 {
@@ -282,8 +299,10 @@ var legacyJSONRenames = map[string]string{
 }
 
 // legacyJSONOf converts a stored legacy document into the JSON body the old
-// app would send back (dates as RFC3339, ids as hex, *_str companions).
-func legacyJSONOf(d M) M {
+// app would send back (dates as RFC3339 in the store zone loc, ids as hex,
+// *_str companions).
+func legacyJSONOf(d M, loc *time.Location) M {
+	loc = orRiyadh(loc)
 	base := M{}
 	for k, v := range d {
 		if k == envKey || k == "_id" {
@@ -298,7 +317,7 @@ func legacyJSONOf(d M) M {
 	out["id"] = hexOf(d["_id"])
 	for _, k := range []string{"date", "expected_date", "signature_date"} {
 		if t, ok := toTime(d[k]); ok {
-			out[k+"_str"] = t.In(riyadh).Format(time.RFC3339)
+			out[k+"_str"] = t.In(loc).Format(time.RFC3339)
 		}
 	}
 	if ps := arr(d["payments"]); len(ps) > 0 {
@@ -311,7 +330,7 @@ func legacyJSONOf(d M) M {
 			jp := toJSONMap(pm)
 			jp["id"] = hexOf(pm["_id"])
 			if t, ok := toTime(pm["date"]); ok {
-				jp["date_str"] = t.In(riyadh).Format(time.RFC3339)
+				jp["date_str"] = t.In(loc).Format(time.RFC3339)
 			}
 			in = append(in, jp)
 		}
@@ -448,7 +467,7 @@ func (b *legacyBackend) render(x *mapCtx, d M, storeScoped bool) M {
 	} else {
 		delete(rec, "storeId")
 	}
-	return applyEnvelope(rec, d, b.isDeleted(d))
+	return applyEnvelopeIn(x.loc(), rec, d, b.isDeleted(d))
 }
 
 func (b *legacyBackend) storeScoped() bool { return !b.orgOverStores && !b.mainOrg }
@@ -494,6 +513,7 @@ func (b *legacyBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 			}
 			all = append(all, rows...)
 		}
+		all = uniqueByID(all)
 		total := int64(len(all))
 		start := (q.Page - 1) * q.Limit
 		if start > len(all) {
@@ -508,6 +528,23 @@ func (b *legacyBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	return b.listOne(c, storeHex, q, false)
 }
 
+// uniqueByID keeps the first row of each id: a store DB copied from another
+// keeps its records' ids, and an org-wide union must list each record once.
+func uniqueByID(rows []M) []M {
+	seen := make(map[string]bool, len(rows))
+	out := rows[:0]
+	for _, r := range rows {
+		if id := str(r["id"]); id != "" {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) ([]M, int64, error) {
 	f := andFilter(b.scopeFilter(c, storeHex), bson.M{"erp.hd": bson.M{"$ne": true}})
 	if !q.IncludeDeleted {
@@ -516,8 +553,8 @@ func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) 
 			f = andFilter(f, bson.M{b.deletedKey: bson.M{"$ne": true}})
 		}
 	}
-	if q.From != nil && b.dateKey != "" {
-		f = andFilter(f, bson.M{b.dateKey: bson.M{"$gte": *q.From}})
+	if from := q.fromIn(c.storeLoc(storeHex)); from != nil && b.dateKey != "" {
+		f = andFilter(f, bson.M{b.dateKey: bson.M{"$gte": *from}})
 	}
 	f = andFilter(f, searchFilter(q.Search, b.searchKeys), legacyIDsFilter(q.IDs))
 	ctx, cancel := dbctx()
@@ -678,7 +715,7 @@ func (b *legacyBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 		}
 	}
 	doc, _ := b.loadRaw(c, storeHex, hex, true)
-	env := M{"v": int64(1), "h": []interface{}{historyEntry(c.UserName, "created", []interface{}{})},
+	env := M{"v": int64(1), "h": []interface{}{historyEntryIn(x.loc(), c.UserName, "created", []interface{}{})},
 		"x": b.extras(rec), "cb": c.UserName}
 	if doc != nil {
 		if t, ok := toTime(doc["updated_at"]); ok {
@@ -729,7 +766,7 @@ func (b *legacyBackend) setEnv(storeHex, hex string, env M) error {
 func (b *legacyBackend) bumpEnv(c *Ctx, storeHex, hex string, prevDoc, prev, next M, action string, extra M) error {
 	doc, _ := b.loadRaw(c, storeHex, hex, true)
 	env := M{"v": versionOf(prevDoc) + 1,
-		"h": appendHistory(historyOf(prevDoc), historyEntry(c.UserName, action, diff(prev, next)))}
+		"h": appendHistory(historyOfIn(c.storeLoc(storeHex), prevDoc), historyEntryIn(c.storeLoc(storeHex), c.UserName, action, diff(prev, next)))}
 	if doc != nil {
 		if t, ok := toTime(doc["updated_at"]); ok {
 			env["ts"] = t
@@ -776,7 +813,7 @@ func (b *legacyBackend) Update(c *Ctx, storeHex, id string, prev, next M, change
 			return nil, err
 		}
 		if len(payload) > 0 && b.replaceUpdate {
-			full := legacyJSONOf(prevDoc)
+			full := legacyJSONOf(prevDoc, x.loc())
 			for k, v := range payload {
 				full[k] = v
 			}

@@ -206,6 +206,7 @@ func toArabicDigits(s string) string {
 
 func storeToContract(x *mapCtx, d M) M {
 	st := sub(d, "settings")
+	loc := storeLocation(d)
 	rec := M{
 		"nameEn": str(d["name"]), "nameAr": str(d["name_in_arabic"]),
 		"branchEn": str(d["branch_name"]),
@@ -214,8 +215,8 @@ func storeToContract(x *mapCtx, d M) M {
 		"category": str(d["business_category"]),
 		// the POS terminal this store's business category opens ("" = none)
 		"posTerminal": CategoryTerminal(str(d["business_category"])),
-		"address":  addressFromLegacy(sub(d, "national_address"), str(d["country_name"])),
-		"phone":    str(d["phone"]), "email": str(d["email"]),
+		"address":     addressFromLegacy(sub(d, "national_address"), str(d["country_name"])),
+		"phone":       str(d["phone"]), "email": str(d["email"]),
 		"vatPercent": func() float64 {
 			if v := num(d["vat_percent"]); v > 0 {
 				return v
@@ -223,7 +224,9 @@ func storeToContract(x *mapCtx, d M) M {
 			return 15
 		}(),
 		"currency": M{"code": "SAR", "nameEn": "Saudi Riyal", "nameAr": "ريال سعودي", "fractionEn": "Halala", "fractionAr": "هللة"},
-		"timezone": "Asia/Riyadh",
+		// derived from the legacy country_code; server-owned (not writable)
+		"timezone":    storeTimezoneName(d),
+		"countryCode": storeCountryOrSA(d),
 		"bank": M{"name": str(get(d, "bank_account.bank_name")), "accountName": str(get(d, "bank_account.account_name")),
 			"accountNo": str(get(d, "bank_account.account_no")), "iban": str(get(d, "bank_account.iban"))},
 		"logo":      nilIfEmpty(str(d["logo"])),
@@ -278,7 +281,7 @@ func storeToContract(x *mapCtx, d M) M {
 	if str(z["phase"]) == "2" {
 		phase = 2
 	}
-	zc := M{"phase": phase, "connected": boolv(z["connected"]), "connectedAt": fmtDT(z["last_connected_at"]),
+	zc := M{"phase": phase, "connected": boolv(z["connected"]), "connectedAt": fmtDTIn(loc, z["last_connected_at"]),
 		"reconnectNeeded": boolv(z["zatca_reconnect_required"]), "env": str(z["env"])}
 	if id := intv(z["production_request_id"]); id != 0 {
 		zc["pcsid"] = str(id)
@@ -287,7 +290,7 @@ func storeToContract(x *mapCtx, d M) M {
 	} else {
 		zc["pcsid"] = ""
 	}
-	if t := fmtDT(z["last_disconnected_at"]); t != "" {
+	if t := fmtDTIn(loc, z["last_disconnected_at"]); t != "" {
 		zc["disconnectedAt"] = t
 	}
 	// once ZATCA documents exist the environment can't change (UI lock hint)
@@ -320,14 +323,14 @@ func storeToContract(x *mapCtx, d M) M {
 	rec["ai"] = M{"provider": str(st["rfq_llm_provider"]), "model": str(st["rfq_llm_model"]), "apiKey": mask(str(st["rfq_llm_api_key"]))}
 	rec["purchaseBills"] = M{"enabled": boolv(st["enable_purchase_bills_tracking"])}
 	rec["openingBalances"] = M{"cash": num(st["cash_opening_balance"]), "bank": num(st["bank_opening_balance"]),
-		"asOf": fmtDay(st["cash_opening_balance_date"])}
+		"asOf": fmtDayIn(loc, st["cash_opening_balance_date"])}
 	rec["legacyCode"] = str(d["code"])
 	return rec
 }
 
 var storeKnown = knownSet("nameEn", "nameAr", "branchEn", "vatNo", "crNo", "category", "address", "phone", "email",
 	"vatPercent", "bank", "logo", "invoiceBg", "titles", "serials", "flags", "zatca", "whatsapp", "emailSettings",
-	"google", "rfq", "ai", "purchaseBills", "openingBalances", "legacyCode", "currency", "timezone", "posTerminal")
+	"google", "rfq", "ai", "purchaseBills", "openingBalances", "legacyCode", "currency", "timezone", "countryCode", "posTerminal")
 
 func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 	e := map[string]string{}
@@ -687,9 +690,10 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 	if branchAr == "" {
 		branchAr = "الفرع الرئيسي"
 	}
-	env := M{"v": int64(1), "h": []interface{}{historyEntry(c.UserName, "created", []interface{}{})}, "cb": c.UserName,
+	loc := storeLocation(M{"country_code": st.CountryCode})
+	env := M{"v": int64(1), "h": []interface{}{historyEntryIn(loc, c.UserName, "created", []interface{}{})}, "cb": c.UserName,
 		"x": M{"short": short, "branchAr": branchAr, "plan": "professional",
-			"trialEndsAt": now.AddDate(0, 0, 14).In(riyadh).Format(layoutDay),
+			"trialEndsAt":  now.AddDate(0, 0, 14).In(loc).Format(layoutDay),
 			"businessType": cat, "address": M{"countryAr": "المملكة العربية السعودية", "shortAddress": str(a["shortAddress"])}}}
 	if err := s.setEnv("", hex, env); err != nil {
 		return nil, err

@@ -67,11 +67,11 @@ func draftStore(c *Ctx, r *http.Request, body M) (string, error) {
 	return s, nil
 }
 
-func draftToContract(d M) M {
+func draftToContract(loc *time.Location, d M) M {
 	out := M{"id": hexOf(d["_id"]), "storeId": hexOf(d["store_id"]), "docType": str(d["doc_type"]),
 		"payload": d["payload"], "title": str(d["title"]), "createdBy": str(d["created_by"]), "updatedBy": str(d["updated_by"]),
-		"createdAt": fmtDT(d["created_at"]), "updatedAt": fmtDT(d["updated_at"]), "deviceId": str(d["device_id"]), "legacyDraft": false}
-	if e := fmtDT(d["expires_at"]); e != "" {
+		"createdAt": fmtDTIn(loc, d["created_at"]), "updatedAt": fmtDTIn(loc, d["updated_at"]), "deviceId": str(d["device_id"]), "legacyDraft": false}
+	if e := fmtDTIn(loc, d["expires_at"]); e != "" {
 		out["expiresAt"] = e
 	}
 	return out
@@ -122,7 +122,7 @@ func handleDraftList(w http.ResponseWriter, r *http.Request) {
 	cur, err := storeDB(s).Collection(draftTypes[t].coll).Find(ctx, bson.M{"doc_type": t}, options.Find().SetSort(bson.M{"updated_at": -1}))
 	if err == nil {
 		for cur.Next(ctx) {
-			out = append(out, draftToContract(bsonToM(cur.Current)))
+			out = append(out, draftToContract(storeLocation(c.store(s)), bsonToM(cur.Current)))
 		}
 		cur.Close(ctx)
 	}
@@ -139,8 +139,8 @@ func handleDraftList(w http.ResponseWriter, r *http.Request) {
 					payload = lb.render(newMapCtx(c, s), d, true)
 				}
 				out = append(out, M{"id": hexOf(d["_id"]), "storeId": s, "docType": t, "payload": payload,
-					"title": "Legacy draft " + str(d["code"]), "legacyDraft": true, "createdAt": fmtDT(d["created_at"]),
-					"updatedAt": fmtDT(d["updated_at"])})
+					"title": "Legacy draft " + str(d["code"]), "legacyDraft": true, "createdAt": fmtDTIn(storeLocation(c.store(s)), d["created_at"]),
+					"updatedAt": fmtDTIn(storeLocation(c.store(s)), d["updated_at"])})
 			}
 			cur2.Close(ctx)
 		}
@@ -187,7 +187,7 @@ func handleDraftGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, draftToContract(d))
+	writeJSON(w, http.StatusOK, draftToContract(storeLocation(c.store(s)), d))
 }
 
 func handleDraftCreate(w http.ResponseWriter, r *http.Request) {
@@ -219,7 +219,7 @@ func handleDraftCreate(w http.ResponseWriter, r *http.Request) {
 		doc := bson.M{"_id": primitive.NewObjectID(), "store_id": s, "doc_type": t, "payload": payload, "title": title,
 			"created_by": c.UserName, "updated_by": c.UserName, "created_at": now, "updated_at": now, "device_id": str(body["deviceId"])}
 		if e := str(body["expiresAt"]); e != "" {
-			if et, err := parseClientTime(e); err == nil {
+			if et, err := parseClientTimeIn(storeLocation(c.store(s)), e); err == nil {
 				doc["expires_at"] = et
 			}
 		}
@@ -229,7 +229,7 @@ func handleDraftCreate(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errInternal("db: " + err.Error())
 		}
 		d, _ := loadDraft(s, t, doc["_id"].(primitive.ObjectID).Hex())
-		return http.StatusCreated, draftToContract(d), nil
+		return http.StatusCreated, draftToContract(storeLocation(c.store(s)), d), nil
 	})
 }
 
@@ -271,7 +271,7 @@ func handleDraftPut(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errInternal("db: " + err.Error())
 		}
 		d, _ := loadDraft(s, t, id)
-		return http.StatusOK, draftToContract(d), nil
+		return http.StatusOK, draftToContract(storeLocation(c.store(s)), d), nil
 	})
 }
 

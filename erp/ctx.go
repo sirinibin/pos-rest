@@ -219,6 +219,18 @@ func (c *Ctx) can(module, verb string) bool {
 
 func (c *Ctx) store(hex string) M { return c.storeIdx[hex] }
 
+// storeLoc is the timezone of store hex ("" = the primary store; Asia/Riyadh
+// when unknown).
+func (c *Ctx) storeLoc(hex string) *time.Location {
+	if c == nil {
+		return riyadh
+	}
+	if hex == "" {
+		hex = c.primaryStore()
+	}
+	return storeLocation(c.store(hex))
+}
+
 func (c *Ctx) storeHexes() []string {
 	out := make([]string, 0, len(c.Stores))
 	for _, s := range c.Stores {

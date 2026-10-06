@@ -58,30 +58,36 @@ func versionOf(doc M) int64 {
 
 // historyOf returns the stored history or one synthesized from the legacy
 // audit fields.
-func historyOf(doc M) []interface{} {
+func historyOf(doc M) []interface{} { return historyOfIn(riyadh, doc) }
+
+// historyOfIn is historyOf with synthesized times in the store zone loc.
+func historyOfIn(loc *time.Location, doc M) []interface{} {
 	if h := arr(get(doc, envKey+".h")); len(h) > 0 {
 		return h
 	}
 	out := []interface{}{}
-	if ca := fmtDT(doc["created_at"]); ca != "" {
+	if ca := fmtDTIn(loc, doc["created_at"]); ca != "" {
 		out = append(out, M{"at": ca, "by": str(doc["created_by_name"]), "action": "created", "changes": []interface{}{}})
 	}
-	if ua := fmtDT(doc["updated_at"]); ua != "" && ua != fmtDT(doc["created_at"]) {
+	if ua := fmtDTIn(loc, doc["updated_at"]); ua != "" && ua != fmtDTIn(loc, doc["created_at"]) {
 		out = append(out, M{"at": ua, "by": str(doc["updated_by_name"]), "action": "updated", "changes": []interface{}{}})
 	}
 	return out
 }
 
 // applyEnvelope adds the common contract envelope fields to a mapped record.
-func applyEnvelope(rec M, doc M, deleted bool) M {
+func applyEnvelope(rec M, doc M, deleted bool) M { return applyEnvelopeIn(riyadh, rec, doc, deleted) }
+
+// applyEnvelopeIn is applyEnvelope with legacy audit times in the store zone.
+func applyEnvelopeIn(loc *time.Location, rec M, doc M, deleted bool) M {
 	env := sub(doc, envKey)
 	rec["version"] = versionOf(doc)
 	rec["deleted"] = deleted
-	rec["history"] = historyOf(doc)
+	rec["history"] = historyOfIn(loc, doc)
 	if ca := str(env["ca"]); ca != "" {
 		rec["createdAt"] = ca
 	} else if _, ok := rec["createdAt"]; !ok {
-		rec["createdAt"] = fmtDT(doc["created_at"])
+		rec["createdAt"] = fmtDTIn(loc, doc["created_at"])
 	}
 	if cb := str(env["cb"]); cb != "" {
 		rec["createdBy"] = cb
@@ -89,7 +95,7 @@ func applyEnvelope(rec M, doc M, deleted bool) M {
 		rec["createdBy"] = str(doc["created_by_name"])
 	}
 	if _, ok := rec["updatedAt"]; !ok {
-		rec["updatedAt"] = fmtDT(doc["updated_at"])
+		rec["updatedAt"] = fmtDTIn(loc, doc["updated_at"])
 	}
 	if _, ok := rec["updatedBy"]; !ok {
 		rec["updatedBy"] = str(doc["updated_by_name"])
@@ -200,13 +206,18 @@ func diff(prev, next M) []interface{} {
 }
 
 func historyEntry(by, action string, changes []interface{}) M {
+	return historyEntryIn(riyadh, by, action, changes)
+}
+
+// historyEntryIn stamps the entry with the current time in the store zone.
+func historyEntryIn(loc *time.Location, by, action string, changes []interface{}) M {
 	if action == "" {
 		action = "updated"
 	}
 	if len(action) > 40 {
 		action = action[:40]
 	}
-	return M{"at": nowFn().In(riyadh).Format(layoutDT), "by": by, "action": action, "changes": changes}
+	return M{"at": nowFn().In(orRiyadh(loc)).Format(layoutDT), "by": by, "action": action, "changes": changes}
 }
 
 func appendHistory(h []interface{}, e M) []interface{} {

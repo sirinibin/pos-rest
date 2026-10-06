@@ -83,7 +83,7 @@ func handleZatcaReport(path string) http.HandlerFunc {
 				}
 				z["status"] = "failed"
 				z["error"] = firstLegacyMsg(lr.Errors)
-				z["attemptAt"] = nowFn().In(riyadh).Format(layoutDT)
+				z["attemptAt"] = nowFn().In(c.storeLoc(storeHex)).Format(layoutDT)
 				out["zatca"] = z
 			}
 			return http.StatusOK, out, nil
@@ -120,8 +120,8 @@ func handleZatcaConnect(w http.ResponseWriter, r *http.Request) {
 		sb := resourceByPath("stores").Backend.(*storesBackend)
 		cur, _ := sb.Get(c, "", id, true)
 		snap, _ := json.Marshal(M{"nameEn": cur["nameEn"], "nameAr": cur["nameAr"], "vatNo": cur["vatNo"], "crNo": cur["crNo"], "address": cur["address"]})
-		_ = sb.setEnv("", id, M{"x.zatca.snapshot": string(snap), "x.zatca.certExpires": time.Now().AddDate(1, 0, 0).In(riyadh).Format(layoutDay),
-			"x.zatca.connectedAt": nowFn().In(riyadh).Format(layoutDT)})
+		_ = sb.setEnv("", id, M{"x.zatca.snapshot": string(snap), "x.zatca.certExpires": time.Now().AddDate(1, 0, 0).In(c.storeLoc(id)).Format(layoutDay),
+			"x.zatca.connectedAt": nowFn().In(c.storeLoc(id)).Format(layoutDT)})
 		out, _ := sb.Get(c, "", id, true)
 		return http.StatusOK, out, nil
 	})
@@ -144,7 +144,7 @@ func handleZatcaDisconnect(w http.ResponseWriter, r *http.Request) {
 		oid, _ := oidOf(id)
 		ctx, cancel := dbctx()
 		_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{
-			"erp.x.zatca.disconnectedAt": nowFn().In(riyadh).Format(layoutDT)}, "$unset": bson.M{"erp.x.zatca.snapshot": ""}})
+			"erp.x.zatca.disconnectedAt": nowFn().In(c.storeLoc(id)).Format(layoutDT)}, "$unset": bson.M{"erp.x.zatca.snapshot": ""}})
 		cancel()
 		out, _ := sb.Get(c, "", id, true)
 		if z, ok := out["zatca"].(M); ok {

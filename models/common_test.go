@@ -1311,3 +1311,15 @@ func TestRemoveObjectID_NilEntriesSkipped(t *testing.T) {
 		t.Errorf("len = %d, want 0 (nil entries dropped, id1 removed)", len(result))
 	}
 }
+
+func TestCountryLocation(t *testing.T) {
+	tests := []struct{ code, want string }{
+		{"SA", "Asia/Riyadh"}, {"sa", "Asia/Riyadh"}, {"GB", "Europe/London"},
+		{"AE", "Asia/Dubai"}, {" IN ", "Asia/Kolkata"}, {"ZZ", "UTC"}, {"", "UTC"},
+	}
+	for _, tc := range tests {
+		if got := CountryLocation(tc.code).String(); got != tc.want {
+			t.Errorf("CountryLocation(%q)=%s want %s", tc.code, got, tc.want)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -586,4 +587,38 @@ func legacyTS(v interface{}) string {
 		return tm.UTC().Format(time.RFC3339)
 	}
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+// TestIntegration_OrgUnionListsEachIDOnce: a store DB copied from another keeps
+// the records' ids, so an org-wide list (union of store DBs) must not repeat
+// them — the dashboard showed one expense category twice.
+func TestIntegration_OrgUnionListsEachIDOnce(t *testing.T) {
+	requireDB(t)
+	d := rawDoc(t, storeA(), "expense_category", fx.ExpenseCatA.Hex())
+	ctx, cancel := dbctx()
+	defer cancel()
+	cp := bson.M{}
+	for k, v := range d {
+		cp[k] = v
+	}
+	cp["_id"] = fx.ExpenseCatA
+	cp["store_id"] = fx.StoreB
+	if _, err := storeDB(storeB()).Collection("expense_category").InsertOne(ctx, cp); err != nil {
+		t.Fatal(err)
+	}
+	defer storeDB(storeB()).Collection("expense_category").DeleteOne(context.Background(), bson.M{"_id": fx.ExpenseCatA})
+	tok := login(t, fx.AdminEmail) // sees both stores
+	g := call(t, "GET", "/expense-categories?limit=500", tok, nil)
+	if g.Code != 200 {
+		t.Fatalf("list: %d %s", g.Code, g.Raw)
+	}
+	n := 0
+	for _, r := range arr(g.Body["data"]) {
+		if r.(M)["id"] == fx.ExpenseCatA.Hex() {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("expense category listed %d times, want once: %s", n, g.Raw)
+	}
 }

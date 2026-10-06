@@ -71,6 +71,32 @@ func deleteAttachmentDirs(msgs []models.ProcurementMessage) {
 	}
 }
 
+// procurementDateRange parses the date_from / date_to calendar days
+// (YYYY-MM-DD) as midnight in the store's timezone, not UTC. The store is
+// only loaded when a date is given.
+func procurementDateRange(storeID primitive.ObjectID, from, to string) (*time.Time, *time.Time) {
+	if from == "" && to == "" {
+		return nil, nil
+	}
+	loc := time.UTC
+	if st, err := models.FindStoreByID(&storeID, map[string]interface{}{"country_code": 1}); err == nil && st != nil {
+		loc = models.CountryLocation(st.CountryCode)
+	}
+	return parseStoreDay(from, loc), parseStoreDay(to, loc)
+}
+
+// parseStoreDay is local midnight of a YYYY-MM-DD day in loc (nil if invalid).
+func parseStoreDay(s string, loc *time.Location) *time.Time {
+	if s == "" {
+		return nil
+	}
+	t, err := time.ParseInLocation("2006-01-02", s, loc)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
 // ListProcurementMessagesHandler handles GET /v1/procurement-messages
 // Query params: store_id, type (email|whatsapp), direction (in|out), search, page, limit
 func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -90,17 +116,7 @@ func ListProcurementMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	hasAttachments := r.URL.Query().Get("has_attachments") == "true"
 	purchaseBills := r.URL.Query().Get("purchase_bills") == "true"
 
-	var dateFrom, dateTo *time.Time
-	if s := r.URL.Query().Get("date_from"); s != "" {
-		if t, err := time.Parse("2006-01-02", s); err == nil {
-			dateFrom = &t
-		}
-	}
-	if s := r.URL.Query().Get("date_to"); s != "" {
-		if t, err := time.Parse("2006-01-02", s); err == nil {
-			dateTo = &t
-		}
-	}
+	dateFrom, dateTo := procurementDateRange(storeObjID, r.URL.Query().Get("date_from"), r.URL.Query().Get("date_to"))
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1

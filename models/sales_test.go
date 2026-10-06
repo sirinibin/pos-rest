@@ -3,6 +3,7 @@ package models
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -703,19 +704,32 @@ func TestResolveDateKeyword_LastNDays_NegativeIsInvalid(t *testing.T) {
 }
 
 func TestResolveDateKeyword_TimezoneOffset_SA(t *testing.T) {
-	// Saudi Arabia is UTC+3, represented as tzOffset=-3 in this codebase
-	start0, end0, _ := resolveDateKeyword("today", 0)
+	// Saudi Arabia is UTC+3, represented as tzOffset=-3 in this codebase.
+	// "today" is the store's own calendar day: from 21:00 UTC it is already
+	// tomorrow in Riyadh, so compare with Riyadh's date, not the server's.
 	startSA, endSA, ok := resolveDateKeyword("today", -3)
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	// SA today starts 3h earlier in UTC than UTC+0 today
-	diff := start0.Sub(startSA).Hours()
-	if diff < 2.9 || diff > 3.1 {
-		t.Errorf("SA start should be ~3h earlier than UTC+0 start, got diff=%.2fh", diff)
+	riyadh := time.FixedZone("AST", 3*3600)
+	for _, now := range []time.Time{time.Now(), time.Now().Add(time.Second)} {
+		d := now.In(riyadh)
+		want := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, riyadh).UTC()
+		if startSA.Equal(want) {
+			if got := endSA.Sub(startSA); got != 24*time.Hour-time.Second {
+				t.Errorf("SA today should span one day, got %v", got)
+			}
+			return
+		}
 	}
-	_ = endSA
-	_ = end0
+	t.Errorf("SA today should start at Riyadh midnight in UTC (21:00Z the day before), got %v", startSA)
+}
+
+func TestResolveDateKeyword_SAMidnightIs21UTC(t *testing.T) {
+	startSA, _, _ := resolveDateKeyword("today", -3)
+	if startSA.Hour() != 21 || startSA.Minute() != 0 {
+		t.Errorf("Riyadh midnight is 21:00 UTC, got %v", startSA)
+	}
 }
 
 // ── customer_name search ──────────────────────────────────────────────────────

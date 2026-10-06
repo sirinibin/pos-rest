@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -54,8 +55,8 @@ func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	if !q.IncludeDeleted {
 		f["deleted"] = bson.M{"$ne": true}
 	}
-	if q.From != nil && b.dateField != "" {
-		f[nativeDateKey] = bson.M{"$gte": *q.From}
+	if from := q.fromIn(c.storeLoc(storeHex)); from != nil && b.dateField != "" {
+		f[nativeDateKey] = bson.M{"$gte": *from}
 	}
 	if sf := searchFilter(q.Search, nativeSearchKeys); sf != nil {
 		f["$or"] = sf["$or"]
@@ -125,11 +126,11 @@ func (b *nativeBackend) Locate(c *Ctx, id string) (string, bool) {
 	return "", false
 }
 
-func (b *nativeBackend) dateOf(rec M) interface{} {
+func (b *nativeBackend) dateOf(loc *time.Location, rec M) interface{} {
 	if b.dateField == "" {
 		return nil
 	}
-	if t, err := parseClientTime(str(rec[b.dateField])); err == nil {
+	if t, err := parseClientTimeIn(loc, str(rec[b.dateField])); err == nil {
 		return t
 	}
 	return nil
@@ -139,7 +140,7 @@ func randomID(prefix string) string {
 	return prefix + "_" + primitive.NewObjectID().Hex()
 }
 
-func (b *nativeBackend) persist(storeHex string, rec M, upsert bool) error {
+func (b *nativeBackend) persist(loc *time.Location, storeHex string, rec M, upsert bool) error {
 	doc := bson.M{}
 	for k, v := range rec {
 		if k == "id" {
@@ -148,7 +149,7 @@ func (b *nativeBackend) persist(storeHex string, rec M, upsert bool) error {
 		doc[k] = v
 	}
 	doc["_id"] = str(rec["id"])
-	doc[nativeDateKey] = b.dateOf(rec)
+	doc[nativeDateKey] = b.dateOf(loc, rec)
 	ctx, cancel := dbctx()
 	defer cancel()
 	var err error
@@ -187,7 +188,8 @@ func (b *nativeBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 		}
 		rec["code"] = code
 	}
-	now := nowFn().In(riyadh).Format(layoutDT)
+	loc := c.storeLoc(storeHex)
+	now := nowFn().In(loc).Format(layoutDT)
 	rec["id"] = id
 	if b.org {
 		delete(rec, "storeId")
@@ -204,8 +206,8 @@ func (b *nativeBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 	rec["createdBy"] = c.UserName
 	rec["updatedAt"] = now
 	rec["updatedBy"] = c.UserName
-	rec["history"] = []interface{}{historyEntry(c.UserName, "created", []interface{}{})}
-	if err := b.persist(storeHex, rec, false); err != nil {
+	rec["history"] = []interface{}{historyEntryIn(loc, c.UserName, "created", []interface{}{})}
+	if err := b.persist(loc, storeHex, rec, false); err != nil {
 		return nil, err
 	}
 	return b.Get(c, storeHex, id, true)
@@ -213,10 +215,11 @@ func (b *nativeBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 
 func (b *nativeBackend) write(c *Ctx, storeHex string, prev, next M, action string) (M, error) {
 	next["version"] = intv(prev["version"]) + 1
-	next["updatedAt"] = nowFn().In(riyadh).Format(layoutDT)
+	loc := c.storeLoc(storeHex)
+	next["updatedAt"] = nowFn().In(loc).Format(layoutDT)
 	next["updatedBy"] = c.UserName
-	next["history"] = appendHistory(arr(prev["history"]), historyEntry(c.UserName, action, diff(prev, next)))
-	if err := b.persist(storeHex, next, true); err != nil {
+	next["history"] = appendHistory(arr(prev["history"]), historyEntryIn(loc, c.UserName, action, diff(prev, next)))
+	if err := b.persist(loc, storeHex, next, true); err != nil {
 		return nil, err
 	}
 	return b.Get(c, storeHex, str(next["id"]), true)

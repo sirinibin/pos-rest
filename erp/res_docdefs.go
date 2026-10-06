@@ -289,14 +289,14 @@ func newExpensesResource() *Resource {
 			}
 			gross := num(d["amount"])
 			vat := num(d["vat_price"])
-			return M{"code": str(d["code"]), "date": fmtDT(d["date"]), "categoryId": cat, "description": str(d["description"]),
+			return M{"code": str(d["code"]), "date": x.fmtDT(d["date"]), "categoryId": cat, "description": str(d["description"]),
 				"amount": round2(gross - vat), "vatAmount": vat, "method": str(d["payment_method"]),
 				"vendorId": idOrNil(d["vendor_id"]), "reference": str(d["vendor_invoice_no"]), "payee": str(d["vendor_name"])}
 		},
 		toL: func(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M, error) {
 			p := M{}
 			date := str(rec["date"])
-			ds, err := toLegacyDateStr(date)
+			ds, err := x.legacyDateStr(date)
 			if err != nil {
 				return nil, errBadRequest("", map[string]string{"date": "required"})
 			}
@@ -379,7 +379,7 @@ func moneyNoteResource(name, path, coll, payPrefix, kind string, ops v1Ops) *Res
 			if len(pays) > 0 {
 				p0, _ = pays[0].(M)
 			}
-			rec := M{"code": str(d["code"]), "date": fmtDT(d["date"]), "customerId": idOrNil(d["customer_id"]),
+			rec := M{"code": str(d["code"]), "date": x.fmtDT(d["date"]), "customerId": idOrNil(d["customer_id"]),
 				"customerName": str(d["customer_name"]), "customerNameAr": str(d["customer_name_arabic"]),
 				"amount": num(d["net_total"]), "method": str(d["payment_method"]), "reference": str(d["bank_reference_no"]),
 				"notes": str(d["remarks"]), "description": str(d["description"]), "partyType": str(d["type"]),
@@ -400,7 +400,7 @@ func moneyNoteResource(name, path, coll, payPrefix, kind string, ops v1Ops) *Res
 				rec["vendorId"] = idOrNil(d["vendor_id"])
 				rec["vendorName"] = str(d["vendor_name"])
 			}
-			lz := zatcaToContract(d, kind)
+			lz := zatcaToContract(x.loc(), d, kind)
 			if boolv(get(d, "zatca.reporting_passed")) {
 				rec["zatca"] = lz
 			} else if xz := sub(d, "erp.x.zatca"); len(xz) > 0 {
@@ -415,7 +415,7 @@ func moneyNoteResource(name, path, coll, payPrefix, kind string, ops v1Ops) *Res
 			if prev != nil && str(prev["type"]) != "" {
 				p["type"] = str(prev["type"])
 			}
-			ds, err := toLegacyDateStr(str(rec["date"]))
+			ds, err := x.legacyDateStr(str(rec["date"]))
 			if err != nil {
 				return nil, errBadRequest("", map[string]string{"date": "required"})
 			}
@@ -552,13 +552,13 @@ func findOrgUserByName(c *Ctx, name string) string {
 func capitalLikeResource(name, path, coll, personC, userKey, nameKey string, ops v1Ops) *Resource {
 	b := &legacyBackend{coll: coll, dateKey: "date", deletedKey: "deleted",
 		toC: func(x *mapCtx, d M) M {
-			return M{"code": str(d["code"]), "date": fmtDT(d["date"]), personC: str(d[nameKey]),
+			return M{"code": str(d["code"]), "date": x.fmtDT(d["date"]), personC: str(d[nameKey]),
 				personC + "UserId": idOrNil(d[userKey]), "amount": num(d["amount"]), "method": str(d["payment_method"]),
 				"notes": str(d["description"])}
 		},
 		toL: func(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M, error) {
 			p := M{}
-			ds, err := toLegacyDateStr(str(rec["date"]))
+			ds, err := x.legacyDateStr(str(rec["date"]))
 			if err != nil {
 				return nil, errBadRequest("", map[string]string{"date": "required"})
 			}
@@ -647,7 +647,7 @@ func newSalariesResource() *Resource {
 			}
 			emp := x.doc("employee", hexOf(d["employee_id"]))
 			rec := M{"code": str(d["code"]), "employeeId": idOrNil(d["employee_id"]), "employeeName": str(d["employee_name"]),
-				"period": period, "netSalary": num(d["amount"]), "paymentDate": fmtDay(d["date"]), "method": str(d["payment_method"]),
+				"period": period, "netSalary": num(d["amount"]), "paymentDate": x.fmtDay(d["date"]), "method": str(d["payment_method"]),
 				"notes": str(d["description"]), "status": "paid"}
 			if emp != nil {
 				rec["employeeNameAr"] = str(emp["name_in_arabic"])
@@ -663,7 +663,7 @@ func newSalariesResource() *Resource {
 			if pd == "" {
 				pd = str(rec["period"]) + "-01"
 			}
-			ds, err := toLegacyDateStr(pd)
+			ds, err := x.legacyDateStr(pd)
 			if err != nil {
 				return nil, errBadRequest("", map[string]string{"paymentDate": "invalid date"})
 			}

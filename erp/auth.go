@@ -333,11 +333,12 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 		"erp.h": bson.A{historyEntry(str(o["name"]), "created", []interface{}{})},
 	}})
 	short := deriveShort(str(c["nameEn"]))
+	sloc := storeLocation(legacyReq) // the new store's zone (SA)
 	_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{
 		"erp.v": int64(1), "erp.x.short": short, "erp.x.plan": str(c["plan"]), "erp.x.branchAr": "الفرع الرئيسي",
-		"erp.x.phone2": cleanPhone(str(c["mobile"])), "erp.x.trialEndsAt": time.Now().AddDate(0, 0, 14).In(riyadh).Format(layoutDay),
+		"erp.x.phone2": cleanPhone(str(c["mobile"])), "erp.x.trialEndsAt": time.Now().AddDate(0, 0, 14).In(sloc).Format(layoutDay),
 		"erp.x.businessType": category, "erp.x.address": M{"countryAr": "المملكة العربية السعودية", "shortAddress": str(a["shortAddress"])},
-		"erp.h": bson.A{historyEntry(str(o["name"]), "created", []interface{}{})},
+		"erp.h": bson.A{historyEntryIn(sloc, str(o["name"]), "created", []interface{}{})},
 	}})
 	tok, err := models.GenerateAccesstoken(str(u["email"]))
 	if err != nil {

@@ -150,6 +150,17 @@ func IsStringBase64(content string) (bool, error) {
 	return regexp.MatchString(`^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$`, content)
 }
 
+// CountryLocation is the IANA timezone of an ISO country code
+// (TimezoneMap); UTC when unknown, like the other store-zone lookups here.
+func CountryLocation(countryCode string) *time.Location {
+	if tz, ok := TimezoneMap[strings.ToUpper(strings.TrimSpace(countryCode))]; ok {
+		if loc, err := time.LoadLocation(tz); err == nil {
+			return loc
+		}
+	}
+	return time.UTC
+}
+
 func ConvertTimeZoneToUTC(timeZoneOffset float64, date time.Time) time.Time {
 	hrs, mins := math.Modf(timeZoneOffset)
 	mins = 60 * mins

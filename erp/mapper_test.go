@@ -325,12 +325,12 @@ func TestZatcaStatusMapping(t *testing.T) {
 		{M{}, "credit", "not_reported", "credit-simplified"},
 	}
 	for i, c := range cases {
-		z := zatcaToContract(c.d, c.kind)
+		z := zatcaToContract(riyadh, c.d, c.kind)
 		if z["status"] != c.status || z["invoiceType"] != c.invType {
 			t.Errorf("case %d: %v", i, z)
 		}
 	}
-	if zatcaToContract(cases[3].d, "invoice")["error"] != "BR-KSA-44 invalid" {
+	if zatcaToContract(riyadh, cases[3].d, "invoice")["error"] != "BR-KSA-44 invalid" {
 		t.Fatal("error surfaced")
 	}
 }

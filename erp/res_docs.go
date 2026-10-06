@@ -3,6 +3,7 @@ package erp
 import (
 	"math"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -77,9 +78,9 @@ func readFld(x *mapCtx, d M, f fld) interface{} {
 	case kBool:
 		return boolv(v)
 	case kDT, kDTPlain:
-		return fmtDT(v)
+		return x.fmtDT(v)
 	case kDay:
-		return fmtDay(v)
+		return x.fmtDay(v)
 	case kRef:
 		return idOrNil(v)
 	case kRefs:
@@ -106,7 +107,7 @@ func writeFld(x *mapCtx, p M, rec M, f fld) error {
 		p[f.l] = boolv(v)
 	case kDT, kDay:
 		if s := str(v); s != "" {
-			ds, err := toLegacyDateStr(s)
+			ds, err := x.legacyDateStr(s)
 			if err != nil {
 				return errBadRequest("", map[string]string{f.c: "invalid date"})
 			}
@@ -116,7 +117,7 @@ func writeFld(x *mapCtx, p M, rec M, f fld) error {
 		}
 	case kDTPlain:
 		if s := str(v); s != "" {
-			ds, err := toLegacyDateStr(s)
+			ds, err := x.legacyDateStr(s)
 			if err != nil {
 				return errBadRequest("", map[string]string{f.c: "invalid date"})
 			}
@@ -188,7 +189,7 @@ func (cfg *docCfg) lineToContract(x *mapCtx, l M, vat float64) M {
 	return it
 }
 
-func zatcaToContract(d M, kindOf string) M {
+func zatcaToContract(loc *time.Location, d M, kindOf string) M {
 	z := sub(d, "zatca")
 	status := "not_reported"
 	if boolv(z["reporting_passed"]) {
@@ -216,25 +217,25 @@ func zatcaToContract(d M, kindOf string) M {
 	}
 	out := M{"status": status, "invoiceType": inv, "uuid": str(d["uuid"]), "hash": str(d["hash"]),
 		"pih": str(d["prev_hash"]), "icv": intv(d["invoice_count_value"]), "qr": str(z["qr_code"]),
-		"signature": str(z["ecdsa_signature"]), "reportedAt": fmtDT(z["reporting_passed_at"]),
+		"signature": str(z["ecdsa_signature"]), "reportedAt": fmtDTIn(loc, z["reporting_passed_at"]),
 		"xmlUrl": str(z["cleared_xml_url"]), "error": ""}
 	if errs := arr(z["reporting_errors"]); len(errs) > 0 {
 		out["error"] = str(errs[len(errs)-1])
 	} else if errs := arr(z["compliance_check_errors"]); len(errs) > 0 && status == "failed" {
 		out["error"] = str(errs[len(errs)-1])
 	}
-	if t := fmtDT(z["reporting_last_failed_at"]); t != "" {
+	if t := fmtDTIn(loc, z["reporting_last_failed_at"]); t != "" {
 		out["attemptAt"] = t
 	}
 	return out
 }
 
-func paymentToContract(p M, defDate interface{}) M {
+func paymentToContract(loc *time.Location, p M, defDate interface{}) M {
 	d := p["date"]
 	if d == nil {
 		d = defDate
 	}
-	out := M{"id": hexOf(p["_id"]), "date": fmtDT(d), "amount": num(p["amount"]), "method": str(p["method"]),
+	out := M{"id": hexOf(p["_id"]), "date": fmtDTIn(loc, d), "amount": num(p["amount"]), "method": str(p["method"]),
 		"description": str(p["description"])}
 	if out["id"] == "" {
 		out["id"] = hexOf(p["id"])
@@ -271,7 +272,7 @@ func (cfg *docCfg) paymentsToContract(x *mapCtx, d M) []interface{} {
 		if pm == nil || boolv(pm["deleted"]) {
 			continue
 		}
-		out = append(out, paymentToContract(pm, d["date"]))
+		out = append(out, paymentToContract(x.loc(), pm, d["date"]))
 	}
 	return out
 }
@@ -293,7 +294,7 @@ func (cfg *docCfg) toContract(x *mapCtx, d M) M {
 			items = append(items, cfg.lineToContract(x, lm, vat))
 		}
 	}
-	rec := M{"code": str(d["code"]), "date": fmtDT(d["date"]), "items": items, "vatPercent": vat}
+	rec := M{"code": str(d["code"]), "date": x.fmtDT(d["date"]), "items": items, "vatPercent": vat}
 	rk := cfg.remarksKey
 	if rk == "" {
 		rk = "remarks"
@@ -346,7 +347,7 @@ func (cfg *docCfg) toContract(x *mapCtx, d M) M {
 		rec[f.c] = readFld(x, d, f)
 	}
 	if cfg.zatca != "" {
-		rec["zatca"] = zatcaToContract(d, cfg.zatca)
+		rec["zatca"] = zatcaToContract(x.loc(), d, cfg.zatca)
 	}
 	// legacy-computed totals, exposed read-only for reconciliation
 	rec["legacyTotals"] = M{"total": num(d["total"]), "vat": num(d["vat_price"]), "net": num(d["net_total"]),
@@ -524,7 +525,7 @@ func (cfg *docCfg) linesToLegacy(x *mapCtx, rec M, prev M, vat float64) ([]inter
 
 func itoa(i int) string { return str(float64(i)) }
 
-func (cfg *docCfg) paymentsToLegacy(rec M, prev M, defDate string) ([]interface{}, error) {
+func (cfg *docCfg) paymentsToLegacy(loc *time.Location, rec M, prev M, defDate string) ([]interface{}, error) {
 	prevIDs := map[string]bool{}
 	for _, p := range arr(get(prev, "payments")) {
 		if pm, ok := p.(M); ok {
@@ -550,7 +551,7 @@ func (cfg *docCfg) paymentsToLegacy(rec M, prev M, defDate string) ([]interface{
 		if ds == "" {
 			ds = defDate
 		}
-		lds, err := toLegacyDateStr(ds)
+		lds, err := toLegacyDateStrIn(loc, ds)
 		if err != nil {
 			fields[pfx+"date"] = "invalid date"
 			continue
@@ -603,13 +604,13 @@ func (cfg *docCfg) toLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create
 	date := str(rec["date"])
 	if date == "" {
 		if prev != nil {
-			date = fmtDT(prev["date"])
+			date = x.fmtDT(prev["date"])
 		} else {
 			fields["date"] = "required"
 		}
 	}
 	if date != "" {
-		ds, err := toLegacyDateStr(date)
+		ds, err := x.legacyDateStr(date)
 		if err != nil {
 			fields["date"] = "invalid date"
 		} else {
@@ -708,7 +709,7 @@ func (cfg *docCfg) toLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create
 		p["rounding_amount"] = r
 	}
 	if cfg.payments {
-		pays, err := cfg.paymentsToLegacy(rec, prev, date)
+		pays, err := cfg.paymentsToLegacy(x.loc(), rec, prev, date)
 		if err != nil {
 			return nil, err
 		}
