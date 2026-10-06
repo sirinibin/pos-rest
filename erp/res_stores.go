@@ -85,6 +85,15 @@ func storeShort(st M) string {
 	return "MAIN"
 }
 
+// reSerialPrefix accepts document-number prefixes such as "DEL-NOTE-UMLJ-DATE-".
+// The old app stored any prefix (and expands a DATE token), so the rule only
+// keeps out spaces and URL/search-hostile characters, with a generous length cap.
+var reSerialPrefix = regexp.MustCompile(`^[A-Za-z0-9_./-]{0,50}$`)
+
+const serialPrefixError = "use up to 50 letters, digits, or - _ / . (no spaces)"
+
+func validSerialPrefix(p string) bool { return reSerialPrefix.MatchString(p) }
+
 // serialCfg returns (prefix, start) for a serial key in contract terms.
 func serialCfg(st M, key string) (string, int) {
 	if lk, ok := serialMap[key]; ok && st != nil {
@@ -388,8 +397,8 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 			if vm == nil {
 				continue
 			}
-			if p := str(vm["prefix"]); !regexp.MustCompile(`^[A-Za-z0-9-]{0,16}$`).MatchString(p) {
-				e["serials."+k+".prefix"] = "letters, digits and - only (max 16)"
+			if p := str(vm["prefix"]); !validSerialPrefix(p) {
+				e["serials."+k+".prefix"] = serialPrefixError
 			}
 			if st, ok := vm["start"]; ok && (num(st) < 1 || num(st) != float64(intv(st))) {
 				e["serials."+k+".start"] = "integer >= 1"
