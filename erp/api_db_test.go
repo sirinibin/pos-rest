@@ -572,8 +572,9 @@ func TestAPI_StoresPatch(t *testing.T) {
 	if get(d, "settings.enable_rbac_module") != true || get(d, "zatca.connected") == true || get(d, "erp.x.short") != "ALN" {
 		t.Fatalf("legacy store doc: settings=%v zatca=%v", get(d, "settings.enable_rbac_module"), get(d, "zatca"))
 	}
-	if r := call(t, "POST", "/stores", admin, M{"nameEn": "x"}); r.Code != 403 {
-		t.Fatalf("store create must go through signup: %d", r.Code)
+	// a platform admin may add stores (categories_api_test.go); an incomplete body is a 400
+	if r := call(t, "POST", "/stores", admin, M{"nameEn": "x"}); r.Code != 400 || r.errField("category") == "" {
+		t.Fatalf("incomplete store create: %d %s", r.Code, r.Raw)
 	}
 	if r := call(t, "DELETE", "/stores/"+storeA(), admin, nil); r.Code != 403 {
 		t.Fatalf("store delete: %d", r.Code)

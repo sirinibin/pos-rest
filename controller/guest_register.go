@@ -286,3 +286,10 @@ func GuestRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(response)
 }
+
+// NewRegistrationStore builds a new store exactly as guest registration does
+// (serials, ZATCA phase, defaults). The StartERP adapter uses it when a
+// platform admin adds a store.
+func NewRegistrationStore(req GuestRegisterRequest, now time.Time) *models.Store {
+	return buildGuestStore(req, primitive.NewObjectID().Hex()[:8], now)
+}

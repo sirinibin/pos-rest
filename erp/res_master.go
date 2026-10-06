@@ -250,6 +250,7 @@ func productValidate(x *mapCtx, rec M, prev M) map[string]string {
 	if mx := num(pr["max"]); mx > 0 && mx < num(pr["min"]) {
 		e["pricing.max"] = "must be >= min"
 	}
+	validatePosFields(rec, e)
 	if code := strings.TrimSpace(str(rec["code"])); code != "" && x.storeHex != "" {
 		ctx, cancel := dbctx()
 		defer cancel()

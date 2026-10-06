@@ -1,10 +1,13 @@
 package erp
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sirinibin/startpos/backend/controller"
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -172,6 +175,8 @@ func storeToContract(x *mapCtx, d M) M {
 		"short":    storeShort(d),
 		"vatNo":    str(d["vat_no"]), "crNo": str(d["registration_number"]),
 		"category": str(d["business_category"]),
+		// the POS terminal this store's business category opens ("" = none)
+		"posTerminal": CategoryTerminal(str(d["business_category"])),
 		"address":  addressFromLegacy(sub(d, "national_address"), str(d["country_name"])),
 		"phone":    str(d["phone"]), "email": str(d["email"]),
 		"vatPercent": func() float64 {
@@ -283,7 +288,7 @@ func storeToContract(x *mapCtx, d M) M {
 
 var storeKnown = knownSet("nameEn", "nameAr", "branchEn", "vatNo", "crNo", "category", "address", "phone", "email",
 	"vatPercent", "bank", "logo", "invoiceBg", "titles", "serials", "flags", "zatca", "whatsapp", "emailSettings",
-	"google", "rfq", "ai", "purchaseBills", "openingBalances", "legacyCode", "currency", "timezone")
+	"google", "rfq", "ai", "purchaseBills", "openingBalances", "legacyCode", "currency", "timezone", "posTerminal")
 
 func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 	e := map[string]string{}
@@ -293,6 +298,17 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 		}
 	}
 	req("nameEn")
+	// business category: sent to ZATCA on Phase 2 onboarding and picks the POS
+	// terminal, so a new or changed value must be one of BusinessCategories.
+	// An unchanged legacy free-text value is still accepted.
+	cat := strings.TrimSpace(str(rec["category"]))
+	if prev == nil || cat != strings.TrimSpace(str(prev["business_category"])) {
+		if cat == "" {
+			e["category"] = "required"
+		} else if _, ok := CanonicalCategory(cat); !ok {
+			e["category"] = "choose a business category from the list"
+		}
+	}
 	if s := str(rec["short"]); s != "" && !reShort.MatchString(s) {
 		e["short"] = "2-5 capital letters"
 	}
@@ -354,7 +370,13 @@ func storeToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M
 		p["registration_number"] = str(rec["crNo"])
 		p["registration_number_in_arabic"] = toArabicDigits(str(rec["crNo"]))
 	}
-	set("category", "business_category", str(rec["category"]))
+	if ch["category"] {
+		cat := strings.TrimSpace(str(rec["category"]))
+		if v, ok := CanonicalCategory(cat); ok {
+			cat = v
+		}
+		p["business_category"] = cat
+	}
 	if ch["phone"] {
 		p["phone"] = str(rec["phone"])
 		p["phone_in_arabic"] = toArabicDigits(str(rec["phone"]))
@@ -561,8 +583,115 @@ var storeBillingFields = []string{"plan", "trialEndsAt", "subscription"}
 // PATCH keeps `short` (and other unmapped fields) in erp.x.
 type storesBackend struct{ *legacyBackend }
 
+// Create: a StartERP platform admin (legacy Admin) adds a store. Everyone
+// else gets their store through sign-up. The store is built exactly like a
+// sign-up's (serials, ZATCA phase 2, store DB and indexes).
 func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) (M, error) {
-	return nil, errForbidden("Stores are created through sign-up.")
+	if !c.Admin {
+		return nil, errForbidden("Only StartERP admins can add stores. New businesses sign up.")
+	}
+	rec := stripServerOwned(body)
+	x := newMapCtx(c, "")
+	errs := storeValidate(x, rec, nil)
+	for k, v := range storeCreateErrors(rec) {
+		if _, dup := errs[k]; !dup {
+			errs[k] = v
+		}
+	}
+	if len(errs) > 0 {
+		return nil, errBadRequest("", errs)
+	}
+	cat, _ := CanonicalCategory(str(rec["category"]))
+	a := sub(rec, "address")
+	var na models.NationalAddress
+	if raw, err := json.Marshal(addressToLegacy(a)); err == nil {
+		_ = json.Unmarshal(raw, &na)
+	}
+	now := time.Now()
+	st := controller.NewRegistrationStore(controller.GuestRegisterRequest{
+		Name: c.UserName, Email: strings.TrimSpace(str(rec["email"])),
+		StoreName: strings.TrimSpace(str(rec["nameEn"])), StoreNameInArabic: strings.TrimSpace(str(rec["nameAr"])),
+		BusinessCategory: cat, RegistrationNumber: strings.TrimSpace(str(rec["crNo"])), VATNo: strings.TrimSpace(str(rec["vatNo"])),
+		Phone: cleanPhone(str(rec["phone"])), CountryCode: "SA", CountryName: "Saudi Arabia", ZatcaPhase: "2",
+		NationalAddress: na,
+	}, now)
+	if b := strings.TrimSpace(str(rec["branchEn"])); b != "" {
+		st.BranchName = b
+	}
+	if uid, ok := oidOf(c.User["_id"]); ok {
+		st.CreatedBy, st.UpdatedBy = &uid, &uid
+	}
+	if err := st.Insert(); err != nil {
+		return nil, errInternal("Unable to create the store: " + err.Error())
+	}
+	if _, err := st.CreateDB(); err != nil {
+		return nil, errInternal("Unable to create the store database: " + err.Error())
+	}
+	if err := st.CreateAllIndexes(); err != nil {
+		return nil, errInternal("Unable to create the store indexes: " + err.Error())
+	}
+	hex := st.ID.Hex()
+	short := str(rec["short"])
+	if !reShort.MatchString(short) {
+		short = deriveShort(str(rec["nameEn"]))
+	}
+	branchAr := strings.TrimSpace(str(rec["branchAr"]))
+	if branchAr == "" {
+		branchAr = "الفرع الرئيسي"
+	}
+	env := M{"v": int64(1), "h": []interface{}{historyEntry(c.UserName, "created", []interface{}{})}, "cb": c.UserName,
+		"x": M{"short": short, "branchAr": branchAr, "plan": "professional",
+			"trialEndsAt": now.AddDate(0, 0, 14).In(riyadh).Format(layoutDay),
+			"businessType": cat, "address": M{"countryAr": "المملكة العربية السعودية", "shortAddress": str(a["shortAddress"])}}}
+	if err := s.setEnv("", hex, env); err != nil {
+		return nil, err
+	}
+	// the admin's own store list is every store (legacy Admin), so the new
+	// store is in c.Stores once reloaded
+	if err := c.loadAccess(); err != nil {
+		return nil, err
+	}
+	return s.Get(c, "", hex, true)
+}
+
+// storeCreateErrors: the fields a new store needs beyond storeValidate
+// (the legacy store validation requires them; reported with contract keys).
+func storeCreateErrors(rec M) map[string]string {
+	e := map[string]string{}
+	need := func(k, v, msg string) {
+		if strings.TrimSpace(v) == "" {
+			e[k] = msg
+		}
+	}
+	need("nameAr", str(rec["nameAr"]), "required")
+	if n := str(rec["nameAr"]); n != "" && !hasArabic(n) {
+		e["nameAr"] = "must contain Arabic letters"
+	}
+	need("vatNo", str(rec["vatNo"]), "required")
+	need("crNo", str(rec["crNo"]), "required")
+	need("email", str(rec["email"]), "required")
+	if p := str(rec["phone"]); p == "" {
+		e["phone"] = "required"
+	} else if !ValidSaudiPhone(p) {
+		e["phone"] = "Saudi phone number"
+	}
+	a := sub(rec, "address")
+	if !re4.MatchString(str(a["buildingNo"])) {
+		e["address.buildingNo"] = "4 digits"
+	}
+	need("address.streetEn", str(a["streetEn"]), "required")
+	if v := str(a["streetAr"]); v == "" || !hasArabic(v) {
+		e["address.streetAr"] = "Arabic street name required"
+	}
+	need("address.districtEn", str(a["districtEn"]), "required")
+	if v := str(a["districtAr"]); v == "" || !hasArabic(v) {
+		e["address.districtAr"] = "Arabic district name required"
+	}
+	need("address.cityEn", str(a["cityEn"]), "required")
+	if !re5.MatchString(str(a["postalCode"])) {
+		e["address.postalCode"] = "5 digits"
+	}
+	return e
 }
 
 func (s *storesBackend) Delete(c *Ctx, storeHex, id string, meta WriteMeta) (M, error) {

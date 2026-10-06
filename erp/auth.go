@@ -265,7 +265,7 @@ func ValidateSignup(body M) map[string]string {
 	if v := str(a["shortAddress"]); v != "" && !regexp.MustCompile(`^[A-Za-z]{4}\d{4}$`).MatchString(v) {
 		e["company.address.shortAddress"] = "format AAAA9999"
 	}
-	if t := str(c["type"]); !signupTypes[t] {
+	if t := str(c["type"]); !signupTypes[t] && CategoryTerminal(t) == "" {
 		e["company.type"] = "invalid business type"
 	}
 	if p := str(c["plan"]); !signupPlans[p] {
@@ -288,6 +288,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	c := sub(body, "company")
 	a := sub(c, "address")
 	email := strings.ToLower(strings.TrimSpace(str(o["email"])))
+	category := signupCategory(str(c["type"]))
 	if findUserByEmailCI(email) != nil {
 		writeErr(w, errf(http.StatusConflict, "email_taken", "An account with this e-mail already exists.", map[string]string{"owner.email": "already registered"}))
 		return
@@ -297,7 +298,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	legacyReq := M{
 		"name": str(o["name"]), "email": email, "mob": cleanPhone(str(o["mobile"])), "password": str(o["password"]),
 		"store_name": str(c["nameEn"]), "store_name_in_arabic": str(c["nameAr"]),
-		"business_category": str(c["type"]), "registration_number": str(c["crNo"]), "vat_no": str(c["vatNo"]),
+		"business_category": category, "registration_number": str(c["crNo"]), "vat_no": str(c["vatNo"]),
 		"phone": cleanPhone(str(c["mobile"])), "country_code": "SA", "country_name": "Saudi Arabia", "zatca_phase": "2",
 		"national_address": addressToLegacy(a),
 	}
@@ -335,7 +336,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{
 		"erp.v": int64(1), "erp.x.short": short, "erp.x.plan": str(c["plan"]), "erp.x.branchAr": "الفرع الرئيسي",
 		"erp.x.phone2": cleanPhone(str(c["mobile"])), "erp.x.trialEndsAt": time.Now().AddDate(0, 0, 14).In(riyadh).Format(layoutDay),
-		"erp.x.businessType": str(c["type"]), "erp.x.address": M{"countryAr": "المملكة العربية السعودية", "shortAddress": str(a["shortAddress"])},
+		"erp.x.businessType": category, "erp.x.address": M{"countryAr": "المملكة العربية السعودية", "shortAddress": str(a["shortAddress"])},
 		"erp.h": bson.A{historyEntry(str(o["name"]), "created", []interface{}{})},
 	}})
 	tok, err := models.GenerateAccesstoken(str(u["email"]))
@@ -354,6 +355,15 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, M{"accessToken": tok.Token, "refreshToken": tok.RefreshToken,
 		"user": userToContractFull(u, stores), "store": store})
+}
+
+// signupCategory is the business_category saved for a sign-up: the canonical
+// spelling of a POS business category (ZATCA-safe), else the legacy type.
+func signupCategory(t string) string {
+	if v, ok := CanonicalCategory(t); ok {
+		return v
+	}
+	return strings.TrimSpace(t)
 }
 
 func deriveShort(name string) string {
