@@ -332,10 +332,8 @@ func SendThreadMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Resolve which channel to use: store_rfq WABA → bot WABA → Evolution API
-	phoneNumberID, accessToken := rfqMetaConfig(body.StoreID, "store_rfq")
-	if phoneNumberID == "" || accessToken == "" {
-		phoneNumberID, accessToken = rfqMetaConfig(body.StoreID, "bot")
-	}
+	// the official WhatsApp API always wins when it is connected
+	phoneNumberID, accessToken := wabaSendConfig(body.StoreID)
 
 	var sendErr error
 	var fromID, wamid string
@@ -343,7 +341,7 @@ func SendThreadMessageHandler(w http.ResponseWriter, r *http.Request) {
 		wamid, sendErr = metaSendText(phoneNumberID, accessToken, contactPhone, body.Text)
 		fromID = phoneNumberID
 	} else {
-		// Fall back to Evolution API
+		// no WABA connected: legacy channel
 		evoURL, evoKey, evoInstance := evoConfigFromStore(body.StoreID)
 		base := strings.TrimRight(evoURL, "/")
 		phone := contactPhone

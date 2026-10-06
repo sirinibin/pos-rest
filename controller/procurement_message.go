@@ -1773,11 +1773,9 @@ func ReplyToProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 		storeIDStr = origMsg.StoreID.Hex()
 	}
 
-	// Prefer Meta WhatsApp Cloud API (store_rfq → bot) then fall back to Evolution API
-	metaPhoneID, metaToken := rfqMetaConfig(storeIDStr, "store_rfq")
-	if metaPhoneID == "" || metaToken == "" {
-		metaPhoneID, metaToken = rfqMetaConfig(storeIDStr, "bot")
-	}
+	// the official WhatsApp API (store_rfq → bot) always wins when connected;
+	// the legacy channel is used only when no WABA number is set up
+	metaPhoneID, metaToken := wabaSendConfig(storeIDStr)
 	var replyWamid string
 	if metaPhoneID != "" && metaToken != "" {
 		var err error

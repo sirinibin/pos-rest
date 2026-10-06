@@ -222,6 +222,29 @@ func metaSendJSON(phoneNumberID, accessToken string, payload interface{}) ([]byt
 	return body, resp.StatusCode, nil
 }
 
+// pickWABASender returns the official WhatsApp (WABA) sender to use: the
+// store RFQ number when fully configured, else the bot number, else none.
+func pickWABASender(rfqPhoneID, rfqToken, botPhoneID, botToken string) (phoneNumberID, accessToken string) {
+	if rfqPhoneID != "" && rfqToken != "" {
+		return rfqPhoneID, rfqToken
+	}
+	if botPhoneID != "" && botToken != "" {
+		return botPhoneID, botToken
+	}
+	return "", ""
+}
+
+// wabaSendConfig is the store's connected official WhatsApp sender. Whenever
+// it is non-empty every WhatsApp send must go through it, never Evolution.
+var wabaSendConfig = func(storeID string) (phoneNumberID, accessToken string) {
+	rID, rTok := rfqMetaConfig(storeID, "store_rfq")
+	bID, bTok := rfqMetaConfig(storeID, "bot")
+	return pickWABASender(rID, rTok, bID, bTok)
+}
+
+// sendWABADocument is metaSendDocument, swappable in tests.
+var sendWABADocument = metaSendDocument
+
 // metaSendText sends a plain text message.
 // Returns the WhatsApp message ID from the API response.
 func metaSendText(phoneNumberID, accessToken, to, text string) (string, error) {

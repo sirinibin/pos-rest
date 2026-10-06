@@ -365,7 +365,9 @@ func DisconnectWhatsApp(w http.ResponseWriter, r *http.Request) {
 
 // ── 5. SendWhatsAppDocument ──────────────────────────────────────────────────
 // POST /v1/whatsapp/send-document
-// Receives a PDF file + phone + caption, sends via Evolution API.
+// Receives a PDF file + phone + caption. Sends through the official WhatsApp
+// API (WABA) whenever the store has it connected; the legacy channel is used
+// only when no WABA number is set up.
 func SendWhatsAppDocument(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -392,9 +394,6 @@ func SendWhatsAppDocument(w http.ResponseWriter, r *http.Request) {
 		filename = handler.Filename
 	}
 
-	evoURL, evoKey, evoInstance := evoConfigFromStore(r.FormValue("store_id"))
-	base := strings.TrimRight(evoURL, "/")
-
 	pdfBytes, err := io.ReadAll(file)
 	if err != nil {
 		http.Error(w, `{"error":"failed to read file"}`, http.StatusInternalServerError)
@@ -406,6 +405,25 @@ func SendWhatsAppDocument(w http.ResponseWriter, r *http.Request) {
 		dst.Write(pdfBytes)
 		dst.Close()
 	}
+
+	if phoneID, token := wabaSendConfig(r.FormValue("store_id")); phoneID != "" {
+		to := wabaRecipient(phone)
+		if to == "" {
+			http.Error(w, `{"error":"this contact has no WhatsApp phone number"}`, http.StatusBadRequest)
+			return
+		}
+		dataURI := "data:application/pdf;base64," + base64.StdEncoding.EncodeToString(pdfBytes)
+		if err := sendWABADocument(phoneID, token, to, dataURI, "application/pdf", filename, caption); err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]string{"error": "WhatsApp API error: " + err.Error()})
+			return
+		}
+		fmt.Fprint(w, `{"success":true,"channel":"waba"}`)
+		return
+	}
+
+	evoURL, evoKey, evoInstance := evoConfigFromStore(r.FormValue("store_id"))
+	base := strings.TrimRight(evoURL, "/")
 
 	// For @lid contacts, try to resolve to a real phone number via fetchProfile.
 	if strings.HasSuffix(phone, "@lid") {
@@ -438,6 +456,25 @@ func SendWhatsAppDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprintf(w, `{"success":true,"detail":%s}`, string(respBody))
+}
+
+// wabaRecipient turns a phone or WhatsApp JID into the digits-only number the
+// official API expects. A @lid id is not a phone number, so it yields "".
+func wabaRecipient(phone string) string {
+	phone = strings.TrimSpace(phone)
+	if strings.HasSuffix(phone, "@lid") {
+		return ""
+	}
+	if i := strings.Index(phone, "@"); i >= 0 {
+		phone = phone[:i]
+	}
+	var b strings.Builder
+	for _, r := range phone {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // ── 6. CheckWhatsAppNumbers ──────────────────────────────────────────────────
