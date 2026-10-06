@@ -39,6 +39,8 @@ func TestERP_Endpoints_Unauthenticated(t *testing.T) {
 	for _, r := range erp.Resources() {
 		paths = append(paths,
 			struct{ method, path string }{"GET", "/" + r.Path},
+			struct{ method, path string }{"GET", "/" + r.Path + "?select=-history"},
+			struct{ method, path string }{"GET", "/" + r.Path + "/x?select=code"},
 			struct{ method, path string }{"POST", "/" + r.Path},
 			struct{ method, path string }{"PATCH", "/" + r.Path + "/x"},
 			struct{ method, path string }{"DELETE", "/" + r.Path + "/x"},

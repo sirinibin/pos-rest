@@ -64,8 +64,12 @@ func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	if err != nil {
 		return nil, 0, errInternal("db: " + err.Error())
 	}
-	cur, err := col.Find(ctx, f, options.Find().SetSort(bson.D{{Key: nativeDateKey, Value: 1}, {Key: "_id", Value: 1}}).
-		SetSkip(int64((q.Page-1)*q.Limit)).SetLimit(int64(q.Limit)))
+	opts := options.Find().SetSort(bson.D{{Key: nativeDateKey, Value: 1}, {Key: "_id", Value: 1}}).
+		SetSkip(int64((q.Page - 1) * q.Limit)).SetLimit(int64(q.Limit))
+	if p := q.Select.dbProjection("history"); p != nil {
+		opts.SetProjection(p)
+	}
+	cur, err := col.Find(ctx, f, opts)
 	if err != nil {
 		return nil, 0, errInternal("db: " + err.Error())
 	}

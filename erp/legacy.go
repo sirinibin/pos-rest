@@ -530,6 +530,9 @@ func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) 
 	}
 	sortD = append(sortD, bson.E{Key: "_id", Value: 1})
 	opts := options.Find().SetSort(sortD)
+	if p := q.Select.dbProjection(envKey + ".h"); p != nil {
+		opts.SetProjection(p)
+	}
 	if !all {
 		opts.SetSkip(int64((q.Page - 1) * q.Limit)).SetLimit(int64(q.Limit))
 	}
