@@ -18,6 +18,7 @@ type ListQuery struct {
 	Page           int
 	IncludeDeleted bool
 	From           *time.Time
+	Select         fieldSelect // ?select= (empty = every field)
 }
 
 // WriteMeta carries per-write request metadata.
@@ -188,6 +189,11 @@ func parseListQuery(r *http.Request, res *Resource) (ListQuery, error) {
 	}
 	inc := v.Get("includeDeleted")
 	q.IncludeDeleted = inc == "1" || strings.EqualFold(inc, "true")
+	sel, err := parseSelect(v.Get("select"))
+	if err != nil {
+		return q, err
+	}
+	q.Select = sel
 	if s := v.Get("from"); s != "" && res.DateField != "" {
 		t, err := parseClientTime(s)
 		if err != nil {
@@ -236,7 +242,7 @@ func handleList(w http.ResponseWriter, r *http.Request, res *Resource) {
 	if rows == nil {
 		rows = []M{}
 	}
-	writeJSON(w, http.StatusOK, M{"data": rows, "total": total})
+	writeJSON(w, http.StatusOK, M{"data": q.Select.applyAll(rows), "total": total})
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request, res *Resource) {
@@ -246,6 +252,11 @@ func handleGet(w http.ResponseWriter, r *http.Request, res *Resource) {
 		return
 	}
 	if err := res.checkPerm(c, "view"); err != nil {
+		writeErr(w, err)
+		return
+	}
+	sel, err := parseSelect(r.URL.Query().Get("select"))
+	if err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -264,7 +275,7 @@ func handleGet(w http.ResponseWriter, r *http.Request, res *Resource) {
 		writeErr(w, errNotFound())
 		return
 	}
-	writeJSON(w, http.StatusOK, rec)
+	writeJSON(w, http.StatusOK, sel.apply(rec))
 }
 
 func handleCreate(w http.ResponseWriter, r *http.Request, res *Resource) {
