@@ -49,6 +49,9 @@ func Register(router *mux.Router) {
 	// Subscription billing by bank transfer (billing.go)
 	registerBilling(s)
 
+	// Dashboard figures computed like the old business dashboard (dashboard_expense.go)
+	s.HandleFunc("/dashboard/total-expense", authed(handleDashboardTotalExpense)).Methods("GET")
+
 	// Drafts (§2.1b): separate *_draft collections, never touch real data
 	s.HandleFunc("/drafts/{docType}", handleDraftList).Methods("GET")
 	s.HandleFunc("/drafts/{docType}", handleDraftCreate).Methods("POST")
