@@ -53,6 +53,7 @@ func Register(router *mux.Router) {
 	s.HandleFunc("/dashboard/total-expense", authed(handleDashboardTotalExpense)).Methods("GET")
 	s.HandleFunc("/dashboard/vat", authed(handleDashboardVat)).Methods("GET")
 	s.HandleFunc("/dashboard/salary-balance", authed(handleDashboardSalaryBalance)).Methods("GET")
+	s.HandleFunc("/dashboard/bi", authed(handleDashboardBI)).Methods("GET")
 
 	// Drafts (§2.1b): separate *_draft collections, never touch real data
 	s.HandleFunc("/drafts/{docType}", handleDraftList).Methods("GET")
