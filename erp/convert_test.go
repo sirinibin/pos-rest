@@ -188,3 +188,15 @@ func TestToArabicDigitsAndPad(t *testing.T) {
 		t.Fatal("padding")
 	}
 }
+
+func TestZatcaEnvNames(t *testing.T) {
+	for in, want := range map[string]string{
+		"NonProduction": "NonProduction", "nonproduction": "NonProduction", "non-production": "NonProduction",
+		"Non Production": "NonProduction", "sandbox": "NonProduction", "Simulation": "Simulation", "simulation": "Simulation",
+		"Production": "Production", " production ": "Production", "": "", "Staging": "", "prod": "",
+	} {
+		if got := zatcaEnv(in); got != want {
+			t.Fatalf("zatcaEnv(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/erp/erpfixture"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func storeA() string { return fx.StoreA.Hex() }
@@ -826,5 +828,107 @@ func TestAPI_ZatcaActions(t *testing.T) {
 	dc := call(t, "POST", "/stores/"+storeA()+"/zatca/disconnect", admin, M{})
 	if dc.Code != 200 || get(dc.Body, "zatca.connected") != false || get(dc.Body, "zatca.pcsid") != nil || str(get(dc.Body, "zatca.disconnectedAt")) == "" {
 		t.Fatalf("disconnect: %d %s", dc.Code, dc.Raw)
+	}
+}
+
+// ---------------- ZATCA environment: admins only, never once documents exist ----------------
+
+func TestAPI_ZatcaEnvironment(t *testing.T) {
+	requireDB(t)
+	admin := login(t, fx.AdminEmail)
+	mgr := login(t, fx.ManagerEmail)
+	userB := login(t, fx.UserBEmail)
+	setEnv := func(sid primitive.ObjectID, env string) {
+		ctx, cancel := dbctx()
+		defer cancel()
+		_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{"zatca.env": env}})
+	}
+	rawEnv := func(sid primitive.ObjectID) string {
+		var raw bson.M
+		ctx, cancel := dbctx()
+		defer cancel()
+		_ = mainDB().Collection("store").FindOne(ctx, bson.M{"_id": sid}).Decode(&raw)
+		return str(get(normDoc(raw), "zatca.env"))
+	}
+	patch := func(tok, id string, body M) resp {
+		g := call(t, "GET", "/stores/"+id, tok, nil)
+		return call(t, "PATCH", "/stores/"+id, tok, body, "If-Match", str(g.Body["version"]), "X-Change-Reason", "zatca env")
+	}
+
+	// store A has sales → the UI lock hint is on
+	setEnv(fx.StoreA, "NonProduction")
+	if g := call(t, "GET", "/stores/"+storeA(), admin, nil); get(g.Body, "zatca.envLocked") != true || get(g.Body, "zatca.env") != "NonProduction" {
+		t.Fatalf("store A zatca: %v", g.Body["zatca"])
+	}
+	// unknown environment name → validation error
+	if r := patch(admin, storeA(), M{"zatca": M{"env": "Staging"}}); r.Code != 400 || r.errField("zatca.env") == "" {
+		t.Fatalf("invalid env: %d %s", r.Code, r.Raw)
+	}
+	// a manager can't edit store settings at all
+	if r := patch(mgr, storeA(), M{"zatca": M{"env": "Production"}}); r.Code != 403 {
+		t.Fatalf("manager env change: %d %s", r.Code, r.Raw)
+	}
+	// an admin can't either once the store has documents
+	if r := patch(admin, storeA(), M{"zatca": M{"env": "Production"}}); r.Code < 400 || !strings.Contains(r.errField("zatca.env"), "can't be changed") {
+		t.Fatalf("admin env change with documents: %d %s", r.Code, r.Raw)
+	}
+	if e := rawEnv(fx.StoreA); e != "NonProduction" {
+		t.Fatalf("env must be unchanged: %q", e)
+	}
+	// unchanged env in the payload is fine
+	if r := patch(admin, storeA(), M{"zatca": M{"env": "NonProduction"}, "email": "ops2@example.com"}); r.Code != 200 {
+		t.Fatalf("same env: %d %s", r.Code, r.Raw)
+	}
+
+	// store B's own user as the store's Administrator (a signed-up owner):
+	// not a platform admin
+	ctx0, cancel0 := dbctx()
+	_, _ = mainDB().Collection("user").UpdateOne(ctx0, bson.M{"email": fx.UserBEmail}, bson.M{"$set": bson.M{"erp.role": "r_admin"}})
+	cancel0()
+	defer func() {
+		ctx, cancel := dbctx()
+		defer cancel()
+		_, _ = mainDB().Collection("user").UpdateOne(ctx, bson.M{"email": fx.UserBEmail}, bson.M{"$unset": bson.M{"erp.role": ""}})
+	}()
+	userB = login(t, fx.UserBEmail)
+	// give store B the complete profile the legacy store update requires
+	// (copied from store A), restoring the original afterwards
+	var rawA, rawB bson.M
+	ctx1, cancel1 := dbctx()
+	_ = mainDB().Collection("store").FindOne(ctx1, bson.M{"_id": fx.StoreA}).Decode(&rawA)
+	_ = mainDB().Collection("store").FindOne(ctx1, bson.M{"_id": fx.StoreB}).Decode(&rawB)
+	full := bson.M{}
+	for k, v := range rawA {
+		full[k] = v
+	}
+	full["_id"], full["code"], full["zatca"] = fx.StoreB, "OLD1", bson.M{"phase": "1"}
+	delete(full, "erp")
+	_, _ = mainDB().Collection("store").ReplaceOne(ctx1, bson.M{"_id": fx.StoreB}, full)
+	cancel1()
+	defer func() {
+		ctx, cancel := dbctx()
+		defer cancel()
+		_, _ = mainDB().Collection("store").ReplaceOne(ctx, bson.M{"_id": fx.StoreB}, rawB)
+	}()
+	// first-time setting is allowed for the store's own Administrator
+	setEnv(fx.StoreB, "")
+	if r := patch(userB, storeB(), M{"zatca": M{"env": "simulation"}}); r.Code != 200 || get(r.Body, "zatca.env") != "Simulation" {
+		t.Fatalf("first env: %d %s", r.Code, r.Raw)
+	}
+	if r := patch(userB, storeB(), M{"zatca": M{"env": "Production"}}); r.Code != 403 || !strings.Contains(r.errField("zatca.env"), "Only admins") {
+		t.Fatalf("non-admin change: %d %s", r.Code, r.Raw)
+	}
+	// with no ZATCA documents an admin may switch it
+	ctx, cancel := dbctx()
+	defer cancel()
+	away := primitive.NewObjectID()
+	ordB := storeDB(storeB()).Collection("order")
+	_, _ = ordB.UpdateMany(ctx, bson.M{"store_id": fx.StoreB}, bson.M{"$set": bson.M{"store_id": away}})
+	defer ordB.UpdateMany(context.Background(), bson.M{"store_id": away}, bson.M{"$set": bson.M{"store_id": fx.StoreB}})
+	if g := call(t, "GET", "/stores/"+storeB(), admin, nil); get(g.Body, "zatca.envLocked") != false {
+		t.Fatalf("store B without documents must not be locked: %v", g.Body["zatca"])
+	}
+	if r := patch(admin, storeB(), M{"zatca": M{"env": "Production"}}); r.Code != 200 || rawEnv(fx.StoreB) != "Production" {
+		t.Fatalf("admin env change without documents: %d %s", r.Code, r.Raw)
 	}
 }

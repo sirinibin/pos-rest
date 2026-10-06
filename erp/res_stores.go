@@ -10,6 +10,7 @@ import (
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // serialMap maps contract serial keys to legacy store.*_serial_number fields.
@@ -163,6 +164,42 @@ func addressToLegacy(a M) M {
 	}
 }
 
+// storeHasZatcaDocs reports whether the store issued any sales, sales
+// returns, debit notes or credit notes (deleted ones included).
+var storeHasZatcaDocs = func(d M) bool {
+	oid, ok := oidOf(d["_id"])
+	if !ok {
+		oid, ok = oidOf(d["id"])
+	}
+	if !ok {
+		return false
+	}
+	ctx, cancel := dbctx()
+	defer cancel()
+	one := int64(1)
+	for _, c := range models.ZatcaDocumentCollections {
+		n, err := storeDB(oid.Hex()).Collection(c).CountDocuments(ctx, bson.M{"store_id": oid}, &options.CountOptions{Limit: &one})
+		if err == nil && n > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// zatcaEnv normalises a ZATCA environment name to the legacy value
+// (NonProduction | Simulation | Production); "" when unknown.
+func zatcaEnv(v string) string {
+	switch strings.ToLower(strings.NewReplacer("-", "", "_", "", " ", "").Replace(strings.TrimSpace(v))) {
+	case "nonproduction", "sandbox", "developerportal":
+		return "NonProduction"
+	case "simulation":
+		return "Simulation"
+	case "production":
+		return "Production"
+	}
+	return ""
+}
+
 func toArabicDigits(s string) string {
 	return strings.NewReplacer("0", "٠", "1", "١", "2", "٢", "3", "٣", "4", "٤", "5", "٥", "6", "٦", "7", "٧", "8", "٨", "9", "٩").Replace(s)
 }
@@ -253,6 +290,8 @@ func storeToContract(x *mapCtx, d M) M {
 	if t := fmtDT(z["last_disconnected_at"]); t != "" {
 		zc["disconnectedAt"] = t
 	}
+	// once ZATCA documents exist the environment can't change (UI lock hint)
+	zc["envLocked"] = storeHasZatcaDocs(d)
 	rec["zatca"] = zc
 	// mode, evolution.status and waba have no legacy field: they live in erp.x
 	// and are merged in by applyEnvelope, where mapped keys win. So the default
@@ -334,6 +373,9 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 	}
 	if v := str(rec["email"]); v != "" && !validEmail(v) {
 		e["email"] = "invalid email"
+	}
+	if v := str(get(rec, "zatca.env")); v != "" && zatcaEnv(v) == "" {
+		e["zatca.env"] = "NonProduction, Simulation or Production"
 	}
 	if s, ok := rec["serials"].(M); ok {
 		for k, v := range s {
@@ -533,13 +575,19 @@ func storeToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M
 		}
 	}
 	if ch["zatca"] {
-		// only phase is client-writable (rule 60); connection state is server-owned
-		ph := str(get(rec, "zatca.phase"))
-		if ph == "1" || ph == "2" {
-			if ph != str(get(prev, "zatca.phase")) {
-				z := cloneM(sub(prev, "zatca"))
-				p["zatca"] = M{"phase": ph, "env": str(z["env"])}
-			}
+		// only phase and env are client-writable (rule 60); credentials and
+		// connection state are server-owned. The legacy store update enforces
+		// who may change env and when (controller.zatcaEnvChangeError).
+		pz := sub(prev, "zatca")
+		ph, env := str(pz["phase"]), str(pz["env"])
+		if v := str(get(rec, "zatca.phase")); v == "1" || v == "2" {
+			ph = v
+		}
+		if v := zatcaEnv(str(get(rec, "zatca.env"))); v != "" {
+			env = v
+		}
+		if ph != str(pz["phase"]) || env != str(pz["env"]) {
+			p["zatca"] = M{"phase": ph, "env": env}
 		}
 	}
 	return p, nil
@@ -569,7 +617,7 @@ func newStoresResource() *Resource {
 			"national_address_zipcode": "address.postalCode", "national_address_street_name_arabic": "address.streetAr",
 			"national_address_district_name_arabic": "address.districtAr", "national_address_city_name_arabic": "address.cityAr",
 			"phone_in_arabic": "phone", "vat_no_in_arabic": "vatNo", "registration_number_in_arabic": "crNo", "country_code": "address.countryEn",
-			"code": "legacyCode",
+			"code": "legacyCode", "zatca_env": "zatca.env",
 		},
 		noDelete: "Stores cannot be deleted from StartERP.",
 	}
@@ -722,6 +770,13 @@ func (s *storesBackend) Update(c *Ctx, storeHex, id string, prev, next M, change
 		z := cloneM(sub(prev, "zatca"))
 		if ph, ok := nz["phase"]; ok {
 			z["phase"] = ph
+		}
+		if v := str(nz["env"]); v != "" {
+			env := zatcaEnv(v)
+			if env == "" {
+				return nil, errBadRequest("", map[string]string{"zatca.env": "NonProduction, Simulation or Production"})
+			}
+			z["env"] = env
 		}
 		next["zatca"] = z
 	}

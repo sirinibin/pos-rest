@@ -789,6 +789,25 @@ func (store *Store) GetCountByCollectionByDeletedIncluded(collectionName string)
 	})
 }
 
+// ZatcaDocumentCollections hold the documents reported to ZATCA: sales,
+// sales returns, debit notes (customer deposits) and credit notes (customer
+// withdrawals).
+var ZatcaDocumentCollections = []string{"order", "salesreturn", "customerdeposit", "customerwithdrawal"}
+
+// CountZatcaDocuments counts the store's ZATCA documents, deleted ones
+// included (they were issued all the same).
+func (store *Store) CountZatcaDocuments() (int64, error) {
+	var total int64
+	for _, c := range ZatcaDocumentCollections {
+		n, err := store.GetCountByCollectionByDeletedIncluded(c)
+		if err != nil {
+			return 0, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
 func (store *Store) GetCountByCollectionInRange(from, to time.Time, collectionName string) (count int64, err error) {
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection(collectionName)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

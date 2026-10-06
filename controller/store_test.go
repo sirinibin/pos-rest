@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -507,5 +509,61 @@ func TestPreserveZatcaCredentials(t *testing.T) {
 				t.Fatalf("credentials not preserved: %+v", z)
 			}
 		})
+	}
+}
+
+// ── ZATCA environment changes ────────────────────────────────────────────────
+
+func TestZatcaEnvChangeError(t *testing.T) {
+	docs := func(n int64, err error) func() (int64, error) {
+		return func() (int64, error) { return n, err }
+	}
+	never := func() (int64, error) { t.Fatal("documents must not be counted"); return 0, nil }
+	cases := []struct {
+		name           string
+		oldEnv, newEnv string
+		admin          bool
+		count          func() (int64, error)
+		wantStatus     int
+		wantMsg        string
+	}{
+		{"unchanged", "Production", "Production", false, never, 0, ""},
+		{"unchanged with spaces", "Production", " Production ", false, never, 0, ""},
+		{"first time set by non-admin", "", "NonProduction", false, never, 0, ""},
+		{"first time set by admin", "", "Simulation", true, never, 0, ""},
+		{"non-admin change", "NonProduction", "Production", false, never, 403, "Only admins"},
+		{"admin change, no documents", "NonProduction", "Production", true, docs(0, nil), 0, ""},
+		{"admin change, documents exist", "Simulation", "Production", true, docs(3, nil), 400, "can't be changed"},
+		{"admin change, count fails", "Simulation", "Production", true, docs(0, errors.New("db down")), 500, "db down"},
+		{"admin clears env with documents", "Production", "", true, docs(1, nil), 400, "can't be changed"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			st, field, msg := zatcaEnvChangeError(c.oldEnv, c.newEnv, c.admin, c.count)
+			if st != c.wantStatus || !strings.Contains(msg, c.wantMsg) || (c.wantMsg == "" && msg != "") {
+				t.Fatalf("got %d %q %q, want %d %q", st, field, msg, c.wantStatus, c.wantMsg)
+			}
+			if msg != "" && field != "zatca_env" {
+				t.Fatalf("field = %q", field)
+			}
+		})
+	}
+}
+
+func TestCanChangeZatcaEnv(t *testing.T) {
+	for _, c := range []struct {
+		u    *models.User
+		want bool
+	}{
+		{nil, false},
+		{&models.User{Role: "Admin"}, true},
+		{&models.User{Role: "admin"}, true},
+		{&models.User{Admin: true, Role: "Manager"}, true},
+		{&models.User{Role: "Manager"}, false},
+		{&models.User{Role: "SalesMan"}, false},
+	} {
+		if got := canChangeZatcaEnv(c.u); got != c.want {
+			t.Fatalf("%+v: got %v", c.u, got)
+		}
 	}
 }

@@ -73,6 +73,8 @@ func TestMain(m *testing.M) {
 		cancel()
 		_ = os.RemoveAll(tmp)
 	} else {
+		// no MongoDB: store reads must not try to count ZATCA documents
+		storeHasZatcaDocs = func(M) bool { return false }
 		code = m.Run()
 	}
 	os.Exit(code)

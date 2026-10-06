@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -302,6 +304,34 @@ func zatcaSensitiveFieldsChanged(oldStore, newStore models.Store, isAdmin bool) 
 	return false
 }
 
+// canChangeZatcaEnv: only platform admins (legacy Admin role or admin flag)
+// may switch a store between NonProduction, Simulation and Production.
+func canChangeZatcaEnv(u *models.User) bool {
+	return u != nil && (u.Admin || strings.EqualFold(u.Role, "Admin"))
+}
+
+// zatcaEnvChangeError validates a ZATCA environment change. Setting it for the
+// first time (old value empty) is always allowed; changing it needs an admin
+// and a store with no sales, sales returns, debit notes or credit notes.
+// docCount is only called when the change is otherwise allowed.
+func zatcaEnvChangeError(oldEnv, newEnv string, isAdmin bool, docCount func() (int64, error)) (int, string, string) {
+	oldEnv, newEnv = strings.TrimSpace(oldEnv), strings.TrimSpace(newEnv)
+	if oldEnv == "" || newEnv == oldEnv {
+		return 0, "", ""
+	}
+	if !isAdmin {
+		return http.StatusForbidden, "zatca_env", "Only admins can change the ZATCA environment"
+	}
+	n, err := docCount()
+	if err != nil {
+		return http.StatusInternalServerError, "zatca_env", "Unable to check the store's ZATCA documents: " + err.Error()
+	}
+	if n > 0 {
+		return http.StatusBadRequest, "zatca_env", "The ZATCA environment can't be changed because this store already has sales, sales returns, debit notes or credit notes (" + strconv.FormatInt(n, 10) + ")"
+	}
+	return 0, "", ""
+}
+
 // preserveZatcaCredentials restores the server-owned ZATCA onboarding fields
 // (keys, CSIDs, connection state) from the stored record, whatever the client
 // sent. Only phase and env are client-editable.
@@ -434,6 +464,17 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	// does not produce false-positive reconnect triggers.
 	store.TrimSpaceFromFields()
 	storeOld.TrimSpaceFromFields()
+
+	// ZATCA environment: admins only, and never once the store has documents
+	// that are (or would be) reported to ZATCA.
+	if status, field, msg := zatcaEnvChangeError(storeOld.Zatca.Env, store.Zatca.Env,
+		canChangeZatcaEnv(accessingUser), storeOld.CountZatcaDocuments); msg != "" {
+		w.WriteHeader(status)
+		response.Status = false
+		response.Errors[field] = msg
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	// Detect ZATCA-sensitive field changes while the store holds ZATCA
 	// credentials — in Phase 2, or in Phase 1 after switching down from a
