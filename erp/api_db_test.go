@@ -625,7 +625,8 @@ func TestAPI_StoresPatch_WhatsappRoundTrip(t *testing.T) {
 	// re-saving with the masked key keeps the real key
 	r = call(t, "PATCH", "/stores/"+storeA(), admin, M{"whatsapp": M{"mode": "evolution", "evolution": M{"url": "https://wa2.example", "instance": "shop1", "apiKey": masked}}},
 		"If-Match", str(r.Body["version"]), "X-Change-Reason", "settings")
-	if r.Code != 200 || get(r.Body, "whatsapp.mode") != "evolution" {
+	// WhatsApp is WABA-only: a legacy mode from an old client reads back as waba
+	if r.Code != 200 || get(r.Body, "whatsapp.mode") != "waba" {
 		t.Fatalf("second patch: %d mode=%v", r.Code, get(r.Body, "whatsapp.mode"))
 	}
 	_ = mainDB().Collection("store").FindOne(ctx, bson.M{"_id": oid}).Decode(&raw)

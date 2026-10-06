@@ -197,7 +197,7 @@ func ConnectWhatsApp(w http.ResponseWriter, r *http.Request) {
 		evoGlobalKey, createPayload)
 	if err != nil || (status != 200 && status != 201) {
 		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprintf(w, `{"error":"Evolution API create failed","detail":%s}`, string(respBody))
+		fmt.Fprintf(w, `{"error":"WhatsApp service setup failed","detail":%s}`, string(respBody))
 		return
 	}
 
@@ -271,7 +271,7 @@ func GetWhatsAppQR(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf("%s/instance/connect/%s", evoURL, instanceName),
 		evoKey, nil)
 	if err != nil {
-		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"WhatsApp service unreachable"}`, http.StatusBadGateway)
 		return
 	}
 	w.Write(evoNormalizeQR(respBody))
@@ -294,7 +294,7 @@ func GetWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf("%s/instance/fetchInstances", evoURL),
 		evoKey, nil)
 	if err != nil {
-		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"WhatsApp service unreachable"}`, http.StatusBadGateway)
 		return
 	}
 
@@ -429,12 +429,12 @@ func SendWhatsAppDocument(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf("%s/message/sendMedia/%s", base, evoInstance),
 		evoKey, payloadBytes)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"Evolution API unreachable: %s"}`, err.Error()), http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf(`{"error":"WhatsApp service unreachable: %s"}`, err.Error()), http.StatusBadGateway)
 		return
 	}
 	if status != http.StatusOK && status != http.StatusCreated {
 		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprintf(w, `{"error":"Evolution API error","detail":%s}`, string(respBody))
+		fmt.Fprintf(w, `{"error":"WhatsApp service error","detail":%s}`, string(respBody))
 		return
 	}
 	fmt.Fprintf(w, `{"success":true,"detail":%s}`, string(respBody))
@@ -463,12 +463,12 @@ func CheckWhatsAppNumbers(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf("%s/chat/whatsappNumbers/%s", strings.TrimRight(evoURL, "/"), evoInstance),
 		evoKey, payload)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"Evolution API unreachable: %s"}`, err.Error()), http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf(`{"error":"WhatsApp service unreachable: %s"}`, err.Error()), http.StatusBadGateway)
 		return
 	}
 	if status != http.StatusOK && status != http.StatusCreated {
 		w.WriteHeader(http.StatusBadGateway)
-		fmt.Fprintf(w, `{"error":"Evolution API error","detail":%s}`, string(respBody))
+		fmt.Fprintf(w, `{"error":"WhatsApp service error","detail":%s}`, string(respBody))
 		return
 	}
 	w.Write(respBody)

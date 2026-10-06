@@ -83,7 +83,7 @@ func SyncWhatsAppContactsForStore(store *Store) error {
 		[]byte("{}"),
 	)
 	if err != nil {
-		return fmt.Errorf("Evolution API unreachable: %w", err)
+		return fmt.Errorf("WhatsApp service unreachable: %w", err)
 	}
 	if contactsStatus != http.StatusOK {
 		return fmt.Errorf("findContacts %d: %s", contactsStatus, string(contactsBody))

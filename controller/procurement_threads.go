@@ -359,7 +359,7 @@ func SendThreadMessageHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("%s/message/sendText/%s", base, evoInstance),
 			evoKey, payload)
 		if sendErr == nil && status != 200 && status != 201 {
-			sendErr = fmt.Errorf("Evolution API error %d: %s", status, string(respBody))
+			sendErr = fmt.Errorf("WhatsApp service error %d: %s", status, string(respBody))
 		}
 		fromID = evoInstance
 	}

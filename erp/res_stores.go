@@ -296,14 +296,10 @@ func storeToContract(x *mapCtx, d M) M {
 	// once ZATCA documents exist the environment can't change (UI lock hint)
 	zc["envLocked"] = storeHasZatcaDocs(d)
 	rec["zatca"] = zc
-	// mode, evolution.status and waba have no legacy field: they live in erp.x
-	// and are merged in by applyEnvelope, where mapped keys win. So the default
-	// mode is only filled when the client never saved one.
-	waMode := str(get(d, envKey+".x.whatsapp.mode"))
-	if waMode == "" {
-		waMode = "evolution"
-	}
-	rec["whatsapp"] = M{"mode": waMode, "evolution": M{
+	// evolution.status and waba have no legacy field: they live in erp.x and
+	// are merged in by applyEnvelope, where mapped keys win. WhatsApp is
+	// WABA-only, so the mode is always "waba", whatever an older client saved.
+	rec["whatsapp"] = M{"mode": "waba", "evolution": M{
 		"url": str(st["evolution_api_url"]), "instance": str(st["evolution_instance_name"]),
 		"apiKey": mask(str(st["evolution_api_key"])),
 	}}

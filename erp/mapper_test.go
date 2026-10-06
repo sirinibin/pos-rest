@@ -785,11 +785,13 @@ func TestStoreToContract_WhatsappAndSmtpPort(t *testing.T) {
 		wantMode string
 		wantPort interface{}
 	}{
-		{"fresh store", M{"_id": sid, "name": "A"}, "evolution", nil},
-		{"port 0", M{"_id": sid, "name": "A", "settings": M{"outgoing_email_smtp_port": int32(0)}}, "evolution", nil},
-		{"port set", M{"_id": sid, "name": "A", "settings": M{"outgoing_email_smtp_port": int32(587)}}, "evolution", int64(587)},
+		{"fresh store", M{"_id": sid, "name": "A"}, "waba", nil},
+		{"port 0", M{"_id": sid, "name": "A", "settings": M{"outgoing_email_smtp_port": int32(0)}}, "waba", nil},
+		{"port set", M{"_id": sid, "name": "A", "settings": M{"outgoing_email_smtp_port": int32(587)}}, "waba", int64(587)},
 		{"saved waba mode", M{"_id": sid, "name": "A", envKey: M{"x": M{"whatsapp": M{"mode": "waba"}}}}, "waba", nil},
-		{"saved empty mode", M{"_id": sid, "name": "A", envKey: M{"x": M{"whatsapp": M{"mode": ""}}}}, "evolution", nil},
+		{"saved empty mode", M{"_id": sid, "name": "A", envKey: M{"x": M{"whatsapp": M{"mode": ""}}}}, "waba", nil},
+		// WhatsApp is WABA-only: a mode an older client saved is reported as waba
+		{"saved legacy mode", M{"_id": sid, "name": "A", envKey: M{"x": M{"whatsapp": M{"mode": "evolution"}}}}, "waba", nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

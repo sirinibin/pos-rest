@@ -1801,12 +1801,12 @@ func ReplyToProcurementMessageHandler(w http.ResponseWriter, r *http.Request) {
 			evoKey, payload)
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Evolution API unreachable: " + err.Error()})
+			json.NewEncoder(w).Encode(map[string]string{"error": "WhatsApp service unreachable: " + err.Error()})
 			return
 		}
 		if status != http.StatusOK && status != http.StatusCreated {
 			w.WriteHeader(http.StatusBadGateway)
-			fmt.Fprintf(w, `{"error":"Evolution API error","detail":%s}`, string(respBody))
+			fmt.Fprintf(w, `{"error":"WhatsApp service error","detail":%s}`, string(respBody))
 			return
 		}
 	}
