@@ -65,6 +65,16 @@ go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
 Both steps must pass cleanly. If the rebase pulls in new commits, re-run the tests.
 Never push if tests are red or if the rebase is unresolved.
 
+## Auto-push rule (NON-NEGOTIABLE)
+
+Once all tests pass, **push immediately without asking** — to `origin/v2`:
+```bash
+git fetch origin && git rebase origin/v2
+go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+git push origin v2
+```
+Do not wait for confirmation. A green test suite is the only gate.
+
 ## API Test Sync Rule (non-negotiable)
 **Every time a backend API is enhanced or a new endpoint is added:**
 - Add or update test cases in `controller/*_test.go` for the changed handler
