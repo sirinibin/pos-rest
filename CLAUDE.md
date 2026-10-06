@@ -46,6 +46,25 @@ The `v2` branch is a **completely separate product line** from `master`/`test`.
 4. **v2 service details:** `start-api-v2`, port 2004, path `/home/ubuntu/go/src/github.com/sirinibin/pos-rest-v2`,
    API at `https://startpos-api-v2.gulfunionozone.com`. Deploy with `deploy_v2.sh` from the `v2` branch only.
 
+## Sync rule (NON-NEGOTIABLE)
+
+This repo's `v2` branch is edited from multiple environments (Claude Code web app, local Claude Code, etc.).
+Commits may land on `origin/v2` at any time from another session.
+
+**Before starting any task:**
+```bash
+git fetch origin && git rebase origin/v2
+```
+Resolve any conflicts before proceeding. Never start work on a stale copy.
+
+**Before every push:**
+```bash
+git fetch origin && git rebase origin/v2
+go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+```
+Both steps must pass cleanly. If the rebase pulls in new commits, re-run the tests.
+Never push if tests are red or if the rebase is unresolved.
+
 ## API Test Sync Rule (non-negotiable)
 **Every time a backend API is enhanced or a new endpoint is added:**
 - Add or update test cases in `controller/*_test.go` for the changed handler

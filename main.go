@@ -19,6 +19,7 @@ import (
 	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
+	"github.com/sirinibin/startpos/backend/erp"
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -120,6 +121,10 @@ func main() {
 	httpsPort = httpsPort + 1
 
 	router := mux.NewRouter()
+
+	// ── StartERP adapter API (/v1/erp/...) — additive; maps the StartERP REST
+	// contract onto the existing collections and v1 handlers (see erp/).
+	erp.Register(router)
 
 	// ── MCP-optimised API layer (/v1/mcp/) ────────────────────────────────────
 	// Auth

@@ -1,0 +1,12 @@
+{
+  "name": "e2e-starterp",
+  "private": true,
+  "type": "module",
+  "description": "UI e2e tests: StartERP UI (compiled prototype / rebuilt dist) against the pos-rest /v1/erp adapter",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}
