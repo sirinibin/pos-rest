@@ -2,8 +2,10 @@ package controller
 
 import (
 	"testing"
+	"time"
 
 	"github.com/sirinibin/startpos/backend/models"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ── zatcaSensitiveFieldsChanged ───────────────────────────────────────────────
@@ -467,6 +469,42 @@ func TestZatcaSensitiveFieldsChanged(t *testing.T) {
 			got := zatcaSensitiveFieldsChanged(c.old, c.new_, c.isAdmin)
 			if got != c.wantTrue {
 				t.Errorf("zatcaSensitiveFieldsChanged() = %v, want %v", got, c.wantTrue)
+			}
+		})
+	}
+}
+
+// ── preserveZatcaCredentials ─────────────────────────────────────────────────
+
+func TestPreserveZatcaCredentials(t *testing.T) {
+	now := time.Now()
+	uid := primitive.NewObjectID()
+	old := models.Zatca{
+		Phase: "2", Env: "Production", Otp: "123456", PrivateKey: "PK", Csr: "CSR",
+		ComplianceRequestID: 11, BinarySecurityToken: "BST", Secret: "S",
+		ProductionRequestID: 22, ProductionBinarySecurityToken: "PBST", ProductionSecret: "PS",
+		Connected: true, LastConnectedAt: &now, ConnectedBy: &uid, ZatcaReconnectRequired: true,
+	}
+	cases := []struct {
+		name string
+		in   models.Zatca
+	}{
+		{"switch to phase 1 keeps credentials", models.Zatca{Phase: "1", Env: "Production"}},
+		{"client tries to wipe credentials", models.Zatca{Phase: "2", Env: "Production", PrivateKey: "", Connected: false}},
+		{"client tries to forge credentials", models.Zatca{Phase: "2", Env: "Production", PrivateKey: "EVIL", ProductionSecret: "EVIL", Connected: true, ProductionRequestID: 999}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			z := c.in
+			preserveZatcaCredentials(&z, old)
+			if z.Phase != c.in.Phase || z.Env != c.in.Env {
+				t.Fatalf("phase/env must stay client-editable: %q %q", z.Phase, z.Env)
+			}
+			if z.PrivateKey != "PK" || z.Csr != "CSR" || z.Secret != "S" || z.BinarySecurityToken != "BST" ||
+				z.ProductionSecret != "PS" || z.ProductionBinarySecurityToken != "PBST" ||
+				z.ComplianceRequestID != 11 || z.ProductionRequestID != 22 || !z.Connected ||
+				z.LastConnectedAt != &now || z.ConnectedBy != &uid || z.Otp != "123456" {
+				t.Fatalf("credentials not preserved: %+v", z)
 			}
 		})
 	}

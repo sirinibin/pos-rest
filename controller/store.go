@@ -302,6 +302,30 @@ func zatcaSensitiveFieldsChanged(oldStore, newStore models.Store, isAdmin bool) 
 	return false
 }
 
+// preserveZatcaCredentials restores the server-owned ZATCA onboarding fields
+// (keys, CSIDs, connection state) from the stored record, whatever the client
+// sent. Only phase and env are client-editable.
+func preserveZatcaCredentials(z *models.Zatca, old models.Zatca) {
+	z.Otp = old.Otp
+	z.PrivateKey = old.PrivateKey
+	z.Csr = old.Csr
+	z.ComplianceRequestID = old.ComplianceRequestID
+	z.BinarySecurityToken = old.BinarySecurityToken
+	z.Secret = old.Secret
+	z.ComplianceCheck = old.ComplianceCheck
+	z.ProductionRequestID = old.ProductionRequestID
+	z.ProductionBinarySecurityToken = old.ProductionBinarySecurityToken
+	z.ProductionSecret = old.ProductionSecret
+	z.Connected = old.Connected
+	z.LastConnectedAt = old.LastConnectedAt
+	z.ConnectedBy = old.ConnectedBy
+	z.DisconnectedBy = old.DisconnectedBy
+	z.LastDisconnectedAt = old.LastDisconnectedAt
+	z.ConnectionFailedCount = old.ConnectionFailedCount
+	z.ConnectionErrors = old.ConnectionErrors
+	z.ConnectionLastFailedAt = old.ConnectionLastFailedAt
+}
+
 // UpdateStore : handler function for PUT /v1/store call
 func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -396,6 +420,11 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	// Preserve zatca_reconnect_required — can only be cleared by ConnectStoreToZatca
 	store.Zatca.ZatcaReconnectRequired = storeOld.Zatca.ZatcaReconnectRequired
 
+	// ZATCA credentials and connection state are server-owned (connect /
+	// disconnect endpoints only). They are kept when the store switches from
+	// Phase 2 to Phase 1, so switching back to Phase 2 reuses them.
+	preserveZatcaCredentials(&store.Zatca, storeOld.Zatca)
+
 	// Never overwrite rfq_email_accounts via the store form — managed exclusively
 	// by POST/DELETE /v1/rfq-email/account endpoints which store credentials safely.
 	store.Settings.RFQEmailAccounts = storeOld.Settings.RFQEmailAccounts
@@ -406,8 +435,10 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	store.TrimSpaceFromFields()
 	storeOld.TrimSpaceFromFields()
 
-	// Detect ZATCA-sensitive field changes when store is Phase 2 and connected
-	if storeOld.Zatca.Phase == "2" && storeOld.Zatca.Connected {
+	// Detect ZATCA-sensitive field changes while the store holds ZATCA
+	// credentials — in Phase 2, or in Phase 1 after switching down from a
+	// connected Phase 2 — so stale credentials are never reused.
+	if storeOld.Zatca.Connected {
 		if zatcaSensitiveFieldsChanged(*storeOld, *store, accessingUser.Role == "Admin") {
 			store.Zatca.ZatcaReconnectRequired = true
 		}

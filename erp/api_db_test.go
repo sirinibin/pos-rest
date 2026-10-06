@@ -676,7 +676,8 @@ func TestAPI_ZatcaActions(t *testing.T) {
 		defer cancel()
 		_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{"zatca.connected": true, "zatca.phase": "2",
 			"zatca.production_request_id": int64(777), "zatca.last_connected_at": time.Now(),
-			"zatca.zatca_reconnect_required": false}}) // like controller.ConnectStoreToZatca
+			"zatca.zatca_reconnect_required": false, "zatca.private_key": "PK", "zatca.production_secret": "PSECRET",
+			"zatca.production_binary_security_token": "PTOKEN"}}) // like controller.ConnectStoreToZatca
 		writeJSON(w, 200, M{"status": true, "result": "connected"})
 	}
 	c := call(t, "POST", "/stores/"+storeA()+"/zatca/connect", admin, M{"otp": "123456"})
@@ -741,6 +742,61 @@ func TestAPI_ZatcaActions(t *testing.T) {
 	// (OrderA1 is already cleared in the fixture, so it comes back as-is)
 	if r := call(t, "POST", "/sales/"+fx.OrderA1.Hex()+"/zatca/report", tok, M{}); r.Code != 200 || get(r.Body, "zatca.status") != "cleared" {
 		t.Fatalf("report after reconnect: %d %s", r.Code, r.Raw)
+	}
+
+	// Phase 2 → Phase 1 keeps the ZATCA credentials in the DB …
+	rawZatca := func() M {
+		var raw bson.M
+		ctx, cancel := dbctx()
+		defer cancel()
+		_ = mainDB().Collection("store").FindOne(ctx, bson.M{"_id": sid}).Decode(&raw)
+		return sub(normDoc(raw), "zatca")
+	}
+	patchStore := func(body M) resp {
+		g := call(t, "GET", "/stores/"+storeA(), admin, nil)
+		return call(t, "PATCH", "/stores/"+storeA(), admin, body, "If-Match", str(g.Body["version"]), "X-Change-Reason", "zatca")
+	}
+	if r := patchStore(M{"zatca": M{"phase": 1}}); r.Code != 200 || get(r.Body, "zatca.phase") != float64(1) {
+		t.Fatalf("switch to phase 1: %d %s", r.Code, r.Raw)
+	}
+	z := rawZatca()
+	if z["phase"] != "1" || z["connected"] != true || z["private_key"] != "PK" || z["production_secret"] != "PSECRET" ||
+		z["production_binary_security_token"] != "PTOKEN" || intv(z["production_request_id"]) != 777 {
+		t.Fatalf("phase 1 must keep the credentials: %v", z)
+	}
+	// … reporting is not available in Phase 1 …
+	if r := call(t, "POST", "/sales/"+fx.OrderA1.Hex()+"/zatca/report", tok, M{}); r.Code != 409 || r.errCode() != "zatca_not_connected" {
+		t.Fatalf("phase 1 report: %d %s", r.Code, r.Raw)
+	}
+	// … and back to Phase 2 with no ZATCA detail changed reuses them: no OTP needed
+	if r := patchStore(M{"zatca": M{"phase": 2}}); r.Code != 200 || get(r.Body, "zatca.connected") != true || get(r.Body, "zatca.reconnectNeeded") != false {
+		t.Fatalf("back to phase 2: %d %s", r.Code, r.Raw)
+	}
+	if r := call(t, "POST", "/sales/"+fx.OrderA1.Hex()+"/zatca/report", tok, M{}); r.Code != 200 {
+		t.Fatalf("report after returning to phase 2: %d %s", r.Code, r.Raw)
+	}
+	// a client can never forge or wipe the credentials through the store form
+	if r := patchStore(M{"zatca": M{"phase": 2, "connected": false, "private_key": "", "production_secret": "x"}}); r.Code != 200 {
+		t.Fatalf("forged zatca patch: %d %s", r.Code, r.Raw)
+	}
+	if z := rawZatca(); z["connected"] != true || z["private_key"] != "PK" || z["production_secret"] != "PSECRET" {
+		t.Fatalf("credentials must be server-owned: %v", z)
+	}
+	// Phase 1 + a ZATCA detail changed → marked; back in Phase 2 reporting needs a reconnect
+	if r := patchStore(M{"zatca": M{"phase": 1}}); r.Code != 200 {
+		t.Fatalf("phase 1 again: %d %s", r.Code, r.Raw)
+	}
+	if r := patchStore(M{"crNo": "2020202020"}); r.Code != 200 || get(r.Body, "zatca.reconnectNeeded") != true {
+		t.Fatalf("phase 1 sensitive change must mark reconnect: %d %s", r.Code, r.Raw)
+	}
+	if r := patchStore(M{"zatca": M{"phase": 2}}); r.Code != 200 || get(r.Body, "zatca.reconnectNeeded") != true {
+		t.Fatalf("phase 2 keeps the reconnect mark: %d %s", r.Code, r.Raw)
+	}
+	if r := call(t, "POST", "/sales/"+fx.OrderA1.Hex()+"/zatca/report", tok, M{}); r.Code != 409 || r.errCode() != "zatca_reconnect_required" {
+		t.Fatalf("stale credentials must not be reused: %d %s", r.Code, r.Raw)
+	}
+	if r := call(t, "POST", "/stores/"+storeA()+"/zatca/connect", admin, M{"otp": "111222"}); r.Code != 200 || get(r.Body, "zatca.reconnectNeeded") != false {
+		t.Fatalf("reconnect after phase round-trip: %d %s", r.Code, r.Raw)
 	}
 	// failure path: legacy error → 200 with zatca.status failed + message
 	zatcaReporters["sales"] = func(w http.ResponseWriter, r *http.Request) {
