@@ -83,6 +83,7 @@ func dashboardKinds() []*dashKind {
 		registerDashKind(&dashKind{Name: "total-expense", Params: []string{"from", "to"}, Handler: handleDashboardTotalExpense}),
 		registerDashKind(&dashKind{Name: "vat", Params: []string{"from", "to"}, Handler: handleDashboardVat}),
 		registerDashKind(&dashKind{Name: "revenue", Params: []string{"from", "to"}, Handler: handleDashboardRevenue}),
+		registerDashKind(&dashKind{Name: "net-profit", Params: []string{"from", "to"}, Handler: handleDashboardNetProfit}),
 		registerDashKind(&dashKind{Name: "salary-balance", Handler: handleDashboardSalaryBalance}),
 		registerDashKind(&dashKind{Name: "bi", Daily: true, Handler: handleDashboardBI}),
 		registerDashKind(&dashKind{Name: "feed", Daily: true, Handler: handleDashboardFeed}),

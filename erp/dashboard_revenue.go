@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/sirinibin/startpos/backend/models"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // RevenueInputs are the period's net totals (VAT included).
@@ -75,10 +76,43 @@ func handleDashboardRevenue(c *Ctx, w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	flags := RevenueFlags{
+	flags := revenueFlags(store)
+	in, err := loadRevenueInputs(store, dateRange, flags)
+	if err != nil {
+		return errInternal("Unable to calculate revenue.")
+	}
+	vat := dashboardVatPercent(store)
+	q := r.URL.Query()
+	writeJSON(w, http.StatusOK, M{
+		"storeId":    store.ID.Hex(),
+		"from":       q.Get("from"),
+		"to":         q.Get("to"),
+		"vatPercent": vat,
+		"flags":      flags,
+		"inputs":     in,
+		"result":     DashboardRevenue(in, flags, vat),
+	})
+	return nil
+}
+
+func revenueFlags(store *models.Store) RevenueFlags {
+	return RevenueFlags{
 		SalesInQuotation: store.Settings.EnableSalesInQuotation,
 		NonVatSales:      store.Settings.NonVATSales,
 	}
+}
+
+// dashboardVatPercent is the store's VAT rate, 15 when it has none.
+func dashboardVatPercent(store *models.Store) float64 {
+	if store.VatPercent <= 0 {
+		return 15
+	}
+	return store.VatPercent
+}
+
+// loadRevenueInputs sums the period's net totals, in parallel; quotation and
+// non-VAT collections are read only when their setting is on.
+func loadRevenueInputs(store *models.Store, dateRange bson.M, flags RevenueFlags) (RevenueInputs, error) {
 	var (
 		in    RevenueInputs
 		mu    sync.Mutex
@@ -113,22 +147,5 @@ func handleDashboardRevenue(c *Ctx, w http.ResponseWriter, r *http.Request) erro
 		sum("non_vat_sales_return", nil, &in.NonVatSalesReturn)
 	}
 	wg.Wait()
-	if first != nil {
-		return errInternal("Unable to calculate revenue.")
-	}
-	vat := store.VatPercent
-	if vat <= 0 {
-		vat = 15
-	}
-	q := r.URL.Query()
-	writeJSON(w, http.StatusOK, M{
-		"storeId":    store.ID.Hex(),
-		"from":       q.Get("from"),
-		"to":         q.Get("to"),
-		"vatPercent": vat,
-		"flags":      flags,
-		"inputs":     in,
-		"result":     DashboardRevenue(in, flags, vat),
-	})
-	return nil
+	return in, first
 }
