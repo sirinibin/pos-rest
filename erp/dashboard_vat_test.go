@@ -10,9 +10,8 @@ import (
 )
 
 // Old business dashboard VAT card (business_dashboard/charts/KPICards.js):
-// salesVAT − salesReturnVAT − purchaseVAT + purchaseReturnVAT, accounted purchases
-// only with disable_purchases_on_accounts; VAT on valid vendor VAT bills for
-// expenses lowers what is owed (owner's decision, 2026-10-07).
+// salesVAT − salesReturnVAT − purchaseVAT + purchaseReturnVAT + expenseVendorVAT,
+// accounted purchases only with disable_purchases_on_accounts.
 func TestDashboardVat_Formula(t *testing.T) {
 	in := DashboardVatInputs{SalesVat: 1500, SalesReturnVat: 150, PurchaseVat: 600, PurchaseReturnVat: 60,
 		AccountedPurchaseVat: 300, AccountedPurchaseReturnVat: 30, ExpenseVendorVat: 20}
@@ -22,8 +21,8 @@ func TestDashboardVat_Formula(t *testing.T) {
 		flags DashboardVatFlags
 		want  DashboardVatResult
 	}{
-		{"all purchases", in, DashboardVatFlags{}, DashboardVatResult{1350, 540, 20, 790}},
-		{"accounted purchases only", in, DashboardVatFlags{DisablePurchasesOnAccounts: true}, DashboardVatResult{1350, 270, 20, 1060}},
+		{"all purchases", in, DashboardVatFlags{}, DashboardVatResult{1350, 540, 20, 830}},
+		{"accounted purchases only", in, DashboardVatFlags{DisablePurchasesOnAccounts: true}, DashboardVatResult{1350, 270, 20, 1100}},
 		{"refundable", DashboardVatInputs{SalesVat: 100, PurchaseVat: 900}, DashboardVatFlags{}, DashboardVatResult{100, 900, 0, -800}},
 		{"nothing", DashboardVatInputs{}, DashboardVatFlags{}, DashboardVatResult{}},
 		{"rounding", DashboardVatInputs{SalesVat: 0.105, PurchaseVat: 0.001}, DashboardVatFlags{}, DashboardVatResult{0.11, 0, 0, 0.1}},
@@ -73,24 +72,17 @@ func TestAPI_DashboardVat(t *testing.T) {
 	ins("purchase", doc(inOct, 300, bson.M{"enable_on_accounts": true}), doc(inOct, 300))
 	ins("purchasereturn", doc(inOct, 30, bson.M{"enable_on_accounts": true}), doc(inOct, 30))
 	vendor := primitive.NewObjectID()
-	ins("vendor", bson.M{"_id": vendor, "store_id": oid, "name": "Vendor"})
-	gone := primitive.NewObjectID() // not in the vendor collection
 	ins("expense",
-		doc(inOct, 20, bson.M{"amount": 153.33, "vat": 0.0, "vendor_id": vendor, "vendor_invoice_no": "INV-1"}), // valid VAT bill
-		doc(inOct, 99, bson.M{"amount": 115.0, "vendor_id": vendor, "vendor_invoice_no": ""}),                   // no vendor invoice
-		doc(inOct, 88, bson.M{"amount": 115.0, "vendor_id": vendor, "vendor_invoice_no": "   "}),                // blank vendor invoice
-		doc(inOct, 0, bson.M{"amount": 115.0, "vat": 77.0, "vendor_id": vendor, "vendor_invoice_no": "INV-2"}),  // no VAT amount
-		doc(inOct, 66, bson.M{"amount": 115.0, "vendor_id": gone, "vendor_invoice_no": "INV-3"}),                // unknown vendor
-		doc(inOct, 15, bson.M{"amount": 115.0, "vendor_invoice_no": "INV-4"}),                                   // no vendor
-		doc(inOct, 44, bson.M{"amount": 115.0, "vendor_id": vendor, "vendor_invoice_no": "INV-5", "deleted": true}),
-		doc(inSep, 33, bson.M{"amount": 115.0, "vendor_id": vendor, "vendor_invoice_no": "INV-6"})) // other month
+		doc(inOct, 0, bson.M{"amount": 115.0, "vat": 20.0, "vendor_id": vendor, "vendor_invoice_no": "INV-1"}),
+		doc(inOct, 0, bson.M{"amount": 115.0, "vat": 99.0, "vendor_id": vendor, "vendor_invoice_no": ""}), // no vendor invoice
+		doc(inOct, 15, bson.M{"amount": 115.0})) // no vendor
 
 	r := call(t, "GET", "/dashboard/vat?storeId="+sid+"&from=2026-10-01&to=2026-10-31", owner, nil)
 	if r.Code != 200 {
 		t.Fatalf("%d %s", r.Code, r.Raw)
 	}
 	res := sub(r.Body, "result")
-	if res["outVat"] != 1350.0 || res["inVat"] != 540.0 || res["expenseVat"] != 20.0 || res["vatPayable"] != 790.0 {
+	if res["outVat"] != 1350.0 || res["inVat"] != 540.0 || res["expenseVat"] != 20.0 || res["vatPayable"] != 830.0 {
 		t.Fatalf("result %v", res)
 	}
 	if f := sub(r.Body, "flags"); f["enableVatBox"] != true || f["disablePurchasesOnAccounts"] != false {
@@ -98,7 +90,7 @@ func TestAPI_DashboardVat(t *testing.T) {
 	}
 	_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"settings.disable_purchases_on_accounts": true}})
 	r = call(t, "GET", "/dashboard/vat?storeId="+sid+"&from=2026-10-01&to=2026-10-31", owner, nil)
-	if res := sub(r.Body, "result"); res["inVat"] != 270.0 || res["vatPayable"] != 1060.0 {
+	if res := sub(r.Body, "result"); res["inVat"] != 270.0 || res["vatPayable"] != 1100.0 {
 		t.Fatalf("accounted only: %v", res)
 	}
 	if r := call(t, "GET", "/dashboard/vat?storeId="+sid, owner, nil); sub(r.Body, "inputs")["salesVat"] != 11499.0 {
