@@ -17,6 +17,7 @@ package erp
 // (a count),
 // nonEmpty:<field> counts records with that field set, any other name sums that
 // contract field (dotted path); "<sum>|<field>=<value>" adds only matching records.
+// groupBy=party (customer or vendor) or a field also adds up per value ("groups").
 // Filters (f.<key>): party, pstatus, zatca, paymentMethod (any payment), overdue as in
 // DocumentList; nonEmpty:<field> = y / n (field set or not); any other key compares
 // the contract field of that name, as ListPage does by default.
@@ -52,12 +53,14 @@ type StatsQuery struct {
 	Filters        map[string]string
 	IncludeDeleted bool
 	Today          string // store day, for the overdue filter
+	GroupBy        string // "" | "party" | a contract field: also add up per value
 }
 
 // StatsResult is the response body (besides storeId/timezone).
 type StatsResult struct {
-	Count int                `json:"count"`
-	Sums  map[string]float64 `json:"sums"`
+	Count  int                     `json:"count"`
+	Sums   map[string]float64      `json:"sums"`
+	Groups map[string]*StatsResult `json:"groups,omitempty"`
 }
 
 func parseStatsQuery(r *http.Request) (StatsQuery, error) {
@@ -96,6 +99,7 @@ func parseStatsQuery(r *http.Request) (StatsQuery, error) {
 			q.Filters[k[2:]] = vals[0]
 		}
 	}
+	q.GroupBy = strings.TrimSpace(v.Get("groupBy"))
 	inc := v.Get("includeDeleted")
 	q.IncludeDeleted = inc == "1" || strings.EqualFold(inc, "true")
 	return q, nil
@@ -229,6 +233,9 @@ func statFields(q StatsQuery) map[string]bool {
 		if !namedFilters[k] {
 			f[k] = true
 		}
+	}
+	if q.GroupBy != "" && q.GroupBy != "party" {
+		f[q.GroupBy] = true
 	}
 	for _, s := range q.Sums {
 		base, cf, _ := splitMeasure(s)
@@ -528,19 +535,46 @@ func ListStats(c *Ctx, storeHex string, res *Resource, q StatsQuery) (*StatsResu
 	if err != nil {
 		return nil, err
 	}
+	return addUp(q, rows, credits), nil
+}
+
+// addUp adds up the rows q matches, and per group when q.GroupBy is set.
+func addUp(q StatsQuery, rows []statRow, credits map[string]float64) *StatsResult {
 	out := &StatsResult{Sums: map[string]float64{}}
 	for _, s := range q.Sums {
 		out.Sums[s] = 0
 	}
+	if q.GroupBy != "" {
+		out.Groups = map[string]*StatsResult{}
+	}
 	for _, r := range rows {
 		if statsMatch(q, r, credits) {
 			addStats(out, q.Sums, r)
+			if out.Groups != nil {
+				key := r.Party
+				if q.GroupBy != "party" {
+					key = jsString(r.Vals[q.GroupBy])
+				}
+				g := out.Groups[key]
+				if g == nil {
+					g = &StatsResult{Sums: map[string]float64{}}
+					out.Groups[key] = g
+				}
+				addStats(g, q.Sums, r)
+			}
 		}
 	}
-	for k, v := range out.Sums {
-		out.Sums[k] = round2(v)
+	out.round()
+	return out
+}
+
+func (s *StatsResult) round() {
+	for k, v := range s.Sums {
+		s.Sums[k] = round2(v)
 	}
-	return out, nil
+	for _, g := range s.Groups {
+		g.round()
+	}
 }
 
 // orderCreditsOf is finance.js orderCredits over the store's deposits and sales returns.
@@ -594,8 +628,12 @@ func handleListStats(w http.ResponseWriter, r *http.Request, res *Resource) {
 		writeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, M{"storeId": storeHex, "timezone": orRiyadh(c.storeLoc(storeHex)).String(),
-		"from": q.From, "to": q.To, "count": out.Count, "sums": out.Sums})
+	body := M{"storeId": storeHex, "timezone": orRiyadh(c.storeLoc(storeHex)).String(),
+		"from": q.From, "to": q.To, "count": out.Count, "sums": out.Sums}
+	if out.Groups != nil {
+		body["groups"] = out.Groups
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // hasListStats: store documents backed by the legacy store (windowed lists).

@@ -2733,6 +2733,268 @@
      "one|zatca.status=reported": 1
     }
    }
+  },
+  {
+   "query": {
+    "sum": "balance,amount",
+    "groupBy": "party",
+    "to": "2025-10-06"
+   },
+   "want": {
+    "count": 29,
+    "sums": {
+     "balance": 13176.03,
+     "amount": 16519.4
+    },
+    "groups": {
+     "v2": {
+      "count": 3,
+      "sums": {
+       "balance": 2884.69,
+       "amount": 1451.17
+      }
+     },
+     "c2": {
+      "count": 8,
+      "sums": {
+       "balance": 1065.58,
+       "amount": 3802.47
+      }
+     },
+     "c3": {
+      "count": 6,
+      "sums": {
+       "balance": 1500.45,
+       "amount": 3455.59
+      }
+     },
+     "v1": {
+      "count": 6,
+      "sums": {
+       "balance": 2004.34,
+       "amount": 4741.63
+      }
+     },
+     "c1": {
+      "count": 6,
+      "sums": {
+       "balance": 5720.97,
+       "amount": 3068.54
+      }
+     }
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "groupBy": "party"
+   },
+   "want": {
+    "count": 56,
+    "sums": {
+     "net": 36632.38,
+     "vat": 3708.71,
+     "paid": 12155.14,
+     "balance": 24761.77,
+     "taxable": 32923.67,
+     "profit": 13062.13,
+     "cost": 19796.54,
+     "retailProfit": 4565.14,
+     "wholesaleProfit": 1530.37,
+     "one": 56,
+     "amount": 29808.05,
+     "vatAmount": 142.5,
+     "net|status=accepted": 11486.95,
+     "nonEmpty:orderIds": 5,
+     "amount|nonEmpty:orderId=1": 7461.31,
+     "one|zatca.status=reported": 9
+    },
+    "groups": {
+     "v2": {
+      "count": 11,
+      "sums": {
+       "net": 9125.07,
+       "vat": 910.37,
+       "paid": 1885.59,
+       "balance": 7313.73,
+       "taxable": 8214.7,
+       "profit": 3254.57,
+       "cost": 4942.63,
+       "retailProfit": 1253,
+       "wholesaleProfit": 421.01,
+       "one": 11,
+       "amount": 4586.83,
+       "vatAmount": 30,
+       "net|status=accepted": 1747.26,
+       "nonEmpty:orderIds": 0,
+       "amount|nonEmpty:orderId=1": 1482.36,
+       "one|zatca.status=reported": 1
+      }
+     },
+     "c2": {
+      "count": 12,
+      "sums": {
+       "net": 4952.78,
+       "vat": 491.99,
+       "paid": 2778.65,
+       "balance": 2236.3,
+       "taxable": 4460.79,
+       "profit": 1757.59,
+       "cost": 2688.2,
+       "retailProfit": 807.83,
+       "wholesaleProfit": 272.26,
+       "one": 12,
+       "amount": 5846.4,
+       "vatAmount": 22.5,
+       "net|status=accepted": 2256.16,
+       "nonEmpty:orderIds": 0,
+       "amount|nonEmpty:orderId=1": 2047.79,
+       "one|zatca.status=reported": 2
+      }
+     },
+     "c1": {
+      "count": 10,
+      "sums": {
+       "net": 9258.83,
+       "vat": 986.37,
+       "paid": 2753.22,
+       "balance": 6518.59,
+       "taxable": 8272.46,
+       "profit": 3301.17,
+       "cost": 4963.79,
+       "retailProfit": 1541.34,
+       "wholesaleProfit": 514.1,
+       "one": 10,
+       "amount": 5555.9,
+       "vatAmount": 30,
+       "net|status=accepted": 5063.36,
+       "nonEmpty:orderIds": 3,
+       "amount|nonEmpty:orderId=1": 892.36,
+       "one|zatca.status=reported": 1
+      }
+     },
+     "c3": {
+      "count": 14,
+      "sums": {
+       "net": 8326.09,
+       "vat": 986.23,
+       "paid": 2928.86,
+       "balance": 5527.91,
+       "taxable": 7339.86,
+       "profit": 2908.25,
+       "cost": 4414.11,
+       "retailProfit": 652.16,
+       "wholesaleProfit": 219.4,
+       "one": 14,
+       "amount": 7148.23,
+       "vatAmount": 45,
+       "net|status=accepted": 2051.71,
+       "nonEmpty:orderIds": 0,
+       "amount|nonEmpty:orderId=1": 2674.21,
+       "one|zatca.status=reported": 3
+      }
+     },
+     "v1": {
+      "count": 9,
+      "sums": {
+       "net": 4969.61,
+       "vat": 333.75,
+       "paid": 1808.82,
+       "balance": 3165.24,
+       "taxable": 4635.86,
+       "profit": 1840.55,
+       "cost": 2787.81,
+       "retailProfit": 310.81,
+       "wholesaleProfit": 103.6,
+       "one": 9,
+       "amount": 6670.69,
+       "vatAmount": 15,
+       "net|status=accepted": 368.46,
+       "nonEmpty:orderIds": 2,
+       "amount|nonEmpty:orderId=1": 364.59,
+       "one|zatca.status=reported": 2
+      }
+     }
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,one",
+    "groupBy": "status",
+    "f.pstatus": "paid"
+   },
+   "want": {
+    "count": 14,
+    "sums": {
+     "net": 5566.42,
+     "one": 14
+    },
+    "groups": {
+     "pending": {
+      "count": 2,
+      "sums": {
+       "net": 442.49,
+       "one": 2
+      }
+     },
+     "received": {
+      "count": 7,
+      "sums": {
+       "net": 3576.73,
+       "one": 7
+      }
+     },
+     "accepted": {
+      "count": 4,
+      "sums": {
+       "net": 1217.76,
+       "one": 4
+      }
+     },
+     "cancelled": {
+      "count": 1,
+      "sums": {
+       "net": 329.44,
+       "one": 1
+      }
+     }
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "amount",
+    "groupBy": "createdBy",
+    "from": "2025-01-01"
+   },
+   "want": {
+    "count": 40,
+    "sums": {
+     "amount": 21464.19
+    },
+    "groups": {
+     "Sara": {
+      "count": 13,
+      "sums": {
+       "amount": 7500.74
+      }
+     },
+     "Ali": {
+      "count": 13,
+      "sums": {
+       "amount": 8281.35
+      }
+     },
+     "Omar": {
+      "count": 14,
+      "sums": {
+       "amount": 5682.1
+      }
+     }
+    }
+   }
   }
  ]
 }

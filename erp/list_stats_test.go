@@ -2,6 +2,7 @@ package erp
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http/httptest"
 	"net/url"
@@ -31,6 +32,7 @@ func TestParseStatsQuery(t *testing.T) {
 					len(q.Filters) == 2 && q.IncludeDeleted
 			}},
 		{"dateKey", "dateKey=paidAt", "", func(q StatsQuery) bool { return q.DateKey == "paidAt" }},
+		{"groupBy", "groupBy=+party+", "", func(q StatsQuery) bool { return q.GroupBy == "party" }},
 		{"bad from", "from=yesterday", "from", nil},
 		{"bad to", "to=2026-13-01", "to", nil},
 		{"from after to", "from=2026-02-01&to=2026-01-01", "from", nil},
@@ -267,6 +269,30 @@ func TestAPI_ListStats_AllTimeBeyondWindow(t *testing.T) {
 	if int(num(f.Body["count"])) != 1 {
 		t.Fatalf("party filter count %v", f.Body["count"])
 	}
+	// per customer: each group adds up that customer's sales, and the groups add up to all
+	g := call(t, "GET", "/sales/stats?storeId="+storeA()+"&sum=balance&groupBy=party", tok, nil)
+	groups, _ := g.Body["groups"].(M)
+	wantBal := map[string]float64{}
+	for _, d := range all.data() {
+		wantBal[str(d.(M)["customerId"])] += ComputeTotals(d.(M)).Balance
+	}
+	if len(groups) != len(wantBal) || len(groups) < 2 {
+		t.Fatalf("groups %v want %v", groups, wantBal)
+	}
+	gn := 0
+	for id, want := range wantBal {
+		gr, _ := groups[id].(M)
+		if gr == nil || num(get(gr, "sums.balance")) != round2(want) {
+			t.Fatalf("group %s = %v want %v", id, gr, round2(want))
+		}
+		gn += int(num(gr["count"]))
+	}
+	if gn != len(all.data()) {
+		t.Fatalf("groups count %d of %d", gn, len(all.data()))
+	}
+	if _, ok := r.Body["groups"]; ok {
+		t.Fatal("groups without groupBy")
+	}
 	s := call(t, "GET", "/sales/stats?storeId="+storeA()+"&q=S-INV-000&keys=code", tok, nil)
 	if int(num(s.Body["count"])) != 1 {
 		t.Fatalf("search count %v", s.Body["count"])
@@ -326,11 +352,14 @@ func TestAPI_ListStats_AllTimeBeyondWindow(t *testing.T) {
 
 func TestStatFields(t *testing.T) {
 	f := statFields(StatsQuery{DateKey: "paidAt", SearchKeys: []string{"code"}, Sums: []string{"net", "amount"},
-		Filters: map[string]string{"party": "x", "createdBy": "y"}})
-	for _, k := range []string{"paidAt", "date", "code", "amount", "createdBy"} {
+		Filters: map[string]string{"party": "x", "createdBy": "y"}, GroupBy: "status"})
+	for _, k := range []string{"paidAt", "date", "code", "amount", "createdBy", "status"} {
 		if !f[k] {
 			t.Errorf("missing %s", k)
 		}
+	}
+	if statFields(StatsQuery{GroupBy: "party"})["party"] {
+		t.Error("groupBy=party is derived, not a field")
 	}
 	for _, k := range []string{"net", "party"} {
 		if f[k] {
@@ -422,10 +451,7 @@ func TestListStats_ParityFixture(t *testing.T) {
 		Rows    []M                `json:"rows"`
 		Cases   []struct {
 			Query map[string]string `json:"query"`
-			Want  struct {
-				Count int                `json:"count"`
-				Sums  map[string]float64 `json:"sums"`
-			} `json:"want"`
+			Want  StatsResult       `json:"want"`
 		} `json:"cases"`
 	}
 	if err := json.Unmarshal(raw, &fx); err != nil {
@@ -445,20 +471,34 @@ func TestListStats_ParityFixture(t *testing.T) {
 		}
 		q.Today = fx.Today
 		fields := statFields(q)
-		res := &StatsResult{Sums: map[string]float64{}}
-		for _, rec := range fx.Rows {
-			r := statRowOf(rec, fields)
-			if statsMatch(q, r, fx.Credits) {
-				addStats(res, q.Sums, r)
-			}
+		rows := make([]statRow, len(fx.Rows))
+		for j, rec := range fx.Rows {
+			rows[j] = statRowOf(rec, fields)
 		}
-		if res.Count != c.Want.Count {
-			t.Errorf("case %d %v: count %d want %d", i, c.Query, res.Count, c.Want.Count)
+		res := addUp(q, rows, fx.Credits)
+		sameStats(t, fmt.Sprintf("case %d %v", i, c.Query), res, &c.Want)
+	}
+}
+
+func sameStats(t *testing.T, at string, res, want *StatsResult) {
+	t.Helper()
+	if res.Count != want.Count {
+		t.Errorf("%s: count %d want %d", at, res.Count, want.Count)
+	}
+	for k, w := range want.Sums {
+		if got := round2(res.Sums[k]); math.Abs(got-w) > 0.0001 {
+			t.Errorf("%s: %s = %v want %v", at, k, got, w)
 		}
-		for k, want := range c.Want.Sums {
-			if got := round2(res.Sums[k]); math.Abs(got-want) > 0.0001 {
-				t.Errorf("case %d %v: %s = %v want %v", i, c.Query, k, got, want)
-			}
+	}
+	if len(res.Groups) != len(want.Groups) {
+		t.Errorf("%s: %d groups want %d", at, len(res.Groups), len(want.Groups))
+	}
+	for k, wg := range want.Groups {
+		g := res.Groups[k]
+		if g == nil {
+			t.Errorf("%s: no group %q", at, k)
+			continue
 		}
+		sameStats(t, at+" group "+k, g, wg)
 	}
 }
