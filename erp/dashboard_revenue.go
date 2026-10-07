@@ -58,8 +58,10 @@ func DashboardRevenue(in RevenueInputs, f RevenueFlags, vatPercent float64) Reve
 	if f.NonVatSales {
 		nonVat = in.NonVatSales - in.NonVatSalesReturn
 	}
-	if vatPercent <= 0 {
-		vatPercent = 15
+	// the caller passes the store's rate (dashboardVatPercent): 0 in a
+	// country without VAT
+	if vatPercent < 0 {
+		vatPercent = 0
 	}
 	vat := rev * vatPercent / (100 + vatPercent)
 	return RevenueResult{
@@ -102,10 +104,16 @@ func revenueFlags(store *models.Store) RevenueFlags {
 	}
 }
 
-// dashboardVatPercent is the store's VAT rate, 15 when it has none.
+// dashboardVatPercent is the store's VAT rate: 0 in a country without VAT
+// (Qatar, Kuwait), else the saved rate or the country's standard rate (15
+// for a Saudi store without one, as before).
 func dashboardVatPercent(store *models.Store) float64 {
+	p := models.CountryProfileOrSaudi(store.CountryCode)
+	if !p.HasVAT {
+		return 0
+	}
 	if store.VatPercent <= 0 {
-		return 15
+		return p.VatPercent
 	}
 	return store.VatPercent
 }

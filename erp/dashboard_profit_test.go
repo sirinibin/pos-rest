@@ -20,7 +20,7 @@ func TestDashboardNetProfit_Formula(t *testing.T) {
 		{"profit", 13220, 6263, 15, NetProfitResult{Revenue: 13220, Expense: 6263, Profit: 6957, Vat: 907.43, ProfitWithoutVat: 6049.57, Profitable: true}},
 		{"loss", 1000, 3300, 15, NetProfitResult{Revenue: 1000, Expense: 3300, Profit: -2300, Vat: -300, ProfitWithoutVat: -2000, Profitable: false}},
 		{"break-even counts as profit", 500, 500, 15, NetProfitResult{Revenue: 500, Expense: 500, Profitable: true}},
-		{"no VAT rate defaults to 15%", 115, 0, 0, NetProfitResult{Revenue: 115, Profit: 115, Vat: 15, ProfitWithoutVat: 100, Profitable: true}},
+		{"0% VAT (Qatar, Kuwait)", 115, 0, 0, NetProfitResult{Revenue: 115, Profit: 115, Vat: 0, ProfitWithoutVat: 115, Profitable: true}},
 		{"5% VAT", 105, 0, 5, NetProfitResult{Revenue: 105, Profit: 105, Vat: 5, ProfitWithoutVat: 100, Profitable: true}},
 	}
 	for _, c := range cases {

@@ -88,8 +88,8 @@ func TotalExpense(in TotalExpenseInputs, f TotalExpenseFlags, vatPercent float64
 		sal = in.SalaryPaid
 	}
 	total := in.Expense + purchases + cd + comm + sal
-	if vatPercent <= 0 {
-		vatPercent = 15
+	if vatPercent < 0 {
+		vatPercent = 0
 	}
 	vat := total * vatPercent / (100 + vatPercent)
 	return TotalExpenseResult{
@@ -152,11 +152,8 @@ func handleDashboardTotalExpense(c *Ctx, w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		return errInternal("Unable to calculate the total expense.")
 	}
-	res := TotalExpense(in, flags, store.VatPercent)
-	vat := store.VatPercent
-	if vat <= 0 {
-		vat = 15
-	}
+	vat := dashboardVatPercent(store)
+	res := TotalExpense(in, flags, vat)
 	writeJSON(w, http.StatusOK, M{
 		"storeId":    storeHex,
 		"from":       q.Get("from"),

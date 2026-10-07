@@ -31,8 +31,8 @@ type NetProfitResult struct {
 
 // DashboardNetProfit applies the old business dashboard's profit formula.
 func DashboardNetProfit(revenue, expense, vatPercent float64) NetProfitResult {
-	if vatPercent <= 0 {
-		vatPercent = 15
+	if vatPercent < 0 {
+		vatPercent = 0
 	}
 	p := revenue - expense
 	vat := p * vatPercent / (100 + vatPercent)

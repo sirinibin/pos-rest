@@ -33,7 +33,8 @@ func TestDashboardRevenue_Formula(t *testing.T) {
 			t.Errorf("%s: vat split %+v", c.name, got)
 		}
 	}
-	if g := DashboardRevenue(RevenueInputs{Sales: 115}, RevenueFlags{}, 0); g.Vat != 15 || g.RevenueWithoutVat != 100 {
+	// a store's rate comes from dashboardVatPercent; 0 (no VAT) means no VAT
+	if g := DashboardRevenue(RevenueInputs{Sales: 115}, RevenueFlags{}, 0); g.Vat != 0 || g.RevenueWithoutVat != 115 {
 		t.Errorf("default VAT: %+v", g)
 	}
 	if g := DashboardRevenue(RevenueInputs{NonVatSales: 50}, RevenueFlags{}, 15); g.Total != 0 || g.NonVatNet != 0 {

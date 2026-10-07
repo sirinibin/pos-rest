@@ -65,8 +65,9 @@ func TestTotalExpense_VatAndRounding(t *testing.T) {
 	if got.Vat != 15 || got.TotalWithoutVat != 100 {
 		t.Fatalf("15%%: %+v", got)
 	}
-	// a store with no VAT rate falls back to 15% like the old dashboard
-	if g := TotalExpense(TotalExpenseInputs{Expense: 115}, TotalExpenseFlags{}, 0); g.Vat != 15 {
+	// 0% (a country without VAT): no VAT share; dashboardVatPercent gives
+	// 15 to a Saudi store without a saved rate, like the old dashboard
+	if g := TotalExpense(TotalExpenseInputs{Expense: 115}, TotalExpenseFlags{}, 0); g.Vat != 0 {
 		t.Fatalf("default vat: %+v", g)
 	}
 	if g := TotalExpense(TotalExpenseInputs{Expense: 10.005, Purchase: 0.001}, TotalExpenseFlags{}, 15); g.Total != 10.01 {

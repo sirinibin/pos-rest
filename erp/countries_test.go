@@ -407,3 +407,30 @@ func TestCountriesEndpoint(t *testing.T) {
 		t.Errorf("last: %v", last)
 	}
 }
+
+func TestDashboardVatPercent_ByCountry(t *testing.T) {
+	tests := []struct {
+		store models.Store
+		want  float64
+	}{
+		{models.Store{}, 15},
+		{models.Store{CountryCode: "SA", VatPercent: 15}, 15},
+		{models.Store{CountryCode: "AE"}, 5},
+		{models.Store{CountryCode: "BH", VatPercent: 10}, 10},
+		{models.Store{CountryCode: "QA", VatPercent: 15}, 0},
+		{models.Store{CountryCode: "KW"}, 0},
+	}
+	for _, tc := range tests {
+		if got := dashboardVatPercent(&tc.store); got != tc.want {
+			t.Errorf("%s/%v: %v, want %v", tc.store.CountryCode, tc.store.VatPercent, got, tc.want)
+		}
+	}
+	// Kuwait: revenue has no VAT share
+	if g := DashboardRevenue(RevenueInputs{Sales: 100}, RevenueFlags{}, 0); g.Vat != 0 || g.RevenueWithoutVat != 100 {
+		t.Errorf("no-VAT revenue %+v", g)
+	}
+	// UAE 5%
+	if g := DashboardRevenue(RevenueInputs{Sales: 105}, RevenueFlags{}, 5); g.Vat != 5 || g.RevenueWithoutVat != 100 {
+		t.Errorf("UAE revenue %+v", g)
+	}
+}
