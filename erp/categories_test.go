@@ -9,8 +9,8 @@ import (
 // the store's POS terminal) and the product POS catalog fields.
 
 func TestBusinessCategories_ZatcaSafeAndUnique(t *testing.T) {
-	if len(BusinessCategories) != 24 {
-		t.Fatalf("expected 24 Saudi POS categories, got %d", len(BusinessCategories))
+	if len(BusinessCategories) != 25 {
+		t.Fatalf("expected 25 Saudi POS categories, got %d", len(BusinessCategories))
 	}
 	values, terminals := map[string]bool{}, map[string]bool{}
 	for _, c := range BusinessCategories {
@@ -38,6 +38,9 @@ func TestBusinessCategories_TerminalMapping(t *testing.T) {
 		"Ladies Beauty Salon": "salon", "Barber Shop": "barber", "Thobe Tailoring": "thobe",
 		"Construction and Contracting": "construction", "Software and IT Services": "softwaresa",
 		"Gaming and Entertainment": "gamingsa", "Mobile Phones and Accessories": "mobile",
+		"Business Visa and Travels": "travel", "business visa and travels": "travel",
+		// the display spelling is not ZATCA-safe and is not a stored value
+		"Business, Visa & Travels": "",
 		// case-insensitive and trimmed (legacy values such as "restaurant", "TRADING")
 		"restaurant": "restaurant", "  TRADING ": "trading",
 		// free text legacy values open no terminal

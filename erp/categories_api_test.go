@@ -119,6 +119,27 @@ func TestAPI_Stores_CreateForbiddenForOwners(t *testing.T) {
 	}
 }
 
+func TestAPI_Stores_BusinessVisaAndTravels(t *testing.T) {
+	requireDB(t)
+	owner, sid := signupOwner(t, "cattravel")
+	defer cleanupStore(t, sid)
+	g := call(t, "GET", "/stores/"+sid, owner, nil)
+	// the display spelling ("," and "&") is not ZATCA-safe, so it is rejected
+	if b := call(t, "PATCH", "/stores/"+sid, owner, M{"category": "Business, Visa & Travels"}, "If-Match", str(g.Body["version"])); b.Code != 400 || b.errField("category") == "" {
+		t.Fatalf("display spelling accepted: %d %s", b.Code, b.Raw)
+	}
+	g = call(t, "GET", "/stores/"+sid, owner, nil)
+	p := call(t, "PATCH", "/stores/"+sid, owner, M{"category": "business visa and travels"}, "If-Match", str(g.Body["version"]))
+	if p.Code != 200 || p.Body["category"] != "Business Visa and Travels" || p.Body["posTerminal"] != "travel" {
+		t.Fatalf("travel category: %d %s", p.Code, p.Raw)
+	}
+	body := M{"storeId": sid, "nameEn": "UAE visit visa (30 days)", "nameAr": "تأشيرة زيارة الإمارات", "unit": "Job", "isService": true,
+		"pricing": M{"retail": 391.3043}, "posTerminal": "travel", "posSection": "visa", "posKey": "v-uae"}
+	if r := call(t, "POST", "/products?storeId="+sid, owner, body); (r.Code != 201 && r.Code != 200) || r.Body["posTerminal"] != "travel" {
+		t.Fatalf("travel product: %d %s", r.Code, r.Raw)
+	}
+}
+
 func TestAPI_Products_PosFields(t *testing.T) {
 	requireDB(t)
 	owner, sid := signupOwner(t, "catprod")

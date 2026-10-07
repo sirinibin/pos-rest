@@ -41,6 +41,8 @@ var BusinessCategories = []BusinessCategory{
 	{"Interior Design", "interior"},
 	{"Software and IT Services", "softwaresa"},
 	{"Gaming and Entertainment", "gamingsa"},
+	// shown as "Business, Visa & Travels" in the app (ZATCA: letters and spaces only)
+	{"Business Visa and Travels", "travel"},
 }
 
 // reZatcaCategory: what ZATCA's CSR accepts safely as business category.
