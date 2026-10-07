@@ -211,6 +211,8 @@ func TestValidatePosFields(t *testing.T) {
 	}
 }
 
+const gccErr = "choose a GCC country: Saudi Arabia, UAE, Oman, Qatar, Bahrain or Kuwait"
+
 func TestStoreValidate_Country(t *testing.T) {
 	x := newMapCtx(nil, "")
 	tests := []struct {
@@ -220,12 +222,16 @@ func TestStoreValidate_Country(t *testing.T) {
 	}{
 		{"Saudi Arabia", "SA", ""},
 		{"lower case", "ae", ""},
-		{"United Kingdom", "GB", ""},
-		{"India", "IN", ""},
+		{"Oman", "OM", ""},
+		{"Qatar", "QA", ""},
+		{"Bahrain", "BH", ""},
+		{"Kuwait", "KW", ""},
+		{"United Kingdom (not GCC)", "GB", gccErr},
+		{"India (not GCC)", "IN", gccErr},
 		{"not sent", nil, ""},
 		{"empty", "", ""},
-		{"unknown code", "ZZ", "choose a country from the list"},
-		{"a name, not a code", "Saudi Arabia", "choose a country from the list"},
+		{"unknown code", "ZZ", gccErr},
+		{"a name, not a code", "Saudi Arabia", gccErr},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -66,13 +67,20 @@ func (x *mapCtx) legacyDateStr(s string) (string, error) {
 	return toLegacyDateStrIn(x.loc(), s)
 }
 
+// vatPercent is the store's VAT rate (0 in Qatar/Kuwait; 15 without a store).
 func (x *mapCtx) vatPercent() float64 {
 	if x.store != nil {
-		if v, ok := x.store["vat_percent"]; ok && num(v) > 0 {
-			return num(v)
-		}
+		return storeVatPercent(x.store)
 	}
 	return 15
+}
+
+// profile is the store's country profile (Saudi Arabia without a store).
+func (x *mapCtx) profile() *models.CountryProfile {
+	if x == nil {
+		return storeProfile(nil)
+	}
+	return storeProfile(x.store)
 }
 
 // warehouses returns the store's legacy warehouses (non-deleted first).

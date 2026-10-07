@@ -140,6 +140,12 @@ func mask(s string) string {
 
 // addressFromLegacy maps national_address (+country) to the contract address.
 func addressFromLegacy(na M, countryName string) M {
+	return addressFromLegacyIn(na, countryName, "")
+}
+
+// addressFromLegacyIn is addressFromLegacy with the store's country code,
+// which names a GCC country in English and Arabic.
+func addressFromLegacyIn(na M, countryName, countryCode string) M {
 	a := M{
 		"buildingNo": str(na["building_no"]), "streetEn": str(na["street_name"]), "streetAr": str(na["street_name_arabic"]),
 		"districtEn": str(na["district_name"]), "districtAr": str(na["district_name_arabic"]),
@@ -153,7 +159,9 @@ func addressFromLegacy(na M, countryName string) M {
 	if u := str(na["unit_no"]); u != "" {
 		a["unitNo"] = u
 	}
-	if countryName == "" || strings.EqualFold(countryName, "Saudi Arabia") {
+	if p := models.CountryProfileFor(countryCode); p != nil {
+		a["countryEn"], a["countryAr"] = p.NameEn, p.NameAr
+	} else if countryName == "" || strings.EqualFold(countryName, "Saudi Arabia") {
 		a["countryEn"] = "Saudi Arabia"
 		a["countryAr"] = "المملكة العربية السعودية"
 	}
@@ -216,6 +224,11 @@ func toArabicDigits(s string) string {
 func storeToContract(x *mapCtx, d M) M {
 	st := sub(d, "settings")
 	loc := storeLocation(d)
+	cp := storeProfile(d)
+	countryBlock := countryContract(cp)
+	countryBlock["gcc"] = models.CountryProfileFor(storeCountry(d)) != nil
+	// the country can change only while the store has no ZATCA-type documents
+	countryBlock["locked"] = storeHasZatcaDocs(d)
 	rec := M{
 		"nameEn": str(d["name"]), "nameAr": str(d["name_in_arabic"]),
 		"branchEn": str(d["branch_name"]),
@@ -224,15 +237,12 @@ func storeToContract(x *mapCtx, d M) M {
 		"category": str(d["business_category"]),
 		// the POS terminal this store's business category opens ("" = none)
 		"posTerminal": CategoryTerminal(str(d["business_category"])),
-		"address":     addressFromLegacy(sub(d, "national_address"), str(d["country_name"])),
+		"address":     addressFromLegacyIn(sub(d, "national_address"), str(d["country_name"]), storeCountry(d)),
 		"phone":       str(d["phone"]), "email": str(d["email"]),
-		"vatPercent": func() float64 {
-			if v := num(d["vat_percent"]); v > 0 {
-				return v
-			}
-			return 15
-		}(),
-		"currency": M{"code": "SAR", "nameEn": "Saudi Riyal", "nameAr": "ريال سعودي", "fractionEn": "Halala", "fractionAr": "هللة"},
+		// VAT rate, currency and country rules follow country_code (GCC)
+		"vatPercent": storeVatPercent(d),
+		"currency":   currencyContract(cp),
+		"country":    countryBlock,
 		// timezone follows country_code (server-owned); countryCode is editable
 		"timezone":    storeTimezoneName(d),
 		"countryCode": storeCountryOrSA(d),
@@ -303,7 +313,7 @@ func storeToContract(x *mapCtx, d M) M {
 		zc["disconnectedAt"] = t
 	}
 	// once ZATCA documents exist the environment can't change (UI lock hint)
-	zc["envLocked"] = storeHasZatcaDocs(d)
+	zc["envLocked"] = countryBlock["locked"]
 	rec["zatca"] = zc
 	// evolution.status and waba have no legacy field: they live in erp.x and
 	// are merged in by applyEnvelope, where mapped keys win. WhatsApp is
@@ -356,33 +366,41 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 			e["category"] = "choose a business category from the list"
 		}
 	}
-	// country: picks the store's timezone, so it must be one TimezoneMap knows
-	if c, ok := rec["countryCode"]; ok && str(c) != "" {
-		if _, known := models.TimezoneMap[strings.ToUpper(strings.TrimSpace(str(c)))]; !known {
-			e["countryCode"] = "choose a country from the list"
+	// country: picks the store's timezone, currency and tax rules. A new or
+	// changed country must be a supported GCC country (older stores keep
+	// theirs), and it is locked once the store has issued documents.
+	newCountry := normCountry(str(rec["countryCode"]))
+	oldCountry := storeCountry(prev)
+	if newCountry != "" && newCountry != oldCountry {
+		if _, known := models.TimezoneMap[newCountry]; !known || models.CountryProfileFor(newCountry) == nil {
+			e["countryCode"] = "choose a GCC country: Saudi Arabia, UAE, Oman, Qatar, Bahrain or Kuwait"
+		} else if prev != nil && (oldCountry != "" || newCountry != "SA") && storeHasZatcaDocs(prev) {
+			e["countryCode"] = "the country can't change once the store has issued invoices"
 		}
 	}
+	if newCountry == "" {
+		newCountry = oldCountry
+	}
+	cp := models.CountryProfileOrSaudi(newCountry)
 	if s := str(rec["short"]); s != "" && !reShort.MatchString(s) {
 		e["short"] = "2-5 capital letters"
 	}
-	if v := str(rec["vatNo"]); v != "" && !ValidVAT(v) {
-		e["vatNo"] = "VAT No. must be 15 digits starting and ending with 3"
+	if v := str(rec["vatNo"]); v != "" && !validTaxIDFor(cp, v) {
+		e["vatNo"] = taxIDErrorFor(cp)
 	}
-	if v := str(rec["crNo"]); v != "" && !ValidCR(v) {
-		e["crNo"] = "CR No. must be 10 digits"
+	if v := str(rec["crNo"]); v != "" {
+		if cp.Code == "SA" && !ValidCR(v) {
+			e["crNo"] = "CR No. must be 10 digits"
+		} else if cp.Code != "SA" && !cp.ValidCR(v) {
+			e["crNo"] = cp.CRLabelEn + ": " + cp.CRHint
+		}
 	}
 	if v := num(rec["vatPercent"]); v < 0 || v > 100 {
 		e["vatPercent"] = "0..100"
 	}
 	if a, ok := rec["address"].(M); ok {
-		if b := str(a["buildingNo"]); b != "" && !re4.MatchString(b) {
-			e["address.buildingNo"] = "4 digits"
-		}
-		if p := str(a["postalCode"]); p != "" && !re5.MatchString(p) {
-			e["address.postalCode"] = "5 digits"
-		}
-		if p := str(a["additionalNo"]); p != "" && !re4.MatchString(p) {
-			e["address.additionalNo"] = "4 digits"
+		for k, v := range addressErrorsFor(cp, a, "address.") {
+			e[k] = v
 		}
 	}
 	if v := str(rec["email"]); v != "" && !validEmail(v) {
@@ -449,8 +467,16 @@ func storeToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M
 		}
 	}
 	if ch["countryCode"] {
-		if c := strings.ToUpper(strings.TrimSpace(str(rec["countryCode"]))); c != "" {
+		if c := normCountry(str(rec["countryCode"])); c != "" {
 			p["country_code"] = c
+			// a new GCC country brings its name and standard VAT rate
+			// (unless the rate was edited in the same save)
+			if cp := models.CountryProfileFor(c); cp != nil {
+				p["country_name"] = cp.NameEn
+				if !ch["vatPercent"] || !cp.HasVAT {
+					p["vat_percent"] = cp.VatPercent
+				}
+			}
 		}
 	}
 	if ch["bank"] {
@@ -669,6 +695,7 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 		return nil, errBadRequest("", errs)
 	}
 	cat, _ := CanonicalCategory(str(rec["category"]))
+	newCP := models.CountryProfileOrSaudi(normCountry(str(rec["countryCode"])))
 	a := sub(rec, "address")
 	var na models.NationalAddress
 	if raw, err := json.Marshal(addressToLegacy(a)); err == nil {
@@ -679,7 +706,7 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 		Name: c.UserName, Email: strings.TrimSpace(str(rec["email"])),
 		StoreName: strings.TrimSpace(str(rec["nameEn"])), StoreNameInArabic: strings.TrimSpace(str(rec["nameAr"])),
 		BusinessCategory: cat, RegistrationNumber: strings.TrimSpace(str(rec["crNo"])), VATNo: strings.TrimSpace(str(rec["vatNo"])),
-		Phone: cleanPhone(str(rec["phone"])), CountryCode: "SA", CountryName: "Saudi Arabia", ZatcaPhase: "2",
+		Phone: cleanPhone(str(rec["phone"])), CountryCode: newCP.Code, CountryName: newCP.NameEn, ZatcaPhase: "2",
 		NationalAddress: na,
 	}, now)
 	if b := strings.TrimSpace(str(rec["branchEn"])); b != "" {
@@ -710,7 +737,7 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 	env := M{"v": int64(1), "h": []interface{}{historyEntryIn(loc, c.UserName, "created", []interface{}{})}, "cb": c.UserName,
 		"x": M{"short": short, "branchAr": branchAr, "plan": "professional",
 			"trialEndsAt":  now.AddDate(0, 0, 14).In(loc).Format(layoutDay),
-			"businessType": cat, "address": M{"countryAr": "المملكة العربية السعودية", "shortAddress": str(a["shortAddress"])}}}
+			"businessType": cat, "address": M{"countryAr": newCP.NameAr, "shortAddress": str(a["shortAddress"])}}}
 	if err := s.setEnv("", hex, env); err != nil {
 		return nil, err
 	}
@@ -731,19 +758,32 @@ func storeCreateErrors(rec M) map[string]string {
 			e[k] = msg
 		}
 	}
+	cp := models.CountryProfileOrSaudi(normCountry(str(rec["countryCode"])))
 	need("nameAr", str(rec["nameAr"]), "required")
 	if n := str(rec["nameAr"]); n != "" && !hasArabic(n) {
 		e["nameAr"] = "must contain Arabic letters"
 	}
-	need("vatNo", str(rec["vatNo"]), "required")
+	if cp.TaxIDRequired {
+		need("vatNo", str(rec["vatNo"]), "required")
+	}
 	need("crNo", str(rec["crNo"]), "required")
 	need("email", str(rec["email"]), "required")
+	a := sub(rec, "address")
+	if !cp.NationalAddress {
+		if p := str(rec["phone"]); p == "" {
+			e["phone"] = "required"
+		} else if !cp.ValidPhone(p) {
+			e["phone"] = cp.NameEn + " phone number"
+		}
+		need("address.streetEn", str(a["streetEn"]), "required")
+		need("address.cityEn", str(a["cityEn"]), "required")
+		return e
+	}
 	if p := str(rec["phone"]); p == "" {
 		e["phone"] = "required"
 	} else if !ValidSaudiPhone(p) {
 		e["phone"] = "Saudi phone number"
 	}
-	a := sub(rec, "address")
 	if !re4.MatchString(str(a["buildingNo"])) {
 		e["address.buildingNo"] = "4 digits"
 	}
@@ -800,5 +840,26 @@ func (s *storesBackend) Update(c *Ctx, storeHex, id string, prev, next M, change
 		}
 		next["zatca"] = z
 	}
-	return s.legacyBackend.Update(c, storeHex, id, prev, next, changed, meta)
+	out, err := s.legacyBackend.Update(c, storeHex, id, prev, next, changed, meta)
+	if err == nil {
+		s.syncCountryVAT(id)
+	}
+	return out, err
+}
+
+// syncCountryVAT stores the VAT rate a country without VAT needs (0): the
+// legacy store update skips a zero vat_percent (omitempty), and the legacy
+// sales maths read store.VatPercent directly.
+func (s *storesBackend) syncCountryVAT(id string) {
+	oid, ok := oidOf(id)
+	if !ok {
+		return
+	}
+	d := loadStoreRaw(id)
+	if d == nil || storeProfile(d).HasVAT || num(d["vat_percent"]) == 0 {
+		return
+	}
+	ctx, cancel := dbctx()
+	defer cancel()
+	_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"vat_percent": 0.0}})
 }

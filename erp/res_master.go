@@ -584,8 +584,9 @@ func partyValidate(x *mapCtx, rec M, prev M) map[string]string {
 	if n := str(rec["nameAr"]); n != "" && !hasArabic(n) {
 		e["nameAr"] = "must contain Arabic letters"
 	}
-	if v := str(rec["vatNo"]); v != "" && !ValidVAT(v) {
-		e["vatNo"] = "VAT No. must be 15 digits starting and ending with 3"
+	cp := x.profile()
+	if v := str(rec["vatNo"]); v != "" && !validTaxIDFor(cp, v) {
+		e["vatNo"] = taxIDErrorFor(cp)
 	}
 	if num(rec["creditLimit"]) < 0 {
 		e["creditLimit"] = "must be >= 0"
@@ -596,18 +597,11 @@ func partyValidate(x *mapCtx, rec M, prev M) map[string]string {
 	if v := str(rec["email"]); v != "" && !validEmail(v) {
 		e["email"] = "invalid email"
 	}
-	if v := str(rec["phone"]); v != "" && !ValidSaudiMobile(v) && !ValidSaudiPhone(v) {
+	if v := str(rec["phone"]); v != "" && !validPhoneFor(cp, v) {
 		e["phone"] = "invalid phone"
 	}
-	a := sub(rec, "address")
-	if v := str(a["postalCode"]); v != "" && !re5.MatchString(v) {
-		e["address.postalCode"] = "5 digits"
-	}
-	if v := str(a["buildingNo"]); v != "" && !re4.MatchString(v) {
-		e["address.buildingNo"] = "4 digits"
-	}
-	if v := str(a["additionalNo"]); v != "" && !re4.MatchString(v) {
-		e["address.additionalNo"] = "4 digits"
+	for k, v := range addressErrorsFor(cp, sub(rec, "address"), "address.") {
+		e[k] = v
 	}
 	return e
 }

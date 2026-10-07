@@ -197,6 +197,13 @@ func ValidateSignup(body M) map[string]string {
 	o := sub(body, "owner")
 	c := sub(body, "company")
 	a := sub(c, "address")
+	// company.countryCode: one of the GCC countries (default Saudi Arabia)
+	// decides the tax-number, phone and address rules below.
+	cc := normCountry(str(c["countryCode"]))
+	if cc != "" && models.CountryProfileFor(cc) == nil {
+		e["company.countryCode"] = "choose a GCC country: SA, AE, OM, QA, BH or KW"
+	}
+	cp := models.CountryProfileOrSaudi(cc)
 	if strings.TrimSpace(str(o["name"])) == "" {
 		e["owner.name"] = "required"
 	}
@@ -207,8 +214,8 @@ func ValidateSignup(body M) map[string]string {
 	}
 	if m := str(o["mobile"]); m == "" {
 		e["owner.mobile"] = "required"
-	} else if !ValidSaudiMobile(m) {
-		e["owner.mobile"] = "Saudi mobile number (05XXXXXXXX)"
+	} else if !validMobileFor(cp, m) {
+		e["owner.mobile"] = cp.NameEn + " mobile number (" + cp.MobileHint + ")"
 	}
 	if p := str(o["password"]); len(p) < 8 {
 		e["owner.password"] = "at least 8 characters"
@@ -224,19 +231,40 @@ func ValidateSignup(body M) map[string]string {
 		e["company.nameAr"] = "must contain Arabic letters"
 	}
 	if v := str(c["vatNo"]); v == "" {
-		e["company.vatNo"] = "required"
-	} else if !ValidVAT(v) {
-		e["company.vatNo"] = "15 digits, starting and ending with 3"
+		if cp.TaxIDRequired {
+			e["company.vatNo"] = "required"
+		}
+	} else if !validTaxIDFor(cp, v) {
+		e["company.vatNo"] = cp.TaxIDHint
 	}
 	if v := str(c["crNo"]); v == "" {
 		e["company.crNo"] = "required"
-	} else if !ValidCR(v) {
-		e["company.crNo"] = "10 digits"
+	} else if (cp.Code == "SA" && !ValidCR(v)) || (cp.Code != "SA" && !cp.ValidCR(v)) {
+		e["company.crNo"] = cp.CRHint
 	}
 	if m := str(c["mobile"]); m == "" {
 		e["company.mobile"] = "required"
-	} else if !ValidSaudiPhone(m) {
-		e["company.mobile"] = "Saudi phone number"
+	} else if (cp.Code == "SA" && !ValidSaudiPhone(m)) || (cp.Code != "SA" && !cp.ValidPhone(m)) {
+		e["company.mobile"] = cp.NameEn + " phone number"
+	}
+	if t := str(c["type"]); !signupTypes[t] && CategoryTerminal(t) == "" {
+		e["company.type"] = "invalid business type"
+	}
+	if p := str(c["plan"]); !signupPlans[p] {
+		e["company.plan"] = "invalid plan"
+	}
+	if !cp.NationalAddress {
+		// other GCC countries: street and city, the rest optional
+		if strings.TrimSpace(str(a["streetEn"])) == "" {
+			e["company.address.streetEn"] = "required"
+		}
+		if strings.TrimSpace(str(a["cityEn"])) == "" {
+			e["company.address.cityEn"] = "required"
+		}
+		for k, v := range addressErrorsFor(cp, a, "company.address.") {
+			e[k] = v
+		}
+		return e
 	}
 	if v := str(a["buildingNo"]); !re4.MatchString(v) {
 		e["company.address.buildingNo"] = "4 digits"
@@ -265,12 +293,6 @@ func ValidateSignup(body M) map[string]string {
 	if v := str(a["shortAddress"]); v != "" && !regexp.MustCompile(`^[A-Za-z]{4}\d{4}$`).MatchString(v) {
 		e["company.address.shortAddress"] = "format AAAA9999"
 	}
-	if t := str(c["type"]); !signupTypes[t] && CategoryTerminal(t) == "" {
-		e["company.type"] = "invalid business type"
-	}
-	if p := str(c["plan"]); !signupPlans[p] {
-		e["company.plan"] = "invalid plan"
-	}
 	return e
 }
 
@@ -289,6 +311,11 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	a := sub(c, "address")
 	email := strings.ToLower(strings.TrimSpace(str(o["email"])))
 	category := signupCategory(str(c["type"]))
+	cp := models.CountryProfileOrSaudi(normCountry(str(c["countryCode"])))
+	zatcaPhase := "2"
+	if !models.ZatcaApplies(cp.Code) {
+		zatcaPhase = "1"
+	}
 	if findUserByEmailCI(email) != nil {
 		writeErr(w, errf(http.StatusConflict, "email_taken", "An account with this e-mail already exists.", map[string]string{"owner.email": "already registered"}))
 		return
@@ -299,7 +326,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 		"name": str(o["name"]), "email": email, "mob": cleanPhone(str(o["mobile"])), "password": str(o["password"]),
 		"store_name": str(c["nameEn"]), "store_name_in_arabic": str(c["nameAr"]),
 		"business_category": category, "registration_number": str(c["crNo"]), "vat_no": str(c["vatNo"]),
-		"phone": cleanPhone(str(c["mobile"])), "country_code": "SA", "country_name": "Saudi Arabia", "zatca_phase": "2",
+		"phone": cleanPhone(str(c["mobile"])), "country_code": cp.Code, "country_name": cp.NameEn, "zatca_phase": zatcaPhase,
 		"national_address": addressToLegacy(a),
 	}
 	fake := &Ctx{R: r}
@@ -333,13 +360,18 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 		"erp.h": bson.A{historyEntry(str(o["name"]), "created", []interface{}{})},
 	}})
 	short := deriveShort(str(c["nameEn"]))
-	sloc := storeLocation(legacyReq) // the new store's zone (SA)
+	sloc := storeLocation(legacyReq) // the new store's zone (its country's)
 	_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{
 		"erp.v": int64(1), "erp.x.short": short, "erp.x.plan": str(c["plan"]), "erp.x.branchAr": "الفرع الرئيسي",
 		"erp.x.phone2": cleanPhone(str(c["mobile"])), "erp.x.trialEndsAt": time.Now().AddDate(0, 0, 14).In(sloc).Format(layoutDay),
-		"erp.x.businessType": category, "erp.x.address": M{"countryAr": "المملكة العربية السعودية", "shortAddress": str(a["shortAddress"])},
+		"erp.x.businessType": category, "erp.x.address": M{"countryAr": cp.NameAr, "shortAddress": str(a["shortAddress"])},
 		"erp.h": bson.A{historyEntryIn(sloc, str(o["name"]), "created", []interface{}{})},
 	}})
+	if cp.Code != "SA" {
+		// invoice wording of the country ("Invoice" where there is no VAT)
+		_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{
+			"title": cp.InvoiceTitleEn, "title_in_arabic": cp.InvoiceTitleAr}})
+	}
 	tok, err := models.GenerateAccesstoken(str(u["email"]))
 	if err != nil {
 		writeErr(w, errInternal("Unable to issue tokens."))

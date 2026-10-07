@@ -70,25 +70,38 @@ func validateGuestRegisterRequest(req GuestRegisterRequest) map[string]string {
 	if govalidator.IsNull(req.RegistrationNumber) {
 		errs["registration_number"] = "Registration number (CRN) is required"
 	}
-	if govalidator.IsNull(req.VATNo) {
-		errs["vat_no"] = "VAT number is required"
-	} else if len(req.VATNo) != 15 {
-		errs["vat_no"] = "VAT No. should be 15 digits"
+	// country rules (models/country_profile.go): an empty country is Saudi
+	// Arabia; other GCC countries have an optional tax number and a simpler
+	// address.
+	cp := models.CountryProfileOrSaudi(req.CountryCode)
+	if c := strings.TrimSpace(req.CountryCode); c != "" && models.CountryProfileFor(c) == nil {
+		errs["country_code"] = "Choose a GCC country"
 	}
-	if govalidator.IsNull(req.NationalAddress.BuildingNo) {
-		errs["national_address_building_no"] = "Building number is required"
+	if cp.TaxIDRequired {
+		if govalidator.IsNull(req.VATNo) {
+			errs["vat_no"] = "VAT number is required"
+		} else if len(req.VATNo) != 15 {
+			errs["vat_no"] = "VAT No. should be 15 digits"
+		}
+	} else if !govalidator.IsNull(req.VATNo) && !cp.ValidTaxID(req.VATNo) {
+		errs["vat_no"] = cp.TaxIDLabelEn + ": " + cp.TaxIDHint
+	}
+	if cp.NationalAddress {
+		if govalidator.IsNull(req.NationalAddress.BuildingNo) {
+			errs["national_address_building_no"] = "Building number is required"
+		}
+		if govalidator.IsNull(req.NationalAddress.DistrictName) {
+			errs["national_address_district_name"] = "District name is required"
+		}
+		if govalidator.IsNull(req.NationalAddress.ZipCode) {
+			errs["national_address_zipcode"] = "Zip code is required"
+		}
 	}
 	if govalidator.IsNull(req.NationalAddress.StreetName) {
 		errs["national_address_street_name"] = "Street name is required"
 	}
-	if govalidator.IsNull(req.NationalAddress.DistrictName) {
-		errs["national_address_district_name"] = "District name is required"
-	}
 	if govalidator.IsNull(req.NationalAddress.CityName) {
 		errs["national_address_city_name"] = "City name is required"
-	}
-	if govalidator.IsNull(req.NationalAddress.ZipCode) {
-		errs["national_address_zipcode"] = "Zip code is required"
 	}
 
 	return errs
@@ -110,13 +123,13 @@ func buildGuestStore(req GuestRegisterRequest, branchCode string, now time.Time)
 	if phone == "" {
 		phone = req.Mob
 	}
-	countryCode := strings.TrimSpace(req.CountryCode)
+	countryCode := strings.ToUpper(strings.TrimSpace(req.CountryCode))
 	if countryCode == "" {
 		countryCode = "SA"
 	}
 	countryName := strings.TrimSpace(req.CountryName)
 	if countryName == "" {
-		countryName = "Saudi Arabia"
+		countryName = models.CountryProfileOrSaudi(countryCode).NameEn
 	}
 
 	na := req.NationalAddress
@@ -134,8 +147,13 @@ func buildGuestStore(req GuestRegisterRequest, branchCode string, now time.Time)
 		return models.SerialNumber{Prefix: prefix, PaddingCount: padding, StartFromCount: start}
 	}
 
+	cp := models.CountryProfileOrSaudi(countryCode)
+	zatcaPhase := req.ZatcaPhase
 	zatcaEnv := "NonProduction"
-	if req.ZatcaPhase == "2" {
+	if !models.ZatcaApplies(countryCode) {
+		// ZATCA is Saudi-only: other GCC stores stay on plain Phase 1
+		zatcaPhase = "1"
+	} else if zatcaPhase == "2" {
 		zatcaEnv = "Production"
 	}
 
@@ -148,7 +166,7 @@ func buildGuestStore(req GuestRegisterRequest, branchCode string, now time.Time)
 		RegistrationNumberInArabic: req.RegistrationNumber,
 		VATNo:                      req.VATNo,
 		VATNoInArabic:              req.VATNo,
-		VatPercent:                 15,
+		VatPercent:                 cp.VatPercent,
 		BusinessCategory:           req.BusinessCategory,
 		Email:                      req.Email,
 		Phone:                      phone,
@@ -178,7 +196,7 @@ func buildGuestStore(req GuestRegisterRequest, branchCode string, now time.Time)
 		NonVATSalesReturnSerialNumber:    sn("NVS-R", 3, 1),
 
 		Zatca: models.Zatca{
-			Phase: req.ZatcaPhase,
+			Phase: zatcaPhase,
 			Env:   zatcaEnv,
 		},
 

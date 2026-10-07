@@ -981,8 +981,14 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["name_in_arabic"] = "Name in Arabic is required"
 	}
 
+	cp := CountryProfileOrSaudi(store.CountryCode)
+
 	if govalidator.IsNull(store.RegistrationNumber) {
 		errs["registration_number"] = "Registration Number / CRN is required"
+	} else if !cp.NationalAddress {
+		if !cp.ValidCR(store.RegistrationNumber) {
+			errs["registration_number"] = cp.CRLabelEn + ": " + cp.CRHint
+		}
 	} else if !IsAlphanumeric(store.RegistrationNumber) {
 		errs["registration_number"] = "Registration Number should be alpha numeric(a-zA-Z|0-9)"
 	}
@@ -1003,19 +1009,26 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["phone_in_arabic"] = "Phone in Arabic is required"
 	}
 
-	if govalidator.IsNull(store.VATNo) {
-		errs["vat_no"] = "VAT NO. is required"
-	} else if !IsValidDigitNumber(store.VATNo, "15") {
-		errs["vat_no"] = "VAT No. should be 15 digits"
-	} else if !IsNumberStartAndEndWith(store.VATNo, "3") {
-		errs["vat_no"] = "VAT No. should start and end with 3"
+	// Tax number and VAT rate follow the store's country (country_profile.go):
+	// Saudi stores keep the ZATCA rules; elsewhere the number is optional and
+	// Qatar/Kuwait have no VAT.
+	if cp.TaxIDRequired {
+		if govalidator.IsNull(store.VATNo) {
+			errs["vat_no"] = "VAT NO. is required"
+		} else if !IsValidDigitNumber(store.VATNo, "15") {
+			errs["vat_no"] = "VAT No. should be 15 digits"
+		} else if !IsNumberStartAndEndWith(store.VATNo, "3") {
+			errs["vat_no"] = "VAT No. should start and end with 3"
+		}
+
+		if govalidator.IsNull(store.VATNoInArabic) {
+			errs["vat_no_in_arabic"] = "VAT NO. is required"
+		}
+	} else if !govalidator.IsNull(store.VATNo) && !cp.ValidTaxID(store.VATNo) {
+		errs["vat_no"] = cp.TaxIDLabelEn + ": " + cp.TaxIDHint
 	}
 
-	if govalidator.IsNull(store.VATNoInArabic) {
-		errs["vat_no_in_arabic"] = "VAT NO. is required"
-	}
-
-	if store.VatPercent == 0 {
+	if store.VatPercent == 0 && cp.HasVAT {
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
@@ -1023,43 +1036,57 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["business_category"] = "Business category is required"
 	}
 
-	//National address
-	if govalidator.IsNull(store.NationalAddress.BuildingNo) {
-		errs["national_address_building_no"] = "Building number is required"
-	} else {
-		if !IsValidDigitNumber(store.NationalAddress.BuildingNo, "4") {
-			errs["national_address_building_no"] = "Building number should be 4 digits"
+	//National address (Saudi National Address rules; other GCC countries
+	// need a street and a city, the rest is optional)
+	if !cp.NationalAddress {
+		if govalidator.IsNull(store.NationalAddress.StreetName) {
+			errs["national_address_street_name"] = "Street name is required"
 		}
-	}
+		if govalidator.IsNull(store.NationalAddress.CityName) {
+			errs["national_address_city_name"] = "City name is required"
+		}
+		if !cp.ValidPostal(store.NationalAddress.ZipCode) {
+			errs["national_address_zipcode"] = "Invalid postal code"
+		}
+	} else {
+		if govalidator.IsNull(store.NationalAddress.BuildingNo) {
+			errs["national_address_building_no"] = "Building number is required"
+		} else {
+			if !IsValidDigitNumber(store.NationalAddress.BuildingNo, "4") {
+				errs["national_address_building_no"] = "Building number should be 4 digits"
+			}
+		}
 
-	if govalidator.IsNull(store.NationalAddress.StreetName) {
-		errs["national_address_street_name"] = "Street name is required"
-	}
+		if govalidator.IsNull(store.NationalAddress.StreetName) {
+			errs["national_address_street_name"] = "Street name is required"
+		}
 
-	if govalidator.IsNull(store.NationalAddress.StreetNameArabic) {
-		errs["national_address_street_name_arabic"] = "Street name in arabic is required"
-	}
+		if govalidator.IsNull(store.NationalAddress.StreetNameArabic) {
+			errs["national_address_street_name_arabic"] = "Street name in arabic is required"
+		}
 
-	if govalidator.IsNull(store.NationalAddress.DistrictName) {
-		errs["national_address_district_name"] = "District name is required"
-	}
+		if govalidator.IsNull(store.NationalAddress.DistrictName) {
+			errs["national_address_district_name"] = "District name is required"
+		}
 
-	if govalidator.IsNull(store.NationalAddress.DistrictNameArabic) {
-		errs["national_address_district_name_arabic"] = "District name in arabic is required"
-	}
+		if govalidator.IsNull(store.NationalAddress.DistrictNameArabic) {
+			errs["national_address_district_name_arabic"] = "District name in arabic is required"
+		}
 
-	if govalidator.IsNull(store.NationalAddress.CityName) {
-		errs["national_address_city_name"] = "City name is required"
-	}
+		if govalidator.IsNull(store.NationalAddress.CityName) {
+			errs["national_address_city_name"] = "City name is required"
+		}
 
-	if govalidator.IsNull(store.NationalAddress.CityNameArabic) {
-		errs["national_address_city_name_arabic"] = "City name in arabic is required"
-	}
+		if govalidator.IsNull(store.NationalAddress.CityNameArabic) {
+			errs["national_address_city_name_arabic"] = "City name in arabic is required"
+		}
 
-	if govalidator.IsNull(store.NationalAddress.ZipCode) {
-		errs["national_address_zipcode"] = "Zip code is required"
-	} else if !IsValidDigitNumber(store.NationalAddress.ZipCode, "5") {
-		errs["national_address_zipcode"] = "Zip code should be 5 digits"
+		if govalidator.IsNull(store.NationalAddress.ZipCode) {
+			errs["national_address_zipcode"] = "Zip code is required"
+		} else if !IsValidDigitNumber(store.NationalAddress.ZipCode, "5") {
+			errs["national_address_zipcode"] = "Zip code should be 5 digits"
+		}
+
 	}
 
 	//sales serial number

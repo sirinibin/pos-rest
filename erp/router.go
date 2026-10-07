@@ -32,6 +32,7 @@ func Register(router *mux.Router) {
 	initResources()
 	s := router.PathPrefix(Prefix).Subrouter()
 	s.HandleFunc("/meta", handleMeta).Methods("GET")
+	s.HandleFunc("/countries", handleCountries).Methods("GET")
 	s.HandleFunc("/auth/login", rateLimited(loginLimiter, handleLogin)).Methods("POST")
 	s.HandleFunc("/auth/refresh", handleRefresh).Methods("POST")
 	s.HandleFunc("/auth/logout", handleLogout).Methods("POST")

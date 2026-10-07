@@ -76,7 +76,7 @@ func userValidate(x *mapCtx, rec M, prev M) map[string]string {
 	} else if other := findUserByEmailCI(em); other != nil && !boolv(other["deleted"]) && (prev == nil || hexOf(other["_id"]) != hexOf(prev["_id"])) {
 		e["email"] = "already in use"
 	}
-	if p := str(rec["phone"]); p != "" && !ValidSaudiMobile(p) && !ValidSaudiPhone(p) {
+	if p := str(rec["phone"]); p != "" && !validAnyGCCPhone(p) {
 		e["phone"] = "invalid phone"
 	}
 	role := str(rec["role"])

@@ -53,6 +53,9 @@ func handleZatcaReport(path string) http.HandlerFunc {
 				return 0, nil, errNotFound()
 			}
 			st := c.store(storeHex)
+			if !storeZatca(st) {
+				return 0, nil, errZatcaNotApplicable(storeProfile(st))
+			}
 			if str(get(st, "zatca.phase")) != "2" || !boolv(get(st, "zatca.connected")) {
 				return 0, nil, errf(http.StatusConflict, "zatca_not_connected",
 					"This store is not connected to ZATCA (Phase 2). Connect it in Settings → ZATCA first.", nil)
@@ -100,6 +103,9 @@ func handleZatcaConnect(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		if c.store(id) == nil {
 			return 0, nil, errNotFound()
+		}
+		if !storeZatca(c.store(id)) {
+			return 0, nil, errZatcaNotApplicable(storeProfile(c.store(id)))
 		}
 		body, err := readBody(r)
 		if err != nil {

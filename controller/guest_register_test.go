@@ -697,3 +697,75 @@ func TestGuestRegister_Integration_Success(t *testing.T) {
 	}
 	t.Skip("requires live MongoDB — run manually in a connected environment")
 }
+
+// ---------------------------------------------------------------------------
+// GCC countries (models/country_profile.go)
+// ---------------------------------------------------------------------------
+
+func gccReq(code string) GuestRegisterRequest {
+	r := validReq()
+	r.CountryCode = code
+	r.VATNo = ""
+	r.NationalAddress = models.NationalAddress{StreetName: "Sheikh Zayed Rd", CityName: "Dubai"}
+	return r
+}
+
+func TestValidateGuestRegisterRequest_GCC(t *testing.T) {
+	for _, code := range []string{"AE", "OM", "QA", "BH", "KW", "ae"} {
+		if errs := validateGuestRegisterRequest(gccReq(code)); len(errs) != 0 {
+			t.Errorf("%s: unexpected %v", code, errs)
+		}
+	}
+	tests := []struct {
+		name string
+		req  func() GuestRegisterRequest
+		key  string
+	}{
+		{"non-GCC country", func() GuestRegisterRequest { return gccReq("GB") }, "country_code"},
+		{"bad UAE TRN", func() GuestRegisterRequest { r := gccReq("AE"); r.VATNo = "12"; return r }, "vat_no"},
+		{"street required", func() GuestRegisterRequest { r := gccReq("BH"); r.NationalAddress.StreetName = ""; return r }, "national_address_street_name"},
+		{"city required", func() GuestRegisterRequest { r := gccReq("KW"); r.NationalAddress.CityName = ""; return r }, "national_address_city_name"},
+		{"Saudi still needs VAT", func() GuestRegisterRequest { r := validReq(); r.VATNo = ""; return r }, "vat_no"},
+		{"Saudi still needs building no.", func() GuestRegisterRequest {
+			r := validReq()
+			r.NationalAddress.BuildingNo = ""
+			return r
+		}, "national_address_building_no"},
+	}
+	for _, tc := range tests {
+		if errs := validateGuestRegisterRequest(tc.req()); errs[tc.key] == "" {
+			t.Errorf("%s: expected %s, got %v", tc.name, tc.key, errs)
+		}
+	}
+}
+
+func TestBuildGuestStore_GCCCountry(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		code, name, phase string
+		vat               float64
+	}{
+		{"", "Saudi Arabia", "2", 15},
+		{"SA", "Saudi Arabia", "2", 15},
+		{"ae", "United Arab Emirates", "1", 5},
+		{"OM", "Oman", "1", 5},
+		{"QA", "Qatar", "1", 0},
+		{"BH", "Bahrain", "1", 10},
+		{"KW", "Kuwait", "1", 0},
+	}
+	for _, tc := range tests {
+		r := validReq()
+		r.CountryCode, r.ZatcaPhase = tc.code, "2"
+		s := buildGuestStore(r, "abc12345", now)
+		want := strings.ToUpper(tc.code)
+		if want == "" {
+			want = "SA"
+		}
+		if s.CountryCode != want || s.CountryName != tc.name || s.VatPercent != tc.vat || s.Zatca.Phase != tc.phase {
+			t.Errorf("%q: country=%s/%s vat=%v phase=%s", tc.code, s.CountryCode, s.CountryName, s.VatPercent, s.Zatca.Phase)
+		}
+		if tc.phase == "1" && s.Zatca.Env != "NonProduction" {
+			t.Errorf("%q: non-Saudi store must not get a ZATCA production env", tc.code)
+		}
+	}
+}

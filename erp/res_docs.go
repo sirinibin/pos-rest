@@ -799,8 +799,8 @@ func (cfg *docCfg) validate(x *mapCtx, rec M, prev M) map[string]string {
 	if str(rec["date"]) == "" && prev == nil {
 		e["date"] = "required"
 	}
-	if v := str(rec["vatNo"]); v != "" && cfg.party == "customer" && !ValidVAT(v) {
-		e["vatNo"] = "VAT No. must be 15 digits starting and ending with 3"
+	if v := str(rec["vatNo"]); v != "" && cfg.party == "customer" && !validTaxIDFor(x.profile(), v) {
+		e["vatNo"] = taxIDErrorFor(x.profile())
 	}
 	if cfg.discount {
 		if d := num(rec["discount"]); d < 0 {
