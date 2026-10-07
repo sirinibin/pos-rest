@@ -369,6 +369,30 @@ func TestSalesToLegacy_Create(t *testing.T) {
 	}
 }
 
+// With the store's Warehouse module off the web app sends lines with no warehouse
+// (or the virtual main store); both must save to the legacy main store bucket.
+func TestSalesToLegacy_LineWithoutWarehouseGoesToMainStore(t *testing.T) {
+	sid, pid := hexID(), hexID()
+	for _, wh := range []interface{}{nil, "", "ms_" + sid} {
+		x := testX(sid, M{"_id": sid, "vat_percent": 15.0})
+		x.cache["product|"+pid] = M{"_id": pid, "name": "Oil", "product_stores": M{sid: M{}}}
+		b := newSalesResource().Backend.(*legacyBackend)
+		item := M{"productId": pid, "qty": 1.0, "unitPrice": 10.0, "unitDiscount": 0.0}
+		if wh != nil {
+			item["warehouseId"] = wh
+		}
+		rec := M{"date": "2026-10-05T11:30", "customerId": hexID(), "vatPercent": 15.0, "items": []interface{}{item}}
+		p, err := b.toL(x, rec, nil, allKeys(rec), true)
+		if err != nil {
+			t.Fatalf("warehouseId %v: %v", wh, err)
+		}
+		line := arr(p["products"])[0].(M)
+		if line["warehouse_id"] != nil || line["warehouse_code"] != nil {
+			t.Fatalf("warehouseId %v: want main store, got %v", wh, line)
+		}
+	}
+}
+
 func TestSalesToLegacy_PaymentOnlyUpdateKeepsLines(t *testing.T) {
 	sid, pid := hexID(), hexID()
 	x := testX(sid, M{"_id": sid})
