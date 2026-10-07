@@ -481,15 +481,16 @@ func newProductsResource() *Resource {
 			"stock": "product_stores.{store}.stock"},
 		listRange: map[string]string{"stock": "product_stores.{store}.stock", "retail": "product_stores.{store}.retail_unit_price"},
 		listWhere: map[string]whereKey{"categoryId": {key: "category_id", oid: true}, "brandId": {key: "brand_id", oid: true},
-			"isService": {fn: func(v string) (bson.M, bool) {
-				switch v {
-				case "true":
-					return bson.M{"is_service": true}, true
-				case "false":
-					return bson.M{"is_service": bson.M{"$ne": true}}, true
-				}
-				return nil, false
-			}}},
+			"isService": {fn: boolWhere("is_service")}, "isSet": {fn: boolWhere("is_set")},
+			"stockStatus": {fn: productStockStatus}},
+		listSumExpr: map[string]func(storeHex string) interface{}{
+			// stock value at purchase price (inventory/helpers.js stockValue)
+			"stockValue": func(st string) interface{} {
+				return bson.M{"$multiply": bson.A{
+					bson.M{"$convert": bson.M{"input": "$product_stores." + st + ".stock", "to": "double", "onError": 0.0, "onNull": 0.0}},
+					bson.M{"$convert": bson.M{"input": "$product_stores." + st + ".purchase_unit_price", "to": "double", "onError": 0.0, "onNull": 0.0}},
+				}}
+			}},
 		toC: productToContract, toL: productToLegacy, known: productKnown, validate: productValidate,
 		hybrid: knownSet("pricing", "stock"),
 		v1: v1Ops{path: "/v1/product", create: controller.CreateProduct, update: controller.UpdateProduct,

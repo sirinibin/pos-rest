@@ -37,7 +37,7 @@ type whereKey struct {
 	oid bool // value is a record id (stored as ObjectID)
 	// fn builds the filter itself (derived fields such as "over credit limit");
 	// false = the value is not one this filter accepts (400).
-	fn func(val string) (bson.M, bool)
+	fn func(val, storeHex string) (bson.M, bool)
 }
 
 // storeKey fills the {store} placeholder of a legacy key.
@@ -143,7 +143,7 @@ func (b *legacyBackend) listExtras(c *Ctx, storeHex string, q ListQuery) (bson.M
 				map[string]string{"where." + field: "not supported for this resource"})
 		}
 		if wk.fn != nil {
-			m, ok := wk.fn(val)
+			m, ok := wk.fn(val, storeHex)
 			if !ok {
 				return nil, nil, errBadRequest("Invalid filter value.", map[string]string{"where." + field: "unsupported value"})
 			}
@@ -152,9 +152,16 @@ func (b *legacyBackend) listExtras(c *Ctx, storeHex string, q ListQuery) (bson.M
 		}
 		key := storeKey(wk.key, storeHex)
 		if wk.oid {
-			in := bson.A{val}
-			if oid, ok := oidOf(val); ok {
-				in = append(bson.A{oid}, in...)
+			// one id, or several separated by commas (a category and its sub-categories)
+			in := bson.A{}
+			for _, id := range strings.Split(val, ",") {
+				if id = strings.TrimSpace(id); id == "" {
+					continue
+				}
+				if oid, ok := oidOf(id); ok {
+					in = append(in, oid)
+				}
+				in = append(in, id)
 			}
 			f = andFilter(f, bson.M{key: bson.M{"$in": in}})
 		} else {
@@ -242,7 +249,7 @@ var partyListSort = map[string]string{"code": "code", "nameEn": "name", "nameAr"
 var partyListRange = map[string]string{"creditLimit": "credit_limit", "creditBalance": "credit_balance"}
 
 // overLimit: a credit limit is set and the balance is above it.
-func partyOverLimit(val string) (bson.M, bool) {
+func partyOverLimit(val, _ string) (bson.M, bool) {
 	switch val {
 	case "true", "1":
 		return bson.M{"credit_limit": bson.M{"$gt": 0}, "$expr": bson.M{"$gt": bson.A{"$credit_balance", "$credit_limit"}}}, true
@@ -254,7 +261,7 @@ func partyOverLimit(val string) (bson.M, bool) {
 }
 
 // employee status lives in is_active (missing = active).
-func employeeStatus(val string) (bson.M, bool) {
+func employeeStatus(val, _ string) (bson.M, bool) {
 	switch val {
 	case "active":
 		return bson.M{"is_active": bson.M{"$ne": false}}, true
@@ -279,12 +286,16 @@ func (b *legacyBackend) Sums(c *Ctx, storeHex string, q ListQuery) (M, error) {
 	group := bson.M{"_id": nil}
 	names := map[string]string{}
 	for i, f := range q.Sum {
+		n := "s" + strconv.Itoa(i)
+		names[n] = f
+		if ex, ok := b.listSumExpr[f]; ok {
+			group[n] = bson.M{"$sum": ex(storeHex)}
+			continue
+		}
 		key, ok := b.listRange[f]
 		if !ok {
 			return nil, errBadRequest("This list has no total for "+f+".", map[string]string{"sum": f + " is not supported"})
 		}
-		n := "s" + strconv.Itoa(i)
-		names[n] = f
 		group[n] = bson.M{"$sum": bson.M{"$convert": bson.M{"input": "$" + storeKey(key, storeHex), "to": "double", "onError": 0.0, "onNull": 0.0}}}
 	}
 	f, _, err := b.listFilter(c, storeHex, q)
@@ -315,7 +326,7 @@ func (b *legacyBackend) Sums(c *Ctx, storeHex string, q ListQuery) (M, error) {
 }
 
 // Saudi national ids start with 1, iqamas (expats) with 2 (the web app's rule).
-func employeeNationality(val string) (bson.M, bool) {
+func employeeNationality(val, _ string) (bson.M, bool) {
 	switch val {
 	case "saudi":
 		return bson.M{"iqama_no": bson.M{"$regex": "^1"}}, true
@@ -323,4 +334,44 @@ func employeeNationality(val string) (bson.M, bool) {
 		return bson.M{"iqama_no": bson.M{"$regex": "^2"}}, true
 	}
 	return nil, false
+}
+
+// Products: stock status as the web app shows it (inventory/helpers.js stockStatus):
+// out = no stock, low = at or below the minimum (erp.x.stock.<warehouse>.min, summed),
+// ok = above it.  Services have no stock status.
+func productStockStatus(val, storeHex string) (bson.M, bool) {
+	stock := "$product_stores." + storeHex + ".stock"
+	qty := bson.M{"$convert": bson.M{"input": stock, "to": "double", "onError": 0.0, "onNull": 0.0}}
+	min := bson.M{"$reduce": bson.M{
+		"input":        bson.M{"$objectToArray": bson.M{"$ifNull": bson.A{"$erp.x.stock", bson.M{}}}},
+		"initialValue": 0.0,
+		"in": bson.M{"$add": bson.A{"$$value", bson.M{"$convert": bson.M{"input": "$$this.v.min", "to": "double",
+			"onError": 0.0, "onNull": 0.0}}}},
+	}}
+	goods := bson.M{"is_service": bson.M{"$ne": true}}
+	out := bson.M{"$lte": bson.A{qty, 0}}
+	low := bson.M{"$and": bson.A{bson.M{"$gt": bson.A{qty, 0}}, bson.M{"$lte": bson.A{qty, min}}}}
+	switch val {
+	case "out":
+		return andFilter(goods, bson.M{"$expr": out}), true
+	case "low":
+		return andFilter(goods, bson.M{"$expr": low}), true
+	case "lowout":
+		return andFilter(goods, bson.M{"$expr": bson.M{"$or": bson.A{out, low}}}), true
+	case "ok":
+		return andFilter(goods, bson.M{"$expr": bson.M{"$gt": bson.A{qty, min}}}), true
+	}
+	return nil, false
+}
+
+func boolWhere(key string) func(val, _ string) (bson.M, bool) {
+	return func(val, _ string) (bson.M, bool) {
+		switch val {
+		case "true":
+			return bson.M{key: true}, true
+		case "false":
+			return bson.M{key: bson.M{"$ne": true}}, true
+		}
+		return nil, false
+	}
 }

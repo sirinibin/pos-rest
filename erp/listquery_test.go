@@ -428,3 +428,97 @@ func TestAPI_ListSums(t *testing.T) {
 		t.Fatal("sums only on request")
 	}
 }
+
+// DB-backed: product stock status and stock value agree with the web app's rules
+// (inventory/helpers.js stockStatus, stockValue) on the same records.
+func TestAPI_ProductListStock(t *testing.T) {
+	requireDB(t)
+	tok := login(t, fx.AdminEmail)
+	st := "&storeId=" + storeA()
+	// give one product a minimum above its stock so "low" has a member
+	all := call(t, "GET", "/products?limit=500"+st, tok, nil)
+	var goods []M
+	for _, r := range all.data() {
+		if r.(M)["isService"] != true {
+			goods = append(goods, r.(M))
+		}
+	}
+	if len(goods) == 0 {
+		t.Fatal("no goods in the fixture")
+	}
+	// a minimum above the stock makes a product "low" (a product with stock)
+	for _, p := range goods {
+		stk := sub(p, "stock")
+		var q float64
+		for _, w := range stk {
+			q += num(w.(M)["qty"])
+		}
+		if q <= 0 {
+			continue
+		}
+		next := M{}
+		for id, w := range stk {
+			e := M{"qty": num(w.(M)["qty"]), "min": q + 1000}
+			next[id] = e
+		}
+		up := call(t, "PATCH", "/products/"+str(p["id"]), tok, M{"stock": next})
+		if up.Code != 200 {
+			t.Fatalf("set min: %d %s", up.Code, up.Raw)
+		}
+		break
+	}
+	all = call(t, "GET", "/products?limit=500"+st, tok, nil)
+	goods = nil
+	for _, r := range all.data() {
+		if r.(M)["isService"] != true {
+			goods = append(goods, r.(M))
+		}
+	}
+	stockOf := func(p M) (qty, min float64) {
+		for _, w := range sub(p, "stock") {
+			qty += num(w.(M)["qty"])
+			min += num(w.(M)["min"])
+		}
+		return
+	}
+	status := func(p M) string {
+		q, m := stockOf(p)
+		switch {
+		case q <= 0:
+			return "out"
+		case q <= m:
+			return "low"
+		}
+		return "ok"
+	}
+	want := map[string]map[string]bool{"out": {}, "low": {}, "ok": {}}
+	value := 0.0
+	for _, p := range goods {
+		want[status(p)][str(p["id"])] = true
+		q, _ := stockOf(p)
+		value += q * num(sub(p, "pricing")["purchase"])
+	}
+	if len(want["low"]) == 0 {
+		t.Fatal("no low-stock product to check")
+	}
+	for _, s := range []string{"out", "low", "ok"} {
+		r := call(t, "GET", "/products?limit=500&where.stockStatus="+s+st, tok, nil)
+		if r.Code != 200 {
+			t.Fatalf("%s: %d %s", s, r.Code, r.Raw)
+		}
+		got := map[string]bool{}
+		for _, row := range r.data() {
+			got[str(row.(M)["id"])] = true
+		}
+		if !reflect.DeepEqual(got, want[s]) {
+			t.Errorf("stockStatus=%s: got %v want %v", s, got, want[s])
+		}
+	}
+	r := call(t, "GET", "/products?limit=1&where.isService=false&sum=stockValue"+st, tok, nil)
+	if r.Code != 200 || math.Abs(num(r.Body["sums"].(M)["stockValue"])-value) > 0.01 {
+		t.Fatalf("stock value: %s want %v", r.Raw, value)
+	}
+	if r := call(t, "GET", "/products?where.stockStatus=maybe"+st, tok, nil); r.Code != 400 {
+		t.Fatalf("bad stock status: %d", r.Code)
+	}
+}
