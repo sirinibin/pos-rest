@@ -297,6 +297,13 @@ func TestMasterListExtras(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(f, bson.M{"is_active": false}) {
 		t.Fatalf("inactive employees: %v %v", f, err)
 	}
+	f, _, err = be("employees").listExtras(nil, "st", ListQuery{Where: map[string]string{"nationality": "saudi"}})
+	if err != nil || !reflect.DeepEqual(f, bson.M{"iqama_no": bson.M{"$regex": "^1"}}) {
+		t.Fatalf("saudi employees: %v %v", f, err)
+	}
+	if _, _, err := be("employees").listExtras(nil, "st", ListQuery{Where: map[string]string{"nationality": "x"}}); err == nil {
+		t.Fatal("nationality takes saudi or expat")
+	}
 	// vehicles by make
 	f, _, err = be("vehicles").listExtras(nil, "st", ListQuery{Where: map[string]string{"make": "Toyota"}})
 	if err != nil || !reflect.DeepEqual(f, bson.M{"brand": "Toyota"}) {
@@ -350,6 +357,11 @@ func TestAPI_MasterListPaging(t *testing.T) {
 	for _, r := range get("/products?where.isService=false&sort=-stock&limit=500") {
 		if r["isService"] == true {
 			t.Fatalf("service in goods-only list: %v", r["id"])
+		}
+	}
+	for _, r := range get("/employees?where.nationality=saudi&limit=500") {
+		if !strings.HasPrefix(str(r["nationalId"]), "1") {
+			t.Fatalf("not a Saudi id: %v", r["nationalId"])
 		}
 	}
 	for _, r := range get("/employees?where.status=active&limit=500") {

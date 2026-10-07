@@ -809,7 +809,7 @@ func newEmployeesResource() *Resource {
 		searchKeys: []string{"name", "name_in_arabic", "code", "mob1", "mob2", "iqama_no"}, searchSort: "name",
 		listSort: map[string]string{"code": "code", "nameEn": "name", "nameAr": "name_in_arabic", "jobTitle": "position",
 			"basicSalary": "salary", "joinDate": "joining_date", "phone": "mob1"},
-		listWhere: map[string]whereKey{"status": {fn: employeeStatus}, "jobTitle": {key: "position"}},
+		listWhere: map[string]whereKey{"status": {fn: employeeStatus}, "jobTitle": {key: "position"}, "nationality": {fn: employeeNationality}},
 		listRange: map[string]string{"basicSalary": "salary"},
 		toC: simpleToC(employeeFields, func(x *mapCtx, d M, rec M) {
 			if boolv(d["is_active"]) || d["is_active"] == nil {

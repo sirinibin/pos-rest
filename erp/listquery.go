@@ -313,3 +313,14 @@ func (b *legacyBackend) Sums(c *Ctx, storeHex string, q ListQuery) (M, error) {
 	}
 	return out, cur.Err()
 }
+
+// Saudi national ids start with 1, iqamas (expats) with 2 (the web app's rule).
+func employeeNationality(val string) (bson.M, bool) {
+	switch val {
+	case "saudi":
+		return bson.M{"iqama_no": bson.M{"$regex": "^1"}}, true
+	case "expat":
+		return bson.M{"iqama_no": bson.M{"$regex": "^2"}}, true
+	}
+	return nil, false
+}
