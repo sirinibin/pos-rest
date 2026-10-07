@@ -1,0 +1,2738 @@
+{
+ "today": "2026-10-07",
+ "credits": {
+  "d3": 50,
+  "d10": 100000,
+  "d11": 5
+ },
+ "rows": [
+  {
+   "id": "d0",
+   "code": "S-INV-0000",
+   "date": "2023-10-18T16:31",
+   "vatPercent": 0,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 149.63,
+     "unitDiscount": 0,
+     "purchasePrice": 89.78,
+     "retailPrice": 194.519,
+     "wholesalePrice": 164.59300000000002
+    }
+   ],
+   "payments": [
+    {
+     "amount": 517.22,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "pending",
+   "method": "cash",
+   "amount": 71.99,
+   "vatAmount": 7.5,
+   "vendorId": "v2",
+   "vendorName": "Parts Co",
+   "zatca": {
+    "status": "cleared"
+   },
+   "orderId": "d53"
+  },
+  {
+   "id": "d1",
+   "code": "S-INV-0001",
+   "date": "2026-09-08T17:44",
+   "vatPercent": 0,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 401.37,
+     "unitDiscount": 0,
+     "purchasePrice": 240.82,
+     "retailPrice": 521.7810000000001,
+     "wholesalePrice": 441.50700000000006
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "pending",
+   "method": "cash",
+   "amount": 790.19,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "cleared"
+   },
+   "orderId": "d50"
+  },
+  {
+   "id": "d2",
+   "code": "S-INV-0002",
+   "date": "2024-12-31T09:34",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 176.63,
+     "unitDiscount": 0,
+     "purchasePrice": 105.98,
+     "retailPrice": 229.619,
+     "wholesalePrice": 194.293
+    }
+   ],
+   "payments": [
+    {
+     "amount": 610.37,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "cancelled",
+   "method": "cash",
+   "amount": 120.65,
+   "vatAmount": 7.5,
+   "customerId": "c2",
+   "customerName": "مؤسسة النور",
+   "phone": "0524869155",
+   "zatca": {
+    "status": "cleared"
+   }
+  },
+  {
+   "id": "d3",
+   "code": "S-INV-0003",
+   "date": "2026-10-07T06:46",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 96.02,
+     "unitDiscount": 0,
+     "purchasePrice": 57.61,
+     "retailPrice": 124.826,
+     "wholesalePrice": 105.622
+    }
+   ],
+   "payments": [
+    {
+     "amount": 111.42,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "cash",
+   "amount": 875.66,
+   "vatAmount": 7.5,
+   "customerId": "c1",
+   "customerName": "مؤسسة النور",
+   "phone": "0528816413",
+   "zatca": {
+    "status": "cleared"
+   }
+  },
+  {
+   "id": "d4",
+   "code": "S-INV-0004",
+   "date": "2023-10-14T06:34",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 210.56,
+     "unitDiscount": 0,
+     "purchasePrice": 126.34,
+     "retailPrice": 273.728,
+     "wholesalePrice": 231.616
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "cancelled",
+   "method": "bank",
+   "amount": 943.99,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "Gulf Union",
+   "phone": "0558431279"
+  },
+  {
+   "id": "d5",
+   "code": "S-INV-0005",
+   "date": "2026-03-23T05:20",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 449.31,
+     "unitDiscount": 0,
+     "purchasePrice": 269.59
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "bank",
+   "amount": 917.26,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "Acme Trading",
+   "phone": "0582335403",
+   "zatca": {
+    "status": "reported"
+   },
+   "orderId": "d50"
+  },
+  {
+   "id": "d6",
+   "code": "S-INV-0006",
+   "date": "2025-05-05T13:55",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 137.84,
+     "unitDiscount": 0.5,
+     "purchasePrice": 82.7,
+     "retailPrice": 179.192,
+     "wholesalePrice": 151.62400000000002
+    }
+   ],
+   "payments": [
+    {
+     "amount": 318.03,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "received",
+   "method": "cash",
+   "amount": 895.51,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0515743649",
+   "orderId": "d13"
+  },
+  {
+   "id": "d7",
+   "code": "S-INV-0007",
+   "date": "2025-01-09T00:24",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 381.31,
+     "unitDiscount": 0,
+     "purchasePrice": 228.79
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "cash",
+   "amount": 854.35,
+   "vatAmount": 0,
+   "vendorId": "v1",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d8",
+   "code": "S-INV-0008",
+   "date": "2026-05-28T11:03",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 30.57,
+     "unitDiscount": 0,
+     "purchasePrice": 18.34,
+     "retailPrice": 39.741,
+     "wholesalePrice": 33.627
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "received",
+   "method": "bank",
+   "amount": 157.79,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "failed"
+   },
+   "orderId": "d6"
+  },
+  {
+   "id": "d9",
+   "code": "S-INV-0009",
+   "date": "2025-02-02T20:32",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 110.21,
+     "unitDiscount": 0.5,
+     "purchasePrice": 66.13
+    }
+   ],
+   "payments": [
+    {
+     "amount": 101.39,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "received",
+   "method": "bank",
+   "amount": 879.86,
+   "vatAmount": 0,
+   "vendorId": "v1",
+   "vendorName": "Parts Co"
+  },
+  {
+   "id": "d10",
+   "code": "S-INV-0010",
+   "date": "2026-07-08T14:02",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 18.71,
+     "unitDiscount": 0,
+     "purchasePrice": 11.23,
+     "retailPrice": 24.323,
+     "wholesalePrice": 20.581000000000003
+    }
+   ],
+   "payments": [
+    {
+     "amount": 65.55,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 210.66,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Parts Co",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d11",
+   "code": "S-INV-0011",
+   "date": "2026-06-25T06:00",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 286.97,
+     "unitDiscount": 0.5,
+     "purchasePrice": 172.18
+    }
+   ],
+   "payments": [
+    {
+     "amount": 331.02,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "cancelled",
+   "method": "bank",
+   "amount": 560.02,
+   "vatAmount": 7.5,
+   "customerId": "c1",
+   "customerName": "Gulf Union",
+   "phone": "0593138378",
+   "orderIds": [
+    "o11"
+   ]
+  },
+  {
+   "id": "d12",
+   "code": "S-INV-0012",
+   "date": "2025-07-15T00:13",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 362.63,
+     "unitDiscount": 0,
+     "purchasePrice": 217.58,
+     "retailPrice": 471.419,
+     "wholesalePrice": 398.89300000000003
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": true,
+   "createdBy": "Omar",
+   "status": "cancelled",
+   "method": "cash",
+   "amount": 393.34,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "reported"
+   }
+  },
+  {
+   "id": "d13",
+   "code": "S-INV-0013",
+   "date": "2024-09-18T23:57",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 490.79,
+     "unitDiscount": 0.5,
+     "purchasePrice": 294.47
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 996.25,
+   "vatAmount": 7.5,
+   "vendorId": "v2",
+   "vendorName": "Supplier One",
+   "orderIds": []
+  },
+  {
+   "id": "d14",
+   "code": "S-INV-0014",
+   "date": "2026-03-29T18:02",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 474.95,
+     "unitDiscount": 0,
+     "purchasePrice": 284.97
+    }
+   ],
+   "payments": [
+    {
+     "amount": 547.19,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 372.31,
+   "vatAmount": 0,
+   "customerId": "c1",
+   "customerName": "Acme Trading",
+   "phone": "0510787859"
+  },
+  {
+   "id": "d15",
+   "code": "S-INV-0015",
+   "date": "2023-11-17T04:27",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 471.58,
+     "unitDiscount": 0,
+     "purchasePrice": 282.95,
+     "retailPrice": 613.054,
+     "wholesalePrice": 518.738
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "received",
+   "method": "cash",
+   "amount": 600.82,
+   "vatAmount": 0,
+   "customerId": "c1",
+   "customerName": "Gulf Union",
+   "phone": "056517314"
+  },
+  {
+   "id": "d16",
+   "code": "S-INV-0016",
+   "date": "2026-06-16T02:00",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 65.14,
+     "unitDiscount": 0,
+     "purchasePrice": 39.08
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 755.06,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "Acme Trading",
+   "phone": "0519983413"
+  },
+  {
+   "id": "d17",
+   "code": "S-INV-0017",
+   "date": "2024-10-03T16:21",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 303.89,
+     "unitDiscount": 0.5,
+     "purchasePrice": 182.33,
+     "retailPrice": 395.057,
+     "wholesalePrice": 334.279
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "bank",
+   "amount": 382.93,
+   "vatAmount": 7.5,
+   "vendorId": "v2",
+   "vendorName": "Parts Co",
+   "orderId": "d54"
+  },
+  {
+   "id": "d18",
+   "code": "S-INV-0018",
+   "date": "2025-12-02T18:54",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 159.45,
+     "unitDiscount": 0.5,
+     "purchasePrice": 95.67
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 364.59,
+   "vatAmount": 7.5,
+   "vendorId": "v1",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "reported"
+   },
+   "orderIds": [
+    "o18"
+   ],
+   "orderId": "d44"
+  },
+  {
+   "id": "d19",
+   "code": "S-INV-0019",
+   "date": "2026-04-09T15:58",
+   "vatPercent": 0,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 79.06,
+     "unitDiscount": 0.5,
+     "purchasePrice": 47.44
+    }
+   ],
+   "payments": [
+    {
+     "amount": 91.92,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 27.38,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "Acme Trading",
+   "phone": "0591642343"
+  },
+  {
+   "id": "d20",
+   "code": "S-INV-0020",
+   "date": "2024-08-02T13:37",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 161.94,
+     "unitDiscount": 0.5,
+     "purchasePrice": 97.16,
+     "retailPrice": 210.522,
+     "wholesalePrice": 178.13400000000001
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 732.81,
+   "vatAmount": 7.5,
+   "customerId": "c1",
+   "customerName": "Gulf Union",
+   "phone": "0544845938",
+   "zatca": {
+    "status": "cleared"
+   },
+   "orderIds": [
+    "o20"
+   ]
+  },
+  {
+   "id": "d21",
+   "code": "S-INV-0021",
+   "date": "2026-02-07T01:42",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 148.93,
+     "unitDiscount": 0,
+     "purchasePrice": 89.36,
+     "retailPrice": 193.609,
+     "wholesalePrice": 163.823
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 403.81,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "Acme Trading",
+   "phone": "0516925966",
+   "zatca": {
+    "status": "cleared"
+   }
+  },
+  {
+   "id": "d22",
+   "code": "S-INV-0022",
+   "date": "2026-06-04T03:45",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 226.24,
+     "unitDiscount": 0.5,
+     "purchasePrice": 135.74,
+     "retailPrice": 294.112,
+     "wholesalePrice": 248.86400000000003
+    }
+   ],
+   "payments": [
+    {
+     "amount": 312.21,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "cancelled",
+   "method": "cash",
+   "amount": 510.83,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Parts Co"
+  },
+  {
+   "id": "d23",
+   "code": "S-INV-0023",
+   "date": "2026-08-30T09:44",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 28.66,
+     "unitDiscount": 0.5,
+     "purchasePrice": 17.2,
+     "retailPrice": 37.258,
+     "wholesalePrice": 31.526000000000003
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "received",
+   "method": "cash",
+   "amount": 758.47,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "Acme Trading",
+   "phone": "0512735164",
+   "zatca": {
+    "status": "reported"
+   }
+  },
+  {
+   "id": "d24",
+   "code": "S-INV-0024",
+   "date": "2025-10-20T09:22",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 52.36,
+     "unitDiscount": 0.5,
+     "purchasePrice": 31.42
+    }
+   ],
+   "payments": [
+    {
+     "amount": 24.09,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "cash",
+   "amount": 848.38,
+   "vatAmount": 0,
+   "vendorId": "v1",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "reported"
+   }
+  },
+  {
+   "id": "d25",
+   "code": "S-INV-0025",
+   "date": "2025-04-16T14:03",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 392.48,
+     "unitDiscount": 0,
+     "purchasePrice": 235.49
+    }
+   ],
+   "payments": [
+    {
+     "amount": 722.16,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 765.24,
+   "vatAmount": 0,
+   "customerId": "c1",
+   "customerName": "Gulf Union",
+   "phone": "0538707566"
+  },
+  {
+   "id": "d26",
+   "code": "S-INV-0026",
+   "date": "2025-02-15T12:24",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 4.74,
+     "unitDiscount": 0.5,
+     "purchasePrice": 2.84,
+     "retailPrice": 6.162000000000001,
+     "wholesalePrice": 5.214
+    }
+   ],
+   "payments": [
+    {
+     "amount": 2.18,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "bank",
+   "amount": 533.17,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "Gulf Union",
+   "phone": "0550944030",
+   "orderIds": [],
+   "orderId": "d52"
+  },
+  {
+   "id": "d27",
+   "code": "S-INV-0027",
+   "date": "2024-01-05T11:22",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 196.94,
+     "unitDiscount": 0.5,
+     "purchasePrice": 118.16
+    }
+   ],
+   "payments": [
+    {
+     "amount": 906.92,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "received",
+   "method": "bank",
+   "amount": 206.84,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0556738162",
+   "orderId": "d22"
+  },
+  {
+   "id": "d28",
+   "code": "S-INV-0028",
+   "date": "2024-11-14T03:10",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 326.85,
+     "unitDiscount": 0,
+     "purchasePrice": 196.11,
+     "retailPrice": 424.90500000000003,
+     "wholesalePrice": 359.5350000000001
+    }
+   ],
+   "payments": [
+    {
+     "amount": 601.4,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 305.27,
+   "vatAmount": 7.5,
+   "customerId": "c1",
+   "customerName": "Acme Trading",
+   "phone": "059762755",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d29",
+   "code": "S-INV-0029",
+   "date": "2026-04-27T01:03",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 431.86,
+     "unitDiscount": 0,
+     "purchasePrice": 259.12,
+     "retailPrice": 561.418,
+     "wholesalePrice": 475.04600000000005
+    }
+   ],
+   "payments": [
+    {
+     "amount": 595.97,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "cancelled",
+   "method": "bank",
+   "amount": 84.63,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d30",
+   "code": "S-INV-0030",
+   "date": "2025-11-22T17:21",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 453.71,
+     "unitDiscount": 0.5,
+     "purchasePrice": 272.23
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "received",
+   "method": "cash",
+   "amount": 79.46,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "failed"
+   },
+   "orderId": "d36"
+  },
+  {
+   "id": "d31",
+   "code": "S-INV-0031",
+   "date": "2025-06-09T04:00",
+   "vatPercent": 0,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 345.34,
+     "unitDiscount": 0,
+     "purchasePrice": 207.2,
+     "retailPrice": 448.942,
+     "wholesalePrice": 379.874
+    }
+   ],
+   "payments": [
+    {
+     "amount": 476.57,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "cancelled",
+   "method": "cash",
+   "amount": 937.32,
+   "vatAmount": 0,
+   "vendorId": "v1",
+   "vendorName": "Supplier One"
+  },
+  {
+   "id": "d32",
+   "code": "S-INV-0032",
+   "date": "2026-07-09T23:06",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 388.32,
+     "unitDiscount": 0,
+     "purchasePrice": 232.99
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "cash",
+   "amount": 716.09,
+   "vatAmount": 0,
+   "vendorId": "v1",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "cleared"
+   }
+  },
+  {
+   "id": "d33",
+   "code": "S-INV-0033",
+   "date": "2025-02-27T23:54",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 394.77,
+     "unitDiscount": 0.5,
+     "purchasePrice": 236.86,
+     "retailPrice": 513.201,
+     "wholesalePrice": 434.247
+    }
+   ],
+   "payments": [
+    {
+     "amount": 454.99,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 530.25,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "مؤسسة النور",
+   "phone": "0599227976",
+   "zatca": {
+    "status": "failed"
+   },
+   "orderIds": []
+  },
+  {
+   "id": "d34",
+   "code": "S-INV-0034",
+   "date": "2025-04-23T22:13",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 222.3,
+     "unitDiscount": 0,
+     "purchasePrice": 133.38,
+     "retailPrice": 288.99,
+     "wholesalePrice": 244.53000000000003
+    }
+   ],
+   "payments": [
+    {
+     "amount": 409.03,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 451.41,
+   "vatAmount": 0,
+   "customerId": "c1",
+   "customerName": "Acme Trading",
+   "phone": "0586356151",
+   "zatca": {
+    "status": "cleared"
+   },
+   "orderIds": [
+    "o34"
+   ]
+  },
+  {
+   "id": "d35",
+   "code": "S-INV-0035",
+   "date": "2025-05-22T18:53",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 350.02,
+     "unitDiscount": 0,
+     "purchasePrice": 210.01
+    }
+   ],
+   "payments": [
+    {
+     "amount": 644.04,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "received",
+   "method": "cash",
+   "amount": 106.17,
+   "vatAmount": 0,
+   "vendorId": "v1",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d36",
+   "code": "S-INV-0036",
+   "date": "2026-04-02T03:21",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 63.62,
+     "unitDiscount": 0,
+     "purchasePrice": 38.17
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 34.85,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0557217311",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d37",
+   "code": "S-INV-0037",
+   "date": "2024-03-15T19:08",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 168.68,
+     "unitDiscount": 0.5,
+     "purchasePrice": 101.21,
+     "retailPrice": 219.28400000000002,
+     "wholesalePrice": 185.54800000000003
+    }
+   ],
+   "payments": [
+    {
+     "amount": 310.37,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "received",
+   "method": "bank",
+   "amount": 533.68,
+   "vatAmount": 7.5,
+   "customerId": "c2",
+   "customerName": "Acme Trading",
+   "phone": "0553215053"
+  },
+  {
+   "id": "d38",
+   "code": "S-INV-0038",
+   "date": "2025-10-04T18:34",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 152.95,
+     "unitDiscount": 0,
+     "purchasePrice": 91.77
+    }
+   ],
+   "payments": [
+    {
+     "amount": 528.68,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "received",
+   "method": "cash",
+   "amount": 994.13,
+   "vatAmount": 0,
+   "vendorId": "v1",
+   "vendorName": "Supplier One",
+   "orderIds": [
+    "o38"
+   ]
+  },
+  {
+   "id": "d39",
+   "code": "S-INV-0039",
+   "date": "2025-03-27T05:12",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 201.25,
+     "unitDiscount": 0.5,
+     "purchasePrice": 120.75
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "pending",
+   "method": "bank",
+   "amount": 212.99,
+   "vatAmount": 0,
+   "customerId": "c1",
+   "customerName": "Acme Trading",
+   "phone": "0566400390",
+   "orderId": "d20"
+  },
+  {
+   "id": "d40",
+   "code": "S-INV-0040",
+   "date": "2025-02-13T07:02",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 238.06,
+     "unitDiscount": 0,
+     "purchasePrice": 142.84
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "pending",
+   "method": "cash",
+   "amount": 685.52,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "Gulf Union",
+   "phone": "0577313005"
+  },
+  {
+   "id": "d41",
+   "code": "S-INV-0041",
+   "date": "2026-03-10T23:15",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 262.19,
+     "unitDiscount": 0,
+     "purchasePrice": 157.31
+    }
+   ],
+   "payments": [
+    {
+     "amount": 361.82,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 452.2,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "Acme Trading",
+   "phone": "0585762050",
+   "zatca": {
+    "status": "reported"
+   },
+   "orderIds": []
+  },
+  {
+   "id": "d42",
+   "code": "S-INV-0042",
+   "date": "2023-10-05T09:20",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 140.86,
+     "unitDiscount": 0,
+     "purchasePrice": 84.52
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 314.03,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "مؤسسة النور",
+   "phone": "0535715627",
+   "zatca": {
+    "status": "cleared"
+   }
+  },
+  {
+   "id": "d43",
+   "code": "S-INV-0043",
+   "date": "2025-04-14T11:30",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 159.03,
+     "unitDiscount": 0,
+     "purchasePrice": 95.42,
+     "retailPrice": 206.739,
+     "wholesalePrice": 174.93300000000002
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "pending",
+   "method": "cash",
+   "amount": 329.62,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0526771378",
+   "zatca": {
+    "status": "reported"
+   }
+  },
+  {
+   "id": "d44",
+   "code": "S-INV-0044",
+   "date": "2025-01-31T06:50",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 211.27,
+     "unitDiscount": 0.5,
+     "purchasePrice": 126.76
+    }
+   ],
+   "payments": [
+    {
+     "amount": 194.37,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": true,
+   "createdBy": "Omar",
+   "status": "cancelled",
+   "method": "cash",
+   "amount": 383.19,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0576413023",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d45",
+   "code": "S-INV-0045",
+   "date": "2026-06-23T19:48",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 373.66,
+     "unitDiscount": 0.5,
+     "purchasePrice": 224.2
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "pending",
+   "method": "cash",
+   "amount": 974,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0524222707"
+  },
+  {
+   "id": "d46",
+   "code": "S-INV-0046",
+   "date": "2024-09-26T01:44",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 397.42,
+     "unitDiscount": 0.5,
+     "purchasePrice": 238.45
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 720.02,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "Gulf Union",
+   "phone": "0563328576",
+   "orderIds": []
+  },
+  {
+   "id": "d47",
+   "code": "S-INV-0047",
+   "date": "2024-04-25T10:31",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 1.78,
+     "unitDiscount": 0.5,
+     "purchasePrice": 1.07
+    }
+   ],
+   "payments": [
+    {
+     "amount": 3.05,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "pending",
+   "method": "cash",
+   "amount": 969.8,
+   "vatAmount": 7.5,
+   "vendorId": "v1",
+   "vendorName": "Supplier One",
+   "zatca": {
+    "status": "cleared"
+   }
+  },
+  {
+   "id": "d48",
+   "code": "S-INV-0048",
+   "date": "2025-11-30T09:10",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 480.61,
+     "unitDiscount": 0,
+     "purchasePrice": 288.37
+    }
+   ],
+   "payments": [
+    {
+     "amount": 1659.1,
+     "method": "cash"
+    }
+   ],
+   "deleted": true,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "cash",
+   "amount": 275.32,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0537708508",
+   "zatca": {
+    "status": "reported"
+   }
+  },
+  {
+   "id": "d49",
+   "code": "S-INV-0049",
+   "date": "2025-10-28T20:42",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 11.05,
+     "unitDiscount": 0.5,
+     "purchasePrice": 6.63,
+     "retailPrice": 14.365000000000002,
+     "wholesalePrice": 12.155000000000001
+    }
+   ],
+   "payments": [
+    {
+     "amount": 10,
+     "method": "cash"
+    },
+    {
+     "amount": 5.5,
+     "method": "bank_transfer"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "pending",
+   "method": "cash",
+   "amount": 478.97,
+   "vatAmount": 0,
+   "vendorId": "v2",
+   "vendorName": "Parts Co",
+   "zatca": {
+    "status": "reported"
+   },
+   "orderIds": []
+  },
+  {
+   "id": "d50",
+   "code": "S-INV-0050",
+   "date": "2024-09-07T00:20",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 334.88,
+     "unitDiscount": 0.5,
+     "purchasePrice": 200.93,
+     "retailPrice": 435.344,
+     "wholesalePrice": 368.36800000000005
+    }
+   ],
+   "payments": [
+    {
+     "amount": 771.22,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "received",
+   "method": "cash",
+   "amount": 359.61,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "مؤسسة النور",
+   "phone": "0555621170",
+   "zatca": {
+    "status": "reported"
+   }
+  },
+  {
+   "id": "d51",
+   "code": "S-INV-0051",
+   "date": "2026-08-31T23:42",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 359.43,
+     "unitDiscount": 0.5,
+     "purchasePrice": 215.66
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "cancelled",
+   "method": "bank",
+   "amount": 654.6,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "Acme Trading",
+   "phone": "0584411931",
+   "orderId": "d4"
+  },
+  {
+   "id": "d52",
+   "code": "S-INV-0052",
+   "date": "2026-03-27T00:05",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 197.63,
+     "unitDiscount": 0.5,
+     "purchasePrice": 118.58
+    }
+   ],
+   "payments": [
+    {
+     "amount": 363.64,
+     "method": "bank_card"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "received",
+   "method": "cash",
+   "amount": 823.13,
+   "vatAmount": 7.5,
+   "vendorId": "v2",
+   "vendorName": "Parts Co",
+   "zatca": {
+    "status": "failed"
+   }
+  },
+  {
+   "id": "d53",
+   "code": "S-INV-0053",
+   "date": "2024-02-27T23:06",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 212.42,
+     "unitDiscount": 0,
+     "purchasePrice": 127.45,
+     "retailPrice": 276.146,
+     "wholesalePrice": 233.662
+    }
+   ],
+   "payments": [],
+   "deleted": true,
+   "createdBy": "Ali",
+   "status": "cancelled",
+   "method": "bank",
+   "amount": 241.15,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "Gulf Union",
+   "phone": "0530049276"
+  },
+  {
+   "id": "d54",
+   "code": "S-INV-0054",
+   "date": "2024-11-12T09:37",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 4,
+     "unitPrice": 17.53,
+     "unitDiscount": 0,
+     "purchasePrice": 10.52,
+     "retailPrice": 22.789,
+     "wholesalePrice": 19.283
+    }
+   ],
+   "payments": [
+    {
+     "amount": 32.26,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 420.72,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "Gulf Union",
+   "phone": "05630331",
+   "zatca": {
+    "status": "cleared"
+   },
+   "orderId": "d58"
+  },
+  {
+   "id": "d55",
+   "code": "S-INV-0055",
+   "date": "2025-12-01T06:50",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 0,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 350.42,
+     "unitDiscount": 0.5,
+     "purchasePrice": 210.25,
+     "retailPrice": 455.54600000000005,
+     "wholesalePrice": 385.46200000000005
+    }
+   ],
+   "payments": [
+    {
+     "amount": 403.98,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "received",
+   "method": "cash",
+   "amount": 429.45,
+   "vatAmount": 7.5,
+   "customerId": "c2",
+   "customerName": "Gulf Union",
+   "phone": "0530764114",
+   "zatca": {
+    "status": "cleared"
+   },
+   "orderId": "d57"
+  },
+  {
+   "id": "d56",
+   "code": "S-INV-0056",
+   "date": "2024-01-18T04:20",
+   "vatPercent": 15,
+   "discount": 5,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 496.24,
+     "unitDiscount": 0,
+     "purchasePrice": 297.74
+    }
+   ],
+   "payments": [
+    {
+     "amount": 571.68,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Sara",
+   "status": "received",
+   "method": "bank",
+   "amount": 664.45,
+   "vatAmount": 0,
+   "customerId": "c2",
+   "customerName": "Gulf Union",
+   "phone": "057237899",
+   "zatca": {
+    "status": "failed"
+   },
+   "orderId": "d14"
+  },
+  {
+   "id": "d57",
+   "code": "S-INV-0057",
+   "date": "2026-05-07T03:55",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 2,
+     "unitPrice": 344.9,
+     "unitDiscount": 0.5,
+     "purchasePrice": 206.94,
+     "retailPrice": 448.37,
+     "wholesalePrice": 379.39
+    }
+   ],
+   "payments": [
+    {
+     "amount": 794.27,
+     "method": "cash"
+    }
+   ],
+   "deleted": false,
+   "createdBy": "Ali",
+   "status": "accepted",
+   "method": "bank",
+   "amount": 60.69,
+   "vatAmount": 0,
+   "customerId": "c3",
+   "customerName": "Gulf Union",
+   "phone": "0568039131"
+  },
+  {
+   "id": "d58",
+   "code": "S-INV-0058",
+   "date": "2026-09-16T13:01",
+   "vatPercent": 0,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 1,
+   "items": [
+    {
+     "qty": 3,
+     "unitPrice": 265.08,
+     "unitDiscount": 0,
+     "purchasePrice": 159.05,
+     "retailPrice": 344.604,
+     "wholesalePrice": 291.588
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "received",
+   "method": "bank",
+   "amount": 679.37,
+   "vatAmount": 0,
+   "customerId": "c1",
+   "customerName": "مؤسسة النور",
+   "phone": "0597086930",
+   "zatca": {
+    "status": "reported"
+   },
+   "orderId": "d2"
+  },
+  {
+   "id": "d59",
+   "code": "S-INV-0059",
+   "date": "2026-01-26T21:59",
+   "vatPercent": 15,
+   "discount": 0,
+   "shipping": 2.5,
+   "cashDiscount": 0,
+   "items": [
+    {
+     "qty": 1,
+     "unitPrice": 49.37,
+     "unitDiscount": 0.5,
+     "purchasePrice": 29.62
+    }
+   ],
+   "payments": [],
+   "deleted": false,
+   "createdBy": "Omar",
+   "status": "cancelled",
+   "method": "cash",
+   "amount": 268.8,
+   "vatAmount": 7.5,
+   "customerId": "c3",
+   "customerName": "Gulf Union",
+   "phone": "0558846104",
+   "zatca": {
+    "status": "cleared"
+   },
+   "orderIds": []
+  }
+ ],
+ "cases": [
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported"
+   },
+   "want": {
+    "count": 56,
+    "sums": {
+     "net": 36632.38,
+     "vat": 3708.71,
+     "paid": 12155.14,
+     "balance": 24761.77,
+     "taxable": 32923.67,
+     "profit": 13062.13,
+     "cost": 19796.54,
+     "retailProfit": 4565.14,
+     "wholesaleProfit": 1530.37,
+     "one": 56,
+     "amount": 29808.05,
+     "vatAmount": 142.5,
+     "net|status=accepted": 11486.95,
+     "nonEmpty:orderIds": 5,
+     "amount|nonEmpty:orderId=1": 7461.31,
+     "one|zatca.status=reported": 9
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "includeDeleted": "1"
+   },
+   "want": {
+    "count": 60,
+    "sums": {
+     "net": 41173.33,
+     "vat": 4301.01,
+     "paid": 14024.11,
+     "balance": 27433.75,
+     "taxable": 36872.32,
+     "profit": 14636.98,
+     "cost": 22167.84,
+     "retailProfit": 5191.48,
+     "wholesaleProfit": 1739.15,
+     "one": 60,
+     "amount": 31101.05,
+     "vatAmount": 157.5,
+     "net|status=accepted": 13145.05,
+     "nonEmpty:orderIds": 5,
+     "amount|nonEmpty:orderId=1": 7461.31,
+     "one|zatca.status=reported": 11
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "from": "2025-10-07"
+   },
+   "want": {
+    "count": 27,
+    "sums": {
+     "net": 15514.02,
+     "vat": 1539.33,
+     "paid": 4065.08,
+     "balance": 11585.74,
+     "taxable": 13974.69,
+     "profit": 5541.83,
+     "cost": 8395.36,
+     "retailProfit": 1529.53,
+     "wholesaleProfit": 513.5,
+     "one": 27,
+     "amount": 13288.65,
+     "vatAmount": 60,
+     "net|status=accepted": 3577.98,
+     "nonEmpty:orderIds": 2,
+     "amount|nonEmpty:orderId=1": 4072.71,
+     "one|zatca.status=reported": 7
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "from": "2024-01-01",
+    "to": "2024-12-31"
+   },
+   "want": {
+    "count": 12,
+    "sums": {
+     "net": 9207,
+     "vat": 1042.62,
+     "paid": 3838.27,
+     "balance": 5377.51,
+     "taxable": 8164.38,
+     "profit": 3237.48,
+     "cost": 4909.4,
+     "retailProfit": 1394.33,
+     "wholesaleProfit": 468.44,
+     "one": 12,
+     "amount": 6413.03,
+     "vatAmount": 67.5,
+     "net|status=accepted": 4371.35,
+     "nonEmpty:orderIds": 1,
+     "amount|nonEmpty:orderId=1": 1674.94,
+     "one|zatca.status=reported": 1
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "to": "2023-12-31"
+   },
+   "want": {
+    "count": 4,
+    "sums": {
+     "net": 3170.66,
+     "vat": 355.67,
+     "paid": 532.72,
+     "balance": 2710.27,
+     "taxable": 2814.99,
+     "profit": 1115.97,
+     "cost": 1696.52,
+     "retailProfit": 763.74,
+     "wholesaleProfit": 254.58,
+     "one": 4,
+     "amount": 1930.83,
+     "vatAmount": 15,
+     "net|status=accepted": 318.23,
+     "nonEmpty:orderIds": 0,
+     "amount|nonEmpty:orderId=1": 71.99,
+     "one|zatca.status=reported": 0
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "q": "acme"
+   },
+   "want": {
+    "count": 12,
+    "sums": {
+     "net": 9679.06,
+     "vat": 1045.55,
+     "paid": 2352.73,
+     "balance": 7338.69,
+     "taxable": 8633.51,
+     "profit": 3427.88,
+     "cost": 5190.63,
+     "retailProfit": 1060.32,
+     "wholesaleProfit": 355.43,
+     "one": 12,
+     "amount": 5844.44,
+     "vatAmount": 30,
+     "net|status=accepted": 4836.48,
+     "nonEmpty:orderIds": 1,
+     "amount|nonEmpty:orderId=1": 1784.85,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "q": "S-INV-001",
+    "keys": "code"
+   },
+   "want": {
+    "count": 9,
+    "sums": {
+     "net": 6675.35,
+     "vat": 695.17,
+     "paid": 1051.18,
+     "balance": 5648.03,
+     "taxable": 5980.18,
+     "profit": 2378.79,
+     "cost": 3591.39,
+     "retailProfit": 949.41,
+     "wholesaleProfit": 317.8,
+     "one": 9,
+     "amount": 4270.02,
+     "vatAmount": 30,
+     "net|status=accepted": 2963.08,
+     "nonEmpty:orderIds": 2,
+     "amount|nonEmpty:orderId=1": 747.52,
+     "one|zatca.status=reported": 1
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "q": "النور"
+   },
+   "want": {
+    "count": 11,
+    "sums": {
+     "net": 5139.68,
+     "vat": 502.38,
+     "paid": 3219.45,
+     "balance": 2008.7,
+     "taxable": 4637.3,
+     "profit": 1839.92,
+     "cost": 2789.88,
+     "retailProfit": 926.33,
+     "wholesaleProfit": 310.45,
+     "one": 11,
+     "amount": 5320.39,
+     "vatAmount": 30,
+     "net|status=accepted": 858.83,
+     "nonEmpty:orderIds": 0,
+     "amount|nonEmpty:orderId=1": 1781.72,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.party": "c2"
+   },
+   "want": {
+    "count": 12,
+    "sums": {
+     "net": 4952.78,
+     "vat": 491.99,
+     "paid": 2778.65,
+     "balance": 2236.3,
+     "taxable": 4460.79,
+     "profit": 1757.59,
+     "cost": 2688.2,
+     "retailProfit": 807.83,
+     "wholesaleProfit": 272.26,
+     "one": 12,
+     "amount": 5846.4,
+     "vatAmount": 22.5,
+     "net|status=accepted": 2256.16,
+     "nonEmpty:orderIds": 0,
+     "amount|nonEmpty:orderId=1": 2047.79,
+     "one|zatca.status=reported": 2
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.party": "v1"
+   },
+   "want": {
+    "count": 9,
+    "sums": {
+     "net": 4969.61,
+     "vat": 333.75,
+     "paid": 1808.82,
+     "balance": 3165.24,
+     "taxable": 4635.86,
+     "profit": 1840.55,
+     "cost": 2787.81,
+     "retailProfit": 310.81,
+     "wholesaleProfit": 103.6,
+     "one": 9,
+     "amount": 6670.69,
+     "vatAmount": 15,
+     "net|status=accepted": 368.46,
+     "nonEmpty:orderIds": 2,
+     "amount|nonEmpty:orderId=1": 364.59,
+     "one|zatca.status=reported": 2
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.pstatus": "paid"
+   },
+   "want": {
+    "count": 14,
+    "sums": {
+     "net": 5566.42,
+     "vat": 496.79,
+     "paid": 5869.95,
+     "balance": 0,
+     "taxable": 5069.63,
+     "profit": 2004.36,
+     "cost": 3055.27,
+     "retailProfit": 898.45,
+     "wholesaleProfit": 302.15,
+     "one": 14,
+     "amount": 6856.44,
+     "vatAmount": 52.5,
+     "net|status=accepted": 1217.76,
+     "nonEmpty:orderIds": 2,
+     "amount|nonEmpty:orderId=1": 2268.24,
+     "one|zatca.status=reported": 1
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.pstatus": "paid_partially"
+   },
+   "want": {
+    "count": 27,
+    "sums": {
+     "net": 19550.16,
+     "vat": 1869.92,
+     "paid": 6285.19,
+     "balance": 13252.97,
+     "taxable": 17680.24,
+     "profit": 7021.67,
+     "cost": 10628.57,
+     "retailProfit": 2472.55,
+     "wholesaleProfit": 829.51,
+     "one": 27,
+     "amount": 14743.54,
+     "vatAmount": 52.5,
+     "net|status=accepted": 6245.92,
+     "nonEmpty:orderIds": 2,
+     "amount|nonEmpty:orderId=1": 2467.07,
+     "one|zatca.status=reported": 5
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.pstatus": "not_paid"
+   },
+   "want": {
+    "count": 15,
+    "sums": {
+     "net": 11515.8,
+     "vat": 1342,
+     "paid": 0,
+     "balance": 11508.8,
+     "taxable": 10173.8,
+     "profit": 4036.1,
+     "cost": 6112.7,
+     "retailProfit": 1194.14,
+     "wholesaleProfit": 398.71,
+     "one": 15,
+     "amount": 8208.07,
+     "vatAmount": 37.5,
+     "net|status=accepted": 4023.27,
+     "nonEmpty:orderIds": 1,
+     "amount|nonEmpty:orderId=1": 2726,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.zatca": "not_reported"
+   },
+   "want": {
+    "count": 23,
+    "sums": {
+     "net": 17591.8,
+     "vat": 1768.68,
+     "paid": 5504.91,
+     "balance": 12212,
+     "taxable": 15823.12,
+     "profit": 6282.89,
+     "cost": 9520.23,
+     "retailProfit": 2009.65,
+     "wholesaleProfit": 675.21,
+     "one": 23,
+     "amount": 14203.16,
+     "vatAmount": 52.5,
+     "net|status=accepted": 5948.49,
+     "nonEmpty:orderIds": 2,
+     "amount|nonEmpty:orderId=1": 2886.04,
+     "one|zatca.status=reported": 0
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.zatca": "reported"
+   },
+   "want": {
+    "count": 9,
+    "sums": {
+     "net": 4792.77,
+     "vat": 418.48,
+     "paid": 1203.63,
+     "balance": 3587.29,
+     "taxable": 4374.29,
+     "profit": 1731.69,
+     "cost": 2627.6,
+     "retailProfit": 565.57,
+     "wholesaleProfit": 190.86,
+     "one": 9,
+     "amount": 5188.47,
+     "vatAmount": 22.5,
+     "net|status=accepted": 1155.03,
+     "nonEmpty:orderIds": 1,
+     "amount|nonEmpty:orderId=1": 1961.22,
+     "one|zatca.status=reported": 9
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.paymentMethod": "bank_transfer"
+   },
+   "want": {
+    "count": 11,
+    "sums": {
+     "net": 6330.32,
+     "vat": 411.29,
+     "paid": 170.5,
+     "balance": 6154.82,
+     "taxable": 5919.03,
+     "profit": 2346.7,
+     "cost": 3559.83,
+     "retailProfit": 522.62,
+     "wholesaleProfit": 176.88,
+     "one": 11,
+     "amount": 6598.57,
+     "vatAmount": 22.5,
+     "net|status=accepted": 503.89,
+     "nonEmpty:orderIds": 1,
+     "amount|nonEmpty:orderId=1": 1513.18,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.method": "bank"
+   },
+   "want": {
+    "count": 24,
+    "sums": {
+     "net": 15449.27,
+     "vat": 1473.83,
+     "paid": 4587.58,
+     "balance": 11025.14,
+     "taxable": 13975.44,
+     "profit": 5544.56,
+     "cost": 8400.88,
+     "retailProfit": 2115.06,
+     "wholesaleProfit": 709.35,
+     "one": 24,
+     "amount": 12164.97,
+     "vatAmount": 67.5,
+     "net|status=accepted": 4875.24,
+     "nonEmpty:orderIds": 4,
+     "amount|nonEmpty:orderId=1": 5194.71,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.createdBy": "Sara"
+   },
+   "want": {
+    "count": 20,
+    "sums": {
+     "net": 14084.18,
+     "vat": 1725.96,
+     "paid": 4962.14,
+     "balance": 9194.16,
+     "taxable": 12358.22,
+     "profit": 4901.17,
+     "cost": 7432.05,
+     "retailProfit": 1789.06,
+     "wholesaleProfit": 600.35,
+     "one": 20,
+     "amount": 12569.34,
+     "vatAmount": 37.5,
+     "net|status=accepted": 5400.07,
+     "nonEmpty:orderIds": 1,
+     "amount|nonEmpty:orderId=1": 1454.64,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.status": "received"
+   },
+   "want": {
+    "count": 22,
+    "sums": {
+     "net": 16219.54,
+     "vat": 1656.74,
+     "paid": 5119.64,
+     "balance": 11127.1,
+     "taxable": 14562.8,
+     "profit": 5792.8,
+     "cost": 8750,
+     "retailProfit": 1824.92,
+     "wholesaleProfit": 613.63,
+     "one": 22,
+     "amount": 13296.58,
+     "vatAmount": 60,
+     "net|status=accepted": 0,
+     "nonEmpty:orderIds": 1,
+     "amount|nonEmpty:orderId=1": 4946.23,
+     "one|zatca.status=reported": 5
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.nonEmpty:vatAmount": "y"
+   },
+   "want": {
+    "count": 19,
+    "sums": {
+     "net": 13695.08,
+     "vat": 1557.6,
+     "paid": 4977.11,
+     "balance": 8811.75,
+     "taxable": 12137.48,
+     "profit": 4817.39,
+     "cost": 7295.09,
+     "retailProfit": 1705.57,
+     "wholesaleProfit": 572.52,
+     "one": 19,
+     "amount": 10517.33,
+     "vatAmount": 142.5,
+     "net|status=accepted": 3746.26,
+     "nonEmpty:orderIds": 3,
+     "amount|nonEmpty:orderId=1": 3027.66,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.nonEmpty:orderId": "n"
+   },
+   "want": {
+    "count": 40,
+    "sums": {
+     "net": 25026.61,
+     "vat": 2675.92,
+     "paid": 9356.37,
+     "balance": 15870.79,
+     "taxable": 22350.69,
+     "profit": 8869.74,
+     "cost": 13435.95,
+     "retailProfit": 3483.36,
+     "wholesaleProfit": 1167.11,
+     "one": 40,
+     "amount": 22346.74,
+     "vatAmount": 90,
+     "net|status=accepted": 11040.73,
+     "nonEmpty:orderIds": 4,
+     "amount|nonEmpty:orderId=1": 0,
+     "one|zatca.status=reported": 6
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.overdue": "30"
+   },
+   "want": {
+    "count": 40,
+    "sums": {
+     "net": 29869.35,
+     "vat": 3211.92,
+     "paid": 6285.19,
+     "balance": 23567.16,
+     "taxable": 26657.43,
+     "profit": 10584.13,
+     "cost": 16023.3,
+     "retailProfit": 3307.71,
+     "wholesaleProfit": 1108.56,
+     "one": 40,
+     "amount": 21482.05,
+     "vatAmount": 90,
+     "net|status=accepted": 10269.19,
+     "nonEmpty:orderIds": 3,
+     "amount|nonEmpty:orderId=1": 3723.51,
+     "one|zatca.status=reported": 7
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.overdue": "30",
+    "from": "2026-01-01"
+   },
+   "want": {
+    "count": 15,
+    "sums": {
+     "net": 10128.29,
+     "vat": 1112.86,
+     "paid": 2227.33,
+     "balance": 7893.96,
+     "taxable": 9015.43,
+     "profit": 3584.66,
+     "cost": 5410.77,
+     "retailProfit": 799.88,
+     "wholesaleProfit": 268.29,
+     "one": 15,
+     "amount": 7883.83,
+     "vatAmount": 30,
+     "net|status=accepted": 2386.03,
+     "nonEmpty:orderIds": 0,
+     "amount|nonEmpty:orderId=1": 1729.65,
+     "one|zatca.status=reported": 3
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "net,vat,paid,balance,taxable,profit,cost,retailProfit,wholesaleProfit,one,amount,vatAmount,net|status=accepted,nonEmpty:orderIds,amount|nonEmpty:orderId=1,one|zatca.status=reported",
+    "f.party": "c1",
+    "f.pstatus": "not_paid",
+    "from": "2024-06-01",
+    "q": "s-inv"
+   },
+   "want": {
+    "count": 1,
+    "sums": {
+     "net": 797.74,
+     "vat": 0,
+     "paid": 0,
+     "balance": 796.74,
+     "taxable": 797.74,
+     "profit": 318.09,
+     "cost": 477.15,
+     "retailProfit": 238.57,
+     "wholesaleProfit": 79.52,
+     "one": 1,
+     "amount": 679.37,
+     "vatAmount": 0,
+     "net|status=accepted": 0,
+     "nonEmpty:orderIds": 0,
+     "amount|nonEmpty:orderId=1": 679.37,
+     "one|zatca.status=reported": 1
+    }
+   }
+  }
+ ]
+}

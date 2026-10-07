@@ -1,7 +1,12 @@
 package erp
 
 import (
+	"encoding/json"
+	"math"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -102,8 +107,12 @@ func TestStatsMatch(t *testing.T) {
 		{"pstatus mismatch", q(func(s *StatsQuery) { s.Filters["pstatus"] = "paid" }), unpaid, nil, false},
 		{"zatca reported", q(func(s *StatsQuery) { s.Filters["zatca"] = "reported" }), inv, nil, true},
 		{"zatca default not_reported", q(func(s *StatsQuery) { s.Filters["zatca"] = "not_reported" }), unpaid, nil, true},
-		{"method cash", q(func(s *StatsQuery) { s.Filters["method"] = "cash" }), inv, nil, true},
-		{"method none", q(func(s *StatsQuery) { s.Filters["method"] = "cash" }), unpaid, nil, false},
+		{"method cash", q(func(s *StatsQuery) { s.Filters["paymentMethod"] = "cash" }), inv, nil, true},
+		{"method none", q(func(s *StatsQuery) { s.Filters["paymentMethod"] = "cash" }), unpaid, nil, false},
+		{"plain method field (expenses)", q(func(s *StatsQuery) { s.Filters["method"] = "bank" }), M{"id": "e", "method": "bank"}, nil, true},
+		{"nonEmpty y", q(func(s *StatsQuery) { s.Filters["nonEmpty:vatAmount"] = "y" }), M{"id": "e", "vatAmount": 3.0}, nil, true},
+		{"nonEmpty n", q(func(s *StatsQuery) { s.Filters["nonEmpty:vatAmount"] = "n" }), M{"id": "e", "vatAmount": 0.0}, nil, true},
+		{"nonEmpty y on empty", q(func(s *StatsQuery) { s.Filters["nonEmpty:vatAmount"] = "y" }), M{"id": "e"}, nil, false},
 		{"createdBy field", q(func(s *StatsQuery) { s.Filters["createdBy"] = "Ali" }), inv, nil, true},
 		{"plain field", q(func(s *StatsQuery) { s.Filters["status"] = "received" }), vendorDoc, nil, true},
 		{"dotted field", q(func(s *StatsQuery) { s.Filters["meta.kind"] = "x" }), vendorDoc, nil, true},
@@ -113,7 +122,7 @@ func TestStatsMatch(t *testing.T) {
 		{"overdue bad days", q(func(s *StatsQuery) { s.Filters["overdue"] = "x" }), inv, nil, false},
 		{"all filters together", q(func(s *StatsQuery) {
 			s.From, s.To, s.Search = "2026-01-01", "2026-12-31", "s-a"
-			s.Filters["party"], s.Filters["pstatus"], s.Filters["method"] = "c1", "paid_partially", "cash"
+			s.Filters["party"], s.Filters["pstatus"], s.Filters["paymentMethod"] = "c1", "paid_partially", "cash"
 		}), inv, nil, true},
 	}
 	for _, c := range cases {
@@ -370,13 +379,14 @@ func TestRetailWholesaleProfit(t *testing.T) {
 }
 
 func TestConditionalAndNonEmptySums(t *testing.T) {
-	sums := []string{"net|status=accepted", "nonEmpty:orderIds", "nonEmpty:orderId", "amount|kind=a", "net"}
+	sums := []string{"net|status=accepted", "nonEmpty:orderIds", "nonEmpty:orderId", "amount|kind=a", "net", "one|status=accepted", "one"}
 	fields := statFields(StatsQuery{DateKey: "date", Sums: sums})
 	res := &StatsResult{Sums: map[string]float64{}}
 	addStats(res, sums, statRowOf(statsInv("a", "2026-01-01T00:00", 0, M{"status": "accepted", "orderIds": []interface{}{"o1"}, "kind": "a", "amount": 4.0}), fields))
 	addStats(res, sums, statRowOf(statsInv("b", "2026-01-01T00:00", 0, M{"status": "pending", "orderIds": []interface{}{}, "orderId": "o9", "kind": "b", "amount": 9.0}), fields))
 	addStats(res, sums, statRowOf(statsInv("c", "2026-01-01T00:00", 0, M{"status": "accepted"}), fields))
-	want := map[string]float64{"net|status=accepted": 230, "nonEmpty:orderIds": 1, "nonEmpty:orderId": 1, "amount|kind=a": 4, "net": 345}
+	want := map[string]float64{"net|status=accepted": 230, "nonEmpty:orderIds": 1, "nonEmpty:orderId": 1, "amount|kind=a": 4, "net": 345,
+		"one|status=accepted": 2, "one": 3}
 	for k, v := range want {
 		if res.Sums[k] != v {
 			t.Errorf("%s: got %v want %v", k, res.Sums[k], v)
@@ -393,5 +403,60 @@ func TestConditionalAndNonEmptySums(t *testing.T) {
 	}
 	if b, f, v := splitMeasure("net|status"); b != "net" || f != "" || v != "" {
 		t.Errorf("malformed condition: %q %q %q", b, f, v)
+	}
+}
+
+// The shared fixture (= starterp-frontend-v1 tests/fixtures/list-stats-parity.json,
+// written by the web app's oracle src/lib/listStatsServer.js): the server adds up the
+// same records to the same figures as the mock API and the browser.
+func TestListStats_ParityFixture(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "list_stats_parity.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fx struct {
+		Today   string             `json:"today"`
+		Credits map[string]float64 `json:"credits"`
+		Rows    []M                `json:"rows"`
+		Cases   []struct {
+			Query map[string]string `json:"query"`
+			Want  struct {
+				Count int                `json:"count"`
+				Sums  map[string]float64 `json:"sums"`
+			} `json:"want"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &fx); err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.Cases) < 20 {
+		t.Fatalf("fixture has %d cases", len(fx.Cases))
+	}
+	for i, c := range fx.Cases {
+		v := url.Values{}
+		for k, val := range c.Query {
+			v.Set(k, val)
+		}
+		q, err := parseStatsQuery(httptest.NewRequest("GET", "/x?"+v.Encode(), nil))
+		if err != nil {
+			t.Fatalf("case %d: %v", i, err)
+		}
+		q.Today = fx.Today
+		fields := statFields(q)
+		res := &StatsResult{Sums: map[string]float64{}}
+		for _, rec := range fx.Rows {
+			r := statRowOf(rec, fields)
+			if statsMatch(q, r, fx.Credits) {
+				addStats(res, q.Sums, r)
+			}
+		}
+		if res.Count != c.Want.Count {
+			t.Errorf("case %d %v: count %d want %d", i, c.Query, res.Count, c.Want.Count)
+		}
+		for k, want := range c.Want.Sums {
+			if got := round2(res.Sums[k]); math.Abs(got-want) > 0.0001 {
+				t.Errorf("case %d %v: %s = %v want %v", i, c.Query, k, got, want)
+			}
+		}
 	}
 }

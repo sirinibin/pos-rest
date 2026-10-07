@@ -13,11 +13,13 @@ package erp
 // totals.js computeTotals for document figures), so the tiles agree with the rows.
 //
 // Sums: net, vat, paid, balance, taxable, profit and cost are a document's computed
-// totals (ComputeTotals), retailProfit / wholesaleProfit a purchase's (R9),
+// totals (ComputeTotals), retailProfit / wholesaleProfit a purchase's (R9), one is 1
+// (a count),
 // nonEmpty:<field> counts records with that field set, any other name sums that
 // contract field (dotted path); "<sum>|<field>=<value>" adds only matching records.
-// Filters (f.<key>): party, pstatus, zatca, method, overdue as in DocumentList; any
-// other key compares the contract field of that name, as ListPage does by default.
+// Filters (f.<key>): party, pstatus, zatca, paymentMethod (any payment), overdue as in
+// DocumentList; nonEmpty:<field> = y / n (field set or not); any other key compares
+// the contract field of that name, as ListPage does by default.
 
 import (
 	"context"
@@ -38,7 +40,7 @@ var listSearchKeys = []string{"code", "nameEn", "nameAr", "customerName", "custo
 	"vendorNameAr", "phone", "vatNo"}
 
 var totalMeasures = map[string]bool{"net": true, "vat": true, "paid": true, "balance": true, "taxable": true,
-	"profit": true, "cost": true, "retailProfit": true, "wholesaleProfit": true}
+	"profit": true, "cost": true, "retailProfit": true, "wholesaleProfit": true, "one": true}
 
 // StatsQuery is a parsed /stats request.
 type StatsQuery struct {
@@ -272,7 +274,7 @@ func nonEmpty(v interface{}) bool {
 	return num(v) != 0
 }
 
-var namedFilters = map[string]bool{"party": true, "pstatus": true, "zatca": true, "method": true, "overdue": true}
+var namedFilters = map[string]bool{"party": true, "pstatus": true, "zatca": true, "paymentMethod": true, "overdue": true}
 
 // statsMatch applies ListPage's search, date range and filters to one record.
 func statsMatch(q StatsQuery, r statRow, credits map[string]float64) bool {
@@ -316,7 +318,7 @@ func statsFilter(key, val string, r statRow, credits map[string]float64, today s
 		return r.T.Status == val
 	case "zatca":
 		return r.Zatca == val
-	case "method":
+	case "paymentMethod":
 		for _, m := range r.Methods {
 			if m == val {
 				return true
@@ -333,6 +335,9 @@ func statsFilter(key, val string, r statRow, credits map[string]float64, today s
 			bal = 0
 		}
 		return isOverdueDay(first10(jsString(r.Vals["date"])), bal, days, today)
+	}
+	if strings.HasPrefix(key, "nonEmpty:") {
+		return (val == "y") == (num(r.Vals[key]) == 1)
 	}
 	return jsString(r.Vals[key]) == val
 }
@@ -378,6 +383,8 @@ func addStats(res *StatsResult, sums []string, r statRow) {
 			v = r.Retail
 		case "wholesaleProfit":
 			v = r.Whole
+		case "one":
+			v = 1
 		default:
 			v = num(r.Vals[base])
 		}
