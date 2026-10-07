@@ -9,14 +9,18 @@ package erp
 // dashboard_monthly totals of models/dashboard_monthly.go):
 //
 //   sales VAT − sales return VAT − purchase VAT + purchase return VAT
-//   + expense VAT on vendor invoices
+//   − expense VAT on vendor VAT bills
 //
 // With disable_purchases_on_accounts only purchases (and returns) flagged
 // "on accounts" count. The card is shown only when the store setting
-// enable_vat_box is on. The expense term sums the expense "vat" field on
-// expenses with a vendor and a vendor invoice number, exactly like
-// dashboard_monthly (legacy expenses keep their VAT in vat_price, so the term
-// is 0 there too). Dates are whole days in the store's own timezone.
+// enable_vat_box is on.
+//
+// Expense VAT departs from the old card on purpose (decided by the owner,
+// 2026-10-07): the old card added the expense "vat" field, which expenses never
+// fill (always 0). Here VAT paid on an expense lowers the VAT owed, counting only
+// expenses with a valid VAT bill: a vendor that exists in the store's database,
+// a vendor invoice number, and a VAT amount (vat_price) above zero. Dates are
+// whole days in the store's own timezone.
 
 import (
 	"net/http"
@@ -63,7 +67,7 @@ func DashboardVat(in DashboardVatInputs, f DashboardVatFlags) DashboardVatResult
 		OutVat:     models.RoundFloat(out, 2),
 		InVat:      models.RoundFloat(inp, 2),
 		ExpenseVat: models.RoundFloat(in.ExpenseVendorVat, 2),
-		VatPayable: models.RoundFloat(out-inp+in.ExpenseVendorVat, 2),
+		VatPayable: models.RoundFloat(out-inp-in.ExpenseVendorVat, 2),
 	}
 }
 
@@ -140,12 +144,7 @@ func handleDashboardVat(c *Ctx, w http.ResponseWriter, r *http.Request) error {
 	run(func() (float64, error) { s, err := store.GetPurchaseReturnStats(f()); return s.VatPrice, err }, &in.PurchaseReturnVat)
 	run(func() (float64, error) { s, err := store.GetPurchaseStats(acc()); return s.VatPrice, err }, &in.AccountedPurchaseVat)
 	run(func() (float64, error) { s, err := store.GetPurchaseReturnStats(acc()); return s.VatPrice, err }, &in.AccountedPurchaseReturnVat)
-	run(func() (float64, error) {
-		m := f()
-		m["vendor_id"] = bson.M{"$exists": true, "$ne": nil}
-		m["vendor_invoice_no"] = bson.M{"$exists": true, "$ne": ""}
-		return sumField(store, "expense", m, "vat")
-	}, &in.ExpenseVendorVat)
+	run(func() (float64, error) { return sumExpenseVendorVat(store, f()) }, &in.ExpenseVendorVat)
 	wg.Wait()
 	if first != nil {
 		return errInternal("Unable to calculate VAT.")
@@ -173,6 +172,34 @@ func sumField(store *models.Store, coll string, filter map[string]interface{}, f
 	cur, err := storeDB(store.ID.Hex()).Collection(coll).Aggregate(ctx, []bson.M{
 		{"$match": filter},
 		{"$group": bson.M{"_id": nil, "total": bson.M{"$sum": "$" + field}}},
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(ctx)
+	var res struct {
+		Total float64 `bson:"total"`
+	}
+	if cur.Next(ctx) {
+		_ = cur.Decode(&res)
+	}
+	return res.Total, nil
+}
+
+// sumExpenseVendorVat sums vat_price of the expenses in filter that have a valid
+// VAT bill: a vendor invoice number, a VAT amount above zero, and a vendor that
+// exists in the store's vendor collection.
+func sumExpenseVendorVat(store *models.Store, filter map[string]interface{}) (float64, error) {
+	filter["vendor_id"] = bson.M{"$exists": true, "$ne": nil}
+	filter["vendor_invoice_no"] = bson.M{"$regex": `\S`}
+	filter["vat_price"] = bson.M{"$gt": 0}
+	ctx, cancel := dbctx()
+	defer cancel()
+	cur, err := storeDB(store.ID.Hex()).Collection("expense").Aggregate(ctx, []bson.M{
+		{"$match": filter},
+		{"$lookup": bson.M{"from": "vendor", "localField": "vendor_id", "foreignField": "_id", "as": "v"}},
+		{"$match": bson.M{"v.0": bson.M{"$exists": true}}},
+		{"$group": bson.M{"_id": nil, "total": bson.M{"$sum": "$vat_price"}}},
 	})
 	if err != nil {
 		return 0, err
