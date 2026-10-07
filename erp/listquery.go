@@ -27,7 +27,8 @@ import (
 // silently ignored (the screen would show the wrong rows).
 
 const (
-	maxWhereLen  = 100
+	maxWhereLen  = 2600 // up to 100 record ids separated by commas
+	maxWhereIDs  = 100
 	maxSumFields = 10
 )
 
@@ -101,7 +102,7 @@ func parseListExtras(v url.Values, res *Resource, q *ListQuery) error {
 			continue
 		}
 		if len(val) > maxWhereLen {
-			return errBadRequest("Filter value is too long.", map[string]string{k: "at most 100 characters"})
+			return errBadRequest("Filter value is too long.", map[string]string{k: "at most 2600 characters"})
 		}
 		if q.Where == nil {
 			q.Where = map[string]string{}
@@ -154,6 +155,9 @@ func (b *legacyBackend) listExtras(c *Ctx, storeHex string, q ListQuery) (bson.M
 		if wk.oid {
 			// one id, or several separated by commas (a category and its sub-categories)
 			in := bson.A{}
+			if strings.Count(val, ",") >= maxWhereIDs {
+				return nil, nil, errBadRequest("Too many ids in a filter.", map[string]string{"where." + field: "at most 100 ids"})
+			}
 			for _, id := range strings.Split(val, ",") {
 				if id = strings.TrimSpace(id); id == "" {
 					continue
@@ -374,4 +378,43 @@ func boolWhere(key string) func(val, _ string) (bson.M, bool) {
 		}
 		return nil, false
 	}
+}
+
+// Repair jobs still in the workshop: any status but the finished ones (the web
+// app's vehicles.jsx Gb list), a missing status included.
+var repairDoneStatuses = bson.A{"completed", "delivered", "closed", "cancelled"}
+
+// where.status on repair jobs: open (still in the workshop), done (finished),
+// notCancelled, or one status.
+func repairJobStatus(val, _ string) (bson.M, bool) {
+	switch val {
+	case "open":
+		return bson.M{"status": bson.M{"$nin": repairDoneStatuses}}, true
+	case "done":
+		return bson.M{"status": bson.M{"$in": repairDoneStatuses}}, true
+	case "notCancelled":
+		return bson.M{"status": bson.M{"$ne": "cancelled"}}, true
+	case "completed", "delivered", "closed", "cancelled", "in_progress":
+		return bson.M{"status": val}, true
+	}
+	return nil, false
+}
+
+// where.openJob on vehicles: true = a repair job of the vehicle is still in the
+// workshop, false = none is.
+func vehicleOpenJob(val, storeHex string) (bson.M, bool) {
+	if val != "true" && val != "false" {
+		return nil, false
+	}
+	ctx, cancel := dbctx()
+	defer cancel()
+	ids, err := storeDB(storeHex).Collection("repair_job").Distinct(ctx, "vehicle_id",
+		bson.M{"status": bson.M{"$nin": repairDoneStatuses}, "deleted": bson.M{"$ne": true}})
+	if err != nil || ids == nil {
+		ids = []interface{}{}
+	}
+	if val == "true" {
+		return bson.M{"_id": bson.M{"$in": ids}}, true
+	}
+	return bson.M{"_id": bson.M{"$nin": ids}}, true
 }

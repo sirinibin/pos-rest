@@ -874,8 +874,9 @@ func newVehiclesResource() *Resource {
 		searchKeys: []string{"vehicle_number", "brand", "model", "chassis_number", "customer_name", "customer_name_arabic"}, searchSort: "vehicle_number",
 		listSort: map[string]string{"plate": "vehicle_number", "make": "brand", "model": "model", "year": "year",
 			"customerName": "customer_name", "currentKm": "current_km"},
-		listWhere: map[string]whereKey{"make": {key: "brand"}, "customerId": {key: "customer_id", oid: true}},
-		toC:       simpleToC(vehicleFields, nil),
+		listWhere: map[string]whereKey{"make": {key: "brand"}, "customerId": {key: "customer_id", oid: true},
+			"openJob": {fn: vehicleOpenJob}},
+		toC: simpleToC(vehicleFields, nil),
 		toL: simpleToL(vehicleFields, func(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M) error {
 			if v, ok := p["vehicle_number"]; ok {
 				p["vehicle_number"] = strings.Join(strings.Fields(strings.ToUpper(str(v))), " ")

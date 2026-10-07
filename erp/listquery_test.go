@@ -1,9 +1,11 @@
 package erp
 
 import (
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -36,7 +38,7 @@ func TestParseListExtras(t *testing.T) {
 		{name: "where", res: dated, qs: "where.customerId=abc&where.paymentStatus=paid",
 			where: map[string]string{"customerId": "abc", "paymentStatus": "paid"}},
 		{name: "empty where value skipped", res: dated, qs: "where.customerId=&where.=x"},
-		{name: "where value too long", res: dated, qs: "where.customerId=" + strings.Repeat("a", 101), errKey: "where.customerId"},
+		{name: "where value too long", res: dated, qs: "where.customerId=" + strings.Repeat("a", 2601), errKey: "where.customerId"},
 		{name: "min not a number", res: undated, qs: "min.creditLimit=abc", errKey: "min.creditLimit"},
 		{name: "max infinite", res: undated, qs: "max.creditLimit=Inf", errKey: "max.creditLimit"},
 		{name: "too many totals", res: undated, qs: "sum=a,b,c,d,e,f,g,h,i,j,k", errKey: "sum"},
@@ -520,5 +522,119 @@ func TestAPI_ProductListStock(t *testing.T) {
 	}
 	if r := call(t, "GET", "/products?where.stockStatus=maybe"+st, tok, nil); r.Code != 400 {
 		t.Fatalf("bad stock status: %d", r.Code)
+	}
+}
+
+func TestRepairJobStatusWhere(t *testing.T) {
+	for _, tc := range []struct {
+		val  string
+		ok   bool
+		want string
+	}{
+		{"open", true, `{"status":{"$nin":["completed","delivered","closed","cancelled"]}}`},
+		{"done", true, `{"status":{"$in":["completed","delivered","closed","cancelled"]}}`},
+		{"notCancelled", true, `{"status":{"$ne":"cancelled"}}`},
+		{"in_progress", true, `{"status":"in_progress"}`},
+		{"delivered", true, `{"status":"delivered"}`},
+		{"nope", false, ""},
+		{"", false, ""},
+	} {
+		m, ok := repairJobStatus(tc.val, "")
+		if ok != tc.ok {
+			t.Fatalf("%q: ok=%v", tc.val, ok)
+		}
+		if !ok {
+			continue
+		}
+		b, _ := bson.MarshalExtJSON(m, false, false)
+		if string(b) != tc.want {
+			t.Fatalf("%q: %s want %s", tc.val, b, tc.want)
+		}
+	}
+	if _, ok := vehicleOpenJob("maybe", "x"); ok {
+		t.Fatal("openJob accepts only true/false")
+	}
+}
+
+func TestListWhereIDLists(t *testing.T) {
+	res := &Resource{Name: "products"}
+	ids := make([]string, 100)
+	for i := range ids {
+		ids[i] = primitive.NewObjectID().Hex()
+	}
+	// 100 ids fit (a category with many sub-categories)
+	var q ListQuery
+	if err := parseListExtras(url.Values{"where.categoryId": {strings.Join(ids, ",")}}, res, &q); err != nil {
+		t.Fatalf("100 ids: %v", err)
+	}
+	b := newProductsResource().Backend.(*legacyBackend)
+	f, _, err := b.listExtras(&Ctx{}, "s1", q)
+	if err != nil {
+		t.Fatalf("100 ids: %v", err)
+	}
+	if in := f["category_id"].(bson.M)["$in"].(bson.A); len(in) != 200 {
+		t.Fatalf("each id as ObjectID and text: %d", len(in))
+	}
+	// 101 ids are refused by name
+	q = ListQuery{Where: map[string]string{"categoryId": strings.Join(append(ids, "a"), ",")}}
+	if _, _, err := b.listExtras(&Ctx{}, "s1", q); err == nil || !strings.Contains(fmt.Sprint(err), "ids") {
+		t.Fatalf("101 ids: %v", err)
+	}
+	// a value longer than 2600 characters is refused
+	if err := parseListExtras(url.Values{"where.make": {strings.Repeat("x", 2601)}}, res, &ListQuery{}); err == nil {
+		t.Fatal("long value accepted")
+	}
+}
+
+func TestAPI_VehicleOpenJobAndRepairTotals(t *testing.T) {
+	requireDB(t)
+	tok := login(t, fx.AdminEmail)
+	st := "&storeId=" + storeA()
+	open := map[string]bool{}
+	for _, r := range call(t, "GET", "/repair-jobs?limit=500&where.status=open"+st, tok, nil).data() {
+		s := str(r.(M)["status"])
+		if s == "completed" || s == "delivered" || s == "closed" || s == "cancelled" {
+			t.Fatalf("open filter returned a %s job", s)
+		}
+		open[str(r.(M)["vehicleId"])] = true
+	}
+	if !open[fx.VehicleA1.Hex()] {
+		t.Fatal("the fixture vehicle has an open job")
+	}
+	all := call(t, "GET", "/vehicles?limit=500"+st, tok, nil)
+	in := call(t, "GET", "/vehicles?limit=500&where.openJob=true"+st, tok, nil)
+	out := call(t, "GET", "/vehicles?limit=500&where.openJob=false"+st, tok, nil)
+	if in.Code != 200 || out.Code != 200 {
+		t.Fatalf("openJob: %d %d %s", in.Code, out.Code, out.Raw)
+	}
+	if num(in.Body["total"])+num(out.Body["total"]) != num(all.Body["total"]) {
+		t.Fatalf("open %v + none %v != all %v", in.Body["total"], out.Body["total"], all.Body["total"])
+	}
+	for _, r := range in.data() {
+		if !open[str(r.(M)["id"])] {
+			t.Fatalf("vehicle %v has no open job", r.(M)["id"])
+		}
+	}
+	for _, r := range out.data() {
+		if open[str(r.(M)["id"])] {
+			t.Fatalf("vehicle %v has an open job", r.(M)["id"])
+		}
+	}
+	if r := call(t, "GET", "/vehicles?where.openJob=maybe"+st, tok, nil); r.Code != 400 {
+		t.Fatalf("bad openJob: %d", r.Code)
+	}
+	// one vehicle's jobs, and the grand total of jobs that are not cancelled
+	mine := call(t, "GET", "/repair-jobs?limit=500&where.vehicleId="+fx.VehicleA1.Hex()+st, tok, nil)
+	for _, r := range mine.data() {
+		if str(r.(M)["vehicleId"]) != fx.VehicleA1.Hex() {
+			t.Fatalf("other vehicle's job: %v", r.(M)["vehicleId"])
+		}
+	}
+	if len(mine.data()) == 0 {
+		t.Fatal("no jobs for the fixture vehicle")
+	}
+	s := call(t, "GET", "/repair-jobs?limit=1&sum=grand&where.status=notCancelled"+st, tok, nil)
+	if s.Code != 200 || s.Body["sums"] == nil || num(s.Body["sums"].(M)["grand"]) < 0 {
+		t.Fatalf("grand total: %d %s", s.Code, s.Raw)
 	}
 }

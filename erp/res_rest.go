@@ -347,6 +347,12 @@ func repairToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (
 
 func newRepairJobsResource() *Resource {
 	b := &legacyBackend{coll: "repair_job", dateKey: "date", deletedKey: "deleted",
+		listWhere: map[string]whereKey{"vehicleId": {key: "vehicle_id", oid: true}, "customerId": {key: "customer_id", oid: true},
+			"status": {fn: repairJobStatus}},
+		// grand total with VAT, as the job keeps it (inventory/helpers.js wn().grand)
+		listSumExpr: map[string]func(string) interface{}{"grand": func(string) interface{} {
+			return bson.M{"$convert": bson.M{"input": "$total_with_vat", "to": "double", "onError": 0.0, "onNull": 0.0}}
+		}},
 		toC: repairToContract, toL: repairToLegacy,
 		known: knownSet("code", "title", "date", "status", "vehicleId", "plate", "make", "model", "customerId", "customerName",
 			"odometer", "complaint", "inspection", "workDone", "technicianIds", "parts", "labour", "vatPercent", "saleId",
