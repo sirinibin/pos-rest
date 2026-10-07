@@ -22,6 +22,11 @@ type ListQuery struct {
 	Select         fieldSelect // ?select= (empty = every field)
 	Search         string      // ?q= search text (pickers), see search.go
 	IDs            []string    // ?ids= only these records
+	To             *time.Time  // ?to= last day included; see toIn (listquery.go)
+	ToRaw          string
+	Sort           string            // ?sort= contract field ("" = the resource's default order)
+	Desc           bool              // ?sort=-field
+	Where          map[string]string // ?where.<field>= equality filters
 }
 
 // WriteMeta carries per-write request metadata.
@@ -206,6 +211,9 @@ func parseListQuery(r *http.Request, res *Resource) (ListQuery, error) {
 			return q, errBadRequest("Invalid from date.", map[string]string{"from": "expected YYYY-MM-DD"})
 		}
 		q.From, q.FromRaw = &t, s
+	}
+	if err := parseListExtras(v, res, &q); err != nil {
+		return q, err
 	}
 	return q, nil
 }

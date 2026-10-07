@@ -39,7 +39,8 @@ func docResource(name, path, module, coll string, cfg *docCfg, ops v1Ops, desc s
 			return rec
 		},
 		toL: cfg.toLegacy, known: cfg.known(), validate: cfg.validate, v1: ops,
-		fieldErr: docFieldErr, lineErr: docLineErr, lineKey: "items", hybrid: hy}
+		fieldErr: docFieldErr, lineErr: docLineErr, lineKey: "items", hybrid: hy,
+		listSort: docListSort(cfg.party), listWhere: docListWhere(cfg.party), searchKeys: docSearchKeys(cfg.party)}
 	b.settleLedger = map[string]bool{"sales": true, "salesReturns": true, "purchases": true, "purchaseReturns": true,
 		"nonvatSales": true, "nonvatReturns": true, "quotationReturns": true}[name]
 	b.affectsStock = map[string]bool{"sales": true, "salesReturns": true, "purchases": true, "purchaseReturns": true,

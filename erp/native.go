@@ -64,6 +64,26 @@ func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	if len(q.IDs) > 0 {
 		f["_id"] = bson.M{"$in": q.IDs}
 	}
+	if len(q.Where) > 0 {
+		return nil, 0, errBadRequest("This list cannot be filtered.", map[string]string{"where": "not supported for this resource"})
+	}
+	if to := q.toIn(c.storeLoc(storeHex)); to != nil && b.dateField != "" {
+		if cur, ok := f[nativeDateKey].(bson.M); ok {
+			cur["$lt"] = *to
+		} else {
+			f[nativeDateKey] = bson.M{"$lt": *to}
+		}
+	}
+	dir := 1
+	switch q.Sort {
+	case "":
+	case "date":
+		if q.Desc {
+			dir = -1
+		}
+	default:
+		return nil, 0, errBadRequest("This list cannot be sorted by "+q.Sort+".", map[string]string{"sort": "not supported for this resource"})
+	}
 	ctx, cancel := dbctx()
 	defer cancel()
 	col := b.col(storeHex)
@@ -71,7 +91,7 @@ func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	if err != nil {
 		return nil, 0, errInternal("db: " + err.Error())
 	}
-	opts := options.Find().SetSort(bson.D{{Key: nativeDateKey, Value: 1}, {Key: "_id", Value: 1}}).
+	opts := options.Find().SetSort(bson.D{{Key: nativeDateKey, Value: dir}, {Key: "_id", Value: dir}}).
 		SetSkip(int64((q.Page - 1) * q.Limit)).SetLimit(int64(q.Limit))
 	if p := q.Select.dbProjection("history"); p != nil {
 		opts.SetProjection(p)

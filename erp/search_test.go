@@ -119,7 +119,7 @@ func TestParseListQuerySearch(t *testing.T) {
 func TestSearchableResources(t *testing.T) {
 	initResources()
 	want := []string{"products", "customers", "vendors", "employees", "vehicles", "packages", "rfqSuppliers",
-		"categories", "brands", "accounts"}
+		"categories", "brands", "accounts", "sales", "salesReturns", "quotations", "purchases", "purchaseReturns"}
 	for _, name := range want {
 		res := resourceByName(name)
 		if res == nil {
@@ -134,13 +134,13 @@ func TestSearchableResources(t *testing.T) {
 		}
 	}
 	// a resource without search keys rejects ?q= with a field error
-	sales := resourceByName("sales").Backend.(*legacyBackend)
-	err := sales.checkSearch(ListQuery{Search: "x"})
+	expenses := resourceByName("expenses").Backend.(*legacyBackend)
+	err := expenses.checkSearch(ListQuery{Search: "x"})
 	if ae, ok := err.(*APIError); !ok || ae.Status != 400 || ae.Fields["q"] == "" {
-		t.Fatalf("sales ?q=: %v", err)
+		t.Fatalf("expenses ?q=: %v", err)
 	}
-	if err := sales.checkSearch(ListQuery{}); err != nil {
-		t.Fatalf("sales without q: %v", err)
+	if err := expenses.checkSearch(ListQuery{}); err != nil {
+		t.Fatalf("expenses without q: %v", err)
 	}
 }
 
@@ -229,8 +229,8 @@ func TestAPI_ListSearch(t *testing.T) {
 		t.Fatalf("select with q: %v", got)
 	}
 	// resources without search fields reject q
-	if bad := call(t, "GET", "/sales?q=x"+st, tok, nil); bad.Code != 400 || bad.errField("q") == "" {
-		t.Fatalf("sales q: %d %s", bad.Code, bad.Raw)
+	if bad := call(t, "GET", "/expenses?q=x"+st, tok, nil); bad.Code != 400 || bad.errField("q") == "" {
+		t.Fatalf("expenses q: %d %s", bad.Code, bad.Raw)
 	}
 	// native resources search code/name
 	if n := call(t, "GET", "/customer-categories?q=nothing-here", tok, nil); n.Code != 200 {

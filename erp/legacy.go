@@ -254,6 +254,8 @@ type legacyBackend struct {
 	sortKey       string
 	searchKeys    []string                      // legacy keys ?q= matches (search.go); none = ?q= not supported
 	searchSort    string                        // sort key for ?q= results (e.g. name), "" = sortKey
+	listSort      map[string]string             // ?sort= contract field -> legacy key (listquery.go)
+	listWhere     map[string]whereKey           // ?where.<field>= contract field -> legacy key
 	mainOrg       bool                          // org-scoped resource in the main DB (stores, users)
 	access        func(c *Ctx) bson.M           // extra visibility filter (mainOrg)
 	hybrid        map[string]bool               // keys mapped to legacy AND preserved in erp.x (nested objects partially mapped)
@@ -565,6 +567,11 @@ func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) 
 		f = andFilter(f, bson.M{b.dateKey: bson.M{"$gte": *from}})
 	}
 	f = andFilter(f, searchFilter(q.Search, b.searchKeys), legacyIDsFilter(q.IDs))
+	xf, xsort, err := b.listExtras(c, storeHex, q)
+	if err != nil {
+		return nil, 0, err
+	}
+	f = andFilter(f, xf)
 	ctx, cancel := dbctx()
 	defer cancel()
 	total, err := b.col(storeHex).CountDocuments(ctx, f)
@@ -583,6 +590,9 @@ func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) 
 		sortD = append(sortD, bson.E{Key: sortKey, Value: 1})
 	}
 	sortD = append(sortD, bson.E{Key: "_id", Value: 1})
+	if xsort != nil {
+		sortD = xsort
+	}
 	opts := options.Find().SetSort(sortD)
 	if p := q.Select.dbProjection(envKey + ".h"); p != nil {
 		opts.SetProjection(p)
