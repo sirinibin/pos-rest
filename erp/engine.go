@@ -28,6 +28,7 @@ type ListQuery struct {
 	Desc           bool                   // ?sort=-field
 	Where          map[string]string      // ?where.<field>= equality filters
 	Range          map[string][2]*float64 // ?min.<field>= / ?max.<field>=
+	Sum            []string               // ?sum=a,b totals over every match (listquery.go)
 }
 
 // WriteMeta carries per-write request metadata.
@@ -262,13 +263,29 @@ func handleList(w http.ResponseWriter, r *http.Request, res *Resource) {
 		writeErr(w, err)
 		return
 	}
+	var sums M
+	if len(q.Sum) > 0 {
+		s, ok := res.Backend.(summer)
+		if !ok {
+			writeErr(w, errBadRequest("This list has no totals.", map[string]string{"sum": "not supported for this resource"}))
+			return
+		}
+		if sums, err = s.Sums(c, storeHex, q); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
 	for _, row := range rows {
 		remember(res, str(row["id"]), storeHex)
 	}
 	if rows == nil {
 		rows = []M{}
 	}
-	writeJSON(w, http.StatusOK, M{"data": q.Select.applyAll(rows), "total": total})
+	out := M{"data": q.Select.applyAll(rows), "total": total}
+	if sums != nil {
+		out["sums"] = sums
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request, res *Resource) {

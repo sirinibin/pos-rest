@@ -810,6 +810,7 @@ func newEmployeesResource() *Resource {
 		listSort: map[string]string{"code": "code", "nameEn": "name", "nameAr": "name_in_arabic", "jobTitle": "position",
 			"basicSalary": "salary", "joinDate": "joining_date", "phone": "mob1"},
 		listWhere: map[string]whereKey{"status": {fn: employeeStatus}, "jobTitle": {key: "position"}},
+		listRange: map[string]string{"basicSalary": "salary"},
 		toC: simpleToC(employeeFields, func(x *mapCtx, d M, rec M) {
 			if boolv(d["is_active"]) || d["is_active"] == nil {
 				rec["status"] = "active"

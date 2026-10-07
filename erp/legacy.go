@@ -556,7 +556,8 @@ func uniqueByID(rows []M) []M {
 	return out
 }
 
-func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) ([]M, int64, error) {
+// listFilter is the filter (and the ?sort= order, nil = default) of a list request.
+func (b *legacyBackend) listFilter(c *Ctx, storeHex string, q ListQuery) (bson.M, bson.D, error) {
 	f := andFilter(b.scopeFilter(c, storeHex), bson.M{"erp.hd": bson.M{"$ne": true}})
 	if !q.IncludeDeleted {
 		f = andFilter(f, bson.M{"erp.del": bson.M{"$ne": true}})
@@ -570,9 +571,16 @@ func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) 
 	f = andFilter(f, searchFilter(q.Search, b.searchKeys), legacyIDsFilter(q.IDs))
 	xf, xsort, err := b.listExtras(c, storeHex, q)
 	if err != nil {
+		return nil, nil, err
+	}
+	return andFilter(f, xf), xsort, nil
+}
+
+func (b *legacyBackend) listOne(c *Ctx, storeHex string, q ListQuery, all bool) ([]M, int64, error) {
+	f, xsort, err := b.listFilter(c, storeHex, q)
+	if err != nil {
 		return nil, 0, err
 	}
-	f = andFilter(f, xf)
 	ctx, cancel := dbctx()
 	defer cancel()
 	total, err := b.col(storeHex).CountDocuments(ctx, f)

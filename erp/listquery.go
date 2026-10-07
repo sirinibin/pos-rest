@@ -26,7 +26,10 @@ import (
 // downloading every record.  An unsupported sort or where field is a 400, never
 // silently ignored (the screen would show the wrong rows).
 
-const maxWhereLen = 100
+const (
+	maxWhereLen  = 100
+	maxSumFields = 10
+)
 
 // whereKey maps a contract filter field to the legacy document key.
 type whereKey struct {
@@ -48,6 +51,16 @@ func parseListExtras(v url.Values, res *Resource, q *ListQuery) error {
 			return errBadRequest("Invalid to date.", map[string]string{"to": "expected YYYY-MM-DD"})
 		}
 		q.To, q.ToRaw = &t, s
+	}
+	if s := strings.TrimSpace(v.Get("sum")); s != "" {
+		for _, f := range strings.Split(s, ",") {
+			if f = strings.TrimSpace(f); f != "" {
+				q.Sum = append(q.Sum, f)
+			}
+		}
+		if len(q.Sum) > maxSumFields {
+			return errBadRequest("Too many totals.", map[string]string{"sum": "at most 10 fields"})
+		}
 	}
 	if s := strings.TrimSpace(v.Get("sort")); s != "" {
 		q.Desc = strings.HasPrefix(s, "-")
@@ -249,4 +262,54 @@ func employeeStatus(val string) (bson.M, bool) {
 		return bson.M{"is_active": false}, true
 	}
 	return nil, false
+}
+
+// summer is a backend that totals numeric fields over every record a list
+// request matches (?sum=creditBalance,creditLimit -> "sums" next to "total"),
+// so stat tiles need no download of the whole list.
+type summer interface {
+	Sums(c *Ctx, storeHex string, q ListQuery) (M, error)
+}
+
+// Sums totals the ?sum= fields (those in listRange) over every match.
+func (b *legacyBackend) Sums(c *Ctx, storeHex string, q ListQuery) (M, error) {
+	if b.orgOverStores || b.mainOrg {
+		return nil, errBadRequest("This list has no totals.", map[string]string{"sum": "not supported for this resource"})
+	}
+	group := bson.M{"_id": nil}
+	names := map[string]string{}
+	for i, f := range q.Sum {
+		key, ok := b.listRange[f]
+		if !ok {
+			return nil, errBadRequest("This list has no total for "+f+".", map[string]string{"sum": f + " is not supported"})
+		}
+		n := "s" + strconv.Itoa(i)
+		names[n] = f
+		group[n] = bson.M{"$sum": bson.M{"$convert": bson.M{"input": "$" + storeKey(key, storeHex), "to": "double", "onError": 0.0, "onNull": 0.0}}}
+	}
+	f, _, err := b.listFilter(c, storeHex, q)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := dbctx()
+	defer cancel()
+	cur, err := b.col(storeHex).Aggregate(ctx, bson.A{bson.M{"$match": f}, bson.M{"$group": group}})
+	if err != nil {
+		return nil, errInternal("db: " + err.Error())
+	}
+	defer cur.Close(ctx)
+	out := M{}
+	for _, f := range q.Sum {
+		out[f] = 0.0
+	}
+	if cur.Next(ctx) {
+		var row bson.M
+		if err := cur.Decode(&row); err != nil {
+			return nil, errInternal("db: " + err.Error())
+		}
+		for n, f := range names {
+			out[f] = roundN(num(row[n]), 2)
+		}
+	}
+	return out, cur.Err()
 }

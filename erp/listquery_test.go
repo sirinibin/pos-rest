@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -38,6 +39,7 @@ func TestParseListExtras(t *testing.T) {
 		{name: "where value too long", res: dated, qs: "where.customerId=" + strings.Repeat("a", 101), errKey: "where.customerId"},
 		{name: "min not a number", res: undated, qs: "min.creditLimit=abc", errKey: "min.creditLimit"},
 		{name: "max infinite", res: undated, qs: "max.creditLimit=Inf", errKey: "max.creditLimit"},
+		{name: "too many totals", res: undated, qs: "sum=a,b,c,d,e,f,g,h,i,j,k", errKey: "sum"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -360,5 +362,57 @@ func TestAPI_MasterListPaging(t *testing.T) {
 	}
 	if r := call(t, "GET", "/customers?min.salary=1"+st, tok, nil); r.Code != 400 {
 		t.Fatalf("unknown range: %d %s", r.Code, r.Raw)
+	}
+}
+
+func TestParseListSum(t *testing.T) {
+	res := &Resource{Name: "customers", Path: "customers", Scope: "store"}
+	q, err := parseListQuery(httptest.NewRequest("GET", "/v1/erp/customers?sum=+creditBalance,,creditLimit+", nil), res)
+	if err != nil || !reflect.DeepEqual(q.Sum, []string{"creditBalance", "creditLimit"}) {
+		t.Fatalf("sum: %v %v", q.Sum, err)
+	}
+}
+
+// DB-backed: ?sum= totals every match, with the same filters as the rows.
+func TestAPI_ListSums(t *testing.T) {
+	requireDB(t)
+	tok := login(t, fx.AdminEmail)
+	st := "&storeId=" + storeA()
+	check := func(path string) {
+		t.Helper()
+		r := call(t, "GET", path+"&limit=500"+st, tok, nil)
+		if r.Code != 200 {
+			t.Fatalf("%s: %d %s", path, r.Code, r.Raw)
+		}
+		sums, _ := r.Body["sums"].(M)
+		var bal, lim float64
+		for _, row := range r.data() {
+			bal += num(row.(M)["creditBalance"])
+			lim += num(row.(M)["creditLimit"])
+		}
+		if math.Abs(num(sums["creditBalance"])-bal) > 0.01 || math.Abs(num(sums["creditLimit"])-lim) > 0.01 {
+			t.Fatalf("%s: sums %v, rows give %v / %v", path, sums, bal, lim)
+		}
+	}
+	check("/customers?sum=creditBalance,creditLimit")
+	check("/customers?sum=creditBalance,creditLimit&q=riyadh")
+	check("/customers?sum=creditBalance,creditLimit&min.creditLimit=1")
+	// the page size does not change the totals
+	a := call(t, "GET", "/customers?sum=creditLimit&limit=1"+st, tok, nil)
+	b := call(t, "GET", "/customers?sum=creditLimit&limit=500"+st, tok, nil)
+	if num(a.Body["sums"].(M)["creditLimit"]) != num(b.Body["sums"].(M)["creditLimit"]) {
+		t.Fatalf("sums depend on the page: %v vs %v", a.Body["sums"], b.Body["sums"])
+	}
+	if r := call(t, "GET", "/employees?sum=basicSalary&where.status=active"+st, tok, nil); r.Code != 200 || r.Body["sums"] == nil {
+		t.Fatalf("employee payroll: %d %s", r.Code, r.Raw)
+	}
+	for _, bad := range []string{"/customers?sum=nameEn", "/sales?sum=netTotal", "/categories?sum=x"} {
+		if r := call(t, "GET", bad+st, tok, nil); r.Code != 400 || r.errField("sum") == "" {
+			t.Errorf("%s: %d %s", bad, r.Code, r.Raw)
+		}
+	}
+	// without ?sum= the answer has no sums
+	if r := call(t, "GET", "/customers?limit=1"+st, tok, nil); r.Body["sums"] != nil {
+		t.Fatal("sums only on request")
 	}
 }
