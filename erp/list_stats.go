@@ -18,6 +18,9 @@ package erp
 // nonEmpty:<field> counts records with that field set, any other name sums that
 // contract field (dotted path); "<sum>|<field>=<value>" adds only matching records.
 // groupBy=party (customer or vendor) or a field also adds up per value ("groups").
+// lines=payments adds up the payment lines instead (the Payments lists): each line is
+// its record with date (the payment's, else the record's), amount, method and
+// description taken from the payment.
 // Filters (f.<key>): party, pstatus, zatca, paymentMethod (any payment), overdue as in
 // DocumentList; nonEmpty:<field> = y / n (field set or not); any other key compares
 // the contract field of that name, as ListPage does by default.
@@ -54,6 +57,7 @@ type StatsQuery struct {
 	IncludeDeleted bool
 	Today          string // store day, for the overdue filter
 	GroupBy        string // "" | "party" | a contract field: also add up per value
+	Lines          string // "" | "payments": add up the records' payment lines instead
 }
 
 // StatsResult is the response body (besides storeId/timezone).
@@ -100,6 +104,11 @@ func parseStatsQuery(r *http.Request) (StatsQuery, error) {
 		}
 	}
 	q.GroupBy = strings.TrimSpace(v.Get("groupBy"))
+	switch q.Lines = strings.TrimSpace(v.Get("lines")); q.Lines {
+	case "", "payments":
+	default:
+		return q, errBadRequest("Unknown lines.", map[string]string{"lines": "payments or none"})
+	}
 	inc := v.Get("includeDeleted")
 	q.IncludeDeleted = inc == "1" || strings.EqualFold(inc, "true")
 	return q, nil
@@ -160,7 +169,11 @@ type statRow struct {
 	Zatca   string
 	Methods []string
 	Vals    map[string]interface{} // field → string or float64 (absent = nil)
+	Lines   []statRow              // lines=payments: one per payment
 }
+
+// linesField marks the fields of a lines=payments query (the rows keep their lines).
+const linesField = "~payments"
 
 func statRowOf(rec M, fields map[string]bool) statRow {
 	r := statRow{ID: str(rec["id"]), Deleted: boolv(rec["deleted"]), T: ComputeTotals(rec), Vals: map[string]interface{}{}}
@@ -181,6 +194,9 @@ func statRowOf(rec M, fields map[string]bool) statRow {
 		}
 	}
 	for f := range fields {
+		if f == linesField {
+			continue
+		}
 		if strings.HasPrefix(f, "nonEmpty:") {
 			if nonEmpty(field(rec, f[len("nonEmpty:"):])) {
 				r.Vals[f] = 1.0
@@ -195,6 +211,26 @@ func statRowOf(rec M, fields map[string]bool) statRow {
 			r.Vals[f] = num(v)
 		default:
 			r.Vals[f] = jsString(v)
+		}
+	}
+	if fields[linesField] {
+		for _, p := range arr(rec["payments"]) {
+			pm, _ := p.(M)
+			l := r
+			l.Lines = nil
+			l.Vals = make(map[string]interface{}, len(r.Vals)+4)
+			for k, v := range r.Vals {
+				l.Vals[k] = v
+			}
+			if d := str(pm["date"]); d != "" {
+				l.Vals["date"] = d
+			} else {
+				l.Vals["date"] = jsString(rec["date"])
+			}
+			l.Vals["amount"] = num(pm["amount"])
+			l.Vals["method"] = str(pm["method"])
+			l.Vals["description"] = str(pm["description"])
+			r.Lines = append(r.Lines, l)
 		}
 	}
 	return r
@@ -236,6 +272,9 @@ func statFields(q StatsQuery) map[string]bool {
 	}
 	if q.GroupBy != "" && q.GroupBy != "party" {
 		f[q.GroupBy] = true
+	}
+	if q.Lines == "payments" {
+		f[linesField] = true
 	}
 	for _, s := range q.Sums {
 		base, cf, _ := splitMeasure(s)
@@ -546,6 +585,13 @@ func addUp(q StatsQuery, rows []statRow, credits map[string]float64) *StatsResul
 	}
 	if q.GroupBy != "" {
 		out.Groups = map[string]*StatsResult{}
+	}
+	if q.Lines != "" {
+		var ls []statRow
+		for _, r := range rows {
+			ls = append(ls, r.Lines...)
+		}
+		rows = ls
 	}
 	for _, r := range rows {
 		if statsMatch(q, r, credits) {

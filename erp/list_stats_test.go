@@ -33,6 +33,8 @@ func TestParseStatsQuery(t *testing.T) {
 			}},
 		{"dateKey", "dateKey=paidAt", "", func(q StatsQuery) bool { return q.DateKey == "paidAt" }},
 		{"groupBy", "groupBy=+party+", "", func(q StatsQuery) bool { return q.GroupBy == "party" }},
+		{"lines", "lines=payments", "", func(q StatsQuery) bool { return q.Lines == "payments" && statFields(q)[linesField] }},
+		{"bad lines", "lines=items", "lines", nil},
 		{"bad from", "from=yesterday", "from", nil},
 		{"bad to", "to=2026-13-01", "to", nil},
 		{"from after to", "from=2026-02-01&to=2026-01-01", "from", nil},
@@ -292,6 +294,22 @@ func TestAPI_ListStats_AllTimeBeyondWindow(t *testing.T) {
 	}
 	if _, ok := r.Body["groups"]; ok {
 		t.Fatal("groups without groupBy")
+	}
+	// payment lines: every sale's payments, per method
+	var wantPay float64
+	wantN := 0
+	for _, d := range all.data() {
+		for _, p := range arr(d.(M)["payments"]) {
+			wantPay += num(p.(M)["amount"])
+			wantN++
+		}
+	}
+	pl := call(t, "GET", "/sales/stats?storeId="+storeA()+"&lines=payments&sum=amount&groupBy=method", tok, nil)
+	if int(num(pl.Body["count"])) != wantN || wantN == 0 || num(get(pl.Body, "sums.amount")) != round2(wantPay) {
+		t.Fatalf("payment lines %v want %d / %v", pl.Raw, wantN, round2(wantPay))
+	}
+	if len(pl.Body["groups"].(M)) == 0 {
+		t.Fatalf("payment lines per method: %s", pl.Raw)
 	}
 	s := call(t, "GET", "/sales/stats?storeId="+storeA()+"&q=S-INV-000&keys=code", tok, nil)
 	if int(num(s.Body["count"])) != 1 {

@@ -27,7 +27,9 @@
    "payments": [
     {
      "amount": 517.22,
-     "method": "cash"
+     "method": "cash",
+     "date": "2026-10-07T08:00",
+     "description": "ref-0"
     }
    ],
    "deleted": false,
@@ -133,7 +135,8 @@
    "payments": [
     {
      "amount": 111.42,
-     "method": "cash"
+     "method": "cash",
+     "date": "2026-06-18T08:00"
     }
    ],
    "deleted": false,
@@ -239,7 +242,8 @@
    "payments": [
     {
      "amount": 318.03,
-     "method": "cash"
+     "method": "cash",
+     "date": "2026-02-27T08:00"
     }
    ],
    "deleted": false,
@@ -342,7 +346,8 @@
    "payments": [
     {
      "amount": 101.39,
-     "method": "bank_card"
+     "method": "bank_card",
+     "date": "2025-11-08T08:00"
     }
    ],
    "deleted": false,
@@ -446,11 +451,13 @@
    "payments": [
     {
      "amount": 10,
-     "method": "cash"
+     "method": "cash",
+     "date": "2025-07-20T08:00"
     },
     {
      "amount": 5.5,
-     "method": "bank_transfer"
+     "method": "bank_transfer",
+     "description": "ref-12"
     }
    ],
    "deleted": true,
@@ -708,7 +715,8 @@
     },
     {
      "amount": 5.5,
-     "method": "bank_transfer"
+     "method": "bank_transfer",
+     "description": "ref-20"
     }
    ],
    "deleted": false,
@@ -843,7 +851,9 @@
    "payments": [
     {
      "amount": 24.09,
-     "method": "cash"
+     "method": "cash",
+     "date": "2024-05-02T08:00",
+     "description": "ref-24"
     }
    ],
    "deleted": false,
@@ -945,7 +955,8 @@
    "payments": [
     {
      "amount": 906.92,
-     "method": "cash"
+     "method": "cash",
+     "date": "2024-01-12T08:00"
     }
    ],
    "deleted": false,
@@ -980,7 +991,8 @@
    "payments": [
     {
      "amount": 601.4,
-     "method": "bank_card"
+     "method": "bank_card",
+     "description": "ref-28"
     }
    ],
    "deleted": false,
@@ -1118,7 +1130,8 @@
     },
     {
      "amount": 5.5,
-     "method": "bank_transfer"
+     "method": "bank_transfer",
+     "description": "ref-32"
     }
    ],
    "deleted": false,
@@ -1154,7 +1167,8 @@
    "payments": [
     {
      "amount": 454.99,
-     "method": "cash"
+     "method": "cash",
+     "date": "2026-06-08T08:00"
     }
    ],
    "deleted": false,
@@ -1362,7 +1376,8 @@
    "payments": [
     {
      "amount": 10,
-     "method": "cash"
+     "method": "cash",
+     "date": "2025-10-29T08:00"
     },
     {
      "amount": 5.5,
@@ -1403,7 +1418,8 @@
     },
     {
      "amount": 5.5,
-     "method": "bank_transfer"
+     "method": "bank_transfer",
+     "description": "ref-40"
     }
    ],
    "deleted": false,
@@ -1471,7 +1487,8 @@
    "payments": [
     {
      "amount": 10,
-     "method": "cash"
+     "method": "cash",
+     "date": "2025-07-10T08:00"
     },
     {
      "amount": 5.5,
@@ -1551,7 +1568,8 @@
    "payments": [
     {
      "amount": 194.37,
-     "method": "bank_card"
+     "method": "bank_card",
+     "description": "ref-44"
     }
    ],
    "deleted": true,
@@ -1586,7 +1604,8 @@
    "payments": [
     {
      "amount": 10,
-     "method": "cash"
+     "method": "cash",
+     "date": "2025-03-21T08:00"
     },
     {
      "amount": 5.5,
@@ -1684,7 +1703,9 @@
    "payments": [
     {
      "amount": 1659.1,
-     "method": "cash"
+     "method": "cash",
+     "date": "2024-11-30T08:00",
+     "description": "ref-48"
     }
    ],
    "deleted": true,
@@ -1825,7 +1846,8 @@
    "payments": [
     {
      "amount": 363.64,
-     "method": "bank_card"
+     "method": "bank_card",
+     "description": "ref-52"
     }
    ],
    "deleted": false,
@@ -1890,7 +1912,8 @@
    "payments": [
     {
      "amount": 32.26,
-     "method": "cash"
+     "method": "cash",
+     "date": "2024-04-22T08:00"
     }
    ],
    "deleted": false,
@@ -1964,7 +1987,8 @@
    "payments": [
     {
      "amount": 571.68,
-     "method": "cash"
+     "method": "cash",
+     "description": "ref-56"
     }
    ],
    "deleted": false,
@@ -2002,7 +2026,8 @@
    "payments": [
     {
      "amount": 794.27,
-     "method": "cash"
+     "method": "cash",
+     "date": "2024-01-02T08:00"
     }
    ],
    "deleted": false,
@@ -2993,6 +3018,95 @@
        "amount": 5682.1
       }
      }
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "amount",
+    "lines": "payments",
+    "groupBy": "method"
+   },
+   "want": {
+    "count": 52,
+    "sums": {
+     "amount": 12155.14
+    },
+    "groups": {
+     "cash": {
+      "count": 33,
+      "sums": {
+       "amount": 8725.68
+      }
+     },
+     "bank_transfer": {
+      "count": 11,
+      "sums": {
+       "amount": 60.5
+      }
+     },
+     "bank_card": {
+      "count": 8,
+      "sums": {
+       "amount": 3368.96
+      }
+     }
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "amount,one",
+    "lines": "payments",
+    "from": "2025-10-08",
+    "f.method": "cash"
+   },
+   "want": {
+    "count": 13,
+    "sums": {
+     "amount": 2881.32,
+     "one": 13
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "amount",
+    "lines": "payments",
+    "q": "REF-2",
+    "keys": "code,description"
+   },
+   "want": {
+    "count": 3,
+    "sums": {
+     "amount": 630.99
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "amount",
+    "lines": "payments",
+    "to": "2025-01-01",
+    "f.party": "c1"
+   },
+   "want": {
+    "count": 3,
+    "sums": {
+     "amount": 616.9
+    }
+   }
+  },
+  {
+   "query": {
+    "sum": "cashDiscount,net",
+    "f.nonEmpty:cashDiscount": "y"
+   },
+   "want": {
+    "count": 26,
+    "sums": {
+     "cashDiscount": 26,
+     "net": 20604.31
     }
    }
   }
