@@ -476,6 +476,20 @@ func productToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) 
 func newProductsResource() *Resource {
 	b := &legacyBackend{coll: "product", deletedKey: "deleted", sortKey: "_id",
 		searchKeys: []string{"name", "name_in_arabic", "item_code", "part_number", "bar_code"}, searchSort: "name",
+		listSort: map[string]string{"code": "item_code", "nameEn": "name", "nameAr": "name_in_arabic", "partNo": "part_number",
+			"retail": "product_stores.{store}.retail_unit_price", "purchase": "product_stores.{store}.purchase_unit_price",
+			"stock": "product_stores.{store}.stock"},
+		listRange: map[string]string{"stock": "product_stores.{store}.stock", "retail": "product_stores.{store}.retail_unit_price"},
+		listWhere: map[string]whereKey{"categoryId": {key: "category_id", oid: true}, "brandId": {key: "brand_id", oid: true},
+			"isService": {fn: func(v string) (bson.M, bool) {
+				switch v {
+				case "true":
+					return bson.M{"is_service": true}, true
+				case "false":
+					return bson.M{"is_service": bson.M{"$ne": true}}, true
+				}
+				return nil, false
+			}}},
 		toC: productToContract, toL: productToLegacy, known: productKnown, validate: productValidate,
 		hybrid: knownSet("pricing", "stock"),
 		v1: v1Ops{path: "/v1/product", create: controller.CreateProduct, update: controller.UpdateProduct,
@@ -612,6 +626,7 @@ var partyErrExtra = map[string]string{"national_address_building_no": "address.b
 func newCustomersResource() *Resource {
 	b := &legacyBackend{coll: "customer", deletedKey: "deleted", sortKey: "_id",
 		searchKeys: partySearchKeys, searchSort: "name",
+		listSort: partyListSort, listRange: partyListRange, listWhere: map[string]whereKey{"overLimit": {fn: partyOverLimit}},
 		toC: simpleToC(customerFields, partyAddressToC), toL: simpleToL(customerFields, partyAddressToL),
 		known: fieldKeys(customerFields, "address", "addressText", "phoneAr", "phone2Ar"), validate: partyValidate,
 		hybrid: knownSet("address"),
@@ -669,7 +684,9 @@ func vendorExtraToL(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M
 func newVendorsResource() *Resource {
 	b := &legacyBackend{coll: "vendor", deletedKey: "deleted", sortKey: "_id",
 		searchKeys: partySearchKeys, searchSort: "name",
-		toC: simpleToC(vendorFields, vendorExtraToC), toL: simpleToL(vendorFields, vendorExtraToL),
+		listSort: partyListSort, listRange: partyListRange,
+		listWhere: map[string]whereKey{"overLimit": {fn: partyOverLimit}, "category": {key: "category_name"}},
+		toC:       simpleToC(vendorFields, vendorExtraToC), toL: simpleToL(vendorFields, vendorExtraToL),
 		known: fieldKeys(vendorFields, "address", "addressText", "phoneAr", "category", "vatPercent"), validate: partyValidate,
 		hybrid: knownSet("address", "category"),
 		v1: v1Ops{path: "/v1/vendor", create: controller.CreateVendor, update: controller.UpdateVendor,
@@ -790,6 +807,9 @@ var employeeFields = []fld{
 func newEmployeesResource() *Resource {
 	b := &legacyBackend{coll: "employee", deletedKey: "deleted", sortKey: "_id",
 		searchKeys: []string{"name", "name_in_arabic", "code", "mob1", "mob2", "iqama_no"}, searchSort: "name",
+		listSort: map[string]string{"code": "code", "nameEn": "name", "nameAr": "name_in_arabic", "jobTitle": "position",
+			"basicSalary": "salary", "joinDate": "joining_date", "phone": "mob1"},
+		listWhere: map[string]whereKey{"status": {fn: employeeStatus}, "jobTitle": {key: "position"}},
 		toC: simpleToC(employeeFields, func(x *mapCtx, d M, rec M) {
 			if boolv(d["is_active"]) || d["is_active"] == nil {
 				rec["status"] = "active"
@@ -850,7 +870,10 @@ var vehicleFields = []fld{
 func newVehiclesResource() *Resource {
 	b := &legacyBackend{coll: "vehicle", deletedKey: "deleted", sortKey: "_id",
 		searchKeys: []string{"vehicle_number", "brand", "model", "chassis_number", "customer_name", "customer_name_arabic"}, searchSort: "vehicle_number",
-		toC: simpleToC(vehicleFields, nil),
+		listSort: map[string]string{"plate": "vehicle_number", "make": "brand", "model": "model", "year": "year",
+			"customerName": "customer_name", "currentKm": "current_km"},
+		listWhere: map[string]whereKey{"make": {key: "brand"}, "customerId": {key: "customer_id", oid: true}},
+		toC:       simpleToC(vehicleFields, nil),
 		toL: simpleToL(vehicleFields, func(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M) error {
 			if v, ok := p["vehicle_number"]; ok {
 				p["vehicle_number"] = strings.Join(strings.Fields(strings.ToUpper(str(v))), " ")

@@ -24,9 +24,10 @@ type ListQuery struct {
 	IDs            []string    // ?ids= only these records
 	To             *time.Time  // ?to= last day included; see toIn (listquery.go)
 	ToRaw          string
-	Sort           string            // ?sort= contract field ("" = the resource's default order)
-	Desc           bool              // ?sort=-field
-	Where          map[string]string // ?where.<field>= equality filters
+	Sort           string                 // ?sort= contract field ("" = the resource's default order)
+	Desc           bool                   // ?sort=-field
+	Where          map[string]string      // ?where.<field>= equality filters
+	Range          map[string][2]*float64 // ?min.<field>= / ?max.<field>=
 }
 
 // WriteMeta carries per-write request metadata.

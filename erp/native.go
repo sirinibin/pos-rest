@@ -64,7 +64,7 @@ func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	if len(q.IDs) > 0 {
 		f["_id"] = bson.M{"$in": q.IDs}
 	}
-	if len(q.Where) > 0 {
+	if len(q.Where) > 0 || len(q.Range) > 0 {
 		return nil, 0, errBadRequest("This list cannot be filtered.", map[string]string{"where": "not supported for this resource"})
 	}
 	if to := q.toIn(c.storeLoc(storeHex)); to != nil && b.dateField != "" {

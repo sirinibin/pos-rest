@@ -256,6 +256,7 @@ type legacyBackend struct {
 	searchSort    string                        // sort key for ?q= results (e.g. name), "" = sortKey
 	listSort      map[string]string             // ?sort= contract field -> legacy key (listquery.go)
 	listWhere     map[string]whereKey           // ?where.<field>= contract field -> legacy key
+	listRange     map[string]string             // ?min.<field>= / ?max.<field>= numeric contract field -> legacy key
 	mainOrg       bool                          // org-scoped resource in the main DB (stores, users)
 	access        func(c *Ctx) bson.M           // extra visibility filter (mainOrg)
 	hybrid        map[string]bool               // keys mapped to legacy AND preserved in erp.x (nested objects partially mapped)

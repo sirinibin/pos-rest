@@ -1,7 +1,9 @@
 package erp
 
 import (
+	"math"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +18,9 @@ import (
 // sort — a contract field, "-" for newest/largest first. Only the fields a resource
 //        lists in listSort can be sorted on; ties are broken by id in the same order.
 // where.<field> — equality on a contract field the resource lists in listWhere.
+// min.<field> / max.<field> — numeric range on a field the resource lists in listRange.
+//
+// Legacy keys may hold "{store}", replaced by the store id (per-store product fields).
 //
 // The web app uses these so a list screen asks for one page of rows instead of
 // downloading every record.  An unsupported sort or where field is a 400, never
@@ -27,7 +32,13 @@ const maxWhereLen = 100
 type whereKey struct {
 	key string
 	oid bool // value is a record id (stored as ObjectID)
+	// fn builds the filter itself (derived fields such as "over credit limit");
+	// false = the value is not one this filter accepts (400).
+	fn func(val string) (bson.M, bool)
 }
+
+// storeKey fills the {store} placeholder of a legacy key.
+func storeKey(key, storeHex string) string { return strings.ReplaceAll(key, "{store}", storeHex) }
 
 // parseListExtras reads ?to=, ?sort= and ?where.<field>= into q.
 func parseListExtras(v url.Values, res *Resource, q *ListQuery) error {
@@ -46,7 +57,29 @@ func parseListExtras(v url.Values, res *Resource, q *ListQuery) error {
 		}
 	}
 	for k, vals := range v {
-		if !strings.HasPrefix(k, "where.") || len(vals) == 0 {
+		if len(vals) == 0 {
+			continue
+		}
+		for _, pre := range []string{"min.", "max."} {
+			if !strings.HasPrefix(k, pre) || strings.TrimSpace(vals[0]) == "" {
+				continue
+			}
+			n, err := strconv.ParseFloat(strings.TrimSpace(vals[0]), 64)
+			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+				return errBadRequest("Invalid number.", map[string]string{k: "must be a number"})
+			}
+			if q.Range == nil {
+				q.Range = map[string][2]*float64{}
+			}
+			r := q.Range[strings.TrimPrefix(k, pre)]
+			if pre == "min." {
+				r[0] = &n
+			} else {
+				r[1] = &n
+			}
+			q.Range[strings.TrimPrefix(k, pre)] = r
+		}
+		if !strings.HasPrefix(k, "where.") {
 			continue
 		}
 		f := strings.TrimPrefix(k, "where.")
@@ -96,15 +129,39 @@ func (b *legacyBackend) listExtras(c *Ctx, storeHex string, q ListQuery) (bson.M
 			return nil, nil, errBadRequest("This list cannot be filtered by "+field+".",
 				map[string]string{"where." + field: "not supported for this resource"})
 		}
+		if wk.fn != nil {
+			m, ok := wk.fn(val)
+			if !ok {
+				return nil, nil, errBadRequest("Invalid filter value.", map[string]string{"where." + field: "unsupported value"})
+			}
+			f = andFilter(f, m)
+			continue
+		}
+		key := storeKey(wk.key, storeHex)
 		if wk.oid {
 			in := bson.A{val}
 			if oid, ok := oidOf(val); ok {
 				in = append(bson.A{oid}, in...)
 			}
-			f = andFilter(f, bson.M{wk.key: bson.M{"$in": in}})
+			f = andFilter(f, bson.M{key: bson.M{"$in": in}})
 		} else {
-			f = andFilter(f, bson.M{wk.key: val})
+			f = andFilter(f, bson.M{key: val})
 		}
+	}
+	for field, r := range q.Range {
+		key, ok := b.listRange[field]
+		if !ok {
+			return nil, nil, errBadRequest("This list cannot be filtered by "+field+".",
+				map[string]string{"min." + field: "not supported for this resource"})
+		}
+		cond := bson.M{}
+		if r[0] != nil {
+			cond["$gte"] = *r[0]
+		}
+		if r[1] != nil {
+			cond["$lte"] = *r[1]
+		}
+		f = andFilter(f, bson.M{storeKey(key, storeHex): cond})
 	}
 	if q.Sort == "" {
 		return f, nil, nil
@@ -124,7 +181,7 @@ func (b *legacyBackend) listExtras(c *Ctx, storeHex string, q ListQuery) (bson.M
 	}
 	sortD := bson.D{}
 	if key != "_id" {
-		sortD = append(sortD, bson.E{Key: key, Value: dir})
+		sortD = append(sortD, bson.E{Key: storeKey(key, storeHex), Value: dir})
 	}
 	return f, append(sortD, bson.E{Key: "_id", Value: dir}), nil
 }
@@ -163,4 +220,33 @@ func docSearchKeys(party string) []string {
 		return []string{"code", "vendor_name", "vendor_name_arabic", "vendor_invoice_no", "phone", "vat_no"}
 	}
 	return []string{"code"}
+}
+
+// Customers and vendors: sort, filters and ranges of the party lists.
+var partyListSort = map[string]string{"code": "code", "nameEn": "name", "nameAr": "name_in_arabic", "phone": "phone",
+	"vatNo": "vat_no", "creditLimit": "credit_limit", "creditBalance": "credit_balance"}
+
+var partyListRange = map[string]string{"creditLimit": "credit_limit", "creditBalance": "credit_balance"}
+
+// overLimit: a credit limit is set and the balance is above it.
+func partyOverLimit(val string) (bson.M, bool) {
+	switch val {
+	case "true", "1":
+		return bson.M{"credit_limit": bson.M{"$gt": 0}, "$expr": bson.M{"$gt": bson.A{"$credit_balance", "$credit_limit"}}}, true
+	case "false", "0":
+		return bson.M{"$or": bson.A{bson.M{"credit_limit": bson.M{"$not": bson.M{"$gt": 0}}},
+			bson.M{"$expr": bson.M{"$lte": bson.A{"$credit_balance", "$credit_limit"}}}}}, true
+	}
+	return nil, false
+}
+
+// employee status lives in is_active (missing = active).
+func employeeStatus(val string) (bson.M, bool) {
+	switch val {
+	case "active":
+		return bson.M{"is_active": bson.M{"$ne": false}}, true
+	case "inactive":
+		return bson.M{"is_active": false}, true
+	}
+	return nil, false
 }

@@ -36,6 +36,8 @@ func TestParseListExtras(t *testing.T) {
 			where: map[string]string{"customerId": "abc", "paymentStatus": "paid"}},
 		{name: "empty where value skipped", res: dated, qs: "where.customerId=&where.=x"},
 		{name: "where value too long", res: dated, qs: "where.customerId=" + strings.Repeat("a", 101), errKey: "where.customerId"},
+		{name: "min not a number", res: undated, qs: "min.creditLimit=abc", errKey: "min.creditLimit"},
+		{name: "max infinite", res: undated, qs: "max.creditLimit=Inf", errKey: "max.creditLimit"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -229,5 +231,134 @@ func TestAPI_ListPaging(t *testing.T) {
 		if r := call(t, "GET", bad.path, tok, nil); r.Code != 400 || r.errField(bad.field) == "" {
 			t.Errorf("%s: %d %s", bad.path, r.Code, r.Raw)
 		}
+	}
+}
+
+func TestParseListRange(t *testing.T) {
+	res := &Resource{Name: "customers", Path: "customers", Scope: "store"}
+	q, err := parseListQuery(httptest.NewRequest("GET", "/v1/erp/customers?min.creditLimit=100&max.creditLimit=500.5&max.creditBalance=0&min.x=", nil), res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := q.Range["creditLimit"]
+	if cl[0] == nil || *cl[0] != 100 || cl[1] == nil || *cl[1] != 500.5 {
+		t.Fatalf("creditLimit range: %v", q.Range)
+	}
+	if cb := q.Range["creditBalance"]; cb[0] != nil || cb[1] == nil || *cb[1] != 0 {
+		t.Fatalf("creditBalance max only: %v", q.Range)
+	}
+	if _, ok := q.Range["x"]; ok {
+		t.Fatal("empty value is no filter")
+	}
+}
+
+func TestMasterListExtras(t *testing.T) {
+	initResources()
+	be := func(name string) *legacyBackend { return resourceByName(name).Backend.(*legacyBackend) }
+	lo, hi := 100.0, 500.0
+	// customers: sort by name, over the credit limit, credit limit range
+	f, s, err := be("customers").listExtras(nil, "st", ListQuery{Sort: "nameEn", Where: map[string]string{"overLimit": "true"},
+		Range: map[string][2]*float64{"creditLimit": {&lo, &hi}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s[0].Key != "name" || s[0].Value != 1 {
+		t.Fatalf("sort: %v", s)
+	}
+	parts := f["$and"].(bson.A)
+	if len(parts) != 2 {
+		t.Fatalf("filter: %v", f)
+	}
+	if _, ok := parts[0].(bson.M)["$expr"]; !ok {
+		t.Fatalf("over limit compares balance and limit: %v", parts[0])
+	}
+	if r := parts[1].(bson.M)["credit_limit"].(bson.M); r["$gte"] != lo || r["$lte"] != hi {
+		t.Fatalf("range: %v", r)
+	}
+	if _, _, err := be("customers").listExtras(nil, "st", ListQuery{Where: map[string]string{"overLimit": "maybe"}}); err == nil {
+		t.Fatal("overLimit takes true or false")
+	}
+	if _, _, err := be("customers").listExtras(nil, "st", ListQuery{Range: map[string][2]*float64{"salary": {&lo, nil}}}); err == nil {
+		t.Fatal("unknown range field")
+	}
+	// products: per-store fields use the store id
+	_, s, err = be("products").listExtras(nil, "abc123", ListQuery{Sort: "stock", Desc: true})
+	if err != nil || s[0].Key != "product_stores.abc123.stock" || s[0].Value != -1 {
+		t.Fatalf("product stock sort: %v %v", s, err)
+	}
+	f, _, err = be("products").listExtras(nil, "abc123", ListQuery{Where: map[string]string{"isService": "false"}})
+	if err != nil || !reflect.DeepEqual(f, bson.M{"is_service": bson.M{"$ne": true}}) {
+		t.Fatalf("products, goods only: %v %v", f, err)
+	}
+	// employees: status from is_active
+	f, _, err = be("employees").listExtras(nil, "st", ListQuery{Where: map[string]string{"status": "inactive"}})
+	if err != nil || !reflect.DeepEqual(f, bson.M{"is_active": false}) {
+		t.Fatalf("inactive employees: %v %v", f, err)
+	}
+	// vehicles by make
+	f, _, err = be("vehicles").listExtras(nil, "st", ListQuery{Where: map[string]string{"make": "Toyota"}})
+	if err != nil || !reflect.DeepEqual(f, bson.M{"brand": "Toyota"}) {
+		t.Fatalf("vehicles by make: %v %v", f, err)
+	}
+}
+
+// DB-backed: master lists paged, sorted and filtered by the server.
+func TestAPI_MasterListPaging(t *testing.T) {
+	requireDB(t)
+	tok := login(t, fx.AdminEmail)
+	st := "&storeId=" + storeA()
+	get := func(path string) []M {
+		r := call(t, "GET", path+st, tok, nil)
+		if r.Code != 200 {
+			t.Fatalf("%s: %d %s", path, r.Code, r.Raw)
+		}
+		out := []M{}
+		for _, row := range r.data() {
+			out = append(out, row.(M))
+		}
+		return out
+	}
+	names := func(rows []M) []string {
+		out := []string{}
+		for _, r := range rows {
+			out = append(out, str(r["nameEn"]))
+		}
+		return out
+	}
+	asc := names(get("/customers?sort=nameEn&limit=500"))
+	desc := names(get("/customers?sort=-nameEn&limit=500"))
+	if len(asc) < 2 || asc[0] != desc[len(desc)-1] {
+		t.Fatalf("name order: %v / %v", asc, desc)
+	}
+	for i := 1; i < len(asc); i++ {
+		if asc[i-1] > asc[i] {
+			t.Fatalf("not sorted by name: %v", asc)
+		}
+	}
+	for _, r := range get("/customers?min.creditLimit=1&limit=500") {
+		if num(r["creditLimit"]) < 1 {
+			t.Fatalf("credit limit below min: %v", r["creditLimit"])
+		}
+	}
+	for _, r := range get("/customers?where.overLimit=true&limit=500") {
+		if !(num(r["creditLimit"]) > 0 && num(r["creditBalance"]) > num(r["creditLimit"])) {
+			t.Fatalf("not over limit: %v", r)
+		}
+	}
+	for _, r := range get("/products?where.isService=false&sort=-stock&limit=500") {
+		if r["isService"] == true {
+			t.Fatalf("service in goods-only list: %v", r["id"])
+		}
+	}
+	for _, r := range get("/employees?where.status=active&limit=500") {
+		if str(r["status"]) != "active" {
+			t.Fatalf("inactive employee listed: %v", r["id"])
+		}
+	}
+	if r := call(t, "GET", "/customers?where.overLimit=maybe"+st, tok, nil); r.Code != 400 || r.errField("where.overLimit") == "" {
+		t.Fatalf("bad overLimit: %d %s", r.Code, r.Raw)
+	}
+	if r := call(t, "GET", "/customers?min.salary=1"+st, tok, nil); r.Code != 400 {
+		t.Fatalf("unknown range: %d %s", r.Code, r.Raw)
 	}
 }
