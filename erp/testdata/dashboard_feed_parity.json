@@ -1,5 +1,5 @@
 {
- "about": "Contract-shaped records and the dashboard feed they reduce to. Shared by starterp-frontend-v1 tests/fixtures/dashboard-feed-parity.json and pos-rest erp/testdata/dashboard_feed_parity.json (the JS and Go builders must give the same feed). Regenerate both together.",
+ "about": "Contract-shaped records and the dashboard feed they reduce to. Shared with pos-rest erp/testdata/dashboard_feed_parity.json (the Go builder must give the same feed). Regenerate both together.",
  "from": "2025-01-01",
  "records": {
   "sales": [
@@ -2121,6 +2121,24 @@
     "items": []
    },
    {
+    "id": "edge-sameday",
+    "code": "E6",
+    "date": "2026-03-01T09:00",
+    "items": [
+     {
+      "productId": "p",
+      "qty": "2",
+      "unitPrice": "10.5",
+      "purchasePrice": 4
+     },
+     {
+      "productId": "q",
+      "qty": 1,
+      "unitPrice": 7
+     }
+    ]
+   },
+   {
     "id": "edge-deleted",
     "code": "E3",
     "date": "2026-03-01T10:00",
@@ -2785,6 +2803,20 @@
      }
     ],
     "code": "OLY-SRT-2026-000006"
+   },
+   {
+    "id": "edge-ret",
+    "code": "R1",
+    "date": "2026-03-01T15:00",
+    "orderId": "edge-auto",
+    "items": [
+     {
+      "productId": "p",
+      "qty": 1,
+      "unitPrice": 33.33,
+      "unitDiscount": 0.01
+     }
+    ]
    }
   ],
   "nonvatReturns": [
@@ -7726,36 +7758,6 @@
       "d": "2026-04-22"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p2",
-      "qty": 9,
-      "unitPrice": 189,
-      "unitDiscount": 0,
-      "purchasePrice": 132
-     },
-     {
-      "productId": "st_olaya_p29",
-      "qty": 3,
-      "unitPrice": 24,
-      "unitDiscount": 0,
-      "purchasePrice": 15
-     },
-     {
-      "productId": "st_olaya_p24",
-      "qty": 11,
-      "unitPrice": 540,
-      "unitDiscount": 0,
-      "purchasePrice": 385
-     },
-     {
-      "productId": "st_olaya_p10",
-      "qty": 12,
-      "unitPrice": 58,
-      "unitDiscount": 0,
-      "purchasePrice": 34
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -7781,29 +7783,6 @@
       "amount": 2967,
       "method": "bank_transfer",
       "d": "2026-04-15"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p28",
-      "qty": 10,
-      "unitPrice": 29,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p13",
-      "qty": 4,
-      "unitPrice": 440,
-      "unitDiscount": 0,
-      "purchasePrice": 290
-     },
-     {
-      "productId": "st_olaya_p12",
-      "qty": 2,
-      "unitPrice": 265,
-      "unitDiscount": 0,
-      "purchasePrice": 175
      }
     ],
     "zatca": "cleared"
@@ -7833,29 +7812,6 @@
       "d": "2026-04-20"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p28",
-      "qty": 3,
-      "unitPrice": 29,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p28",
-      "qty": 5,
-      "unitPrice": 29,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p24",
-      "qty": 12,
-      "unitPrice": 540,
-      "unitDiscount": 0,
-      "purchasePrice": 385
-     }
-    ],
     "zatca": "cleared"
    },
    {
@@ -7881,36 +7837,6 @@
       "amount": 16156.35,
       "method": "bank_card",
       "d": "2026-07-21"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p22",
-      "qty": 10,
-      "unitPrice": 860,
-      "unitDiscount": 0,
-      "purchasePrice": 610
-     },
-     {
-      "productId": "st_olaya_p7",
-      "qty": 7,
-      "unitPrice": 32,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p6",
-      "qty": 11,
-      "unitPrice": 85,
-      "unitDiscount": 0,
-      "purchasePrice": 52
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 6,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
      }
     ],
     "zatca": "cleared"
@@ -7940,43 +7866,6 @@
       "d": "2026-08-02"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p17",
-      "qty": 11,
-      "unitPrice": 120,
-      "unitDiscount": 0,
-      "purchasePrice": 78
-     },
-     {
-      "productId": "st_olaya_p12",
-      "qty": 9,
-      "unitPrice": 265,
-      "unitDiscount": 0,
-      "purchasePrice": 175
-     },
-     {
-      "productId": "st_olaya_p31",
-      "qty": 8,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     },
-     {
-      "productId": "st_olaya_p4",
-      "qty": 1,
-      "unitPrice": 24,
-      "unitDiscount": 0,
-      "purchasePrice": 14
-     },
-     {
-      "productId": "st_olaya_p24",
-      "qty": 3,
-      "unitPrice": 540,
-      "unitDiscount": 0,
-      "purchasePrice": 385
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8002,15 +7891,6 @@
       "amount": 8297.25,
       "method": "bank_transfer",
       "d": "2026-05-09"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p16",
-      "qty": 12,
-      "unitPrice": 595,
-      "unitDiscount": 0,
-      "purchasePrice": 430
      }
     ],
     "zatca": "cleared"
@@ -8040,15 +7920,6 @@
       "d": "2026-02-04"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p34",
-      "qty": 9,
-      "unitPrice": 65,
-      "unitDiscount": 0,
-      "purchasePrice": 38
-     }
-    ],
     "zatca": "cleared"
    },
    {
@@ -8074,15 +7945,6 @@
       "amount": 10879,
       "method": "cash",
       "d": "2025-10-11"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p22",
-      "qty": 11,
-      "unitPrice": 860,
-      "unitDiscount": 0,
-      "purchasePrice": 610
      }
     ],
     "zatca": "cleared"
@@ -8112,36 +7974,6 @@
       "d": "2026-02-22"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p5",
-      "qty": 6,
-      "unitPrice": 45,
-      "unitDiscount": 0,
-      "purchasePrice": 28
-     },
-     {
-      "productId": "st_olaya_p5",
-      "qty": 12,
-      "unitPrice": 45,
-      "unitDiscount": 0,
-      "purchasePrice": 28
-     },
-     {
-      "productId": "st_olaya_p19",
-      "qty": 2,
-      "unitPrice": 35,
-      "unitDiscount": 0,
-      "purchasePrice": 21
-     },
-     {
-      "productId": "st_olaya_p22",
-      "qty": 2,
-      "unitPrice": 860,
-      "unitDiscount": 0,
-      "purchasePrice": 610
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8167,43 +7999,6 @@
       "amount": 10888.2,
       "method": "credit_card",
       "d": "2026-01-03"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p21",
-      "qty": 5,
-      "unitPrice": 215,
-      "unitDiscount": 0,
-      "purchasePrice": 148
-     },
-     {
-      "productId": "st_olaya_p24",
-      "qty": 11,
-      "unitPrice": 540,
-      "unitDiscount": 27,
-      "purchasePrice": 385
-     },
-     {
-      "productId": "st_olaya_p3",
-      "qty": 4,
-      "unitPrice": 35,
-      "unitDiscount": 0,
-      "purchasePrice": 22
-     },
-     {
-      "productId": "st_olaya_p0",
-      "qty": 10,
-      "unitPrice": 145,
-      "unitDiscount": 0,
-      "purchasePrice": 98
-     },
-     {
-      "productId": "st_olaya_p0",
-      "qty": 8,
-      "unitPrice": 145,
-      "unitDiscount": 0,
-      "purchasePrice": 98
      }
     ],
     "zatca": "reported"
@@ -8233,15 +8028,6 @@
       "d": "2026-01-03"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p2",
-      "qty": 4,
-      "unitPrice": 189,
-      "unitDiscount": 0,
-      "purchasePrice": 132
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8267,29 +8053,6 @@
       "amount": 8947,
       "method": "credit_card",
       "d": "2026-09-23"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p13",
-      "qty": 6,
-      "unitPrice": 440,
-      "unitDiscount": 0,
-      "purchasePrice": 290
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 6,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p6",
-      "qty": 10,
-      "unitPrice": 85,
-      "unitDiscount": 0,
-      "purchasePrice": 52
      }
     ],
     "zatca": "reported"
@@ -8319,36 +8082,6 @@
       "d": "2026-01-22"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p23",
-      "qty": 1,
-      "unitPrice": 595,
-      "unitDiscount": 0,
-      "purchasePrice": 420
-     },
-     {
-      "productId": "st_olaya_p23",
-      "qty": 10,
-      "unitPrice": 595,
-      "unitDiscount": 29.75,
-      "purchasePrice": 420
-     },
-     {
-      "productId": "st_olaya_p20",
-      "qty": 4,
-      "unitPrice": 455,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 6,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     }
-    ],
     "zatca": "cleared"
    },
    {
@@ -8370,43 +8103,6 @@
     "cost": 4433,
     "qty": 29,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p31",
-      "qty": 3,
-      "unitPrice": 375,
-      "unitDiscount": 18.75,
-      "purchasePrice": 265
-     },
-     {
-      "productId": "st_olaya_p13",
-      "qty": 11,
-      "unitPrice": 440,
-      "unitDiscount": 0,
-      "purchasePrice": 290
-     },
-     {
-      "productId": "st_olaya_p26",
-      "qty": 4,
-      "unitPrice": 64,
-      "unitDiscount": 0,
-      "purchasePrice": 42
-     },
-     {
-      "productId": "st_olaya_p5",
-      "qty": 10,
-      "unitPrice": 45,
-      "unitDiscount": 0,
-      "purchasePrice": 28
-     },
-     {
-      "productId": "st_olaya_p40",
-      "qty": 1,
-      "unitPrice": 75,
-      "unitDiscount": 0,
-      "purchasePrice": 0
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8432,43 +8128,6 @@
       "amount": 9020.37,
       "method": "bank_card",
       "d": "2026-06-24"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p25",
-      "qty": 11,
-      "unitPrice": 168,
-      "unitDiscount": 0,
-      "purchasePrice": 118
-     },
-     {
-      "productId": "st_olaya_p12",
-      "qty": 6,
-      "unitPrice": 265,
-      "unitDiscount": 0,
-      "purchasePrice": 175
-     },
-     {
-      "productId": "st_olaya_p26",
-      "qty": 1,
-      "unitPrice": 64,
-      "unitDiscount": 3.2,
-      "purchasePrice": 42
-     },
-     {
-      "productId": "st_olaya_p31",
-      "qty": 10,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     },
-     {
-      "productId": "st_olaya_p16",
-      "qty": 1,
-      "unitPrice": 595,
-      "unitDiscount": 0,
-      "purchasePrice": 430
      }
     ],
     "zatca": "cleared"
@@ -8498,36 +8157,6 @@
       "d": "2025-10-12"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p32",
-      "qty": 4,
-      "unitPrice": 715,
-      "unitDiscount": 35.75,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p31",
-      "qty": 4,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     },
-     {
-      "productId": "st_olaya_p25",
-      "qty": 6,
-      "unitPrice": 168,
-      "unitDiscount": 8.4,
-      "purchasePrice": 118
-     },
-     {
-      "productId": "st_olaya_p28",
-      "qty": 8,
-      "unitPrice": 29,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     }
-    ],
     "zatca": "cleared"
    },
    {
@@ -8553,15 +8182,6 @@
       "amount": 665.28,
       "method": "bank_card",
       "d": "2026-01-16"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p12",
-      "qty": 2,
-      "unitPrice": 265,
-      "unitDiscount": 13.25,
-      "purchasePrice": 175
      }
     ],
     "zatca": "reported"
@@ -8591,22 +8211,6 @@
       "d": "2026-07-04"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p21",
-      "qty": 2,
-      "unitPrice": 215,
-      "unitDiscount": 0,
-      "purchasePrice": 148
-     },
-     {
-      "productId": "st_olaya_p26",
-      "qty": 5,
-      "unitPrice": 64,
-      "unitDiscount": 0,
-      "purchasePrice": 42
-     }
-    ],
     "zatca": "cleared"
    },
    {
@@ -8632,15 +8236,6 @@
       "amount": 1719.25,
       "method": "bank_card",
       "d": "2026-04-09"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p32",
-      "qty": 2,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
      }
     ],
     "zatca": "cleared"
@@ -8670,43 +8265,6 @@
       "d": "2026-07-23"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p8",
-      "qty": 11,
-      "unitPrice": 48,
-      "unitDiscount": 0,
-      "purchasePrice": 29
-     },
-     {
-      "productId": "st_olaya_p26",
-      "qty": 8,
-      "unitPrice": 64,
-      "unitDiscount": 0,
-      "purchasePrice": 42
-     },
-     {
-      "productId": "st_olaya_p25",
-      "qty": 1,
-      "unitPrice": 168,
-      "unitDiscount": 0,
-      "purchasePrice": 118
-     },
-     {
-      "productId": "st_olaya_p20",
-      "qty": 11,
-      "unitPrice": 455,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     },
-     {
-      "productId": "st_olaya_p3",
-      "qty": 1,
-      "unitPrice": 35,
-      "unitDiscount": 0,
-      "purchasePrice": 22
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8732,29 +8290,6 @@
       "amount": 7294.45,
       "method": "bank_card",
       "d": "2025-12-19"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p29",
-      "qty": 7,
-      "unitPrice": 24,
-      "unitDiscount": 0,
-      "purchasePrice": 15
-     },
-     {
-      "productId": "st_olaya_p20",
-      "qty": 1,
-      "unitPrice": 455,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 8,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
      }
     ],
     "zatca": "reported"
@@ -8784,36 +8319,6 @@
       "d": "2026-06-07"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p10",
-      "qty": 3,
-      "unitPrice": 58,
-      "unitDiscount": 0,
-      "purchasePrice": 34
-     },
-     {
-      "productId": "st_olaya_p26",
-      "qty": 12,
-      "unitPrice": 64,
-      "unitDiscount": 0,
-      "purchasePrice": 42
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 12,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p34",
-      "qty": 9,
-      "unitPrice": 65,
-      "unitDiscount": 0,
-      "purchasePrice": 38
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8835,29 +8340,6 @@
     "cost": 986,
     "qty": 14,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p24",
-      "qty": 2,
-      "unitPrice": 540,
-      "unitDiscount": 0,
-      "purchasePrice": 385
-     },
-     {
-      "productId": "st_olaya_p28",
-      "qty": 11,
-      "unitPrice": 29,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p7",
-      "qty": 1,
-      "unitPrice": 32,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8883,36 +8365,6 @@
       "amount": 4749.73,
       "method": "credit_card",
       "d": "2025-11-27"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p11",
-      "qty": 1,
-      "unitPrice": 320,
-      "unitDiscount": 0,
-      "purchasePrice": 210
-     },
-     {
-      "productId": "st_olaya_p10",
-      "qty": 2,
-      "unitPrice": 58,
-      "unitDiscount": 2.9,
-      "purchasePrice": 34
-     },
-     {
-      "productId": "st_olaya_p0",
-      "qty": 4,
-      "unitPrice": 145,
-      "unitDiscount": 0,
-      "purchasePrice": 98
-     },
-     {
-      "productId": "st_olaya_p18",
-      "qty": 4,
-      "unitPrice": 780,
-      "unitDiscount": 0,
-      "purchasePrice": 520
      }
     ],
     "zatca": "reported"
@@ -8942,29 +8394,6 @@
       "d": "2026-04-20"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p24",
-      "qty": 4,
-      "unitPrice": 540,
-      "unitDiscount": 0,
-      "purchasePrice": 385
-     },
-     {
-      "productId": "st_olaya_p28",
-      "qty": 9,
-      "unitPrice": 29,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p34",
-      "qty": 5,
-      "unitPrice": 65,
-      "unitDiscount": 0,
-      "purchasePrice": 38
-     }
-    ],
     "zatca": "reported"
    },
    {
@@ -8991,16 +8420,26 @@
       "d": "2026-03-01"
      }
     ],
-    "items": [
-     {
-      "productId": "p",
-      "qty": 3,
-      "unitPrice": 33.33,
-      "unitDiscount": 0.01,
-      "purchasePrice": 20
-     }
-    ],
     "zatca": "failed"
+   },
+   {
+    "id": "edge-sameday",
+    "code": "E6",
+    "date": "2026-03-01T09:00",
+    "hour": 9,
+    "dow": 0,
+    "nameEn": "",
+    "nameAr": "",
+    "taxable": 28,
+    "vat": 4.2,
+    "net": 32.2,
+    "paid": 0,
+    "balance": 32.2,
+    "status": "not_paid",
+    "profit": 20,
+    "cost": 8,
+    "qty": 3,
+    "payments": []
    },
    {
     "id": "edge-vendorname",
@@ -9024,15 +8463,6 @@
       "amount": 10,
       "method": "bank_transfer",
       "d": "2026-03-05"
-     }
-    ],
-    "items": [
-     {
-      "productId": "p",
-      "qty": 1,
-      "unitPrice": 10,
-      "unitDiscount": 0,
-      "purchasePrice": 0
      }
     ]
    }
@@ -9062,15 +8492,6 @@
       "method": "cash",
       "d": "2026-07-06"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p31",
-      "qty": 4,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     }
     ]
    },
    {
@@ -9096,29 +8517,6 @@
       "amount": 703,
       "method": "cash",
       "d": "2026-04-23"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p31",
-      "qty": 1,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     },
-     {
-      "productId": "st_olaya_p11",
-      "qty": 1,
-      "unitPrice": 320,
-      "unitDiscount": 16,
-      "purchasePrice": 210
-     },
-     {
-      "productId": "st_olaya_p4",
-      "qty": 1,
-      "unitPrice": 24,
-      "unitDiscount": 0,
-      "purchasePrice": 14
      }
     ]
    },
@@ -9146,29 +8544,6 @@
       "method": "cash",
       "d": "2026-07-09"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p32",
-      "qty": 4,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p12",
-      "qty": 3,
-      "unitPrice": 265,
-      "unitDiscount": 0,
-      "purchasePrice": 175
-     },
-     {
-      "productId": "st_olaya_p16",
-      "qty": 1,
-      "unitPrice": 595,
-      "unitDiscount": 0,
-      "purchasePrice": 430
-     }
     ]
    },
    {
@@ -9194,29 +8569,6 @@
       "amount": 1451,
       "method": "cash",
       "d": "2026-09-14"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p26",
-      "qty": 4,
-      "unitPrice": 64,
-      "unitDiscount": 0,
-      "purchasePrice": 42
-     },
-     {
-      "productId": "st_olaya_p5",
-      "qty": 3,
-      "unitPrice": 45,
-      "unitDiscount": 0,
-      "purchasePrice": 28
-     },
-     {
-      "productId": "st_olaya_p12",
-      "qty": 4,
-      "unitPrice": 265,
-      "unitDiscount": 0,
-      "purchasePrice": 175
      }
     ]
    },
@@ -9244,22 +8596,6 @@
       "method": "cash",
       "d": "2026-08-02"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p15",
-      "qty": 3,
-      "unitPrice": 410,
-      "unitDiscount": 0,
-      "purchasePrice": 290
-     },
-     {
-      "productId": "st_olaya_p3",
-      "qty": 3,
-      "unitPrice": 35,
-      "unitDiscount": 0,
-      "purchasePrice": 22
-     }
     ]
    },
    {
@@ -9285,29 +8621,6 @@
       "amount": 1092,
       "method": "cash",
       "d": "2026-04-12"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p4",
-      "qty": 2,
-      "unitPrice": 24,
-      "unitDiscount": 0,
-      "purchasePrice": 14
-     },
-     {
-      "productId": "st_olaya_p11",
-      "qty": 3,
-      "unitPrice": 320,
-      "unitDiscount": 0,
-      "purchasePrice": 210
-     },
-     {
-      "productId": "st_olaya_p14",
-      "qty": 3,
-      "unitPrice": 28,
-      "unitDiscount": 0,
-      "purchasePrice": 16
      }
     ]
    }
@@ -9336,15 +8649,6 @@
       "amount": 400.2,
       "method": "bank_transfer",
       "d": "2026-03-07"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p10",
-      "qty": 6,
-      "unitPrice": 58,
-      "unitDiscount": 0,
-      "purchasePrice": 34
      }
     ],
     "zatca": "reported",
@@ -9376,15 +8680,6 @@
       "d": "2025-12-21"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p15",
-      "qty": 5,
-      "unitPrice": 410,
-      "unitDiscount": 0,
-      "purchasePrice": 290
-     }
-    ],
     "zatca": "reported",
     "orderId": "st_olaya_s751",
     "remarks": "Damaged in delivery"
@@ -9412,15 +8707,6 @@
       "amount": 621,
       "method": "cash",
       "d": "2026-02-17"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p24",
-      "qty": 1,
-      "unitPrice": 540,
-      "unitDiscount": 0,
-      "purchasePrice": 385
      }
     ],
     "zatca": "reported",
@@ -9452,15 +8738,6 @@
       "d": "2026-03-04"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p16",
-      "qty": 1,
-      "unitPrice": 595,
-      "unitDiscount": 29.75,
-      "purchasePrice": 430
-     }
-    ],
     "zatca": "reported",
     "orderId": "st_olaya_s381",
     "remarks": "Damaged in delivery"
@@ -9488,15 +8765,6 @@
       "amount": 684.25,
       "method": "cash",
       "d": "2026-08-16"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p16",
-      "qty": 1,
-      "unitPrice": 595,
-      "unitDiscount": 0,
-      "purchasePrice": 430
      }
     ],
     "zatca": "reported",
@@ -9528,18 +8796,29 @@
       "d": "2026-04-23"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p29",
-      "qty": 5,
-      "unitPrice": 24,
-      "unitDiscount": 0,
-      "purchasePrice": 15
-     }
-    ],
     "zatca": "reported",
     "orderId": "st_olaya_s101",
     "remarks": "Wrong part number"
+   },
+   {
+    "id": "edge-ret",
+    "code": "R1",
+    "date": "2026-03-01T15:00",
+    "hour": 15,
+    "dow": 0,
+    "nameEn": "",
+    "nameAr": "",
+    "taxable": 33.32,
+    "vat": 5,
+    "net": 38.32,
+    "paid": 0,
+    "balance": 38.32,
+    "status": "not_paid",
+    "profit": 33.32,
+    "cost": 0,
+    "qty": 1,
+    "payments": [],
+    "orderId": "edge-auto"
    }
   ],
   "nonvatReturns": [
@@ -9566,15 +8845,6 @@
       "amount": 375,
       "method": "cash",
       "d": "2026-07-08"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p31",
-      "qty": 1,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
      }
     ],
     "orderId": "st_olaya_nv0",
@@ -9605,15 +8875,6 @@
       "d": "2026-04-25"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p31",
-      "qty": 1,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     }
-    ],
     "orderId": "st_olaya_nv1",
     "remarks": "Returned unused"
    },
@@ -9642,15 +8903,6 @@
       "d": "2026-07-11"
      }
     ],
-    "items": [
-     {
-      "productId": "st_olaya_p32",
-      "qty": 1,
-      "unitPrice": 715,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     }
-    ],
     "orderId": "st_olaya_nv2",
     "remarks": "Returned unused"
    },
@@ -9677,15 +8929,6 @@
       "amount": 64,
       "method": "cash",
       "d": "2026-09-16"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p26",
-      "qty": 1,
-      "unitPrice": 64,
-      "unitDiscount": 0,
-      "purchasePrice": 42
      }
     ],
     "orderId": "st_olaya_nv3",
@@ -9717,29 +8960,6 @@
       "method": "cash",
       "d": "2026-04-30"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p9",
-      "qty": 68,
-      "unitPrice": 21,
-      "unitDiscount": 0,
-      "purchasePrice": 21
-     },
-     {
-      "productId": "st_olaya_p29",
-      "qty": 19,
-      "unitPrice": 15,
-      "unitDiscount": 0,
-      "purchasePrice": 15
-     },
-     {
-      "productId": "st_olaya_p19",
-      "qty": 17,
-      "unitPrice": 21,
-      "unitDiscount": 0,
-      "purchasePrice": 21
-     }
     ]
    },
    {
@@ -9765,29 +8985,6 @@
       "amount": 8300.7,
       "method": "bank_transfer",
       "d": "2026-01-26"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p28",
-      "qty": 48,
-      "unitPrice": 18,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p0",
-      "qty": 54,
-      "unitPrice": 98,
-      "unitDiscount": 0,
-      "purchasePrice": 98
-     },
-     {
-      "productId": "st_olaya_p28",
-      "qty": 59,
-      "unitPrice": 18,
-      "unitDiscount": 0,
-      "purchasePrice": 18
      }
     ]
    },
@@ -9815,36 +9012,6 @@
       "method": "bank_transfer",
       "d": "2026-08-06"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p26",
-      "qty": 15,
-      "unitPrice": 42,
-      "unitDiscount": 0,
-      "purchasePrice": 42
-     },
-     {
-      "productId": "st_olaya_p11",
-      "qty": 70,
-      "unitPrice": 210,
-      "unitDiscount": 0,
-      "purchasePrice": 210
-     },
-     {
-      "productId": "st_olaya_p23",
-      "qty": 40,
-      "unitPrice": 420,
-      "unitDiscount": 0,
-      "purchasePrice": 420
-     },
-     {
-      "productId": "st_olaya_p20",
-      "qty": 65,
-      "unitPrice": 340,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     }
     ]
    },
    {
@@ -9870,36 +9037,6 @@
       "amount": 47759.5,
       "method": "bank_transfer",
       "d": "2026-03-25"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p5",
-      "qty": 10,
-      "unitPrice": 28,
-      "unitDiscount": 0,
-      "purchasePrice": 28
-     },
-     {
-      "productId": "st_olaya_p22",
-      "qty": 57,
-      "unitPrice": 610,
-      "unitDiscount": 0,
-      "purchasePrice": 610
-     },
-     {
-      "productId": "st_olaya_p3",
-      "qty": 60,
-      "unitPrice": 22,
-      "unitDiscount": 0,
-      "purchasePrice": 22
-     },
-     {
-      "productId": "st_olaya_p16",
-      "qty": 12,
-      "unitPrice": 430,
-      "unitDiscount": 0,
-      "purchasePrice": 430
      }
     ]
    },
@@ -9927,29 +9064,6 @@
       "method": "bank_transfer",
       "d": "2026-03-16"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p14",
-      "qty": 8,
-      "unitPrice": 16,
-      "unitDiscount": 0,
-      "purchasePrice": 16
-     },
-     {
-      "productId": "st_olaya_p5",
-      "qty": 36,
-      "unitPrice": 28,
-      "unitDiscount": 0,
-      "purchasePrice": 28
-     },
-     {
-      "productId": "st_olaya_p27",
-      "qty": 38,
-      "unitPrice": 155,
-      "unitDiscount": 0,
-      "purchasePrice": 155
-     }
     ]
    },
    {
@@ -9975,50 +9089,6 @@
       "amount": 94432.25,
       "method": "bank_transfer",
       "d": "2026-07-27"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p9",
-      "qty": 71,
-      "unitPrice": 21,
-      "unitDiscount": 0,
-      "purchasePrice": 21
-     },
-     {
-      "productId": "st_olaya_p21",
-      "qty": 49,
-      "unitPrice": 148,
-      "unitDiscount": 0,
-      "purchasePrice": 148
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 45,
-      "unitPrice": 520,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p18",
-      "qty": 26,
-      "unitPrice": 520,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 67,
-      "unitPrice": 520,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p6",
-      "qty": 31,
-      "unitPrice": 52,
-      "unitDiscount": 0,
-      "purchasePrice": 52
      }
     ]
    },
@@ -10046,29 +9116,6 @@
       "method": "cash",
       "d": "2026-02-22"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p24",
-      "qty": 41,
-      "unitPrice": 385,
-      "unitDiscount": 0,
-      "purchasePrice": 385
-     },
-     {
-      "productId": "st_olaya_p32",
-      "qty": 47,
-      "unitPrice": 520,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p29",
-      "qty": 42,
-      "unitPrice": 15,
-      "unitDiscount": 0,
-      "purchasePrice": 15
-     }
     ]
    },
    {
@@ -10094,29 +9141,6 @@
       "amount": 20545.9,
       "method": "bank_transfer",
       "d": "2025-12-07"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p20",
-      "qty": 25,
-      "unitPrice": 340,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     },
-     {
-      "productId": "st_olaya_p9",
-      "qty": 46,
-      "unitPrice": 21,
-      "unitDiscount": 0,
-      "purchasePrice": 21
-     },
-     {
-      "productId": "st_olaya_p23",
-      "qty": 20,
-      "unitPrice": 420,
-      "unitDiscount": 0,
-      "purchasePrice": 420
      }
     ]
    }
@@ -10146,15 +9170,6 @@
       "method": "vendor_account",
       "d": "2025-10-30"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p13",
-      "qty": 17,
-      "unitPrice": 290,
-      "unitDiscount": 0,
-      "purchasePrice": 290
-     }
     ]
    },
    {
@@ -10180,15 +9195,6 @@
       "amount": 2334.5,
       "method": "bank_transfer",
       "d": "2026-02-19"
-     }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p13",
-      "qty": 7,
-      "unitPrice": 290,
-      "unitDiscount": 0,
-      "purchasePrice": 290
      }
     ]
    },
@@ -10216,15 +9222,6 @@
       "method": "vendor_account",
       "d": "2026-07-08"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p11",
-      "qty": 5,
-      "unitPrice": 210,
-      "unitDiscount": 0,
-      "purchasePrice": 210
-     }
     ]
    },
    {
@@ -10251,15 +9248,6 @@
       "method": "bank_transfer",
       "d": "2026-04-08"
      }
-    ],
-    "items": [
-     {
-      "productId": "st_olaya_p20",
-      "qty": 16,
-      "unitPrice": 340,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     }
     ]
    }
   ],
@@ -10283,36 +9271,6 @@
     "cost": 7072,
     "qty": 62,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p3",
-      "qty": 16,
-      "unitPrice": 35,
-      "unitDiscount": 1.75,
-      "purchasePrice": 22
-     },
-     {
-      "productId": "st_olaya_p0",
-      "qty": 10,
-      "unitPrice": 145,
-      "unitDiscount": 0,
-      "purchasePrice": 98
-     },
-     {
-      "productId": "st_olaya_p20",
-      "qty": 16,
-      "unitPrice": 455,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     },
-     {
-      "productId": "st_olaya_p29",
-      "qty": 20,
-      "unitPrice": 24,
-      "unitDiscount": 1.2,
-      "purchasePrice": 15
-     }
-    ],
     "zatca": "not_reported",
     "docStatus": "expired"
    },
@@ -10335,22 +9293,6 @@
     "cost": 1428,
     "qty": 27,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p1",
-      "qty": 15,
-      "unitPrice": 125,
-      "unitDiscount": 0,
-      "purchasePrice": 84
-     },
-     {
-      "productId": "st_olaya_p4",
-      "qty": 12,
-      "unitPrice": 24,
-      "unitDiscount": 0,
-      "purchasePrice": 14
-     }
-    ],
     "zatca": "not_reported",
     "docStatus": "accepted",
     "orderIds": [
@@ -10376,43 +9318,6 @@
     "cost": 14140.6,
     "qty": 49,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p31",
-      "qty": 6,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     },
-     {
-      "productId": "st_olaya_p12",
-      "qty": 14,
-      "unitPrice": 265,
-      "unitDiscount": 0,
-      "purchasePrice": 175
-     },
-     {
-      "productId": "st_olaya_p19",
-      "qty": 13,
-      "unitPrice": 35,
-      "unitDiscount": 0,
-      "purchasePrice": 21
-     },
-     {
-      "productId": "st_olaya_p30",
-      "qty": 6,
-      "unitPrice": 7.2,
-      "unitDiscount": 0.36,
-      "purchasePrice": 4.6
-     },
-     {
-      "productId": "st_olaya_p33",
-      "qty": 10,
-      "unitPrice": 1390,
-      "unitDiscount": 0,
-      "purchasePrice": 980
-     }
-    ],
     "zatca": "not_reported",
     "docStatus": "accepted",
     "orderIds": [
@@ -10438,22 +9343,6 @@
     "cost": 5885,
     "qty": 22,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p27",
-      "qty": 19,
-      "unitPrice": 225,
-      "unitDiscount": 0,
-      "purchasePrice": 155
-     },
-     {
-      "productId": "st_olaya_p33",
-      "qty": 3,
-      "unitPrice": 1390,
-      "unitDiscount": 69.5,
-      "purchasePrice": 980
-     }
-    ],
     "zatca": "not_reported",
     "docStatus": "expired"
    },
@@ -10476,50 +9365,6 @@
     "cost": 9589,
     "qty": 37,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p7",
-      "qty": 3,
-      "unitPrice": 32,
-      "unitDiscount": 0,
-      "purchasePrice": 18
-     },
-     {
-      "productId": "st_olaya_p18",
-      "qty": 5,
-      "unitPrice": 780,
-      "unitDiscount": 0,
-      "purchasePrice": 520
-     },
-     {
-      "productId": "st_olaya_p24",
-      "qty": 3,
-      "unitPrice": 540,
-      "unitDiscount": 0,
-      "purchasePrice": 385
-     },
-     {
-      "productId": "st_olaya_p22",
-      "qty": 2,
-      "unitPrice": 860,
-      "unitDiscount": 0,
-      "purchasePrice": 610
-     },
-     {
-      "productId": "st_olaya_p31",
-      "qty": 4,
-      "unitPrice": 375,
-      "unitDiscount": 0,
-      "purchasePrice": 265
-     },
-     {
-      "productId": "st_olaya_p12",
-      "qty": 20,
-      "unitPrice": 265,
-      "unitDiscount": 13.25,
-      "purchasePrice": 175
-     }
-    ],
     "zatca": "not_reported",
     "docStatus": "accepted",
     "orderIds": [
@@ -10545,43 +9390,6 @@
     "cost": 3858,
     "qty": 28,
     "payments": [],
-    "items": [
-     {
-      "productId": "st_olaya_p17",
-      "qty": 3,
-      "unitPrice": 120,
-      "unitDiscount": 0,
-      "purchasePrice": 78
-     },
-     {
-      "productId": "st_olaya_p1",
-      "qty": 1,
-      "unitPrice": 125,
-      "unitDiscount": 6.25,
-      "purchasePrice": 84
-     },
-     {
-      "productId": "st_olaya_p20",
-      "qty": 8,
-      "unitPrice": 455,
-      "unitDiscount": 0,
-      "purchasePrice": 340
-     },
-     {
-      "productId": "st_olaya_p24",
-      "qty": 1,
-      "unitPrice": 540,
-      "unitDiscount": 27,
-      "purchasePrice": 385
-     },
-     {
-      "productId": "st_olaya_p8",
-      "qty": 15,
-      "unitPrice": 48,
-      "unitDiscount": 0,
-      "purchasePrice": 29
-     }
-    ],
     "zatca": "not_reported",
     "docStatus": "accepted",
     "orderIds": [
@@ -11689,6 +10497,1018 @@
     "otherAllowances": 300,
     "openingBalance": 2000,
     "openingBalanceType": "debit"
+   }
+  ],
+  "productDays": [
+   {
+    "d": "2026-04-22",
+    "productId": "st_olaya_p2",
+    "qty": 9,
+    "rev": 1701,
+    "cost": 1188,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-22",
+    "productId": "st_olaya_p29",
+    "qty": 3,
+    "rev": 72,
+    "cost": 45,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-22",
+    "productId": "st_olaya_p24",
+    "qty": 11,
+    "rev": 5940,
+    "cost": 4235,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-22",
+    "productId": "st_olaya_p10",
+    "qty": 12,
+    "rev": 696,
+    "cost": 408,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-15",
+    "productId": "st_olaya_p28",
+    "qty": 10,
+    "rev": 290,
+    "cost": 180,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-15",
+    "productId": "st_olaya_p13",
+    "qty": 4,
+    "rev": 1760,
+    "cost": 1160,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-15",
+    "productId": "st_olaya_p12",
+    "qty": 2,
+    "rev": 530,
+    "cost": 350,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-20",
+    "productId": "st_olaya_p28",
+    "qty": 17,
+    "rev": 493,
+    "cost": 306,
+    "lines": 3,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-20",
+    "productId": "st_olaya_p24",
+    "qty": 16,
+    "rev": 8640,
+    "cost": 6160,
+    "lines": 2,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-21",
+    "productId": "st_olaya_p22",
+    "qty": 10,
+    "rev": 8600,
+    "cost": 6100,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-21",
+    "productId": "st_olaya_p7",
+    "qty": 7,
+    "rev": 224,
+    "cost": 126,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-21",
+    "productId": "st_olaya_p6",
+    "qty": 11,
+    "rev": 935,
+    "cost": 572,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-21",
+    "productId": "st_olaya_p32",
+    "qty": 6,
+    "rev": 4290,
+    "cost": 3120,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-02",
+    "productId": "st_olaya_p17",
+    "qty": 11,
+    "rev": 1320,
+    "cost": 858,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-02",
+    "productId": "st_olaya_p12",
+    "qty": 9,
+    "rev": 2385,
+    "cost": 1575,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-02",
+    "productId": "st_olaya_p31",
+    "qty": 8,
+    "rev": 3000,
+    "cost": 2120,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-02",
+    "productId": "st_olaya_p4",
+    "qty": 1,
+    "rev": 24,
+    "cost": 14,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-02",
+    "productId": "st_olaya_p24",
+    "qty": 3,
+    "rev": 1620,
+    "cost": 1155,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-05-09",
+    "productId": "st_olaya_p16",
+    "qty": 12,
+    "rev": 7140,
+    "cost": 5160,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-02-04",
+    "productId": "st_olaya_p34",
+    "qty": 9,
+    "rev": 585,
+    "cost": 342,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-10-11",
+    "productId": "st_olaya_p22",
+    "qty": 11,
+    "rev": 9460,
+    "cost": 6710,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-02-22",
+    "productId": "st_olaya_p5",
+    "qty": 18,
+    "rev": 810,
+    "cost": 504,
+    "lines": 2,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-02-22",
+    "productId": "st_olaya_p19",
+    "qty": 2,
+    "rev": 70,
+    "cost": 42,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-02-22",
+    "productId": "st_olaya_p22",
+    "qty": 2,
+    "rev": 1720,
+    "cost": 1220,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-03",
+    "productId": "st_olaya_p21",
+    "qty": 5,
+    "rev": 1075,
+    "cost": 740,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-03",
+    "productId": "st_olaya_p24",
+    "qty": 11,
+    "rev": 5643,
+    "cost": 4235,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-03",
+    "productId": "st_olaya_p3",
+    "qty": 4,
+    "rev": 140,
+    "cost": 88,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-03",
+    "productId": "st_olaya_p0",
+    "qty": 18,
+    "rev": 2610,
+    "cost": 1764,
+    "lines": 2,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-03",
+    "productId": "st_olaya_p2",
+    "qty": 4,
+    "rev": 756,
+    "cost": 528,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-23",
+    "productId": "st_olaya_p13",
+    "qty": 6,
+    "rev": 2640,
+    "cost": 1740,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-23",
+    "productId": "st_olaya_p32",
+    "qty": 6,
+    "rev": 4290,
+    "cost": 3120,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-23",
+    "productId": "st_olaya_p6",
+    "qty": 10,
+    "rev": 850,
+    "cost": 520,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-22",
+    "productId": "st_olaya_p23",
+    "qty": 11,
+    "rev": 6247.5,
+    "cost": 4620,
+    "lines": 2,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-22",
+    "productId": "st_olaya_p20",
+    "qty": 4,
+    "rev": 1820,
+    "cost": 1360,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-22",
+    "productId": "st_olaya_p32",
+    "qty": 6,
+    "rev": 4290,
+    "cost": 3120,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-23",
+    "productId": "st_olaya_p31",
+    "qty": 3,
+    "rev": 1068.75,
+    "cost": 795,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-23",
+    "productId": "st_olaya_p13",
+    "qty": 11,
+    "rev": 4840,
+    "cost": 3190,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-23",
+    "productId": "st_olaya_p26",
+    "qty": 4,
+    "rev": 256,
+    "cost": 168,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-23",
+    "productId": "st_olaya_p5",
+    "qty": 10,
+    "rev": 450,
+    "cost": 280,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-23",
+    "productId": "st_olaya_p40",
+    "qty": 1,
+    "rev": 75,
+    "cost": 0,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-24",
+    "productId": "st_olaya_p25",
+    "qty": 11,
+    "rev": 1848,
+    "cost": 1298,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-24",
+    "productId": "st_olaya_p12",
+    "qty": 6,
+    "rev": 1590,
+    "cost": 1050,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-24",
+    "productId": "st_olaya_p26",
+    "qty": 1,
+    "rev": 60.8,
+    "cost": 42,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-24",
+    "productId": "st_olaya_p31",
+    "qty": 10,
+    "rev": 3750,
+    "cost": 2650,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-24",
+    "productId": "st_olaya_p16",
+    "qty": 1,
+    "rev": 595,
+    "cost": 430,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-10-12",
+    "productId": "st_olaya_p32",
+    "qty": 4,
+    "rev": 2717,
+    "cost": 2080,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-10-12",
+    "productId": "st_olaya_p31",
+    "qty": 4,
+    "rev": 1500,
+    "cost": 1060,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-10-12",
+    "productId": "st_olaya_p25",
+    "qty": 6,
+    "rev": 957.5999999999999,
+    "cost": 708,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-10-12",
+    "productId": "st_olaya_p28",
+    "qty": 8,
+    "rev": 232,
+    "cost": 144,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-01-16",
+    "productId": "st_olaya_p12",
+    "qty": 2,
+    "rev": 503.5,
+    "cost": 350,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-04",
+    "productId": "st_olaya_p21",
+    "qty": 2,
+    "rev": 430,
+    "cost": 296,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-04",
+    "productId": "st_olaya_p26",
+    "qty": 5,
+    "rev": 320,
+    "cost": 210,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-09",
+    "productId": "st_olaya_p32",
+    "qty": 2,
+    "rev": 1430,
+    "cost": 1040,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-23",
+    "productId": "st_olaya_p8",
+    "qty": 11,
+    "rev": 528,
+    "cost": 319,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-23",
+    "productId": "st_olaya_p26",
+    "qty": 8,
+    "rev": 512,
+    "cost": 336,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-23",
+    "productId": "st_olaya_p25",
+    "qty": 1,
+    "rev": 168,
+    "cost": 118,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-23",
+    "productId": "st_olaya_p20",
+    "qty": 11,
+    "rev": 5005,
+    "cost": 3740,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-23",
+    "productId": "st_olaya_p3",
+    "qty": 1,
+    "rev": 35,
+    "cost": 22,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-12-19",
+    "productId": "st_olaya_p29",
+    "qty": 7,
+    "rev": 168,
+    "cost": 105,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-12-19",
+    "productId": "st_olaya_p20",
+    "qty": 1,
+    "rev": 455,
+    "cost": 340,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-12-19",
+    "productId": "st_olaya_p32",
+    "qty": 8,
+    "rev": 5720,
+    "cost": 4160,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-07",
+    "productId": "st_olaya_p10",
+    "qty": 3,
+    "rev": 174,
+    "cost": 102,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-07",
+    "productId": "st_olaya_p26",
+    "qty": 12,
+    "rev": 768,
+    "cost": 504,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-07",
+    "productId": "st_olaya_p32",
+    "qty": 12,
+    "rev": 8580,
+    "cost": 6240,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-06-07",
+    "productId": "st_olaya_p34",
+    "qty": 9,
+    "rev": 585,
+    "cost": 342,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-24",
+    "productId": "st_olaya_p24",
+    "qty": 2,
+    "rev": 1080,
+    "cost": 770,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-24",
+    "productId": "st_olaya_p28",
+    "qty": 11,
+    "rev": 319,
+    "cost": 198,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-24",
+    "productId": "st_olaya_p7",
+    "qty": 1,
+    "rev": 32,
+    "cost": 18,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-11-27",
+    "productId": "st_olaya_p11",
+    "qty": 1,
+    "rev": 320,
+    "cost": 210,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-11-27",
+    "productId": "st_olaya_p10",
+    "qty": 2,
+    "rev": 110.2,
+    "cost": 68,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-11-27",
+    "productId": "st_olaya_p0",
+    "qty": 4,
+    "rev": 580,
+    "cost": 392,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2025-11-27",
+    "productId": "st_olaya_p18",
+    "qty": 4,
+    "rev": 3120,
+    "cost": 2080,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-20",
+    "productId": "st_olaya_p34",
+    "qty": 5,
+    "rev": 325,
+    "cost": 190,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-03-01",
+    "productId": "p",
+    "qty": 5,
+    "rev": 120.96000000000001,
+    "cost": 68,
+    "lines": 2,
+    "retQty": 1,
+    "retRev": 33.32
+   },
+   {
+    "d": "2026-03-01",
+    "productId": "q",
+    "qty": 1,
+    "rev": 7,
+    "cost": 0,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-03-02",
+    "productId": "p",
+    "qty": 1,
+    "rev": 10,
+    "cost": 0,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-06",
+    "productId": "st_olaya_p31",
+    "qty": 4,
+    "rev": 1500,
+    "cost": 1060,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-23",
+    "productId": "st_olaya_p31",
+    "qty": 1,
+    "rev": 375,
+    "cost": 265,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-23",
+    "productId": "st_olaya_p11",
+    "qty": 1,
+    "rev": 304,
+    "cost": 210,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-23",
+    "productId": "st_olaya_p4",
+    "qty": 1,
+    "rev": 24,
+    "cost": 14,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-09",
+    "productId": "st_olaya_p32",
+    "qty": 4,
+    "rev": 2860,
+    "cost": 2080,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-09",
+    "productId": "st_olaya_p12",
+    "qty": 3,
+    "rev": 795,
+    "cost": 525,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-07-09",
+    "productId": "st_olaya_p16",
+    "qty": 1,
+    "rev": 595,
+    "cost": 430,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-14",
+    "productId": "st_olaya_p26",
+    "qty": 4,
+    "rev": 256,
+    "cost": 168,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-14",
+    "productId": "st_olaya_p5",
+    "qty": 3,
+    "rev": 135,
+    "cost": 84,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-09-14",
+    "productId": "st_olaya_p12",
+    "qty": 4,
+    "rev": 1060,
+    "cost": 700,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-02",
+    "productId": "st_olaya_p15",
+    "qty": 3,
+    "rev": 1230,
+    "cost": 870,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-08-02",
+    "productId": "st_olaya_p3",
+    "qty": 3,
+    "rev": 105,
+    "cost": 66,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-12",
+    "productId": "st_olaya_p4",
+    "qty": 2,
+    "rev": 48,
+    "cost": 28,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-12",
+    "productId": "st_olaya_p11",
+    "qty": 3,
+    "rev": 960,
+    "cost": 630,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-04-12",
+    "productId": "st_olaya_p14",
+    "qty": 3,
+    "rev": 84,
+    "cost": 48,
+    "lines": 1,
+    "retQty": 0,
+    "retRev": 0
+   },
+   {
+    "d": "2026-03-07",
+    "productId": "st_olaya_p10",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 6,
+    "retRev": 348
+   },
+   {
+    "d": "2025-12-21",
+    "productId": "st_olaya_p15",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 5,
+    "retRev": 2050
+   },
+   {
+    "d": "2026-02-17",
+    "productId": "st_olaya_p24",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 1,
+    "retRev": 540
+   },
+   {
+    "d": "2026-03-04",
+    "productId": "st_olaya_p16",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 1,
+    "retRev": 565.25
+   },
+   {
+    "d": "2026-08-16",
+    "productId": "st_olaya_p16",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 1,
+    "retRev": 595
+   },
+   {
+    "d": "2026-04-23",
+    "productId": "st_olaya_p29",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 5,
+    "retRev": 120
+   },
+   {
+    "d": "2026-07-08",
+    "productId": "st_olaya_p31",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 1,
+    "retRev": 375
+   },
+   {
+    "d": "2026-04-25",
+    "productId": "st_olaya_p31",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 1,
+    "retRev": 375
+   },
+   {
+    "d": "2026-07-11",
+    "productId": "st_olaya_p32",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 1,
+    "retRev": 715
+   },
+   {
+    "d": "2026-09-16",
+    "productId": "st_olaya_p26",
+    "qty": 0,
+    "rev": 0,
+    "cost": 0,
+    "lines": 0,
+    "retQty": 1,
+    "retRev": 64
    }
   ],
   "counts": {

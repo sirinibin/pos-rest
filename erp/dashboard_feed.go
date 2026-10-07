@@ -36,13 +36,18 @@ type FeedPayment struct {
 	D      string  `json:"d"`
 }
 
-// FeedItem is one line of a document, with what the product figures read.
-type FeedItem struct {
-	ProductID     string  `json:"productId"`
-	Qty           float64 `json:"qty"`
-	UnitPrice     float64 `json:"unitPrice"`
-	UnitDiscount  float64 `json:"unitDiscount"`
-	PurchasePrice float64 `json:"purchasePrice"`
+// FeedProductDay is one product's sales and returns on one store day, summed over the
+// lines of every sale / non-VAT sale (and return) of that day: what the dashboard's
+// product figures (finance.js xx) read, instead of every document's lines.
+type FeedProductDay struct {
+	D         string  `json:"d"`
+	ProductID string  `json:"productId"`
+	Qty       float64 `json:"qty"`    // sold
+	Rev       float64 `json:"rev"`    // Σ qty × (unitPrice − unitDiscount)
+	Cost      float64 `json:"cost"`   // Σ qty × purchasePrice
+	Lines     int     `json:"lines"`  // invoice lines (xx "orders")
+	RetQty    float64 `json:"retQty"` // returned
+	RetRev    float64 `json:"retRev"`
 }
 
 // FeedDoc is a sales/purchase-side document as finance.js xo() reduces it.
@@ -66,7 +71,6 @@ type FeedDoc struct {
 	Cost       float64       `json:"cost"`
 	Qty        float64       `json:"qty"`
 	Payments   []FeedPayment `json:"payments"`
-	Items      []FeedItem    `json:"items"`
 	Zatca      string        `json:"zatca,omitempty"`
 	OrderID    string        `json:"orderId,omitempty"`   // returns: the invoice returned
 	Remarks    string        `json:"remarks,omitempty"`   // returns: shown as the reason
@@ -172,7 +176,7 @@ func FeedDocOf(rec M) FeedDoc {
 	d := FeedDoc{ID: str(rec["id"]), Code: str(rec["code"]), Date: date,
 		CustomerID: str(rec["customerId"]), VendorID: str(rec["vendorId"]),
 		Taxable: t.Taxable, Vat: t.Vat, Net: t.Net, Paid: t.Paid, Balance: t.Balance, Status: t.Status,
-		Profit: t.Profit, Cost: t.Cost, Qty: t.Qty, Payments: []FeedPayment{}, Items: []FeedItem{}}
+		Profit: t.Profit, Cost: t.Cost, Qty: t.Qty, Payments: []FeedPayment{}}
 	d.Hour, d.Dow = wallClock(date)
 	d.NameEn = str(rec["customerName"])
 	if d.NameEn == "" {
@@ -189,11 +193,6 @@ func FeedDocOf(rec M) FeedDoc {
 			pd = date
 		}
 		d.Payments = append(d.Payments, FeedPayment{Amount: num(pm["amount"]), Method: str(pm["method"]), D: first10(pd)})
-	}
-	for _, it := range arr(rec["items"]) {
-		im, _ := it.(M)
-		d.Items = append(d.Items, FeedItem{ProductID: str(im["productId"]), Qty: num(im["qty"]), UnitPrice: num(im["unitPrice"]),
-			UnitDiscount: num(im["unitDiscount"]), PurchasePrice: num(im["purchasePrice"])})
 	}
 	if z, ok := rec["zatca"].(M); ok {
 		d.Zatca = str(z["status"])
@@ -318,26 +317,29 @@ var (
 
 // DashboardFeed is the main dashboard's whole input.
 type DashboardFeed struct {
-	Sales              []FeedDoc       `json:"sales"`
-	NonVAT             []FeedDoc       `json:"nonvatSales"`
-	SalesReturns       []FeedDoc       `json:"salesReturns"`
-	NonVATReturns      []FeedDoc       `json:"nonvatReturns"`
-	Purchases          []FeedDoc       `json:"purchases"`
-	PurchaseReturns    []FeedDoc       `json:"purchaseReturns"`
-	Quotations         []FeedDoc       `json:"quotations"`
-	Expenses           []FeedExpense   `json:"expenses"`
-	Salaries           []FeedSalary    `json:"salaries"`
-	Deposits           []FeedMoney     `json:"deposits"`
-	Withdrawals        []FeedMoney     `json:"withdrawals"`
-	Capitals           []FeedMoney     `json:"capitals"`
-	CapitalWithdrawals []FeedMoney     `json:"capitalWithdrawals"`
-	Dividends          []FeedMoney     `json:"dividends"`
-	RepairJobs         []FeedRepairJob `json:"repairJobs"`
-	Customers          []M             `json:"customers"`
-	Vendors            []M             `json:"vendors"`
-	Products           []M             `json:"products"`
-	Employees          []M             `json:"employees"`
-	Counts             M               `json:"counts"`
+	Sales              []FeedDoc        `json:"sales"`
+	NonVAT             []FeedDoc        `json:"nonvatSales"`
+	SalesReturns       []FeedDoc        `json:"salesReturns"`
+	NonVATReturns      []FeedDoc        `json:"nonvatReturns"`
+	Purchases          []FeedDoc        `json:"purchases"`
+	PurchaseReturns    []FeedDoc        `json:"purchaseReturns"`
+	Quotations         []FeedDoc        `json:"quotations"`
+	Expenses           []FeedExpense    `json:"expenses"`
+	Salaries           []FeedSalary     `json:"salaries"`
+	Deposits           []FeedMoney      `json:"deposits"`
+	Withdrawals        []FeedMoney      `json:"withdrawals"`
+	Capitals           []FeedMoney      `json:"capitals"`
+	CapitalWithdrawals []FeedMoney      `json:"capitalWithdrawals"`
+	Dividends          []FeedMoney      `json:"dividends"`
+	RepairJobs         []FeedRepairJob  `json:"repairJobs"`
+	Customers          []M              `json:"customers"`
+	Vendors            []M              `json:"vendors"`
+	Products           []M              `json:"products"`
+	Employees          []M              `json:"employees"`
+	ProductDays        []FeedProductDay `json:"productDays"`
+	Counts             M                `json:"counts"`
+
+	pdIdx map[string]int
 }
 
 // NewDashboardFeed is an empty feed (every list present, never null).
@@ -346,7 +348,8 @@ func NewDashboardFeed() *DashboardFeed {
 		Purchases: []FeedDoc{}, PurchaseReturns: []FeedDoc{}, Quotations: []FeedDoc{}, Expenses: []FeedExpense{},
 		Salaries: []FeedSalary{}, Deposits: []FeedMoney{}, Withdrawals: []FeedMoney{}, Capitals: []FeedMoney{},
 		CapitalWithdrawals: []FeedMoney{}, Dividends: []FeedMoney{}, RepairJobs: []FeedRepairJob{},
-		Customers: []M{}, Vendors: []M{}, Products: []M{}, Employees: []M{},
+		Customers: []M{}, Vendors: []M{}, Products: []M{}, Employees: []M{}, ProductDays: []FeedProductDay{},
+		pdIdx:  map[string]int{},
 		Counts: M{"pendingPurchaseRequests": 0, "draftPurchaseOrders": 0}}
 }
 
@@ -355,9 +358,12 @@ func (f *DashboardFeed) Add(name string, rec M) {
 	switch name {
 	case "sales":
 		f.Sales = append(f.Sales, FeedDocOf(rec))
+		f.addLines(rec, false)
 	case "nonvatSales":
 		f.NonVAT = append(f.NonVAT, FeedDocOf(rec))
+		f.addLines(rec, false)
 	case "salesReturns", "nonvatReturns":
+		f.addLines(rec, true)
 		d := FeedDocOf(rec)
 		d.OrderID, d.Remarks = str(rec["orderId"]), str(rec["remarks"])
 		if name == "salesReturns" {
@@ -405,6 +411,61 @@ func (f *DashboardFeed) Add(name string, rec M) {
 		if str(rec["status"]) == "draft" {
 			f.Counts["draftPurchaseOrders"] = intv(f.Counts["draftPurchaseOrders"]) + 1
 		}
+	}
+}
+
+// addLines sums a sale's (or return's) lines into its day's product rows.
+func (f *DashboardFeed) addLines(rec M, ret bool) {
+	if f.pdIdx == nil {
+		f.pdIdx = map[string]int{}
+	}
+	day := first10(str(rec["date"]))
+	for _, it := range arr(rec["items"]) {
+		im, _ := it.(M)
+		pid := str(im["productId"])
+		k := day + "\x00" + pid
+		i, ok := f.pdIdx[k]
+		if !ok {
+			i = len(f.ProductDays)
+			f.pdIdx[k] = i
+			f.ProductDays = append(f.ProductDays, FeedProductDay{D: day, ProductID: pid})
+		}
+		p := &f.ProductDays[i]
+		q := num(im["qty"])
+		line := q * (num(im["unitPrice"]) - num(im["unitDiscount"]))
+		if ret {
+			p.RetQty += q
+			p.RetRev += line
+		} else {
+			p.Rev += line
+			p.Cost += q * num(im["purchasePrice"])
+			p.Qty += q
+			p.Lines++
+		}
+	}
+}
+
+// mergeProductDays adds another part's day/product rows (sales and returns of the same
+// day and product end up in one row).
+func (f *DashboardFeed) mergeProductDays(rows []FeedProductDay) {
+	if f.pdIdx == nil {
+		f.pdIdx = map[string]int{}
+	}
+	for _, r := range rows {
+		k := r.D + "\x00" + r.ProductID
+		i, ok := f.pdIdx[k]
+		if !ok {
+			f.pdIdx[k] = len(f.ProductDays)
+			f.ProductDays = append(f.ProductDays, r)
+			continue
+		}
+		p := &f.ProductDays[i]
+		p.Qty += r.Qty
+		p.Rev += r.Rev
+		p.Cost += r.Cost
+		p.Lines += r.Lines
+		p.RetQty += r.RetQty
+		p.RetRev += r.RetRev
 	}
 }
 
@@ -485,6 +546,7 @@ func LoadDashboardFeed(c *Ctx, storeHex string, from time.Time) (*DashboardFeed,
 		f.Vendors = append(f.Vendors, p.Vendors...)
 		f.Products = append(f.Products, p.Products...)
 		f.Employees = append(f.Employees, p.Employees...)
+		f.mergeProductDays(p.ProductDays)
 		for k, v := range p.Counts {
 			f.Counts[k] = intv(f.Counts[k]) + intv(v)
 		}

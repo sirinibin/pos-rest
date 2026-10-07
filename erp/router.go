@@ -91,7 +91,8 @@ func dashboardKinds() []*dashKind {
 		registerDashKind(&dashKind{Name: "net-profit", Params: []string{"from", "to"}, Handler: handleDashboardNetProfit}),
 		registerDashKind(&dashKind{Name: "salary-balance", Handler: handleDashboardSalaryBalance}),
 		registerDashKind(&dashKind{Name: "bi", Daily: true, Handler: handleDashboardBI}),
-		registerDashKind(&dashKind{Name: "feed", Daily: true, Handler: handleDashboardFeed}),
+		// Rev 2: per-day product rows instead of invoice lines
+		registerDashKind(&dashKind{Name: "feed", Daily: true, Rev: 2, Handler: handleDashboardFeed}),
 	}
 }
 

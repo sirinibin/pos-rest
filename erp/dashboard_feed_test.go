@@ -134,8 +134,50 @@ func TestDashboardFeedAdd(t *testing.T) {
 		t.Errorf("customer trimmed to the dashboard's fields: %v", f.Customers[0])
 	}
 	b, _ := json.Marshal(NewDashboardFeed())
+	if strings.Contains(string(b), "items") {
+		t.Errorf("documents carry no invoice lines: %s", b)
+	}
 	if strings.Contains(string(b), "null") {
 		t.Errorf("an empty feed has every list, never null: %s", b)
+	}
+}
+
+// Invoice lines become one row per day and product: sales and non-VAT sales add to the
+// sold figures, returns to the returned ones; documents carry no lines.
+func TestDashboardFeed_ProductDays(t *testing.T) {
+	f := NewDashboardFeed()
+	line := func(p string, q, price, disc, cost interface{}) M {
+		return M{"productId": p, "qty": q, "unitPrice": price, "unitDiscount": disc, "purchasePrice": cost}
+	}
+	f.Add("sales", M{"id": "s1", "date": "2026-03-01T09:00", "items": []interface{}{line("p", 2, 10.5, 0.5, 4), line("q", 1, 7, nil, nil)}})
+	f.Add("nonvatSales", M{"id": "n1", "date": "2026-03-01T18:00", "items": []interface{}{line("p", "3", "10", 0, 4)}})
+	f.Add("salesReturns", M{"id": "r1", "date": "2026-03-01T20:00", "items": []interface{}{line("p", 1, 10, 0, 4)}})
+	f.Add("nonvatReturns", M{"id": "r2", "date": "2026-03-02T08:00", "items": []interface{}{line("p", 1, 10, 0, 4)}})
+	f.Add("purchases", M{"id": "b1", "date": "2026-03-01T08:00", "items": []interface{}{line("p", 50, 4, 0, 4)}})
+	want := []FeedProductDay{
+		{D: "2026-03-01", ProductID: "p", Qty: 5, Rev: 50, Cost: 20, Lines: 2, RetQty: 1, RetRev: 10},
+		{D: "2026-03-01", ProductID: "q", Qty: 1, Rev: 7, Lines: 1},
+		{D: "2026-03-02", ProductID: "p", RetQty: 1, RetRev: 10},
+	}
+	if !reflect.DeepEqual(f.ProductDays, want) {
+		t.Errorf("productDays\n got %+v\nwant %+v", f.ProductDays, want)
+	}
+	// parts loaded in parallel merge into the same rows
+	m := NewDashboardFeed()
+	a, b := NewDashboardFeed(), NewDashboardFeed()
+	a.Add("sales", M{"date": "2026-03-01T09:00", "items": []interface{}{line("p", 2, 10, 0, 4)}})
+	b.Add("salesReturns", M{"date": "2026-03-01T10:00", "items": []interface{}{line("p", 1, 10, 0, 4)}})
+	b.Add("salesReturns", M{"date": "2026-03-02T10:00", "items": []interface{}{line("p", 1, 10, 0, 4)}})
+	m.mergeProductDays(a.ProductDays)
+	m.mergeProductDays(b.ProductDays)
+	if !reflect.DeepEqual(m.ProductDays, []FeedProductDay{
+		{D: "2026-03-01", ProductID: "p", Qty: 2, Rev: 20, Cost: 8, Lines: 1, RetQty: 1, RetRev: 10},
+		{D: "2026-03-02", ProductID: "p", RetQty: 1, RetRev: 10},
+	}) {
+		t.Errorf("merged %+v", m.ProductDays)
+	}
+	if b, _ := json.Marshal(f.Sales[0]); strings.Contains(string(b), "items") {
+		t.Errorf("a document carries no lines: %s", b)
 	}
 }
 
@@ -208,6 +250,20 @@ func TestSnapKeyAndParams(t *testing.T) {
 	}
 	if key, _, _ := snapKey("s", &dashKind{Name: "bi"}, q); key != "s|bi|" {
 		t.Errorf("no params: %s", key)
+	}
+	// a format revision is part of the key, so older saved snapshots are never served
+	fk := registerDashKind(&dashKind{Name: "test-rev", Rev: 2})
+	defer delete(dashKinds, "test-rev")
+	if key, _, _ := snapKey("s", fk, q); key != "s|test-rev@2|" || kindOfKey(key) != fk {
+		t.Errorf("revision key: %s", key)
+	}
+	for _, old := range []string{"s|test-rev|", "s|test-rev@1|", "s|gone|", "bad"} {
+		if kindOfKey(old) != nil {
+			t.Errorf("%s: an older format or unknown kind has no kind", old)
+		}
+	}
+	if kindOfKey("s|vat|from=2026-10-01") != dashKinds["vat"] && dashKinds["vat"] != nil {
+		t.Errorf("vat key")
 	}
 	for _, c := range []struct {
 		from, to string
@@ -354,8 +410,12 @@ func TestAPI_DashboardFeed(t *testing.T) {
 		s0["profit"] != 120.0 || s0["status"] != "not_paid" || s0["nameEn"] != "Feed Customer" || s0["customerId"] != cust.Hex() {
 		t.Errorf("sale reduced to its numbers: %v", s0)
 	}
-	if s0["hour"] == nil || len(arr(s0["items"])) != 1 || arr(s0["items"])[0].(M)["productId"] != prod.Hex() {
-		t.Errorf("sale hour and lines: %v", s0)
+	if s0["hour"] == nil || s0["items"] != nil {
+		t.Errorf("sale hour, and no invoice lines: %v", s0)
+	}
+	if pd := arr(feed["productDays"]); len(pd) != 1 || pd[0].(M)["productId"] != prod.Hex() || pd[0].(M)["qty"] != 2.0 ||
+		pd[0].(M)["rev"] != 200.0 || pd[0].(M)["cost"] != 80.0 || pd[0].(M)["lines"] != 1.0 {
+		t.Errorf("product figures per day: %v", pd)
 	}
 	if ex := arr(feed["expenses"]); len(ex) != 1 || ex[0].(M)["description"] != "Rent" {
 		t.Errorf("expenses: %v", ex)

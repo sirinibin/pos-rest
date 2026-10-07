@@ -40,6 +40,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -79,6 +80,7 @@ type dashKind struct {
 	Name    string
 	Params  []string // query parameters that are part of the key (besides storeId)
 	Daily   bool     // depends on the store's today
+	Rev     int      // response format revision: a new one never serves snapshots saved in an older format
 	Handler func(c *Ctx, w http.ResponseWriter, r *http.Request) error
 }
 
@@ -159,7 +161,30 @@ func snapKey(store string, k *dashKind, q url.Values) (string, string, url.Value
 		}
 	}
 	params := strings.Join(parts, "&")
-	return store + "|" + k.Name + "|" + params, params, p
+	name := k.Name
+	if k.Rev > 0 {
+		name += "@" + strconv.Itoa(k.Rev)
+	}
+	return store + "|" + name + "|" + params, params, p
+}
+
+// kindOfKey is the kind a snapshot key belongs to; nil when the kind is gone or the key
+// is of an older format revision ("feed" once "feed@2" is current).
+func kindOfKey(key string) *dashKind {
+	parts := strings.SplitN(key, "|", 3)
+	if len(parts) < 3 {
+		return nil
+	}
+	name, rev := parts[1], 0
+	if i := strings.IndexByte(name, '@'); i >= 0 {
+		rev, _ = strconv.Atoi(name[i+1:])
+		name = name[:i]
+	}
+	k := dashKinds[name]
+	if k == nil || k.Rev != rev {
+		return nil
+	}
+	return k
 }
 
 // ---- events ----
@@ -472,11 +497,13 @@ func refreshStore(st *dashStore) {
 			delete(st.params, key)
 			continue
 		}
-		parts := strings.SplitN(key, "|", 3)
-		if len(parts) < 3 || dashKinds[parts[1]] == nil {
+		k := kindOfKey(key)
+		if k == nil {
+			delete(st.used, key) // a kind gone, or saved in an older format
+			delete(st.params, key)
 			continue
 		}
-		jobs = append(jobs, job{key, st.params[key], dashKinds[parts[1]]})
+		jobs = append(jobs, job{key, st.params[key], k})
 	}
 	st.mu.Unlock()
 	sort.Slice(jobs, func(i, j int) bool { return jobs[i].key < jobs[j].key })
@@ -783,7 +810,7 @@ func seedActive() {
 			Params string    `bson:"params"`
 			UsedAt time.Time `bson:"used_at"`
 		}
-		if cur.Decode(&d) != nil || dashKinds[d.Kind] == nil {
+		if cur.Decode(&d) != nil || kindOfKey(d.ID) == nil {
 			continue
 		}
 		q, _ := url.ParseQuery(d.Params)
