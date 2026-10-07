@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -410,7 +411,8 @@ func TestConditionalAndNonEmptySums(t *testing.T) {
 // written by the web app's oracle src/lib/listStatsServer.js): the server adds up the
 // same records to the same figures as the mock API and the browser.
 func TestListStats_ParityFixture(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("testdata", "list_stats_parity.json"))
+	_, here, _, _ := runtime.Caller(0) // DB-backed runs change the working directory
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(here), "testdata", "list_stats_parity.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
