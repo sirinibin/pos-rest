@@ -447,6 +447,13 @@ func newNativeResource(name, path, module, scope, coll, dateField, serialKey, pr
 		Backend: &nativeBackend{coll: coll, org: scope == "org", dateField: dateField, serialKey: serialKey, idPrefix: prefix, validate: validate}}
 }
 
+// Purchase bills inbox: the sidebar badge counts the new ones (?where.status=new).
+func newPurchaseBillsResource() *Resource {
+	r := newNativeResource("purchaseBills", "purchase-bills", "purchases", "store", "erp_purchase_bill", "receivedAt", "purchaseBill", "pbl", purchaseBillValidate)
+	r.Backend.(*nativeBackend).whereKeys = map[string]bool{"status": true, "vendorId": true}
+	return r
+}
+
 func purchaseBillValidate(x *mapCtx, rec M, prev M) map[string]string {
 	e := map[string]string{}
 	if str(rec["vendorId"]) == "" {
@@ -504,7 +511,7 @@ func allResources() []*Resource {
 		newSalesReturnsResource(), newDeliveryNotesResource(), newNonVATSalesResource(), newNonVATReturnsResource(),
 		newQuotationReturnsResource(), newPurchasesResource(), newPurchaseOrdersResource(), newPurchaseRequestsResource(),
 		newPurchaseReturnsResource(),
-		newNativeResource("purchaseBills", "purchase-bills", "purchases", "store", "erp_purchase_bill", "receivedAt", "purchaseBill", "pbl", purchaseBillValidate),
+		newPurchaseBillsResource(),
 		newStockTransfersResource(), newExpensesResource(), newDepositsResource(), newWithdrawalsResource(),
 		newCapitalsResource(), newCapitalWithdrawalsResource(), newDividendsResource(), newSalariesResource(),
 		newRepairJobsResource(), newRFQsResource(),
