@@ -74,6 +74,7 @@ func Register(router *mux.Router) {
 		if res.Path == "products" {
 			// before /{id}: "facets" is not a record id
 			s.HandleFunc("/products/facets", func(w http.ResponseWriter, r *http.Request) { handleProductFacets(w, r, res) }).Methods("GET")
+			s.HandleFunc("/products/{id}/history", func(w http.ResponseWriter, r *http.Request) { handleProductHistory(w, r, res) }).Methods("GET")
 		}
 		if hasListStats(res) {
 			// before /{id}: "stats" is not a record id
