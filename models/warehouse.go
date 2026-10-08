@@ -373,7 +373,7 @@ func (warehouse *Warehouse) Validate(w http.ResponseWriter, r *http.Request, sce
 			errs["phone"] = "Invalid phone no."
 		}*/
 
-	if !govalidator.IsNull(warehouse.Phone) && !ValidateSaudiPhone(warehouse.Phone) {
+	if !govalidator.IsNull(warehouse.Phone) && !ValidStorePhone(store, warehouse.Phone) {
 		errs["phone"] = "Invalid phone no."
 	}
 

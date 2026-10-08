@@ -2044,7 +2044,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		}
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(order.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(order.Phone)) {
+	if !govalidator.IsNull(strings.TrimSpace(order.Phone)) && !ValidStorePhone(store, strings.TrimSpace(order.Phone)) {
 		errs["phone"] = "Invalid phone no."
 		return
 	}

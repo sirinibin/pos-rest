@@ -190,6 +190,14 @@
     {
      "name": "Pampers",
      "nameAr": "بامبرز"
+    },
+    {
+     "name": "Amul",
+     "nameAr": "أمول"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
     }
    ],
    "specs": [],
@@ -259,7 +267,8 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
      }
     },
     {
@@ -277,7 +286,14 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
+     },
+     "variants": {
+      "IN": [
+       "Buttermilk (chaas) 1 L",
+       "لبن 1 لتر"
+      ]
      }
     },
     {
@@ -304,7 +320,14 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
+     },
+     "variants": {
+      "IN": [
+       "Paneer 400 g",
+       "بانير 400 غ"
+      ]
      }
     },
     {
@@ -342,7 +365,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -360,7 +384,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -918,6 +943,14 @@
     {
      "name": "Gillette",
      "nameAr": "جيليت"
+    },
+    {
+     "name": "Amul",
+     "nameAr": "أمول"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
     }
    ],
    "specs": [],
@@ -1126,7 +1159,8 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
      }
     },
     {
@@ -1144,7 +1178,14 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
+     },
+     "variants": {
+      "IN": [
+       "Buttermilk (chaas) 1 L",
+       "لبن 1 لتر"
+      ]
      }
     },
     {
@@ -1172,7 +1213,14 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
+     },
+     "variants": {
+      "IN": [
+       "Paneer 400 g",
+       "بانير 400 غ"
+      ]
      }
     },
     {
@@ -1356,7 +1404,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -1374,7 +1423,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -4701,6 +4751,150 @@
      "countries": [
       "KW"
      ]
+    },
+    {
+     "key": "sim-jio-in",
+     "section": "sim",
+     "nameEn": "Jio prepaid SIM",
+     "nameAr": "شريحة جيو مسبقة الدفع",
+     "price": 99,
+     "unit": "Pcs",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-jio-in-299",
+     "section": "sim",
+     "nameEn": "Jio recharge ₹299",
+     "nameAr": "شحن جيو 299 روبية",
+     "price": 299,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-jio-in-349",
+     "section": "sim",
+     "nameEn": "Jio recharge ₹349",
+     "nameAr": "شحن جيو 349 روبية",
+     "price": 349,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-jio-in-899",
+     "section": "sim",
+     "nameEn": "Jio recharge ₹899",
+     "nameAr": "شحن جيو 899 روبية",
+     "price": 899,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "sim-airtel-in",
+     "section": "sim",
+     "nameEn": "Airtel prepaid SIM",
+     "nameAr": "شريحة إيرتل مسبقة الدفع",
+     "price": 99,
+     "unit": "Pcs",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-airtel-in-349",
+     "section": "sim",
+     "nameEn": "Airtel recharge ₹349",
+     "nameAr": "شحن إيرتل 349 روبية",
+     "price": 349,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-airtel-in-379",
+     "section": "sim",
+     "nameEn": "Airtel recharge ₹379",
+     "nameAr": "شحن إيرتل 379 روبية",
+     "price": 379,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-airtel-in-979",
+     "section": "sim",
+     "nameEn": "Airtel recharge ₹979",
+     "nameAr": "شحن إيرتل 979 روبية",
+     "price": 979,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "sim-vi-in",
+     "section": "sim",
+     "nameEn": "Vi prepaid SIM",
+     "nameAr": "شريحة في مسبقة الدفع",
+     "price": 99,
+     "unit": "Pcs",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-vi-in-299",
+     "section": "sim",
+     "nameEn": "Vi recharge ₹299",
+     "nameAr": "شحن في 299 روبية",
+     "price": 299,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-vi-in-365",
+     "section": "sim",
+     "nameEn": "Vi recharge ₹365",
+     "nameAr": "شحن في 365 روبية",
+     "price": 365,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
+    },
+    {
+     "key": "rc-vi-in-859",
+     "section": "sim",
+     "nameEn": "Vi recharge ₹859",
+     "nameAr": "شحن في 859 روبية",
+     "price": 859,
+     "unit": "Card",
+     "local": true,
+     "countries": [
+      "IN"
+     ]
     }
    ]
   },
@@ -4789,6 +4983,14 @@
     {
      "name": "Abraj",
      "nameAr": "أبراج"
+    },
+    {
+     "name": "Amul",
+     "nameAr": "أمول"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
     }
    ],
    "specs": [],
@@ -5204,7 +5406,14 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
+     },
+     "variants": {
+      "IN": [
+       "Buttermilk (chaas)",
+       "لبن"
+      ]
      }
     },
     {
@@ -5232,7 +5441,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -5347,6 +5557,10 @@
     {
      "name": "Abraj",
      "nameAr": "أبراج"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
     }
    ],
    "specs": [],
@@ -5827,7 +6041,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -5931,6 +6146,14 @@
     {
      "name": "Abraj",
      "nameAr": "أبراج"
+    },
+    {
+     "name": "Amul",
+     "nameAr": "أمول"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
     }
    ],
    "specs": [],
@@ -6310,7 +6533,14 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
+     },
+     "variants": {
+      "IN": [
+       "Buttermilk (chaas)",
+       "لبن"
+      ]
      }
     },
     {
@@ -6338,7 +6568,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     }
    ]
@@ -6908,6 +7139,10 @@
     {
      "name": "Abraj",
      "nameAr": "أبراج"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
     }
    ],
    "specs": [],
@@ -7180,7 +7415,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -7404,6 +7640,14 @@
     {
      "name": "Lay's",
      "nameAr": "ليز"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
+    },
+    {
+     "name": "Amul",
+     "nameAr": "أمول"
     }
    ],
    "specs": [],
@@ -7813,7 +8057,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -7831,7 +8076,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {
@@ -7849,7 +8095,14 @@
       "OM": "Almarai",
       "QA": "Baladna",
       "BH": "Almarai",
-      "KW": "Almarai"
+      "KW": "Almarai",
+      "IN": "Amul"
+     },
+     "variants": {
+      "IN": [
+       "Buttermilk (chaas) (Almarai)",
+       "لبن المراعي"
+      ]
      }
     },
     {
@@ -14274,6 +14527,14 @@
     {
      "name": "Perkins",
      "nameAr": "بيركنز"
+    },
+    {
+     "name": "UltraTech Cement",
+     "nameAr": "أسمنت ألترا تك"
+    },
+    {
+     "name": "TATA Tiscon",
+     "nameAr": "تاتا تيسكون"
     }
    ],
    "specs": [
@@ -14433,7 +14694,8 @@
       "AE": "Emirates Cement",
       "OM": "Oman Cement",
       "QA": "Qatar National Cement",
-      "KW": "Kuwait Cement"
+      "KW": "Kuwait Cement",
+      "IN": "UltraTech Cement"
      }
     },
     {
@@ -14455,7 +14717,8 @@
       "AE": "Emirates Cement",
       "OM": "Oman Cement",
       "QA": "Qatar National Cement",
-      "KW": "Kuwait Cement"
+      "KW": "Kuwait Cement",
+      "IN": "UltraTech Cement"
      }
     },
     {
@@ -14477,7 +14740,8 @@
       "AE": "Emirates Cement",
       "OM": "Oman Cement",
       "QA": "Qatar National Cement",
-      "KW": "Kuwait Cement"
+      "KW": "Kuwait Cement",
+      "IN": "UltraTech Cement"
      }
     },
     {
@@ -14565,7 +14829,8 @@
       "OM": "Jindal Shadeed",
       "QA": "Qatar Steel",
       "BH": "SULB",
-      "KW": "Kuwait Steel"
+      "KW": "Kuwait Steel",
+      "IN": "TATA Tiscon"
      }
     },
     {
@@ -14588,7 +14853,8 @@
       "OM": "Jindal Shadeed",
       "QA": "Qatar Steel",
       "BH": "SULB",
-      "KW": "Kuwait Steel"
+      "KW": "Kuwait Steel",
+      "IN": "TATA Tiscon"
      }
     },
     {
@@ -14611,7 +14877,8 @@
       "OM": "Jindal Shadeed",
       "QA": "Qatar Steel",
       "BH": "SULB",
-      "KW": "Kuwait Steel"
+      "KW": "Kuwait Steel",
+      "IN": "TATA Tiscon"
      }
     },
     {
@@ -14634,7 +14901,8 @@
       "OM": "Jindal Shadeed",
       "QA": "Qatar Steel",
       "BH": "SULB",
-      "KW": "Kuwait Steel"
+      "KW": "Kuwait Steel",
+      "IN": "TATA Tiscon"
      }
     },
     {
@@ -15285,7 +15553,11 @@
        "HR & Payroll (WPS)",
        "الموارد البشرية والرواتب (حماية الأجور)"
       ],
-      "SA": null
+      "SA": null,
+      "IN": [
+       "HR & Payroll (PF / ESI / TDS)",
+       "الموارد البشرية والرواتب (PF / ESI)"
+      ]
      }
     },
     {
@@ -15344,6 +15616,19 @@
      "countries": [
       "SA"
      ]
+    },
+    {
+     "key": "gstein",
+     "section": "impl",
+     "nameEn": "GST e-invoicing (IRN) integration",
+     "nameAr": "ربط الفوترة الإلكترونية لضريبة GST (IRN)",
+     "price": 25000,
+     "unit": "Job",
+     "service": true,
+     "countries": [
+      "IN"
+     ],
+     "local": true
     },
     {
      "key": "imp-s",
@@ -15609,6 +15894,19 @@
      "countries": [
       "KW"
      ]
+    },
+    {
+     "key": "din",
+     "section": "cloud",
+     "nameEn": ".in domain (1 year)",
+     "nameAr": "نطاق ‎.in (سنة)",
+     "price": 899,
+     "unit": "Yr",
+     "service": true,
+     "countries": [
+      "IN"
+     ],
+     "local": true
     }
    ]
   },
@@ -15735,6 +16033,10 @@
     {
      "name": "Indomie",
      "nameAr": "إندومي"
+    },
+    {
+     "name": "Bisleri",
+     "nameAr": "بيسلري"
     }
    ],
    "specs": [],
@@ -15834,7 +16136,8 @@
       "OM": "Tanuf",
       "QA": "Rayyan",
       "BH": "Aquafina",
-      "KW": "Abraj"
+      "KW": "Abraj",
+      "IN": "Bisleri"
      }
     },
     {

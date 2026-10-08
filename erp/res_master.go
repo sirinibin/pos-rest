@@ -271,6 +271,14 @@ func productValidate(x *mapCtx, rec M, prev M) map[string]string {
 		e["pricing.max"] = "must be >= min"
 	}
 	validatePosFields(rec, e)
+	if v := strings.TrimSpace(str(rec["hsn"])); v != "" && !validHSN(v) {
+		e["hsn"] = "HSN / SAC code: 4, 6 or 8 digits"
+	}
+	if v, ok := rec["vatPercent"]; ok && v != nil && x.profile().TaxSplit == "gst" {
+		if msg := vatRateError(x.profile(), v); msg != "" {
+			e["vatPercent"] = msg
+		}
+	}
 	if code := strings.TrimSpace(str(rec["code"])); code != "" && x.storeHex != "" {
 		ctx, cancel := dbctx()
 		defer cancel()
@@ -626,6 +634,8 @@ func partyValidate(x *mapCtx, rec M, prev M) map[string]string {
 	cp := x.profile()
 	if v := str(rec["vatNo"]); v != "" && !validTaxIDFor(cp, v) {
 		e["vatNo"] = taxIDErrorFor(cp)
+	} else if msg := gstinStateError(cp, v, sub(rec, "address")); msg != "" {
+		e["vatNo"] = msg
 	}
 	if num(rec["creditLimit"]) < 0 {
 		e["creditLimit"] = "must be >= 0"
@@ -1090,4 +1100,10 @@ func leftPad(n, w int) string {
 		s = "0" + s
 	}
 	return s
+}
+
+// validHSN: an HSN (goods) or SAC (services) code of 4, 6 or 8 digits, as
+// printed on Indian GST invoices (kept in erp.x as product.hsn).
+func validHSN(s string) bool {
+	return (len(s) == 4 || len(s) == 6 || len(s) == 8) && regexpDigits(s, 4, 8)
 }

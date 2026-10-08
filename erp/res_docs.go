@@ -1,7 +1,6 @@
 package erp
 
 import (
-	"math"
 	"strings"
 	"time"
 
@@ -728,7 +727,7 @@ func (cfg *docCfg) toLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create
 		r := num(rec["rounding"])
 		if boolv(rec["roundingAuto"]) {
 			br := ksTotals(rec, vat)
-			r = round2(math.Round(br*20)/20 - br)
+			r = autoRounding(br, x.profile())
 		}
 		p["auto_rounding_amount"] = false
 		p["rounding_amount"] = round2(r + roundingCentFix(rec, vat))
@@ -827,6 +826,12 @@ func (cfg *docCfg) validate(x *mapCtx, rec M, prev M) map[string]string {
 	if v := str(rec["vatNo"]); v != "" && cfg.party == "customer" && !validTaxIDFor(x.profile(), v) {
 		e["vatNo"] = taxIDErrorFor(x.profile())
 	}
+	// India: GST at one of the GST rates (other countries: any 0..100)
+	if v, ok := rec["vatPercent"]; ok && x.profile().TaxSplit == "gst" {
+		if msg := vatRateError(x.profile(), v); msg != "" {
+			e["vatPercent"] = msg
+		}
+	}
 	if cfg.discount {
 		if d := num(rec["discount"]); d < 0 {
 			e["discount"] = "must be >= 0"
@@ -848,7 +853,7 @@ func (cfg *docCfg) validate(x *mapCtx, rec M, prev M) map[string]string {
 		br := ksTotals(rec, vat)
 		r := num(rec["rounding"])
 		if boolv(rec["roundingAuto"]) {
-			r = round2(math.Round(br*20)/20 - br)
+			r = autoRounding(br, x.profile())
 		}
 		net := round2(br + r)
 		if paid+num(rec["cashDiscount"]) > net+0.009 {

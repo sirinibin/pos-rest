@@ -721,7 +721,9 @@ func TestValidateGuestRegisterRequest_GCC(t *testing.T) {
 		req  func() GuestRegisterRequest
 		key  string
 	}{
-		{"non-GCC country", func() GuestRegisterRequest { return gccReq("GB") }, "country_code"},
+		{"unsupported country", func() GuestRegisterRequest { return gccReq("GB") }, "country_code"},
+		{"bad GSTIN checksum", func() GuestRegisterRequest { r := gccReq("IN"); r.VATNo = "27AAPFU0939F1ZA"; return r }, "vat_no"},
+		{"GCC still needs the CR", func() GuestRegisterRequest { r := gccReq("AE"); r.RegistrationNumber = ""; return r }, "registration_number"},
 		{"bad UAE TRN", func() GuestRegisterRequest { r := gccReq("AE"); r.VATNo = "12"; return r }, "vat_no"},
 		{"street required", func() GuestRegisterRequest { r := gccReq("BH"); r.NationalAddress.StreetName = ""; return r }, "national_address_street_name"},
 		{"city required", func() GuestRegisterRequest { r := gccReq("KW"); r.NationalAddress.CityName = ""; return r }, "national_address_city_name"},
@@ -739,6 +741,22 @@ func TestValidateGuestRegisterRequest_GCC(t *testing.T) {
 	}
 }
 
+func TestValidateGuestRegisterRequest_India(t *testing.T) {
+	r := gccReq("IN")
+	r.RegistrationNumber = "" // PAN is optional in India
+	r.VATNo = "27AAPFU0939F1ZV"
+	if errs := validateGuestRegisterRequest(r); len(errs) != 0 {
+		t.Fatalf("India: unexpected %v", errs)
+	}
+	r.VATNo = ""
+	if errs := validateGuestRegisterRequest(r); len(errs) != 0 {
+		t.Fatalf("India without GSTIN: unexpected %v", errs)
+	}
+	if errs := validateGuestRegisterRequest(gccReq("GB")); errs["country_code"] != "Choose a supported country" {
+		t.Errorf("country message: %v", errs)
+	}
+}
+
 func TestBuildGuestStore_GCCCountry(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
@@ -752,6 +770,7 @@ func TestBuildGuestStore_GCCCountry(t *testing.T) {
 		{"QA", "Qatar", "1", 0},
 		{"BH", "Bahrain", "1", 10},
 		{"KW", "Kuwait", "1", 0},
+		{"in", "India", "1", 18},
 	}
 	for _, tc := range tests {
 		r := validReq()

@@ -95,8 +95,9 @@ func loadStarterCatalogs() (*starterCatalogs, error) {
 }
 
 // starterPriceFactor converts a SAR starter price to the store's currency
-// (rounded for display; the owner sets real prices later).
-var starterPriceFactor = map[string]float64{"SA": 1, "AE": 1, "QA": 1, "OM": 0.1, "BH": 0.1, "KW": 0.08}
+// (rounded for display; the owner sets real prices later). India is not the
+// exchange rate (≈23) but what the same goods cost there.
+var starterPriceFactor = map[string]float64{"SA": 1, "AE": 1, "QA": 1, "OM": 0.1, "BH": 0.1, "KW": 0.08, "IN": 15}
 
 func starterPrice(sar float64, cc string, decimals int) float64 {
 	f, ok := starterPriceFactor[cc]
@@ -104,11 +105,26 @@ func starterPrice(sar float64, cc string, decimals int) float64 {
 		f = 1
 	}
 	v := sar * f
+	if cc == "IN" {
+		return niceRupees(v)
+	}
 	if decimals >= 3 {
 		// 3-decimal currencies: nearest 0.005
 		return math.Round(v*200) / 200
 	}
 	return math.Round(v*100) / 100
+}
+
+// niceRupees rounds a rupee price the way shops price: whole rupees under
+// ₹100, then the nearest ₹5, and the nearest ₹10 from ₹1,000.
+func niceRupees(v float64) float64 {
+	switch {
+	case v < 100:
+		return math.Max(1, math.Round(v))
+	case v < 1000:
+		return math.Round(v/5) * 5
+	}
+	return math.Round(v/10) * 10
 }
 
 // starterPlanItem is one product to create, resolved for a country.

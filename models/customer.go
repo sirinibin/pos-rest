@@ -2239,11 +2239,10 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	}
 
+	// the store's country decides the format (a customer marked as abroad is not checked)
 	if customer.CountryCode == "" || customer.CountryCode == "SA" {
-		if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsValidDigitNumber(strings.TrimSpace(customer.VATNo), "15") {
-			errs["vat_no"] = "VAT No. should be 15 digits"
-		} else if !govalidator.IsNull(strings.TrimSpace(customer.VATNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(customer.VATNo), "3") {
-			errs["vat_no"] = "VAT No. should start and end with 3"
+		if msg := StoreVATNoError(store, customer.VATNo); msg != "" {
+			errs["vat_no"] = msg
 		}
 	}
 

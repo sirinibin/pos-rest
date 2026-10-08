@@ -1442,16 +1442,13 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["store_id"] = "Store is required"
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(salesreturn.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(salesreturn.Phone)) {
+	if !govalidator.IsNull(strings.TrimSpace(salesreturn.Phone)) && !ValidStorePhone(store, strings.TrimSpace(salesreturn.Phone)) {
 		errs["phone"] = "Invalid phone no."
 		return
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(salesreturn.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(salesreturn.VatNo), "15") {
-		errs["vat_no"] = "VAT No. should be 15 digits"
-		return
-	} else if !govalidator.IsNull(strings.TrimSpace(salesreturn.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(salesreturn.VatNo), "3") {
-		errs["vat_no"] = "VAT No. should start and end with 3"
+	if msg := StoreVATNoError(store, salesreturn.VatNo); msg != "" {
+		errs["vat_no"] = msg
 		return
 	}
 

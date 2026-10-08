@@ -67,15 +67,16 @@ func validateGuestRegisterRequest(req GuestRegisterRequest) map[string]string {
 	if govalidator.IsNull(req.BusinessCategory) {
 		errs["business_category"] = "Business category is required"
 	}
-	if govalidator.IsNull(req.RegistrationNumber) {
-		errs["registration_number"] = "Registration number (CRN) is required"
-	}
 	// country rules (models/country_profile.go): an empty country is Saudi
 	// Arabia; other GCC countries have an optional tax number and a simpler
 	// address.
 	cp := models.CountryProfileOrSaudi(req.CountryCode)
 	if c := strings.TrimSpace(req.CountryCode); c != "" && models.CountryProfileFor(c) == nil {
-		errs["country_code"] = "Choose a GCC country"
+		errs["country_code"] = "Choose a supported country"
+	}
+	// the CR / licence number is required in the GCC; India's PAN is optional
+	if cp.CRRequired && govalidator.IsNull(req.RegistrationNumber) {
+		errs["registration_number"] = "Registration number (CRN) is required"
 	}
 	if cp.TaxIDRequired {
 		if govalidator.IsNull(req.VATNo) {

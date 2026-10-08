@@ -977,14 +977,17 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["branch_name"] = "Branch name is required"
 	}
 
-	if govalidator.IsNull(store.NameInArabic) {
+	cp := CountryProfileOrSaudi(store.CountryCode)
+
+	// Arabic name and CR number: required in the GCC, optional in India
+	if govalidator.IsNull(store.NameInArabic) && cp.GCC {
 		errs["name_in_arabic"] = "Name in Arabic is required"
 	}
 
-	cp := CountryProfileOrSaudi(store.CountryCode)
-
 	if govalidator.IsNull(store.RegistrationNumber) {
-		errs["registration_number"] = "Registration Number / CRN is required"
+		if cp.CRRequired {
+			errs["registration_number"] = "Registration Number / CRN is required"
+		}
 	} else if !cp.NationalAddress {
 		if !cp.ValidCR(store.RegistrationNumber) {
 			errs["registration_number"] = cp.CRLabelEn + ": " + cp.CRHint
@@ -993,7 +996,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["registration_number"] = "Registration Number should be alpha numeric(a-zA-Z|0-9)"
 	}
 
-	if govalidator.IsNull(store.NameInArabic) {
+	if govalidator.IsNull(store.NameInArabic) && cp.GCC {
 		errs["registration_number_in_arabic"] = "Registration Number/C.R NO. in Arabic is required"
 	}
 

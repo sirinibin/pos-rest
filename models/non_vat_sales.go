@@ -297,7 +297,7 @@ func (s *NonVATSales) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		s.Date = &date
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(s.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(s.Phone)) {
+	if !govalidator.IsNull(strings.TrimSpace(s.Phone)) && !ValidStorePhone(store, strings.TrimSpace(s.Phone)) {
 		errs["phone"] = "Invalid phone no."
 		return
 	}

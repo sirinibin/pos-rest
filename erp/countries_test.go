@@ -24,13 +24,14 @@ func TestCountryProfiles_GCC(t *testing.T) {
 		{"QA", "QAR", 2, 0, false, false, "Asia/Qatar"},
 		{"BH", "BHD", 3, 10, true, false, "Asia/Bahrain"},
 		{"KW", "KWD", 3, 0, false, false, "Asia/Kuwait"},
+		{"IN", "INR", 2, 18, true, false, "Asia/Kolkata"},
 	}
-	if len(models.GCCCountries) != len(want) {
-		t.Fatalf("%d countries, want %d", len(models.GCCCountries), len(want))
+	if len(models.Countries) != len(want) {
+		t.Fatalf("%d countries, want %d", len(models.Countries), len(want))
 	}
 	for i, w := range want {
 		p := models.CountryProfileFor(w.code)
-		if p == nil || models.GCCCountries[i].Code != w.code {
+		if p == nil || models.Countries[i].Code != w.code {
 			t.Fatalf("%s: missing or out of order", w.code)
 		}
 		if p.CurrencyCode != w.cur || p.Decimals != w.dec || p.VatPercent != w.vat || p.HasVAT != w.hasVAT ||
@@ -51,9 +52,12 @@ func TestCountryProfiles_GCC(t *testing.T) {
 	if models.CountryProfileFor("ae") == nil || models.CountryProfileFor(" kw ") == nil {
 		t.Error("lookup must ignore case and spaces")
 	}
-	for _, c := range []string{"", "IN", "GB", "ZZ"} {
+	if p := models.CountryProfileFor("in"); p == nil || p.GCC || models.ZatcaApplies("IN") {
+		t.Error("India is supported, outside the GCC and never ZATCA")
+	}
+	for _, c := range []string{"", "GB", "ZZ"} {
 		if models.CountryProfileFor(c) != nil {
-			t.Errorf("%q is not GCC", c)
+			t.Errorf("%q is not supported", c)
 		}
 		if models.CountryProfileOrSaudi(c).Code != "SA" || !models.ZatcaApplies(c) {
 			t.Errorf("%q must keep the Saudi rules", c)
@@ -395,16 +399,27 @@ func TestCountriesEndpoint(t *testing.T) {
 		t.Fatalf("GET /countries: %d %s", r.Code, r.Raw)
 	}
 	d := r.data()
-	if len(d) != 6 {
+	if len(d) != 7 {
 		t.Fatalf("%d countries", len(d))
 	}
 	first, _ := d[0].(M)
 	if first["code"] != "SA" || get(first, "currency.code") != "SAR" || first["zatca"] != true {
 		t.Errorf("first: %v", first)
 	}
-	last, _ := d[5].(M)
-	if last["code"] != "KW" || get(last, "currency.decimals") != 3.0 || last["hasVat"] != false {
-		t.Errorf("last: %v", last)
+	kw, _ := d[5].(M)
+	if kw["code"] != "KW" || get(kw, "currency.decimals") != 3.0 || kw["hasVat"] != false || kw["gcc"] != true {
+		t.Errorf("Kuwait: %v", kw)
+	}
+	in, _ := d[6].(M)
+	if in["code"] != "IN" || get(in, "currency.code") != "INR" || in["gcc"] != false || in["taxSplit"] != "gst" ||
+		in["roundingStep"] != 1.0 || in["zatca"] != false || in["crRequired"] != false || in["arabicRequired"] != false {
+		t.Errorf("India: %v", in)
+	}
+	if states, _ := in["states"].([]interface{}); len(states) != 37 {
+		t.Errorf("India states: %d", len(states))
+	}
+	if rates, _ := in["vatRates"].([]interface{}); len(rates) != 6 {
+		t.Errorf("India GST rates: %v", in["vatRates"])
 	}
 }
 

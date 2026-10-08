@@ -1729,7 +1729,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		}
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(quotation.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(quotation.Phone)) {
+	if !govalidator.IsNull(strings.TrimSpace(quotation.Phone)) && !ValidStorePhone(store, strings.TrimSpace(quotation.Phone)) {
 		errs["phone"] = "Invalid phone no."
 		return
 	}

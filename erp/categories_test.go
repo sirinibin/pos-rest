@@ -214,7 +214,7 @@ func TestValidatePosFields(t *testing.T) {
 	}
 }
 
-const gccErr = "choose a GCC country: Saudi Arabia, UAE, Oman, Qatar, Bahrain or Kuwait"
+const gccErr = "choose a supported country: Saudi Arabia, UAE, Oman, Qatar, Bahrain, Kuwait or India"
 
 func TestStoreValidate_Country(t *testing.T) {
 	x := newMapCtx(nil, "")
@@ -230,7 +230,8 @@ func TestStoreValidate_Country(t *testing.T) {
 		{"Bahrain", "BH", ""},
 		{"Kuwait", "KW", ""},
 		{"United Kingdom (not GCC)", "GB", gccErr},
-		{"India (not GCC)", "IN", gccErr},
+		{"India", "IN", ""},
+		{"India lower case", "in", ""},
 		{"not sent", nil, ""},
 		{"empty", "", ""},
 		{"unknown code", "ZZ", gccErr},

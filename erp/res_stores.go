@@ -367,13 +367,13 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 		}
 	}
 	// country: picks the store's timezone, currency and tax rules. A new or
-	// changed country must be a supported GCC country (older stores keep
+	// changed country must be a supported country (older stores keep
 	// theirs), and it is locked once the store has issued documents.
 	newCountry := normCountry(str(rec["countryCode"]))
 	oldCountry := storeCountry(prev)
 	if newCountry != "" && newCountry != oldCountry {
 		if _, known := models.TimezoneMap[newCountry]; !known || models.CountryProfileFor(newCountry) == nil {
-			e["countryCode"] = "choose a GCC country: Saudi Arabia, UAE, Oman, Qatar, Bahrain or Kuwait"
+			e["countryCode"] = countryChoiceError
 		} else if prev != nil && (oldCountry != "" || newCountry != "SA") && storeHasZatcaDocs(prev) {
 			e["countryCode"] = "the country can't change once the store has issued invoices"
 		}
@@ -387,6 +387,13 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 	}
 	if v := str(rec["vatNo"]); v != "" && !validTaxIDFor(cp, v) {
 		e["vatNo"] = taxIDErrorFor(cp)
+	} else if msg := gstinStateError(cp, v, storeAddressOf(rec, prev, cp)); msg != "" {
+		e["vatNo"] = msg
+	}
+	if v, ok := rec["vatPercent"]; ok && cp.TaxSplit == "gst" && num(v) != 0 {
+		if msg := vatRateError(cp, v); msg != "" {
+			e["vatPercent"] = msg
+		}
 	}
 	if v := str(rec["crNo"]); v != "" {
 		if cp.Code == "SA" && !ValidCR(v) {
@@ -741,7 +748,7 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 	env := M{"v": int64(1), "h": []interface{}{historyEntryIn(loc, c.UserName, "created", []interface{}{})}, "cb": c.UserName,
 		"x": M{"short": short, "branchAr": branchAr, "plan": "professional",
 			"trialEndsAt":  now.AddDate(0, 0, 14).In(loc).Format(layoutDay),
-			"businessType": cat, "address": M{"countryAr": newCP.NameAr, "shortAddress": str(a["shortAddress"])}}}
+			"businessType": cat, "address": signupAddressExtras(newCP, a)}}
 	if err := s.setEnv("", hex, env); err != nil {
 		return nil, err
 	}
@@ -766,14 +773,19 @@ func storeCreateErrors(rec M) map[string]string {
 		}
 	}
 	cp := models.CountryProfileOrSaudi(normCountry(str(rec["countryCode"])))
-	need("nameAr", str(rec["nameAr"]), "required")
+	// Arabic name and CR: required in the GCC, optional in India
+	if cp.GCC {
+		need("nameAr", str(rec["nameAr"]), "required")
+	}
 	if n := str(rec["nameAr"]); n != "" && !hasArabic(n) {
 		e["nameAr"] = "must contain Arabic letters"
 	}
 	if cp.TaxIDRequired {
 		need("vatNo", str(rec["vatNo"]), "required")
 	}
-	need("crNo", str(rec["crNo"]), "required")
+	if cp.CRRequired {
+		need("crNo", str(rec["crNo"]), "required")
+	}
 	need("email", str(rec["email"]), "required")
 	a := sub(rec, "address")
 	if !cp.NationalAddress {
@@ -784,6 +796,10 @@ func storeCreateErrors(rec M) map[string]string {
 		}
 		need("address.streetEn", str(a["streetEn"]), "required")
 		need("address.cityEn", str(a["cityEn"]), "required")
+		if len(cp.States) > 0 {
+			need("address.stateCode", str(a["stateCode"]), "required")
+			need("address.postalCode", str(a["postalCode"]), "required")
+		}
 		return e
 	}
 	if p := str(rec["phone"]); p == "" {
@@ -869,4 +885,16 @@ func (s *storesBackend) syncCountryVAT(id string) {
 	ctx, cancel := dbctx()
 	defer cancel()
 	_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": bson.M{"vat_percent": 0.0}})
+}
+
+// storeAddressOf is the address a store save ends with (the record's, else
+// the saved one with its state from erp.x), for the GSTIN state check.
+func storeAddressOf(rec, prev M, cp *models.CountryProfile) M {
+	if a, ok := rec["address"].(M); ok {
+		return a
+	}
+	if prev == nil {
+		return M{}
+	}
+	return M{"stateCode": str(get(prev, "erp.x.address.stateCode"))}
 }

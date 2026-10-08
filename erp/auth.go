@@ -197,11 +197,11 @@ func ValidateSignup(body M) map[string]string {
 	o := sub(body, "owner")
 	c := sub(body, "company")
 	a := sub(c, "address")
-	// company.countryCode: one of the GCC countries (default Saudi Arabia)
-	// decides the tax-number, phone and address rules below.
+	// company.countryCode: one of the supported countries (default Saudi
+	// Arabia) decides the tax-number, phone and address rules below.
 	cc := normCountry(str(c["countryCode"]))
 	if cc != "" && models.CountryProfileFor(cc) == nil {
-		e["company.countryCode"] = "choose a GCC country: SA, AE, OM, QA, BH or KW"
+		e["company.countryCode"] = "choose a supported country: SA, AE, OM, QA, BH, KW or IN"
 	}
 	cp := models.CountryProfileOrSaudi(cc)
 	if strings.TrimSpace(str(o["name"])) == "" {
@@ -225,8 +225,11 @@ func ValidateSignup(body M) map[string]string {
 	if strings.TrimSpace(str(c["nameEn"])) == "" {
 		e["company.nameEn"] = "Registered company name is required"
 	}
+	// the Arabic name is required in the GCC; optional in India
 	if n := strings.TrimSpace(str(c["nameAr"])); n == "" {
-		e["company.nameAr"] = "required"
+		if cp.GCC {
+			e["company.nameAr"] = "required"
+		}
 	} else if !hasArabic(n) {
 		e["company.nameAr"] = "must contain Arabic letters"
 	}
@@ -236,9 +239,13 @@ func ValidateSignup(body M) map[string]string {
 		}
 	} else if !validTaxIDFor(cp, v) {
 		e["company.vatNo"] = cp.TaxIDHint
+	} else if msg := gstinStateError(cp, v, a); msg != "" {
+		e["company.vatNo"] = msg
 	}
 	if v := str(c["crNo"]); v == "" {
-		e["company.crNo"] = "required"
+		if cp.CRRequired {
+			e["company.crNo"] = "required"
+		}
 	} else if (cp.Code == "SA" && !ValidCR(v)) || (cp.Code != "SA" && !cp.ValidCR(v)) {
 		e["company.crNo"] = cp.CRHint
 	}
@@ -254,12 +261,19 @@ func ValidateSignup(body M) map[string]string {
 		e["company.plan"] = "invalid plan"
 	}
 	if !cp.NationalAddress {
-		// other GCC countries: street and city, the rest optional
+		// other countries: street and city, the rest optional (India also
+		// needs the state, which decides CGST+SGST or IGST, and the PIN code)
 		if strings.TrimSpace(str(a["streetEn"])) == "" {
 			e["company.address.streetEn"] = "required"
 		}
 		if strings.TrimSpace(str(a["cityEn"])) == "" {
 			e["company.address.cityEn"] = "required"
+		}
+		if len(cp.States) > 0 && strings.TrimSpace(str(a["stateCode"])) == "" {
+			e["company.address.stateCode"] = "required"
+		}
+		if cp.Code == "IN" && strings.TrimSpace(str(a["postalCode"])) == "" {
+			e["company.address.postalCode"] = "required"
 		}
 		for k, v := range addressErrorsFor(cp, a, "company.address.") {
 			e[k] = v
@@ -324,7 +338,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	// indexes + user), so the new store is created exactly like the old app's.
 	legacyReq := M{
 		"name": str(o["name"]), "email": email, "mob": cleanPhone(str(o["mobile"])), "password": str(o["password"]),
-		"store_name": str(c["nameEn"]), "store_name_in_arabic": str(c["nameAr"]),
+		"store_name": str(c["nameEn"]), "store_name_in_arabic": str(c["nameAr"]), // empty: the English name
 		"business_category": category, "registration_number": str(c["crNo"]), "vat_no": str(c["vatNo"]),
 		"phone": cleanPhone(str(c["mobile"])), "country_code": cp.Code, "country_name": cp.NameEn, "zatca_phase": zatcaPhase,
 		"national_address": addressToLegacy(a),
@@ -364,7 +378,7 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	_, _ = mainDB().Collection("store").UpdateOne(ctx, bson.M{"_id": sid}, bson.M{"$set": bson.M{
 		"erp.v": int64(1), "erp.x.short": short, "erp.x.plan": str(c["plan"]), "erp.x.branchAr": "الفرع الرئيسي",
 		"erp.x.phone2": cleanPhone(str(c["mobile"])), "erp.x.trialEndsAt": time.Now().AddDate(0, 0, 14).In(sloc).Format(layoutDay),
-		"erp.x.businessType": category, "erp.x.address": M{"countryAr": cp.NameAr, "shortAddress": str(a["shortAddress"])},
+		"erp.x.businessType": category, "erp.x.address": signupAddressExtras(cp, a),
 		"erp.h": bson.A{historyEntryIn(sloc, str(o["name"]), "created", []interface{}{})},
 	}})
 	if cp.Code != "SA" {
@@ -425,4 +439,15 @@ func deriveShort(name string) string {
 		return "MAIN"
 	}
 	return ini
+}
+
+// signupAddressExtras: the address fields kept in erp.x (no legacy field):
+// the Arabic country name, the Saudi short address and India's state.
+func signupAddressExtras(cp *models.CountryProfile, a M) M {
+	x := M{"countryAr": cp.NameAr, "shortAddress": str(a["shortAddress"])}
+	if sc := strings.TrimSpace(str(a["stateCode"])); sc != "" && cp.StateName(sc) != "" {
+		x["stateCode"] = sc
+		x["stateEn"] = cp.StateName(sc)
+	}
+	return x
 }

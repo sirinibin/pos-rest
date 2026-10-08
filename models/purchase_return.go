@@ -1219,16 +1219,13 @@ func (purchasereturn *PurchaseReturn) Validate(
 		return errs
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(purchasereturn.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(purchasereturn.Phone)) {
+	if !govalidator.IsNull(strings.TrimSpace(purchasereturn.Phone)) && !ValidStorePhone(store, strings.TrimSpace(purchasereturn.Phone)) {
 		errs["phone"] = "Invalid phone no."
 		return
 	}
 
-	if !govalidator.IsNull(strings.TrimSpace(purchasereturn.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(purchasereturn.VatNo), "15") {
-		errs["vat_no"] = "VAT No. should be 15 digits"
-		return
-	} else if !govalidator.IsNull(strings.TrimSpace(purchasereturn.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(purchasereturn.VatNo), "3") {
-		errs["vat_no"] = "VAT No. should start and end with 3"
+	if msg := StoreVATNoError(store, purchasereturn.VatNo); msg != "" {
+		errs["vat_no"] = msg
 		return
 	}
 

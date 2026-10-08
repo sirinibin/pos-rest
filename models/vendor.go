@@ -1481,10 +1481,9 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 	*/
 
-	if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) && !IsValidDigitNumber(strings.TrimSpace(vendor.VATNo), "15") {
-		errs["vat_no"] = "VAT No. should be 15 digits"
-	} else if !govalidator.IsNull(strings.TrimSpace(vendor.VATNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(vendor.VATNo), "3") {
-		errs["vat_no"] = "VAT No. should start and end with 3"
+	// the store's country decides the format (Saudi: 15 digits, 3…3)
+	if msg := StoreVATNoError(store, vendor.VATNo); msg != "" {
+		errs["vat_no"] = msg
 	}
 
 	if !govalidator.IsNull(vendor.RegistrationNumber) && !IsAlphanumeric(vendor.RegistrationNumber) {

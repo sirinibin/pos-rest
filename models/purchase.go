@@ -1445,11 +1445,8 @@ func (purchase *Purchase) Validate(
 	}
 
 
-	if !govalidator.IsNull(strings.TrimSpace(purchase.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(purchase.VatNo), "15") {
-		errs["vat_no"] = "VAT No. should be 15 digits"
-		return
-	} else if !govalidator.IsNull(strings.TrimSpace(purchase.VatNo)) && !IsNumberStartAndEndWith(strings.TrimSpace(purchase.VatNo), "3") {
-		errs["vat_no"] = "VAT No. should start and end with 3"
+	if msg := StoreVATNoError(store, purchase.VatNo); msg != "" {
+		errs["vat_no"] = msg
 		return
 	}
 
