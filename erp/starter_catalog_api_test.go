@@ -249,6 +249,9 @@ func TestAPI_StarterCatalog_EveryCategorySeeds(t *testing.T) {
 	tok, sid := signupOwner(t, "starter-all")
 	defer cleanupStore(t, sid)
 	for _, bc := range BusinessCategories {
+		if !CategoryAllowedIn(bc.Value, "SA") {
+			continue // India-only categories: TestAPI_KeralaCategories_IndiaStore
+		}
 		g := call(t, "GET", "/stores/"+sid, tok, nil)
 		if p := call(t, "PATCH", "/stores/"+sid, tok, M{"category": bc.Value}, "If-Match", str(g.Body["version"])); p.Code != 200 {
 			t.Fatalf("%s: set category: %d %s", bc.Value, p.Code, p.Raw)

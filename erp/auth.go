@@ -256,6 +256,8 @@ func ValidateSignup(body M) map[string]string {
 	}
 	if t := str(c["type"]); !signupTypes[t] && CategoryTerminal(t) == "" {
 		e["company.type"] = "invalid business type"
+	} else if !CategoryAllowedIn(t, cp.Code) {
+		e["company.type"] = categoryCountryError(t)
 	}
 	if p := str(c["plan"]); !signupPlans[p] {
 		e["company.plan"] = "invalid plan"

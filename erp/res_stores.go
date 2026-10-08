@@ -378,6 +378,17 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 			e["countryCode"] = "the country can't change once the store has issued invoices"
 		}
 	}
+	// some categories are offered in one country only (the Kerala tailoring
+	// and boutique categories are India's): check a new category, or a new
+	// country under the kept category
+	effCountry := oldCountry
+	if newCountry != "" {
+		effCountry = newCountry
+	}
+	catChanged := prev == nil || cat != strings.TrimSpace(str(prev["business_category"]))
+	if e["category"] == "" && cat != "" && (catChanged || newCountry != oldCountry) && !CategoryAllowedIn(cat, effCountry) {
+		e["category"] = categoryCountryError(cat)
+	}
 	if newCountry == "" {
 		newCountry = oldCountry
 	}

@@ -43,6 +43,53 @@ var BusinessCategories = []BusinessCategory{
 	{"Gaming and Entertainment", "gamingsa"},
 	// shown as "Business, Visa & Travels" in the app (ZATCA: letters and spaces only)
 	{"Business Visa and Travels", "travel"},
+	// India only (categoryCountries); "Kerala Tailor Shop & Gents Dress" in the app
+	{"Kerala Tailor Shop and Gents Dress", "keralagents"},
+	{"Kerala Tailor Shop", "keralatailor"},
+	{"Kerala Ladies Boutique", "keralaboutique"},
+}
+
+// categoryCountries: business categories offered only in some countries (by
+// terminal id). Every other category is open to every supported country.
+var categoryCountries = map[string][]string{
+	"keralagents":    {"IN"},
+	"keralatailor":   {"IN"},
+	"keralaboutique": {"IN"},
+}
+
+// CategoryCountries returns the countries a business category is limited to
+// (nil: every country).
+func CategoryCountries(value string) []string {
+	return categoryCountries[CategoryTerminal(value)]
+}
+
+// CategoryAllowedIn reports whether a store in country cc (ISO code, "" =
+// Saudi Arabia, the legacy default) may use the business category. Unknown
+// free-text values are left to the caller.
+func CategoryAllowedIn(value, cc string) bool {
+	list := CategoryCountries(value)
+	if len(list) == 0 {
+		return true
+	}
+	cc = strings.ToUpper(strings.TrimSpace(cc))
+	if cc == "" {
+		cc = "SA"
+	}
+	for _, c := range list {
+		if c == cc {
+			return true
+		}
+	}
+	return false
+}
+
+// categoryCountryError is the message when a category is not offered in the
+// store's country.
+func categoryCountryError(value string) string {
+	if list := CategoryCountries(value); len(list) == 1 && list[0] == "IN" {
+		return "this business category is for stores in India"
+	}
+	return "this business category is not offered in the store's country"
 }
 
 // reZatcaCategory: what ZATCA's CSR accepts safely as business category.
