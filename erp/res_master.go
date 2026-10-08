@@ -162,6 +162,26 @@ func newWarehousesResource() *Resource {
 
 // ---- products ----
 
+// productIsSet: a set (bundle) is a product with components. The legacy
+// product save (models.Product.Validate) stores is_set the wrong way round
+// (true without components, false with them), so every product created or
+// edited through the API read as a set or not the opposite way, and the POS
+// grids (where.isSet=false) hid ordinary products. The components decide.
+func productIsSet(d M) bool {
+	return len(arr(get(d, "set.products"))) > 0
+}
+
+// productSetWhere is where.isSet with productIsSet's meaning.
+func productSetWhere(val, _ string) (bson.M, bool) {
+	switch val {
+	case "true":
+		return bson.M{"set.products.0": bson.M{"$exists": true}}, true
+	case "false":
+		return bson.M{"set.products.0": bson.M{"$exists": false}}, true
+	}
+	return nil, false
+}
+
 func productToContract(x *mapCtx, d M) M {
 	ps := sub(sub(d, "product_stores"), x.storeHex)
 	rec := M{
@@ -169,7 +189,7 @@ func productToContract(x *mapCtx, d M) M {
 		"keywords": strs(d["additional_keywords"]), "partNo": str(d["part_number"]), "prefixPartNo": str(d["prefix_part_number"]),
 		"unit": str(d["unit"]), "isService": boolv(d["is_service"]), "categoryIds": ids(d["category_id"]),
 		"brandId": idOrNil(d["brand_id"]), "country": str(d["country_name"]), "barcode": str(d["bar_code"]),
-		"rack": str(d["rack"]), "note": str(d["note"]), "images": strs(d["images"]), "isSet": boolv(d["is_set"]),
+		"rack": str(d["rack"]), "note": str(d["note"]), "images": strs(d["images"]), "isSet": productIsSet(d),
 		"linkedIds": ids(d["linked_product_ids"]),
 	}
 	if rec["barcode"] == "" {
@@ -482,7 +502,7 @@ func newProductsResource() *Resource {
 			"stock": "product_stores.{store}.stock"},
 		listRange: map[string]string{"stock": "product_stores.{store}.stock", "retail": "product_stores.{store}.retail_unit_price"},
 		listWhere: map[string]whereKey{"categoryId": {key: "category_id", oid: true}, "brandId": {key: "brand_id", oid: true},
-			"isService": {fn: boolWhere("is_service")}, "isSet": {fn: boolWhere("is_set")},
+			"isService": {fn: boolWhere("is_service")}, "isSet": {fn: productSetWhere},
 			"stockStatus": {fn: productStockStatus}},
 		listSumExpr: map[string]func(storeHex string) interface{}{
 			// stock value at purchase price (inventory/helpers.js stockValue)

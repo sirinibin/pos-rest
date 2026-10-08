@@ -334,8 +334,10 @@ func (cfg *docCfg) toContract(x *mapCtx, d M) M {
 		rec["commissionMethod"] = str(d["commission_payment_method"])
 	}
 	if cfg.rounding {
+		// the client's rounding: the client's net (ksTotals + rounding) is then
+		// the legacy net_total
 		rec["roundingAuto"] = false
-		rec["rounding"] = num(d["rounding_amount"])
+		rec["rounding"] = round2(num(d["rounding_amount"]) - roundingCentFix(rec, vat))
 	}
 	for _, lk := range cfg.links {
 		rec[lk.c] = idOrNil(d[lk.l])
@@ -368,6 +370,29 @@ func ksTotals(rec M, vat float64) (beforeRounding float64) {
 	taxable := round2(gross - itemDisc - num(rec["discount"]) + num(rec["shipping"]))
 	v := round2(taxable * vat / 100)
 	return round2(taxable + v)
+}
+
+// legacyBeforeRounding reproduces the legacy save's net before rounding
+// (models.Order FindTotal / FindNetTotal and their twins on the other
+// documents): it rounds the running line sum to 2 decimals after every line,
+// so with VAT-inclusive prices (4-decimal unit prices) it can land a cent away
+// from ksTotals.  The legacy net is legacyBeforeRounding + rounding_amount.
+func legacyBeforeRounding(rec M, vat float64) float64 {
+	total := 0.0
+	for _, it := range arr(rec["items"]) {
+		im, _ := it.(M)
+		total = round2(total + num(im["qty"])*(num(im["unitPrice"])-num(im["unitDiscount"])))
+	}
+	base := round2(total + round2(num(rec["shipping"])) - round2(num(rec["discount"])))
+	return round2(base + round2(base*vat/100))
+}
+
+// roundingCentFix is what the legacy rounding_amount carries on top of the
+// client's rounding so that the legacy net equals the client's net (else the
+// legacy save rejects a payment of the full total: "Total payment should not
+// exceed …").  Read back, it is taken off again.
+func roundingCentFix(rec M, vat float64) float64 {
+	return round2(ksTotals(rec, vat) - legacyBeforeRounding(rec, vat))
 }
 
 // matchPrevLine finds the legacy line a contract item corresponds to, so
@@ -706,7 +731,7 @@ func (cfg *docCfg) toLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create
 			r = round2(math.Round(br*20)/20 - br)
 		}
 		p["auto_rounding_amount"] = false
-		p["rounding_amount"] = r
+		p["rounding_amount"] = round2(r + roundingCentFix(rec, vat))
 	}
 	if cfg.payments {
 		pays, err := cfg.paymentsToLegacy(x.loc(), rec, prev, date)
