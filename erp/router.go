@@ -68,6 +68,10 @@ func Register(router *mux.Router) {
 	for _, res := range Resources() {
 		res := res
 		s.HandleFunc("/"+res.Path, func(w http.ResponseWriter, r *http.Request) { handleList(w, r, res) }).Methods("GET")
+		if res.Path == "products" {
+			// before /{id}: "facets" is not a record id
+			s.HandleFunc("/products/facets", func(w http.ResponseWriter, r *http.Request) { handleProductFacets(w, r, res) }).Methods("GET")
+		}
 		if hasListStats(res) {
 			// before /{id}: "stats" is not a record id
 			s.HandleFunc("/"+res.Path+"/stats", func(w http.ResponseWriter, r *http.Request) { handleListStats(w, r, res) }).Methods("GET")

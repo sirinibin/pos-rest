@@ -500,6 +500,9 @@ func newProductsResource() *Resource {
 		lineErr: map[string]string{"adjustment_date": "date", "adjustment_quantity": "qty", "adjustment_type": "type", "category_id": "id"},
 		lineKey: "adjustments",
 	}
+	for k, v := range productPosWhere {
+		b.listWhere[k] = v
+	}
 	return &Resource{Name: "products", Path: "products", Scope: "store", Module: "inventory", Legacy: "store DB `product` (product_stores[store])", Backend: b}
 }
 

@@ -210,3 +210,71 @@ func TestAPI_Products_Specs(t *testing.T) {
 		t.Fatalf("bad spec key accepted: %d %s", b.Code, b.Raw)
 	}
 }
+
+// POS product grids page from the server: forTerminal / spec filters and the
+// /products/facets counts.
+func TestAPI_Products_PosPagingAndFacets(t *testing.T) {
+	requireDB(t)
+	owner, sid := signupOwner(t, "catfacets")
+	defer cleanupStore(t, sid)
+	spec := func(kind, name string) string {
+		r := call(t, "POST", "/product-specs?storeId="+sid, owner, M{"storeId": sid, "kind": kind, "name": name})
+		if r.Code != 201 && r.Code != 200 {
+			t.Fatalf("spec: %d %s", r.Code, r.Raw)
+		}
+		return str(r.Body["id"])
+	}
+	s2, s4, c150 := spec("size", `2"`), spec("size", `4"`), spec("class", "150")
+	mk := func(name string, extra M) {
+		body := M{"storeId": sid, "nameEn": name, "unit": "Pcs", "pricing": M{"retail": 10}}
+		for k, v := range extra {
+			body[k] = v
+		}
+		if r := call(t, "POST", "/products?storeId="+sid, owner, body); r.Code != 201 && r.Code != 200 {
+			t.Fatalf("product %s: %d %s", name, r.Code, r.Raw)
+		}
+	}
+	mk("Valve A", M{"specs": M{"size": s2, "class": c150}})
+	mk("Valve B", M{"specs": M{"size": s2}})
+	mk("Flange C", M{"specs": M{"size": s4}, "posTerminal": "industrial"})
+	mk("Milk", M{"posTerminal": "grocery"})
+	mk("Plain D", nil)
+
+	l := call(t, "GET", "/products?storeId="+sid+"&where.forTerminal=industrial&limit=2&page=1&sort=nameEn&select=nameEn", owner, nil)
+	if l.Code != 200 || l.Body["total"] != 4.0 || len(l.data()) != 2 {
+		t.Fatalf("forTerminal page 1: %d %s", l.Code, l.Raw)
+	}
+	l = call(t, "GET", "/products?storeId="+sid+"&where.forTerminal=industrial&where.specSize="+s2, owner, nil)
+	if l.Code != 200 || l.Body["total"] != 2.0 {
+		t.Fatalf("specSize: %d %s", l.Code, l.Raw)
+	}
+	if b := call(t, "GET", "/products?storeId="+sid+"&where.forTerminal=casino", owner, nil); b.Code != 400 {
+		t.Fatalf("bad terminal: %d %s", b.Code, b.Raw)
+	}
+	f := call(t, "GET", "/products/facets?storeId="+sid+"&where.forTerminal=industrial", owner, nil)
+	if f.Code != 200 {
+		t.Fatalf("facets: %d %s", f.Code, f.Raw)
+	}
+	counts := func(name string) map[string]float64 {
+		out := map[string]float64{}
+		for _, r := range arr(f.Body[name]) {
+			rm := r.(M)
+			out[str(rm["id"])] = num(rm["count"])
+		}
+		return out
+	}
+	if sz := counts("specSize"); sz[s2] != 2 || sz[s4] != 1 || len(sz) != 2 {
+		t.Fatalf("size facet: %v", f.Body["specSize"])
+	}
+	if cl := counts("specClass"); cl[c150] != 1 || len(cl) != 1 {
+		t.Fatalf("class facet: %v", f.Body["specClass"])
+	}
+	if m := counts("specMaterial"); len(m) != 0 {
+		t.Fatalf("material facet: %v", f.Body["specMaterial"])
+	}
+	// facets follow the other filters and the search
+	f = call(t, "GET", "/products/facets?storeId="+sid+"&where.forTerminal=industrial&q=flange", owner, nil)
+	if sz := counts("specSize"); sz[s4] != 1 || len(sz) != 1 {
+		t.Fatalf("searched size facet: %v", f.Body["specSize"])
+	}
+}
