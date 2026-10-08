@@ -172,3 +172,41 @@ func TestAPI_Products_PosFields(t *testing.T) {
 		t.Fatalf("bad terminal: %d %s", b.Code, b.Raw)
 	}
 }
+
+// Industrial Supplies stores: class / size / material options (product-specs)
+// picked on products (specs, kept in erp.x) and listed with ?select=specs.
+func TestAPI_Products_Specs(t *testing.T) {
+	requireDB(t)
+	owner, sid := signupOwner(t, "catspecs")
+	defer cleanupStore(t, sid)
+	mk := func(kind, name string) string {
+		r := call(t, "POST", "/product-specs?storeId="+sid, owner, M{"storeId": sid, "kind": kind, "name": name})
+		if r.Code != 201 && r.Code != 200 {
+			t.Fatalf("create %s %s: %d %s", kind, name, r.Code, r.Raw)
+		}
+		return str(r.Body["id"])
+	}
+	cl, sz, mat := mk("class", "150"), mk("size", `2"`), mk("material", "A105 CS")
+	if b := call(t, "POST", "/product-specs?storeId="+sid, owner, M{"storeId": sid, "kind": "grade", "name": "X"}); b.Code != 400 || b.errField("kind") == "" {
+		t.Fatalf("bad kind accepted: %d %s", b.Code, b.Raw)
+	}
+	if l := call(t, "GET", "/product-specs?storeId="+sid, owner, nil); l.Code != 200 || len(l.data()) != 3 {
+		t.Fatalf("list specs: %d %s", l.Code, l.Raw)
+	}
+	body := M{"storeId": sid, "nameEn": "Gate valve 2in CL150", "unit": "Pcs", "pricing": M{"retail": 420},
+		"specs": M{"class": cl, "size": sz, "material": mat}}
+	r := call(t, "POST", "/products?storeId="+sid, owner, body)
+	if r.Code != 201 && r.Code != 200 {
+		t.Fatalf("create product: %d %s", r.Code, r.Raw)
+	}
+	if s := sub(r.Body, "specs"); s["class"] != cl || s["size"] != sz || s["material"] != mat {
+		t.Fatalf("specs: %v", r.Body["specs"])
+	}
+	l := call(t, "GET", "/products?storeId="+sid+"&select=nameEn,specs,categoryIds,brandId", owner, nil)
+	if l.Code != 200 || len(l.data()) != 1 || sub(l.data()[0].(M), "specs")["size"] != sz {
+		t.Fatalf("selected specs: %d %s", l.Code, l.Raw)
+	}
+	if b := call(t, "PATCH", "/products/"+str(r.Body["id"])+"?storeId="+sid, owner, M{"specs": M{"grade": "x"}}); b.Code != 400 || b.errField("specs.grade") == "" {
+		t.Fatalf("bad spec key accepted: %d %s", b.Code, b.Raw)
+	}
+}

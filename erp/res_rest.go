@@ -492,7 +492,7 @@ func proformaValidate(x *mapCtx, rec M, prev M) map[string]string {
 	return e
 }
 
-// allResources lists every contract resource (contract §11, 43 paths).
+// allResources lists every contract resource (contract §11, 44 paths).
 func allResources() []*Resource {
 	return []*Resource{
 		newStoresResource(), newUsersResource(), newRolesResource(), newCategoriesResource(), newBrandsResource(),
@@ -510,6 +510,7 @@ func allResources() []*Resource {
 		newRepairJobsResource(), newRFQsResource(),
 		newNativeResource("threads", "threads", "purchases", "store", "erp_thread", "", "", "thr", nil),
 		newNativeResource("notifications", "notifications", "", "store", "erp_notification", "", "", "not", nil),
+		newNativeResource("productSpecs", "product-specs", "inventory", "store", "erp_product_spec", "", "", "psp", productSpecValidate),
 	}
 }
 

@@ -95,6 +95,7 @@ var rePosToken = regexp.MustCompile(`^[A-Za-z0-9_-]{1,40}$`)
 // validatePosFields checks the POS catalog fields a product may carry
 // (kept in erp.x): posTerminal, posSection and posKey.
 func validatePosFields(rec M, e map[string]string) {
+	validateProductSpecs(rec, e)
 	if v, ok := rec["posTerminal"]; ok && v != nil && str(v) != "" {
 		if !posTerminals[str(v)] {
 			e["posTerminal"] = "unknown POS terminal"

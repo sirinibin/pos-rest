@@ -147,6 +147,12 @@ func resourceCases() []resourceCase {
 		{path: "notifications", body: func() M {
 			return M{"storeId": sA, "type": "stock", "tone": "warning", "titleEn": "Low", "at": dt, "read": false}
 		}, patch: M{"read": true}},
+		{path: "product-specs", body: func() M { return M{"storeId": sA, "kind": "class", "name": "CL" + digits(3)} },
+			patch: M{"name": "CL900"}, check: func(t *testing.T, rec M) {
+				if rec["kind"] != "class" {
+					t.Errorf("spec kind: %v", rec["kind"])
+				}
+			}},
 		{path: "roles", asAdmin: true, body: func() M { return M{"name": "Role " + uniq(""), "perms": M{"sales": M{"view": true}}} }, patch: M{"description": "d"}},
 		{path: "users", asAdmin: true, body: func() M {
 			return M{"name": "U " + uniq(""), "email": uniq("u") + "@t1.example", "phone": "05" + digits(8), "role": "r_viewer", "storeIds": []string{sA}}
