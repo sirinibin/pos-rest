@@ -127,7 +127,7 @@ func TestFacetPipelineAndResult(t *testing.T) {
 		t.Fatalf("pipeline: %v", p)
 	}
 	fc := p[1].(bson.M)["$facet"].(bson.M)
-	if len(fc) != 7 || fc["total"].(bson.A)[0].(bson.M)["$count"] != "n" {
+	if len(fc) != 8 || fc["total"].(bson.A)[0].(bson.M)["$count"] != "n" {
 		t.Fatalf("facets: %v", fc)
 	}
 	if fc["categoryId"].(bson.A)[0].(bson.M)["$unwind"] != "$category_id" {
@@ -159,7 +159,7 @@ func TestFacetPipelineAndResult(t *testing.T) {
 	if b := out["brandId"].([]M); len(b) != 0 {
 		t.Errorf("brands: %v", b)
 	}
-	if e := facetResult(bson.M{}); len(e) != 7 || e["total"] != int64(0) {
+	if e := facetResult(bson.M{}); len(e) != 8 || e["total"] != int64(0) {
 		t.Error("every facet is present, empty")
 	}
 }

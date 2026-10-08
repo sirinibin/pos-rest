@@ -14,7 +14,7 @@ import (
 //
 //	GET /products?where.forTerminal=industrial&where.isService=false&where.categoryId=…&where.specSize=…&q=…&page=1&limit=50
 //	GET /products/facets?where.forTerminal=industrial&where.isService=false&where.isSet=false
-//	  → {"categoryId":[{"id":…,"count":n}], "brandId":[…], "specClass":[…], "specSize":[…], "specMaterial":[…], "posSection":[…], "total":n}
+//	  → {"categoryId":[{"id":…,"count":n}], "brandId":[…], "specClass":[…], "specSize":[…], "specMaterial":[…], "specType":[…], "posSection":[…], "total":n}
 //
 // forTerminal:  products tagged for the terminal (posTerminal) or not tagged at all.
 // onlyTerminal: products tagged for the terminal.
@@ -117,6 +117,7 @@ var productPosWhere = map[string]whereKey{
 	"specClass":    {key: "erp.x.specs.class"},
 	"specSize":     {key: "erp.x.specs.size"},
 	"specMaterial": {key: "erp.x.specs.material"},
+	"specType":     {key: "erp.x.specs.type"},
 }
 
 // productFacetFields: facet name → legacy key (category_id is an array).
@@ -129,6 +130,7 @@ var productFacetFields = []struct {
 	{"specClass", "erp.x.specs.class", false},
 	{"specSize", "erp.x.specs.size", false},
 	{"specMaterial", "erp.x.specs.material", false},
+	{"specType", "erp.x.specs.type", false},
 	{"posSection", "erp.x.posSection", false},
 }
 

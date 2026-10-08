@@ -4,14 +4,14 @@ import (
 	"strings"
 )
 
-// Product specifications for Industrial Supplies stores: each product may carry
-// a class, size and material picked from the store's own option lists
-// (resource productSpecs, NEW collection erp_product_spec). The product keeps
-// the option ids in `specs` (erp.x): {"class": id, "size": id, "material": id}.
-// The industrial POS terminal filters by them and shows only the ones in use.
+// Product option lists a store manages (resource productSpecs, NEW collection
+// erp_product_spec): a product type for every store, and class, size and
+// material for Industrial Supplies stores. The product keeps the option ids in
+// `specs` (erp.x): {"type": id, "class": id, "size": id, "material": id}.
+// POS terminals filter by them and show only the ones in use.
 
 // ProductSpecKinds are the option lists a store manages.
-var ProductSpecKinds = []string{"class", "size", "material"}
+var ProductSpecKinds = []string{"type", "class", "size", "material"}
 
 func validSpecKind(k string) bool {
 	for _, s := range ProductSpecKinds {
@@ -28,7 +28,7 @@ const maxSpecName = 60
 func productSpecValidate(x *mapCtx, rec M, prev M) map[string]string {
 	e := map[string]string{}
 	if !validSpecKind(str(rec["kind"])) {
-		e["kind"] = "one of class, size, material"
+		e["kind"] = "one of type, class, size, material"
 	}
 	name := strings.TrimSpace(str(rec["name"]))
 	if name == "" {
@@ -56,7 +56,7 @@ func validateProductSpecs(rec M, e map[string]string) {
 		}
 	}
 	if !isMap {
-		e["specs"] = "must be an object of class, size and material"
+		e["specs"] = "must be an object of type, class, size and material"
 		return
 	}
 	for k, id := range m {

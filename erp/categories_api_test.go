@@ -297,7 +297,12 @@ func TestAPI_Products_PosSections(t *testing.T) {
 			t.Fatalf("product %s: %d %s", name, r.Code, r.Raw)
 		}
 	}
-	mk("Tomato", M{"posTerminal": "grocery", "posSection": "veg"})
+	tr := call(t, "POST", "/product-specs?storeId="+sid, owner, M{"storeId": sid, "kind": "type", "name": "Fresh"})
+	if tr.Code != 201 && tr.Code != 200 {
+		t.Fatalf("type option: %d %s", tr.Code, tr.Raw)
+	}
+	fresh := str(tr.Body["id"])
+	mk("Tomato", M{"posTerminal": "grocery", "posSection": "veg", "specs": M{"type": fresh}})
 	mk("Onion", M{"posTerminal": "grocery", "posSection": "veg"})
 	mk("Milk", M{"posTerminal": "grocery", "posSection": "dairy"})
 	mk("Batteries", M{"posTerminal": "grocery"})
@@ -341,5 +346,8 @@ func TestAPI_Products_PosSections(t *testing.T) {
 	}
 	if sec["veg"] != 2 || sec["dairy"] != 1 || len(sec) != 2 {
 		t.Fatalf("section facet: %v", f.Body["posSection"])
+	}
+	if ty := arr(f.Body["specType"]); len(ty) != 1 || str(ty[0].(M)["id"]) != fresh || num(ty[0].(M)["count"]) != 1 {
+		t.Fatalf("type facet: %v", f.Body["specType"])
 	}
 }
