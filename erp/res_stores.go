@@ -423,6 +423,7 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 			}
 		}
 	}
+	validatePosSettings(rec, e)
 	return e
 }
 

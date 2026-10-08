@@ -24,6 +24,12 @@ type nativeBackend struct {
 	serialKey string // numbering (serverNumbers) key, "" = no code
 	idPrefix  string
 	validate  func(x *mapCtx, rec M, prev M) map[string]string
+	// whereKeys: contract fields a list may be filtered by (?where.<k>=v, exact
+	// match; a comma list matches any of them). nil = no filters.
+	whereKeys map[string]bool
+	// bareHistory: history entries say who changed the record and when, without
+	// the field diff (records rewritten often whose data is large)
+	bareHistory bool
 }
 
 func (b *nativeBackend) col(storeHex string) *mongo.Collection {
@@ -64,8 +70,24 @@ func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, 
 	if len(q.IDs) > 0 {
 		f["_id"] = bson.M{"$in": q.IDs}
 	}
-	if len(q.Where) > 0 || len(q.Range) > 0 {
+	if len(q.Range) > 0 {
 		return nil, 0, errBadRequest("This list cannot be filtered.", map[string]string{"where": "not supported for this resource"})
+	}
+	for k, v := range q.Where {
+		if !b.whereKeys[k] {
+			return nil, 0, errBadRequest("This list cannot be filtered by "+k+".", map[string]string{"where." + k: "not supported for this resource"})
+		}
+		if strings.Contains(v, ",") {
+			in := bson.A{}
+			for _, p := range strings.Split(v, ",") {
+				if p = strings.TrimSpace(p); p != "" {
+					in = append(in, p)
+				}
+			}
+			f[k] = bson.M{"$in": in}
+		} else {
+			f[k] = v
+		}
 	}
 	if to := q.toIn(c.storeLoc(storeHex)); to != nil && b.dateField != "" {
 		if cur, ok := f[nativeDateKey].(bson.M); ok {
@@ -238,7 +260,11 @@ func (b *nativeBackend) write(c *Ctx, storeHex string, prev, next M, action stri
 	loc := c.storeLoc(storeHex)
 	next["updatedAt"] = nowFn().In(loc).Format(layoutDT)
 	next["updatedBy"] = c.UserName
-	next["history"] = appendHistory(arr(prev["history"]), historyEntryIn(loc, c.UserName, action, diff(prev, next)))
+	changes := []interface{}{}
+	if !b.bareHistory {
+		changes = diff(prev, next)
+	}
+	next["history"] = appendHistory(arr(prev["history"]), historyEntryIn(loc, c.UserName, action, changes))
 	if err := b.persist(loc, storeHex, next, true); err != nil {
 		return nil, err
 	}

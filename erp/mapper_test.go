@@ -761,13 +761,13 @@ func TestAllResourcesCoverContract(t *testing.T) {
 		"accounts", "warehouses", "products", "customers", "vendors", "employees", "vehicles", "signatures", "packages", "rfq-suppliers",
 		"sales", "quotations", "proformas", "sales-returns", "delivery-notes", "nonvat-sales", "nonvat-returns", "quotation-returns",
 		"purchases", "purchase-orders", "purchase-requests", "purchase-returns", "purchase-bills", "stock-transfers", "expenses",
-		"deposits", "withdrawals", "capitals", "capital-withdrawals", "dividends", "salaries", "repair-jobs", "rfqs", "threads", "notifications", "product-specs"}
+		"deposits", "withdrawals", "capitals", "capital-withdrawals", "dividends", "salaries", "repair-jobs", "rfqs", "threads", "notifications", "product-specs", "pos-records"}
 	got := map[string]*Resource{}
 	for _, r := range allResources() {
 		got[r.Path] = r
 	}
-	if len(want) != 44 || len(got) != 44 {
-		t.Fatalf("want 44 resources, registry has %d", len(got))
+	if len(want) != 45 || len(got) != 45 {
+		t.Fatalf("want 45 resources, registry has %d", len(got))
 	}
 	org := knownSet("stores", "users", "roles", "categories", "brands", "customer-categories", "vendor-categories", "expense-categories", "accounts")
 	for _, p := range want {

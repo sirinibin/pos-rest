@@ -511,6 +511,7 @@ func allResources() []*Resource {
 		newNativeResource("threads", "threads", "purchases", "store", "erp_thread", "", "", "thr", nil),
 		newNativeResource("notifications", "notifications", "", "store", "erp_notification", "", "", "not", nil),
 		newNativeResource("productSpecs", "product-specs", "inventory", "store", "erp_product_spec", "", "", "psp", productSpecValidate),
+		newPosRecordsResource(),
 	}
 }
 

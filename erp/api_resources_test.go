@@ -153,6 +153,13 @@ func resourceCases() []resourceCase {
 					t.Errorf("spec kind: %v", rec["kind"])
 				}
 			}},
+		{path: "pos-records", body: func() M {
+			return M{"storeId": sA, "terminal": "restaurant", "kind": "tables", "status": "open", "data": M{"T1": M{"covers": 2}}}
+		}, patch: M{"data": M{"T1": M{"covers": 4}}}, check: func(t *testing.T, rec M) {
+			if rec["terminal"] != "restaurant" || rec["kind"] != "tables" {
+				t.Errorf("pos record: %v", rec)
+			}
+		}},
 		{path: "roles", asAdmin: true, body: func() M { return M{"name": "Role " + uniq(""), "perms": M{"sales": M{"view": true}}} }, patch: M{"description": "d"}},
 		{path: "users", asAdmin: true, body: func() M {
 			return M{"name": "U " + uniq(""), "email": uniq("u") + "@t1.example", "phone": "05" + digits(8), "role": "r_viewer", "storeIds": []string{sA}}

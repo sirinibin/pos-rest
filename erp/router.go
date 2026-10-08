@@ -53,6 +53,10 @@ func Register(router *mux.Router) {
 	// Starter catalog of the store's business category (starter_catalog.go)
 	registerStarterCatalog(s)
 
+	// POS terminals' shared working state and numbers (pos_records.go);
+	// before the resource routes so "next-number" is not taken for a record id
+	registerPosRecords(s)
+
 	// Dashboard figures computed like the old business dashboard (dashboard_expense.go),
 	// the BI dashboard (dashboard_bi.go) and the main dashboard's data (dashboard_feed.go),
 	// all served from ready-made snapshots (dashboard_snapshots.go)
