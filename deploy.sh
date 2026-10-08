@@ -2,12 +2,8 @@
 # Deploy the Go backend to both test and production after all tests pass.
 #
 # Usage:
-#   ./deploy.sh           — deploy test (if within 10 pm–6 am Saudi) + production
-#   ./deploy.sh --force   — bypass time restriction; deploy both test + production
+#   ./deploy.sh           — deploy test + production
 set -euo pipefail
-
-FORCE=false
-for arg in "$@"; do [ "$arg" = "--force" ] && FORCE=true; done
 
 SSH_KEY="$HOME/Downloads/startuptech-v2.pem"
 AWS_USER="ubuntu"
@@ -17,17 +13,6 @@ HEALTH_BINARY="pos-health-monitor"
 HEALTH_DEST="/home/ubuntu/go/src/github.com/sirinibin/pos-rest"
 
 cd "$(dirname "$0")"
-
-# ─── guard: test-deploy window (10 pm – 6 am Saudi time) ─────────────────────
-
-# Returns 0 (allowed) when the current Saudi time is within the test-deploy window.
-# Saudi Arabia is UTC+3; allowed hours are 22, 23, 0, 1, 2, 3, 4, 5.
-test_window_open() {
-    local sa_hour
-    sa_hour=$(TZ='Asia/Riyadh' date +%H)
-    sa_hour=$((10#$sa_hour))
-    [ "$sa_hour" -ge 22 ] || [ "$sa_hour" -le 5 ]
-}
 
 # ─── guard: uncommitted changes ───────────────────────────────────────────────
 
@@ -150,14 +135,7 @@ deploy_to() {
 }
 
 # ─── 3. Deploy main API ──────────────────────────────────────────────────────
-if $FORCE || test_window_open; then
-    $FORCE && ! test_window_open && echo "==> [--force] Bypassing test deploy time restriction."
-    deploy_to "start-api-test" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest-test" "TEST"
-else
-    sa_time=$(TZ='Asia/Riyadh' date '+%H:%M')
-    echo ""
-    echo "==> Note: TEST deploy skipped (outside 10 pm–6 am Saudi window; current: $sa_time). Use --force to override."
-fi
+deploy_to "start-api-test" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest-test" "TEST"
 deploy_to "start-api" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest" "PRODUCTION"
 
 # ─── 4. Deploy health monitor (single shared instance) ────────────────────────
@@ -179,8 +157,4 @@ else
 fi
 
 echo ""
-if $FORCE || test_window_open; then
-    echo "==> Both test and production API + health monitor deployed successfully."
-else
-    echo "==> Production API + health monitor deployed successfully. (Test skipped — outside deploy window.)"
-fi
+echo "==> Both test and production API + health monitor deployed successfully."
