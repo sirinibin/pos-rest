@@ -50,6 +50,9 @@ func Register(router *mux.Router) {
 	// Subscription billing by bank transfer (billing.go)
 	registerBilling(s)
 
+	// Starter catalog of the store's business category (starter_catalog.go)
+	registerStarterCatalog(s)
+
 	// Dashboard figures computed like the old business dashboard (dashboard_expense.go),
 	// the BI dashboard (dashboard_bi.go) and the main dashboard's data (dashboard_feed.go),
 	// all served from ready-made snapshots (dashboard_snapshots.go)

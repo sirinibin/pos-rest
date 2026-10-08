@@ -378,6 +378,13 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ = loadUser(uid)
+	// the starter catalog of the business category (company.starterCatalog: false skips it)
+	if c["starterCatalog"] != false {
+		sc := &Ctx{R: r, Token: tok.Token, User: u, UserID: uid}
+		if sc.loadAccess() == nil {
+			seedNewStore(sc, storeHex)
+		}
+	}
 	stores, _ := accessibleStores(u)
 	var store M
 	sb := newStoresResource().Backend.(*storesBackend)

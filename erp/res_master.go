@@ -732,14 +732,8 @@ func newBrandsResource() *Resource {
 		toL: simpleToL(fields, func(x *mapCtx, rec, prev M, ch map[string]bool, create bool, p M) error {
 			if str(p["code"]) == "" && (create || ch["name"]) {
 				// legacy requires a brand code; the contract has none
-				code := strings.ToUpper(reNonAlnum.ReplaceAllString(str(rec["name"]), ""))
-				if len(code) > 6 {
-					code = code[:6]
-				}
-				if code == "" {
-					code = "BRAND"
-				}
-				p["code"] = code
+				// unique in the store ("Arabian Oud" and "Arabian Pipes" are both ARABIA)
+				p["code"] = uniqueBrandCode(str(rec["name"]), storeBrandCodes(x.storeHex, prev))
 			}
 			return nil
 		}),

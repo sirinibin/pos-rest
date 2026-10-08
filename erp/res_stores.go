@@ -684,6 +684,9 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 		return nil, errForbidden("Only StartERP admins can add stores. New businesses sign up.")
 	}
 	rec := stripServerOwned(body)
+	// starterCatalog: false skips the business category's starter catalog
+	starter := rec["starterCatalog"] != false
+	delete(rec, "starterCatalog")
 	x := newMapCtx(c, "")
 	errs := storeValidate(x, rec, nil)
 	for k, v := range storeCreateErrors(rec) {
@@ -745,6 +748,9 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 	// store is in c.Stores once reloaded
 	if err := c.loadAccess(); err != nil {
 		return nil, err
+	}
+	if starter {
+		seedNewStore(c, hex)
 	}
 	return s.Get(c, "", hex, true)
 }
