@@ -476,6 +476,7 @@ func productToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) 
 func newProductsResource() *Resource {
 	b := &legacyBackend{coll: "product", deletedKey: "deleted", sortKey: "_id",
 		searchKeys: []string{"name", "name_in_arabic", "item_code", "part_number", "bar_code"}, searchSort: "name",
+		searchFn: productSearch,
 		listSort: map[string]string{"code": "item_code", "nameEn": "name", "nameAr": "name_in_arabic", "partNo": "part_number",
 			"retail": "product_stores.{store}.retail_unit_price", "purchase": "product_stores.{store}.purchase_unit_price",
 			"stock": "product_stores.{store}.stock"},

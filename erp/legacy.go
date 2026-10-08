@@ -252,17 +252,18 @@ type legacyBackend struct {
 	noRestore     string
 	readOnly      bool
 	sortKey       string
-	searchKeys    []string                                     // legacy keys ?q= matches (search.go); none = ?q= not supported
-	searchSort    string                                       // sort key for ?q= results (e.g. name), "" = sortKey
-	listSort      map[string]string                            // ?sort= contract field -> legacy key (listquery.go)
-	listWhere     map[string]whereKey                          // ?where.<field>= contract field -> legacy key
-	listRange     map[string]string                            // ?min.<field>= / ?max.<field>= numeric contract field -> legacy key
-	listSumExpr   map[string]func(storeHex string) interface{} // ?sum= computed totals (e.g. stock value)
-	mainOrg       bool                                         // org-scoped resource in the main DB (stores, users)
-	access        func(c *Ctx) bson.M                          // extra visibility filter (mainOrg)
-	hybrid        map[string]bool                              // keys mapped to legacy AND preserved in erp.x (nested objects partially mapped)
-	storeHint     func(x *mapCtx, rec M) string                // main-DB docs: which store DB context to use
-	affectsStock  bool                                         // document moves stock: bump the version of every product it touches (rule 53)
+	searchKeys    []string                                         // legacy keys ?q= matches (search.go); none = ?q= not supported
+	searchSort    string                                           // sort key for ?q= results (e.g. name), "" = sortKey
+	searchFn      func(c *Ctx, storeHex, q string) (bson.M, error) // ?q= filter in place of searchKeys (products: product_search.go)
+	listSort      map[string]string                                // ?sort= contract field -> legacy key (listquery.go)
+	listWhere     map[string]whereKey                              // ?where.<field>= contract field -> legacy key
+	listRange     map[string]string                                // ?min.<field>= / ?max.<field>= numeric contract field -> legacy key
+	listSumExpr   map[string]func(storeHex string) interface{}     // ?sum= computed totals (e.g. stock value)
+	mainOrg       bool                                             // org-scoped resource in the main DB (stores, users)
+	access        func(c *Ctx) bson.M                              // extra visibility filter (mainOrg)
+	hybrid        map[string]bool                                  // keys mapped to legacy AND preserved in erp.x (nested objects partially mapped)
+	storeHint     func(x *mapCtx, rec M) string                    // main-DB docs: which store DB context to use
+	affectsStock  bool                                             // document moves stock: bump the version of every product it touches (rule 53)
 	// adapterSoftDelete: the legacy delete is DESTRUCTIVE (DeleteOne), so the
 	// contract soft delete is kept in erp.del (restorable); ?hard=1 calls the
 	// legacy delete.
@@ -569,7 +570,14 @@ func (b *legacyBackend) listFilter(c *Ctx, storeHex string, q ListQuery) (bson.M
 	if from := q.fromIn(c.storeLoc(storeHex)); from != nil && b.dateKey != "" {
 		f = andFilter(f, bson.M{b.dateKey: bson.M{"$gte": *from}})
 	}
-	f = andFilter(f, searchFilter(q.Search, b.searchKeys), legacyIDsFilter(q.IDs))
+	sf := searchFilter(q.Search, b.searchKeys)
+	if b.searchFn != nil && q.Search != "" {
+		var err error
+		if sf, err = b.searchFn(c, storeHex, q.Search); err != nil {
+			return nil, nil, err
+		}
+	}
+	f = andFilter(f, sf, legacyIDsFilter(q.IDs))
 	xf, xsort, err := b.listExtras(c, storeHex, q)
 	if err != nil {
 		return nil, nil, err
