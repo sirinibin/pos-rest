@@ -53,24 +53,7 @@ jobs:
           fi
           sha256sum ./pos-rest
 
-      # ── Time window: only deploy test between 10 PM and 6 AM Saudi time ───────
-      # Matches deploy.sh: Saudi Arabia is UTC+3; allowed hours are 22-23, 0-5.
-      - name: Check test-deploy window (10 PM – 6 AM Saudi time)
-        id: window
-        run: |
-          SA_HOUR=$(TZ='Asia/Riyadh' date +%H)
-          SA_HOUR=$((10#$SA_HOUR))
-          SA_TIME=$(TZ='Asia/Riyadh' date '+%H:%M')
-          if [ "$SA_HOUR" -ge 6 ] && [ "$SA_HOUR" -lt 22 ]; then
-            echo "in_window=false" >> "$GITHUB_OUTPUT"
-            echo "Outside test deploy window (current Saudi time: $SA_TIME). Deploy skipped."
-          else
-            echo "in_window=true" >> "$GITHUB_OUTPUT"
-            echo "Within test deploy window ($SA_TIME Saudi time). Proceeding with deploy."
-          fi
-
       - name: Set up SSH
-        if: steps.window.outputs.in_window == 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
@@ -79,7 +62,6 @@ jobs:
 
       # ── Upload binary while service is still live (no downtime during transfer) ──
       - name: Upload binary to staging path
-        if: steps.window.outputs.in_window == 'true'
         run: |
           scp -i private_key -o StrictHostKeyChecking=no \
             pos-rest \
@@ -87,7 +69,6 @@ jobs:
 
       # ── Verify checksum before touching the running service ───────────────────
       - name: Verify remote checksum
-        if: steps.window.outputs.in_window == 'true'
         run: |
           LOCAL_SUM=$(sha256sum ./pos-rest | awk '{print $1}')
           REMOTE_SUM=$(ssh -i private_key -o StrictHostKeyChecking=no \
@@ -103,7 +84,6 @@ jobs:
 
       # ── Atomic swap + service restart (downtime = systemd restart time, ~1 s) ──
       - name: Swap binary and restart service
-        if: steps.window.outputs.in_window == 'true'
         uses: appleboy/ssh-action@v0.1.5
         with:
           host: ${{ secrets.AWS_HOST }}
