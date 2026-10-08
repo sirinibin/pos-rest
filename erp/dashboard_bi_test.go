@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"math"
 	"net/http"
 	"testing"
 	"time"
@@ -223,7 +224,7 @@ func TestComputeBI_ProductsAgingQuotationsAsk(t *testing.T) {
 	}
 
 	q := r.Quotations
-	if q.Created != 3 || q.Accepted != 1 || q.Decided != 2 || q.Rate != 50 || q.Invoiced != 1 || q.Sent != 2 {
+	if q.Created != 3 || q.Accepted != 1 || q.Decided != 2 || q.Counted != 3 || math.Abs(q.Rate-100.0/3) > 1e-9 || q.Invoiced != 1 || q.Sent != 2 {
 		t.Errorf("quotations %+v", q)
 	}
 	if q.ByStatus[3].S != "accepted" || q.ByStatus[3].Value != 100 {
@@ -468,5 +469,59 @@ func TestIsWalkInCustomer(t *testing.T) {
 	}, p, BISettings{})
 	if len(r.Customers.Rows) != 1 || r.Customers.Rows[0].ID != "c" {
 		t.Errorf("walk-in customer records left out of customer analytics: %+v", r.Customers.Rows)
+	}
+}
+
+// Win rate = quotations invoiced ÷ quotations in the period (not cancelled, not quotation-sales).
+func TestBIQuotations_WinRateFromInvoices(t *testing.T) {
+	p := biTestPeriod()
+	sales := []BIDoc{
+		{ID: "s1", QuotationID: "q1"}, // linked from the invoice side only
+		{ID: "s2"},                    // linked from the quotation side only (q2.orderIds)
+		{ID: "s3", QuotationID: "q3"}, // second invoice of q3 still counts q3 once
+		{ID: "s4", QuotationID: "q3"},
+		{ID: "n1", QuotationID: "q4"}, // a non-VAT sale counts too
+		{ID: "s5", QuotationID: "qc"}, // cancelled quotation: left out even though invoiced
+		{ID: "s6", QuotationID: "qold"},
+	}
+	qs := []BIDoc{
+		{ID: "q1", Day: "2026-09-01", Status: "accepted"},
+		{ID: "q2", Day: "2026-09-02", Status: "delivered", OrderIDs: []string{"s2"}},
+		{ID: "q3", Day: "2026-09-03", Status: "accepted"},
+		{ID: "q4", Day: "2026-10-01", Status: "pending"},
+		{ID: "q5", Day: "2026-10-02", Status: "accepted", OrderIDs: []string{"gone"}}, // invoice deleted: not invoiced
+		{ID: "q6", Day: "2026-10-03", Status: "rejected"},
+		{ID: "q7", Day: "2026-10-04", Status: "expired"},
+		{ID: "q8", Day: "2026-10-05", Status: "created"},
+		{ID: "qc", Day: "2026-10-05", Status: "cancelled"},
+		{ID: "qi", Day: "2026-10-05", Status: "", Type: "invoice"},              // quotation-sales invoice, not an offer
+		{ID: "qold", Day: "2024-01-01", Status: "accepted"},                     // before the period
+		{ID: "q9", Day: "2026-10-06", Status: "accepted", OrderIDs: []string{}}, // accepted but not invoiced yet
+	}
+	q := biQuotations(qs, sales, p)
+	if q.Created != 10 || q.Counted != 9 || q.Invoiced != 4 {
+		t.Fatalf("created/counted/invoiced %+v", q)
+	}
+	if math.Abs(q.Rate-400.0/9) > 1e-9 {
+		t.Errorf("rate %v, want 44.44", q.Rate)
+	}
+	if q.Accepted != 4 || q.Decided != 7 || q.Sent != 9 {
+		t.Errorf("funnel %+v", q)
+	}
+
+	if e := biQuotations(nil, nil, p); e.Rate != 0 || e.Counted != 0 || len(e.ByStatus) != 7 {
+		t.Errorf("empty %+v", e)
+	}
+	// all cancelled: nothing to count, no division by zero
+	if c := biQuotations([]BIDoc{{ID: "x", Day: "2026-10-01", Status: "cancelled"}}, nil, p); c.Rate != 0 || c.Counted != 0 || c.Created != 1 {
+		t.Errorf("cancelled only %+v", c)
+	}
+}
+
+func TestBIDocOf_QuotationLinks(t *testing.T) {
+	q := BIDocOf(M{"id": "q", "type": "invoice", "orderIds": []interface{}{"o1"}})
+	s := BIDocOf(M{"id": "s", "quotationId": "q"})
+	if q.Type != "invoice" || len(q.OrderIDs) != 1 || s.QuotationID != "q" {
+		t.Errorf("links %+v %+v", q, s)
 	}
 }

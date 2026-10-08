@@ -145,20 +145,22 @@ type BILine struct {
 
 // BIDoc is a sales-side document reduced to what the dashboard reads.
 type BIDoc struct {
-	ID         string
-	Code       string
-	Day        string // YYYY-MM-DD, store time
-	CustomerID string
-	NameEn     string
-	NameAr     string
-	Taxable    float64
-	Net        float64 // incl. VAT and rounding
-	Balance    float64
-	Lines      []BILine
-	OrderID    string   // returns: the invoice returned; deposits: the invoice paid
-	Amount     float64  // deposits
-	Status     string   // quotations
-	OrderIDs   []string // quotations: invoices made from it
+	ID          string
+	Code        string
+	Day         string // YYYY-MM-DD, store time
+	CustomerID  string
+	NameEn      string
+	NameAr      string
+	Taxable     float64
+	Net         float64 // incl. VAT and rounding
+	Balance     float64
+	Lines       []BILine
+	OrderID     string   // returns: the invoice returned; deposits: the invoice paid
+	Amount      float64  // deposits
+	Status      string   // quotations
+	OrderIDs    []string // quotations: invoices made from it
+	Type        string   // quotations: "invoice" = a quotation-sales invoice, not an offer
+	QuotationID string   // sales: the quotation it was invoiced from
 }
 
 func (d BIDoc) month() string {
@@ -207,7 +209,8 @@ func BIDocOf(rec M) BIDoc {
 	taxable, net, balance := biTotals(rec)
 	d := BIDoc{ID: str(rec["id"]), Code: str(rec["code"]), CustomerID: str(rec["customerId"]),
 		NameEn: str(rec["customerName"]), NameAr: str(rec["customerNameAr"]), Taxable: taxable, Net: net, Balance: balance,
-		OrderID: str(rec["orderId"]), Amount: num(rec["amount"]), Status: str(rec["status"]), OrderIDs: strs(rec["orderIds"])}
+		OrderID: str(rec["orderId"]), Amount: num(rec["amount"]), Status: str(rec["status"]), OrderIDs: strs(rec["orderIds"]),
+		Type: str(rec["type"]), QuotationID: str(rec["quotationId"])}
 	if s := str(rec["date"]); len(s) >= 10 {
 		d.Day = s[:10]
 	}
@@ -354,7 +357,8 @@ type BIQuotations struct {
 	Decided  int            `json:"decided"`
 	Accepted int            `json:"accepted"`
 	Invoiced int            `json:"invoiced"`
-	Rate     float64        `json:"rate"`
+	Counted  int            `json:"counted"` // win-rate base: quotations in the period, not cancelled
+	Rate     float64        `json:"rate"`    // invoiced ÷ counted × 100
 	ByStatus []BIQuotStatus `json:"byStatus"`
 }
 
@@ -437,7 +441,7 @@ func ComputeBI(in BIInput, p BIPeriod, set BISettings) BIResult {
 		Products:    biProducts(all, in.Returns, in.Products, p.Months, p.has),
 		Aging:       biAging(sales, p.Today),
 		Receivables: biReceivables(sales, p.Today),
-		Quotations:  biQuotations(in.Quotations, p),
+		Quotations:  biQuotations(in.Quotations, all, p),
 		Ask:         biAsk(all, sales, in, p, set),
 		Settings:    set,
 	}
@@ -687,12 +691,36 @@ func biReceivables(sales []BIDoc, today string) float64 {
 
 var biQuotStatuses = []string{"created", "delivered", "pending", "accepted", "rejected", "expired", "cancelled"}
 
-func biQuotations(qs []BIDoc, p BIPeriod) BIQuotations {
+// biQuotations: win rate = quotations invoiced ÷ quotations raised in the period, leaving out
+// cancelled ones (deleted ones never load).  A quotation counts as invoiced when a live sales
+// invoice was made from it: the invoice carries its quotationId, or the quotation lists the
+// invoice in orderIds (pos-rest master links both ways: order.quotation_id + quotation.order_ids).
+// Quotation-sales invoices (type "invoice") are sales, not offers, so they are not counted.
+func biQuotations(qs, sales []BIDoc, p BIPeriod) BIQuotations {
 	out := BIQuotations{ByStatus: []BIQuotStatus{}}
+	saleIDs := map[string]bool{}
+	fromQuot := map[string]bool{}
+	for _, s := range sales {
+		saleIDs[s.ID] = true
+		if s.QuotationID != "" {
+			fromQuot[s.QuotationID] = true
+		}
+	}
+	invoiced := func(q BIDoc) bool {
+		if q.ID != "" && fromQuot[q.ID] {
+			return true
+		}
+		for _, id := range q.OrderIDs {
+			if saleIDs[id] {
+				return true
+			}
+		}
+		return false
+	}
 	n := map[string]int{}
 	v := map[string]float64{}
 	for _, q := range qs {
-		if !p.has(q.Day) {
+		if !p.has(q.Day) || q.Type == "invoice" {
 			continue
 		}
 		out.Created++
@@ -701,14 +729,18 @@ func biQuotations(qs []BIDoc, p BIPeriod) BIQuotations {
 		if q.Status != "created" {
 			out.Sent++
 		}
-		if len(q.OrderIDs) > 0 {
+		if q.Status == "cancelled" {
+			continue
+		}
+		out.Counted++
+		if invoiced(q) {
 			out.Invoiced++
 		}
 	}
 	out.Accepted = n["accepted"]
 	out.Decided = n["accepted"] + n["rejected"] + n["expired"] + n["cancelled"]
-	if out.Decided > 0 {
-		out.Rate = float64(out.Accepted) / float64(out.Decided) * 100
+	if out.Counted > 0 {
+		out.Rate = float64(out.Invoiced) / float64(out.Counted) * 100
 	}
 	for _, s := range biQuotStatuses {
 		out.ByStatus = append(out.ByStatus, BIQuotStatus{S: s, N: n[s], Value: round2(v[s])})
