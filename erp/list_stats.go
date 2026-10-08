@@ -18,6 +18,9 @@ package erp
 // nonEmpty:<field> counts records with that field set, any other name sums that
 // contract field (dotted path); "<sum>|<field>=<value>" adds only matching records.
 // groupBy=party (customer or vendor) or a field also adds up per value ("groups").
+// page=N (&limit, at most 500; &sort=[-]field, default -date) also returns "ids": that
+// page of the matches in sort order, for a list screen that pages on the server with
+// the same filters as its tiles (it then reads those records with ?ids=).
 // lines=payments adds up the payment lines instead (the Payments lists): each line is
 // its record with date (the payment's, else the record's), amount, method and
 // description taken from the payment.
@@ -29,6 +32,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	sortpkg "sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,11 +62,14 @@ type StatsQuery struct {
 	Today          string // store day, for the overdue filter
 	GroupBy        string // "" | "party" | a contract field: also add up per value
 	Lines          string // "" | "payments": add up the records' payment lines instead
+	Page, Limit    int    // page > 0: also return the ids of that page of matches (in Sort order)
+	Sort           string // "<field>" or "-<field>" (a computed total, pstatus, zatca or a contract field)
 }
 
 // StatsResult is the response body (besides storeId/timezone).
 type StatsResult struct {
 	Count  int                     `json:"count"`
+	IDs    []string                `json:"ids,omitempty"`
 	Sums   map[string]float64      `json:"sums"`
 	Groups map[string]*StatsResult `json:"groups,omitempty"`
 }
@@ -111,8 +118,32 @@ func parseStatsQuery(r *http.Request) (StatsQuery, error) {
 	}
 	inc := v.Get("includeDeleted")
 	q.IncludeDeleted = inc == "1" || strings.EqualFold(inc, "true")
+	if s := strings.TrimSpace(v.Get("page")); s != "" {
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 {
+			return q, errBadRequest("Invalid page.", map[string]string{"page": "must be 1 or more"})
+		}
+		if q.Lines != "" {
+			return q, errBadRequest("page does not go with lines.", map[string]string{"page": "not with lines"})
+		}
+		q.Page, q.Limit = n, 25
+		if s := strings.TrimSpace(v.Get("limit")); s != "" {
+			l, err := strconv.Atoi(s)
+			if err != nil || l < 1 || l > maxStatsPage {
+				return q, errBadRequest("Invalid limit.", map[string]string{"limit": "1 to " + strconv.Itoa(maxStatsPage)})
+			}
+			q.Limit = l
+		}
+		q.Sort = strings.TrimSpace(v.Get("sort"))
+		if q.Sort == "" || q.Sort == "-" {
+			q.Sort = "-" + q.DateKey
+		}
+	}
 	return q, nil
 }
+
+// maxStatsPage: the most ids one /stats page returns.
+const maxStatsPage = 500
 
 func splitList(s string) []string {
 	out := []string{}
@@ -275,6 +306,9 @@ func statFields(q StatsQuery) map[string]bool {
 	}
 	if q.Lines == "payments" {
 		f[linesField] = true
+	}
+	if k := strings.TrimPrefix(q.Sort, "-"); k != "" && !totalMeasures[k] && k != "pstatus" && k != "zatca" {
+		f[k] = true
 	}
 	for _, s := range q.Sums {
 		base, cf, _ := splitMeasure(s)
@@ -611,8 +645,12 @@ func addUp(q StatsQuery, rows []statRow, credits map[string]float64) *StatsResul
 		}
 		rows = ls
 	}
+	var hits []statRow
 	for _, r := range rows {
 		if statsMatch(q, r, credits) {
+			if q.Page > 0 {
+				hits = append(hits, r)
+			}
 			addStats(out, q.Sums, r)
 			if out.Groups != nil {
 				key := r.Party
@@ -628,7 +666,90 @@ func addUp(q StatsQuery, rows []statRow, credits map[string]float64) *StatsResul
 			}
 		}
 	}
+	if q.Page > 0 {
+		out.IDs = pageIDs(hits, q.Sort, q.Page, q.Limit)
+	}
 	out.round()
+	return out
+}
+
+// sortValue: what a page of matches is ordered by (a number or text).
+func sortValue(r statRow, key string) interface{} {
+	switch key {
+	case "net":
+		return r.T.Net
+	case "vat":
+		return r.T.Vat
+	case "paid":
+		return r.T.Paid
+	case "balance":
+		return r.T.Balance
+	case "taxable":
+		return r.T.Taxable
+	case "profit":
+		return r.T.Profit
+	case "cost":
+		return r.T.Cost
+	case "retailProfit":
+		return r.Retail
+	case "wholesaleProfit":
+		return r.Whole
+	case "pstatus":
+		return r.T.Status
+	case "zatca":
+		return r.Zatca
+	}
+	return r.Vals[key]
+}
+
+// lessValue orders numbers before text, numbers by value and text case-blind
+// (missing values first).
+func lessValue(a, b interface{}) (less, equal bool) {
+	fa, na := a.(float64)
+	fb, nb := b.(float64)
+	switch {
+	case na && nb:
+		return fa < fb, fa == fb
+	case na != nb:
+		return na, false
+	}
+	sa, sb := strings.ToLower(jsString(a)), strings.ToLower(jsString(b))
+	return sa < sb, sa == sb
+}
+
+// pageIDs sorts the matches by sort ("-field" = descending; ties by id the same
+// way) and returns the ids of one page.
+func pageIDs(hits []statRow, sort string, page, limit int) []string {
+	desc := strings.HasPrefix(sort, "-")
+	key := strings.TrimPrefix(sort, "-")
+	vals := make([]interface{}, len(hits))
+	for i, r := range hits {
+		vals[i] = sortValue(r, key)
+	}
+	idx := make([]int, len(hits))
+	for i := range idx {
+		idx[i] = i
+	}
+	sortpkg.SliceStable(idx, func(i, j int) bool {
+		a, b := idx[i], idx[j]
+		lt, eq := lessValue(vals[a], vals[b])
+		if eq {
+			lt = hits[a].ID < hits[b].ID
+			if desc {
+				return hits[b].ID < hits[a].ID
+			}
+			return lt
+		}
+		if desc {
+			gt, _ := lessValue(vals[b], vals[a])
+			return gt
+		}
+		return lt
+	})
+	out := []string{}
+	for i := (page - 1) * limit; i < len(idx) && i < page*limit; i++ {
+		out = append(out, hits[idx[i]].ID)
+	}
 	return out
 }
 
@@ -696,6 +817,10 @@ func handleListStats(w http.ResponseWriter, r *http.Request, res *Resource) {
 		"from": q.From, "to": q.To, "count": out.Count, "sums": out.Sums}
 	if out.Groups != nil {
 		body["groups"] = out.Groups
+	}
+	if q.Page > 0 {
+		body["ids"] = out.IDs
+		body["page"], body["limit"], body["sort"] = q.Page, q.Limit, q.Sort
 	}
 	writeJSON(w, http.StatusOK, body)
 }
