@@ -23,7 +23,7 @@ func TestParseStatsQuery_Page(t *testing.T) {
 		{qs: "page=x", err: "page"},
 		{qs: "page=1&limit=501", err: "limit"},
 		{qs: "page=1&limit=0", err: "limit"},
-		{qs: "page=1&lines=payments", err: "page"},
+		{qs: "page=1&lines=payments", page: 1, limit: 25, sort: "-date"},
 	}
 	for _, c := range cases {
 		q, err := parseStatsQuery(httptest.NewRequest("GET", "/x?"+c.qs, nil))

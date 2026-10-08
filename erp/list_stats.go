@@ -20,7 +20,11 @@ package erp
 // groupBy=party (customer or vendor) or a field also adds up per value ("groups").
 // page=N (&limit, at most 500; &sort=[-]field, default -date) also returns "ids": that
 // page of the matches in sort order, for a list screen that pages on the server with
-// the same filters as its tiles (it then reads those records with ?ids=).
+// the same filters as its tiles (it then reads those records with ?ids=); with
+// lines=payments it returns that page's lines themselves as "rows" instead.
+// qstatus (a quotation's status, expired once past its validity), expiry and late (a
+// pending delivery note past its estimated delivery) work as fields too
+// (list_stats_derived.go).
 // lines=payments adds up the payment lines instead (the Payments lists): each line is
 // its record with date (the payment's, else the record's), amount, method and
 // description taken from the payment.
@@ -60,6 +64,7 @@ type StatsQuery struct {
 	Filters        map[string]string
 	IncludeDeleted bool
 	Today          string // store day, for the overdue filter
+	Now            string // store wall-clock time (YYYY-MM-DDTHH:MM), for qstatus / late
 	GroupBy        string // "" | "party" | a contract field: also add up per value
 	Lines          string // "" | "payments": add up the records' payment lines instead
 	Page, Limit    int    // page > 0: also return the ids of that page of matches (in Sort order)
@@ -70,6 +75,7 @@ type StatsQuery struct {
 type StatsResult struct {
 	Count  int                     `json:"count"`
 	IDs    []string                `json:"ids,omitempty"`
+	Rows   []M                     `json:"rows,omitempty"` // lines=payments pages: the lines themselves
 	Sums   map[string]float64      `json:"sums"`
 	Groups map[string]*StatsResult `json:"groups,omitempty"`
 }
@@ -122,9 +128,6 @@ func parseStatsQuery(r *http.Request) (StatsQuery, error) {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 1 {
 			return q, errBadRequest("Invalid page.", map[string]string{"page": "must be 1 or more"})
-		}
-		if q.Lines != "" {
-			return q, errBadRequest("page does not go with lines.", map[string]string{"page": "not with lines"})
 		}
 		q.Page, q.Limit = n, 25
 		if s := strings.TrimSpace(v.Get("limit")); s != "" {
@@ -228,6 +231,10 @@ func statRowOf(rec M, fields map[string]bool) statRow {
 		if f == linesField {
 			continue
 		}
+		if f == "expiry" {
+			r.Vals[f] = quotationExpiry(jsString(rec["date"]), num(rec["validityDays"]))
+			continue
+		}
 		if strings.HasPrefix(f, "nonEmpty:") {
 			if nonEmpty(field(rec, f[len("nonEmpty:"):])) {
 				r.Vals[f] = 1.0
@@ -261,6 +268,7 @@ func statRowOf(rec M, fields map[string]bool) statRow {
 			l.Vals["amount"] = num(pm["amount"])
 			l.Vals["method"] = str(pm["method"])
 			l.Vals["description"] = str(pm["description"])
+			l.Vals["paymentId"] = str(pm["id"])
 			r.Lines = append(r.Lines, l)
 		}
 	}
@@ -310,10 +318,18 @@ func statFields(q StatsQuery) map[string]bool {
 	if k := strings.TrimPrefix(q.Sort, "-"); k != "" && !totalMeasures[k] && k != "pstatus" && k != "zatca" {
 		f[k] = true
 	}
+	for _, k := range derivedOf(q) {
+		delete(f, k)
+		for _, need := range derivedNeeds[k] {
+			f[need] = true
+		}
+	}
 	for _, s := range q.Sums {
 		base, cf, _ := splitMeasure(s)
 		if cf != "" {
-			f[cf] = true
+			if _, ok := derivedNeeds[cf]; !ok {
+				f[cf] = true
+			}
 		}
 		if !totalMeasures[base] {
 			f[base] = true
@@ -611,18 +627,28 @@ func statRows(c *Ctx, storeHex string, res *Resource, b *legacyBackend, fields m
 // ListStats adds up a store's records of one resource for q.
 func ListStats(c *Ctx, storeHex string, res *Resource, q StatsQuery) (*StatsResult, error) {
 	b, ok := res.Backend.(*legacyBackend)
-	if !ok {
+	nb, native := res.Backend.(*nativeBackend)
+	if !ok && !native {
 		return nil, errBadRequest("This list has no server totals.", nil)
 	}
 	loc := orRiyadh(c.storeLoc(storeHex))
 	if q.Today == "" {
 		q.Today = time.Now().In(loc).Format(layoutDay)
 	}
+	if q.Now == "" {
+		q.Now = time.Now().In(loc).Format(layoutWall)
+	}
 	var credits map[string]float64
 	if _, ok := q.Filters["overdue"]; ok {
 		credits = orderCreditsOf(c, storeHex)
 	}
-	rows, err := statRows(c, storeHex, res, b, statFields(q))
+	var rows []statRow
+	var err error
+	if native {
+		rows, err = nativeStatRows(c, storeHex, nb, statFields(q))
+	} else {
+		rows, err = statRows(c, storeHex, res, b, statFields(q))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +672,11 @@ func addUp(q StatsQuery, rows []statRow, credits map[string]float64) *StatsResul
 		rows = ls
 	}
 	var hits []statRow
+	derived := derivedOf(q)
 	for _, r := range rows {
+		if len(derived) > 0 {
+			r = withDerived(r, derived, q.Now)
+		}
 		if statsMatch(q, r, credits) {
 			if q.Page > 0 {
 				hits = append(hits, r)
@@ -668,6 +698,10 @@ func addUp(q StatsQuery, rows []statRow, credits map[string]float64) *StatsResul
 	}
 	if q.Page > 0 {
 		out.IDs = pageIDs(hits, q.Sort, q.Page, q.Limit)
+		if q.Lines != "" {
+			out.Rows = lineRows(hits, q.Sort, q.Page, q.Limit)
+			out.IDs = nil
+		}
 	}
 	out.round()
 	return out
@@ -720,6 +754,38 @@ func lessValue(a, b interface{}) (less, equal bool) {
 // pageIDs sorts the matches by sort ("-field" = descending; ties by id the same
 // way) and returns the ids of one page.
 func pageIDs(hits []statRow, sort string, page, limit int) []string {
+	out := []string{}
+	for _, i := range pageOrder(hits, sort, page, limit) {
+		out = append(out, hits[i].ID)
+	}
+	return out
+}
+
+// lineRows: one page of payment lines (lines=payments), each line as the list shows
+// it: "<record id>~<payment id>", its record's id as docId and the fields read.
+func lineRows(hits []statRow, sort string, page, limit int) []M {
+	out := []M{}
+	for _, i := range pageOrder(hits, sort, page, limit) {
+		h := hits[i]
+		row := M{}
+		for k, v := range h.Vals {
+			row[k] = v
+		}
+		pid := jsString(h.Vals["paymentId"])
+		if pid == "" {
+			pid = strconv.Itoa(i)
+		}
+		row["id"], row["docId"] = h.ID+"~"+pid, h.ID
+		if h.Party != "" {
+			row["partyId"] = h.Party
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// pageOrder: the indexes of hits on one page, in sort order.
+func pageOrder(hits []statRow, sort string, page, limit int) []int {
 	desc := strings.HasPrefix(sort, "-")
 	key := strings.TrimPrefix(sort, "-")
 	vals := make([]interface{}, len(hits))
@@ -746,9 +812,9 @@ func pageIDs(hits []statRow, sort string, page, limit int) []string {
 		}
 		return lt
 	})
-	out := []string{}
+	out := []int{}
 	for i := (page - 1) * limit; i < len(idx) && i < page*limit; i++ {
-		out = append(out, hits[idx[i]].ID)
+		out = append(out, idx[i])
 	}
 	return out
 }
@@ -818,20 +884,45 @@ func handleListStats(w http.ResponseWriter, r *http.Request, res *Resource) {
 	if out.Groups != nil {
 		body["groups"] = out.Groups
 	}
-	if q.Page > 0 {
+	if q.Page > 0 && q.Lines != "" {
+		body["rows"] = out.Rows
+		body["page"], body["limit"], body["sort"] = q.Page, q.Limit, q.Sort
+	} else if q.Page > 0 {
 		body["ids"] = out.IDs
 		body["page"], body["limit"], body["sort"] = q.Page, q.Limit, q.Sort
 	}
 	writeJSON(w, http.StatusOK, body)
 }
 
-// hasListStats: store documents backed by the legacy store (windowed lists).
+// hasListStats: dated store lists (the web app holds only their last year).
 func hasListStats(res *Resource) bool {
 	if res.Scope != "store" || res.DateField == "" {
 		return false
 	}
-	_, ok := res.Backend.(*legacyBackend)
-	return ok
+	switch res.Backend.(type) {
+	case *legacyBackend, *nativeBackend:
+		return true
+	}
+	return false
+}
+
+// nativeStatRows reads every record of a native list (new collections stay small, so
+// they are not cached), deleted ones included.
+func nativeStatRows(c *Ctx, storeHex string, b *nativeBackend, fields map[string]bool) ([]statRow, error) {
+	sel, _ := parseSelect("-history")
+	rows := []statRow{}
+	for page := 1; ; page++ {
+		recs, total, err := b.List(c, storeHex, ListQuery{Limit: 1000, Page: page, IncludeDeleted: true, Select: sel})
+		if err != nil {
+			return nil, err
+		}
+		for _, rec := range recs {
+			rows = append(rows, statRowOf(rec, fields))
+		}
+		if len(recs) == 0 || int64(page*1000) >= total {
+			return rows, nil
+		}
+	}
 }
 
 // statsCtx bounds one /stats read (every record of a store's list, like the dashboards).

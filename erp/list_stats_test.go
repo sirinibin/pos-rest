@@ -196,7 +196,7 @@ func TestHasListStats(t *testing.T) {
 		}
 	}
 	for _, n := range []string{"sales", "nonvatSales", "salesReturns", "nonvatReturns", "purchases", "purchaseReturns",
-		"quotations", "expenses", "deposits"} {
+		"quotations", "expenses", "deposits", "withdrawals", "salaries", "capitals", "deliveryNotes", "proformas"} {
 		if !names[n] {
 			t.Errorf("%s has no /stats", n)
 		}
