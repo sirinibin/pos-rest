@@ -72,6 +72,15 @@ func sectionValues(val string) (bson.A, bson.A, bool) {
 	return keys, oids, true
 }
 
+// posKey: one key or a comma list (the demo items a terminal looks up).
+func productPosKeys(val, _ string) (bson.M, bool) {
+	keys, _, ok := sectionValues(val)
+	if !ok {
+		return nil, false
+	}
+	return bson.M{"erp.x.posKey": bson.M{"$in": keys}}, true
+}
+
 func productSection(val, _ string) (bson.M, bool) {
 	keys, oids, ok := sectionValues(val)
 	if !ok {
@@ -104,7 +113,7 @@ var productPosWhere = map[string]whereKey{
 	"sectionNot":   {fn: productSectionNot},
 	"posSection":   {key: "erp.x.posSection"},
 	"posTerminal":  {key: "erp.x.posTerminal"},
-	"posKey":       {key: "erp.x.posKey"},
+	"posKey":       {fn: productPosKeys},
 	"specClass":    {key: "erp.x.specs.class"},
 	"specSize":     {key: "erp.x.specs.size"},
 	"specMaterial": {key: "erp.x.specs.material"},

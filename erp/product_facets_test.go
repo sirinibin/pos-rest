@@ -91,16 +91,27 @@ func TestProductSectionFilters(t *testing.T) {
 	}
 }
 
+func TestProductPosKeys(t *testing.T) {
+	m, ok := productPosKeys("svc1, __misc", "")
+	in := m["erp.x.posKey"].(bson.M)["$in"].(bson.A)
+	if !ok || len(in) != 2 || in[1] != "__misc" {
+		t.Fatalf("posKey: %v", m)
+	}
+	if _, ok := productPosKeys("bad key", ""); ok {
+		t.Error("bad posKey accepted")
+	}
+}
+
 func TestProductPosWhereRegistered(t *testing.T) {
 	b := newProductsResource().Backend.(*legacyBackend)
 	for k, key := range map[string]string{"specClass": "erp.x.specs.class", "specSize": "erp.x.specs.size",
 		"specMaterial": "erp.x.specs.material", "posSection": "erp.x.posSection",
-		"posTerminal": "erp.x.posTerminal", "posKey": "erp.x.posKey"} {
+		"posTerminal": "erp.x.posTerminal"} {
 		if b.listWhere[k].key != key {
 			t.Errorf("where.%s → %q", k, b.listWhere[k].key)
 		}
 	}
-	for _, k := range []string{"forTerminal", "onlyTerminal", "section", "sectionNot"} {
+	for _, k := range []string{"forTerminal", "onlyTerminal", "section", "sectionNot", "posKey"} {
 		if b.listWhere[k].fn == nil {
 			t.Errorf("where.%s missing", k)
 		}

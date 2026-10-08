@@ -320,6 +320,7 @@ func TestAPI_Products_PosSections(t *testing.T) {
 		"where.onlyTerminal=grocery&where.sectionNot=veg,dairy": 1,
 		"where.forTerminal=grocery&where.sectionNot=veg,dairy":  2,
 		"where.posTerminal=grocery&where.posKey=__misc":         1,
+		"where.posKey=__misc,nokey":                             1,
 	} {
 		if got := total(q); got != want {
 			t.Errorf("%s: total %v, want %v", q, got, want)
