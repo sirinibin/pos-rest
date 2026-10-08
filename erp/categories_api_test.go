@@ -277,4 +277,68 @@ func TestAPI_Products_PosPagingAndFacets(t *testing.T) {
 	if sz := counts("specSize"); sz[s4] != 1 || len(sz) != 1 {
 		t.Fatalf("searched size facet: %v", f.Body["specSize"])
 	}
+	if f.Body["total"] != 1.0 {
+		t.Fatalf("searched total: %v", f.Body["total"])
+	}
+}
+
+// Kit terminals (grocery, salon, …): only the terminal's tagged products,
+// its "__misc" product never, POS section tabs and the "Other" tab.
+func TestAPI_Products_PosSections(t *testing.T) {
+	requireDB(t)
+	owner, sid := signupOwner(t, "catsections")
+	defer cleanupStore(t, sid)
+	mk := func(name string, extra M) {
+		body := M{"storeId": sid, "nameEn": name, "unit": "Pcs", "pricing": M{"retail": 10}}
+		for k, v := range extra {
+			body[k] = v
+		}
+		if r := call(t, "POST", "/products?storeId="+sid, owner, body); r.Code != 201 && r.Code != 200 {
+			t.Fatalf("product %s: %d %s", name, r.Code, r.Raw)
+		}
+	}
+	mk("Tomato", M{"posTerminal": "grocery", "posSection": "veg"})
+	mk("Onion", M{"posTerminal": "grocery", "posSection": "veg"})
+	mk("Milk", M{"posTerminal": "grocery", "posSection": "dairy"})
+	mk("Batteries", M{"posTerminal": "grocery"})
+	mk("Other POS item", M{"posTerminal": "grocery", "posKey": "__misc", "isService": true})
+	mk("Untagged soap", nil)
+	mk("Haircut", M{"posTerminal": "salon"})
+
+	total := func(q string) float64 {
+		r := call(t, "GET", "/products?storeId="+sid+"&limit=50&"+q, owner, nil)
+		if r.Code != 200 {
+			t.Fatalf("%s: %d %s", q, r.Code, r.Raw)
+		}
+		return num(r.Body["total"])
+	}
+	for q, want := range map[string]float64{
+		"where.onlyTerminal=grocery":                            4,
+		"where.forTerminal=grocery":                             5,
+		"where.onlyTerminal=grocery&where.section=veg":          2,
+		"where.onlyTerminal=grocery&where.section=veg,dairy":    3,
+		"where.onlyTerminal=grocery&where.sectionNot=veg,dairy": 1,
+		"where.forTerminal=grocery&where.sectionNot=veg,dairy":  2,
+		"where.posTerminal=grocery&where.posKey=__misc":         1,
+	} {
+		if got := total(q); got != want {
+			t.Errorf("%s: total %v, want %v", q, got, want)
+		}
+	}
+	for _, q := range []string{"where.onlyTerminal=casino", "where.section=bad%20key", "where.sectionNot=a%21b"} {
+		if r := call(t, "GET", "/products?storeId="+sid+"&"+q, owner, nil); r.Code != 400 {
+			t.Errorf("%s: %d, want 400", q, r.Code)
+		}
+	}
+	f := call(t, "GET", "/products/facets?storeId="+sid+"&where.onlyTerminal=grocery", owner, nil)
+	if f.Code != 200 || f.Body["total"] != 4.0 {
+		t.Fatalf("facets: %d %s", f.Code, f.Raw)
+	}
+	sec := map[string]float64{}
+	for _, r := range arr(f.Body["posSection"]) {
+		sec[str(r.(M)["id"])] = num(r.(M)["count"])
+	}
+	if sec["veg"] != 2 || sec["dairy"] != 1 || len(sec) != 2 {
+		t.Fatalf("section facet: %v", f.Body["posSection"])
+	}
 }

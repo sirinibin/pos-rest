@@ -48,21 +48,21 @@ type starterSpec struct {
 }
 
 type starterItem struct {
-	Key       string                         `json:"key"`
-	Section   string                         `json:"section"`
-	NameEn    string                         `json:"nameEn"`
-	NameAr    string                         `json:"nameAr"`
-	Price     float64                        `json:"price"`
-	Local     bool                           `json:"local"` // price already in the store's currency
-	Unit      string                         `json:"unit"`
-	Service   bool                           `json:"service"`
-	Brand     string                         `json:"brand"`
-	BrandBy   map[string]string              `json:"brandBy"` // country → brand (missing: none)
-	Specs     map[string]string              `json:"specs"`   // kind → option name
-	PartNo    string                         `json:"partNo"`
-	Countries []string                       `json:"countries"` // empty: every country
-	Variants  map[string]*[2]string          `json:"variants"`  // country or "*" → [en, ar]; null keeps the name
-	Prices    map[string]float64             `json:"prices"`
+	Key       string                `json:"key"`
+	Section   string                `json:"section"`
+	NameEn    string                `json:"nameEn"`
+	NameAr    string                `json:"nameAr"`
+	Price     float64               `json:"price"`
+	Local     bool                  `json:"local"` // price already in the store's currency
+	Unit      string                `json:"unit"`
+	Service   bool                  `json:"service"`
+	Brand     string                `json:"brand"`
+	BrandBy   map[string]string     `json:"brandBy"` // country → brand (missing: none)
+	Specs     map[string]string     `json:"specs"`   // kind → option name
+	PartNo    string                `json:"partNo"`
+	Countries []string              `json:"countries"` // empty: every country
+	Variants  map[string]*[2]string `json:"variants"`  // country or "*" → [en, ar]; null keeps the name
+	Prices    map[string]float64    `json:"prices"`
 }
 
 type starterTerminal struct {
@@ -237,8 +237,8 @@ func starterProductRecord(terminal string, vatInclusive bool, vat float64, it st
 	rec := M{
 		"nameEn": it.NameEn, "nameAr": it.NameAr, "unit": unit, "isService": it.Service, "vatPercent": vat,
 		"categoryIds": []interface{}{}, "brandId": nil,
-		"pricing":     M{"purchase": 0.0, "retail": retail, "wholesale": 0.0, "retailMargin": 0.0, "wholesaleMargin": 0.0, "min": 0.0, "max": 0.0},
-		"stock":       M{}, "components": []interface{}{},
+		"pricing": M{"purchase": 0.0, "retail": retail, "wholesale": 0.0, "retailMargin": 0.0, "wholesaleMargin": 0.0, "min": 0.0, "max": 0.0},
+		"stock":   M{}, "components": []interface{}{},
 		"posTerminal": terminal, "posSection": it.Section, "posKey": it.Key,
 	}
 	if catID != "" {
