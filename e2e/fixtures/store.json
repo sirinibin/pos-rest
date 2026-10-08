@@ -1,0 +1,73 @@
+{
+  "name": "E2E Test Store",
+  "name_in_arabic": "متجر الاختبار",
+  "code": "E2E1",
+  "branch_name": "E2E Branch",
+  "country_code": "SA",
+  "business_category": "Trading",
+  "registration_number": "1010101010",
+  "registration_number_in_arabic": "١٠١٠١٠١٠١٠",
+  "email": "store@startpos.test",
+  "phone": "0500000001",
+  "phone_in_arabic": "٠٥٠٠٠٠٠٠٠١",
+  "vat_no": "300000000000003",
+  "vat_no_in_arabic": "٣٠٠٠٠٠٠٠٠٠٠٠٠٠٣",
+  "vat_percent": 15,
+  "national_address": {
+    "building_no": "1234",
+    "building_no_arabic": "١٢٣٤",
+    "street_name": "King Fahd Road",
+    "street_name_arabic": "طريق الملك فهد",
+    "district_name": "Olaya",
+    "district_name_arabic": "العليا",
+    "city_name": "Riyadh",
+    "city_name_arabic": "الرياض",
+    "zipcode": "12345",
+    "zipcode_arabic": "١٢٣٤٥",
+    "additional_no": "5678",
+    "unit_no": "1"
+  },
+  "zatca": {
+    "phase": "1"
+  },
+  "sales_serial_number": {
+    "prefix": "SAL-",
+    "start_from_count": 1,
+    "padding_count": 4
+  },
+  "sales_return_serial_number": {
+    "prefix": "SAL-",
+    "start_from_count": 1,
+    "padding_count": 4
+  },
+  "purchase_serial_number": {
+    "prefix": "PUR-",
+    "start_from_count": 1,
+    "padding_count": 4
+  },
+  "purchase_return_serial_number": {
+    "prefix": "PUR-",
+    "start_from_count": 1,
+    "padding_count": 4
+  },
+  "purchase_order_serial_number": {
+    "prefix": "PUR-",
+    "start_from_count": 1,
+    "padding_count": 4
+  },
+  "quotation_serial_number": {
+    "prefix": "QUO-",
+    "start_from_count": 1,
+    "padding_count": 4
+  },
+  "customer_serial_number": {
+    "prefix": "CUS-",
+    "start_from_count": 1,
+    "padding_count": 4
+  },
+  "vendor_serial_number": {
+    "prefix": "VEN-",
+    "start_from_count": 1,
+    "padding_count": 4
+  }
+}

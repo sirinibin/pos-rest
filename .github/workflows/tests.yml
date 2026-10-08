@@ -1,0 +1,221 @@
+name: Tests
+
+# Every test suite for the API. deploy_test.yml and deploy_prod.yml call this
+# workflow and only deploy when all of its jobs pass. It can also be run by
+# hand from the Actions tab against any branch.
+on:
+  workflow_call:
+    inputs:
+      frontend_ref:
+        description: "sirinibin/reactjs-pos branch whose UI e2e suite runs against this API"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      frontend_ref:
+        description: "sirinibin/reactjs-pos branch whose UI e2e suite runs against this API"
+        required: true
+        default: master
+        type: string
+
+env:
+  E2E_EMAIL: e2e-admin@startpos.test
+  E2E_PASSWORD: E2e-Passw0rd!
+  MONGO_DB: pos_e2e
+  REDIS_DSN: localhost:6379
+
+jobs:
+  # ── Unit + API handler tests (httptest, no database) ──────────────────────
+  unit-and-api:
+    name: Unit and API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      # Skip the timezone test that is flaky near midnight UTC (matches deploy.sh).
+      - name: Run unit and API tests
+        run: go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+
+  # ── Integration tests: models against real MongoDB + Redis ───────────────
+  integration:
+    name: Integration tests (MongoDB + Redis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      # TestHealthCheck_ServicesDown asserts the health check reports MongoDB and
+      # Redis as down, so it only holds without them; the unit job runs it.
+      - name: Run integration tests
+        env:
+          MONGO_DB: startpos_integration_test
+        run: go test -tags integration ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA|TestHealthCheck_ServicesDown"
+
+  # ── API end-to-end: the built server over real HTTP ──────────────────────
+  api-e2e:
+    name: API end-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Build server
+        run: go build -o pos-rest .
+
+      - name: Seed e2e user
+        run: go run ./e2e/seed
+
+      - name: Start server
+        run: |
+          API_PORT=2000 nohup ./pos-rest > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://localhost:2000/v1/me && exit 0
+            sleep 1
+          done
+          echo "Server did not start:"; cat server.log; exit 1
+
+      - name: Run API e2e tests
+        run: go test -tags e2e ./e2e/... -count=1 -v
+
+      - name: Server log
+        if: failure()
+        run: tail -n 300 server.log
+
+  # ── UI end-to-end: the React app in Chromium against this API ────────────
+  ui-e2e:
+    name: UI end-to-end tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the frontend
+        uses: actions/checkout@v4
+        with:
+          repository: sirinibin/reactjs-pos
+          ref: ${{ inputs.frontend_ref }}
+          path: frontend
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Go dependencies
+        run: go mod tidy
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 17.9.0
+
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          npm install
+          NODE_OPTIONS="--openssl-legacy-provider --max-old-space-size=4096" \
+          GENERATE_SOURCEMAP=false DISABLE_ESLINT_PLUGIN=true \
+          npm run build
+
+      - name: Build server and seed e2e user
+        run: |
+          go build -o pos-rest .
+          go run ./e2e/seed
+
+      - name: Start server (serving the frontend build)
+        run: |
+          API_PORT=2000 STATIC_DIR="$GITHUB_WORKSPACE/frontend/build" nohup ./pos-rest > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://localhost:2000/v1/me && exit 0
+            sleep 1
+          done
+          echo "Server did not start:"; cat server.log; exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        working-directory: frontend/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run UI e2e tests
+        working-directory: frontend/e2e
+        env:
+          CI: "true"
+        run: npx playwright test -c playwright.fullstack.config.js
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-api
+          path: |
+            frontend/e2e/playwright-report-fullstack
+            frontend/e2e/test-results-fullstack
+          retention-days: 14
+
+      - name: Server log
+        if: failure()
+        run: tail -n 300 server.log

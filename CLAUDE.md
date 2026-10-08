@@ -17,6 +17,12 @@ deploy.sh enforces three gates before every deploy — all three must pass:
 3. **No build output** — `go build` must produce zero output.
    Any output from go build (warnings, notes) causes an abort.
 
+## GitHub Actions
+`deploy_test.yml` / `deploy_prod.yml` call `tests.yml` and deploy only if all of it passes:
+unit + API tests, integration tests (`-tags integration`, MongoDB + Redis services),
+API e2e (`-tags e2e`, see `e2e/README.md`) and the frontend's full-stack Playwright suite
+(reactjs-pos, same branch). Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
+
 ## Usage
 ```
 backend/deploy.sh   # deploys to both test and production
