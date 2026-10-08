@@ -529,8 +529,9 @@ func TestPurchaseLines(t *testing.T) {
 	if line["purchase_unit_price"] != 9.0 || line["retail_unit_price"] != 25.0 || line["wholesale_unit_price"] != 22.0 {
 		t.Fatalf("purchase line: %v", line)
 	}
-	if errs := b.validate(x, M{"date": "2026-10-05"}, nil); errs["vendorId"] == "" {
-		t.Fatal("vendor required")
+	// No vendor is an unknown vendor: the legacy model books it to UNKNOWN.
+	if errs := b.validate(x, M{"date": "2026-10-05"}, nil); errs["vendorId"] != "" {
+		t.Fatalf("vendor must be optional: %v", errs)
 	}
 }
 

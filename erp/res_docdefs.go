@@ -184,16 +184,9 @@ func newPurchasesResource() *Resource {
 	}
 	return docResource("purchases", "purchases", "purchases", "purchase", cfg,
 		v1Ops{path: "/v1/purchase", create: controller.CreatePurchase, update: controller.UpdatePurchase, delete: controller.DeletePurchase},
-		"store DB `purchase` (+ `purchase_payment`)", func(b *legacyBackend) {
-			inner := b.validate
-			b.validate = func(x *mapCtx, rec M, prev M) map[string]string {
-				e := inner(x, rec, prev)
-				if str(rec["vendorId"]) == "" {
-					e["vendorId"] = "required"
-				}
-				return e
-			}
-		})
+		// No vendor is an unknown vendor (the web app's purchase form, like the old
+		// app, may leave it empty); the legacy model books it to the UNKNOWN vendor.
+		"store DB `purchase` (+ `purchase_payment`)", nil)
 }
 
 func newPurchaseReturnsResource() *Resource {

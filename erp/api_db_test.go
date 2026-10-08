@@ -941,3 +941,30 @@ func TestAPI_ZatcaEnvironment(t *testing.T) {
 		t.Fatalf("admin env change without documents: %d %s", r.Code, r.Raw)
 	}
 }
+
+// A sale with no customer goes to the store's UNKNOWN customer (a simplified
+// invoice); a purchase with no vendor goes to its UNKNOWN vendor.  The web app's
+// document forms leave the party empty for both.
+func TestAPI_UnknownCustomerAndVendor(t *testing.T) {
+	requireDB(t)
+	tok := login(t, fx.ManagerEmail)
+	line := []M{{"productId": fx.ProductA2.Hex(), "qty": 1, "unitPrice": 25, "warehouseId": "ms_" + storeA()}}
+	sale := call(t, "POST", "/sales", tok, M{"storeId": storeA(), "date": "2026-10-06T10:00", "customerName": "", "items": line})
+	if sale.Code != 201 {
+		t.Fatalf("sale without customer: %d %s", sale.Code, sale.Raw)
+	}
+	if got := str(sale.Body["customerName"]); got != "UNKNOWN" {
+		t.Errorf("customerName = %q, want UNKNOWN", got)
+	}
+	if got := str(get(sale.Body, "zatca.invoiceType")); got != "simplified" {
+		t.Errorf("zatca.invoiceType = %q, want simplified", got)
+	}
+	pur := call(t, "POST", "/purchases", tok, M{"storeId": storeA(), "date": "2026-10-06T10:00", "items": line})
+	if pur.Code != 201 {
+		t.Fatalf("purchase without vendor: %d %s", pur.Code, pur.Raw)
+	}
+	// the legacy model books it to the store's UNKNOWN vendor, like the customer side
+	if got := str(pur.Body["vendorName"]); got != "UNKNOWN" {
+		t.Errorf("vendorName = %q, want UNKNOWN", got)
+	}
+}
