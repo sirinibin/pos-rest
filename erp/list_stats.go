@@ -359,7 +359,8 @@ func statsMatch(q StatsQuery, r statRow, credits map[string]float64) bool {
 func statsFilter(key, val string, r statRow, credits map[string]float64, today string) bool {
 	switch key {
 	case "party":
-		return r.Party == val
+		// several picked customers / vendors: any of them
+		return inCommaList(val, r.Party)
 	case "pstatus":
 		return r.T.Status == val
 	case "zatca":
@@ -385,7 +386,24 @@ func statsFilter(key, val string, r statRow, credits map[string]float64, today s
 	if strings.HasPrefix(key, "nonEmpty:") {
 		return (val == "y") == (num(r.Vals[key]) == 1)
 	}
+	if strings.HasSuffix(key, "Id") {
+		return inCommaList(val, jsString(r.Vals[key]))
+	}
 	return jsString(r.Vals[key]) == val
+}
+
+// inCommaList: val is one id or several separated by commas (a list filter's
+// search-and-select picks); have matches any of them.
+func inCommaList(val, have string) bool {
+	if have == "" {
+		return false
+	}
+	for _, v := range strings.Split(val, ",") {
+		if strings.TrimSpace(v) == have {
+			return true
+		}
+	}
+	return false
 }
 
 // isOverdueDay is finance.js isOverdue.
