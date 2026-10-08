@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -854,5 +855,32 @@ func TestStoreEnvelope_PreservesWhatsappState(t *testing.T) {
 		if got := get(rec, path); got != want {
 			t.Errorf("%s=%#v want %#v", path, got, want)
 		}
+	}
+}
+
+// The products table's Line Disc (inc. VAT) column derives the unit discount as
+// line ÷ VAT factor ÷ qty at 8 decimals; the line discount the user typed only
+// comes back if the unit discount is stored and read back unrounded.
+func TestDocLines_LineDiscountKeepsUnitDiscountPrecision(t *testing.T) {
+	sid, pid := hexID(), hexID()
+	x := testX(sid, M{"_id": sid})
+	x.cache["product|"+pid] = M{"_id": pid, "name": "Oil"}
+	cfg := &docCfg{priceKey: "unit_price", costKey: "purchase_unit_price"}
+	ud := 2.89855072 // 10.00 incl. 15% VAT over 3 units
+	lines, err := cfg.linesToLegacy(x, M{"items": []interface{}{
+		M{"productId": pid, "qty": 3.0, "unitPrice": 100.0, "unitDiscount": ud, "warehouseId": "ms_" + sid}}}, nil, 15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := lines[0].(M)
+	if l["unit_discount"] != ud {
+		t.Fatalf("unit_discount rounded: %v", l["unit_discount"])
+	}
+	back := cfg.lineToContract(x, l, 15)
+	if back["unitDiscount"] != ud {
+		t.Fatalf("unitDiscount read back as %v", back["unitDiscount"])
+	}
+	if got := math.Round(num(back["unitDiscount"])*num(back["qty"])*1.15*100) / 100; got != 10 {
+		t.Fatalf("line discount incl. VAT = %v, want 10", got)
 	}
 }
