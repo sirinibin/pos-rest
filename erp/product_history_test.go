@@ -14,14 +14,14 @@ func TestHistoryResourceKinds(t *testing.T) {
 		if r == nil || r.Name != name {
 			t.Fatalf("kind %s → %v", kind, r)
 		}
-		if _, ok := r.Backend.(*legacyBackend); !ok {
+		if historyBackend(r) == nil {
 			t.Errorf("kind %s is not a legacy document list", kind)
 		}
 		if r.Module == "" {
 			t.Errorf("kind %s has no permission module", kind)
 		}
 	}
-	for _, bad := range []string{"", "products", "Sales", "stockTransfers", "sales "} {
+	for _, bad := range []string{"", "products", "Sales", "expenses", "sales "} {
 		if historyResource(bad) != nil {
 			t.Errorf("%q accepted", bad)
 		}
@@ -158,6 +158,15 @@ func TestAPI_ProductHistory(t *testing.T) {
 	}
 	if s := p.Body["sums"].(M); num(s["value"]) != 800 || num(s["qty"]) != 10 {
 		t.Fatalf("purchase sums %v", s)
+	}
+	// quotation sales: only sales made from a quotation (the fixture's are not)
+	if qs := call(t, "GET", base+"&kind=quotationSales&q=S-INV-001", tok, nil); qs.Code != 200 || num(qs.Body["total"]) != 0 {
+		t.Fatalf("quotation sales: %d %s", qs.Code, qs.Raw)
+	}
+	// stock transfers of a product (the fixture moves the oil filter)
+	tr := call(t, "GET", "/products/"+fx.ProductA2.Hex()+"/history?storeId="+storeA()+"&kind=stockTransfers", tok, nil)
+	if tr.Code != 200 || num(tr.Body["total"]) < 1 || tr.data()[0].(M)["toWarehouseId"] == nil {
+		t.Fatalf("transfers: %d %s", tr.Code, tr.Raw)
 	}
 	// limit is capped
 	if c := call(t, "GET", base+"&kind=sales&limit=1000", tok, nil); num(c.Body["limit"]) != historyMaxLimit {

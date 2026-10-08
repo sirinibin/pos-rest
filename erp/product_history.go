@@ -29,6 +29,25 @@ var productHistoryKinds = map[string]string{
 	"quotationReturns": "quotationReturns", "deliveryNotes": "deliveryNotes",
 	"nonvatSales": "nonvatSales", "nonvatReturns": "nonvatReturns",
 	"purchases": "purchases", "purchaseReturns": "purchaseReturns",
+	"quotationSales": "sales", "stockTransfers": "stockTransfers",
+}
+
+// historyKindFilter narrows a kind's documents: quotation sales are the sales
+// made from a quotation.
+var historyKindFilter = map[string]bson.M{
+	"quotationSales": {"quotation_id": bson.M{"$exists": true, "$ne": nil}},
+}
+
+// historyBackend: the legacy store collection of a document list (completed
+// stock transfers for stockTransfers).
+func historyBackend(res *Resource) *legacyBackend {
+	switch b := res.Backend.(type) {
+	case *legacyBackend:
+		return b
+	case *stockTransfersBackend:
+		return b.legacy
+	}
+	return nil
 }
 
 // historyPriceKey: the legacy line field holding the kind's unit price
@@ -64,7 +83,7 @@ func historyResource(kind string) *Resource {
 }
 
 func historyKindList() string {
-	return "sales, salesReturns, quotations, quotationReturns, deliveryNotes, nonvatSales, nonvatReturns, purchases or purchaseReturns"
+	return "sales, salesReturns, quotations, quotationSales, quotationReturns, deliveryNotes, nonvatSales, nonvatReturns, purchases, purchaseReturns or stockTransfers"
 }
 
 // historyRows: the lines of one rendered document that carry product pid.
@@ -90,7 +109,7 @@ func historyRows(rec M, pid string) []M {
 			"profit": round2(qty * (price - cost)), "vatPercent": num(l["vatPercent"]),
 			"warehouseId": l["warehouseId"],
 		}
-		for _, k := range []string{"status", "type", "paymentStatus", "vendorInvoiceNo"} {
+		for _, k := range []string{"status", "type", "paymentStatus", "vendorInvoiceNo", "fromWarehouseId", "toWarehouseId", "quotationId", "quotationCode"} {
 			if v, ok := rec[k]; ok && v != nil && v != "" {
 				row[k] = v
 			}
@@ -182,8 +201,8 @@ func handleProductHistory(w http.ResponseWriter, r *http.Request, products *Reso
 		writeErr(w, errBadRequest("storeId is required.", map[string]string{"storeId": "required"}))
 		return
 	}
-	b, ok := res.Backend.(*legacyBackend)
-	if !ok {
+	b := historyBackend(res)
+	if b == nil {
 		writeErr(w, errNotFound())
 		return
 	}
@@ -192,7 +211,7 @@ func handleProductHistory(w http.ResponseWriter, r *http.Request, products *Reso
 		writeErr(w, err)
 		return
 	}
-	f = andFilter(f, bson.M{"products.product_id": pid})
+	f = andFilter(f, historyKindFilter[kind], bson.M{"products.product_id": pid})
 	ctx, cancel := dbctx()
 	defer cancel()
 	col := b.col(storeHex)
