@@ -287,3 +287,63 @@ func countOlder(t *testing.T, tok, from string) int {
 	r := call(t, "GET", "/proformas/stats?storeId="+storeA()+"&to="+from, tok, nil)
 	return int(num(r.Body["count"])) - 1
 }
+
+// running=amount: each page record's running balance over the whole list (ledger.js
+// W4: date then code order, deleted left out), whatever the filters.
+func TestAddUp_Running(t *testing.T) {
+	r := func(id, date, code, who string, amt float64, del bool) statRow {
+		return statRow{ID: id, Deleted: del, Vals: map[string]interface{}{"date": date, "code": code, "amount": amt, "investor": who}}
+	}
+	rows := []statRow{
+		r("c", "2026-03-01T10:00", "CAP-3", "B", 300, false),
+		r("a", "2024-01-01T09:00", "CAP-1", "A", 100, false),
+		r("x", "2025-01-01T09:00", "CAP-9", "A", 999, true),
+		r("b", "2026-03-01T10:00", "CAP-2", "A", 50, false),
+	}
+	q := StatsQuery{DateKey: "date", Sums: []string{"amount"}, Page: 1, Limit: 2, Sort: "-date", Running: "amount",
+		Filters: map[string]string{"investor": "B"}}
+	out := addUp(q, rows, nil)
+	if out.Count != 1 || !reflect.DeepEqual(out.Running, map[string]float64{"c": 450}) {
+		t.Fatalf("filtered: %+v", out)
+	}
+	q.Filters = nil
+	out = addUp(q, rows, nil)
+	if !reflect.DeepEqual(out.IDs, []string{"c", "b"}) || !reflect.DeepEqual(out.Running, map[string]float64{"c": 450, "b": 150}) {
+		t.Fatalf("page 1: %+v", out)
+	}
+	q.Page = 2
+	if out := addUp(q, rows, nil); !reflect.DeepEqual(out.Running, map[string]float64{"a": 100}) {
+		t.Fatalf("page 2: %+v", out.Running)
+	}
+	q.Running = ""
+	if out := addUp(q, rows, nil); out.Running != nil {
+		t.Fatalf("not asked: %v", out.Running)
+	}
+	if f := statFields(StatsQuery{DateKey: "date", Page: 1, Running: "amount"}); !f["amount"] || !f["code"] {
+		t.Fatalf("fields: %v", f)
+	}
+}
+
+func TestAPI_ListStats_RunningBalance(t *testing.T) {
+	requireDB(t)
+	tok := login(t, fx.ManagerEmail)
+	loc := orRiyadh(time.FixedZone("x", 3*3600))
+	cr := call(t, "POST", "/capitals", tok, M{"storeId": storeA(), "date": time.Now().In(loc).Format("2006-01-02T15:04"),
+		"investorUserId": fx.ManagerA.Hex(), "amount": 125, "method": "cash"})
+	if cr.Code != 201 && cr.Code != 200 {
+		t.Fatalf("create: %d %s", cr.Code, cr.Raw)
+	}
+	r := call(t, "GET", "/capitals/stats?storeId="+storeA()+"&sum=amount&page=1&limit=500&running=amount", tok, nil)
+	if r.Code != 200 {
+		t.Fatalf("capitals: %d %s", r.Code, r.Raw)
+	}
+	ids := arr(r.Body["ids"])
+	run, _ := r.Body["running"].(M)
+	if len(ids) < 2 || len(run) != len(ids) {
+		t.Fatalf("running for %d of %d: %s", len(run), len(ids), r.Raw)
+	}
+	// the newest entry's running balance is the list's total
+	if num(run[str(ids[0])]) != num(get(r.Body, "sums.amount")) || num(run[str(ids[1])]) >= num(run[str(ids[0])]) {
+		t.Fatalf("newest balance %v, total %v", run[str(ids[0])], get(r.Body, "sums.amount"))
+	}
+}

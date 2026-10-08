@@ -69,15 +69,19 @@ type StatsQuery struct {
 	Lines          string // "" | "payments": add up the records' payment lines instead
 	Page, Limit    int    // page > 0: also return the ids of that page of matches (in Sort order)
 	Sort           string // "<field>" or "-<field>" (a computed total, pstatus, zatca or a contract field)
+	Running        string // with page: also each page record's running total of this field ("running")
 }
 
 // StatsResult is the response body (besides storeId/timezone).
 type StatsResult struct {
-	Count  int                     `json:"count"`
-	IDs    []string                `json:"ids,omitempty"`
-	Rows   []M                     `json:"rows,omitempty"` // lines=payments pages: the lines themselves
-	Sums   map[string]float64      `json:"sums"`
-	Groups map[string]*StatsResult `json:"groups,omitempty"`
+	Count int      `json:"count"`
+	IDs   []string `json:"ids,omitempty"`
+	Rows  []M      `json:"rows,omitempty"` // lines=payments pages: the lines themselves
+	// Running: per page record, the running total of q.Running over every record of
+	// the list (not deleted, any filter) in date then code order (ledger.js W4)
+	Running map[string]float64      `json:"running,omitempty"`
+	Sums    map[string]float64      `json:"sums"`
+	Groups  map[string]*StatsResult `json:"groups,omitempty"`
 }
 
 func parseStatsQuery(r *http.Request) (StatsQuery, error) {
@@ -141,6 +145,7 @@ func parseStatsQuery(r *http.Request) (StatsQuery, error) {
 		if q.Sort == "" || q.Sort == "-" {
 			q.Sort = "-" + q.DateKey
 		}
+		q.Running = strings.TrimSpace(v.Get("running"))
 	}
 	return q, nil
 }
@@ -314,6 +319,9 @@ func statFields(q StatsQuery) map[string]bool {
 	}
 	if q.Lines == "payments" {
 		f[linesField] = true
+	}
+	if q.Running != "" {
+		f[q.Running], f["code"] = true, true
 	}
 	if k := strings.TrimPrefix(q.Sort, "-"); k != "" && !totalMeasures[k] && k != "pstatus" && k != "zatca" {
 		f[k] = true
@@ -701,6 +709,8 @@ func addUp(q StatsQuery, rows []statRow, credits map[string]float64) *StatsResul
 		if q.Lines != "" {
 			out.Rows = lineRows(hits, q.Sort, q.Page, q.Limit)
 			out.IDs = nil
+		} else if q.Running != "" {
+			out.Running = runningTotals(rows, q.DateKey, q.Running, out.IDs)
 		}
 	}
 	out.round()
@@ -780,6 +790,37 @@ func lineRows(hits []statRow, sort string, page, limit int) []M {
 			row["partyId"] = h.Party
 		}
 		out = append(out, row)
+	}
+	return out
+}
+
+// runningTotals is ledger.js W4 over the list's records (deleted ones left out): the
+// running total of field in date then code order, for the ids asked.
+func runningTotals(rows []statRow, dateKey, field string, ids []string) map[string]float64 {
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	live := make([]statRow, 0, len(rows))
+	for _, r := range rows {
+		if !r.Deleted {
+			live = append(live, r)
+		}
+	}
+	sortpkg.SliceStable(live, func(i, j int) bool {
+		di, dj := jsString(live[i].Vals[dateKey]), jsString(live[j].Vals[dateKey])
+		if di != dj {
+			return di < dj
+		}
+		return jsString(live[i].Vals["code"]) < jsString(live[j].Vals["code"])
+	})
+	out := map[string]float64{}
+	var t float64
+	for _, r := range live {
+		t = round2(t + num(r.Vals[field]))
+		if want[r.ID] {
+			out[r.ID] = t
+		}
 	}
 	return out
 }
@@ -889,6 +930,9 @@ func handleListStats(w http.ResponseWriter, r *http.Request, res *Resource) {
 		body["page"], body["limit"], body["sort"] = q.Page, q.Limit, q.Sort
 	} else if q.Page > 0 {
 		body["ids"] = out.IDs
+		if out.Running != nil {
+			body["running"] = out.Running
+		}
 		body["page"], body["limit"], body["sort"] = q.Page, q.Limit, q.Sort
 	}
 	writeJSON(w, http.StatusOK, body)
