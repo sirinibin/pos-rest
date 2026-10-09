@@ -638,3 +638,16 @@ func TestAPI_VehicleOpenJobAndRepairTotals(t *testing.T) {
 		t.Fatalf("grand total: %d %s", s.Code, s.Raw)
 	}
 }
+
+// A POS terminal's Bills list asks for its own sales: where.posType on sales only.
+func TestSalesWherePosType(t *testing.T) {
+	sales := resourceByName("sales").Backend.(*legacyBackend)
+	f, _, err := sales.listExtras(nil, "", ListQuery{Where: map[string]string{"posType": "thobe"}})
+	if err != nil || f["erp.x.posType"] != "thobe" {
+		t.Fatalf("filter %v err %v", f, err)
+	}
+	ret := resourceByName("salesReturns").Backend.(*legacyBackend)
+	if _, _, err := ret.listExtras(nil, "", ListQuery{Where: map[string]string{"posType": "thobe"}}); err == nil || err.(*APIError).Status != 400 {
+		t.Errorf("sales returns accepted where.posType: %v", err)
+	}
+}

@@ -158,6 +158,11 @@ func TestValidatePosSettings(t *testing.T) {
 		{"unknown terminal", M{"posSettings": M{"casino": M{}}}, []string{"posSettings.casino"}},
 		{"terminal not object", M{"posSettings": M{"barber": 4.0}}, []string{"posSettings.barber"}},
 		{"too large", M{"posSettings": M{"barber": M{"x": strings.Repeat("y", maxPosSettingsBytes)}}}, []string{"posSettings"}},
+		{"print format ok", M{"posSettings": M{"grocery": M{"printFormat": "A4", "autoPrint": true}}}, nil},
+		{"every print format", M{"posSettings": M{"thobe": M{"printFormat": "c95x55"}, "salon": M{"printFormat": "r58"}}}, nil},
+		{"unknown print format", M{"posSettings": M{"grocery": M{"printFormat": "A9"}}}, []string{"posSettings.grocery.printFormat"}},
+		{"print format not text", M{"posSettings": M{"grocery": M{"printFormat": 80.0}}}, []string{"posSettings.grocery.printFormat"}},
+		{"auto print not bool", M{"posSettings": M{"grocery": M{"autoPrint": "yes"}}}, []string{"posSettings.grocery.autoPrint"}},
 	}
 	for _, c := range cases {
 		e := map[string]string{}

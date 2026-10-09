@@ -64,6 +64,8 @@ func newSalesResource() *Resource {
 		"store DB `order` (+ `sales_payment`)", func(b *legacyBackend) {
 			b.deletedKey = ""
 			b.noDelete = "Sales invoices cannot be deleted in the existing system; issue a sales return (credit note) instead."
+			// a POS terminal's Bills list: its own recent sales (posType is a client field kept in erp.x)
+			b.listWhere["posType"] = whereKey{key: "erp.x.posType"}
 		})
 }
 

@@ -164,6 +164,10 @@ func nextPosNumber(storeHex, id string, start int64) (int64, error) {
 // erp.x) is one object of terminal → settings, at most 64 KB.
 const maxPosSettingsBytes = 64 * 1024
 
+// POS quick print formats (frontend src/pos/printFormats.js POS_PRINT_FORMATS)
+var posPrintFormats = map[string]bool{"r80": true, "r58": true, "r112": true, "r76": true, "A4": true, "A5": true,
+	"c95x11": true, "c95x55": true}
+
 func validatePosSettings(rec M, e map[string]string) {
 	v, ok := rec["posSettings"]
 	if !ok || v == nil {
@@ -179,8 +183,21 @@ func validatePosSettings(rec M, e map[string]string) {
 			e["posSettings."+t] = "unknown POS terminal"
 			continue
 		}
-		if _, ok := sv.(M); !ok && sv != nil {
+		sm, ok := sv.(M)
+		if !ok && sv != nil {
 			e["posSettings."+t] = "must be an object"
+			continue
+		}
+		// printing (every terminal): quick print format and auto print
+		if f, has := sm["printFormat"]; has && f != nil {
+			if fs, isStr := f.(string); !isStr || !posPrintFormats[fs] {
+				e["posSettings."+t+".printFormat"] = "unknown print format"
+			}
+		}
+		if a, has := sm["autoPrint"]; has && a != nil {
+			if _, isBool := a.(bool); !isBool {
+				e["posSettings."+t+".autoPrint"] = "must be true or false"
+			}
 		}
 	}
 	if b, err := json.Marshal(v); err != nil || len(b) > maxPosSettingsBytes {
