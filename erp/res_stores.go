@@ -43,6 +43,8 @@ var settingsFlag = map[string]string{
 	"enable_rbac_module":       "enable_rbac_module",
 	"enable_purchase_bills":    "enable_purchase_bills_tracking",
 	"enable_customer_po":       "enable_customer_po_no",
+	// non-VAT sales (the old app's store setting): POS Documents offers them only when on
+	"enable_nonvat_sales": "non_vat_sales",
 }
 
 var reNonUpper = regexp.MustCompile(`[^A-Z]`)

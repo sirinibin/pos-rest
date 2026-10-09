@@ -473,6 +473,14 @@ func purchaseBillValidate(x *mapCtx, rec M, prev M) map[string]string {
 	return e
 }
 
+// Proforma invoices: a POS terminal's Documents list asks for its own
+// (?where.posType=<terminal>); customerId lists one customer's.
+func newProformasResource() *Resource {
+	r := newNativeResource("proformas", "proformas", "sales", "store", "erp_proforma", "date", "proforma", "pro", proformaValidate)
+	r.Backend.(*nativeBackend).whereKeys = map[string]bool{"posType": true, "customerId": true}
+	return r
+}
+
 func proformaValidate(x *mapCtx, rec M, prev M) map[string]string {
 	e := map[string]string{}
 	if str(rec["date"]) == "" {
@@ -507,7 +515,7 @@ func allResources() []*Resource {
 		newVendorCategoriesResource(), newExpenseCategoriesResource(), newAccountsResource(), newWarehousesResource(),
 		newProductsResource(), newCustomersResource(), newVendorsResource(), newEmployeesResource(), newVehiclesResource(),
 		newSignaturesResource(), newPackagesResource(), newRFQSuppliersResource(), newSalesResource(), newQuotationsResource(),
-		newNativeResource("proformas", "proformas", "sales", "store", "erp_proforma", "date", "proforma", "pro", proformaValidate),
+		newProformasResource(),
 		newSalesReturnsResource(), newDeliveryNotesResource(), newNonVATSalesResource(), newNonVATReturnsResource(),
 		newQuotationReturnsResource(), newPurchasesResource(), newPurchaseOrdersResource(), newPurchaseRequestsResource(),
 		newPurchaseReturnsResource(),

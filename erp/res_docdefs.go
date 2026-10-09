@@ -24,6 +24,11 @@ var docLineErr = map[string]string{
 	"unit_price_with_vat": "unitPrice", "warehouse_id": "warehouseId",
 }
 
+// posTypeWhere: ?where.posType=<terminal> lists the documents a POS terminal
+// made (its Bills, and its quotations, non-VAT sales and purchases in POS
+// Documents). posType is a client field kept in erp.x.
+var posTypeWhere = whereKey{key: "erp.x.posType"}
+
 // docResource wires a docCfg onto a legacy collection and its v1 handlers.
 func docResource(name, path, module, coll string, cfg *docCfg, ops v1Ops, desc string, mod func(b *legacyBackend)) *Resource {
 	hy := knownSet()
@@ -64,8 +69,8 @@ func newSalesResource() *Resource {
 		"store DB `order` (+ `sales_payment`)", func(b *legacyBackend) {
 			b.deletedKey = ""
 			b.noDelete = "Sales invoices cannot be deleted in the existing system; issue a sales return (credit note) instead."
-			// a POS terminal's Bills list: its own recent sales (posType is a client field kept in erp.x)
-			b.listWhere["posType"] = whereKey{key: "erp.x.posType"}
+			// a POS terminal's Bills list: its own recent sales
+			b.listWhere["posType"] = posTypeWhere
 		})
 }
 
@@ -94,6 +99,7 @@ func newQuotationsResource() *Resource {
 	return docResource("quotations", "quotations", "sales", "quotation", cfg,
 		v1Ops{path: "/v1/quotation", create: controller.CreateQuotation, update: controller.UpdateQuotation, delete: controller.DeleteQuotation},
 		"store DB `quotation` (type quotation|invoice)", func(b *legacyBackend) {
+			b.listWhere["posType"] = posTypeWhere
 			inner := b.validate
 			b.validate = func(x *mapCtx, rec M, prev M) map[string]string {
 				e := inner(x, rec, prev)
@@ -166,7 +172,10 @@ func newNonVATSalesResource() *Resource {
 	}
 	return docResource("nonvatSales", "nonvat-sales", "sales", "non_vat_sales", cfg,
 		v1Ops{path: "/v1/non-vat-sales", create: controller.CreateNonVATSales, update: controller.UpdateNonVATSales, delete: controller.DeleteNonVATSales},
-		"store DB `non_vat_sales`", func(b *legacyBackend) { b.replaceUpdate = true })
+		"store DB `non_vat_sales`", func(b *legacyBackend) {
+			b.replaceUpdate = true
+			b.listWhere["posType"] = posTypeWhere
+		})
 }
 
 func newNonVATReturnsResource() *Resource {
@@ -188,7 +197,9 @@ func newPurchasesResource() *Resource {
 		v1Ops{path: "/v1/purchase", create: controller.CreatePurchase, update: controller.UpdatePurchase, delete: controller.DeletePurchase},
 		// No vendor is an unknown vendor (the web app's purchase form, like the old
 		// app, may leave it empty); the legacy model books it to the UNKNOWN vendor.
-		"store DB `purchase` (+ `purchase_payment`)", nil)
+		"store DB `purchase` (+ `purchase_payment`)", func(b *legacyBackend) {
+			b.listWhere["posType"] = posTypeWhere
+		})
 }
 
 func newPurchaseReturnsResource() *Resource {
