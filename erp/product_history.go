@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
@@ -18,6 +19,11 @@ import (
 //	GET /products/{id}/history?kind=sales&storeId=…&page=1&limit=25&q=…&from=…&to=…&where.customerId=…
 //	  → {"productId", "kind", "data": [line rows, newest first], "total": documents, "page", "limit",
 //	     "sums": {"qty", "value", "cost", "profit", "lines"}}
+//
+// Every row carries "stock" and "warehouseStocks": the product's stock after
+// it (product_history_stock.go). kind=all pages every product_history record
+// (sales, returns, purchases, quotations, transfers, stock adjustments) like
+// the old product history modal; its sums are {"qty", "in", "out", "lines"}.
 //
 // q, from, to and where.<field> filter the documents the way the document list
 // does (q searches the code and the party). A product on two lines of one
@@ -83,7 +89,7 @@ func historyResource(kind string) *Resource {
 }
 
 func historyKindList() string {
-	return "sales, salesReturns, quotations, quotationSales, quotationReturns, deliveryNotes, nonvatSales, nonvatReturns, purchases, purchaseReturns or stockTransfers"
+	return "all, sales, salesReturns, quotations, quotationSales, quotationReturns, deliveryNotes, nonvatSales, nonvatReturns, purchases, purchaseReturns or stockTransfers"
 }
 
 // historyRows: the lines of one rendered document that carry product pid.
@@ -166,6 +172,15 @@ func handleProductHistory(w http.ResponseWriter, r *http.Request, products *Reso
 		return
 	}
 	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
+	if kind == "all" {
+		pid, perr := primitive.ObjectIDFromHex(mux.Vars(r)["id"])
+		if perr != nil {
+			writeErr(w, errNotFound())
+			return
+		}
+		handleProductHistoryAll(w, r, c, products, pid)
+		return
+	}
 	res := historyResource(kind)
 	if res == nil {
 		writeErr(w, errBadRequest("Unknown history kind.", map[string]string{"kind": "one of " + historyKindList()}))
@@ -231,11 +246,17 @@ func handleProductHistory(w http.ResponseWriter, r *http.Request, products *Reso
 			return
 		}
 		x := newMapCtx(c, storeHex)
+		dates := map[string]time.Time{}
 		for cur.Next(ctx) {
-			rec := b.render(x, bsonToM(cur.Current), b.storeScoped())
+			raw := bsonToM(cur.Current)
+			rec := b.render(x, raw, b.storeScoped())
+			if t, ok := toTime(raw[b.dateKey]); ok {
+				dates[str(rec["id"])] = t
+			}
 			rows = append(rows, historyRows(rec, pid.Hex())...)
 		}
 		cur.Close(ctx)
+		attachHistoryStock(x, pid, rows, dates)
 	}
 	sums := historySums(bson.M{})
 	if total > 0 {
