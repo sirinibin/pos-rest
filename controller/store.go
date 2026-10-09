@@ -245,7 +245,8 @@ func ObjectIDExists(id primitive.ObjectID, list []*primitive.ObjectID) bool {
 // zatcaSensitiveFieldsChanged reports whether any field that is transmitted to
 // the ZATCA system changed between oldStore and newStore.
 //
-// Core identity and national-address fields are always compared. When isAdmin
+// Core identity and national-address fields are always compared (the business
+// category is not: changing it never forces a re-connection). When isAdmin
 // is true the serial-number prefixes, padding counts, and start-from counts are
 // also compared, with the customer-deposit and customer-withdrawal serials
 // additionally gated by the corresponding settings flags on newStore.
@@ -260,7 +261,6 @@ func zatcaSensitiveFieldsChanged(oldStore, newStore models.Store, isAdmin bool) 
 		oldStore.BranchName != newStore.BranchName ||
 		oldStore.RegistrationNumber != newStore.RegistrationNumber ||
 		oldStore.VATNo != newStore.VATNo ||
-		oldStore.BusinessCategory != newStore.BusinessCategory ||
 		!strings.EqualFold(strings.TrimSpace(oldStore.CountryCode), strings.TrimSpace(newStore.CountryCode)) ||
 		oldStore.NationalAddress.ShortCode != newStore.NationalAddress.ShortCode ||
 		oldStore.NationalAddress.BuildingNo != newStore.NationalAddress.BuildingNo ||

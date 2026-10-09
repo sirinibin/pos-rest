@@ -122,11 +122,24 @@ func TestZatcaSensitiveFieldsChanged(t *testing.T) {
 			wantTrue: true,
 		},
 
-		// ── Business Category ─────────────────────────────────────────────────
+		// ── Business Category (not ZATCA-sensitive: never forces a reconnect) ──
 		{
 			name:     "BusinessCategory changed",
 			old:      base,
 			new_:     func() models.Store { s := base; s.BusinessCategory = "Retail"; return s }(),
+			wantTrue: false,
+		},
+		{
+			name:     "BusinessCategory changed (admin)",
+			old:      base,
+			new_:     func() models.Store { s := base; s.BusinessCategory = "Restaurant"; return s }(),
+			isAdmin:  true,
+			wantTrue: false,
+		},
+		{
+			name:     "BusinessCategory changed together with VATNo",
+			old:      base,
+			new_:     func() models.Store { s := base; s.BusinessCategory = "Retail"; s.VATNo = "VAT999999"; return s }(),
 			wantTrue: true,
 		},
 		{

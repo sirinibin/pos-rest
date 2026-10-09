@@ -46,6 +46,8 @@ func Register(router *mux.Router) {
 	s.HandleFunc("/withdrawals/{id}/zatca/report", handleZatcaReport("withdrawals")).Methods("POST")
 	s.HandleFunc("/stores/{id}/zatca/connect", handleZatcaConnect).Methods("POST")
 	s.HandleFunc("/stores/{id}/zatca/disconnect", handleZatcaDisconnect).Methods("POST")
+	// platform admins: list stores marked for re-connection, clear the mark (zatca_admin.go)
+	registerZatcaAdmin(s)
 
 	// Subscription billing by bank transfer (billing.go)
 	registerBilling(s)

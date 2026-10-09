@@ -23,6 +23,7 @@ func TestEndpoints_Unauthenticated(t *testing.T) {
 		{"GET", "/drafts/sales"}, {"POST", "/drafts/sales"}, {"GET", "/drafts/sales/x"}, {"PUT", "/drafts/sales/x"},
 		{"DELETE", "/drafts/sales/x"}, {"POST", "/drafts/sales/x/finalize"},
 		{"GET", "/stores/x/starter-catalog"}, {"POST", "/stores/x/starter-catalog"},
+		{"GET", "/admin/zatca-reconnects"}, {"POST", "/stores/x/zatca/unmark"},
 	}
 	for _, r := range Resources() {
 		eps = append(eps,
