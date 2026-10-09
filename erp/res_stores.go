@@ -45,7 +45,33 @@ var settingsFlag = map[string]string{
 	"enable_customer_po":       "enable_customer_po_no",
 	// non-VAT sales (the old app's store setting): POS Documents offers them only when on
 	"enable_nonvat_sales": "non_vat_sales",
+	// store form settings that show the non-VAT and quotation-sales title rows
+	// (and count those documents in the dashboard revenue); non_vat_sales and
+	// enable_nonvat_sales are aliases of one legacy setting
+	"non_vat_sales":             "non_vat_sales",
+	"enable_sales_in_quotation": "enable_sales_in_quotation",
 }
+
+// newStoreSerials is erp.x.serials for a new store: every serial key with no
+// legacy counter (proforma invoices, repair jobs, ...) gets its prototype
+// default stored, so a new store has a value for every document from day one.
+// The legacy counters (sales, credit/debit notes, non-VAT sales and returns,
+// ...) are filled by the store builder (controller.buildGuestStore).
+func newStoreSerials() M {
+	out := M{}
+	for k, p := range defaultSerialPrefix {
+		out[k] = M{"prefix": p, "start": 1}
+	}
+	return out
+}
+
+// titleKeys are the contract store.titles document keys (each has an En and
+// an Ar variant). Titles are printed at the top of the document.
+var titleKeys = []string{"invoice", "quotation", "delivery", "purchase", "purchaseReturn", "salesReturn",
+	"nonvat", "nonvatReturn", "quotationSales", "quotationReturn", "debitNote", "creditNote"}
+
+// maxTitleLen caps a document title (printed in the header).
+const maxTitleLen = 100
 
 var reNonUpper = regexp.MustCompile(`[^A-Z]`)
 
@@ -443,6 +469,23 @@ func storeValidate(x *mapCtx, rec M, prev M) map[string]string {
 			}
 		}
 	}
+	if t, ok := rec["titles"].(M); ok {
+		for _, k := range titleKeys {
+			for _, lang := range []string{"En", "Ar"} {
+				v, ok := t[k+lang]
+				if !ok || v == nil {
+					continue
+				}
+				sv, isStr := v.(string)
+				if !isStr {
+					e["titles."+k+lang] = "must be text"
+				} else if len([]rune(strings.TrimSpace(sv))) > maxTitleLen && (prev == nil || str(get(prev, "erp.x.titles."+k+lang)) != sv) {
+					// an unchanged stored title never blocks a save
+					e["titles."+k+lang] = "up to 100 characters"
+				}
+			}
+		}
+	}
 	validatePosSettings(rec, e)
 	return e
 }
@@ -530,9 +573,16 @@ func storeToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) (M
 	if ch["flags"] {
 		f := sub(rec, "flags")
 		for ck, lk := range settingsFlag {
-			if v, ok := f[ck]; ok {
-				settings[lk] = boolv(v)
+			v, ok := f[ck]
+			if !ok {
+				continue
 			}
+			// aliases of one legacy setting: the one the client changed wins
+			// (the client sends every flag, so the other still has the old value)
+			if cur, dup := settings[lk]; dup && cur != boolv(setting(prev, lk)) {
+				continue
+			}
+			settings[lk] = boolv(v)
 		}
 	}
 	if ch["whatsapp"] {
@@ -761,7 +811,7 @@ func (s *storesBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 	env := M{"v": int64(1), "h": []interface{}{historyEntryIn(loc, c.UserName, "created", []interface{}{})}, "cb": c.UserName,
 		"x": M{"short": short, "branchAr": branchAr, "plan": "professional",
 			"trialEndsAt":  now.AddDate(0, 0, 14).In(loc).Format(layoutDay),
-			"businessType": cat, "address": signupAddressExtras(newCP, a)}}
+			"businessType": cat, "address": signupAddressExtras(newCP, a), "serials": newStoreSerials()}}
 	if err := s.setEnv("", hex, env); err != nil {
 		return nil, err
 	}
