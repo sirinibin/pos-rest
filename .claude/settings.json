@@ -70,5 +70,8 @@
       "Bash(rm -rf *)",
       "Bash(sudo *)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "21st"
+  ]
 }
