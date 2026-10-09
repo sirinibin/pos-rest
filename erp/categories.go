@@ -43,6 +43,8 @@ var BusinessCategories = []BusinessCategory{
 	{"Gaming and Entertainment", "gamingsa"},
 	// shown as "Business, Visa & Travels" in the app (ZATCA: letters and spaces only)
 	{"Business Visa and Travels", "travel"},
+	// every supported country (GCC + India); prices by weight at the day's rate
+	{"Jewellery", "jewellery"},
 	// India only (categoryCountries); "Kerala Tailor Shop & Gents Dress" in the app
 	{"Kerala Tailor Shop and Gents Dress", "keralagents"},
 	{"Kerala Tailor Shop", "keralatailor"},
@@ -143,6 +145,7 @@ var rePosToken = regexp.MustCompile(`^[A-Za-z0-9_-]{1,40}$`)
 // (kept in erp.x): posTerminal, posSection and posKey.
 func validatePosFields(rec M, e map[string]string) {
 	validateProductSpecs(rec, e)
+	validateJewel(rec, e)
 	if v, ok := rec["posTerminal"]; ok && v != nil && str(v) != "" {
 		if !posTerminals[str(v)] {
 			e["posTerminal"] = "unknown POS terminal"

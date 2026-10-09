@@ -18823,6 +18823,1182 @@
      "local": true
     }
    ]
+  },
+  "jewellery": {
+   "category": "Jewellery",
+   "vatInclusive": false,
+   "taxRates": {
+    "IN": 3
+   },
+   "categories": [
+    {
+     "key": "rings",
+     "nameEn": "Rings",
+     "nameAr": "الخواتم"
+    },
+    {
+     "key": "necklaces",
+     "nameEn": "Necklaces & sets",
+     "nameAr": "العقود والأطقم"
+    },
+    {
+     "key": "bangles",
+     "nameEn": "Bangles & bracelets",
+     "nameAr": "الأساور والغوايش"
+    },
+    {
+     "key": "earrings",
+     "nameEn": "Earrings",
+     "nameAr": "الأقراط"
+    },
+    {
+     "key": "chains",
+     "nameEn": "Chains",
+     "nameAr": "السلاسل"
+    },
+    {
+     "key": "pendants",
+     "nameEn": "Pendants",
+     "nameAr": "الدلايات"
+    },
+    {
+     "key": "diamond",
+     "nameEn": "Diamond jewellery",
+     "nameAr": "مجوهرات الألماس"
+    },
+    {
+     "key": "coins",
+     "nameEn": "Coins & bars",
+     "nameAr": "العملات والسبائك"
+    },
+    {
+     "key": "silver",
+     "nameEn": "Silver",
+     "nameAr": "الفضة"
+    },
+    {
+     "key": "repair",
+     "nameEn": "Repairs & services",
+     "nameAr": "التصليح والخدمات"
+    },
+    {
+     "key": "oldgold",
+     "nameEn": "Old gold bought",
+     "nameAr": "الذهب المستعمل المشترى"
+    }
+   ],
+   "brands": [
+    {
+     "name": "Tanishq",
+     "nameAr": "تانيشك"
+    },
+    {
+     "name": "Malabar",
+     "nameAr": "مالابار"
+    },
+    {
+     "name": "Joyalukkas",
+     "nameAr": "جوي آلوكاس"
+    },
+    {
+     "name": "L'azurde",
+     "nameAr": "لازوردي"
+    },
+    {
+     "name": "PAMP",
+     "nameAr": "بامب"
+    }
+   ],
+   "specs": [],
+   "items": [
+    {
+     "key": "jw-ring-21",
+     "section": "rings",
+     "nameEn": "Ladies ring 21K – twisted band",
+     "nameAr": "خاتم نسائي عيار 21 – مجدول",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 3.6,
+      "stone": 0,
+      "net": 3.6,
+      "makingType": "gram",
+      "making": 18,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-ring-21b",
+     "section": "rings",
+     "nameEn": "Ladies ring 21K – flower stone",
+     "nameAr": "خاتم نسائي عيار 21 – وردة بفصوص",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 4.25,
+      "stone": 0.15,
+      "net": 4.1,
+      "makingType": "gram",
+      "making": 22,
+      "wastage": 0,
+      "hallmark": true,
+      "stoneValue": 40,
+      "stoneNote": "CZ stones"
+     }
+    },
+    {
+     "key": "jw-ring-18",
+     "section": "rings",
+     "nameEn": "Men's ring 18K – signet",
+     "nameAr": "خاتم رجالي عيار 18 – ختم",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "L'azurde",
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 7.8,
+      "stone": 0,
+      "net": 7.8,
+      "makingType": "gram",
+      "making": 25,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-neck-21",
+     "section": "necklaces",
+     "nameEn": "Necklace set 21K – Bahraini design",
+     "nameAr": "طقم عقد عيار 21 – تصميم بحريني",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 38.5,
+      "stone": 0,
+      "net": 38.5,
+      "makingType": "gram",
+      "making": 20,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-neck-22",
+     "section": "necklaces",
+     "nameEn": "Necklace 22K – Indian temple design",
+     "nameAr": "عقد عيار 22 – تصميم هندي",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "Malabar",
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 24.6,
+      "stone": 0,
+      "net": 24.6,
+      "makingType": "gram",
+      "making": 24,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-bang-21",
+     "section": "bangles",
+     "nameEn": "Bangle 21K – plain (one)",
+     "nameAr": "غويشة عيار 21 – سادة (واحدة)",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 11.2,
+      "stone": 0,
+      "net": 11.2,
+      "makingType": "gram",
+      "making": 12,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-bang-21c",
+     "section": "bangles",
+     "nameEn": "Bangle 21K – Kuwaiti cut (one)",
+     "nameAr": "غويشة عيار 21 – قص كويتي (واحدة)",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 14.8,
+      "stone": 0,
+      "net": 14.8,
+      "makingType": "gram",
+      "making": 16,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-brac-18",
+     "section": "bangles",
+     "nameEn": "Bracelet 18K – Italian link",
+     "nameAr": "إسورة عيار 18 – إيطالي",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "L'azurde",
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 9.4,
+      "stone": 0,
+      "net": 9.4,
+      "makingType": "gram",
+      "making": 28,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-ear-21",
+     "section": "earrings",
+     "nameEn": "Earrings 21K – hoop",
+     "nameAr": "حلق عيار 21 – دائري",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 4.1,
+      "stone": 0,
+      "net": 4.1,
+      "makingType": "gram",
+      "making": 20,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-ear-18",
+     "section": "earrings",
+     "nameEn": "Earrings 18K – studs",
+     "nameAr": "حلق عيار 18 – فصوص",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 2.2,
+      "stone": 0.1,
+      "net": 2.1,
+      "makingType": "gram",
+      "making": 30,
+      "wastage": 0,
+      "hallmark": true,
+      "stoneValue": 60,
+      "stoneNote": "CZ stones"
+     }
+    },
+    {
+     "key": "jw-chain-21",
+     "section": "chains",
+     "nameEn": "Chain 21K – rope 50 cm",
+     "nameAr": "سلسلة عيار 21 – حبل 50 سم",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 10.4,
+      "stone": 0,
+      "net": 10.4,
+      "makingType": "gram",
+      "making": 10,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-chain-18",
+     "section": "chains",
+     "nameEn": "Chain 18K – box 45 cm",
+     "nameAr": "سلسلة عيار 18 – بوكس 45 سم",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 6.3,
+      "stone": 0,
+      "net": 6.3,
+      "makingType": "gram",
+      "making": 14,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-pend-21",
+     "section": "pendants",
+     "nameEn": "Pendant 21K – Allah name",
+     "nameAr": "دلاية عيار 21 – لفظ الجلالة",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "21K",
+      "pricing": "weight",
+      "gross": 2.8,
+      "stone": 0,
+      "net": 2.8,
+      "makingType": "gram",
+      "making": 25,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "jw-pend-18",
+     "section": "pendants",
+     "nameEn": "Pendant 18K – initial letter",
+     "nameAr": "دلاية عيار 18 – حرف",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 1.9,
+      "stone": 0,
+      "net": 1.9,
+      "makingType": "gram",
+      "making": 30,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-ring-22",
+     "section": "rings",
+     "nameEn": "Ladies ring 22K – floral",
+     "nameAr": "خاتم نسائي عيار 22 – زهور",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 3.85,
+      "stone": 0,
+      "net": 3.85,
+      "makingType": "gram",
+      "making": 350,
+      "wastage": 8,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-ring-22m",
+     "section": "rings",
+     "nameEn": "Gents ring 22K – plain band",
+     "nameAr": "خاتم رجالي عيار 22 – سادة",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 6.2,
+      "stone": 0,
+      "net": 6.2,
+      "makingType": "gram",
+      "making": 300,
+      "wastage": 7,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-neck-22",
+     "section": "necklaces",
+     "nameEn": "Necklace 22K – Kerala palakka mala",
+     "nameAr": "عقد عيار 22 – بالاكا مالا",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "Malabar",
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 32.4,
+      "stone": 1.2,
+      "net": 31.2,
+      "makingType": "gram",
+      "making": 450,
+      "wastage": 10,
+      "hallmark": true,
+      "stoneValue": 4500,
+      "stoneNote": "Green palakka stones"
+     }
+    },
+    {
+     "key": "in-kasu-22",
+     "section": "necklaces",
+     "nameEn": "Kasu mala 22K (coin necklace)",
+     "nameAr": "عقد كاسو مالا عيار 22",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 40.1,
+      "stone": 0,
+      "net": 40.1,
+      "makingType": "gram",
+      "making": 380,
+      "wastage": 9,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-thali-22",
+     "section": "necklaces",
+     "nameEn": "Thali chain with pendant 22K",
+     "nameAr": "سلسلة ثالي مع دلاية عيار 22",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 16.0,
+      "stone": 0,
+      "net": 16.0,
+      "makingType": "gram",
+      "making": 400,
+      "wastage": 8,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-bang-22",
+     "section": "bangles",
+     "nameEn": "Bangles 22K – pair, machine cut",
+     "nameAr": "أساور عيار 22 – زوج، قص آلي",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "Joyalukkas",
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 24.0,
+      "stone": 0,
+      "net": 24.0,
+      "makingType": "gram",
+      "making": 320,
+      "wastage": 7,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-ear-22",
+     "section": "earrings",
+     "nameEn": "Jhumka earrings 22K",
+     "nameAr": "حلق جومكا عيار 22",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 8.6,
+      "stone": 0,
+      "net": 8.6,
+      "makingType": "gram",
+      "making": 420,
+      "wastage": 10,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-ear-18",
+     "section": "earrings",
+     "nameEn": "Stud earrings 18K",
+     "nameAr": "حلق فصوص عيار 18",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 2.1,
+      "stone": 0,
+      "net": 2.1,
+      "makingType": "gram",
+      "making": 500,
+      "wastage": 12,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-chain-22",
+     "section": "chains",
+     "nameEn": "Chain 22K – Rope 20 inch",
+     "nameAr": "سلسلة عيار 22 – حبل 20 إنش",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 12.0,
+      "stone": 0,
+      "net": 12.0,
+      "makingType": "gram",
+      "making": 250,
+      "wastage": 6,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-pend-22",
+     "section": "pendants",
+     "nameEn": "Pendant 22K – Lakshmi",
+     "nameAr": "دلاية عيار 22 – لاكشمي",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 2.6,
+      "stone": 0,
+      "net": 2.6,
+      "makingType": "gram",
+      "making": 400,
+      "wastage": 10,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "in-nose-22",
+     "section": "pendants",
+     "nameEn": "Nose pin 22K",
+     "nameAr": "حلق أنف عيار 22",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 0.45,
+      "stone": 0,
+      "net": 0.45,
+      "makingType": "fixed",
+      "making": 350,
+      "wastage": 12,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "dm-ring",
+     "section": "diamond",
+     "nameEn": "Diamond solitaire ring 18K – 0.30 ct",
+     "nameAr": "خاتم ألماس سوليتير عيار 18 – 0.30 قيراط",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "Tanishq",
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 3.4,
+      "stone": 0.06,
+      "net": 3.34,
+      "makingType": "gram",
+      "making": 60,
+      "wastage": 0,
+      "hallmark": true,
+      "stoneValue": 3200,
+      "stoneNote": "0.30 ct G VS2",
+      "certificate": "IGI"
+     }
+    },
+    {
+     "key": "dm-ear",
+     "section": "diamond",
+     "nameEn": "Diamond earrings 18K – 0.20 ct",
+     "nameAr": "حلق ألماس عيار 18 – 0.20 قيراط",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 2.6,
+      "stone": 0.04,
+      "net": 2.56,
+      "makingType": "gram",
+      "making": 60,
+      "wastage": 0,
+      "hallmark": true,
+      "stoneValue": 2100,
+      "stoneNote": "0.20 ct H SI1",
+      "certificate": "IGI"
+     }
+    },
+    {
+     "key": "dm-pend",
+     "section": "diamond",
+     "nameEn": "Diamond pendant 18K – heart",
+     "nameAr": "دلاية ألماس عيار 18 – قلب",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "jewel": {
+      "metal": "gold",
+      "purity": "18K",
+      "pricing": "weight",
+      "gross": 2.1,
+      "stone": 0.03,
+      "net": 2.07,
+      "makingType": "gram",
+      "making": 60,
+      "wastage": 0,
+      "hallmark": true,
+      "stoneValue": 1500,
+      "stoneNote": "0.15 ct H SI1"
+     }
+    },
+    {
+     "key": "cn-1g",
+     "section": "coins",
+     "nameEn": "Gold bar 24K – 1 g",
+     "nameAr": "سبيكة ذهب عيار 24 – 1 غرام",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "PAMP",
+     "jewel": {
+      "metal": "gold",
+      "purity": "24K",
+      "pricing": "weight",
+      "gross": 1,
+      "stone": 0,
+      "net": 1,
+      "makingType": "fixed",
+      "making": 15,
+      "wastage": 0,
+      "hallmark": true,
+      "investment": true
+     }
+    },
+    {
+     "key": "cn-5g",
+     "section": "coins",
+     "nameEn": "Gold bar 24K – 5 g",
+     "nameAr": "سبيكة ذهب عيار 24 – 5 غرام",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "PAMP",
+     "jewel": {
+      "metal": "gold",
+      "purity": "24K",
+      "pricing": "weight",
+      "gross": 5,
+      "stone": 0,
+      "net": 5,
+      "makingType": "fixed",
+      "making": 35,
+      "wastage": 0,
+      "hallmark": true,
+      "investment": true
+     }
+    },
+    {
+     "key": "cn-10g",
+     "section": "coins",
+     "nameEn": "Gold bar 24K – 10 g",
+     "nameAr": "سبيكة ذهب عيار 24 – 10 غرام",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "brand": "PAMP",
+     "jewel": {
+      "metal": "gold",
+      "purity": "24K",
+      "pricing": "weight",
+      "gross": 10,
+      "stone": 0,
+      "net": 10,
+      "makingType": "fixed",
+      "making": 55,
+      "wastage": 0,
+      "hallmark": true,
+      "investment": true
+     }
+    },
+    {
+     "key": "cn-8g",
+     "section": "coins",
+     "nameEn": "Gold coin 22K – 8 g (sovereign)",
+     "nameAr": "جنيه ذهب عيار 22 – 8 غرام",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "jewel": {
+      "metal": "gold",
+      "purity": "22K",
+      "pricing": "weight",
+      "gross": 8,
+      "stone": 0,
+      "net": 8,
+      "makingType": "fixed",
+      "making": 60,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "sv-anklet",
+     "section": "silver",
+     "nameEn": "Silver anklets 925 – pair",
+     "nameAr": "خلخال فضة 925 – زوج",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "jewel": {
+      "metal": "silver",
+      "purity": "925",
+      "pricing": "weight",
+      "gross": 32,
+      "stone": 0,
+      "net": 32,
+      "makingType": "gram",
+      "making": 1.5,
+      "wastage": 0,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "sv-ring",
+     "section": "silver",
+     "nameEn": "Silver ring 925 – stone",
+     "nameAr": "خاتم فضة 925 – بفص",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "jewel": {
+      "metal": "silver",
+      "purity": "925",
+      "pricing": "weight",
+      "gross": 5.5,
+      "stone": 0.5,
+      "net": 5.0,
+      "makingType": "gram",
+      "making": 3,
+      "wastage": 0,
+      "hallmark": true,
+      "stoneValue": 15,
+      "stoneNote": "Agate"
+     }
+    },
+    {
+     "key": "sv-coin",
+     "section": "silver",
+     "nameEn": "Silver coin 999 – 10 g",
+     "nameAr": "عملة فضة 999 – 10 غرام",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "jewel": {
+      "metal": "silver",
+      "purity": "999",
+      "pricing": "weight",
+      "gross": 10,
+      "stone": 0,
+      "net": 10,
+      "makingType": "fixed",
+      "making": 6,
+      "wastage": 0,
+      "hallmark": true,
+      "investment": true
+     }
+    },
+    {
+     "key": "sv-lamp",
+     "section": "silver",
+     "nameEn": "Silver pooja lamp 999 – 50 g",
+     "nameAr": "مصباح فضة 999 – 50 غرام",
+     "price": 0,
+     "unit": "Pcs",
+     "service": false,
+     "countries": [
+      "IN"
+     ],
+     "local": true,
+     "jewel": {
+      "metal": "silver",
+      "purity": "999",
+      "pricing": "weight",
+      "gross": 50,
+      "stone": 0,
+      "net": 50,
+      "makingType": "gram",
+      "making": 30,
+      "wastage": 5,
+      "hallmark": true
+     }
+    },
+    {
+     "key": "rp-polish",
+     "section": "repair",
+     "nameEn": "Polishing & cleaning",
+     "nameAr": "تلميع وتنظيف",
+     "price": 30,
+     "unit": "Service",
+     "service": true,
+     "taxRates": {
+      "IN": 5
+     }
+    },
+    {
+     "key": "rp-resize",
+     "section": "repair",
+     "nameEn": "Ring resizing",
+     "nameAr": "تعديل مقاس الخاتم",
+     "price": 50,
+     "unit": "Service",
+     "service": true,
+     "taxRates": {
+      "IN": 5
+     }
+    },
+    {
+     "key": "rp-solder",
+     "section": "repair",
+     "nameEn": "Soldering / chain repair",
+     "nameAr": "لحام وتصليح سلسلة",
+     "price": 25,
+     "unit": "Service",
+     "service": true,
+     "taxRates": {
+      "IN": 5
+     }
+    },
+    {
+     "key": "rp-stone",
+     "section": "repair",
+     "nameEn": "Stone setting",
+     "nameAr": "تركيب فص",
+     "price": 40,
+     "unit": "Service",
+     "service": true,
+     "taxRates": {
+      "IN": 5
+     }
+    },
+    {
+     "key": "rp-rhodium",
+     "section": "repair",
+     "nameEn": "Rhodium plating",
+     "nameAr": "طلاء روديوم",
+     "price": 60,
+     "unit": "Service",
+     "service": true,
+     "taxRates": {
+      "IN": 5
+     }
+    },
+    {
+     "key": "rp-engrave",
+     "section": "repair",
+     "nameEn": "Engraving",
+     "nameAr": "نقش",
+     "price": 40,
+     "unit": "Service",
+     "service": true,
+     "taxRates": {
+      "IN": 5
+     }
+    },
+    {
+     "key": "rp-making",
+     "section": "repair",
+     "nameEn": "Making charges on customer's gold (per gram)",
+     "nameAr": "أجرة الصياغة على ذهب العميل (للغرام)",
+     "price": 20,
+     "unit": "g",
+     "service": true,
+     "taxRates": {
+      "IN": 5
+     }
+    },
+    {
+     "key": "og-24k",
+     "section": "oldgold",
+     "nameEn": "Old gold 24K (bought)",
+     "nameAr": "ذهب مستعمل عيار 24 (مشترى)",
+     "price": 0,
+     "unit": "g",
+     "service": false,
+     "local": true
+    },
+    {
+     "key": "og-22k",
+     "section": "oldgold",
+     "nameEn": "Old gold 22K (bought)",
+     "nameAr": "ذهب مستعمل عيار 22 (مشترى)",
+     "price": 0,
+     "unit": "g",
+     "service": false,
+     "local": true
+    },
+    {
+     "key": "og-21k",
+     "section": "oldgold",
+     "nameEn": "Old gold 21K (bought)",
+     "nameAr": "ذهب مستعمل عيار 21 (مشترى)",
+     "price": 0,
+     "unit": "g",
+     "service": false,
+     "countries": [
+      "SA",
+      "AE",
+      "OM",
+      "QA",
+      "BH",
+      "KW"
+     ],
+     "local": true
+    },
+    {
+     "key": "og-18k",
+     "section": "oldgold",
+     "nameEn": "Old gold 18K (bought)",
+     "nameAr": "ذهب مستعمل عيار 18 (مشترى)",
+     "price": 0,
+     "unit": "g",
+     "service": false,
+     "local": true
+    },
+    {
+     "key": "og-silver",
+     "section": "oldgold",
+     "nameEn": "Old silver (bought)",
+     "nameAr": "فضة مستعملة (مشتراة)",
+     "price": 0,
+     "unit": "g",
+     "service": false,
+     "local": true
+    }
+   ]
   }
  }
 }

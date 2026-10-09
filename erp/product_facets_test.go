@@ -106,7 +106,7 @@ func TestProductPosWhereRegistered(t *testing.T) {
 	b := newProductsResource().Backend.(*legacyBackend)
 	for k, key := range map[string]string{"specClass": "erp.x.specs.class", "specSize": "erp.x.specs.size",
 		"specMaterial": "erp.x.specs.material", "posSection": "erp.x.posSection",
-		"posTerminal": "erp.x.posTerminal"} {
+		"posTerminal": "erp.x.posTerminal", "jewelMetal": "erp.x.jewel.metal", "jewelPurity": "erp.x.jewel.purity"} {
 		if b.listWhere[k].key != key {
 			t.Errorf("where.%s → %q", k, b.listWhere[k].key)
 		}
@@ -127,7 +127,7 @@ func TestFacetPipelineAndResult(t *testing.T) {
 		t.Fatalf("pipeline: %v", p)
 	}
 	fc := p[1].(bson.M)["$facet"].(bson.M)
-	if len(fc) != 8 || fc["total"].(bson.A)[0].(bson.M)["$count"] != "n" {
+	if len(fc) != 9 || fc["total"].(bson.A)[0].(bson.M)["$count"] != "n" {
 		t.Fatalf("facets: %v", fc)
 	}
 	if fc["categoryId"].(bson.A)[0].(bson.M)["$unwind"] != "$category_id" {
@@ -138,13 +138,17 @@ func TestFacetPipelineAndResult(t *testing.T) {
 	}
 	oid := primitive.NewObjectID()
 	out := facetResult(bson.M{
-		"categoryId": bson.A{bson.M{"_id": oid, "n": int32(3)}, bson.M{"_id": nil, "n": 9}},
-		"specSize":   bson.A{bson.M{"_id": "psp_s1", "n": int64(2)}},
-		"posSection": bson.A{bson.M{"_id": "veg", "n": int32(4)}},
-		"total":      bson.A{bson.M{"n": int32(12)}},
+		"categoryId":  bson.A{bson.M{"_id": oid, "n": int32(3)}, bson.M{"_id": nil, "n": 9}},
+		"specSize":    bson.A{bson.M{"_id": "psp_s1", "n": int64(2)}},
+		"posSection":  bson.A{bson.M{"_id": "veg", "n": int32(4)}},
+		"jewelPurity": bson.A{bson.M{"_id": "22K", "n": int32(5)}},
+		"total":       bson.A{bson.M{"n": int32(12)}},
 	})
 	if ps := out["posSection"].([]M); len(ps) != 1 || ps[0]["id"] != "veg" || ps[0]["count"] != 4.0 {
 		t.Errorf("sections: %v", ps)
+	}
+	if jp := out["jewelPurity"].([]M); len(jp) != 1 || jp[0]["id"] != "22K" || jp[0]["count"] != 5.0 {
+		t.Errorf("jewel purities: %v", jp)
 	}
 	if out["total"] != int64(12) {
 		t.Errorf("total: %v", out["total"])
@@ -159,7 +163,7 @@ func TestFacetPipelineAndResult(t *testing.T) {
 	if b := out["brandId"].([]M); len(b) != 0 {
 		t.Errorf("brands: %v", b)
 	}
-	if e := facetResult(bson.M{}); len(e) != 8 || e["total"] != int64(0) {
+	if e := facetResult(bson.M{}); len(e) != 9 || e["total"] != int64(0) {
 		t.Error("every facet is present, empty")
 	}
 }

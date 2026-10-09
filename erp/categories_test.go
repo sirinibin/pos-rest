@@ -9,8 +9,8 @@ import (
 // the store's POS terminal) and the product POS catalog fields.
 
 func TestBusinessCategories_ZatcaSafeAndUnique(t *testing.T) {
-	if len(BusinessCategories) != 28 {
-		t.Fatalf("expected 28 POS categories (25 + 3 India-only), got %d", len(BusinessCategories))
+	if len(BusinessCategories) != 29 {
+		t.Fatalf("expected 29 POS categories (26 + 3 India-only), got %d", len(BusinessCategories))
 	}
 	values, terminals := map[string]bool{}, map[string]bool{}
 	for _, c := range BusinessCategories {

@@ -83,8 +83,18 @@ func TestStarterCatalogs_DataIsConsistent(t *testing.T) {
 			if len([]rune(it.NameEn)) < 3 || !reStarterArabic.MatchString(it.NameAr) {
 				t.Errorf("%s: %s needs an English (3+) and Arabic name: %q / %q", term, it.Key, it.NameEn, it.NameAr)
 			}
-			if it.Price <= 0 {
+			// jewellery priced by weight at the day's rate, and old gold the
+			// shop buys by weight, carry no list price
+			byWeight := (it.Jewel != nil && str(it.Jewel["pricing"]) == "weight") || (term == "jewellery" && it.Section == "oldgold")
+			if it.Price <= 0 && !byWeight {
 				t.Errorf("%s: %s price %v", term, it.Key, it.Price)
+			}
+			if it.Jewel != nil {
+				e := map[string]string{}
+				validateJewel(M{"jewel": it.Jewel}, e)
+				if len(e) > 0 {
+					t.Errorf("%s: %s jewel details rejected: %v", term, it.Key, e)
+				}
 			}
 			if it.Brand != "" && !brands[it.Brand] {
 				t.Errorf("%s: %s brand %s not in the brand list", term, it.Key, it.Brand)

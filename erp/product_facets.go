@@ -118,6 +118,9 @@ var productPosWhere = map[string]whereKey{
 	"specSize":     {key: "erp.x.specs.size"},
 	"specMaterial": {key: "erp.x.specs.material"},
 	"specType":     {key: "erp.x.specs.type"},
+	// Jewellery terminal: metal (gold, silver, platinum) and purity (22K, 925 …)
+	"jewelMetal":  {key: "erp.x.jewel.metal"},
+	"jewelPurity": {key: "erp.x.jewel.purity"},
 }
 
 // productFacetFields: facet name → legacy key (category_id is an array).
@@ -132,6 +135,7 @@ var productFacetFields = []struct {
 	{"specMaterial", "erp.x.specs.material", false},
 	{"specType", "erp.x.specs.type", false},
 	{"posSection", "erp.x.posSection", false},
+	{"jewelPurity", "erp.x.jewel.purity", false},
 }
 
 // facetPipeline counts the products matching f per category, brand and spec.

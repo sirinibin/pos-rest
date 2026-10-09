@@ -63,15 +63,18 @@ type starterItem struct {
 	Countries []string              `json:"countries"` // empty: every country
 	Variants  map[string]*[2]string `json:"variants"`  // country or "*" → [en, ar]; null keeps the name
 	Prices    map[string]float64    `json:"prices"`
+	Jewel     M                     `json:"jewel"`    // jewellery details (see jewellery.go)
+	TaxRates  map[string]float64    `json:"taxRates"` // country → tax rate of the product
 }
 
 type starterTerminal struct {
-	Category     string            `json:"category"`
-	VatInclusive bool              `json:"vatInclusive"`
-	Categories   []starterCategory `json:"categories"`
-	Brands       []starterBrand    `json:"brands"`
-	Specs        []starterSpec     `json:"specs"`
-	Items        []starterItem     `json:"items"`
+	Category     string             `json:"category"`
+	VatInclusive bool               `json:"vatInclusive"`
+	Categories   []starterCategory  `json:"categories"`
+	Brands       []starterBrand     `json:"brands"`
+	Specs        []starterSpec      `json:"specs"`
+	Items        []starterItem      `json:"items"`
+	TaxRates     map[string]float64 `json:"taxRates"` // country → tax rate of the terminal's goods
 }
 
 type starterCatalogs struct {
@@ -133,6 +136,8 @@ type starterPlanItem struct {
 	Service                                           bool
 	Price                                             float64 // in the store's currency, as sold (see VatInclusive)
 	Specs                                             map[string]string
+	Jewel                                             M        // money values in the store's currency
+	Tax                                               *float64 // the product's own tax rate (nil: the store's)
 }
 
 // StarterPlan is what a store of one business category gets in one country.
@@ -203,8 +208,13 @@ func planStarterCatalog(terminal, cc string) (*StarterPlan, bool) {
 		if brand != "" {
 			usedBrand[brand] = true
 		}
-		p.Items = append(p.Items, starterPlanItem{Key: it.Key, Section: it.Section, NameEn: en, NameAr: ar, Unit: it.Unit,
-			Brand: brand, PartNo: it.PartNo, Service: it.Service, Price: price, Specs: it.Specs})
+		pi := starterPlanItem{Key: it.Key, Section: it.Section, NameEn: en, NameAr: ar, Unit: it.Unit,
+			Brand: brand, PartNo: it.PartNo, Service: it.Service, Price: price, Specs: it.Specs}
+		if it.Jewel != nil {
+			pi.Jewel = starterJewel(it.Jewel, cc, cp.Decimals, it.Local)
+		}
+		pi.Tax = starterTax(t, it, cc)
+		p.Items = append(p.Items, pi)
 	}
 	for _, b := range t.Brands {
 		if usedBrand[b.Name] {
@@ -213,6 +223,41 @@ func planStarterCatalog(terminal, cc string) (*StarterPlan, bool) {
 	}
 	p.Specs = t.Specs
 	return p, true
+}
+
+// starterJewel: an item's jewellery details for a country; the making charge
+// (per gram or fixed) and the stones' value are money, converted like prices.
+func starterJewel(j M, cc string, decimals int, local bool) M {
+	out := cloneM(j)
+	if local {
+		return out
+	}
+	if mt := str(out["makingType"]); mt == "gram" || mt == "fixed" {
+		out["making"] = starterPrice(num(out["making"]), cc, decimals)
+	}
+	if v, ok := out["stoneValue"]; ok {
+		out["stoneValue"] = starterPrice(num(v), cc, decimals)
+	}
+	return out
+}
+
+// starterTax: the tax rate a product carries when it is not the store's
+// standard rate: the item's or terminal's rate for the country (India sells
+// gold jewellery at 3% GST and job work at 5%), and 0% for investment gold and
+// silver (99%+ bars and coins) in the Gulf countries, where they are
+// zero-rated.
+func starterTax(t *starterTerminal, it starterItem, cc string) *float64 {
+	if v, ok := it.TaxRates[cc]; ok {
+		return &v
+	}
+	if it.Jewel != nil && boolv(it.Jewel["investment"]) && cc != "IN" {
+		z := 0.0
+		return &z
+	}
+	if v, ok := t.TaxRates[cc]; ok {
+		return &v
+	}
+	return nil
 }
 
 // StarterCounts summarises a plan or a seeding run.
@@ -240,6 +285,9 @@ func (p *StarterPlan) counts() StarterCounts {
 // vat: the store's VAT rate; refs: ids of the categories / brands / options.
 func starterProductRecord(terminal string, vatInclusive bool, vat float64, it starterPlanItem, catID, brandID string, specIDs map[string]string) M {
 	retail := it.Price
+	if it.Tax != nil {
+		vat = *it.Tax
+	}
 	if vatInclusive && vat > 0 {
 		retail = roundN(it.Price/(1+vat/100), 4)
 	}
@@ -265,6 +313,9 @@ func starterProductRecord(terminal string, vatInclusive bool, vat float64, it st
 	}
 	if it.PartNo != "" {
 		rec["partNo"] = it.PartNo
+	}
+	if it.Jewel != nil {
+		rec["jewel"] = cloneM(it.Jewel)
 	}
 	if len(specIDs) > 0 {
 		sp := M{}
