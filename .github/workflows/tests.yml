@@ -204,7 +204,7 @@ jobs:
         working-directory: frontend/e2e
         env:
           CI: "true"
-        run: npx playwright test
+        run: npx playwright test -c playwright.fullstack.config.js
 
       - name: Upload Playwright report
         if: failure()
@@ -212,8 +212,8 @@ jobs:
         with:
           name: playwright-report-api
           path: |
-            frontend/e2e/playwright-report
-            frontend/e2e/test-results
+            frontend/e2e/playwright-report-fullstack
+            frontend/e2e/test-results-fullstack
           retention-days: 14
 
       - name: Server log
