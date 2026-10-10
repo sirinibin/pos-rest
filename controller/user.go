@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -163,6 +164,9 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	// One create per email at a time, so two at once can't both find it free.
+	defer models.LockKey("user-email:" + strings.ToLower(strings.TrimSpace(user.Email)))()
 
 	// Validate data
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
@@ -938,6 +942,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	if !utils.Decode(w, r, &user) {
 		return
 	}
+
+	// One create per email at a time, so two at once can't both find it free.
+	defer models.LockKey("user-email:" + strings.ToLower(strings.TrimSpace(user.Email)))()
 
 	// Validate data
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {

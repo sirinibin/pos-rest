@@ -179,7 +179,7 @@ func (pr *PurchaseRequest) MakeCode() error {
 		if startFrom <= 0 {
 			startFrom = 1
 		}
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}

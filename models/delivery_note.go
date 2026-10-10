@@ -556,7 +556,7 @@ func (deliveryNote *DeliveryNote) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.DeliveryNoteSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -592,7 +592,7 @@ func (deliveryNote *DeliveryNote) MakeRedisCode() error {
 				return err
 			}
 
-			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 			if err != nil {
 				return err
 			}
@@ -693,7 +693,7 @@ func (model *DeliveryNote) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -897,14 +897,14 @@ func NotifyDeliveryNoteReminders() error {
 		for _, dn := range notes {
 			// Collect connected user/device pairs under the mutex, then emit without holding the lock
 			type userDevice struct{ userID, deviceID string }
-			mutex.Lock()
+			ClientsMu.Lock()
 			var targets []userDevice
 			for userID, devices := range Clients {
 				for deviceID := range devices {
 					targets = append(targets, userDevice{userID, deviceID})
 				}
 			}
-			mutex.Unlock()
+			ClientsMu.Unlock()
 
 			for _, t := range targets {
 				Emit(t.userID, t.deviceID, "delivery_note_reminder", map[string]interface{}{

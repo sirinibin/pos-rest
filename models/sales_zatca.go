@@ -700,11 +700,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 	// scanning when formatted as "50.00". For those amounts, suppress the ".00"
 	// suffix so whole numbers are encoded without trailing decimal zeros.
 	payableVal := RoundTo2Decimals(order.NetTotal)
-	if payableVal < 100 {
-		zatcaRawWholeAmounts = true
-	}
-	updatedXML, err := xml.MarshalIndent(invoice, "", "  ")
-	zatcaRawWholeAmounts = false
+	updatedXML, err := marshalZatcaXML(invoice, payableVal < 100)
 	if err != nil {
 		return xmlContent, err
 	}

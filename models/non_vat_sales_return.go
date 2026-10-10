@@ -407,7 +407,7 @@ func (ret *NonVATSalesReturn) MakeRedisCode() error {
 			return err
 		}
 		startFrom := serialNum.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -437,7 +437,7 @@ func (ret *NonVATSalesReturn) MakeRedisCode() error {
 			if err != nil {
 				return err
 			}
-			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 			if err != nil {
 				return err
 			}

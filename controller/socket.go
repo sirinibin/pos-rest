@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -15,7 +14,6 @@ import (
 )
 
 var upgrader = websocket.Upgrader{}
-var mutex = sync.Mutex{}
 
 func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	//log.Print("Inside socket handler")
@@ -43,12 +41,12 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mutex.Lock()
+	models.ClientsMu.Lock()
 	if _, exists := models.Clients[userID]; !exists {
 		models.Clients[userID] = make(map[string][]*websocket.Conn)
 	}
 	models.Clients[userID][deviceID] = append(models.Clients[userID][deviceID], conn)
-	mutex.Unlock()
+	models.ClientsMu.Unlock()
 
 	/*
 		Emit(userID, deviceID, "role_updated", map[string]string{
@@ -71,7 +69,7 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 			if findErr != nil {
 				fmt.Println("error finding user on disconnect: " + findErr.Error())
 				// Still clean up Clients even if DB lookup failed
-				mutex.Lock()
+				models.ClientsMu.Lock()
 				connections := models.Clients[userID][deviceID]
 				for i, c := range connections {
 					if c == conn {
@@ -85,13 +83,13 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				if len(models.Clients[userID]) == 0 {
 					delete(models.Clients, userID)
 				}
-				mutex.Unlock()
+				models.ClientsMu.Unlock()
 				break
 			}
 
 			// Minimal critical section: update Clients and read tab count
 			var tabsOpen int
-			mutex.Lock()
+			models.ClientsMu.Lock()
 			connections := models.Clients[userID][deviceID]
 			for i, c := range connections {
 				if c == conn {
@@ -106,7 +104,7 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 			if len(models.Clients[userID]) == 0 {
 				delete(models.Clients, userID)
 			}
-			mutex.Unlock()
+			models.ClientsMu.Unlock()
 
 			// DB update and notifications outside the mutex
 			_, ok := user.Devices[deviceID]

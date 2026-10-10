@@ -34,6 +34,9 @@ use. A new endpoint that takes a store under another key needs its own check.
 the user's roles don't grant, in stores with `settings.enable_rbac_module` on; map new resources in `rbacResources`.
 Concurrency: recompute-and-save of product stock goes through `store.RefreshProductStock` / `store.UpdateProductLocked`
 (per-product lock); the signed-in user comes from `models.UserFromClaims(claims)`, never a package variable.
+Account balances are recomputed under a per-account lock; customer/vendor `credit_balance` and `account` are written
+only by `SetCreditBalance` (`Update()` leaves them out). Document counters start with `SetNX`. Check-then-insert
+(user email, the 30-second receipt duplicate guard) holds `models.LockKey`. `models.ClientsMu` guards websocket clients.
 ZATCA: a store is one device, so invoices, credit and debit notes share one ICV (`zatca.icv`) and one PIH chain
 (`models.NextZatcaChainLink`, under the store's "zatca" queue); `invoice_count_value` stays the per-type document
 number. A document ZATCA accepted answers 409 `already_reported` if reported again. Unsigned XML goes to

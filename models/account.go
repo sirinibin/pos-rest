@@ -961,17 +961,19 @@ func (store *Store) IsAccountExists(ID *primitive.ObjectID) (exists bool, err er
 
 func SetAccountBalances(accounts map[string]Account) error {
 	for _, account := range accounts {
-		err := account.CalculateBalance(nil, nil)
-		if err != nil {
-			return err
-		}
-
-		err = account.Update()
-		if err != nil {
+		if err := setAccountBalance(account); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func setAccountBalance(account Account) error {
+	defer lockAccountBalance(account.ID)()
+	if err := account.CalculateBalance(nil, nil); err != nil {
+		return err
+	}
+	return account.Update()
 }
 
 func ProcessAccounts() error {

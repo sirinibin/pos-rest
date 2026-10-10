@@ -439,7 +439,7 @@ func (deposit *CustomerDeposit) MakeXMLContent() (string, error) {
 		},
 	}
 
-	updatedXML, err := xml.MarshalIndent(invoice, "", "  ")
+	updatedXML, err := marshalZatcaXML(invoice, false)
 	if err != nil {
 		return "", err
 	}
@@ -626,7 +626,7 @@ func (deposit *CustomerDeposit) EnsureInvoiceCountValue() error {
 			return err
 		}
 		startFrom := store.CustomerDepositSerialNumber.StartFromCount
-		if err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err(); err != nil {
+		if err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err(); err != nil {
 			return err
 		}
 	}

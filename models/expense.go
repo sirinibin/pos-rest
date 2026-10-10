@@ -745,7 +745,7 @@ func (expense *Expense) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.ExpenseSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -782,12 +782,12 @@ func (expense *Expense) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
@@ -889,7 +889,7 @@ func (model *Expense) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -1333,7 +1333,22 @@ func (expense *Expense) FindPreviousExpense(selectFields map[string]interface{})
 
 //Accounting
 
+// DoAccounting posts the expense. An expense at the same minute as its
+// neighbour moves the neighbour a minute on and re-posts it; two expenses
+// saved at once both re-posted the same neighbour and posted it twice. The
+// store's expense accounting runs one at a time.
 func (expense *Expense) DoAccounting() error {
+	defer LockKey("expense-accounting:" + expense.StoreID.Hex())()
+	return expense.doAccounting()
+}
+
+// UndoAccounting removes the expense's postings; see DoAccounting.
+func (expense *Expense) UndoAccounting() error {
+	defer LockKey("expense-accounting:" + expense.StoreID.Hex())()
+	return expense.undoAccounting()
+}
+
+func (expense *Expense) doAccounting() error {
 	previousExpense, err := expense.FindPreviousExpense(bson.M{})
 	if err != nil {
 		return errors.New("Error finding previous expense:" + err.Error())
@@ -1364,11 +1379,11 @@ func (expense *Expense) DoAccounting() error {
 				return err
 			}
 
-			err = nextExpense.UndoAccounting()
+			err = nextExpense.undoAccounting()
 			if err != nil {
 				return err
 			}
-			err = nextExpense.DoAccounting()
+			err = nextExpense.doAccounting()
 			if err != nil {
 				return err
 			}
@@ -1387,7 +1402,7 @@ func (expense *Expense) DoAccounting() error {
 	return nil
 }
 
-func (expense *Expense) UndoAccounting() error {
+func (expense *Expense) undoAccounting() error {
 	store, err := FindStoreByID(expense.StoreID, bson.M{})
 	if err != nil {
 		return err

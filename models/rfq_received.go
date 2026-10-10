@@ -192,7 +192,7 @@ func (rfq *RFQReceived) MakeRFQCode() error {
 		if start == 0 {
 			start = 1
 		}
-		db.RedisClient.Set(redisKey, start+count-1, 0)
+		db.RedisClient.SetNX(redisKey, start+count-1, 0)
 	}
 	n, err := db.RedisClient.Incr(redisKey).Result()
 	if err != nil {

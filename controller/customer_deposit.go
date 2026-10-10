@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -131,6 +132,12 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		customerdeposit.Payments[i].UpdatedAt = &now
 		customerdeposit.Payments[i].UpdatedBy = &userID
 	}
+
+	// The duplicate guard in Validate looks for the same receipt saved in the
+	// last 30 seconds; hold it per party and amount until this one is saved,
+	// so a double submit can't pass it twice.
+	defer models.LockKey(fmt.Sprintf("customerdeposit:%v:%s:%v:%v:%v:%v", customerdeposit.StoreID, customerdeposit.Type,
+		customerdeposit.CustomerID, customerdeposit.VendorID, customerdeposit.EmployeeID, customerdeposit.NetTotal))()
 
 	// Validate data
 	if errs := customerdeposit.Validate(w, r, "create", nil); len(errs) > 0 {

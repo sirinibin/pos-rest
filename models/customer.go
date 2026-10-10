@@ -714,6 +714,10 @@ func (customer *Customer) SetCreditBalance() error {
 		// collection) — the Account Balance Sheet — instead of trusting whatever
 		// cached value happens to already be on the account document, so the
 		// customer's credit balance never drifts out of sync with the ledger.
+		// One recompute-and-save per account at a time, so the last save
+		// counts every posting; and only the balance fields are written, so a
+		// customer loaded earlier can't put back fields changed since.
+		defer lockAccountBalance(account.ID)()
 		err = account.CalculateBalance(nil, nil)
 		if err != nil {
 			return errors.New("error calculating customer account balance:" + err.Error())
@@ -728,7 +732,7 @@ func (customer *Customer) SetCreditBalance() error {
 		if account.Type == "liability" {
 			customer.CreditBalance = account.Balance * -1
 		}
-		err = customer.Update()
+		err = setPartyBalance(store, "customer", customer.ID, customer.CreditBalance, account)
 		if err != nil {
 			return errors.New("error updating customer credit balance:" + err.Error())
 		}
@@ -740,7 +744,7 @@ func (customer *Customer) SetCreditBalance() error {
 
 		if vendor != nil {
 			vendor.CreditBalance = customer.CreditBalance
-			err = vendor.Update()
+			err = setPartyBalance(store, "vendor", vendor.ID, vendor.CreditBalance, nil)
 			if err != nil {
 				return err
 			}
@@ -2420,10 +2424,14 @@ func (customer *Customer) Update() error {
 	updateOptions.SetUpsert(false)
 	defer cancel()
 
-	_, err := collection.UpdateOne(
+	set, err := withoutPartyBalance(customer)
+	if err != nil {
+		return err
+	}
+	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": customer.ID},
-		bson.M{"$set": customer},
+		bson.M{"$set": set},
 		updateOptions,
 	)
 	if err != nil {
@@ -3202,7 +3210,7 @@ func (customer *Customer) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}

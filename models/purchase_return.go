@@ -1768,7 +1768,7 @@ func (purchaseReturn *PurchaseReturn) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.PurchaseReturnSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -1805,12 +1805,12 @@ func (purchaseReturn *PurchaseReturn) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}

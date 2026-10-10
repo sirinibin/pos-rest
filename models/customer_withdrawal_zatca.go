@@ -418,7 +418,7 @@ func (withdrawal *CustomerWithdrawal) MakeXMLContent() (string, error) {
 		},
 	}
 
-	updatedXML, err := xml.MarshalIndent(invoice, "", "  ")
+	updatedXML, err := marshalZatcaXML(invoice, false)
 	if err != nil {
 		return "", err
 	}
@@ -585,7 +585,7 @@ func (withdrawal *CustomerWithdrawal) EnsureInvoiceCountValue() error {
 			return err
 		}
 		startFrom := store.CustomerWithdrawalSerialNumber.StartFromCount
-		if err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err(); err != nil {
+		if err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err(); err != nil {
 			return err
 		}
 	}

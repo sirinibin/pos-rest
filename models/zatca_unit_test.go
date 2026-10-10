@@ -1,6 +1,8 @@
 package models
 
 import (
+	"strings"
+	"sync"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -100,5 +102,38 @@ func TestZatcaXMLPath_ScopedByStore(t *testing.T) {
 	}
 	if zatcaXMLPath("credit_note", &a, "X") == zatcaXMLPath("debit_note", &a, "X") {
 		t.Fatal("a credit note and a debit note with the same code share a file")
+	}
+}
+
+// Documents of different stores are marshalled at the same time; one asking
+// for whole amounts without ".00" must not change another's amounts.
+func TestMarshalZatcaXML_ConcurrentFormatsStayApart(t *testing.T) {
+	type doc struct {
+		Percent TaxPercent `xml:"cbc:Percent"`
+	}
+	var wg sync.WaitGroup
+	errs := make(chan string, 400)
+	for i := 0; i < 200; i++ {
+		raw := i%2 == 0
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out, err := marshalZatcaXML(doc{Percent: 15}, raw)
+			want := "<cbc:Percent>15.00</cbc:Percent>"
+			if raw {
+				want = "<cbc:Percent>15</cbc:Percent>"
+			}
+			if err != nil || !strings.Contains(string(out), want) {
+				errs <- string(out)
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for e := range errs {
+		t.Fatalf("got %s", e)
+	}
+	if zatcaRawWholeAmounts {
+		t.Fatal("zatcaRawWholeAmounts left on")
 	}
 }

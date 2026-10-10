@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -130,6 +131,12 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		customerwithdrawal.Payments[i].UpdatedAt = &now
 		customerwithdrawal.Payments[i].UpdatedBy = &userID
 	}
+
+	// The duplicate guard in Validate looks for the same receipt saved in the
+	// last 30 seconds; hold it per party and amount until this one is saved,
+	// so a double submit can't pass it twice.
+	defer models.LockKey(fmt.Sprintf("customerwithdrawal:%v:%s:%v:%v:%v:%v", customerwithdrawal.StoreID, customerwithdrawal.Type,
+		customerwithdrawal.CustomerID, customerwithdrawal.VendorID, customerwithdrawal.EmployeeID, customerwithdrawal.NetTotal))()
 
 	// Validate data
 	if errs := customerwithdrawal.Validate(w, r, "create", nil); len(errs) > 0 {

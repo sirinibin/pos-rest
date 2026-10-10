@@ -10,7 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-var mutex = sync.Mutex{}
+// ClientsMu guards Clients, in this package and in controller.
+var ClientsMu sync.Mutex
 var Clients = make(map[string]map[string][]*websocket.Conn) // Store Active User Connections
 
 type Event struct {
@@ -74,8 +75,8 @@ func SendPong(conn *websocket.Conn) error {
 }
 
 func Emit(userID string, deviceID string, event string, data interface{}) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	ClientsMu.Lock()
+	defer ClientsMu.Unlock()
 
 	payload := Event{
 		Event: event,
@@ -145,13 +146,13 @@ func ConvertToLocation(data interface{}) (Location, error) {
 func NotifyUserByID(userID *primitive.ObjectID, event string, data interface{}) error {
 	userIDStr := userID.Hex()
 
-	mutex.Lock()
+	ClientsMu.Lock()
 	userDevices, hasUser := Clients[userIDStr]
 	deviceIDs := make([]string, 0, len(userDevices))
 	for deviceID := range userDevices {
 		deviceIDs = append(deviceIDs, deviceID)
 	}
-	mutex.Unlock()
+	ClientsMu.Unlock()
 
 	if hasUser && len(deviceIDs) > 0 {
 		for _, deviceID := range deviceIDs {
@@ -195,12 +196,12 @@ func (store *Store) NotifyUsers(event string) error {
 // (more reliable than iterating user.Devices from the DB, which can be stale).
 func emitToStoreUsers(storeID primitive.ObjectID, event string) {
 	// Snapshot connected userIDs under the mutex so we don't hold it during DB calls.
-	mutex.Lock()
+	ClientsMu.Lock()
 	userIDs := make([]string, 0, len(Clients))
 	for uid := range Clients {
 		userIDs = append(userIDs, uid)
 	}
-	mutex.Unlock()
+	ClientsMu.Unlock()
 
 	for _, userIDStr := range userIDs {
 		objID, err := primitive.ObjectIDFromHex(userIDStr)
@@ -225,7 +226,7 @@ func emitToStoreUsers(storeID primitive.ObjectID, event string) {
 			continue
 		}
 		// Emit to all open device connections for this user.
-		mutex.Lock()
+		ClientsMu.Lock()
 		deviceMap, ok := Clients[userIDStr]
 		deviceIDs := make([]string, 0, len(deviceMap))
 		if ok {
@@ -233,7 +234,7 @@ func emitToStoreUsers(storeID primitive.ObjectID, event string) {
 				deviceIDs = append(deviceIDs, did)
 			}
 		}
-		mutex.Unlock()
+		ClientsMu.Unlock()
 		for _, did := range deviceIDs {
 			Emit(userIDStr, did, event, nil)
 		}

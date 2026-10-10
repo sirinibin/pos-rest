@@ -431,14 +431,14 @@ func (order *Order) LinkDeliveryNote() error {
 		}
 
 		// Notify all connected clients so they can remove this DN from their notification bell
-		mutex.Lock()
+		ClientsMu.Lock()
 		var targets []struct{ userID, deviceID string }
 		for userID, devices := range Clients {
 			for deviceID := range devices {
 				targets = append(targets, struct{ userID, deviceID string }{userID, deviceID})
 			}
 		}
-		mutex.Unlock()
+		ClientsMu.Unlock()
 		for _, t := range targets {
 			Emit(t.userID, t.deviceID, "delivery_note_order_linked", map[string]interface{}{
 				"delivery_note_id": order.DeliveryNoteID.Hex(),
@@ -3299,7 +3299,7 @@ func (order *Order) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.SalesSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -3336,12 +3336,12 @@ func (order *Order) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}

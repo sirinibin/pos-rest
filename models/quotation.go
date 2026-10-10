@@ -1949,7 +1949,7 @@ func (quotation *Quotation) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.QuotationSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -1985,7 +1985,7 @@ func (quotation *Quotation) MakeRedisCode() error {
 				return err
 			}
 
-			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 			if err != nil {
 				return err
 			}
@@ -2086,7 +2086,7 @@ func (model *Quotation) MakeRedisCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}

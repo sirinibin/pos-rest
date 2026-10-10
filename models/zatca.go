@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type ComplianceCheck struct {
@@ -493,8 +494,19 @@ func (p TaxPercent) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 
 // zatcaRawWholeAmounts, when true, suppresses the ".00" suffix for whole-number
 // amounts during XML marshaling (e.g. outputs "50" instead of "50.00").
-// Set this before xml.MarshalIndent and reset to false immediately after.
+// It is package state read by MarshalXML, so marshalZatcaXML sets it and
+// marshals under zatcaMarshalMu: documents of different stores are signed at
+// the same time, and one store's setting must not leak into another's XML.
 var zatcaRawWholeAmounts bool
+var zatcaMarshalMu sync.Mutex
+
+func marshalZatcaXML(v interface{}, rawWholeAmounts bool) ([]byte, error) {
+	zatcaMarshalMu.Lock()
+	defer zatcaMarshalMu.Unlock()
+	zatcaRawWholeAmounts = rawWholeAmounts
+	defer func() { zatcaRawWholeAmounts = false }()
+	return xml.MarshalIndent(v, "", "  ")
+}
 
 // formatAmount formats a float64 with at least 2 decimal places, preserving more if present.
 // If zatcaRawWholeAmounts is true, whole-number values are returned without trailing decimals.

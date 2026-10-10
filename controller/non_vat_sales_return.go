@@ -191,14 +191,10 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queue.Pop()
 	CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales_return")
 
-	// Update return count on the parent non_vat_sales document
+	// Update return count on the parent non_vat_sales document; $inc so two
+	// returns of one sale saved at once both count.
 	if item.NonVATSalesID != nil && !item.NonVATSalesID.IsZero() {
-		parent, err := store.FindNonVATSalesByID(item.NonVATSalesID, bson.M{})
-		if err == nil {
-			parent.ReturnCount++
-			parent.ReturnAmount += item.NetTotal
-			_ = parent.Update()
-		}
+		_ = store.AddNonVATSalesReturn(item.NonVATSalesID, item.NetTotal)
 	}
 
 	go func() {
@@ -206,6 +202,7 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesReturnStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -372,6 +369,7 @@ func UpdateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesReturnStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -433,6 +431,7 @@ func DeleteNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		_ = item.ClearProductsNonVATSalesReturnHistory()
 		_ = item.SetProductsStock()
 		_ = item.SetCustomerNonVATSalesReturnStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true

@@ -781,7 +781,7 @@ func (warehouse *Warehouse) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}

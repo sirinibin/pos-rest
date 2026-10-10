@@ -192,6 +192,7 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -358,6 +359,7 @@ func UpdateNonVATSales(w http.ResponseWriter, r *http.Request) {
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -419,6 +421,7 @@ func DeleteNonVATSales(w http.ResponseWriter, r *http.Request) {
 		_ = item.ClearProductsNonVATSalesHistory()
 		_ = item.SetProductsStock()
 		_ = item.SetCustomerNonVATSalesStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true

@@ -482,6 +482,8 @@ func (vendor *Vendor) SetCreditBalance() error {
 		// collection) — the Account Balance Sheet — instead of trusting whatever
 		// cached value happens to already be on the account document, so the
 		// vendor's credit balance never drifts out of sync with the ledger.
+		// See Customer.SetCreditBalance.
+		defer lockAccountBalance(account.ID)()
 		err = account.CalculateBalance(nil, nil)
 		if err != nil {
 			return errors.New("error calculating vendor account balance:" + err.Error())
@@ -497,7 +499,7 @@ func (vendor *Vendor) SetCreditBalance() error {
 			vendor.CreditBalance = account.Balance * -1
 		}
 
-		err = vendor.Update()
+		err = setPartyBalance(store, "vendor", vendor.ID, vendor.CreditBalance, account)
 		if err != nil {
 			return errors.New("error updating vendor credit balance:" + err.Error())
 		}
@@ -509,7 +511,7 @@ func (vendor *Vendor) SetCreditBalance() error {
 
 		if customer != nil {
 			customer.CreditBalance = vendor.CreditBalance
-			err = customer.Update()
+			err = setPartyBalance(store, "customer", customer.ID, customer.CreditBalance, nil)
 			if err != nil {
 				return err
 			}
@@ -1810,10 +1812,14 @@ func (vendor *Vendor) Update() error {
 	}
 	vendor.LogoContent = ""
 
+	set, err := withoutPartyBalance(vendor)
+	if err != nil {
+		return err
+	}
 	_, err = collection.UpdateOne(
 		ctx,
 		bson.M{"_id": vendor.ID},
-		bson.M{"$set": vendor},
+		bson.M{"$set": set},
 		updateOptions,
 	)
 	if err != nil {
@@ -2050,7 +2056,7 @@ func (vendor *Vendor) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}
