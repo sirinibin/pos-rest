@@ -233,3 +233,32 @@ func TestFlow_RFQSupplierListServesBothShapes(t *testing.T) {
 		}
 	}
 }
+
+// A service category name is trimmed before the duplicate check, a blank
+// name is "required" (not 409) and a deleted category frees its name.
+func TestFlow_ServiceCategoryNames(t *testing.T) {
+	sid := newStore(t)
+	create := func(name string) (int, apiResponse) {
+		return in(t, sid, "POST", "/v1/service-category", map[string]interface{}{"store_id": sid, "name": name})
+	}
+	code, res := create("  Repairs  ")
+	c := mustOK(t, "create Repairs", code, res)
+	if got := str(c, "name"); got != "Repairs" {
+		t.Fatalf("saved name %q, want Repairs", got)
+	}
+	code, res = create("Repairs ")
+	wantStatus(t, "a duplicate with a trailing space", code, res, http.StatusConflict)
+
+	code, res = in(t, sid, "DELETE", "/v1/service-category/"+str(c, "id"), nil)
+	if code != http.StatusOK || !res.Status {
+		t.Fatalf("delete Repairs: HTTP %d %v", code, res.Errors)
+	}
+	code, res = create("Repairs")
+	mustOK(t, "re-create a deleted name", code, res)
+
+	code, res = create("   ")
+	wantStatus(t, "a blank name", code, res, http.StatusBadRequest)
+	if res.Errors["name"] != "Name is required" {
+		t.Fatalf("blank name error %q, want Name is required", res.Errors["name"])
+	}
+}

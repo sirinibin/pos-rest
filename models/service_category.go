@@ -236,13 +236,16 @@ func (serviceCategory *ServiceCategory) Validate(w http.ResponseWriter, r *http.
 
 	}
 
-	if govalidator.IsNull(strings.TrimSpace(serviceCategory.Name)) {
+	serviceCategory.Name = strings.TrimSpace(serviceCategory.Name)
+	nameExists := false
+	if govalidator.IsNull(serviceCategory.Name) {
 		errs["name"] = "Name is required"
-	}
-
-	nameExists, err := serviceCategory.IsNameExists()
-	if err != nil {
-		errs["name"] = err.Error()
+	} else {
+		var err error
+		nameExists, err = serviceCategory.IsNameExists()
+		if err != nil {
+			errs["name"] = err.Error()
+		}
 	}
 
 	if nameExists {
@@ -266,12 +269,14 @@ func (serviceCategory *ServiceCategory) IsNameExists() (exists bool, err error) 
 
 	if serviceCategory.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"name": serviceCategory.Name,
+			"name":    serviceCategory.Name,
+			"deleted": bson.M{"$ne": true},
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"name": serviceCategory.Name,
-			"_id":  bson.M{"$ne": serviceCategory.ID},
+			"name":    serviceCategory.Name,
+			"_id":     bson.M{"$ne": serviceCategory.ID},
+			"deleted": bson.M{"$ne": true},
 		})
 	}
 
