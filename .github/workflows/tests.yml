@@ -204,7 +204,7 @@ jobs:
   zatca-sandbox:
     name: ZATCA sandbox (report only)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     continue-on-error: true
     services:
       mongo:
@@ -222,6 +222,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check out the frontend
+        uses: actions/checkout@v4
+        with:
+          repository: sirinibin/reactjs-pos
+          ref: ${{ inputs.frontend_ref }}
+          path: frontend
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -229,6 +236,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # The Fatoora SDK (invoice signing) is a Java jar.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 17.9.0
+
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          npm install
+          NODE_OPTIONS="--openssl-legacy-provider --max-old-space-size=4096" \
+          GENERATE_SOURCEMAP=false DISABLE_ESLINT_PLUGIN=true \
+          npm run build
 
       - name: Install dependencies
         run: |
@@ -243,7 +268,7 @@ jobs:
 
       - name: Start server
         run: |
-          API_PORT=2000 nohup ./pos-rest > server.log 2>&1 &
+          API_PORT=2000 STATIC_DIR="$GITHUB_WORKSPACE/frontend/build" nohup ./pos-rest > server.log 2>&1 &
           for i in $(seq 1 60); do
             curl -s -o /dev/null http://localhost:2000/v1/me && exit 0
             sleep 1
@@ -254,6 +279,31 @@ jobs:
         run: go test -tags "e2e zatca" ./e2e/api -run TestZatcaSandbox -count=1 -v 2>&1 | tee zatca.log; exit ${PIPESTATUS[0]}
         shell: bash
 
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: 20
+
+      # The frontend's ZATCA flow in Chromium: onboard a new test store
+      # (VAT 399999999900003), report a simplified invoice, clear a standard
+      # invoice and report a credit note through the UI.
+      - name: Run the frontend's ZATCA sandbox tests
+        if: always()
+        working-directory: frontend/e2e
+        shell: bash
+        env:
+          CI: "true"
+          E2E_ZATCA: "1"
+          E2E_ZATCA_OTP: "123345"
+        run: |
+          if [ ! -f fullstack/zatca.spec.js ]; then
+            echo "::notice title=ZATCA sandbox (UI)::fullstack/zatca.spec.js is not on this frontend branch yet"
+            exit 0
+          fi
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test -c playwright.fullstack.config.js fullstack/zatca.spec.js --project=desktop 2>&1 | tee ../../zatca-ui.log; exit ${PIPESTATUS[0]}
+
       # The job log ends with the service containers' output, which can push
       # the test output past what the log API returns; annotations keep it.
       - name: Report failures as annotations
@@ -261,6 +311,7 @@ jobs:
         shell: bash
         run: |
           grep -E -- '--- FAIL|_test.go:[0-9]+:' zatca.log | head -20 | while IFS= read -r l; do echo "::error title=ZATCA sandbox::${l}"; done
+          [ -f zatca-ui.log ] && grep -E '✘|Error:|expect\(' zatca-ui.log | head -20 | while IFS= read -r l; do echo "::error title=ZATCA sandbox (UI)::${l:0:900}"; done
           grep -iE 'zatca|python|error' server.log | tail -10 | while IFS= read -r l; do echo "::warning title=ZATCA server log::${l:0:900}"; done
 
       - name: Server log
