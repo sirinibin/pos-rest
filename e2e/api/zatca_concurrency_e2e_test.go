@@ -127,7 +127,9 @@ func storeKeys(t *testing.T, sids []string) map[string]*signerKey {
 // which belongs to none of the stores' keys: that is counted, not failed.
 func checkSignedBy(t *testing.T, label string, d zatcaDoc, keys map[string]*signerKey, sandboxCerts map[string]string) {
 	t.Helper()
-	if !keys[d.store].verifiesHash(d.hash, d.signature) {
+	if d.signature == "" {
+		t.Errorf("%s: reported with an empty signature", label)
+	} else if !keys[d.store].verifiesHash(d.hash, d.signature) {
 		for sid, k := range keys {
 			if sid != d.store && k.verifiesHash(d.hash, d.signature) {
 				t.Errorf("%s: signed with store %s's key", label, sid)

@@ -44,6 +44,26 @@ jobs:
       - name: Run unit and API tests
         run: go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
 
+      # The ZATCA signer, signing real invoices through the Fatoora SDK from
+      # the public sirinibin/zatca-sdk repo (no credentials).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: ZATCA signing-key tests (Python + Fatoora SDK)
+        shell: bash
+        run: |
+          pip install --quiet pyopenssl asn1crypto cryptography lxml pytz requests
+          git clone --depth 1 --quiet https://github.com/sirinibin/zatca-sdk.git "$RUNNER_TEMP/zatca-sdk"
+          unzip -q -o "$RUNNER_TEMP/zatca-sdk/fatoora-cli-simulation.zip" -d ZatcaPython/utilities
+          java -version
+          python -m unittest discover -s ZatcaPython/tests -v
+
   # ── Integration tests: models against real MongoDB + Redis ───────────────
   integration:
     name: Integration tests (MongoDB + Redis)

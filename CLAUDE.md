@@ -40,7 +40,9 @@ only by `SetCreditBalance` (`Update()` leaves them out). Document counters start
 ZATCA: a store is one device, so invoices, credit and debit notes share one ICV (`zatca.icv`) and one PIH chain
 (`models.NextZatcaChainLink`, under the store's "zatca" queue); `invoice_count_value` stays the per-type document
 number. A document ZATCA accepted answers 409 `already_reported` if reported again. Unsigned XML goes to
-`zatcaXMLPath` (store id in the name).
+`zatcaXMLPath` (store id in the name). The Fatoora SDK signs only with a SEC1 key: given PKCS#8 (what its `-csr` writes) it
+leaves SignatureValue empty yet reports success, so the signer converts with `sdk_private_key` and refuses an
+unsigned result (`ZatcaPython/tests`, run in the unit job).
 Validation errors answer 400: a handler that writes no status calls `ensureStatus(w, http.StatusBadRequest)`. Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
 
 ## Usage

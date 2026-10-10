@@ -8,6 +8,7 @@ import base64
 import os
 import re
 from asn1crypto.core import UTF8String
+from utilities.einvoice_signer import sdk_private_key
 import tempfile
 import subprocess
 
@@ -90,7 +91,8 @@ class CsrGenerator:
             # Read private key
             with open(private_key_file, "r") as f:
                 private_key_pem = f.read()
-            private_key_content = "".join(private_key_pem.strip().splitlines()[1:-1])
+            # The SDK writes PKCS#8; it signs only with SEC1 (see sdk_private_key).
+            private_key_content = sdk_private_key(private_key_pem)
 
             # Read CSR
             with open(csr_file, "rb") as f:
