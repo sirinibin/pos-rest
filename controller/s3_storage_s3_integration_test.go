@@ -15,7 +15,7 @@ import (
 	"github.com/sirinibin/startpos/backend/models"
 )
 
-// These tests talk to a real S3-compatible server (SeaweedFS in CI, see
+// These tests talk to a real S3-compatible server (versitygw in CI, see
 // tests.yml), so they cover the SigV4 signing that the unit tests' fake
 // servers accept blindly. They skip when S3_TEST_ENDPOINT is unset.
 func s3TestSettings(t *testing.T) models.AdminSettings {
@@ -42,8 +42,8 @@ func s3TestSettings(t *testing.T) models.AdminSettings {
 	return s
 }
 
-// s3TestVisible waits for a just-written key: a fresh SeaweedFS can answer
-// 404 for a moment after a new bucket's first write (AWS S3 doesn't).
+// s3TestVisible waits for a just-written key: some S3-compatible servers answer
+// 404 for a moment after a write (AWS S3 is read-after-write consistent).
 func s3TestVisible(s models.AdminSettings, key string) bool {
 	for i := 0; i < 50; i++ {
 		if headS3Object(s, key) {

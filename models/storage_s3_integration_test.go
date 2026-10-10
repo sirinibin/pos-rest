@@ -10,7 +10,7 @@ import (
 )
 
 // Uploads through SaveFileToStorage's signer against a real S3-compatible
-// server (SeaweedFS in CI; tests.yml creates the bucket). Skips when
+// server (versitygw in CI; tests.yml creates the bucket). Skips when
 // S3_TEST_ENDPOINT is unset.
 func TestUploadToS3Models_RealServer(t *testing.T) {
 	endpoint := os.Getenv("S3_TEST_ENDPOINT")

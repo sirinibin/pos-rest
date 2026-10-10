@@ -72,19 +72,22 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
-      # A local S3-compatible server, so the S3 upload/read/delete code is
-      # tested with real request signing. Throwaway keys; no real bucket.
-      - name: Start a local S3 server (SeaweedFS)
+      # A local S3-compatible server that checks request signatures, so the S3
+      # upload/read/delete code is tested for real. Throwaway keys; no real bucket.
+      - name: Start a local S3 server (versitygw)
+        env:
+          AWS_ACCESS_KEY_ID: ciaccesskey
+          AWS_SECRET_ACCESS_KEY: cisecretkey123
+          AWS_DEFAULT_REGION: us-east-1
         run: |
-          mkdir -p /tmp/s3cfg
-          echo '{"identities":[{"name":"ci","credentials":[{"accessKey":"ciaccesskey","secretKey":"cisecretkey123"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > /tmp/s3cfg/s3.json
-          docker run -d --network host --name s3 -v /tmp/s3cfg:/cfg chrislusf/seaweedfs:3.97 \
-            server -dir=/data -s3 -s3.port=8333 -s3.config=/cfg/s3.json -master.volumeSizeLimitMB=64
-          for i in $(seq 1 60); do
-            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8333/)" = 403 ] && exit 0
-            sleep 2
+          docker run -d --network host --name s3 --tmpfs /data \
+            -e ROOT_ACCESS_KEY=ciaccesskey -e ROOT_SECRET_KEY=cisecretkey123 \
+            versity/versitygw:v1.0.16 --port :8333 posix /data
+          for i in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8333/)" = 403 ] && break
+            sleep 1
           done
-          docker logs s3 | tail -20; exit 1
+          aws --endpoint-url http://localhost:8333 s3api create-bucket --bucket pos-ci
 
       # TestHealthCheck_ServicesDown asserts the health check reports MongoDB and
       # Redis as down, so it only holds without them; the unit job runs it.
