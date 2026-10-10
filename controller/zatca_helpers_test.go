@@ -43,3 +43,24 @@ func TestLastLines(t *testing.T) {
 		}
 	}
 }
+
+func TestZatcaDeviceSerialNumber(t *testing.T) {
+	const dev = "-4bd41220-f619-47bc-830b-7fedd3b33032"
+	cases := []struct {
+		name, prefix string
+		padding      int64
+		want         string
+	}{
+		{"prefix and padding", "GUOJ", 5, "1-GUOJ|2-00001|3" + dev},
+		{"prefix with a date", "INV-DATE", 3, "1-INV|2-20261010|3-001|4" + dev},
+		{"no prefix", "", 5, "1-INV|2-00001|3" + dev},
+		{"no prefix, no padding", "", 0, "1-INV|2-1|3" + dev},
+		{"prefix with a trailing dash", "S-", 2, "1-S|2-01|3" + dev},
+		{"blank prefix", "  ", 4, "1-INV|2-0001|3" + dev},
+	}
+	for _, c := range cases {
+		if got := zatcaDeviceSerialNumber(c.prefix, c.padding, "20261010"); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}

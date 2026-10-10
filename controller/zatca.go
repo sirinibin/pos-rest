@@ -102,17 +102,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	invoiceCode = strings.ReplaceAll(invoiceCode, "DATE", currentDate)
 	//log.Print("invoiceCode:" + invoiceCode)
 
-	serialNumberTemplate := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, 1)
-
-	parts := strings.Split(serialNumberTemplate, "-")
-	serialNumber := ""
-	for k, part := range parts {
-		serialNumber += strconv.Itoa((k + 1)) + "-" + part + "|"
-	}
-
-	serialNumber += strconv.Itoa((len(parts) + 1)) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
-
-	serialNumber = strings.ReplaceAll(serialNumber, "DATE", currentDate)
+	serialNumber := zatcaDeviceSerialNumber(store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, currentDate)
 	//log.Print("serialNumber:" + serialNumber)
 
 	//log.Print("serialNumber:" + serialNumber)
@@ -953,4 +943,27 @@ func lastLines(s string, n int) string {
 // marked for reporting in stores that aren't connected to ZATCA.
 func zatcaReportingOn(store *models.Store) bool {
 	return store != nil && store.Zatca.Phase == "2" && store.Zatca.Connected
+}
+
+// zatcaDeviceSerialNumber builds the CSR serial number ZATCA requires,
+// "1-<part>|2-<part>|...|n-<device id>", from the sales invoice prefix.
+// Empty parts are dropped: a store without a prefix used to send "1-|2-..."
+// and ZATCA refused it with "serial number is mandatory field".
+func zatcaDeviceSerialNumber(prefix string, padding int64, currentDate string) string {
+	template := fmt.Sprintf("%s-%0*d", prefix, padding, 1)
+	template = strings.ReplaceAll(template, "DATE", currentDate)
+	parts := []string{}
+	for _, part := range strings.Split(template, "-") {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) < 2 {
+		parts = append([]string{"INV"}, parts...)
+	}
+	serialNumber := ""
+	for k, part := range parts {
+		serialNumber += strconv.Itoa(k+1) + "-" + part + "|"
+	}
+	return serialNumber + strconv.Itoa(len(parts)+1) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
 }
