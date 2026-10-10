@@ -1,0 +1,39 @@
+name: Delete merged working branches
+
+# Working branches (claude/*) are deleted once every commit on them is in both
+# master and test. Branches with unmerged work are left alone.
+on:
+  push:
+    branches: [master, test]
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cleanup-merged-branches
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete claude/* branches merged into master and test
+        run: |
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          for ref in $(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/claude/'); do
+            branch="${ref#origin/}"
+            if git merge-base --is-ancestor "$ref" origin/master &&
+               git merge-base --is-ancestor "$ref" origin/test; then
+              echo "Deleting $branch (merged into master and test)"
+              git push origin --delete "$branch"
+            else
+              echo "Keeping $branch (has commits not in both master and test)"
+            fi
+          done
