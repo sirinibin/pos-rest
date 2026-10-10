@@ -400,7 +400,7 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	}
 
-	if govalidator.IsNull(user.Name) {
+	if govalidator.IsNull(strings.TrimSpace(user.Name)) {
 		errs["name"] = "Name is required"
 	}
 
@@ -416,6 +416,8 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	if user.ID.IsZero() && govalidator.IsNull(user.Password) {
 		errs["password"] = "Password is required"
+	} else if user.ID.IsZero() && len(user.Password) < MinPasswordLength {
+		errs["password"] = "Password must be at least 6 characters"
 	}
 
 	if !govalidator.IsNull(user.PhotoContent) {
@@ -825,6 +827,10 @@ func IsUserExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 	return (count > 0), err
 }
+
+// MinPasswordLength is the shortest password a user may set, the same rule
+// change-password and guest sign-up already applied.
+const MinPasswordLength = 6
 
 func HashPassword(password string) string {
 	salt, _ := bcrypt.Salt(10)

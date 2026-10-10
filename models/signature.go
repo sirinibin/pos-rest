@@ -196,7 +196,7 @@ func (signature *UserSignature) Validate(w http.ResponseWriter, r *http.Request,
 
 	}
 
-	if govalidator.IsNull(signature.Name) {
+	if govalidator.IsNull(strings.TrimSpace(signature.Name)) {
 		errs["name"] = "Name is required"
 	}
 

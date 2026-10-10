@@ -132,7 +132,9 @@ func main() {
 
 	router := mux.NewRouter()
 	// A signed-in user may only name stores they have access to.
+	router.Use(controller.StatusTrackerMiddleware)
 	router.Use(controller.StoreAccessMiddleware)
+	router.Use(controller.RBACWriteMiddleware)
 
 	// ── MCP-optimised API layer (/v1/mcp/) ────────────────────────────────────
 	// Auth

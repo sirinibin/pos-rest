@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"context"
 	"errors"
 	"log"
@@ -235,11 +236,11 @@ func (productBrand *ProductBrand) Validate(w http.ResponseWriter, r *http.Reques
 
 	}
 
-	if govalidator.IsNull(productBrand.Name) {
+	if govalidator.IsNull(strings.TrimSpace(productBrand.Name)) {
 		errs["name"] = "Name is required"
 	}
 
-	if govalidator.IsNull(productBrand.Code) {
+	if govalidator.IsNull(strings.TrimSpace(productBrand.Code)) {
 		errs["code"] = "Code is required"
 	}
 

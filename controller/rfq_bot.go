@@ -4844,10 +4844,19 @@ func ListRFQSuppliersHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	response.Status = true
-	response.Result = result.Items
-	response.TotalCount = result.TotalCount
-	json.NewEncoder(w).Encode(response)
+	// The supplier page reads items/total_count; the RFQ screens read result.
+	// Both shapes are served (the list answered only result/total_count for a
+	// while and the supplier page showed "No suppliers yet").
+	json.NewEncoder(w).Encode(rfqSupplierListResponse(result.Items, result.TotalCount))
+}
+
+func rfqSupplierListResponse(items interface{}, total int64) map[string]interface{} {
+	return map[string]interface{}{
+		"status":      true,
+		"result":      items,
+		"items":       items,
+		"total_count": total,
+	}
 }
 
 // POST /v1/rfq-suppliers

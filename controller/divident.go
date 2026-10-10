@@ -33,6 +33,7 @@ func ListDivident(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -116,6 +117,7 @@ func CreateDivident(w http.ResponseWriter, r *http.Request) {
 	if errs := divident.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -181,6 +183,7 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -222,6 +225,7 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 	if errs := divident.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -315,6 +319,7 @@ func ViewDivident(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -369,6 +374,7 @@ func ViewDividentByCode(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -417,6 +423,7 @@ func DeleteDivident(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

@@ -2262,7 +2262,7 @@ func (customer *Customer) Validate(w http.ResponseWriter, r *http.Request, scena
 		}
 	}
 
-	if govalidator.IsNull(customer.Name) {
+	if govalidator.IsNull(strings.TrimSpace(customer.Name)) {
 		errs["name"] = "Name is required"
 	}
 

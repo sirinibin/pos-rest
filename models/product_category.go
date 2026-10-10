@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"context"
 	"errors"
 	"log"
@@ -281,7 +282,7 @@ func (productCategory *ProductCategory) Validate(w http.ResponseWriter, r *http.
 
 	}
 
-	if govalidator.IsNull(productCategory.Name) {
+	if govalidator.IsNull(strings.TrimSpace(productCategory.Name)) {
 		errs["name"] = "Name is required"
 	}
 

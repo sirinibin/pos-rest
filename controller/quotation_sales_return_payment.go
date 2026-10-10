@@ -32,6 +32,7 @@ func ListQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -133,6 +134,7 @@ func CreateQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -201,6 +203,7 @@ func UpdateQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -328,6 +331,7 @@ func ViewQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -384,6 +388,7 @@ func DeleteQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

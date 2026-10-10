@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/models"
 	"github.com/sirinibin/startpos/backend/utils"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -30,6 +31,7 @@ func ListPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -80,6 +82,7 @@ func CreatePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -106,6 +109,7 @@ func CreatePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -180,6 +184,7 @@ func ViewPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -225,6 +230,7 @@ func UpdatePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -269,6 +275,7 @@ func UpdatePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -326,6 +333,7 @@ func DeletePurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -373,6 +381,7 @@ func AcceptPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["id"] = "Invalid ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -381,6 +390,7 @@ func AcceptPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -389,6 +399,7 @@ func AcceptPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Purchase request not found:" + err.Error()
+		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -403,6 +414,23 @@ func AcceptPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid user id in token"
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	decider, err := models.FindUserByID(&userID, bson.M{"role": 1, "admin": 1})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid user"
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if msg := purchaseRequestDecisionError(decider, pr); msg != "" {
+		response.Status = false
+		response.Errors["assigned_to"] = msg
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -460,6 +488,7 @@ func RejectPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["id"] = "Invalid ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -468,6 +497,7 @@ func RejectPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -476,6 +506,7 @@ func RejectPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["find"] = "Purchase request not found:" + err.Error()
+		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -484,6 +515,23 @@ func RejectPurchaseRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid user id in token"
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	decider, err := models.FindUserByID(&userID, bson.M{"role": 1, "admin": 1})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid user"
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if msg := purchaseRequestDecisionError(decider, pr); msg != "" {
+		response.Status = false
+		response.Errors["assigned_to"] = msg
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -545,6 +593,7 @@ func CreatePurchaseOrderFromPR(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -607,4 +656,17 @@ func CreatePurchaseOrderFromPR(w http.ResponseWriter, r *http.Request) {
 		"purchase_order":   po,
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+// purchaseRequestDecisionError says why the user may not accept or reject
+// the request, or "" when they may: the user it is assigned to, or an Admin.
+// Anyone signed in to the store used to be able to accept any request.
+func purchaseRequestDecisionError(user *models.User, pr *models.PurchaseRequest) string {
+	if isAdminUser(user) {
+		return ""
+	}
+	if pr.AssignedTo != nil && *pr.AssignedTo == user.ID {
+		return ""
+	}
+	return "Only the user this request is assigned to can accept or reject it"
 }

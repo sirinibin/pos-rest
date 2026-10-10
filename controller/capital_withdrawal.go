@@ -33,6 +33,7 @@ func ListCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -118,6 +119,7 @@ func CreateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if errs := capitalwithdrawal.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -260,6 +262,7 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if errs := capitalwithdrawal.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -351,6 +354,7 @@ func ViewCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -405,6 +409,7 @@ func ViewCapitalWithdrawalByCode(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -453,6 +458,7 @@ func DeleteCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

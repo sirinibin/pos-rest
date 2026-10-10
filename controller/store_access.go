@@ -170,3 +170,20 @@ func storesUserMayUse(user *models.User, stores []models.Store) []models.Store {
 	}
 	return out
 }
+
+// peekBody returns the request body and leaves it readable for the handler.
+func peekBody(r *http.Request) []byte {
+	if r.Body == nil || r.Body == http.NoBody {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxPeekBody+1))
+	rest := r.Body
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(body), rest), rest}
+	if err != nil {
+		return nil
+	}
+	return body
+}

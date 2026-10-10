@@ -244,6 +244,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -575,6 +576,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -893,6 +895,7 @@ func ViewOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -958,6 +961,7 @@ func ViewPreviousOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -1030,6 +1034,7 @@ func ViewNextOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -1090,6 +1095,7 @@ func ViewLastOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -1143,6 +1149,7 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -89,6 +90,9 @@ type NonVATSalesReturn struct {
 func (r *NonVATSalesReturn) FindTotalQuantity() {
 	total := float64(0)
 	for _, p := range r.Products {
+		if !p.Selected {
+			continue
+		}
 		total += p.Quantity
 	}
 	r.TotalQuantity = total
@@ -100,6 +104,10 @@ func (r *NonVATSalesReturn) FindTotal() {
 	actualTotal := float64(0)
 	actualTotalWithVAT := float64(0)
 	for i, p := range r.Products {
+		// As on sales returns, a line left unselected isn't returned.
+		if !p.Selected {
+			continue
+		}
 		excludeVAT := (p.IsService && r.ExcludeServiceTax) || (!p.IsService && r.ExcludeProductTax)
 		if excludeVAT {
 			r.Products[i].UnitPriceWithVAT = r.Products[i].UnitPrice
@@ -1740,4 +1748,26 @@ func (ret *NonVATSalesReturn) SetCustomerNonVATSalesReturnStats() error {
 	}
 
 	return nil
+}
+
+// SelectUnflaggedLines marks every product line that the request body sent
+// without a "selected" key as selected. The app's return form never sent the
+// key, so its returns were refused ("Select at least 1 product to return")
+// and, before that check, saved without restoring stock. A line sent with
+// "selected": false stays unselected.
+func (ret *NonVATSalesReturn) SelectUnflaggedLines(body []byte) {
+	var probe struct {
+		Products []map[string]json.RawMessage `json:"products"`
+	}
+	if json.Unmarshal(body, &probe) != nil {
+		return
+	}
+	for i := range ret.Products {
+		if i >= len(probe.Products) {
+			break
+		}
+		if _, sent := probe.Products[i]["selected"]; !sent {
+			ret.Products[i].Selected = true
+		}
+	}
 }

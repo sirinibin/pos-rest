@@ -31,6 +31,7 @@ func ListNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -104,14 +105,17 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	var item *models.NonVATSalesReturn
+	body := peekBody(r)
 	if !utils.Decode(w, r, &item) {
 		return
 	}
+	item.SelectUnflaggedLines(body)
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -227,6 +231,7 @@ func ViewNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -280,6 +285,7 @@ func UpdateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -303,9 +309,11 @@ func UpdateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var item *models.NonVATSalesReturn
+	body := peekBody(r)
 	if !utils.Decode(w, r, &item) {
 		return
 	}
+	item.SelectUnflaggedLines(body)
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -389,6 +397,7 @@ func DeleteNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -446,9 +455,11 @@ func CalculateNonVATSalesReturnNetTotal(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var ret *models.NonVATSalesReturn
+	body := peekBody(r)
 	if !utils.Decode(w, r, &ret) {
 		return
 	}
+	ret.SelectUnflaggedLines(body)
 
 	if err := ret.FindNetTotal(); err != nil {
 		response.Status = false

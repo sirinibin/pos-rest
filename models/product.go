@@ -2861,7 +2861,7 @@ func (product *Product) Validate(w http.ResponseWriter, r *http.Request, scenari
 		product.IsSet = true
 	}
 
-	if govalidator.IsNull(product.Name) {
+	if govalidator.IsNull(strings.TrimSpace(product.Name)) {
 		errs["name"] = "Name is required"
 	} else if len(product.Name) < 3 {
 		errs["name"] = "Name length should be min. 3 chars"

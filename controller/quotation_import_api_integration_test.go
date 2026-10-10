@@ -142,8 +142,8 @@ func TestQuotationImportAPI(t *testing.T) {
 	}{
 		{"no token is rejected", "", pickerQuery(sid, ""), http.StatusUnauthorized, false, nil, 0, "access_token"},
 		{"bad token is rejected", "not-a-jwt", pickerQuery(sid, ""), http.StatusUnauthorized, false, nil, 0, "access_token"},
-		{"missing store id", f.token, "select=id,code&limit=20", http.StatusOK, false, nil, 0, "store_id"},
-		{"invalid store id", f.token, "search[store_id]=xyz", http.StatusOK, false, nil, 0, "store_id"},
+		{"missing store id", f.token, "select=id,code&limit=20", http.StatusBadRequest, false, nil, 0, "store_id"},
+		{"invalid store id", f.token, "search[store_id]=xyz", http.StatusBadRequest, false, nil, 0, "store_id"},
 		{"lists newest first without deleted", f.token, pickerQuery(sid, ""), http.StatusOK, true, []string{"QT-API-003", "QT-API-002", "QT-API-001"}, 3, ""},
 		{"filters by code", f.token, pickerQuery(sid, "&search[code]=api-002"), http.StatusOK, true, []string{"QT-API-002"}, 1, ""},
 		{"filters by customer list", f.token, pickerQuery(sid, "&search[customer_id]="+f.custA.Hex()), http.StatusOK, true, []string{"QT-API-002", "QT-API-001"}, 2, ""},

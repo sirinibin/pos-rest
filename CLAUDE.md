@@ -27,7 +27,10 @@ test VAT 399999999900003 / CRN 4030360927, never Production) and the frontend's 
 
 Store access: `controller.StoreAccessMiddleware` answers 403 when a request names a store (query
 `search[store_id]`/`store_id`, body `store_id`, `/v1/store/{id}`, ZATCA connect `id`) the user may not
-use. A new endpoint that takes a store under another key needs its own check. Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
+use. A new endpoint that takes a store under another key needs its own check.
+`controller.RBACWriteMiddleware` answers 403 for a create/update/delete (`POST /v1/x`, `PUT|PATCH|DELETE /v1/x/{id}`)
+the user's roles don't grant, in stores with `settings.enable_rbac_module` on; map new resources in `rbacResources`.
+Validation errors answer 400: a handler that writes no status calls `ensureStatus(w, http.StatusBadRequest)`. Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
 
 ## Usage
 ```

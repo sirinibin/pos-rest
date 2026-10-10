@@ -42,6 +42,15 @@ func manageUserError(requesting, target *models.User) string {
 	return ""
 }
 
+// createUserError says why the requesting user may not create users, or ""
+// when they may: Admins and Managers create users, SalesMen used to as well.
+func createUserError(requesting *models.User) string {
+	if isAdminUser(requesting) || requesting.Role == "Manager" {
+		return ""
+	}
+	return "Only Admin or Manager can create users"
+}
+
 // viewUserAllowed mirrors the user list: non-admins see themselves, users
 // they created and users who share one of their stores.
 func viewUserAllowed(requesting, target *models.User) bool {
@@ -58,13 +67,16 @@ func viewUserAllowed(requesting, target *models.User) bool {
 // no admin flag, and only stores they can use themselves (plus, on an edit,
 // stores the user already had). A user limited to some stores may not give
 // out an empty store list, which means every store.
-func grantErrors(requesting *models.User, admin bool, storeIDs, alreadyHad []*primitive.ObjectID) map[string]string {
+func grantErrors(requesting *models.User, admin bool, role string, storeIDs, alreadyHad []*primitive.ObjectID) map[string]string {
 	errs := map[string]string{}
 	if isAdminUser(requesting) {
 		return errs
 	}
 	if admin {
 		errs["admin"] = "Only admins can grant admin access"
+	}
+	if role == "Admin" {
+		errs["role"] = "Only admins can assign the Admin role"
 	}
 	if len(requesting.StoreIDs) == 0 {
 		return errs

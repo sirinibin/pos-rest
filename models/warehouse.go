@@ -321,7 +321,7 @@ func (warehouse *Warehouse) Validate(w http.ResponseWriter, r *http.Request, sce
 		}
 	}
 
-	if govalidator.IsNull(warehouse.Name) {
+	if govalidator.IsNull(strings.TrimSpace(warehouse.Name)) {
 		errs["name"] = "Name is required"
 	}
 

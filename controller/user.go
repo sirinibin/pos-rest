@@ -144,11 +144,19 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		if requestingUser.Role != "Admin" {
 			response.Status = false
 			response.Errors["role"] = "Only admins can assign the Admin role"
+			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
 	}
-	if errs := grantErrors(requestingUser, user.Admin, user.StoreIDs, nil); len(errs) > 0 {
+	if msg := createUserError(requestingUser); msg != "" {
+		response.Status = false
+		response.Errors["authorization"] = msg
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if errs := grantErrors(requestingUser, user.Admin, user.Role, user.StoreIDs, nil); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		w.WriteHeader(http.StatusForbidden)
@@ -160,6 +168,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -226,6 +235,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
+	user.Password = ""
 	response.Result = user
 
 	json.NewEncoder(w).Encode(response)
@@ -296,7 +306,11 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	if errs := grantErrors(requestingUser, userForm.Admin && !user.Admin, userForm.StoreIDs, user.StoreIDs); len(errs) > 0 {
+	grantedRole := ""
+	if userForm.Role != user.Role {
+		grantedRole = userForm.Role
+	}
+	if errs := grantErrors(requestingUser, userForm.Admin && !user.Admin, grantedRole, userForm.StoreIDs, user.StoreIDs); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
 		w.WriteHeader(http.StatusForbidden)
@@ -316,6 +330,13 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	user.Email = userForm.Email
 	user.Mob = userForm.Mob
 	if !govalidator.IsNull(userForm.Password) {
+		if len(userForm.Password) < models.MinPasswordLength {
+			response.Status = false
+			response.Errors["password"] = "Password must be at least 6 characters"
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 		user.Password = models.HashPassword(userForm.Password)
 	}
 	user.Name = userForm.Name
@@ -356,6 +377,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	if errs := user.Validate(w, r, "update"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -921,6 +943,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
 		response.Errors = errs
+		ensureStatus(w, http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

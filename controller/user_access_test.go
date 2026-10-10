@@ -53,20 +53,25 @@ func TestGrantErrors(t *testing.T) {
 		name        string
 		req         *models.User
 		admin       bool
+		role        string
 		stores, had []*primitive.ObjectID
 		wantKey     string
 	}{
-		{"admin grants anything", admin, true, ids(b, c), nil, ""},
-		{"own store", scoped, false, ids(a), nil, ""},
-		{"other store", scoped, false, ids(b), nil, "store_ids"},
-		{"other store the user already had", scoped, false, ids(a, b), ids(b), ""},
-		{"empty list means every store", scoped, false, ids(), nil, "store_ids"},
-		{"admin flag", scoped, true, ids(a), nil, "admin"},
-		{"unscoped manager may give any store", unscoped, false, ids(c), nil, ""},
-		{"unscoped manager still can't grant admin", unscoped, true, ids(c), nil, "admin"},
+		{"admin grants anything", admin, true, "", ids(b, c), nil, ""},
+		{"own store", scoped, false, "", ids(a), nil, ""},
+		{"other store", scoped, false, "", ids(b), nil, "store_ids"},
+		{"other store the user already had", scoped, false, "", ids(a, b), ids(b), ""},
+		{"empty list means every store", scoped, false, "", ids(), nil, "store_ids"},
+		{"admin flag", scoped, true, "", ids(a), nil, "admin"},
+		{"unscoped manager may give any store", unscoped, false, "", ids(c), nil, ""},
+		{"unscoped manager still can't grant admin", unscoped, true, "", ids(c), nil, "admin"},
+		{"manager can't give the Admin role", unscoped, false, "Admin", ids(c), nil, "role"},
+		{"scoped manager can't give the Admin role", scoped, false, "Admin", ids(a), nil, "role"},
+		{"manager may give the SalesMan role", scoped, false, "SalesMan", ids(a), nil, ""},
+		{"admin may give the Admin role", admin, false, "Admin", ids(a), nil, ""},
 	}
 	for _, x := range cases {
-		errs := grantErrors(x.req, x.admin, x.stores, x.had)
+		errs := grantErrors(x.req, x.admin, x.role, x.stores, x.had)
 		if x.wantKey == "" && len(errs) > 0 {
 			t.Errorf("%s: unexpected %v", x.name, errs)
 		}
@@ -83,5 +88,25 @@ func TestViewUserAllowed(t *testing.T) {
 	other := &models.User{ID: primitive.NewObjectID(), StoreIDs: []*primitive.ObjectID{&b}}
 	if !viewUserAllowed(me, me) || !viewUserAllowed(me, created) || viewUserAllowed(me, other) {
 		t.Fatalf("view rule: self and created users visible, others' users hidden")
+	}
+}
+
+func TestCreateUserError(t *testing.T) {
+	cases := []struct {
+		name string
+		u    *models.User
+		ok   bool
+	}{
+		{"admin flag", &models.User{Admin: true}, true},
+		{"Admin role", &models.User{Role: "Admin"}, true},
+		{"Manager", &models.User{Role: "Manager"}, true},
+		{"SalesMan", &models.User{Role: "SalesMan"}, false},
+		{"no role", &models.User{}, false},
+		{"other role", &models.User{Role: "Accountant"}, false},
+	}
+	for _, c := range cases {
+		if got := createUserError(c.u) == ""; got != c.ok {
+			t.Errorf("%s: may create = %v, want %v", c.name, got, c.ok)
+		}
 	}
 }

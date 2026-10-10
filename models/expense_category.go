@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"context"
 	"errors"
 	"log"
@@ -257,7 +258,7 @@ func (expenseCategory *ExpenseCategory) Validate(w http.ResponseWriter, r *http.
 
 	}
 
-	if govalidator.IsNull(expenseCategory.Name) {
+	if govalidator.IsNull(strings.TrimSpace(expenseCategory.Name)) {
 		errs["name"] = "Name is required"
 	}
 

@@ -961,7 +961,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	}
 
-	if govalidator.IsNull(store.Name) {
+	if govalidator.IsNull(strings.TrimSpace(store.Name)) {
 		errs["name"] = "Name is required"
 	}
 
@@ -969,7 +969,7 @@ func (store *Store) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["country_code"] = "Country is required"
 	}
 
-	if govalidator.IsNull(store.Code) {
+	if govalidator.IsNull(strings.TrimSpace(store.Code)) {
 		errs["code"] = "Branch code is required"
 	}
 
