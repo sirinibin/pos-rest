@@ -129,6 +129,74 @@ jobs:
         if: failure()
         run: tail -n 300 server.log
 
+  # ── Race detector against real MongoDB + Redis ───────────────────────────
+  race-db:
+    name: Race detector (MongoDB + Redis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      # Blocking: every package's tests (unit + DB integration) are race-free.
+      - name: Unit and integration tests with -race
+        env:
+          MONGO_DB: startpos_race_test
+        run: go test -race -tags integration ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA|TestHealthCheck_ServicesDown"
+
+      # The API e2e suite against a -race build of the server, so races in the
+      # handlers and their background goroutines show up under real traffic.
+      - name: Build race-enabled server and seed e2e user
+        run: |
+          go build -race -o pos-rest-race .
+          go run ./e2e/seed
+
+      - name: Start race-enabled server
+        run: |
+          API_PORT=2000 GORACE="halt_on_error=0" nohup ./pos-rest-race > server.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -s -o /dev/null http://localhost:2000/v1/me && exit 0
+            sleep 1
+          done
+          echo "Server did not start:"; cat server.log; exit 1
+
+      - name: Run API e2e tests against the race-enabled server
+        env:
+          POS_REST_BIN: ${{ github.workspace }}/pos-rest-race
+        run: go test -race -tags e2e ./e2e/... -count=1
+
+      # Report only for now: the request user is kept in package globals
+      # (models.UserObject / TokenClaimsObject), which races whenever two
+      # requests arrive together. Make this blocking once that is fixed.
+      - name: Data races seen by the server (report only)
+        if: always()
+        continue-on-error: true
+        run: |
+          sleep 5
+          RACES=$(grep -c "WARNING: DATA RACE" server.log || true)
+          echo "### Server data races: ${RACES}" >> "$GITHUB_STEP_SUMMARY"
+          grep -A 40 "WARNING: DATA RACE" server.log | grep -E "pos-rest/|^(Write|Read|Previous)" | sort | uniq -c | sort -rn | head -40 || true
+          [ "${RACES}" = "0" ]
+
   # ── UI end-to-end: the React app in Chromium against this API ────────────
   ui-e2e:
     name: UI end-to-end tests (Playwright)

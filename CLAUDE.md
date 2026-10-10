@@ -20,7 +20,8 @@ deploy.sh enforces three gates before every deploy — all three must pass:
 ## GitHub Actions
 `deploy_test.yml` / `deploy_prod.yml` call `tests.yml` and deploy only if all of it passes:
 unit + API tests, integration tests (`-tags integration`, MongoDB + Redis services),
-API e2e (`-tags e2e`, see `e2e/README.md`) and the frontend's full-stack Playwright suite
+API e2e (`-tags e2e`, see `e2e/README.md`), a race-detector job (`-race` on unit + integration,
+and the e2e suite against a `-race` server build) and the frontend's full-stack Playwright suite
 (reactjs-pos, same branch). Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
 
 ## Usage
