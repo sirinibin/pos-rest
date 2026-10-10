@@ -46,6 +46,7 @@ func TestFlow_CapitalWithdrawalAndDividendAreValidatedAndBalanced(t *testing.T) 
 
 			for name, edit := range map[string]func(map[string]interface{}){
 				"zero amount":    func(b map[string]interface{}) { b["amount"] = 0 },
+				"negative amount": func(b map[string]interface{}) { b["amount"] = -7 },
 				"missing date":   func(b map[string]interface{}) { delete(b, "date_str") },
 				"bad date":       func(b map[string]interface{}) { b["date_str"] = "01-01-2026" },
 				"no description": func(b map[string]interface{}) { delete(b, "description") },
@@ -260,6 +261,31 @@ func TestFlow_StockTransferMovesStockBetweenWarehouses(t *testing.T) {
 		return ""
 	})
 	// A transfer moves stock, it does not create or destroy it.
+	wantStock(t, sid, widget, 10)
+
+	// A source can't give more than it holds: WN has 6, the main store none.
+	code, res = transfer(from, to, 7)
+	mustReject(t, "transfer of 7 from a warehouse holding 6", code, res, "quantity_0")
+	code, res = transfer("", to, 1)
+	mustReject(t, "transfer from an empty main store", code, res, "quantity_0")
+	code, res = transfer(from, to, -1)
+	mustReject(t, "negative transfer", code, res, "quantity_0")
+	code, res = in(t, sid, "POST", "/v1/stock-transfer", map[string]interface{}{
+		"store_id": sid, "from_warehouse_id": from, "to_warehouse_id": to, "date_str": nowStr(), "vat_percent": 15,
+		"products": []map[string]interface{}{
+			{"product_id": widget, "name": "Widget", "quantity": 4, "unit_price": 60, "unit": "PC"},
+			{"product_id": widget, "name": "Widget", "quantity": 3, "unit_price": 60, "unit": "PC"},
+		},
+	})
+	mustReject(t, "two lines of one product adding up to more than the stock", code, res, "quantity_1")
+	code, res = transfer(from, to, 6)
+	mustOK(t, "transfer everything left", code, res)
+	eventually(t, "WN emptied", func() string {
+		if n := warehouseStock(t, sid, widget, fromCode); !approx(n, 0) {
+			return fmt.Sprintf("%s = %v, want 0", fromCode, n)
+		}
+		return ""
+	})
 	wantStock(t, sid, widget, 10)
 }
 

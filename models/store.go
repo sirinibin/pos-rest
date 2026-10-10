@@ -2739,3 +2739,25 @@ func (store *Store) CreateDB() (*mongo.Database, error) {
 	fmt.Println("✅ Database created for store:", dbName)
 	return storeDB, nil
 }
+
+// HideZatcaSecrets blanks the store's ZATCA signing key and API credentials
+// before the store goes out in an API response; any signed-in client of the
+// store used to receive them.
+func (store *Store) HideZatcaSecrets() {
+	store.Zatca.PrivateKey = ""
+	store.Zatca.Secret = ""
+	store.Zatca.BinarySecurityToken = ""
+	store.Zatca.ProductionSecret = ""
+	store.Zatca.ProductionBinarySecurityToken = ""
+}
+
+// KeepZatcaSecretsFrom restores the ZATCA credentials of the stored record.
+// Clients never see them (HideZatcaSecrets), so the store form sends them
+// back blank; only onboarding (ConnectStoreToZatca) may change them.
+func (store *Store) KeepZatcaSecretsFrom(old *Store) {
+	store.Zatca.PrivateKey = old.Zatca.PrivateKey
+	store.Zatca.Secret = old.Zatca.Secret
+	store.Zatca.BinarySecurityToken = old.Zatca.BinarySecurityToken
+	store.Zatca.ProductionSecret = old.Zatca.ProductionSecret
+	store.Zatca.ProductionBinarySecurityToken = old.Zatca.ProductionBinarySecurityToken
+}

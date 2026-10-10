@@ -60,7 +60,8 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	storeID, err := primitive.ObjectIDFromHex(zatcaConnectInput.StoreID)
 	if err != nil {
 		response.Status = false
-		response.Errors["user_id"] = "Invalid Store ID:" + err.Error()
+		response.Errors["id"] = "Invalid Store ID:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -70,7 +71,11 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error:", err)
 		response.Status = false
 		response.Errors["store_id"] = "Error finding store: " + err.Error()
-		w.WriteHeader(http.StatusInternalServerError)
+		if err == mongo.ErrNoDocuments {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -189,8 +194,8 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		var pythonResponse PythonResponse
 		parseErr := json.Unmarshal(jsonBytes, &pythonResponse)
 		if parseErr != nil {
-			response.Errors["otp"] = "Error running zatca script: " + err.Error() + " | " + stderr.String()
-			w.WriteHeader(http.StatusInternalServerError)
+			response.Errors["otp"] = "Error running zatca script: " + err.Error() + " | " + lastLines(stderr.String(), 5)
+			w.WriteHeader(http.StatusBadGateway)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
@@ -208,13 +213,13 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				fmt.Println("Error saving store: ", err)
 			}
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(response)
 			return
 		}
 		// cmd failed but no error field in JSON — return the raw output as error
-		response.Errors["otp"] = "Zatca script failed: " + err.Error() + " output: " + string(jsonBytes)
-		w.WriteHeader(http.StatusInternalServerError)
+		response.Errors["otp"] = "Zatca script failed: " + err.Error() + " output: " + lastLines(string(jsonBytes), 5)
+		w.WriteHeader(http.StatusBadGateway)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -225,8 +230,8 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println("Error parsing JSON:", err, "stdout:", stdout.String(), "stderr:", stderr.String())
 		response.Status = false
-		response.Errors["otp"] = "Error parsing zatca response: " + err.Error() + " | stdout: " + stdout.String()
-		w.WriteHeader(http.StatusInternalServerError)
+		response.Errors["otp"] = "Error parsing zatca response: " + err.Error() + " | stdout: " + lastLines(stdout.String(), 5)
+		w.WriteHeader(http.StatusBadGateway)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -244,10 +249,9 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		err = store.Update()
 		if err != nil {
 			fmt.Println("Error saving store: ", err)
-			return
 		}
 
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -282,6 +286,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		store.Zatca.LastConnectedAt = &now
 		store.Zatca.ZatcaReconnectRequired = false
 	}
+	connected := store.Zatca.Connected
 
 	err = store.Update()
 	if err != nil {
@@ -313,6 +318,14 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		// Print output
 		fmt.Println(string(output))
 	*/
+
+	if !connected {
+		response.Status = false
+		response.Errors["otp"] = "ZATCA onboarding did not return all credentials; the store is not connected"
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	response.Status = true
 	//response.Result = store
@@ -924,4 +937,20 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 	response.Status = true
 	response.Result = withdrawal
 	json.NewEncoder(w).Encode(response)
+}
+
+// lastLines keeps the last n lines of a script's output for an error message.
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// zatcaReportingOn says whether a store's documents go to ZATCA at all; the
+// internet check before a sale only matters then. It used to refuse sales
+// marked for reporting in stores that aren't connected to ZATCA.
+func zatcaReportingOn(store *models.Store) bool {
+	return store != nil && store.Zatca.Phase == "2" && store.Zatca.Connected
 }

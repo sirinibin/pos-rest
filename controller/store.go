@@ -52,6 +52,9 @@ func ListStore(w http.ResponseWriter, r *http.Request) {
 	if len(stores) == 0 {
 		response.Result = []interface{}{}
 	} else {
+		for i := range stores {
+			stores[i].HideZatcaSecrets()
+		}
 		response.Result = stores
 	}
 
@@ -225,6 +228,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
+	store.HideZatcaSecrets()
 	response.Result = store
 
 	json.NewEncoder(w).Encode(response)
@@ -392,6 +396,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	// Preserve zatca_reconnect_required — can only be cleared by ConnectStoreToZatca
 	store.Zatca.ZatcaReconnectRequired = storeOld.Zatca.ZatcaReconnectRequired
+	store.KeepZatcaSecretsFrom(storeOld)
 
 	// Never overwrite rfq_email_accounts via the store form — managed exclusively
 	// by POST/DELETE /v1/rfq-email/account endpoints which store credentials safely.
@@ -451,6 +456,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
+	store.HideZatcaSecrets()
 	response.Result = store
 
 	json.NewEncoder(w).Encode(response)
@@ -522,6 +528,7 @@ func ViewStore(w http.ResponseWriter, r *http.Request) {
 
 	//store.MarshalJSON()
 	response.Status = true
+	store.HideZatcaSecrets()
 	response.Result = store
 
 	json.NewEncoder(w).Encode(response)

@@ -409,6 +409,8 @@ func (capital *Capital) Validate(w http.ResponseWriter, r *http.Request, scenari
 
 	if capital.Amount == 0 {
 		errs["amount"] = "Amount is required"
+	} else if capital.Amount < 0 {
+		errs["amount"] = "Amount should be greater than zero"
 	}
 
 	if govalidator.IsNull(capital.Description) {

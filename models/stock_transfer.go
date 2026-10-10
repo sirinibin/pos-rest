@@ -631,6 +631,8 @@ func (stocktransfer *StockTransfer) Validate(w http.ResponseWriter, r *http.Requ
 
 		if product.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		} else if product.Quantity < 0 {
+			errs["quantity_"+strconv.Itoa(index)] = "Quantity must be greater than zero"
 		}
 
 		if govalidator.IsNull(strings.TrimSpace(product.Name)) {
@@ -646,6 +648,10 @@ func (stocktransfer *StockTransfer) Validate(w http.ResponseWriter, r *http.Requ
 		if product.UnitPrice == 0 {
 			errs["unit_price_"+strconv.Itoa(index)] = "Unit Price is required"
 		}
+	}
+
+	if len(errs) == 0 {
+		stocktransfer.validateAvailableStock(store, fromWarehouse, oldStockTransfer, errs)
 	}
 
 	if stocktransfer.VatPercent == nil {
@@ -1547,4 +1553,91 @@ func (stocktransfer *StockTransfer) SetWarehouseStockTransferStats() error {
 	}
 
 	return nil
+}
+
+// transferSourceCode is the warehouse_stocks key a transfer takes stock from.
+func transferSourceCode(fromWarehouse *Warehouse) string {
+	if fromWarehouse == nil {
+		return "main_store"
+	}
+	return fromWarehouse.Code
+}
+
+// stockIn is a product's stock in one warehouse_stocks key. Main store stock
+// is what isn't in any warehouse when the key hasn't been computed yet.
+func stockIn(ps ProductStore, code string) float64 {
+	if v, ok := ps.WarehouseStocks[code]; ok {
+		return v
+	}
+	if code != "main_store" {
+		return 0
+	}
+	inWarehouses := 0.0
+	for k, v := range ps.WarehouseStocks {
+		if k != "main_store" {
+			inWarehouses += v
+		}
+	}
+	return ps.Stock - inWarehouses
+}
+
+// sameWarehouse compares two warehouse ids; nil and zero both mean the main store.
+func sameWarehouse(a, b *primitive.ObjectID) bool {
+	aMain, bMain := a == nil || a.IsZero(), b == nil || b.IsZero()
+	if aMain || bMain {
+		return aMain == bMain
+	}
+	return *a == *b
+}
+
+// transferShortfalls returns, per line index, the quantity a transfer asks for
+// beyond what is available. Lines of one product share its stock; on an edit,
+// what the stored transfer already took from the same source is available again.
+func transferShortfalls(products []StockTransferProduct, available map[string]float64, alreadyTaken map[string]float64) map[int]float64 {
+	out := map[int]float64{}
+	used := map[string]float64{}
+	for i, p := range products {
+		key := p.ProductID.Hex()
+		avail, tracked := available[key]
+		if !tracked {
+			continue
+		}
+		used[key] += p.Quantity
+		if over := RoundTo8Decimals(used[key] - (avail + alreadyTaken[key])); over > 0 {
+			out[i] = over
+		}
+	}
+	return out
+}
+
+// validateAvailableStock refuses a transfer that moves more than the source
+// warehouse (or the main store) holds; it used to drive the source negative.
+// Services and product sets aren't stock-tracked and aren't checked.
+func (stocktransfer *StockTransfer) validateAvailableStock(store *Store, fromWarehouse *Warehouse, old *StockTransfer, errs map[string]string) {
+	code := transferSourceCode(fromWarehouse)
+	available := map[string]float64{}
+	for _, line := range stocktransfer.Products {
+		key := line.ProductID.Hex()
+		if _, seen := available[key]; seen {
+			continue
+		}
+		product, err := store.FindProductByID(&line.ProductID, bson.M{})
+		if err != nil || product.IsService || len(product.Set.Products) > 0 {
+			continue
+		}
+		available[key] = stockIn(product.ProductStores[store.ID.Hex()], code)
+	}
+
+	alreadyTaken := map[string]float64{}
+	if old != nil {
+		if sameWarehouse(old.FromWarehouseID, stocktransfer.FromWarehouseID) {
+			for _, p := range old.Products {
+				alreadyTaken[p.ProductID.Hex()] += p.Quantity
+			}
+		}
+	}
+
+	for i, over := range transferShortfalls(stocktransfer.Products, available, alreadyTaken) {
+		errs["quantity_"+strconv.Itoa(i)] = fmt.Sprintf("Not enough stock at the source: %s short", strconv.FormatFloat(over, 'f', -1, 64))
+	}
 }

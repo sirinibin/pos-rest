@@ -381,6 +381,8 @@ func (capitalwithdrawal *CapitalWithdrawal) Validate(w http.ResponseWriter, r *h
 
 	if capitalwithdrawal.Amount == 0 {
 		errs["amount"] = "Amount is required"
+	} else if capitalwithdrawal.Amount < 0 {
+		errs["amount"] = "Amount should be greater than zero"
 	}
 
 	if govalidator.IsNull(capitalwithdrawal.Description) {

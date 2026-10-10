@@ -1816,6 +1816,8 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 
 		if quotationsalesReturnProduct.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		} else if quotationsalesReturnProduct.Quantity < 0 {
+			errs["quantity_"+strconv.Itoa(index)] = "Quantity must be greater than zero"
 		}
 
 		if govalidator.IsNull(strings.TrimSpace(quotationsalesReturnProduct.Name)) {

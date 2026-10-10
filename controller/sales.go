@@ -262,7 +262,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	// Validate data
 	order.FindNetTotal()
 
-	if order.EnableReportToZatca && !IsConnectedToInternet() {
+	if order.EnableReportToZatca && zatcaReportingOn(store) && !IsConnectedToInternet() {
 		response.Status = false
 		response.Errors["reporting_to_zatca"] = "not connected to internet"
 		w.WriteHeader(http.StatusBadRequest)

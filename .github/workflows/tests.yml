@@ -251,7 +251,17 @@ jobs:
           echo "Server did not start:"; cat server.log; exit 1
 
       - name: Run ZATCA sandbox tests
-        run: go test -tags "e2e zatca" ./e2e/api -run TestZatcaSandbox -count=1 -v
+        run: go test -tags "e2e zatca" ./e2e/api -run TestZatcaSandbox -count=1 -v 2>&1 | tee zatca.log; exit ${PIPESTATUS[0]}
+        shell: bash
+
+      # The job log ends with the service containers' output, which can push
+      # the test output past what the log API returns; annotations keep it.
+      - name: Report failures as annotations
+        if: failure()
+        shell: bash
+        run: |
+          grep -E -- '--- FAIL|_test.go:[0-9]+:' zatca.log | head -20 | while IFS= read -r l; do echo "::error title=ZATCA sandbox::${l}"; done
+          grep -iE 'zatca|python|error' server.log | tail -10 | while IFS= read -r l; do echo "::warning title=ZATCA server log::${l:0:900}"; done
 
       - name: Server log
         if: failure()

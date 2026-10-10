@@ -8,6 +8,7 @@
 | `api/flows2_e2e_test.go` | Capital, capital withdrawals and dividends (edits, ledger), employees and salaries, sales and purchase cash discounts, warehouses and stock transfers, delivery notes and purchase orders, non-VAT sales, catalogue masters, users. |
 | `api/flows3_e2e_test.go` | Quotation invoices and their returns and refunds; purchase, sales-return and purchase-return payments (caps, status, delete); non-VAT sales returns; purchase requests; previous/next/last navigation. |
 | `api/flows4_e2e_test.go` | Vehicles, repair jobs (VAT totals, unique numbers), customer packages, signatures. |
+| `api/flows5_e2e_test.go` | Negative line quantities on every document, stock transfer limits and edits, ZATCA secrets kept out of store responses, onboarding error codes, sales marked for ZATCA in stores off ZATCA. |
 | `api/dashboard_e2e_test.go` | The dashboard month summary and outstanding add up to the documents entered; trial balance (debits = credits) and the cash account. |
 | `api/security_e2e_test.go` | A user limited to some stores can't reach other stores (query, body, path, ZATCA, MCP); managers only manage their own staff; no password hashes in responses. |
 | `api/zatca_sandbox_e2e_test.go` | Build tags `e2e zatca`: ZATCA Phase 2 against ZATCA's sandbox with a new non-production store (VAT 399999999900003, CRN 4030360927): onboarding, simplified and standard invoices, a credit note, disconnect. Needs the `ZatcaPython/venv` and internet. |

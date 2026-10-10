@@ -1457,6 +1457,8 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 		if purchaseReturnProduct.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(index)] = "Quantity is required"
+		} else if purchaseReturnProduct.Quantity < 0 {
+			errs["quantity_"+strconv.Itoa(index)] = "Quantity must be greater than zero"
 		}
 
 		if govalidator.IsNull(strings.TrimSpace(purchaseReturnProduct.Name)) {

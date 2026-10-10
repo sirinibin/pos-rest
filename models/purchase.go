@@ -1556,6 +1556,8 @@ func (purchase *Purchase) Validate(
 
 		if product.Quantity == 0 {
 			errs["quantity_"+strconv.Itoa(i)] = "Quantity is required"
+		} else if product.Quantity < 0 {
+			errs["quantity_"+strconv.Itoa(i)] = "Quantity must be greater than zero"
 		}
 
 		if govalidator.IsNull(strings.TrimSpace(product.Name)) {

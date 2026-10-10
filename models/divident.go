@@ -406,6 +406,8 @@ func (divident *Divident) Validate(w http.ResponseWriter, r *http.Request, scena
 
 	if divident.Amount == 0 {
 		errs["amount"] = "Amount is required"
+	} else if divident.Amount < 0 {
+		errs["amount"] = "Amount should be greater than zero"
 	}
 
 	if govalidator.IsNull(divident.Description) {
