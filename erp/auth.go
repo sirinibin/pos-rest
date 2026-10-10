@@ -156,6 +156,58 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, meBody(c))
 }
 
+// ownPasswordErrors checks a self-service password change (the Profile and top-bar
+// "Change password" forms) before the current password is verified.
+func ownPasswordErrors(current, next string) map[string]string {
+	e := map[string]string{}
+	if current == "" {
+		e["currentPassword"] = "required"
+	}
+	switch {
+	case next == "":
+		e["newPassword"] = "required"
+	case len(next) < 8:
+		e["newPassword"] = "at least 8 characters"
+	case next == current:
+		e["newPassword"] = "must differ from the current password"
+	}
+	return e
+}
+
+// POST /auth/password {currentPassword, newPassword}: any signed-in user changes their
+// own password (no settings permission needed; the current password proves it is them).
+func handleChangeOwnPassword(c *Ctx, w http.ResponseWriter, r *http.Request) error {
+	body, err := readBody(r)
+	if err != nil {
+		return err
+	}
+	cur, next := str(body["currentPassword"]), str(body["newPassword"])
+	if e := ownPasswordErrors(cur, next); len(e) > 0 {
+		return errBadRequest("Please correct the highlighted fields", e)
+	}
+	u, err := loadUser(c.UserID)
+	if err != nil || u == nil {
+		return errUnauthorized("Session expired.")
+	}
+	if !bcrypt.Match(cur, str(u["password"])) {
+		return errBadRequest("Please correct the highlighted fields", map[string]string{"currentPassword": "incorrect"})
+	}
+	ctx, cancel := dbctx()
+	defer cancel()
+	_, err = mainDB().Collection("user").UpdateOne(ctx, bson.M{"_id": c.UserID}, bson.M{"$set": bson.M{
+		"password":                 models.HashPassword(next),
+		"updated_at":               nowFn(),
+		"erp.x.passwordChangedAt":  nowFn().In(riyadh).Format(layoutDT),
+		"erp.x.mustChangePassword": false,
+	}})
+	if err != nil {
+		return errInternal("Unable to change the password.")
+	}
+	u, _ = loadUser(c.UserID)
+	writeJSON(w, http.StatusOK, M{"user": userToContractFull(u, c.Stores)})
+	return nil
+}
+
 func meBody(c *Ctx) M {
 	stores := []M{}
 	x := newMapCtx(c, "")

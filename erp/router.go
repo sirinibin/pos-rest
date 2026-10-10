@@ -37,6 +37,7 @@ func Register(router *mux.Router) {
 	s.HandleFunc("/auth/refresh", handleRefresh).Methods("POST")
 	s.HandleFunc("/auth/logout", handleLogout).Methods("POST")
 	s.HandleFunc("/auth/me", handleMe).Methods("GET")
+	s.HandleFunc("/auth/password", authed(handleChangeOwnPassword)).Methods("POST")
 	s.HandleFunc("/auth/signup", rateLimited(signupLimiter, handleSignup)).Methods("POST")
 
 	// ZATCA actions (delegating to the existing ZATCA flow)
