@@ -23,7 +23,8 @@ unit + API tests, integration tests (`-tags integration`, MongoDB + Redis servic
 `S3_TEST_*` storage tests),
 API e2e (`-tags e2e`, see `e2e/README.md`), a race-detector job (`-race` on unit + integration,
 and the e2e suite against a `-race` server build), a report-only ZATCA sandbox job (`-tags "e2e zatca"`,
-test VAT 399999999900003 / CRN 4030360927, never Production) and the frontend's full-stack Playwright suite
+test VAT 399999999900003 / CRN 4030360927, never Production; it takes ZATCA's Java Fatoora SDK from the public
+https://github.com/sirinibin/zatca-sdk repo, which is where the SDK comes from wherever it is needed) and the frontend's full-stack Playwright suite
 (reactjs-pos, same branch).
 
 Store access: `controller.StoreAccessMiddleware` answers 403 when a request names a store (query
