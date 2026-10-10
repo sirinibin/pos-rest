@@ -158,3 +158,15 @@ func storeAccessUser(r *http.Request) *models.User {
 	}
 	return user
 }
+
+// storesUserMayUse keeps the stores the user may use (see
+// StoreAccessMiddleware); the MCP store lists used to show every company's.
+func storesUserMayUse(user *models.User, stores []models.Store) []models.Store {
+	out := make([]models.Store, 0, len(stores))
+	for _, s := range stores {
+		if userMayUseStore(user.Role, user.StoreIDs, s.ID) {
+			out = append(out, s)
+		}
+	}
+	return out
+}

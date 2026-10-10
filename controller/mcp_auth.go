@@ -51,12 +51,18 @@ func MCPLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: fetch all stores
+	// Step 3: fetch the stores this user may use
 	stores, err := models.GetAllStores()
 	if err != nil {
 		mcpWriteError(w, "failed to fetch stores: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	user, err := models.FindUserByEmail(body.Email)
+	if err != nil {
+		mcpWriteError(w, "failed to load user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	stores = storesUserMayUse(user, stores)
 
 	type storeItem struct {
 		ID          string `json:"id"`
@@ -102,7 +108,7 @@ func MCPLogin(w http.ResponseWriter, r *http.Request) {
 
 // MCPListStores handles GET /v1/mcp/stores
 func MCPListStores(w http.ResponseWriter, r *http.Request) {
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		mcpWriteError(w, "Invalid access token: "+err.Error(), http.StatusUnauthorized)
 		return
@@ -113,6 +119,17 @@ func MCPListStores(w http.ResponseWriter, r *http.Request) {
 		mcpWriteError(w, "failed to fetch stores: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		mcpWriteError(w, "invalid user id in token", http.StatusUnauthorized)
+		return
+	}
+	user, err := models.FindUserByID(&userID, bson.M{"role": 1, "store_ids": 1})
+	if err != nil {
+		mcpWriteError(w, "failed to load user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	stores = storesUserMayUse(user, stores)
 
 	activeStoreID := r.URL.Query().Get("active_store_id")
 

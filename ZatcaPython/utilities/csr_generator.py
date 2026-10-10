@@ -40,6 +40,11 @@ class CsrGenerator:
             - private_key_content: Base64 string of private key (no headers)
             - csr_base64: Base64-encoded CSR
         """
+        # The Fatoora SDK jar lives only on the servers (it is not in git).
+        # Without it (CI's ZATCA sandbox job) build the CSR in Python.
+        if not os.path.exists(self.fatoora_cli_simulation):
+            return self.generate_csr_without_sdk()
+
         with tempfile.TemporaryDirectory() as tmpdir:
             csr_config_file = os.path.join(tmpdir, "csr.properties")
             private_key_file = os.path.join(tmpdir, "private.key")
@@ -155,6 +160,41 @@ class CsrGenerator:
 
         return private_key_content, csr_base64
     '''    
+
+    def generate_csr_without_sdk(self):
+        """Same output as generate_csr, built with the cryptography package."""
+        private_key = self.generate_private_key()
+        csr_builder = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, self.config.get('csr.country.name', 'SA')),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, self.config.get('csr.organization.unit.name', '')),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, self.config.get('csr.organization.name', '')),
+            x509.NameAttribute(NameOID.COMMON_NAME, self.config.get('csr.common.name', '')),
+        ]))
+        csr_builder = csr_builder.add_extension(
+            x509.UnrecognizedExtension(ObjectIdentifier("1.3.6.1.4.1.311.20.2"), UTF8String(self.asn_template).dump()),
+            critical=False,
+        )
+        csr_builder = csr_builder.add_extension(
+            x509.SubjectAlternativeName([
+                x509.DirectoryName(x509.Name([
+                    x509.NameAttribute(ObjectIdentifier("2.5.4.4"), self.config.get('csr.serial.number', '')),
+                    x509.NameAttribute(ObjectIdentifier("0.9.2342.19200300.100.1.1"), self.config.get('csr.organization.identifier', '')),
+                    x509.NameAttribute(ObjectIdentifier("2.5.4.12"), self.config.get('csr.invoice.type', '')),
+                    x509.NameAttribute(ObjectIdentifier("2.5.4.26"), self.config.get('csr.location.address', '')),
+                    x509.NameAttribute(ObjectIdentifier("2.5.4.15"), self.config.get('csr.industry.business.category', '')),
+                ]))
+            ]),
+            critical=False,
+        )
+        csr = csr_builder.sign(private_key, hashes.SHA256(), default_backend())
+        private_key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode('utf-8')
+        private_key_content = "".join(private_key_pem.strip().splitlines()[1:-1])
+        csr_base64 = base64.b64encode(csr.public_bytes(serialization.Encoding.PEM)).decode('utf-8')
+        return private_key_content, csr_base64
 
     def save_to_files(self, private_key_pem, csr_pem):
         os.makedirs("certificates", exist_ok=True)

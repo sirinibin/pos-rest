@@ -21,8 +21,13 @@ deploy.sh enforces three gates before every deploy — all three must pass:
 `deploy_test.yml` / `deploy_prod.yml` call `tests.yml` and deploy only if all of it passes:
 unit + API tests, integration tests (`-tags integration`, MongoDB + Redis services),
 API e2e (`-tags e2e`, see `e2e/README.md`), a race-detector job (`-race` on unit + integration,
-and the e2e suite against a `-race` server build) and the frontend's full-stack Playwright suite
-(reactjs-pos, same branch). Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
+and the e2e suite against a `-race` server build), a report-only ZATCA sandbox job (`-tags "e2e zatca"`,
+test VAT 399999999900003 / CRN 4030360927, never Production) and the frontend's full-stack Playwright suite
+(reactjs-pos, same branch).
+
+Store access: `controller.StoreAccessMiddleware` answers 403 when a request names a store (query
+`search[store_id]`/`store_id`, body `store_id`, `/v1/store/{id}`, ZATCA connect `id`) the user may not
+use. A new endpoint that takes a store under another key needs its own check. Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
 
 ## Usage
 ```

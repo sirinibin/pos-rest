@@ -130,15 +130,30 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	user.CreatedAt = &now
 	user.UpdatedAt = &now
 
+	requestingUser, err := models.FindUserByID(&userID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Only Admins (role=Admin) can create users with role=Admin
 	if user.Role == "Admin" {
-		requestingUser, _ := models.FindUserByID(&userID, bson.M{})
 		if requestingUser.Role != "Admin" {
 			response.Status = false
 			response.Errors["role"] = "Only admins can assign the Admin role"
 			json.NewEncoder(w).Encode(response)
 			return
 		}
+	}
+	if errs := grantErrors(requestingUser, user.Admin, user.StoreIDs, nil); len(errs) > 0 {
+		response.Status = false
+		response.Errors = errs
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	// Validate data
@@ -255,6 +270,37 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var userForm *models.UserForm
 	// Decode data
 	if !utils.Decode(w, r, &userForm) {
+		return
+	}
+
+	requestingID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, err := models.FindUserByID(&requestingID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if msg := manageUserError(requestingUser, user); msg != "" {
+		response.Status = false
+		response.Errors["authorization"] = msg
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !isAdminUser(requestingUser) && requestingUser.ID == user.ID && userForm.Role != user.Role {
+		response.Status = false
+		response.Errors["role"] = "You can't change your own role"
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if errs := grantErrors(requestingUser, userForm.Admin && !user.Admin, userForm.StoreIDs, user.StoreIDs); len(errs) > 0 {
+		response.Status = false
+		response.Errors = errs
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -395,7 +441,7 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -410,6 +456,30 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["customer_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	requestingID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, err := models.FindUserByID(&requestingID, bson.M{"role": 1, "admin": 1, "store_ids": 1})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	target, err := models.FindUserByID(&userID, bson.M{"store_ids": 1, "created_by": 1})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !viewUserAllowed(requestingUser, target) {
+		response.Status = false
+		response.Errors["authorization"] = "You can't view this user"
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -467,6 +537,23 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	requestingID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, err := models.FindUserByID(&requestingID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if msg := manageUserError(requestingUser, user); msg != "" {
+		response.Status = false
+		response.Errors["authorization"] = msg
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}

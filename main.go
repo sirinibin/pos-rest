@@ -136,7 +136,7 @@ func main() {
 
 	// ── MCP-optimised API layer (/v1/mcp/) ────────────────────────────────────
 	// Auth
-	router.HandleFunc("/v1/mcp/login", controller.MCPLogin).Methods("POST")
+	router.HandleFunc("/v1/mcp/login", controller.AuthRateLimiter.Middleware(controller.MCPLogin)).Methods("POST")
 	router.HandleFunc("/v1/mcp/stores", controller.MCPListStores).Methods("GET")
 	router.HandleFunc("/v1/mcp/me", controller.MCPMe).Methods("GET")
 	// Sales

@@ -633,6 +633,8 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 			user.DeletedByUser, _ = FindUserByID(user.DeletedBy, deletedByUserSelectFields)
 		}
 
+		// The user list used to return every user's password hash.
+		user.Password = ""
 		users = append(users, user)
 	} //end for loop
 
