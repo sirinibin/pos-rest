@@ -31,16 +31,19 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 case "$BRANCH" in
   master)
     SERVICE="start-api"
+    PORT=2000
     REMOTE_DEST="/home/ubuntu/go/src/github.com/sirinibin/pos-rest"
     LABEL="PRODUCTION"
     ;;
   test)
     SERVICE="start-api-test"
+    PORT=2002
     REMOTE_DEST="/home/ubuntu/go/src/github.com/sirinibin/pos-rest-test"
     LABEL="TEST"
     ;;
   v2)
     SERVICE="start-api-v2"
+    PORT=2004
     REMOTE_DEST="/home/ubuntu/go/src/github.com/sirinibin/pos-rest-v2"
     LABEL="V2"
     ;;
@@ -107,28 +110,10 @@ while [ "$attempt" -le "$max" ]; do
     [ "$attempt" -gt "$max" ] && { echo "==> Upload FAILED after $max attempts."; exit 1; }
 done
 
-# ─── Atomic swap + restart ────────────────────────────────────────────────────
-ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-    "sudo fuser -k $REMOTE_DEST/$BINARY 2>/dev/null || true; sudo fuser -k $tmp 2>/dev/null || true"
-
-echo "==> [$LABEL] Stopping $SERVICE, swapping binary..."
-ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-    "sudo systemctl stop $SERVICE || true; mv -f $tmp $REMOTE_DEST/$BINARY && sync"
-
-start_ok=0; start_try=1
-while [ "$start_try" -le 3 ]; do
-    echo "==> [$LABEL] Starting $SERVICE (attempt $start_try/3)..."
-    if ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-        "sudo systemctl start $SERVICE && sudo systemctl is-active --quiet $SERVICE"; then
-        start_ok=1; break
-    fi
-    start_try=$((start_try + 1)); sleep 5
-done
-
-[ "$start_ok" -eq 0 ] && { echo "==> ERROR: $SERVICE failed to start!"; exit 1; }
-
-ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-    "sha256sum $REMOTE_DEST/$BINARY && sudo systemctl status $SERVICE --no-pager"
+# ─── Graceful, health-checked restart with automatic rollback ─────────────────
+echo "==> [$LABEL] Restarting $SERVICE gracefully..."
+ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" "bash -s -- '$REMOTE_DEST' '$SERVICE' '$PORT'" < deploy/remote_restart.sh \
+    || { echo "==> ERROR: deploy failed (see above)."; exit 1; }
 
 echo ""
 echo "==> [$LABEL] Quick deploy complete. Remember to run full deploy.sh when stable."

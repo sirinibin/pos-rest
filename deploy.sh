@@ -61,6 +61,7 @@ deploy_to() {
     local service="$1"
     local remote_dest="$2"
     local label="$3"
+    local port="$4"
     local tmp="$remote_dest/${BINARY}.new"
     local local_sum
     local_sum=$(sha256sum "./$BINARY" | awk '{print $1}')
@@ -93,50 +94,22 @@ deploy_to() {
         fi
     done
 
-    # ── Kill any stale sftp-server holding the binary open (prevents ETXTBSY) ─
-    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-        "sudo fuser -k $remote_dest/$BINARY 2>/dev/null || true; sudo fuser -k $tmp 2>/dev/null || true"
-
-    # ── Step 1: Stop and swap ────────────────────────────────────────────────
-    # Deliberately a separate SSH connection from step 2 (start). If this
-    # connection drops after stop but before start, the retry loop below still
-    # starts the service on its own fresh connection.
-    # Use "|| true" on stop so a pre-stopped service (e.g. from a prior failed
-    # deploy) doesn't abort the mv+sync.
-    echo "==> [$label] Stopping $service, swapping binary..."
-    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-        "sudo systemctl stop $service || true; mv -f $tmp $remote_dest/$BINARY && sync"
-
-    # ── Step 2: Start with retry ─────────────────────────────────────────────
-    # Separate SSH call so a dropped connection in step 1 never leaves the
-    # service permanently dead.
-    local start_ok=0 start_try=1
-    while [ "$start_try" -le 3 ]; do
-        echo "==> [$label] Starting $service (attempt $start_try/3)..."
-        if ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-            "sudo systemctl start $service && sudo systemctl is-active --quiet $service"; then
-            start_ok=1
-            break
-        fi
-        echo "==> [$label] Start attempt $start_try/3 failed, retrying in 5s..."
-        start_try=$((start_try + 1))
-        sleep 5
-    done
-
-    if [ "$start_ok" -eq 0 ]; then
-        echo "==> [$label] ERROR: $service failed to start after 3 attempts. Manual intervention required!"
+    # ── Graceful, health-checked restart with automatic rollback ─────────────
+    # No kill and no separate stop/start: the binary is renamed in while the
+    # old process keeps serving, `systemctl restart` lets it finish in-flight
+    # requests, and the previous binary comes back if /v1/health fails.
+    echo "==> [$label] Restarting $service gracefully..."
+    if ! ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" "bash -s -- '$remote_dest' '$service' '$port'" < deploy/remote_restart.sh; then
+        echo "==> [$label] ERROR: deploy failed (see above). Manual intervention may be required!"
         return 1
     fi
-
-    ssh $SSH_OPTS "$AWS_USER@$AWS_HOST" \
-        "sha256sum $remote_dest/$BINARY && sudo systemctl status $service --no-pager"
 
     echo "==> [$label] Done."
 }
 
 # ─── 3. Deploy main API ──────────────────────────────────────────────────────
-deploy_to "start-api-test" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest-test" "TEST"
-deploy_to "start-api" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest" "PRODUCTION"
+deploy_to "start-api-test" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest-test" "TEST" 2002
+deploy_to "start-api" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest" "PRODUCTION" 2000
 
 # ─── 4. Deploy health monitor (single shared instance) ────────────────────────
 echo ""

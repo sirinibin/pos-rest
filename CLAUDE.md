@@ -28,6 +28,15 @@ API e2e (`-tags e2e`, see `e2e/README.md`) and the frontend's full-stack Playwri
 backend/deploy.sh   # deploys to both test and production
 ```
 
+## Low-downtime restarts
+Every deploy path (deploy.sh, deploy_quick.sh, the deploy workflows) restarts the API through
+`deploy/remote_restart.sh`: rename the new binary in, `systemctl restart`, wait for `/v1/health`,
+roll back to the previous binary if it never becomes healthy. Never `fuser -k` or `systemctl stop`
+the API in a deploy. The server drains in-flight requests on SIGTERM (`SHUTDOWN_TIMEOUT`, default 20s)
+and binds its port before connecting to MongoDB (`lifecycle/`). With the one-time
+`deploy/enable_socket_activation.sh <service> <port>` on the server, systemd holds the port across
+restarts and no request is refused. Ports: production 2000, test 2002, v2 2004 (HTTPS = port+1).
+
 ## After every backend change
 1. Write Go tests for changed logic.
 2. `go test ./...` to verify.

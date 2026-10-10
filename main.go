@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/env"
+	"github.com/sirinibin/startpos/backend/lifecycle"
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -100,6 +102,24 @@ func seedDefaultUser() {
 // testing
 func main() {
 	fmt.Println("Start POS Restful API")
+
+	// Bind the ports before anything slow runs, so requests that arrive during
+	// a restart queue in the kernel instead of being refused (see lifecycle).
+	httpPort := env.Getenv("API_PORT", "2000")
+	httpsPort, err := strconv.Atoi(httpPort)
+	if err != nil {
+		return
+	}
+	httpsPort = httpsPort + 1
+	httpListener, err := lifecycle.Listen(httpPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+	httpsListener, err := lifecycle.Listen(strconv.Itoa(httpsPort))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	db.Client("")
 	seedDefaultUser()
 	db.InitRedis()
@@ -109,13 +129,6 @@ func main() {
 	go models.EnsureRFQSupplierIndexes()
 	go models.EnsureGooglePlacesCacheIndexes()
 	go models.DeduplicateRFQSuppliersAllStores()
-
-	httpPort := env.Getenv("API_PORT", "2000")
-	httpsPort, err := strconv.Atoi(httpPort)
-	if err != nil {
-		return
-	}
-	httpsPort = httpsPort + 1
 
 	router := mux.NewRouter()
 
@@ -1033,9 +1046,11 @@ func main() {
 		}()
 	}
 
-	go func() {
-		log.Fatal(http.ListenAndServeTLS(":"+strconv.Itoa(httpsPort), "localhost.cert.pem", "localhost.key.pem", corsHandler))
-	}()
+	cert, err := tls.LoadX509KeyPair("localhost.cert.pem", "localhost.key.pem")
+	if err != nil {
+		log.Fatal(err)
+	}
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2", "http/1.1"}}
 
 	// Initialize the Socket.io server
 
@@ -1074,8 +1089,28 @@ func main() {
 
 	controller.StartEmailPolling()
 
+	// Serve until systemd sends SIGTERM, then let in-flight requests finish.
+	ctx, stop := lifecycle.SignalContext()
+	defer stop()
+	shutdownTimeout := lifecycle.ShutdownTimeout(os.Getenv)
+	httpsServer := &http.Server{Handler: corsHandler, TLSConfig: tlsConfig}
+	httpsDone := make(chan error, 1)
+	go func() {
+		httpsDone <- lifecycle.Serve(ctx, httpsServer, tls.NewListener(httpsListener, tlsConfig), shutdownTimeout)
+	}()
+
 	log.Printf("API serving @ http://localhost:%s\n", httpPort)
-	log.Fatal(http.ListenAndServe(":"+httpPort, corsHandler))
+	httpErr := lifecycle.Serve(ctx, &http.Server{Handler: corsHandler}, httpListener, shutdownTimeout)
+	stop()
+	s.Stop()
+	httpsErr := <-httpsDone
+	if httpErr != nil {
+		log.Fatal(httpErr)
+	}
+	if httpsErr != nil {
+		log.Fatal(httpsErr)
+	}
+	log.Println("API stopped cleanly")
 
 }
 
