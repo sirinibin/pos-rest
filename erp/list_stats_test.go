@@ -520,3 +520,24 @@ func sameStats(t *testing.T, at string, res, want *StatsResult) {
 		sameStats(t, at+" group "+k, g, wg)
 	}
 }
+
+// Without ?dateKey a period is the list's own date field (salaries: paymentDate).
+func TestWithResourceDateKey(t *testing.T) {
+	sal := &Resource{DateField: "paymentDate"}
+	q := withResourceDateKey(StatsQuery{DateKey: "date", Sort: "-date"}, sal, "")
+	if q.DateKey != "paymentDate" || q.Sort != "-paymentDate" {
+		t.Errorf("salaries: %+v", q)
+	}
+	if q := withResourceDateKey(StatsQuery{DateKey: "date", Sort: "net"}, sal, ""); q.Sort != "net" {
+		t.Errorf("an asked sort stays: %+v", q)
+	}
+	if q := withResourceDateKey(StatsQuery{DateKey: "createdAt"}, sal, "createdAt"); q.DateKey != "createdAt" {
+		t.Errorf("an asked dateKey stays: %+v", q)
+	}
+	if q := withResourceDateKey(StatsQuery{DateKey: "date"}, &Resource{DateField: "date"}, ""); q.DateKey != "date" {
+		t.Errorf("sales: %+v", q)
+	}
+	if q := withResourceDateKey(StatsQuery{DateKey: "date"}, nil, ""); q.DateKey != "date" {
+		t.Errorf("nil resource: %+v", q)
+	}
+}

@@ -67,7 +67,9 @@ func newSalesResource() *Resource {
 	return docResource("sales", "sales", "sales", "order", cfg,
 		v1Ops{path: "/v1/order", create: controller.CreateOrder, update: controller.UpdateOrder},
 		"store DB `order` (+ `sales_payment`)", func(b *legacyBackend) {
-			b.deletedKey = ""
+			// sales cannot be deleted any more, but invoices the old system deleted
+			// (legacy deleted:true) stay out of every list, tile and dashboard figure,
+			// as the old sales list and business dashboard leave them out
 			b.noDelete = "Sales invoices cannot be deleted in the existing system; issue a sales return (credit note) instead."
 			// a POS terminal's Bills list: its own recent sales
 			b.listWhere["posType"] = posTypeWhere

@@ -80,36 +80,73 @@ func TestTotalExpense_VatAndRounding(t *testing.T) {
 }
 
 func TestDashboardDateRange(t *testing.T) {
-	// Saudi Arabia (UTC+3, offset -3): 1 Oct 00:00 store time = 30 Sep 21:00 UTC
-	r, err := DashboardDateRange("2026-10-01", "2026-10-31", -3)
+	zone := func(cc string) *time.Location { return storeLocation(M{"country_code": cc}) }
+	// Saudi Arabia (UTC+3): 1 Oct 00:00 store time = 30 Sep 21:00 UTC, up to (not
+	// including) 1 Nov 00:00 store time
+	r, err := DashboardDateRange("2026-10-01", "2026-10-31", zone("SA"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := r["$gte"].(time.Time); !got.Equal(time.Date(2026, 9, 30, 21, 0, 0, 0, time.UTC)) {
 		t.Errorf("start %v", got)
 	}
-	if got := r["$lte"].(time.Time); !got.Equal(time.Date(2026, 10, 31, 20, 59, 59, 0, time.UTC)) {
+	if got := r["$lt"].(time.Time); !got.Equal(time.Date(2026, 10, 31, 21, 0, 0, 0, time.UTC)) {
 		t.Errorf("end %v", got)
 	}
-	// India (UTC+5:30)
-	r, _ = DashboardDateRange("2026-10-06", "2026-10-06", -5.5)
+	if _, ok := r["$lte"]; ok {
+		t.Errorf("end is exclusive (the last second of the day counts): %v", r)
+	}
+	// India (UTC+5:30), Dubai (UTC+4)
+	r, _ = DashboardDateRange("2026-10-06", "2026-10-06", zone("IN"))
 	if got := r["$gte"].(time.Time); !got.Equal(time.Date(2026, 10, 5, 18, 30, 0, 0, time.UTC)) {
 		t.Errorf("IN start %v", got)
 	}
-	if r, _ := DashboardDateRange("", "", -3); r != nil {
+	r, _ = DashboardDateRange("2026-10-01", "2026-10-31", zone("ae"))
+	if got := r["$gte"].(time.Time); !got.Equal(time.Date(2026, 9, 30, 20, 0, 0, 0, time.UTC)) {
+		t.Errorf("AE (lower-case code) start %v", got)
+	}
+	// a store without a country is a Saudi store (Riyadh), as everywhere else — not UTC
+	for _, loc := range []*time.Location{zone(""), nil} {
+		r, _ = DashboardDateRange("2026-10-01", "", loc)
+		if got := r["$gte"].(time.Time); !got.Equal(time.Date(2026, 9, 30, 21, 0, 0, 0, time.UTC)) {
+			t.Errorf("no country start %v", got)
+		}
+	}
+	// the same days as /stats and the lists: every instant falls in exactly one day
+	loc := zone("SA")
+	for _, inst := range []time.Time{
+		time.Date(2026, 9, 30, 20, 59, 59, 999e6, time.UTC), // 30 Sep 23:59:59.999 Riyadh
+		time.Date(2026, 9, 30, 21, 0, 0, 0, time.UTC),       // 1 Oct 00:00 Riyadh
+	} {
+		day := inst.In(loc).Format(layoutDay)
+		in := func(from, to string) bool {
+			r, _ := DashboardDateRange(from, to, loc)
+			if g, ok := r["$gte"].(time.Time); ok && inst.Before(g) {
+				return false
+			}
+			if l, ok := r["$lt"].(time.Time); ok && !inst.Before(l) {
+				return false
+			}
+			return true
+		}
+		if !in(day, day) || in("2026-10-01", "2026-10-31") == (day == "2026-09-30") {
+			t.Errorf("%v (store day %s) in the wrong period", inst, day)
+		}
+	}
+	if r, _ := DashboardDateRange("", "", loc); r != nil {
 		t.Errorf("no dates: %v", r)
 	}
-	if r, _ := DashboardDateRange("2026-10-01", "", -3); r["$lte"] != nil || r["$gte"] == nil {
+	if r, _ := DashboardDateRange("2026-10-01", "", loc); r["$lt"] != nil || r["$gte"] == nil {
 		t.Errorf("open end: %v", r)
 	}
-	if r, _ := DashboardDateRange("", "2026-10-01", -3); r["$gte"] != nil || r["$lte"] == nil {
+	if r, _ := DashboardDateRange("", "2026-10-01", loc); r["$gte"] != nil || r["$lt"] == nil {
 		t.Errorf("open start: %v", r)
 	}
 	bad := []struct{ from, to, field string }{
 		{"01-10-2026", "", "from"}, {"", "2026/10/01", "to"}, {"2026-10-05", "2026-10-01", "to"}, {"2026-02-30", "", "from"},
 	}
 	for _, b := range bad {
-		_, err := DashboardDateRange(b.from, b.to, -3)
+		_, err := DashboardDateRange(b.from, b.to, loc)
 		ae, ok := err.(*APIError)
 		if !ok || ae.Status != http.StatusBadRequest || ae.Fields[b.field] == "" {
 			t.Errorf("%q..%q: want 400 on %s, got %v", b.from, b.to, b.field, err)

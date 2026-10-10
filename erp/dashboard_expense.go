@@ -15,7 +15,7 @@ package erp
 //   enable_sales_in_quotation     → quotation invoices' cash discounts count;
 //   enable_employee_module        → salary paid in the period is added.
 //
-// Dates are whole days in the store's own timezone (CountryTimezoneOffset).
+// Dates are whole days in the store's own timezone (storeLocation).
 
 import (
 	"net/http"
@@ -103,35 +103,42 @@ func TotalExpense(in TotalExpenseInputs, f TotalExpenseFlags, vatPercent float64
 	}
 }
 
-// DashboardDateRange turns from/to days (YYYY-MM-DD, either may be empty) in a
-// timezone (CountryTimezoneOffset convention: UTC+3 → -3) into the legacy
-// "date" filter: from 00:00:00 of `from` to 23:59:59 of `to`, store time.
-func DashboardDateRange(from, to string, tzOffset float64) (bson.M, error) {
+// DashboardDateRange turns from/to days (YYYY-MM-DD, either may be empty) in the
+// store's timezone (storeLocation: the IANA zone of its country, Riyadh when unset)
+// into the legacy "date" filter: from 00:00 of `from` up to (not including) 00:00
+// of the day after `to`, store time.  The same days as the lists and /stats
+// (listquery.go), so a figure and its list cover the same documents: the fixed
+// country offset used before was UTC for a store without a country code and
+// ignored daylight saving, and "to 23:59:59" left out the last second.
+func DashboardDateRange(from, to string, loc *time.Location) (bson.M, error) {
+	if loc == nil {
+		loc = riyadh
+	}
 	var start, end time.Time
 	if from = strings.TrimSpace(from); from != "" {
-		d, err := time.Parse(layoutDay, from)
+		d, err := time.ParseInLocation(layoutDay, from, loc)
 		if err != nil {
 			return nil, errBadRequest("from must be a date (YYYY-MM-DD).", map[string]string{"from": "invalid"})
 		}
-		start = models.ConvertTimeZoneToUTC(tzOffset, d)
+		start = d.UTC()
 	}
 	if to = strings.TrimSpace(to); to != "" {
-		d, err := time.Parse(layoutDay, to)
+		d, err := time.ParseInLocation(layoutDay, to, loc)
 		if err != nil {
 			return nil, errBadRequest("to must be a date (YYYY-MM-DD).", map[string]string{"to": "invalid"})
 		}
-		end = models.ConvertTimeZoneToUTC(tzOffset, d).Add(24*time.Hour - time.Second)
+		end = d.AddDate(0, 0, 1).UTC()
 	}
-	if !start.IsZero() && !end.IsZero() && end.Before(start) {
+	if !start.IsZero() && !end.IsZero() && !end.After(start) {
 		return nil, errBadRequest("to must not be before from.", map[string]string{"to": "before_from"})
 	}
 	switch {
 	case !start.IsZero() && !end.IsZero():
-		return bson.M{"$gte": start, "$lte": end}, nil
+		return bson.M{"$gte": start, "$lt": end}, nil
 	case !start.IsZero():
 		return bson.M{"$gte": start}, nil
 	case !end.IsZero():
-		return bson.M{"$lte": end}, nil
+		return bson.M{"$lt": end}, nil
 	}
 	return nil, nil
 }

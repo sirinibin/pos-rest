@@ -150,6 +150,20 @@ func parseStatsQuery(r *http.Request) (StatsQuery, error) {
 	return q, nil
 }
 
+// withResourceDateKey: without ?dateKey a list's period is its own date field
+// (salaries: paymentDate), as the list's ?from/?to are; "date" read a field the
+// salary records do not have, so a period matched none of them.
+func withResourceDateKey(q StatsQuery, res *Resource, asked string) StatsQuery {
+	if strings.TrimSpace(asked) != "" || res == nil || res.DateField == "" || res.DateField == q.DateKey {
+		return q
+	}
+	if q.Sort == "-"+q.DateKey {
+		q.Sort = "-" + res.DateField
+	}
+	q.DateKey = res.DateField
+	return q
+}
+
 // maxStatsPage: the most ids one /stats page returns.
 const maxStatsPage = 500
 
@@ -906,6 +920,7 @@ func handleListStats(w http.ResponseWriter, r *http.Request, res *Resource) {
 		writeErr(w, err)
 		return
 	}
+	q = withResourceDateKey(q, res, r.URL.Query().Get("dateKey"))
 	storeHex, err := resolveStore(c, res, "", nil)
 	if err != nil {
 		writeErr(w, err)

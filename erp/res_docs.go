@@ -266,12 +266,68 @@ func (cfg *docCfg) paymentsToContract(x *mapCtx, d M) []interface{} {
 			cur.Close(ctx)
 		}
 	}
+	real := cfg.realPaymentDates(x, d, ps)
 	for _, p := range ps {
 		pm, _ := p.(M)
 		if pm == nil || boolv(pm["deleted"]) {
 			continue
 		}
+		if t, ok := real[hexOf(pm["_id"])]; ok {
+			pm = cloneM(pm)
+			pm["date"] = t
+		}
 		out = append(out, paymentToContract(x.loc(), pm, d["date"]))
+	}
+	return out
+}
+
+// realPaymentDates: the legacy save (models.Order AdjustPayments and its twins)
+// moves the embedded copy of a payment one minute past the document's time, or
+// past the payment before it, to order its ledger entries; the payment record
+// itself (sales_payment …) keeps the date the user entered.  A cash sale paid at
+// 23:59 on the last day of a month was listed, totalled and charted as paid the
+// next day — the next month.  The dates of the payments that may have been moved
+// are read back from their records (only those, so a list stays one query).
+func (cfg *docCfg) realPaymentDates(x *mapCtx, d M, ps []interface{}) map[string]interface{} {
+	if cfg.payColl == "" || len(ps) == 0 {
+		return nil
+	}
+	shifted := func(a, b interface{}) bool {
+		ta, ok1 := toTime(a)
+		tb, ok2 := toTime(b)
+		return ok1 && ok2 && ta.Sub(tb) == time.Minute
+	}
+	var ids bson.A
+	prev := d["date"]
+	for i, p := range ps {
+		pm, _ := p.(M)
+		if pm == nil {
+			continue
+		}
+		if shifted(pm["date"], d["date"]) || (i > 0 && shifted(pm["date"], prev)) {
+			if oid, ok := oidOf(pm["_id"]); ok {
+				ids = append(ids, oid)
+			}
+		}
+		prev = pm["date"]
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	ctx, cancel := dbctx()
+	defer cancel()
+	cur, err := storeDB(x.storeHex).Collection(cfg.payColl).Find(ctx, bson.M{"_id": bson.M{"$in": ids}},
+		options.Find().SetProjection(bson.M{"date": 1}))
+	if err != nil {
+		return nil
+	}
+	defer cur.Close(ctx)
+	out := map[string]interface{}{}
+	for cur.Next(ctx) {
+		rec := bsonToM(cur.Current)
+		if rec["date"] != nil {
+			out[hexOf(rec["_id"])] = rec["date"]
+		}
 	}
 	return out
 }

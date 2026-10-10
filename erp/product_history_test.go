@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -187,5 +188,26 @@ func TestAPI_ProductHistory(t *testing.T) {
 	}
 	if o := call(t, "GET", base+"&kind=sales", login(t, fx.UserBEmail), nil); o.Code != 403 {
 		t.Fatalf("other store's user: %d", o.Code)
+	}
+}
+
+// A return's unticked lines (legacy selected:false) are not in its rows, so they
+// are not in the totals either; other documents have no such lines.
+func TestHistoryLineMatch_SelectedReturnLines(t *testing.T) {
+	pid := primitive.NewObjectID()
+	for _, k := range []string{"salesReturns", "nonvatReturns", "quotationReturns", "purchaseReturns"} {
+		m := historyLineMatch(pid, k)
+		if m["products.product_id"] != pid || fmt.Sprint(m["products.selected"]) != fmt.Sprint(bson.M{"$ne": false}) {
+			t.Errorf("%s: %v", k, m)
+		}
+	}
+	for _, k := range []string{"sales", "purchases", "quotations", "nonvatSales", "deliveryNotes"} {
+		if m := historyLineMatch(pid, k); len(m) != 1 {
+			t.Errorf("%s: %v", k, m)
+		}
+	}
+	p := historySumsPipeline(bson.M{}, pid, "salesReturns")
+	if fmt.Sprint(p[3]) != fmt.Sprint(bson.M{"$match": historyLineMatch(pid, "salesReturns")}) {
+		t.Errorf("pipeline line match: %v", p[3])
 	}
 }

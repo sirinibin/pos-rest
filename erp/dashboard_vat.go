@@ -89,7 +89,7 @@ func dashboardStore(c *Ctx, r *http.Request) (*models.Store, bson.M, error) {
 	if err != nil || store == nil {
 		return nil, nil, errNotFound()
 	}
-	dateRange, err := DashboardDateRange(q.Get("from"), q.Get("to"), models.CountryTimezoneOffset(store.CountryCode))
+	dateRange, err := DashboardDateRange(q.Get("from"), q.Get("to"), storeLocation(M{"country_code": store.CountryCode}))
 	if err != nil {
 		return nil, nil, err
 	}

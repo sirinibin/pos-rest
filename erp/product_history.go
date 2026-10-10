@@ -144,7 +144,7 @@ func historySumsPipeline(f bson.M, pid primitive.ObjectID, kind string) bson.A {
 		bson.M{"$match": f},
 		bson.M{"$project": bson.M{"products": 1}},
 		bson.M{"$unwind": "$products"},
-		bson.M{"$match": bson.M{"products.product_id": pid}},
+		bson.M{"$match": historyLineMatch(pid, kind)},
 		bson.M{"$group": bson.M{
 			"_id":   nil,
 			"qty":   bson.M{"$sum": qty},
@@ -153,6 +153,18 @@ func historySumsPipeline(f bson.M, pid primitive.ObjectID, kind string) bson.A {
 			"lines": bson.M{"$sum": 1},
 		}},
 	}
+}
+
+// historyLineMatch: the product's lines that count.  A return's lines left
+// unticked (legacy selected:false) are not part of it: the rows leave them out
+// (docCfg.selectedLines), so the totals do too.
+func historyLineMatch(pid primitive.ObjectID, kind string) bson.M {
+	m := bson.M{"products.product_id": pid}
+	switch kind {
+	case "salesReturns", "nonvatReturns", "quotationReturns", "purchaseReturns":
+		m["products.selected"] = bson.M{"$ne": false}
+	}
+	return m
 }
 
 func historySums(doc bson.M) M {
