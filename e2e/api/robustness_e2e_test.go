@@ -21,6 +21,14 @@ import (
 var robPublic = map[string]bool{
 	"GET /v1/erp/meta": true, "GET /v1/erp/countries": true, "POST /v1/erp/auth/login": true,
 	"POST /v1/erp/auth/refresh": true, "POST /v1/erp/auth/signup": true,
+	// card machines: provider call-backs are signed (?sig=), the Card Bridge
+	// setup program is a public download and pairs with a one-time code
+	"GET /v1/erp/card-terminal-webhooks/{provider}/{store}/{payment}":  true,
+	"POST /v1/erp/card-terminal-webhooks/{provider}/{store}/{payment}": true,
+	"GET /v1/erp/card-bridge/downloads":                                true, "GET /v1/erp/card-bridge/download/{file}": true,
+	"POST /v1/erp/card-bridge/pair": true,
+	// registered companies per country, for the marketing site footers
+	"GET /v1/erp/site/companies": true,
 }
 
 // robKnown5xx are the routes that answer 5xx (or drop the connection) for a
