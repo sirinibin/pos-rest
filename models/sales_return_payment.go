@@ -247,6 +247,7 @@ func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 	store, err := FindStoreByID(salesReturnPayment.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	//var oldSalesReturnPayment *SalesReturnPayment
@@ -304,6 +305,7 @@ func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 	salesReturn, err := store.FindSalesReturnByID(salesReturnPayment.SalesReturnID, bson.M{})
 	if err != nil {
 		errs["sales_return"] = "error finding sales return" + err.Error()
+		return errs
 	}
 
 	if salesReturnPayment.Amount > RoundTo2Decimals(salesReturn.NetTotal-salesReturn.CashDiscount) {
@@ -327,6 +329,7 @@ func (salesReturnPayment *SalesReturnPayment) Validate(w http.ResponseWriter, r 
 	order, err := store.FindOrderByID(salesReturnPayment.OrderID, bson.M{})
 	if err != nil {
 		errs["sales"] = "error finding sale" + err.Error()
+		return errs
 	}
 
 	if scenario == "update" {

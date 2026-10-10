@@ -279,6 +279,7 @@ func (purchasePayment *PurchasePayment) Validate(w http.ResponseWriter, r *http.
 	purchase, err := store.FindPurchaseByID(purchasePayment.PurchaseID, bson.M{})
 	if err != nil {
 		errs["sales_return"] = "error finding sales return" + err.Error()
+		return errs
 	}
 
 	if purchasePayment.Amount > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {

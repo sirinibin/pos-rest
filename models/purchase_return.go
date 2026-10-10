@@ -711,6 +711,10 @@ func (purchaseReturn *PurchaseReturn) FindNetTotal() {
 	baseTotal := purchaseReturn.Total + purchaseReturn.ShippingOrHandlingFees - purchaseReturn.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
 
+	if purchaseReturn.VatPercent == nil {
+		return
+	}
+
 	// Now calculate VAT on the discounted base
 	purchaseReturn.VatPrice = RoundTo2Decimals(baseTotal * (*purchaseReturn.VatPercent / 100))
 
@@ -1476,8 +1480,10 @@ func (purchasereturn *PurchaseReturn) Validate(
 					maxAllowedQuantity = purchase.Products[i].Quantity - purchase.Products[i].QuantityReturned
 				}
 
-				if purchaseReturnProduct.Quantity > maxAllowedQuantity {
-					//errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchase.Products[i].Unit
+				if maxAllowedQuantity <= 0 {
+					errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
+				} else if RoundFloat(purchaseReturnProduct.Quantity, 2) > RoundFloat(maxAllowedQuantity, 2) {
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchase.Products[i].Unit
 				}
 				break
 				/*

@@ -338,10 +338,10 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
+	go func(expense *models.Expense) {
 		expense.SetPostBalances()
 		expenseOld.SetPostBalances()
-	}()
+	}(expense)
 
 	store, _ = models.FindStoreByID(expense.StoreID, bson.M{})
 	store.NotifyUsers("expense_updated")

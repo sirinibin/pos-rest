@@ -171,6 +171,10 @@ func (stocktransfer *StockTransfer) FindNetTotal() {
 	//baseTotal = RoundTo8Decimals(baseTotal)
 	baseTotal = RoundTo2Decimals(baseTotal)
 
+	if stocktransfer.VatPercent == nil {
+		return
+	}
+
 	// Now calculate VAT on the discounted base
 	stocktransfer.VatPrice = RoundTo2Decimals(baseTotal * (*stocktransfer.VatPercent / 100))
 
@@ -530,6 +534,7 @@ func (stocktransfer *StockTransfer) Validate(w http.ResponseWriter, r *http.Requ
 	store, err := FindStoreByID(stocktransfer.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	var fromWarehouse *Warehouse

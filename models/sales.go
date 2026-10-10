@@ -2001,10 +2001,18 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
+		errs["customer_id"] = "Invalid customer"
+		return errs
+	}
+
+	// A customer id that matches no customer in this store (and no name to
+	// create one from) would save the sale against a customer that does not exist.
+	if customer == nil && order.CustomerID != nil && !order.CustomerID.IsZero() && govalidator.IsNull(strings.TrimSpace(order.CustomerName)) {
 		errs["customer_id"] = "Invalid customer"
 		return errs
 	}
@@ -2022,6 +2030,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		} else {
 			snapshot := vehicle.GetVehicleSnapshot()
 			order.VehicleSnapshot = &snapshot
+			return errs
 		}
 	} else {
 		order.VehicleSnapshot = nil

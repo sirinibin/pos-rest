@@ -293,6 +293,7 @@ func (warehouse *Warehouse) Validate(w http.ResponseWriter, r *http.Request, sce
 	store, err := FindStoreByID(warehouse.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	/*oldWarehouse, err := FindWarehouseByID(&warehouse.ID, bson.M{})

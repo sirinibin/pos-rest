@@ -214,6 +214,7 @@ func (salesCashDiscount *SalesCashDiscount) Validate(w http.ResponseWriter, r *h
 	store, err := FindStoreByID(salesCashDiscount.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	var oldSalesCashDiscount *SalesCashDiscount

@@ -1433,6 +1433,7 @@ func (vendor *Vendor) Validate(w http.ResponseWriter, r *http.Request, scenario 
 	store, err := FindStoreByID(vendor.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	if scenario == "update" {

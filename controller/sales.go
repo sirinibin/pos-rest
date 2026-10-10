@@ -491,7 +491,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
+	go func(order *models.Order) {
 		order.LinkQuotation()
 		order.LinkDeliveryNote()
 		order.CreateProductsSalesHistory()
@@ -512,7 +512,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// BI: update customer churn/CLV and product velocity/XYZ on order create
-		go func() {
+		go func(order *models.Order) {
 			if order.CustomerID != nil && !order.CustomerID.IsZero() {
 				models.UpdateCustomerBIOnOrderChange(order.StoreID, order.CustomerID)
 			}
@@ -520,9 +520,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 				pid := p.ProductID
 				models.UpdateProductBIOnOrderChange(order.StoreID, &pid)
 			}
-		}()
+		}(order)
 		store.NotifyUsers("sales_updated")
-	}()
+	}(order)
 
 	order, err = store.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {
@@ -749,7 +749,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
+	go func(order *models.Order) {
 		order.LinkQuotation()
 		order.LinkDeliveryNote()
 		order.ClearProductsSalesHistory()
@@ -766,10 +766,10 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		order.ClearProductsHistory()
 		order.CreateProductsHistory(true, orderOld)
 
-		go func() {
+		go func(order *models.Order) {
 			order.SetPostBalances()
 			orderOld.SetPostBalances()
-		}()
+		}(order)
 
 		if order.CustomerID != nil && !order.CustomerID.IsZero() {
 			customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
@@ -792,7 +792,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 			orderOld.SetProductsSalesStats()
 		}
 		// BI: update customer churn/CLV and product velocity/XYZ on order update
-		go func() {
+		go func(order *models.Order) {
 			if order.CustomerID != nil && !order.CustomerID.IsZero() {
 				models.UpdateCustomerBIOnOrderChange(order.StoreID, order.CustomerID)
 			}
@@ -805,9 +805,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 				pid := p.ProductID
 				models.UpdateProductBIOnOrderChange(order.StoreID, &pid)
 			}
-		}()
+		}(order)
 		store.NotifyUsers("sales_updated")
-	}()
+	}(order)
 
 	order, err = store.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {

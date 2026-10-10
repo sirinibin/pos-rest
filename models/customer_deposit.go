@@ -943,6 +943,7 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 			order, err := store.FindOrderByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+				return errs
 			}
 
 			if order.CustomerID != nil &&
@@ -988,6 +989,7 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 			quotation, err := store.FindQuotationByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+				return errs
 			}
 
 			if quotation.CustomerID != nil &&
@@ -1033,6 +1035,7 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 			purchaseReturn, err := store.FindPurchaseReturnByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_receivable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+				return errs
 			}
 
 			if purchaseReturn.VendorID != nil &&

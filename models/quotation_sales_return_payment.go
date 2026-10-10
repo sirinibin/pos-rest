@@ -247,6 +247,7 @@ func (quotationsalesReturnPayment *QuotationSalesReturnPayment) Validate(w http.
 	store, err := FindStoreByID(quotationsalesReturnPayment.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	//var oldQuotationSalesReturnPayment *QuotationSalesReturnPayment
@@ -304,6 +305,7 @@ func (quotationsalesReturnPayment *QuotationSalesReturnPayment) Validate(w http.
 	quotationsalesReturn, err := store.FindQuotationSalesReturnByID(quotationsalesReturnPayment.QuotationSalesReturnID, bson.M{})
 	if err != nil {
 		errs["quotation_sales_return"] = "error finding quotationsales return" + err.Error()
+		return errs
 	}
 
 	if quotationsalesReturnPayment.Amount > (quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount) {
@@ -327,6 +329,7 @@ func (quotationsalesReturnPayment *QuotationSalesReturnPayment) Validate(w http.
 	quotation, err := store.FindQuotationByID(quotationsalesReturnPayment.QuotationID, bson.M{})
 	if err != nil {
 		errs["quotationsales"] = "error finding sale" + err.Error()
+		return errs
 	}
 
 	if scenario == "update" {

@@ -345,6 +345,7 @@ func (store *Store) SearchCapital(w http.ResponseWriter, r *http.Request) (capit
 }
 
 func (capital *Capital) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
+	errs = make(map[string]string)
 	store, err := FindStoreByID(capital.StoreID, bson.M{})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

@@ -327,6 +327,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		product.CreateStockAdjustmentHistory()
 	}()
 
+	response.Status = true
 	response.Result = product
 
 	json.NewEncoder(w).Encode(response)
@@ -478,10 +479,10 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		linkedProduct.Update(nil)
 	}
 
-	go func() {
+	go func(product *models.Product) {
 		product.ClearStockAdjustmentHistory()
 		product.CreateStockAdjustmentHistory()
-	}()
+	}(product)
 
 	product, err = store.FindProductByID(&product.ID, bson.M{})
 	if err != nil {

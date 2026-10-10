@@ -230,6 +230,7 @@ func (quotationPayment *QuotationPayment) Validate(w http.ResponseWriter, r *htt
 	store, err := FindStoreByID(quotationPayment.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	var oldQuotationPayment *QuotationPayment
@@ -310,6 +311,7 @@ func (quotationPayment *QuotationPayment) Validate(w http.ResponseWriter, r *htt
 	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})
 	if err != nil {
 		errs["customer_id"] = "Invalid Customer:" + quotation.CustomerID.Hex()
+		return errs
 	}
 
 	customerAccount, err := store.FindAccountByReferenceID(customer.ID, *quotation.StoreID, bson.M{})

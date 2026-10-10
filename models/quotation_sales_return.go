@@ -996,6 +996,10 @@ func (quotationsalesReturn *QuotationSalesReturn) FindNetTotal() error {
 	baseTotal := quotationsalesReturn.Total + quotationsalesReturn.ShippingOrHandlingFees - quotationsalesReturn.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
 
+	if quotationsalesReturn.VatPercent == nil {
+		return nil
+	}
+
 	// Now calculate VAT on the discounted base
 	quotationsalesReturn.VatPrice = RoundTo2Decimals(baseTotal * (*quotationsalesReturn.VatPercent / 100))
 	quotationsalesReturn.NetTotal = RoundTo2Decimals(baseTotal + quotationsalesReturn.VatPrice)
@@ -1610,6 +1614,7 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 	store, err := FindStoreByID(quotationsalesreturn.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "Store is required"
+		return errs
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(quotationsalesreturn.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(quotationsalesreturn.Phone)) {
@@ -1628,6 +1633,7 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 	quotation, err := store.FindQuotationByID(quotationsalesreturn.QuotationID, bson.M{})
 	if err != nil {
 		errs["quotation_id"] = "Quotation is invalid"
+		return errs
 	}
 
 	customer, err := store.FindCustomerByID(quotationsalesreturn.CustomerID, bson.M{})
@@ -4354,6 +4360,7 @@ func (quotationsalesReturn *QuotationSalesReturn) ValidateZatcaReporting() (errs
 	store, err := FindStoreByID(quotationsalesReturn.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	customer, err := store.FindCustomerByID(quotationsalesReturn.CustomerID, bson.M{})

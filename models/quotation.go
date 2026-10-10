@@ -1209,6 +1209,10 @@ func (quotation *Quotation) FindNetTotal() error {
 	baseTotal := quotation.Total + quotation.ShippingOrHandlingFees - quotation.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
 
+	if quotation.VatPercent == nil {
+		return nil
+	}
+
 	// Now calculate VAT on the discounted base
 	quotation.VatPrice = RoundTo2Decimals(baseTotal * (*quotation.VatPercent / 100))
 
@@ -1700,6 +1704,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 	store, err := FindStoreByID(quotation.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})

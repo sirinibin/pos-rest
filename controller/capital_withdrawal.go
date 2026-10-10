@@ -185,9 +185,9 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 
 	var store *models.Store
 
-	if capitalwithdrawal.StoreID.IsZero() {
+	if capitalwithdrawal.StoreID == nil || capitalwithdrawal.StoreID.IsZero() {
 		response.Status = false
-		response.Errors["store_id"] = "store id is required: " + err.Error()
+		response.Errors["store_id"] = "store id is required"
 		json.NewEncoder(w).Encode(response)
 		return
 	} else {

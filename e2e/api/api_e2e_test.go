@@ -512,8 +512,8 @@ func TestProduct_CreateValidateSearch(t *testing.T) {
 	code, res = call(t, "POST", "/v1/product?"+storeQuery(sid), tok, map[string]interface{}{
 		"store_id": sid, "name": "E2E " + word, "part_number": part, "unit": "PC",
 	})
-	if code != http.StatusOK || len(res.Errors) > 0 {
-		t.Fatalf("create product: HTTP %d %v", code, res.Errors)
+	if code != http.StatusOK || !res.Status || len(res.Errors) > 0 {
+		t.Fatalf("create product: HTTP %d status=%v %v", code, res.Status, res.Errors)
 	}
 	id, _ := resultMap(t, res)["id"].(string)
 	if id == "" {

@@ -23,7 +23,7 @@ func ParseStore(r *http.Request) (store *models.Store, err error) {
 	}
 
 	if storeID.IsZero() {
-		return nil, errors.New("invalid store id(parsing): " + err.Error())
+		return nil, errors.New("invalid store id")
 	} else {
 		store, err = models.FindStoreByID(&storeID, bson.M{})
 		if err != nil {

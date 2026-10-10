@@ -326,10 +326,10 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	go deliverynote.SetCustomerDeliveryNoteStats()
 	go deliverynoteOld.SetCustomerDeliveryNoteStats()
 
-	go func() {
+	go func(deliverynote *models.DeliveryNote) {
 		deliverynote.ClearProductsHistory()
 		deliverynote.CreateProductsHistory(true, deliverynoteOld)
-	}()
+	}(deliverynote)
 
 	deliverynote, err = store.FindDeliveryNoteByID(&deliverynote.ID, bson.M{})
 	if err != nil {

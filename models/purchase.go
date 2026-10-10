@@ -912,6 +912,10 @@ func (purchase *Purchase) FindNetTotal() {
 	baseTotal := purchase.Total + purchase.ShippingOrHandlingFees - purchase.Discount
 	baseTotal = RoundTo2Decimals(baseTotal)
 
+	if purchase.VatPercent == nil {
+		return
+	}
+
 	// Now calculate VAT on the discounted base
 	purchase.VatPrice = RoundTo2Decimals(baseTotal * (*purchase.VatPercent / 100))
 
@@ -1431,6 +1435,7 @@ func (purchase *Purchase) Validate(
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "Invalid store id"
+		return errs
 	}
 
 	if govalidator.IsNull(purchase.DateStr) {

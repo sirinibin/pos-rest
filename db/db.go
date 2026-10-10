@@ -26,20 +26,30 @@ type StoreConnection struct {
 }
 
 func GetDB(dbName string) *mongo.Database {
-	if dbName != "" {
-		_, dbExists := dbs[dbName]
-		connection, connectionExists := connections[dbName]
-
-		if dbExists && connectionExists {
-			connection.LastUsed = time.Now()
-			return dbs[dbName]
-		}
-
-		dbs[dbName] = Client(dbName).Database(dbName)
-		return dbs[dbName]
-	} else {
+	if dbName == "" {
 		return Client(GetPosDB()).Database(GetPosDB())
 	}
+
+	// Requests for many stores run at once; every read and write of the
+	// connection maps goes through mu (unguarded concurrent map writes
+	// crash the whole process).
+	mu.Lock()
+	database, dbExists := dbs[dbName]
+	connection, connectionExists := connections[dbName]
+	if dbExists && connectionExists {
+		connection.LastUsed = time.Now()
+		mu.Unlock()
+		return database
+	}
+	mu.Unlock()
+
+	client := Client(dbName)
+
+	mu.Lock()
+	defer mu.Unlock()
+	database = client.Database(dbName)
+	dbs[dbName] = database
+	return database
 }
 
 // Client : function to get Mongo Client
@@ -50,30 +60,46 @@ func Client(dbName string) *mongo.Client {
 			clientInstance = Connect(GetPosDB())
 		} else {
 			newClient := Connect(dbName)
+			mu.Lock()
 			connections[dbName] = &StoreConnection{
 				Client:   newClient,
 				LastUsed: time.Now(),
 			}
+			mu.Unlock()
 			clientInstance = newClient
 		}
 	})
 
-	if dbName != "" {
-		connection, connectionExists := connections[dbName]
-		if !connectionExists {
-			newClient := Connect(dbName)
-			connections[dbName] = &StoreConnection{
-				Client:   newClient,
-				LastUsed: time.Now(),
-			}
-			return connections[dbName].Client
-		}
+	if dbName == "" {
+		return clientInstance
+	}
 
+	mu.Lock()
+	if connection, ok := connections[dbName]; ok {
+		connection.LastUsed = time.Now()
+		client := connection.Client
+		mu.Unlock()
+		return client
+	}
+	mu.Unlock()
+
+	// Connect without holding the lock so other stores are not blocked
+	// while this one connects.
+	newClient := Connect(dbName)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if connection, ok := connections[dbName]; ok {
+		// Another request connected this database meanwhile; keep theirs.
+		go newClient.Disconnect(context.Background())
 		connection.LastUsed = time.Now()
 		return connection.Client
 	}
-
-	return clientInstance
+	connections[dbName] = &StoreConnection{
+		Client:   newClient,
+		LastUsed: time.Now(),
+	}
+	return newClient
 }
 
 // Connect : To connect to the mongoDb

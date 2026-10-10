@@ -316,6 +316,7 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 	purchaseReturn, err := store.FindPurchaseReturnByID(purchasereturnPayment.PurchaseReturnID, bson.M{})
 	if err != nil {
 		errs["sales_return"] = "error finding sales return" + err.Error()
+		return errs
 	}
 
 	if purchasereturnPayment.Amount > RoundTo2Decimals(purchaseReturn.NetTotal-purchaseReturn.CashDiscount) {
@@ -339,6 +340,7 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 	purchase, err := store.FindOrderByID(purchasereturnPayment.PurchaseID, bson.M{})
 	if err != nil {
 		errs["sales"] = "error finding sale" + err.Error()
+		return errs
 	}
 
 	if scenario == "update" {

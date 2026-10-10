@@ -910,6 +910,7 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			salesreturn, err := store.FindSalesReturnByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+				return errs
 			}
 
 			if salesreturn.CustomerID != nil &&
@@ -956,6 +957,7 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			quotationSalesReturn, err := store.FindQuotationSalesReturnByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+				return errs
 			}
 
 			if quotationSalesReturn.CustomerID != nil &&
@@ -1002,6 +1004,7 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 			purchase, err := store.FindPurchaseByID(payment.InvoiceID, bson.M{})
 			if err != nil {
 				errs["customer_payable_payment_invoice_"+strconv.Itoa(index)] = "invalid invoice: " + err.Error()
+				return errs
 			}
 
 			if purchase.VendorID != nil &&

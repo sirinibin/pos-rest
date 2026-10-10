@@ -753,10 +753,21 @@ func CalculatePurchaseNetTotal(w http.ResponseWriter, r *http.Request) {
 }
 
 func ParsePurchaseBill(w http.ResponseWriter, r *http.Request) {
-	// [Authentication and multipart form reading of image – same as before...]
+	if _, err := models.AuthenticateByAccessToken(r); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(models.Response{Errors: map[string]string{"access_token": "Invalid Access token:" + err.Error()}})
+		return
+	}
 
 	// Read image
-	file, _, _ := r.FormFile("image")
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(models.Response{Errors: map[string]string{"image": "image file is required: " + err.Error()}})
+		return
+	}
 	defer file.Close()
 	imgBytes, _ := io.ReadAll(file)
 

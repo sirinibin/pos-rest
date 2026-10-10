@@ -231,6 +231,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 	store, err := FindStoreByID(salesPayment.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	var oldSalesPayment *SalesPayment
@@ -285,6 +286,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 	order, err := store.FindOrderByID(salesPayment.OrderID, bson.M{})
 	if err != nil {
 		errs["order"] = "error finding order" + err.Error()
+		return errs
 	}
 
 	if salesPayment.Amount > RoundTo2Decimals(order.NetTotal-order.CashDiscount) {
@@ -330,6 +332,7 @@ func (salesPayment *SalesPayment) Validate(w http.ResponseWriter, r *http.Reques
 		customer, err = store.FindCustomerByID(order.CustomerID, bson.M{})
 		if err != nil {
 			errs["customer_id"] = "Invalid Customer:" + order.CustomerID.Hex()
+			return errs
 		}
 	}
 

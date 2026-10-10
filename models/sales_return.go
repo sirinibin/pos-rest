@@ -795,6 +795,10 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 	actualBaseTotal := salesReturn.ActualTotal + salesReturn.ShippingOrHandlingFees - salesReturn.Discount
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
+	if salesReturn.VatPercent == nil {
+		return
+	}
+
 	// Now calculate VAT on the discounted base
 	salesReturn.VatPrice = RoundTo2Decimals(baseTotal * (*salesReturn.VatPercent / 100))
 
@@ -1440,6 +1444,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "Store is required"
+		return errs
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(salesreturn.Phone)) && !ValidateSaudiPhone(strings.TrimSpace(salesreturn.Phone)) {
@@ -1458,6 +1463,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	order, err := store.FindOrderByID(salesreturn.OrderID, bson.M{})
 	if err != nil {
 		errs["order_id"] = "Order is invalid"
+		return errs
 	}
 
 	customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
@@ -4851,6 +4857,7 @@ func (salesReturn *SalesReturn) ValidateZatcaReporting() (errs map[string]string
 	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		return errs
 	}
 
 	customer, err := store.FindCustomerByID(salesReturn.CustomerID, bson.M{})
