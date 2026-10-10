@@ -135,6 +135,7 @@ type Purchase struct {
 	VatNo             string              `bson:"vat_no" json:"vat_no"`
 	Address           string              `bson:"address" json:"address"`
 	EnableOnAccounts  bool                `bson:"enable_on_accounts" json:"enable_on_accounts"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 func (model *Purchase) SetPostBalances() error {
@@ -1757,39 +1758,8 @@ func (purchase *Purchase) SetProductsStock() (err error) {
 	}
 
 	for _, purchaseProduct := range purchase.Products {
-		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&purchaseProduct.ProductID); err != nil {
 			return err
-		}
-
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 	}
 	return nil
@@ -1882,11 +1852,8 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 			continue
 		}
 
-		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
-		if err != nil {
-			return err
-		}
-
+		// under the product's lock, saving only the price fields changed here
+		_, err = store.updateOneProductLocked(&purchaseProduct.ProductID, func(product *Product) error {
 		if productStoreTemp, ok := product.ProductStores[purchase.StoreID.Hex()]; ok {
 
 			productStoreTemp.PurchaseUnitPrice = purchaseProduct.PurchaseUnitPrice
@@ -1935,12 +1902,8 @@ func (purchase *Purchase) UpdateProductUnitPriceInStore() (err error) {
 			}
 		}
 
-		err = product.CalculateUnitProfit()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
+		return product.CalculateUnitProfit()
+		})
 		if err != nil {
 			return err
 		}
@@ -2009,14 +1972,14 @@ func (purchase *Purchase) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.PurchaseSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
 	// === 4. Increment global counter ===
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := purchase.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -2046,12 +2009,12 @@ func (purchase *Purchase) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
@@ -2059,7 +2022,7 @@ func (purchase *Purchase) MakeRedisCode() error {
 		}
 
 		// Increment monthly counter and use it
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := purchase.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -2086,46 +2049,9 @@ func (purchase *Purchase) MakeRedisCode() error {
 }
 
 func (purchase *Purchase) UnMakeRedisCode() error {
-	store, err := FindStoreByID(purchase.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	// Global counter key
-	redisKey := purchase.StoreID.Hex() + "_purchase_invoice_counter"
-
-	// Get location from store.CountryCode
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-
-	// Use CreatedAt, or fallback to now
-	baseTime := purchase.CreatedAt.In(location)
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	// Decrement monthly counter only if Prefix contains "DATE"
-	if strings.Contains(store.PurchaseSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := purchase.StoreID.Hex() + "_purchase_invoice_counter_" + monthKey
-
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return purchase.redisCounters.release()
 }
 
 func (purchase *Purchase) MakeCode() error {
@@ -2899,41 +2825,11 @@ func (purchase *Purchase) SetProductsPurchaseStats() error {
 	}
 
 	for _, purchaseProduct := range purchase.Products {
-		product, err := store.FindProductByID(&purchaseProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&purchaseProduct.ProductID, func(product *Product) error {
+			return product.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
+		}); err != nil {
 			return err
 		}
-
-		err = product.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
-		}
-
 	}
 	return nil
 }
@@ -3567,6 +3463,10 @@ func RegroupPurchasePaymentsByDatetime(payments []PurchasePayment) [][]PurchaseP
 }
 
 func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
+	// the payment totals the journals are built with are package variables
+	ledgerJournalsMu.Lock()
+	defer ledgerJournalsMu.Unlock()
+
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

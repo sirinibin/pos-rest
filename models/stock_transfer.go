@@ -83,6 +83,7 @@ type StockTransfer struct {
 	CreatedByName      string                 `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName      string                 `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	Remarks            string                 `bson:"remarks" json:"remarks"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 func (stocktransfer *StockTransfer) AttributesValueChangeEvent(stocktransferOld *StockTransfer) error {
@@ -664,40 +665,9 @@ func (stocktransfer *StockTransfer) SetProductsStock() (err error) {
 	}
 
 	for _, stocktransferProduct := range stocktransfer.Products {
-		product, err := store.FindProductByID(&stocktransferProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&stocktransferProduct.ProductID); err != nil {
 			return err
 		}
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(&store.ID)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
-		}
-
 	}
 
 	return nil
@@ -787,14 +757,14 @@ func (stocktransfer *StockTransfer) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.StockTransferSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
 	// === 4. Increment global counter ===
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := stocktransfer.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -824,12 +794,12 @@ func (stocktransfer *StockTransfer) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
@@ -838,7 +808,7 @@ func (stocktransfer *StockTransfer) MakeRedisCode() error {
 		}
 
 		// Increment monthly counter and use it
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := stocktransfer.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -869,46 +839,9 @@ func (stocktransfer *StockTransfer) MakeRedisCode() error {
 }
 
 func (stocktransfer *StockTransfer) UnMakeRedisCode() error {
-	store, err := FindStoreByID(stocktransfer.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	// Global counter key
-	redisKey := stocktransfer.StoreID.Hex() + "_stocktransfer_counter"
-
-	// Get location from store.CountryCode
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-
-	// Use CreatedAt, or fallback to now
-	baseTime := stocktransfer.CreatedAt.In(location)
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	// Decrement monthly counter only if Prefix contains "DATE"
-	if strings.Contains(store.StockTransferSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := stocktransfer.StoreID.Hex() + "_stocktransfer_counter_" + monthKey
-
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return stocktransfer.redisCounters.release()
 }
 
 func (stocktransfer *StockTransfer) MakeCode() error {
@@ -1358,41 +1291,11 @@ func (stocktransfer *StockTransfer) SetProductsStockTransferStats() error {
 	}
 
 	for _, stocktransferProduct := range stocktransfer.Products {
-		product, err := store.FindProductByID(&stocktransferProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&stocktransferProduct.ProductID, func(product *Product) error {
+			return product.SetProductStockTransferStats()
+		}); err != nil {
 			return err
 		}
-
-		err = product.SetProductStockTransferStats()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductStockTransferStats()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
-		}
-
 	}
 	return nil
 }

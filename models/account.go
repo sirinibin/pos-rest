@@ -505,6 +505,13 @@ func (store *Store) CreateAccountIfNotExists(
 	phone *string,
 	vatNo *string,
 ) (account *Account, err error) {
+	// find-or-create one store's accounts one at a time (in-process lock), so
+	// two first postings for a party can't both create its account
+	lockKey := store.ID.Hex()
+	if storeID != nil {
+		lockKey = storeID.Hex()
+	}
+	defer keyedLock(&accountCreateLocks, lockKey)()
 	name = strings.ToUpper(strings.TrimSpace(name))
 	if vatNo != nil && !govalidator.IsNull(strings.TrimSpace(*vatNo)) {
 		account, err = store.FindAccountByVatNoByName(*vatNo, name, storeID, bson.M{})
@@ -534,7 +541,12 @@ func (store *Store) CreateAccountIfNotExists(
 	if err != nil {
 		return nil, err
 	}
-	accountNumber := strconv.Itoa(startFrom + int(count))
+	// 1000 + count, moved past any number already in use (a deleted account or
+	// duplicates made before this was locked would otherwise repeat one)
+	accountNumber, err := store.freeAccountNumber(storeID, startFrom+int(count))
+	if err != nil {
+		return nil, err
+	}
 
 	nameArabic := ""
 
@@ -956,17 +968,21 @@ func (store *Store) IsAccountExists(ID *primitive.ObjectID) (exists bool, err er
 
 func SetAccountBalances(accounts map[string]Account) error {
 	for _, account := range accounts {
-		err := account.CalculateBalance(nil, nil)
-		if err != nil {
-			return err
-		}
-
-		err = account.Update()
-		if err != nil {
+		if err := setAccountBalance(account); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// setAccountBalance recomputes an account's balance from its postings and
+// saves it, one at a time per account.
+func setAccountBalance(account Account) error {
+	defer lockAccountBalance(account.ID)()
+	if err := account.CalculateBalance(nil, nil); err != nil {
+		return err
+	}
+	return account.Update()
 }
 
 func ProcessAccounts() error {
@@ -1019,7 +1035,7 @@ func ProcessAccounts() error {
 				}
 
 				customer.Account = &model
-				err = customer.Update()
+				err = setPartyAccount(&store, "customer", customer.ID, &model)
 				if err != nil {
 					return err
 				}
@@ -1043,7 +1059,7 @@ func ProcessAccounts() error {
 				}
 
 				vendor.Account = &model
-				err = vendor.Update()
+				err = setPartyAccount(&store, "vendor", vendor.ID, &model)
 				if err != nil {
 					return err
 				}

@@ -74,6 +74,7 @@ type CustomerWithdrawal struct {
 	PrevHash             string              `bson:"prev_hash,omitempty" json:"prev_hash,omitempty"`
 	Zatca                ZatcaReporting      `bson:"zatca,omitempty" json:"zatca,omitempty"`
 	EnableReportToZatca  bool                `json:"enable_report_to_zatca" bson:"-"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 type PayablePayment struct {
@@ -1168,14 +1169,14 @@ func (customerWithdrawal *CustomerWithdrawal) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.CustomerWithdrawalSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
 	// === 4. Increment global counter ===
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := customerWithdrawal.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -1205,12 +1206,12 @@ func (customerWithdrawal *CustomerWithdrawal) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
@@ -1218,7 +1219,7 @@ func (customerWithdrawal *CustomerWithdrawal) MakeRedisCode() error {
 		}
 
 		// Increment monthly counter and use it
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := customerWithdrawal.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -1248,46 +1249,9 @@ func (customerWithdrawal *CustomerWithdrawal) MakeRedisCode() error {
 }
 
 func (customerWithdrawal *CustomerWithdrawal) UnMakeRedisCode() error {
-	store, err := FindStoreByID(customerWithdrawal.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	// Global counter key
-	redisKey := customerWithdrawal.StoreID.Hex() + "_customer_withdrawal_counter"
-
-	// Get location from store.CountryCode
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-
-	// Use CreatedAt, or fallback to now
-	baseTime := customerWithdrawal.CreatedAt.In(location)
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	// Decrement monthly counter only if Prefix contains "DATE"
-	if strings.Contains(store.CustomerWithdrawalSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := customerWithdrawal.StoreID.Hex() + "_customer_withdrawal_counter_" + monthKey
-
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return customerWithdrawal.redisCounters.release()
 }
 
 /*
@@ -1315,7 +1279,7 @@ func (model *CustomerWithdrawal) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}

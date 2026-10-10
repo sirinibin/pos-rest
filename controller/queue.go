@@ -55,6 +55,20 @@ func (q *SafeQueue) Pop() (*Request, error) {
 	return &item, nil
 }
 
+// Done removes token from the queue wherever it is; a token already popped
+// is ignored. Deferred right after WaitUntilMyTurn it frees the queue on every
+// return path (and on a panic), even one that forgot to Pop.
+func (q *SafeQueue) Done(token string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for i, r := range q.queue {
+		if r.Token == token {
+			q.queue = append(q.queue[:i:i], q.queue[i+1:]...)
+			return
+		}
+	}
+}
+
 // FrontToken returns the token of the item at the front
 func (q *SafeQueue) FrontToken() (string, error) {
 	q.mu.Lock()
@@ -176,55 +190,9 @@ func GetOrCreateQueue(storeID string, modelName string) *SafeQueue {
 	return nil
 }
 
-// CleanupQueueIfEmpty removes the queue if it's empty.
-func CleanupQueueIfEmpty(storeID string, modelName string) {
-	queueMu.Lock()
-	defer queueMu.Unlock()
-
-	if modelName == "sales" {
-		q, exists := storeSalesQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeSalesQueues, storeID)
-		}
-	} else if modelName == "sales_return" {
-		q, exists := storeSalesReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeSalesReturnQueues, storeID)
-		}
-	} else if modelName == "purchase" {
-		q, exists := storePurchaseQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storePurchaseQueues, storeID)
-		}
-	} else if modelName == "purchase_return" {
-		q, exists := storePurchaseReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storePurchaseReturnQueues, storeID)
-		}
-	} else if modelName == "quotation" {
-		q, exists := storeQuotationQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeQuotationQueues, storeID)
-		}
-	} else if modelName == "quotation_sales_return" {
-		q, exists := storeQuotationSalesReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeQuotationSalesReturnQueues, storeID)
-		}
-	} else if modelName == "zatca" {
-		q, exists := storeZatcaQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeZatcaQueues, storeID)
-		}
-	} else if modelName == "non_vat_sales" {
-		q, exists := storeNonVATSalesQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeNonVATSalesQueues, storeID)
-		}
-	} else if modelName == "non_vat_sales_return" {
-		q, exists := storeNonVATSalesReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeNonVATSalesReturnQueues, storeID)
-		}
-	}
-}
+// CleanupQueueIfEmpty used to drop an empty queue from its map. A request
+// that had already fetched the queue but not yet enqueued then waited on the
+// dropped queue while the next request made a new one, and the two ran at the
+// same time (and it read the queue without its lock). Queues are one small
+// value per store and model, so they stay.
+func CleanupQueueIfEmpty(storeID string, modelName string) {}

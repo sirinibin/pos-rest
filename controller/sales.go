@@ -275,6 +275,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	defer queue.Done(queueToken) // frees the queue on every path
 
 	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
 		queue.Pop()

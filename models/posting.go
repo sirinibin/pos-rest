@@ -1018,11 +1018,15 @@ func (ledger *Ledger) CreatePostings() (postings []Posting, err error) {
 
 		postings = append(postings, *posting)
 
+		// recompute-and-save one account at a time
+		unlockBalance := lockAccountBalance(account.ID)
 		err = account.CalculateBalance(nil, nil)
 		if err != nil {
+			unlockBalance()
 			return nil, errors.New("error calculating account balance: " + err.Error())
 		}
 		err = account.Update()
+		unlockBalance()
 		if err != nil {
 			return nil, err
 		}

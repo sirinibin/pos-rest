@@ -80,6 +80,7 @@ type DeliveryNote struct {
 	OrderCode              *string               `json:"order_code" bson:"order_code"`
 	NotifyAt               *time.Time            `json:"notify_at,omitempty" bson:"notify_at,omitempty"`
 	Notified               bool                  `json:"notified,omitempty" bson:"notified"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 func (deliveryNote *DeliveryNote) SetUnKnownCustomerIfNoCustomerSelected() error {
@@ -554,14 +555,14 @@ func (deliveryNote *DeliveryNote) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.DeliveryNoteSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
 	// === 4. Increment global counter ===
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := deliveryNote.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -590,14 +591,14 @@ func (deliveryNote *DeliveryNote) MakeRedisCode() error {
 				return err
 			}
 
-			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 			if err != nil {
 				return err
 			}
 		}
 
 		// Increment monthly counter and use it
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := deliveryNote.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -624,46 +625,9 @@ func (deliveryNote *DeliveryNote) MakeRedisCode() error {
 }
 
 func (deliveryNote *DeliveryNote) UnMakeRedisCode() error {
-	store, err := FindStoreByID(deliveryNote.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	// Global counter key
-	redisKey := deliveryNote.StoreID.Hex() + "_delivery_note_counter"
-
-	// Get location from store.CountryCode
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-
-	// Use CreatedAt, or fallback to now
-	baseTime := deliveryNote.CreatedAt.In(location)
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	// Decrement monthly counter only if Prefix contains "DATE"
-	if strings.Contains(store.DeliveryNoteSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := deliveryNote.StoreID.Hex() + "_delivery_note_counter_" + monthKey
-
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return deliveryNote.redisCounters.release()
 }
 
 /*
@@ -691,7 +655,7 @@ func (model *DeliveryNote) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -895,14 +859,14 @@ func NotifyDeliveryNoteReminders() error {
 		for _, dn := range notes {
 			// Collect connected user/device pairs under the mutex, then emit without holding the lock
 			type userDevice struct{ userID, deviceID string }
-			mutex.Lock()
+			ClientsMu.Lock()
 			var targets []userDevice
 			for userID, devices := range Clients {
 				for deviceID := range devices {
 					targets = append(targets, userDevice{userID, deviceID})
 				}
 			}
-			mutex.Unlock()
+			ClientsMu.Unlock()
 
 			for _, t := range targets {
 				Emit(t.userID, t.deviceID, "delivery_note_reminder", map[string]interface{}{
@@ -1068,39 +1032,10 @@ func (deliveryNote *DeliveryNote) SetProductsDeliveryNoteStats() error {
 	}
 
 	for _, deliveryNoteProduct := range deliveryNote.Products {
-		product, err := store.FindProductByID(&deliveryNoteProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&deliveryNoteProduct.ProductID, func(product *Product) error {
+			return product.SetProductDeliveryNoteStatsByStoreID(*deliveryNote.StoreID)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductDeliveryNoteStatsByStoreID(*deliveryNote.StoreID)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductDeliveryNoteStatsByStoreID(store.ID)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 	}
 	return nil

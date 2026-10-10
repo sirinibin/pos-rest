@@ -144,6 +144,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	defer queue.Done(queueToken) // frees the queue on every path
 
 	// Validate data
 	if errs := quotationsalesreturn.Validate(w, r, "create", nil); len(errs) > 0 {

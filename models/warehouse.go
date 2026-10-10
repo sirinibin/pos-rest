@@ -53,6 +53,7 @@ type Warehouse struct {
 	StockTransferReceivedCount    int64               `bson:"stock_transfer_received_count" json:"stock_transfer_received_count"`
 	StockTransferReceivedAmount   float64             `bson:"stock_transfer_received_amount" json:"stock_transfer_received_amount"`
 	StockTransferReceivedQuantity float64             `bson:"stock_transfer_received_quantity" json:"stock_transfer_received_quantity"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 /*
@@ -780,13 +781,13 @@ func (warehouse *Warehouse) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
-	incr, err := db.RedisClient.Incr(redisKey).Result()
+	incr, err := warehouse.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -797,17 +798,9 @@ func (warehouse *Warehouse) MakeCode() error {
 }
 
 func (warehouse *Warehouse) UnMakeCode() error {
-	// Global counter key
-	redisKey := warehouse.StoreID.Hex() + "_warehouse_counter"
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return warehouse.redisCounters.release()
 }
 
 func (store *Store) GetWarehouseCount() (count int64, err error) {

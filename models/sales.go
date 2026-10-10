@@ -137,6 +137,7 @@ type Order struct {
 	KmDriven        float64             `json:"km_driven" bson:"km_driven"`
 	RepairJobID     *primitive.ObjectID   `json:"repair_job_id,omitempty" bson:"repair_job_id,omitempty"`
 	RepairJobIDs    []primitive.ObjectID  `json:"repair_job_ids,omitempty" bson:"repair_job_ids,omitempty"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 type ZatcaReporting struct {
@@ -427,14 +428,14 @@ func (order *Order) LinkDeliveryNote() error {
 		}
 
 		// Notify all connected clients so they can remove this DN from their notification bell
-		mutex.Lock()
+		ClientsMu.Lock()
 		var targets []struct{ userID, deviceID string }
 		for userID, devices := range Clients {
 			for deviceID := range devices {
 				targets = append(targets, struct{ userID, deviceID string }{userID, deviceID})
 			}
 		}
-		mutex.Unlock()
+		ClientsMu.Unlock()
 		for _, t := range targets {
 			Emit(t.userID, t.deviceID, "delivery_note_order_linked", map[string]interface{}{
 				"delivery_note_id": order.DeliveryNoteID.Hex(),
@@ -2707,40 +2708,9 @@ func (order *Order) SetProductsStock() (err error) {
 	}
 
 	for _, orderProduct := range order.Products {
-		product, err := store.FindProductByID(&orderProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&orderProduct.ProductID); err != nil {
 			return err
 		}
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(&store.ID)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
-		}
-
 	}
 
 	return nil
@@ -3321,14 +3291,14 @@ func (order *Order) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.SalesSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
 	// === 4. Increment global counter ===
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := order.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -3358,12 +3328,12 @@ func (order *Order) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
@@ -3372,7 +3342,7 @@ func (order *Order) MakeRedisCode() error {
 		}
 
 		// Increment monthly counter and use it
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := order.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -3406,46 +3376,9 @@ func (order *Order) MakeRedisCode() error {
 }
 
 func (order *Order) UnMakeRedisCode() error {
-	store, err := FindStoreByID(order.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	// Global counter key
-	redisKey := order.StoreID.Hex() + "_invoice_counter"
-
-	// Get location from store.CountryCode
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-
-	// Use CreatedAt, or fallback to now
-	baseTime := order.CreatedAt.In(location)
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	// Decrement monthly counter only if Prefix contains "DATE"
-	if strings.Contains(store.SalesSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := order.StoreID.Hex() + "_invoice_counter_" + monthKey
-
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return order.redisCounters.release()
 }
 
 func (order *Order) MakeCode() error {
@@ -4329,43 +4262,11 @@ func (order *Order) SetProductsSalesStats() error {
 	}
 
 	for _, orderProduct := range order.Products {
-		product, err := store.FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&orderProduct.ProductID, func(product *Product) error {
+			return product.SetProductSalesStats(orderProduct.WarehouseCode)
+		}); err != nil {
 			return err
 		}
-
-		err = product.SetProductSalesStats(orderProduct.WarehouseCode)
-		if err != nil {
-			log.Print("Error setting product sales stats: " + err.Error())
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			log.Print("Error updating: " + err.Error())
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductSalesStats(orderProduct.WarehouseCode)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
-		}
-
 	}
 	return nil
 }
@@ -5074,6 +4975,10 @@ func (order *Order) AdjustPayments() error {
 //End customer account journals
 
 func (order *Order) CreateLedger() (ledger *Ledger, err error) {
+	// the payment totals the journals are built with are package variables
+	ledgerJournalsMu.Lock()
+	defer ledgerJournalsMu.Unlock()
+
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		return nil, err
