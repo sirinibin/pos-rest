@@ -9,6 +9,7 @@ on:
       - "**.mod"
       - "**.sum"
       - "e2e/**"
+      - "deploy/**"
       - ".github/workflows/deploy_test.yml"
       - ".github/workflows/tests.yml"
   workflow_dispatch:
@@ -95,33 +96,15 @@ jobs:
           fi
           echo "Checksum verified: $LOCAL_SUM"
 
-      # ── Atomic swap + service restart (downtime = systemd restart time, ~1 s) ──
+      # ── Graceful restart: no kill, health-checked, automatic rollback ────────
+      # deploy/remote_restart.sh renames the new binary in while the old one
+      # keeps serving, runs `systemctl restart` (the API drains in-flight
+      # requests on SIGTERM; the new one binds its port before connecting to
+      # MongoDB so requests queue instead of failing), waits for /v1/health
+      # and puts the previous binary back if the new build is unhealthy.
       - name: Swap binary and restart service
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.AWS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
-            DEST="${{ secrets.AWS_GO_API_TEST_DEST_PATH }}"
-
-            # Kill any stale file handle that would cause ETXTBSY on swap
-            sudo fuser -k "$DEST/pos-rest"     2>/dev/null || true
-            sudo fuser -k "$DEST/pos-rest.new" 2>/dev/null || true
-
-            # Stop → swap → sync  (service is down for the duration of this line only)
-            sudo systemctl stop start-api-test || true
-            mv -f "$DEST/pos-rest.new" "$DEST/pos-rest"
-            sync
-
-            # Start with up to 3 retries
-            for attempt in 1 2 3; do
-              sudo systemctl start start-api-test && break
-              echo "Start attempt $attempt/3 failed, retrying in 5 s..."
-              sleep 5
-            done
-
-            sudo systemctl is-active start-api-test
-            sha256sum "$DEST/pos-rest"
-            sudo systemctl status start-api-test --no-pager
+        run: |
+          ssh -i private_key -o StrictHostKeyChecking=no -o ServerAliveInterval=15 \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "bash -s -- '${{ secrets.AWS_GO_API_TEST_DEST_PATH }}' start-api-test 2002" \
+            < deploy/remote_restart.sh

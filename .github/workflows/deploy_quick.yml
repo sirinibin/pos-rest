@@ -48,16 +48,19 @@ jobs:
             master)
               echo "dest_secret=AWS_GO_API_PROD_DEST_PATH" >> "$GITHUB_OUTPUT"
               echo "service=start-api" >> "$GITHUB_OUTPUT"
+              echo "port=2000" >> "$GITHUB_OUTPUT"
               echo "label=PRODUCTION" >> "$GITHUB_OUTPUT"
               ;;
             test)
               echo "dest_secret=AWS_GO_API_TEST_DEST_PATH" >> "$GITHUB_OUTPUT"
               echo "service=start-api-test" >> "$GITHUB_OUTPUT"
+              echo "port=2002" >> "$GITHUB_OUTPUT"
               echo "label=TEST" >> "$GITHUB_OUTPUT"
               ;;
             v2)
               echo "dest_secret=AWS_GO_API_V2_DEST_PATH" >> "$GITHUB_OUTPUT"
               echo "service=start-api-v2" >> "$GITHUB_OUTPUT"
+              echo "port=2004" >> "$GITHUB_OUTPUT"
               echo "label=V2" >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -118,31 +121,12 @@ jobs:
           fi
           echo "Checksum verified: $LOCAL_SUM"
 
+      # Graceful, health-checked restart with automatic rollback (see deploy/remote_restart.sh).
       - name: Swap binary and restart service
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.AWS_HOST }}
-          username: ${{ secrets.AWS_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
-            DEST="${{ secrets[steps.vars.outputs.dest_secret] }}"
-            SERVICE="${{ steps.vars.outputs.service }}"
-
-            sudo fuser -k "$DEST/pos-rest"     2>/dev/null || true
-            sudo fuser -k "$DEST/pos-rest.new" 2>/dev/null || true
-
-            sudo systemctl stop $SERVICE || true
-            mv -f "$DEST/pos-rest.new" "$DEST/pos-rest"
-            sync
-
-            for attempt in 1 2 3; do
-              sudo systemctl start $SERVICE && break
-              echo "Start attempt $attempt/3 failed, retrying in 5 s..."
-              sleep 5
-            done
-
-            sudo systemctl is-active $SERVICE
-            sha256sum "$DEST/pos-rest"
-            sudo systemctl status $SERVICE --no-pager
-            echo "[${{ steps.vars.outputs.label }}] Quick deploy complete. Run full deploy.sh when stable."
+        run: |
+          DEST_PATH="${{ secrets[steps.vars.outputs.dest_secret] }}"
+          ssh -i private_key -o StrictHostKeyChecking=no -o ServerAliveInterval=15 \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "bash -s -- '${DEST_PATH}' ${{ steps.vars.outputs.service }} ${{ steps.vars.outputs.port }}" \
+            < deploy/remote_restart.sh
+          echo "[${{ steps.vars.outputs.label }}] Quick deploy complete. Run full deploy.sh when stable."

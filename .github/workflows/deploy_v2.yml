@@ -1,0 +1,318 @@
+name: Build and Deploy Go Application to v2 (startpos-api-v2.gulfunionozone.com)
+
+on:
+  push:
+    branches:
+      - v2
+    paths:
+      - "**.go"
+      - "**.mod"
+      - "**.sum"
+      - ".github/workflows/deploy_v2.yml"
+      - "ci/**"
+  workflow_dispatch:
+
+# Quality gates run in parallel; the deploy job only starts when every gate
+# passes. Locally:  ci/smoke.sh  and  ci/test-summary.sh  (see each file).
+#
+#   lint        go vet, staticcheck (correctness checks), clean build
+#   unit        every package's tests with the race detector, no database
+#   api         full suite incl. HTTP API tests against MongoDB + Redis
+#               (erp /v1/erp adapter end to end, controller handlers,
+#               models integration tests)
+#   smoke       real binary, seeded test DB, HTTP checks on key endpoints
+#   race-db     race detector on the DB-backed erp API tests (report only
+#               until the legacy background-goroutine races are fixed)
+
+env:
+  GOTOOLCHAIN: auto
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go vet
+        # composites/unreachable are style-only on this legacy code base
+        run: go vet -composites=false -unreachable=false ./...
+      - name: staticcheck (correctness checks)
+        run: go run honnef.co/go/tools/cmd/staticcheck@2026.2.1 -checks 'SA*,-SA1019,-SA4006,-SA9003' ./...
+      - name: Build produces no output
+        run: |
+          OUT=$(go build -o /tmp/pos-rest . 2>&1) || { echo "$OUT"; exit 1; }
+          if [ -n "$OUT" ]; then echo "$OUT"; echo "Build produced output — failing."; exit 1; fi
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Unit tests (race detector, no database)
+        env:
+          TZ: Europe/London # same zone as the server; tests must not depend on it
+        run: |
+          set +e
+          go test -race ./... -count=1 -json > unit.json
+          EXIT=$?
+          set -e
+          ci/test-summary.sh unit.json "$EXIT" "Unit tests (race)" 2000
+
+  api:
+    runs-on: ubuntu-latest
+    # Images come from Google's Docker Hub mirror (Docker Hub rate-limits
+    # anonymous mongo pulls).
+    services:
+      mongo:
+        image: mirror.gcr.io/library/mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
+      redis:
+        image: mirror.gcr.io/library/redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: API, functional and integration tests (MongoDB + Redis)
+        env:
+          ERP_TEST_DB: "1"
+          MONGO_HOST: 127.0.0.1
+          MONGO_PORT: "27017"
+          REDIS_DSN: 127.0.0.1:6379
+          TZ: Europe/London
+        run: |
+          set +e
+          go test -tags integration ./... -count=1 -json > api.json
+          EXIT=$?
+          set -e
+          ci/test-summary.sh api.json "$EXIT" "API + integration tests (MongoDB)" 2500
+
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mirror.gcr.io/library/mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
+      redis:
+        image: mirror.gcr.io/library/redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Functional smoke (real binary on :2010)
+        env:
+          MONGO_HOST: 127.0.0.1
+          MONGO_PORT: "27017"
+          REDIS_DSN: 127.0.0.1:6379
+        run: ci/smoke.sh
+
+  race-db:
+    runs-on: ubuntu-latest
+    # Report only: the legacy handlers update documents from background
+    # goroutines while the request still uses them, which the race detector
+    # flags. Counts show in the job summary; make this blocking once fixed.
+    continue-on-error: true
+    services:
+      mongo:
+        image: mirror.gcr.io/library/mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
+      redis:
+        image: mirror.gcr.io/library/redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: erp API tests with the race detector (report only)
+        env:
+          ERP_TEST_DB: "1"
+          MONGO_HOST: 127.0.0.1
+          MONGO_PORT: "27017"
+          REDIS_DSN: 127.0.0.1:6379
+          TZ: Europe/London
+        run: |
+          set +e
+          go test -race ./erp/ -count=1 -json > race.json
+          EXIT=$?
+          set -e
+          ci/test-summary.sh race.json "$EXIT" "erp API tests (race, report only)"
+
+  build-and-deploy:
+    needs: [lint, unit, api, smoke]
+    if: github.ref == 'refs/heads/v2'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Clean Go cache
+        run: go clean -cache -modcache -i -r
+
+      - name: Clean build directory
+        run: rm -rf ./bin ./build ./pos-rest
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      # ── Build — abort if go build produces any output (warnings = abort) ──────
+      - name: Build
+        run: |
+          BUILD_LOG=$(mktemp)
+          if ! GOOS=linux GOARCH=amd64 go build \
+                -ldflags="-X 'main.version=${{ github.sha }}'" \
+                -o pos-rest . 2>"$BUILD_LOG"; then
+            cat "$BUILD_LOG"
+            echo "Build FAILED — aborting."
+            exit 1
+          fi
+          if [ -s "$BUILD_LOG" ]; then
+            cat "$BUILD_LOG"
+            echo "Build produced warnings — aborting (matches deploy_v2.sh gate)."
+            exit 1
+          fi
+          sha256sum ./pos-rest
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+
+      # ── Ensure dest dir exists and is writable by ubuntu ─────────────────────
+      - name: Prepare destination directory
+        run: |
+          ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sudo mkdir -p ${{ secrets.AWS_GO_API_V2_DEST_PATH }} && sudo chown -R ${{ secrets.AWS_USER }}:${{ secrets.AWS_USER }} ${{ secrets.AWS_GO_API_V2_DEST_PATH }}"
+
+      # ── Upload binary while service is still live (no downtime during transfer) ──
+      - name: Upload binary to staging path
+        run: |
+          scp -i private_key -o StrictHostKeyChecking=no \
+            pos-rest \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_V2_DEST_PATH }}/pos-rest.new
+
+      # ── Verify checksum before touching the running service ───────────────────
+      - name: Verify remote checksum
+        run: |
+          LOCAL_SUM=$(sha256sum ./pos-rest | awk '{print $1}')
+          REMOTE_SUM=$(ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sha256sum ${{ secrets.AWS_GO_API_V2_DEST_PATH }}/pos-rest.new | awk '{print \$1}'")
+          if [ "$LOCAL_SUM" != "$REMOTE_SUM" ]; then
+            echo "Checksum MISMATCH — upload was corrupted. Aborting."
+            echo "  local : $LOCAL_SUM"
+            echo "  remote: $REMOTE_SUM"
+            exit 1
+          fi
+          echo "Checksum verified: $LOCAL_SUM"
+
+      # ── Atomic swap + service restart (downtime = systemd restart time, ~1 s) ──
+      # No time-window restriction — v2 deploys any time a push lands on the branch.
+      - name: Swap binary and restart service
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            DEST="${{ secrets.AWS_GO_API_V2_DEST_PATH }}"
+
+            # Kill any stale file handle that would cause ETXTBSY on swap
+            sudo fuser -k "$DEST/pos-rest"     2>/dev/null || true
+            sudo fuser -k "$DEST/pos-rest.new" 2>/dev/null || true
+
+            # Stop → swap → sync  (service is down for the duration of this line only)
+            sudo systemctl stop start-api-v2 || true
+            mv -f "$DEST/pos-rest.new" "$DEST/pos-rest"
+            sync
+
+            # Start with up to 3 retries
+            for attempt in 1 2 3; do
+              sudo systemctl start start-api-v2 && break
+              echo "Start attempt $attempt/3 failed, retrying in 5 s..."
+              sleep 5
+            done
+
+            sudo systemctl is-active start-api-v2
+            sha256sum "$DEST/pos-rest"
+            sudo systemctl status start-api-v2 --no-pager
+
+  # Merged source branches are removed: after a successful deploy, delete
+  # remote claude/* branches whose tip is already in v2 and whose last commit
+  # is older than 24 h (fresh branches of threads still working are kept).
+  # Never touches v2, master or any other branch.
+  cleanup-branches:
+    needs: build-and-deploy
+    if: github.ref == 'refs/heads/v2'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Delete merged, stale claude/* branches
+        run: |
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          NOW=$(date +%s)
+          DELETED=0
+          for ref in $(git branch -r --merged origin/v2 --format '%(refname:short)'); do
+            case "$ref" in origin/claude/*) ;; *) continue ;; esac
+            BRANCH=${ref#origin/}
+            case "$BRANCH" in v2|master) continue ;; esac
+            AGE=$(( NOW - $(git log -1 --format=%ct "$ref") ))
+            if [ "$AGE" -lt 86400 ]; then
+              echo "keep   $BRANCH (last commit $((AGE / 3600)) h ago)"
+              continue
+            fi
+            echo "delete $BRANCH (merged into v2, last commit $((AGE / 3600)) h ago)"
+            git push origin --delete "$BRANCH" && DELETED=$((DELETED + 1))
+          done
+          echo "Deleted $DELETED merged claude/* branch(es)."

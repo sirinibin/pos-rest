@@ -17,16 +17,49 @@ deploy.sh enforces three gates before every deploy — all three must pass:
 3. **No build output** — `go build` must produce zero output.
    Any output from go build (warnings, notes) causes an abort.
 
+## GitHub Actions
+`deploy_test.yml` / `deploy_prod.yml` call `tests.yml` and deploy only if all of it passes:
+unit + API tests, integration tests (`-tags integration`, MongoDB + Redis services),
+API e2e (`-tags e2e`, see `e2e/README.md`) and the frontend's full-stack Playwright suite
+(reactjs-pos, same branch). Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
+
 ## Usage
 ```
 backend/deploy.sh   # deploys to both test and production
 ```
+
+## Low-downtime restarts
+Every deploy path (deploy.sh, deploy_quick.sh, the deploy workflows) restarts the API through
+`deploy/remote_restart.sh`: rename the new binary in, `systemctl restart`, wait for `/v1/health`,
+roll back to the previous binary if it never becomes healthy. Never `fuser -k` or `systemctl stop`
+the API in a deploy. The server drains in-flight requests on SIGTERM (`SHUTDOWN_TIMEOUT`, default 20s)
+and binds its port before connecting to MongoDB (`lifecycle/`). With the one-time
+`deploy/enable_socket_activation.sh <service> <port>` on the server, systemd holds the port across
+restarts and no request is refused. Ports: production 2000, test 2002, v2 2004 (HTTPS = port+1).
 
 ## After every backend change
 1. Write Go tests for changed logic.
 2. `go test ./...` to verify.
 3. Commit all changed files.
 4. Run `backend/deploy.sh`.
+
+## Branch isolation rule (NON-NEGOTIABLE)
+
+The `v2` branch is a **completely separate product line** from `master`/`test`.
+
+1. **Never merge, cherry-pick, or rebase between `v2` and `master`/`test` in either direction.**
+   Features for v2 stay on v2. Features for master/test stay there. No exceptions.
+
+2. **The one allowed exception — GitHub Actions workflow files only:**
+   GitHub only reads `.github/workflows/` from the default branch (`master`).
+   When adding a new workflow file to `v2`, copy that file to `master` using:
+   `git checkout v2 -- .github/workflows/<file>.yml`
+   This is a file copy only — NOT a merge. No other files cross the v2 boundary.
+
+3. **`master` and `test` may share changes freely.** This rule only applies to the v2 boundary.
+
+4. **v2 service details:** `start-api-v2`, port 2004, path `/home/ubuntu/go/src/github.com/sirinibin/pos-rest-v2`,
+   API at `https://startpos-api-v2.gulfunionozone.com`. Deploy with `deploy_v2.sh` from the `v2` branch only.
 
 ## API Test Sync Rule (non-negotiable)
 **Every time a backend API is enhanced or a new endpoint is added:**
