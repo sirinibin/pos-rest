@@ -42,6 +42,18 @@ func s3TestSettings(t *testing.T) models.AdminSettings {
 	return s
 }
 
+// s3TestVisible waits for a just-written key: a fresh SeaweedFS can answer
+// 404 for a moment after a new bucket's first write (AWS S3 doesn't).
+func s3TestVisible(s models.AdminSettings, key string) bool {
+	for i := 0; i < 50; i++ {
+		if headS3Object(s, key) {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
+}
+
 // s3TestCreateBucket sends a signed CreateBucket; an existing bucket is fine.
 func s3TestCreateBucket(s models.AdminSettings) error {
 	now := time.Now().UTC()
@@ -87,7 +99,7 @@ func TestS3Storage_UploadReadServeDelete(t *testing.T) {
 	if want := strings.TrimRight(s.S3Endpoint, "/") + "/" + s.S3BucketName + "/" + key; url != want {
 		t.Fatalf("url = %q, want %q", url, want)
 	}
-	if !headS3Object(s, key) {
+	if !s3TestVisible(s, key) {
 		_, derr := downloadFromS3(s, key)
 		t.Fatalf("HEAD after upload: object missing (GET: %v)", derr)
 	}
@@ -123,6 +135,9 @@ func TestS3Storage_AttachmentRoundTrip(t *testing.T) {
 	url := saveAttachment(s, relKey, data, "application/pdf")
 	if url != "/cdn/"+relKey {
 		t.Fatalf("saveAttachment = %q, want /cdn/%s", url, relKey)
+	}
+	if !s3TestVisible(s, relKey) {
+		t.Fatalf("attachment never appeared in the bucket")
 	}
 	if _, err := os.Stat("./" + relKey); err == nil {
 		t.Fatalf("an S3 attachment was also written to local disk")
