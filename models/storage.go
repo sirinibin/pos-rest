@@ -25,24 +25,51 @@ func s3StorageBaseURL(s AdminSettings) string {
 	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com", s.S3BucketName, s.S3Region)
 }
 
-// s3StorageHost returns the HTTPS host used for SigV4 signing.
-func s3StorageHost(s AdminSettings) string {
+// S3SigningHost returns the Host header value that SigV4 signs: the
+// endpoint's host[:port] for a custom (path-style) endpoint, which is what the
+// HTTP client sends, or the virtual-hosted AWS bucket host.
+func S3SigningHost(s AdminSettings) string {
 	if s.S3Endpoint != "" {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
 		ep = strings.TrimPrefix(ep, "https://")
 		ep = strings.TrimPrefix(ep, "http://")
-		return ep + "/" + s.S3BucketName
+		if i := strings.Index(ep, "/"); i >= 0 {
+			ep = ep[:i]
+		}
+		return ep
 	}
 	return fmt.Sprintf("%s.s3.%s.amazonaws.com", s.S3BucketName, s.S3Region)
 }
 
+// S3URIEncodeKey encodes an object key for the request path and the SigV4
+// canonical URI the way S3 expects: every byte except A-Z a-z 0-9 - _ . ~ is
+// percent-encoded (spaces, Arabic names, "+", "(", "#" ...); "/" between
+// segments is kept.
+func S3URIEncodeKey(key string) string {
+	const hex = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(key); i++ {
+		c := key[i]
+		if c == '/' || c == '-' || c == '_' || c == '.' || c == '~' ||
+			('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z') || ('0' <= c && c <= '9') {
+			b.WriteByte(c)
+			continue
+		}
+		b.WriteByte('%')
+		b.WriteByte(hex[c>>4])
+		b.WriteByte(hex[c&15])
+	}
+	return b.String()
+}
+
 // s3StoragePutURL returns the full URL for a PutObject request.
 func s3StoragePutURL(s AdminSettings, key string) string {
+	encoded := S3URIEncodeKey(key)
 	if s.S3Endpoint != "" {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
-		return ep + "/" + s.S3BucketName + "/" + key
+		return ep + "/" + s.S3BucketName + "/" + encoded
 	}
-	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.S3BucketName, s.S3Region, key)
+	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.S3BucketName, s.S3Region, encoded)
 }
 
 // sha256Bytes returns the SHA-256 digest of b as a byte slice.
@@ -73,7 +100,7 @@ func uploadToS3Models(s AdminSettings, key string, data []byte, contentType stri
 	}
 
 	bodyHash := fmt.Sprintf("%x", sha256Bytes(data))
-	host := s3StorageHost(s)
+	host := S3SigningHost(s)
 	putURL := s3StoragePutURL(s, key)
 
 	req, err := http.NewRequest("PUT", putURL, bytes.NewReader(data))
@@ -89,9 +116,9 @@ func uploadToS3Models(s AdminSettings, key string, data []byte, contentType stri
 		contentType, host, bodyHash, timeStr)
 	signedHeaders := "content-type;host;x-amz-content-sha256;x-amz-date"
 
-	urlPath := "/" + key
+	urlPath := "/" + S3URIEncodeKey(key)
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + S3URIEncodeKey(key)
 	}
 
 	canonicalRequest := strings.Join([]string{"PUT", urlPath, "", canonicalHeaders, signedHeaders, bodyHash}, "\n")

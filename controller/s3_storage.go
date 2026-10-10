@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,25 +45,15 @@ func s3BaseURL(s models.AdminSettings) string {
 	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com", s.S3BucketName, s.S3Region)
 }
 
-// s3Host returns the HTTPS host for signing requests.
+// s3Host returns the Host header value SigV4 signs (see models.S3SigningHost).
 func s3Host(s models.AdminSettings) string {
-	if s.S3Endpoint != "" {
-		ep := strings.TrimRight(s.S3Endpoint, "/")
-		ep = strings.TrimPrefix(ep, "https://")
-		ep = strings.TrimPrefix(ep, "http://")
-		return ep + "/" + s.S3BucketName
-	}
-	return fmt.Sprintf("%s.s3.%s.amazonaws.com", s.S3BucketName, s.S3Region)
+	return models.S3SigningHost(s)
 }
 
-// s3URIEncodeKey URI-encodes each segment of an S3 key path for AWS SigV4 canonical URI.
-// Slashes between segments are preserved; spaces and other special chars are percent-encoded.
+// s3URIEncodeKey URI-encodes an S3 key for the request path and the SigV4
+// canonical URI (see models.S3URIEncodeKey). Slashes between segments are kept.
 func s3URIEncodeKey(key string) string {
-	parts := strings.Split(key, "/")
-	for i, p := range parts {
-		parts[i] = url.PathEscape(p)
-	}
-	return strings.Join(parts, "/")
+	return models.S3URIEncodeKey(key)
 }
 
 // s3PutURL returns the URL for a PutObject request.
@@ -418,9 +407,9 @@ func deleteFromS3(s models.AdminSettings, key string) error {
 	req.Header.Set("X-Amz-Date", timeStr)
 	req.Header.Set("X-Amz-Content-Sha256", emptyHash)
 
-	urlPath := "/" + key
+	urlPath := "/" + s3URIEncodeKey(key)
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + s3URIEncodeKey(key)
 	}
 	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n", host, emptyHash, timeStr)
 	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
@@ -450,6 +439,9 @@ func deleteFromS3(s models.AdminSettings, key string) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("s3 delete %s: status %d", key, resp.StatusCode)
+	}
 	return nil
 }
 

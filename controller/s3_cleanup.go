@@ -37,9 +37,9 @@ func headS3Object(s models.AdminSettings, key string) bool {
 	req.Header.Set("X-Amz-Date", timeStr)
 	req.Header.Set("X-Amz-Content-Sha256", emptyHash)
 
-	urlPath := "/" + key
+	urlPath := "/" + s3URIEncodeKey(key)
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + s3URIEncodeKey(key)
 	}
 	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n", host, emptyHash, timeStr)
 	signedHeaders := "host;x-amz-content-sha256;x-amz-date"

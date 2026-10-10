@@ -88,9 +88,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: API, functional and integration tests (MongoDB + Redis)
+      - name: Start S3 test server (versitygw, test-only keys)
+        run: ci/s3-test-server.sh >> "$GITHUB_ENV"
+      - name: API, functional and integration tests (MongoDB + Redis + S3)
         env:
           ERP_TEST_DB: "1"
+          S3_TEST_REQUIRED: "1"
           MONGO_HOST: 127.0.0.1
           MONGO_PORT: "27017"
           REDIS_DSN: 127.0.0.1:6379
