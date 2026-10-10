@@ -10,6 +10,7 @@ on:
       - "**.sum"
       - ".github/workflows/deploy_v2.yml"
       - "ci/**"
+      - "cardbridge/**"
   workflow_dispatch:
 
 # Quality gates run in parallel; the deploy job only starts when every gate
@@ -61,6 +62,12 @@ jobs:
           EXIT=$?
           set -e
           ci/test-summary.sh unit.json "$EXIT" "Unit tests (race)" 2000
+      # the shop computer's Card Bridge program (its own Go module in cardbridge/)
+      - name: Card Bridge program (vet + tests, race detector)
+        working-directory: cardbridge
+        run: |
+          go vet ./...
+          go test -race ./... -count=1
 
   api:
     runs-on: ubuntu-latest
@@ -216,6 +223,14 @@ jobs:
           fi
           sha256sum ./pos-rest
 
+      # ── Card Bridge setup files (Windows, macOS, Ubuntu/Linux, Android) ──────
+      # served by the API at GET /v1/erp/card-bridge/downloads from $DEST/cardbridge-dist
+      - name: Build Card Bridge setup files
+        run: |
+          CARD_BRIDGE_VERSION="1.0.${{ github.run_number }}" cardbridge/build.sh "$PWD/cardbridge-dist"
+          test -s cardbridge-dist/manifest.json
+          tar -czf cardbridge-dist.tgz -C cardbridge-dist .
+
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
@@ -236,6 +251,9 @@ jobs:
           scp -i private_key -o StrictHostKeyChecking=no \
             pos-rest \
             ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_V2_DEST_PATH }}/pos-rest.new
+          scp -i private_key -o StrictHostKeyChecking=no \
+            cardbridge-dist.tgz \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_V2_DEST_PATH }}/cardbridge-dist.tgz
 
       # ── Verify checksum before touching the running service ───────────────────
       - name: Verify remote checksum
@@ -263,6 +281,14 @@ jobs:
           script: |
             set -e
             DEST="${{ secrets.AWS_GO_API_V2_DEST_PATH }}"
+
+            # Card Bridge setup files: unpack beside the binary, then swap
+            rm -rf "$DEST/cardbridge-dist.new" && mkdir -p "$DEST/cardbridge-dist.new"
+            tar -xzf "$DEST/cardbridge-dist.tgz" -C "$DEST/cardbridge-dist.new"
+            rm -rf "$DEST/cardbridge-dist.old"
+            [ -d "$DEST/cardbridge-dist" ] && mv "$DEST/cardbridge-dist" "$DEST/cardbridge-dist.old"
+            mv "$DEST/cardbridge-dist.new" "$DEST/cardbridge-dist"
+            rm -rf "$DEST/cardbridge-dist.old" "$DEST/cardbridge-dist.tgz"
 
             # Kill any stale file handle that would cause ETXTBSY on swap
             sudo fuser -k "$DEST/pos-rest"     2>/dev/null || true
