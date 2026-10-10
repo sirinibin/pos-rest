@@ -24,3 +24,6 @@ ZatcaPython/utilities/fatoora-cli-simulation_new/
 ZatcaPython/utilities/fatoora-cli/
 ZatcaPython/store-data/
 ZatcaPython/repaired.pdf
+
+# Card Bridge setup files (built by cardbridge/build.sh)
+/cardbridge-dist/

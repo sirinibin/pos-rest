@@ -55,6 +55,10 @@ func Register(router *mux.Router) {
 	// Subscription billing by bank transfer (billing.go)
 	registerBilling(s)
 
+	// Card machines (card swiping terminals) and their providers (card_terminals.go)
+	registerCardTerminals(s)
+	registerCardBridge(s)
+
 	// Starter catalog of the store's business category (starter_catalog.go)
 	registerStarterCatalog(s)
 
