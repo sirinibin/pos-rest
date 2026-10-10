@@ -156,17 +156,17 @@ func TestSecurity_StoreResponsesCarryNoZatcaSecrets(t *testing.T) {
 // Onboarding failures say what went wrong with a 4xx or 502, not a 500.
 func TestFlow_ZatcaConnectErrorsAreNot500(t *testing.T) {
 	sid := newStore(t)
-	code, res := call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": "not-an-id", "otp": "123345"})
+	code, res := call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": "not-an-id", "otp": "12345"})
 	if code != http.StatusBadRequest || res.Status {
 		t.Fatalf("bad store id: HTTP %d status=%v, want 400", code, res.Status)
 	}
-	code, res = call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": "5f1d7f3e9b1e8a3f4c2b1a00", "otp": "123345"})
+	code, res = call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": "5f1d7f3e9b1e8a3f4c2b1a00", "otp": "12345"})
 	if code != http.StatusNotFound && code != http.StatusForbidden {
 		t.Fatalf("unknown store: HTTP %d, want 404 (or 403 for a store the user can't use)", code)
 	}
 	// The store isn't set up for ZATCA (no VAT number, no Phase 2), and in this
 	// job there is no ZatcaPython venv: either way the answer is not a 500.
-	code, res = call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": sid, "otp": "123345"})
+	code, res = call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": sid, "otp": "12345"})
 	if res.Status {
 		t.Fatalf("a store without ZATCA details connected: HTTP %d", code)
 	}

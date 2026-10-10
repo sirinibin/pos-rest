@@ -141,9 +141,13 @@ func TestZatcaSandbox_BadOTPLeavesStoreDisconnected(t *testing.T) {
 		"vat_no": zatcaTestVAT, "registration_number": zatcaTestCRN,
 		"zatca": map[string]interface{}{"phase": "2", "env": "NonProduction"},
 	})
-	code, res := call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": sid, "otp": "000000"})
+	// Not a 6-digit code at all, so no OTP ZATCA hands out can match it.
+	const badOTP = "not-an-otp"
+	code, res := call(t, "POST", "/v1/store/zatca/connect", authToken(t), map[string]interface{}{"id": sid, "otp": badOTP})
 	if res.Status {
-		t.Skipf("the sandbox accepted OTP 000000 (HTTP %d); it accepts any OTP today", code)
+		// controller.TestZatcaConnect_BadOTPInProductionLeavesStoreDisconnected
+		// covers a rejected OTP with a mocked ZATCA answer.
+		t.Skipf("the sandbox accepted OTP %q (HTTP %d)", badOTP, code)
 	}
 	code, res = call(t, "GET", "/v1/store/"+sid, authToken(t), nil)
 	z, _ := resultMap(t, res)["zatca"].(map[string]interface{})

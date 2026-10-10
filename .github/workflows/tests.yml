@@ -327,7 +327,7 @@ jobs:
         env:
           CI: "true"
           E2E_ZATCA: "1"
-          E2E_ZATCA_OTP: "123345"
+          E2E_ZATCA_OTP: "12345"
         run: |
           if [ ! -f fullstack/zatca.spec.js ]; then
             echo "::notice title=ZATCA sandbox (UI)::fullstack/zatca.spec.js is not on this frontend branch yet"
