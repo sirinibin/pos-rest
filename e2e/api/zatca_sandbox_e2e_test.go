@@ -154,12 +154,18 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 		}
 		b2b["customer"] = cust
 
-		// a return of the standard invoice is a standard credit note, cleared too
-		ret := Create(t, s.Token, "sales-returns", M{"storeId": s.ID, "date": s.Now(), "orderId": b2b["id"],
+		// a return of the standard invoice is a standard credit note, cleared
+		// too. The app sends the sale's customer with the return: the credit
+		// note's type follows the return's customer (customer.IsB2B), and a
+		// return without one is a simplified credit note (NEW-sr-no-customer).
+		ret := Create(t, s.Token, "sales-returns", M{"storeId": s.ID, "date": s.Now(), "orderId": b2b["id"], "customerId": cust["id"],
 			"items":    []M{{"productId": pid, "qty": 1, "unitPrice": 150, "unitDiscount": 0, "warehouseId": s.MS, "vatPercent": 15, "selected": true}},
 			"payments": []M{}})
 		zr := zatcaReport(t, s, "sales-returns", S(ret["id"]))
 		zatcaAccepted(t, "standard credit note", zr, "cleared")
+		if S(zr["invoiceType"]) != "credit" {
+			t.Errorf("standard credit note type: %v", zr["invoiceType"])
+		}
 	})
 
 	t.Run("credit note (sales return) reported", func(t *testing.T) {

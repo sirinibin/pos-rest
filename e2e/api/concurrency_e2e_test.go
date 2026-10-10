@@ -276,7 +276,10 @@ func concCheckStore(t *testing.T, cs *concStore, when string) {
 		t.Fatalf("the plan should oversell the scarce product, want %v", want[2])
 	}
 	for i, pid := range cs.products {
-		salesWaitStock(t, s, pid, s.MS, want[i])
+		// each sale recomputes the product's stock and saves the whole product
+		// after its own read, so a stale writer can finish last
+		got, ok := salesStockSettles(t, s, pid, s.MS, want[i])
+		concRace(t, "NEW-CONC-STOCK-MOVES", fmt.Sprintf("concurrent sales leave product stock %v, want %v (models/product.go:3349 whole-document $set after a stale recompute)", got, want[i]), !ok)
 	}
 
 	// customer balances: what the customer's sales still owe
