@@ -336,21 +336,22 @@ func (purchasereturnPayment *PurchaseReturnPayment) Validate(w http.ResponseWrit
 		}
 	}
 
-	//validating with payment paid payment in purchase
-	purchase, err := store.FindOrderByID(purchasereturnPayment.PurchaseID, bson.M{})
+	// A refund can't exceed what was paid for the purchase. This used to look
+	// the purchase up among sales, so no purchase-return refund could be saved.
+	purchase, err := store.FindPurchaseByID(purchaseReturn.PurchaseID, bson.M{})
 	if err != nil {
-		errs["sales"] = "error finding sale" + err.Error()
+		errs["purchase"] = "error finding purchase: " + err.Error()
 		return errs
 	}
 
 	if scenario == "update" {
-		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - oldPurchaseReturnPayment.Amount)) > purchase.TotalPaymentReceived {
-			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentReceived)) + " (Total Paid payment)"
+		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid - oldPurchaseReturnPayment.Amount)) > purchase.TotalPaymentPaid {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentPaid)) + " (Total Paid payment)"
 			return
 		}
 	} else {
-		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > purchase.TotalPaymentReceived {
-			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentReceived)) + " (Total Paid payment)"
+		if (purchasereturnPayment.Amount + (purchaseReturn.TotalPaymentPaid)) > purchase.TotalPaymentPaid {
+			errs["amount"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", (purchase.TotalPaymentPaid)) + " (Total Paid payment)"
 			return
 		}
 	}

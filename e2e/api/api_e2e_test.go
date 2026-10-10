@@ -409,7 +409,7 @@ func TestStore_CreateThenRead(t *testing.T) {
 		t.Fatalf("store id = %v, want %s", got, id)
 	}
 
-	code, res = call(t, "GET", "/v1/store?limit=100", tok, nil)
+	code, res = call(t, "GET", "/v1/store?limit=100&sort=-created_at", tok, nil)
 	if code != http.StatusOK || !res.Status {
 		t.Fatalf("list stores: HTTP %d %v", code, res.Errors)
 	}

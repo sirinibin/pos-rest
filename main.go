@@ -131,6 +131,8 @@ func main() {
 	go models.DeduplicateRFQSuppliersAllStores()
 
 	router := mux.NewRouter()
+	// A signed-in user may only name stores they have access to.
+	router.Use(controller.StoreAccessMiddleware)
 
 	// ── MCP-optimised API layer (/v1/mcp/) ────────────────────────────────────
 	// Auth

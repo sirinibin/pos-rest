@@ -32,3 +32,12 @@ func TestNonVATSalesFindTotal(t *testing.T) {
 		})
 	}
 }
+
+func TestNonVATSalesReturnFindTotal_ZeroVAT(t *testing.T) {
+	zero := 0.0
+	r := &NonVATSalesReturn{VatPercent: &zero, Products: []QuotationSalesReturnProduct{{Quantity: 2, UnitPrice: 100, UnitDiscount: 5}}}
+	r.FindTotal()
+	if r.Total != 190 || r.TotalWithVAT != 190 {
+		t.Fatalf("total %v with VAT %v, want 190 and 190", r.Total, r.TotalWithVAT)
+	}
+}

@@ -298,6 +298,9 @@ func (pr *PurchaseRequest) Validate(w http.ResponseWriter, r *http.Request, scen
 				errs["product_id_"+strconv.Itoa(i)] = "Invalid product"
 			}
 		}
+		if product.Quantity <= 0 {
+			errs["quantity_"+strconv.Itoa(i)] = "Quantity should be greater than zero"
+		}
 	}
 
 	return errs

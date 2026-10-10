@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -105,16 +106,24 @@ func (r *NonVATSalesReturn) FindTotal() {
 			r.Products[i].UnitDiscountWithVAT = r.Products[i].UnitDiscount
 		} else if p.UnitPriceWithVAT == 0 && p.UnitPrice > 0 && r.VatPercent != nil && *r.VatPercent > 0 {
 			r.Products[i].UnitPriceWithVAT = RoundTo2Decimals(p.UnitPrice * (1 + (*r.VatPercent / 100)))
+		} else if r.VatPercent != nil && *r.VatPercent == 0 {
+			// With no VAT the price with VAT is the price (see NonVATSales.FindTotal).
+			if p.UnitPriceWithVAT == 0 {
+				r.Products[i].UnitPriceWithVAT = p.UnitPrice
+			}
+			if p.UnitDiscountWithVAT == 0 {
+				r.Products[i].UnitDiscountWithVAT = p.UnitDiscount
+			}
 		}
 		total += p.Quantity * (r.Products[i].UnitPrice - p.UnitDiscount)
 		total = RoundTo2Decimals(total)
-		totalWithVAT += p.Quantity * (r.Products[i].UnitPriceWithVAT - p.UnitDiscountWithVAT)
+		totalWithVAT += p.Quantity * (r.Products[i].UnitPriceWithVAT - r.Products[i].UnitDiscountWithVAT)
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 
 		//Actual
 		actualTotal += p.Quantity * (r.Products[i].UnitPrice - p.UnitDiscount)
 		actualTotal = RoundTo8Decimals(actualTotal)
-		actualTotalWithVAT += p.Quantity * (r.Products[i].UnitPriceWithVAT - p.UnitDiscountWithVAT)
+		actualTotalWithVAT += p.Quantity * (r.Products[i].UnitPriceWithVAT - r.Products[i].UnitDiscountWithVAT)
 		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 	}
 	r.Total = total
@@ -264,7 +273,84 @@ func (ret *NonVATSalesReturn) Validate(w http.ResponseWriter, r *http.Request, s
 		}
 	}
 
+	ret.validateQuantities(store, errs)
+
 	return errs
+}
+
+// validateQuantities requires at least one selected product with a positive
+// quantity and, when the return is against a sale, refuses to return more of
+// a product than that sale sold less what its other returns already took.
+func (ret *NonVATSalesReturn) validateQuantities(store *Store, errs map[string]string) {
+	selected := 0
+	for i, p := range ret.Products {
+		if !p.Selected {
+			continue
+		}
+		selected++
+		if p.Quantity <= 0 {
+			errs["quantity_"+strconv.Itoa(i)] = "Quantity should be greater than zero"
+		}
+	}
+	if selected == 0 {
+		errs["product_id"] = "Select at least 1 product to return"
+	}
+	if ret.NonVATSalesID == nil || ret.NonVATSalesID.IsZero() {
+		return
+	}
+
+	sale, err := store.FindNonVATSalesByID(ret.NonVATSalesID, bson.M{})
+	if err != nil {
+		errs["non_vat_sales_id"] = "Invalid non-VAT sale"
+		return
+	}
+	sold := map[string]float64{}
+	for _, p := range sale.Products {
+		if !p.ProductID.IsZero() {
+			sold[p.ProductID.Hex()] += p.Quantity
+		}
+	}
+
+	returned := map[string]float64{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	filter := bson.M{"non_vat_sales_id": ret.NonVATSalesID, "deleted": bson.M{"$ne": true}}
+	if !ret.ID.IsZero() {
+		filter["_id"] = bson.M{"$ne": ret.ID}
+	}
+	cur, err := db.GetDB("store_"+store.ID.Hex()).Collection("non_vat_sales_return").Find(ctx, filter,
+		options.Find().SetProjection(bson.M{"products": 1}))
+	if err != nil {
+		errs["non_vat_sales_id"] = "Unable to read earlier returns: " + err.Error()
+		return
+	}
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		var earlier NonVATSalesReturn
+		if err := cur.Decode(&earlier); err != nil {
+			continue
+		}
+		for _, p := range earlier.Products {
+			if p.Selected && !p.ProductID.IsZero() {
+				returned[p.ProductID.Hex()] += p.Quantity
+			}
+		}
+	}
+
+	asked := map[string]float64{}
+	for i, p := range ret.Products {
+		if !p.Selected || p.Quantity <= 0 || p.ProductID.IsZero() {
+			continue
+		}
+		id := p.ProductID.Hex()
+		asked[id] += p.Quantity
+		left := RoundFloat(sold[id]-returned[id], 2)
+		if left <= 0 {
+			errs["quantity_"+strconv.Itoa(i)] = "Already returned all sold quantities"
+		} else if RoundFloat(asked[id], 2) > left {
+			errs["quantity_"+strconv.Itoa(i)] = "Quantity should not be greater than sold quantity: " + fmt.Sprintf("%.02f", left)
+		}
+	}
 }
 
 func (store *Store) IsNonVATSalesReturnExists(ID *primitive.ObjectID) (exists bool, err error) {
