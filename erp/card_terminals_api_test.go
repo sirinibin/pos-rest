@@ -201,6 +201,13 @@ func TestAPI_CardTerminals_FullFlow(t *testing.T) {
 	if r := call(t, "POST", "/card-terminal-webhooks/simulator/"+sid+"/"+p5id+"?sig="+webhookSig("simulator", sid, p5id), "", M{}); r.Code != 200 {
 		t.Fatalf("webhook: %d %s", r.Code, r.Raw)
 	}
+	// providers that call back with GET
+	if r := call(t, "GET", "/card-terminal-webhooks/simulator/"+sid+"/"+p5id+"?sig=deadbeef", "", nil); r.Code != 404 {
+		t.Fatalf("GET webhook, bad sig: %d", r.Code)
+	}
+	if r := call(t, "GET", "/card-terminal-webhooks/simulator/"+sid+"/"+p5id+"?sig="+webhookSig("simulator", sid, p5id), "", nil); r.Code != 200 {
+		t.Fatalf("GET webhook: %d %s", r.Code, r.Raw)
+	}
 	if g := call(t, "GET", "/card-terminal-payments/"+p5id+"?storeId="+sid, owner, nil); g.Body["status"] != "approved" {
 		t.Fatalf("after webhook: %s", g.Raw)
 	}
