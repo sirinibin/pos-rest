@@ -13,7 +13,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/controller"
 	"github.com/sirinibin/startpos/backend/erp"
+	"github.com/sirinibin/startpos/backend/erp/erpfixture"
+	"github.com/sirinibin/startpos/backend/models"
 )
 
 func erpCall(method, path, token, body string) *httptest.ResponseRecorder {
@@ -106,12 +110,59 @@ func TestERP_Signup_ValidationRules(t *testing.T) {
 	}
 }
 
-// TestERP_Integration_Stub: the DB-backed adapter integration suite lives in
-// erp/integration_test.go (old-data compatibility, counters/stock/ledger
-// parity with the old app, drafts regression).
-func TestERP_Integration_Stub(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+// TestERP_Integration_MetaAndLogin mounts the adapter on a plain mux router
+// exactly as main.go does (erp.Register(router)) and, against the seeded
+// fixture DB, checks GET /v1/erp/meta and POST /v1/erp/auth/login for the
+// fixture admin; the issued access token must be accepted by /auth/me and by
+// the legacy v1 auth. The full adapter suite is ERP_TEST_DB=1 go test ./erp/.
+func TestERP_Integration_MetaAndLogin(t *testing.T) {
+	fx := controller.RequireDBExt(t)
+	router := mux.NewRouter()
+	erp.Register(router)
+	do := func(method, path, token, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, erp.Prefix+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec
 	}
-	t.Skip("run: ERP_TEST_DB=1 MONGO_HOST=… MONGO_PORT=… REDIS_DSN=… go test ./erp/ -count=1")
+
+	if rec := do("GET", "/meta", "", ""); rec.Code != http.StatusOK {
+		t.Fatalf("meta: %d %s", rec.Code, rec.Body.String())
+	}
+
+	body, _ := json.Marshal(map[string]string{"email": fx.AdminEmail, "password": erpfixture.Password})
+	rec := do("POST", "/auth/login", "", string(body))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login: %d %s", rec.Code, rec.Body.String())
+	}
+	var login struct {
+		AccessToken  string                 `json:"accessToken"`
+		RefreshToken string                 `json:"refreshToken"`
+		User         map[string]interface{} `json:"user"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &login); err != nil || login.AccessToken == "" || login.RefreshToken == "" {
+		t.Fatalf("login body: %s", rec.Body.String())
+	}
+	if login.User["id"] != fx.Admin.Hex() {
+		t.Errorf("login user id = %v, want %s", login.User["id"], fx.Admin.Hex())
+	}
+
+	if me := do("GET", "/auth/me", login.AccessToken, ""); me.Code != http.StatusOK {
+		t.Fatalf("me with login token: %d %s", me.Code, me.Body.String())
+	}
+	req := httptest.NewRequest("GET", "/v1/store", nil)
+	req.Header.Set("Authorization", login.AccessToken)
+	if claims, err := models.AuthenticateByAccessToken(req); err != nil || claims.UserID != fx.Admin.Hex() {
+		t.Fatalf("legacy auth rejects the adapter token: %+v %v", claims, err)
+	}
+
+	// wrong password is refused
+	bad, _ := json.Marshal(map[string]string{"email": fx.AdminEmail, "password": "wrong"})
+	if rec := do("POST", "/auth/login", "", string(bad)); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong password: %d %s", rec.Code, rec.Body.String())
+	}
 }

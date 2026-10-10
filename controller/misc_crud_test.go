@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // TestMiscCRUD_Unauthenticated verifies that every listed endpoint returns
@@ -176,14 +177,25 @@ func TestMiscCRUD_Unauthenticated(t *testing.T) {
 
 // TestUploadCustomerImage_SkipAuth_Integration stubs the customer image upload
 // handler which reads multipart form data before authenticating.
+//
+// It runs the real handler against a fresh customer in the seeded store:
+// form validation, a successful upload (stored via the local-disk fallback
+// because no S3 is configured in the test DB) appended to the customer's
+// images, and the handler's behaviour without an access token.
 func TestUploadCustomerImage_SkipAuth_Integration(t *testing.T) {
-	t.Skip("UploadCustomerImage reads multipart form data before auth check; requires integration environment with real DB and CDN")
+	fx := requireDB(t)
+	id := insertStoreDoc(t, fx.StoreA, "customer", bson.M{"name": uniqName("Upload Customer"), "store_id": fx.StoreA, "deleted": false})
+	assertImageUpload(t, UploadCustomerImage, "/v1/customer/upload-image", tokenFor(t, fx.AdminEmail), fx.StoreA, id, "customer", "customers")
 }
 
 // TestUploadVendorImage_SkipAuth_Integration stubs the vendor image upload
 // handler which reads multipart form data before authenticating.
+//
+// Same contract as the customer upload, against a fresh vendor.
 func TestUploadVendorImage_SkipAuth_Integration(t *testing.T) {
-	t.Skip("UploadVendorImage reads multipart form data before auth check; requires integration environment with real DB and CDN")
+	fx := requireDB(t)
+	id := insertStoreDoc(t, fx.StoreA, "vendor", bson.M{"name": uniqName("Upload Vendor"), "store_id": fx.StoreA, "deleted": false})
+	assertImageUpload(t, UploadVendorImage, "/v1/vendor/upload-image", tokenFor(t, fx.AdminEmail), fx.StoreA, id, "vendor", "vendors")
 }
 
 // TestDeleteCustomerImage_NoAuthGuard documents that DeleteCustomerImage has

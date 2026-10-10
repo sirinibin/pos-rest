@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,7 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirinibin/startpos/backend/db"
 	"github.com/sirinibin/startpos/backend/models"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ---------------------------------------------------------------------------
@@ -681,21 +686,177 @@ func TestGuestRegister_EmailGuard(t *testing.T) {
 // Integration tests (skipped unless -run Integration or -count 1 with DB up)
 // ---------------------------------------------------------------------------
 
-// TestGuestRegister_Integration_DuplicateEmail requires a live MongoDB.
-// Run with: go test -run TestGuestRegister_Integration -count 1
-func TestGuestRegister_Integration_DuplicateEmail(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-	t.Skip("requires live MongoDB — run manually in a connected environment")
+// guestRegisterCleanup removes everything a successful guest registration
+// creates: the user, the store document and the store_<id> database.
+func guestRegisterCleanup(t *testing.T, email string) {
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		main := db.Client("").Database(db.GetPosDB())
+		var u struct {
+			StoreIDs []primitive.ObjectID `bson:"store_ids"`
+		}
+		if main.Collection("user").FindOne(ctx, bson.M{"email": email}).Decode(&u) == nil {
+			for _, sid := range u.StoreIDs {
+				_, _ = main.Collection("store").DeleteOne(ctx, bson.M{"_id": sid})
+				_ = db.GetDB("store_" + sid.Hex()).Drop(ctx)
+			}
+		}
+		_, _ = main.Collection("user").DeleteMany(ctx, bson.M{"email": email})
+	})
 }
 
-// TestGuestRegister_Integration_Success verifies end-to-end store+user creation.
-func TestGuestRegister_Integration_Success(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+// countStoresNamed counts store documents with the given name.
+func countStoresNamed(t *testing.T, name string) int64 {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	n, err := db.Client("").Database(db.GetPosDB()).Collection("store").CountDocuments(ctx, bson.M{"name": name})
+	if err != nil {
+		t.Fatalf("count stores: %v", err)
 	}
-	t.Skip("requires live MongoDB — run manually in a connected environment")
+	return n
+}
+
+// TestGuestRegister_Integration_DuplicateEmail checks that registering with
+// an e-mail that already belongs to a user is rejected with 400 and
+// errors.email, and that no store is created for the rejected request.
+func TestGuestRegister_Integration_DuplicateEmail(t *testing.T) {
+	fx := requireDB(t)
+	req := validReq()
+	req.Email = fx.AdminEmail
+	req.StoreName = uniqName("Dup Email Store")
+	body, _ := json.Marshal(req)
+
+	w := postGuestRegister(string(body))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Status bool              `json:"status"`
+		Errors map[string]string `json:"errors"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body.String())
+	}
+	if resp.Status || resp.Errors["email"] != "Email is already in use" {
+		t.Fatalf("want status=false errors.email=\"Email is already in use\", got %+v", resp)
+	}
+	// the duplicate check is combined with the other validation errors
+	req.Mob = ""
+	body, _ = json.Marshal(req)
+	w = postGuestRegister(string(body))
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if w.Code != http.StatusBadRequest || resp.Errors["email"] == "" || resp.Errors["mob"] == "" {
+		t.Fatalf("want both email and mob errors, got %d %s", w.Code, w.Body.String())
+	}
+	if n := countStoresNamed(t, req.StoreName); n != 0 {
+		t.Fatalf("rejected registration must not create a store, found %d", n)
+	}
+	// the existing user is untouched
+	u, err := models.FindUserByEmail(fx.AdminEmail)
+	if err != nil || u.ID != fx.Admin || u.Role != "Admin" {
+		t.Fatalf("existing admin changed: %+v %v", u, err)
+	}
+}
+
+// TestGuestRegister_Integration_Success verifies end-to-end store+user
+// creation: response shape, the persisted store (serials, ZATCA, VAT), the
+// Manager user (hashed password, linked store), the store database's
+// indexes, a working access token, and that the e-mail is then taken.
+func TestGuestRegister_Integration_Success(t *testing.T) {
+	requireDB(t)
+	req := validReq()
+	req.Email = fmt.Sprintf("guest+%d@t1.example", time.Now().UnixNano())
+	req.StoreName = uniqName("Guest Workshop")
+	guestRegisterCleanup(t, req.Email)
+	body, _ := json.Marshal(req)
+
+	w := postGuestRegister(string(body))
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Status bool              `json:"status"`
+		Errors map[string]string `json:"errors"`
+		Result struct {
+			User  map[string]interface{} `json:"user"`
+			Store map[string]interface{} `json:"store"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.Status || len(resp.Errors) != 0 {
+		t.Fatalf("want status=true and no errors, got %s", w.Body.String())
+	}
+	if pw, _ := resp.Result.User["password"].(string); pw != "" {
+		t.Fatalf("response must not leak the password hash, got %q", pw)
+	}
+	storeID, err := primitive.ObjectIDFromHex(fmt.Sprint(resp.Result.Store["id"]))
+	if err != nil {
+		t.Fatalf("store id in response: %s", w.Body.String())
+	}
+
+	// store document
+	store, err := models.FindStoreByID(&storeID, bson.M{})
+	if err != nil {
+		t.Fatalf("store not persisted: %v", err)
+	}
+	if store.Name != req.StoreName || store.VATNo != req.VATNo || store.CountryCode != "SA" || store.BranchName != "Main Branch" ||
+		store.Email != req.Email || len(store.Code) != 8 || store.Zatca.Phase != "1" || store.Zatca.Env != "NonProduction" ||
+		store.SalesSerialNumber.Prefix != "S-INV" || store.CustomerSerialNumber.Prefix != "CUST" || store.VatPercent != 15 ||
+		store.NationalAddress.CityName != "Riyadh" || store.NationalAddress.CityNameArabic != "Riyadh" {
+		t.Fatalf("persisted store mismatch: %+v", store)
+	}
+
+	// user document
+	u, err := models.FindUserByEmail(req.Email)
+	if err != nil {
+		t.Fatalf("user not persisted: %v", err)
+	}
+	if u.Name != req.Name || u.Mob != req.Mob || u.Role != "Manager" || u.Admin ||
+		len(u.StoreIDs) != 1 || *u.StoreIDs[0] != storeID {
+		t.Fatalf("persisted user mismatch: %+v", u)
+	}
+	if u.Password == req.Password || !u.VerifyPassword(req.Password) || u.VerifyPassword("wrong-pass") {
+		t.Fatalf("password must be stored as a hash of the submitted password")
+	}
+	// NOTE: result.user.id is currently the zero ObjectID because
+	// models.User.Insert does not assign the generated _id back to the struct
+	// (reported); identify the returned user by e-mail and role instead.
+	if resp.Result.User["email"] != req.Email || resp.Result.User["role"] != "Manager" {
+		t.Fatalf("response user mismatch: %v", resp.Result.User)
+	}
+
+	// store database exists with its indexes
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	colls, err := db.GetDB("store_"+storeID.Hex()).ListCollectionNames(ctx, bson.M{})
+	if err != nil || len(colls) == 0 {
+		t.Fatalf("store database has no collections (indexes not created): %v %v", colls, err)
+	}
+
+	// the new manager can obtain a working access token
+	tok, err := models.GenerateAccesstoken(req.Email)
+	if err != nil {
+		t.Fatalf("token for new user: %v", err)
+	}
+	hr := httptest.NewRequest("GET", "/", nil)
+	hr.Header.Set("Authorization", tok.Token)
+	if claims, err := models.AuthenticateByAccessToken(hr); err != nil || claims.UserID != u.ID.Hex() {
+		t.Fatalf("auth as new user: %+v %v", claims, err)
+	}
+
+	// registering again with the same e-mail is now rejected
+	req.StoreName = uniqName("Guest Workshop Again")
+	body, _ = json.Marshal(req)
+	if w := postGuestRegister(string(body)); w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Email is already in use") {
+		t.Fatalf("second registration: want 400 email in use, got %d %s", w.Code, w.Body.String())
+	}
+	if n := countStoresNamed(t, req.StoreName); n != 0 {
+		t.Fatalf("second registration must not create a store, found %d", n)
+	}
 }
 
 // ---------------------------------------------------------------------------

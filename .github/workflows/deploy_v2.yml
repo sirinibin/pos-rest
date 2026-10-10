@@ -74,6 +74,7 @@ jobs:
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
           --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
       redis:
         image: mirror.gcr.io/library/redis:7
         ports:
@@ -81,6 +82,7 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -110,6 +112,7 @@ jobs:
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
           --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
       redis:
         image: mirror.gcr.io/library/redis:7
         ports:
@@ -117,6 +120,7 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -143,6 +147,7 @@ jobs:
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
           --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
       redis:
         image: mirror.gcr.io/library/redis:7
         ports:
@@ -150,6 +155,7 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 20
+          --log-driver none
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -277,3 +283,36 @@ jobs:
             sudo systemctl is-active start-api-v2
             sha256sum "$DEST/pos-rest"
             sudo systemctl status start-api-v2 --no-pager
+
+  # Merged source branches are removed: after a successful deploy, delete
+  # remote claude/* branches whose tip is already in v2 and whose last commit
+  # is older than 24 h (fresh branches of threads still working are kept).
+  # Never touches v2, master or any other branch.
+  cleanup-branches:
+    needs: build-and-deploy
+    if: github.ref == 'refs/heads/v2'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Delete merged, stale claude/* branches
+        run: |
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          NOW=$(date +%s)
+          DELETED=0
+          for ref in $(git branch -r --merged origin/v2 --format '%(refname:short)'); do
+            case "$ref" in origin/claude/*) ;; *) continue ;; esac
+            BRANCH=${ref#origin/}
+            case "$BRANCH" in v2|master) continue ;; esac
+            AGE=$(( NOW - $(git log -1 --format=%ct "$ref") ))
+            if [ "$AGE" -lt 86400 ]; then
+              echo "keep   $BRANCH (last commit $((AGE / 3600)) h ago)"
+              continue
+            fi
+            echo "delete $BRANCH (merged into v2, last commit $((AGE / 3600)) h ago)"
+            git push origin --delete "$BRANCH" && DELETED=$((DELETED + 1))
+          done
+          echo "Deleted $DELETED merged claude/* branch(es)."

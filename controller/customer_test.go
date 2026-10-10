@@ -1,13 +1,20 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/db"
+	"github.com/sirinibin/startpos/backend/models"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ---------------------------------------------------------------------------
@@ -344,14 +351,149 @@ func TestPhoneNormVariants_DigitsFirst(t *testing.T) {
 // Integration stubs
 // ---------------------------------------------------------------------------
 
-// TestFindCustomerByNameExact_Integration documents that findCustomerByNameExact
-// requires a live MongoDB connection to search by name.
+// TestFindCustomerByNameExact_Integration checks findCustomerByNameExact
+// against the seeded store: exact, case-sensitive, store-scoped matching that
+// ignores soft-deleted customers.
 func TestFindCustomerByNameExact_Integration(t *testing.T) {
-	t.Skip("requires live MongoDB — findCustomerByNameExact calls store.FindCustomerByName which needs a real DB connection")
+	fx := requireDB(t)
+	storeA, err := models.FindStoreByID(&fx.StoreA, bson.M{})
+	if err != nil {
+		t.Fatalf("load store A: %v", err)
+	}
+	storeB, err := models.FindStoreByID(&fx.StoreB, bson.M{})
+	if err != nil {
+		t.Fatalf("load store B: %v", err)
+	}
+
+	if c := findCustomerByNameExact(storeA, "Riyadh Motors"); c == nil || c.ID != fx.CustomerA1 {
+		t.Fatalf("exact name: want CustomerA1 %s, got %+v", fx.CustomerA1.Hex(), c)
+	}
+	// legacy-shaped customer (no "deleted" key at all) is still found
+	if c := findCustomerByNameExact(storeA, "Walk In Old"); c == nil || c.ID != fx.CustomerA2 {
+		t.Fatalf("legacy customer without deleted flag: want CustomerA2, got %+v", c)
+	}
+	for _, name := range []string{"", "riyadh motors", "Riyadh", "Riyadh Motors "} {
+		if c := findCustomerByNameExact(storeA, name); c != nil {
+			t.Errorf("name %q must not match (exact match only), got %s", name, c.Name)
+		}
+	}
+	// store scoping: store B has no "Riyadh Motors"
+	if c := findCustomerByNameExact(storeB, "Riyadh Motors"); c != nil {
+		t.Errorf("store B must not see store A's customer, got %s", c.ID.Hex())
+	}
+
+	// soft-deleted customers are ignored, live ones with the same name are found
+	name := uniqName("Exact Name Co")
+	insertStoreDoc(t, fx.StoreA, "customer", bson.M{"name": name, "store_id": fx.StoreA, "deleted": true})
+	if c := findCustomerByNameExact(storeA, name); c != nil {
+		t.Fatalf("deleted customer must not be returned, got %s", c.ID.Hex())
+	}
+	liveID := insertStoreDoc(t, fx.StoreA, "customer", bson.M{"name": name, "store_id": fx.StoreA, "deleted": false})
+	if c := findCustomerByNameExact(storeA, name); c == nil || c.ID != liveID {
+		t.Fatalf("live customer: want %s, got %+v", liveID.Hex(), c)
+	}
 }
 
-// TestFindOrCreateCustomerHandler_Integration_Success documents the successful
-// find-or-create flow that requires a live store and MongoDB.
+// TestFindOrCreateCustomerHandler_Integration_Success drives
+// POST /v1/customer/find-or-create: auth + store checks, phone-normalised
+// lookup of an existing customer, creation of a new one (persisted with a
+// serial code and digits-only phone) and idempotency of a repeat call.
 func TestFindOrCreateCustomerHandler_Integration_Success(t *testing.T) {
-	t.Skip("requires live MongoDB with a valid auth token and a seeded store")
+	fx := requireDB(t)
+	tok := tokenFor(t, fx.AdminEmail)
+	url := "/v1/customer/find-or-create?store_id=" + fx.StoreA.Hex()
+
+	if r := callHandler(t, FindOrCreateCustomerHandler, "POST", url, "", map[string]string{"name": "x"}); r.Code != http.StatusUnauthorized {
+		t.Fatalf("no token: want 401, got %d", r.Code)
+	}
+	if r := callHandler(t, FindOrCreateCustomerHandler, "POST", "/v1/customer/find-or-create?store_id=bad", tok, map[string]string{"name": "x"}); r.Code != http.StatusBadRequest {
+		t.Fatalf("bad store_id: want 400, got %d", r.Code)
+	}
+	if r := callHandler(t, FindOrCreateCustomerHandler, "POST", "/v1/customer/find-or-create?store_id="+primitive.NewObjectID().Hex(), tok, map[string]string{"name": "x"}); r.Code != http.StatusNotFound {
+		t.Fatalf("unknown store: want 404, got %d", r.Code)
+	}
+	if r := callHandler(t, FindOrCreateCustomerHandler, "POST", url, tok, "{not json"); r.Code != http.StatusBadRequest {
+		t.Fatalf("bad JSON: want 400, got %d", r.Code)
+	}
+
+	created := func(r apiResp) bool {
+		var m struct {
+			Created bool `json:"created"`
+		}
+		_ = json.Unmarshal([]byte(r.Raw), &m)
+		return m.Created
+	}
+
+	// existing customer: CustomerA1 is stored as "0512345678"; an
+	// international, space-formatted number must resolve to it.
+	r := callHandler(t, FindOrCreateCustomerHandler, "POST", url, tok, map[string]string{"name": "Someone Else", "phone": "+966 51 234 5678"})
+	if r.Code != http.StatusOK || created(r) {
+		t.Fatalf("existing by phone: want 200 created=false, got %d %s", r.Code, r.Raw)
+	}
+	if id, _ := r.resultMap(t)["id"].(string); id != fx.CustomerA1.Hex() {
+		t.Fatalf("existing by phone: want %s, got %s", fx.CustomerA1.Hex(), id)
+	}
+	// existing customer by exact name (no phone/email given)
+	r = callHandler(t, FindOrCreateCustomerHandler, "POST", url, tok, map[string]string{"name": "Riyadh Motors"})
+	if id, _ := r.resultMap(t)["id"].(string); r.Code != http.StatusOK || created(r) || id != fx.CustomerA1.Hex() {
+		t.Fatalf("existing by name: got %d %s", r.Code, r.Raw)
+	}
+
+	// new customer
+	n := time.Now().UnixNano()
+	local := fmt.Sprintf("05%08d", n%100000000)
+	name := uniqName("FindOrCreate Co")
+	email := fmt.Sprintf("foc+%d@t1.example", n)
+	formatted := "+966 " + local[1:3] + " " + local[3:6] + " " + local[6:]
+	r = callHandler(t, FindOrCreateCustomerHandler, "POST", url, tok, map[string]string{
+		"name": name, "phone": formatted, "email": email, "city_name": "Dammam", "contact_person": "Omar",
+	})
+	if r.Code != http.StatusOK || !created(r) {
+		t.Fatalf("create: want 200 created=true, got %d %s", r.Code, r.Raw)
+	}
+	res := r.resultMap(t)
+	newID, err := primitive.ObjectIDFromHex(fmt.Sprint(res["id"]))
+	if err != nil {
+		t.Fatalf("create: bad id in %s", r.Raw)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, _ = db.GetDB("store_"+fx.StoreA.Hex()).Collection("customer").DeleteOne(ctx, bson.M{"_id": newID})
+	})
+
+	storeA, err := models.FindStoreByID(&fx.StoreA, bson.M{})
+	if err != nil {
+		t.Fatalf("load store A: %v", err)
+	}
+	saved, err := storeA.FindCustomerByID(&newID, bson.M{})
+	if err != nil {
+		t.Fatalf("created customer not in DB: %v", err)
+	}
+	wantPhone := "966" + local[1:] // digits-only form of the submitted number
+	if saved.Name != name || saved.Email != email || saved.Phone != wantPhone || saved.ContactPerson != "Omar" ||
+		saved.NationalAddress.CityName != "Dammam" || saved.StoreID == nil || *saved.StoreID != fx.StoreA {
+		t.Fatalf("saved customer mismatch: name=%q email=%q phone=%q contact=%q city=%q store=%v",
+			saved.Name, saved.Email, saved.Phone, saved.ContactPerson, saved.NationalAddress.CityName, saved.StoreID)
+	}
+	if !strings.HasPrefix(saved.Code, "CUST") {
+		t.Errorf("new customer code %q should use the store's CUST serial", saved.Code)
+	}
+
+	// repeat with the local format of the same number: found, not duplicated
+	r = callHandler(t, FindOrCreateCustomerHandler, "POST", url, tok, map[string]string{"name": "Other", "phone": local})
+	if id, _ := r.resultMap(t)["id"].(string); r.Code != http.StatusOK || created(r) || id != newID.Hex() {
+		t.Fatalf("repeat by local phone: want existing %s, got %d %s", newID.Hex(), r.Code, r.Raw)
+	}
+	// and by email only
+	r = callHandler(t, FindOrCreateCustomerHandler, "POST", url, tok, map[string]string{"email": email})
+	if id, _ := r.resultMap(t)["id"].(string); r.Code != http.StatusOK || created(r) || id != newID.Hex() {
+		t.Fatalf("repeat by email: want existing %s, got %d %s", newID.Hex(), r.Code, r.Raw)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cnt, err := db.GetDB("store_"+fx.StoreA.Hex()).Collection("customer").CountDocuments(ctx, bson.M{"name": name})
+	if err != nil || cnt != 1 {
+		t.Fatalf("want exactly 1 customer named %q, got %d (%v)", name, cnt, err)
+	}
 }

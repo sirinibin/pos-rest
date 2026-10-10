@@ -2,20 +2,24 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/go-redis/redis"
 	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/db"
 )
 
 // apiResponse is a catch-all struct used to decode JSON responses in tests.
 type apiResponse struct {
-	Status    bool              `json:"status"`
-	Errors    map[string]string `json:"errors"`
-	OK        bool              `json:"ok"`
-	Redis     struct {
+	Status bool              `json:"status"`
+	Errors map[string]string `json:"errors"`
+	OK     bool              `json:"ok"`
+	Redis  struct {
 		Status string `json:"status"`
 	} `json:"redis"`
 	MongoDB struct {
@@ -142,6 +146,15 @@ func TestHandlers_Unauthenticated(t *testing.T) {
 //   - redis.status and mongodb.status both present
 //   - checked_at is non-empty
 func TestHealthCheck_ServicesDown(t *testing.T) {
+	// In the DB-backed run Redis is already connected by other tests; point
+	// the client at a dialer that always fails for this test so "down" is deterministic.
+	if db.RedisClient != nil {
+		saved := db.RedisClient
+		db.RedisClient = redis.NewClient(&redis.Options{Dialer: func() (net.Conn, error) {
+			return nil, errors.New("redis down (test)")
+		}})
+		t.Cleanup(func() { db.RedisClient = saved })
+	}
 	r := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
 	w := httptest.NewRecorder()
 

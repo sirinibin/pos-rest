@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/erp/erpfixture"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // TestZatcaReportHandlers_Unauthenticated verifies that all four ZATCA report
@@ -91,78 +95,93 @@ func TestZatcaReportHandlers_Unauthenticated(t *testing.T) {
 	}
 }
 
-// TestZatcaReportHandlers_ReconnectRequired documents the expected behavior
-// when store.Zatca.ZatcaReconnectRequired is true.
-//
-// INTEGRATION TEST — SKIPPED in unit-test runs.
-//
-// The reconnect guard fires after ParseStore, which performs a real MongoDB
-// lookup: it reads search[store_id] from the query string and calls
-// models.FindStoreByID. There is no in-process stub for the MongoDB layer, so
-// this test cannot exercise the 403 path without a live database seeded with a
-// store that has Zatca.ZatcaReconnectRequired = true and a valid auth token.
-//
-// Expected behavior once integration conditions are met:
-//   - HTTP 403 Forbidden
-//   - response body: status=false
-//   - response body: errors["zatca_reconnect"] contains "ZATCA re-connection is required"
-func TestZatcaReportHandlers_ReconnectRequired(t *testing.T) {
-	handlers := []struct {
-		name    string
-		handler http.HandlerFunc
+// zatcaReportCases lists the four report handlers with the fixture document
+// each one reports, the collection it lives in, and the handler's error keys
+// for an unparsable id and for an id that is not found.
+func zatcaReportCases(fx *erpfixture.Fixture) []struct {
+	name     string
+	handler  http.HandlerFunc
+	coll     string
+	docID    primitive.ObjectID
+	idKey    string
+	notFound string
+} {
+	return []struct {
+		name     string
+		handler  http.HandlerFunc
+		coll     string
+		docID    primitive.ObjectID
+		idKey    string
+		notFound string
 	}{
-		{"ReportOrderToZatca", ReportOrderToZatca},
-		{"ReportSalesReturnToZatca", ReportSalesReturnToZatca},
-		{"ReportCustomerDepositToZatca", ReportCustomerDepositToZatca},
-		{"ReportCustomerWithdrawalToZatca", ReportCustomerWithdrawalToZatca},
+		{"ReportOrderToZatca", ReportOrderToZatca, "order", fx.OrderA1, "order_id", "find_order"},
+		{"ReportSalesReturnToZatca", ReportSalesReturnToZatca, "salesreturn", fx.SalesReturnA1, "sales_return_id", "find_sales_return"},
+		{"ReportCustomerDepositToZatca", ReportCustomerDepositToZatca, "customerdeposit", fx.DepositA1, "deposit_id", "find_deposit"},
+		{"ReportCustomerWithdrawalToZatca", ReportCustomerWithdrawalToZatca, "customerwithdrawal", fx.WithdrawalA1, "withdrawal_id", "find_withdrawal"},
 	}
+}
 
-	for _, h := range handlers {
-		h := h // capture range variable
-		t.Run(h.name, func(t *testing.T) {
-			t.Skip(
-				"integration test: requires a live MongoDB with a store seeded with " +
-					"Zatca.ZatcaReconnectRequired=true and a valid JWT auth token",
-			)
+// TestZatcaReportHandlers_ReconnectRequired: in a store whose
+// zatca.zatca_reconnect_required flag is set, every report handler answers
+// 403 errors.zatca_reconnect before loading the document — the document is
+// left untouched and ZATCA is never contacted.
+func TestZatcaReportHandlers_ReconnectRequired(t *testing.T) {
+	fx := requireDB(t)
+	tok := tokenFor(t, fx.AdminEmail)
+	docs := map[string][]primitive.ObjectID{}
+	for _, c := range zatcaReportCases(fx) {
+		docs[c.coll] = append(docs[c.coll], c.docID)
+	}
+	// a copy of store A (with copies of the four documents) marked for
+	// re-connection; zatca.connected stays false so that even a regression in
+	// the guard could never reach the real ZATCA service from a test.
+	storeID := gcCloneStore(t, fx.StoreA, bson.M{"zatca.zatca_reconnect_required": true, "zatca.connected": false}, docs)
+
+	for _, c := range zatcaReportCases(fx) {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			before := gcFindOne(t, storeID, c.coll, bson.M{"_id": c.docID})
+			if before == nil {
+				t.Fatalf("setup: %s %s not copied", c.coll, c.docID.Hex())
+			}
+			id := c.docID.Hex()
+			r := callHandler(t, c.handler, "POST", "/v1/x/zatca/report/"+id+"?search[store_id]="+storeID.Hex(), tok, nil, "id", id)
+			if r.Code != http.StatusForbidden || r.Status {
+				t.Fatalf("want 403, got %d %s", r.Code, r.Raw)
+			}
+			msg, _ := r.Errors["zatca_reconnect"].(string)
+			if !strings.Contains(msg, "ZATCA re-connection is required") {
+				t.Fatalf("errors.zatca_reconnect = %q (%s)", msg, r.Raw)
+			}
+			if after := gcFindOne(t, storeID, c.coll, bson.M{"_id": c.docID}); !reflect.DeepEqual(before, after) {
+				t.Fatalf("document changed although reporting was blocked:\nbefore %v\nafter  %v", before, after)
+			}
 		})
 	}
 }
 
-// TestZatcaReportHandlers_InvalidID documents the expected behavior when a
-// syntactically invalid (non-hex) resource ID is supplied in the URL path.
-//
-// INTEGRATION TEST — SKIPPED in unit-test runs.
-//
-// The ObjectID-parsing guard fires after the auth check, which calls
-// models.AuthenticateByAccessToken and requires a valid JWT backed by a live
-// MongoDB user record. Without a real token, every handler returns 401 before
-// it ever reaches the ID-parsing step — so the 400 path is unreachable in
-// pure unit tests.
-//
-// Expected behavior once integration conditions are met (valid token, bad ID):
-//   - HTTP 400 Bad Request
-//   - response body: status=false
-//   - response body: errors[errorKey] contains "Invalid ... ID"
+// TestZatcaReportHandlers_InvalidID: with a valid token, an unparsable id is
+// rejected with 400 errors.<kind>_id, and a well-formed id that does not
+// exist in the store with 400 errors.find_<kind> (store not ZATCA-connected,
+// so nothing is ever sent to ZATCA).
 func TestZatcaReportHandlers_InvalidID(t *testing.T) {
-	cases := []struct {
-		name     string
-		handler  http.HandlerFunc
-		errorKey string
-	}{
-		{"ReportOrderToZatca", ReportOrderToZatca, "order_id"},
-		{"ReportSalesReturnToZatca", ReportSalesReturnToZatca, "sales_return_id"},
-		{"ReportCustomerDepositToZatca", ReportCustomerDepositToZatca, "deposit_id"},
-		{"ReportCustomerWithdrawalToZatca", ReportCustomerWithdrawalToZatca, "withdrawal_id"},
-	}
+	fx := requireDB(t)
+	tok := tokenFor(t, fx.AdminEmail)
+	storeID := gcCloneStore(t, fx.StoreA, bson.M{"zatca.zatca_reconnect_required": false, "zatca.connected": false}, nil)
+	q := "?search[store_id]=" + storeID.Hex()
 
-	for _, c := range cases {
-		c := c // capture range variable
+	for _, c := range zatcaReportCases(fx) {
+		c := c
 		t.Run(c.name, func(t *testing.T) {
-			t.Skip(
-				"integration test: the invalid-ID guard (400) is unreachable without a " +
-					"valid auth token because the auth check fires first (401); " +
-					"expected error key: " + c.errorKey,
-			)
+			r := callHandler(t, c.handler, "POST", "/v1/x/zatca/report/not-a-hex"+q, tok, nil, "id", "not-a-hex")
+			if r.Code != http.StatusBadRequest || r.Status || r.Errors[c.idKey] == nil {
+				t.Fatalf("bad id: want 400 errors.%s, got %d %s", c.idKey, r.Code, r.Raw)
+			}
+			unknown := primitive.NewObjectID().Hex()
+			r = callHandler(t, c.handler, "POST", "/v1/x/zatca/report/"+unknown+q, tok, nil, "id", unknown)
+			if r.Code != http.StatusBadRequest || r.Status || r.Errors[c.notFound] == nil {
+				t.Fatalf("unknown id: want 400 errors.%s, got %d %s", c.notFound, r.Code, r.Raw)
+			}
 		})
 	}
 }
@@ -197,34 +216,46 @@ func TestClearZatcaReconnect_Unauthenticated(t *testing.T) {
 	}
 }
 
-// TestClearZatcaReconnect_AdminOnly documents the expected 403 behavior when a
-// non-Admin token is provided.
-//
-// INTEGRATION TEST — SKIPPED in unit-test runs.
-//
-// The role check fires after the auth guard, which requires a valid JWT backed
-// by a live MongoDB user record. Without a real token the handler returns 401
-// before reaching the role check.
-//
-// Expected behavior once integration conditions are met (valid non-admin token):
-//   - HTTP 403 Forbidden
-//   - response body: status=false
-//   - response body: errors["role"] present
+// TestClearZatcaReconnect_AdminOnly: Manager and SalesMan tokens get 403
+// errors.role and the flag stays set; the Admin clears it (200) and
+// zatca.zatca_reconnect_required is false in MongoDB afterwards.
 func TestClearZatcaReconnect_AdminOnly(t *testing.T) {
-	t.Skip("integration test: role check unreachable without a valid auth token and live MongoDB")
+	fx := requireDB(t)
+	storeID := gcCloneStore(t, fx.StoreA, bson.M{"zatca.zatca_reconnect_required": true}, nil)
+	id := storeID.Hex()
+	path := "/v1/store/" + id + "/zatca/clear-reconnect"
+
+	for _, email := range []string{fx.ManagerEmail, fx.SalesEmail} {
+		r := callHandler(t, ClearZatcaReconnect, "PUT", path, tokenFor(t, email), nil, "id", id)
+		if r.Code != http.StatusForbidden || r.Status || r.Errors["role"] == nil {
+			t.Fatalf("%s: want 403 errors.role, got %d %s", email, r.Code, r.Raw)
+		}
+		if !gcStoreReconnectFlag(t, storeID) {
+			t.Fatalf("%s: a non-admin must not clear the flag", email)
+		}
+	}
+
+	r := callHandler(t, ClearZatcaReconnect, "PUT", path, tokenFor(t, fx.AdminEmail), nil, "id", id)
+	if r.Code != http.StatusOK || !r.Status {
+		t.Fatalf("admin: want 200, got %d %s", r.Code, r.Raw)
+	}
+	if gcStoreReconnectFlag(t, storeID) {
+		t.Fatal("admin clear: zatca.zatca_reconnect_required still true in DB")
+	}
 }
 
-// TestClearZatcaReconnect_InvalidStoreID documents the expected 400 behavior
-// when the store ID is not a valid hex ObjectID.
-//
-// INTEGRATION TEST — SKIPPED in unit-test runs.
-//
-// The store-ID guard fires after the role check which requires a valid admin
-// JWT and live MongoDB. Without those, the handler returns 401/403 first.
-//
-// Expected behavior once integration conditions are met (valid admin token, bad ID):
-//   - HTTP 400 Bad Request
-//   - response body: errors["id"] present
+// TestClearZatcaReconnect_InvalidStoreID: with an admin token an unparsable
+// store id is 400 errors.id, and an unknown store id is 500 errors.store_id.
 func TestClearZatcaReconnect_InvalidStoreID(t *testing.T) {
-	t.Skip("integration test: ID guard unreachable without a valid admin token and live MongoDB")
+	fx := requireDB(t)
+	tok := tokenFor(t, fx.AdminEmail)
+	r := callHandler(t, ClearZatcaReconnect, "PUT", "/v1/store/not-a-hex/zatca/clear-reconnect", tok, nil, "id", "not-a-hex")
+	if r.Code != http.StatusBadRequest || r.Status || r.Errors["id"] == nil {
+		t.Fatalf("bad id: want 400 errors.id, got %d %s", r.Code, r.Raw)
+	}
+	unknown := primitive.NewObjectID().Hex()
+	r = callHandler(t, ClearZatcaReconnect, "PUT", "/v1/store/"+unknown+"/zatca/clear-reconnect", tok, nil, "id", unknown)
+	if r.Code != http.StatusInternalServerError || r.Status || r.Errors["store_id"] == nil {
+		t.Fatalf("unknown store: want 500 errors.store_id, got %d %s", r.Code, r.Raw)
+	}
 }

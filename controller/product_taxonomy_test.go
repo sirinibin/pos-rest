@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // TestProductTaxonomy_Unauthenticated verifies that every product-category,
@@ -162,13 +163,15 @@ func TestProductTaxonomy_Unauthenticated(t *testing.T) {
 	}
 }
 
-// TestUploadProductImage_SkipAuth_Integration is a stub documenting that
-// UploadProductImage calls r.ParseMultipartForm before any authentication
-// check, so it cannot be exercised by a no-token unit test.  A proper
-// integration test that supplies a valid multipart body, a real store ID, and
-// a real product ID should be added when a test database is available.
+// TestUploadProductImage_SkipAuth_Integration runs UploadProductImage (which
+// parses the multipart form before, and instead of, any authentication)
+// against a fresh product in the seeded store: form validation, a successful
+// upload stored via the local-disk fallback (no S3 configured in the test DB)
+// and appended to the product's images, and the no-token behaviour.
 func TestUploadProductImage_SkipAuth_Integration(t *testing.T) {
-	t.Skip("UploadProductImage reads multipart form data before auth check; requires integration environment with real DB and CDN")
+	fx := requireDB(t)
+	id := insertStoreDoc(t, fx.StoreA, "product", bson.M{"name": uniqName("Upload Product"), "store_id": fx.StoreA, "deleted": false})
+	assertImageUpload(t, UploadProductImage, "/v1/product/upload-image", tokenFor(t, fx.AdminEmail), fx.StoreA, id, "product", "products")
 }
 
 // TestDeleteProductImage_NoAuthGuard documents that DeleteProductImage carries
