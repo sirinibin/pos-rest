@@ -144,6 +144,8 @@ func CreatePurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		})
 		if statsErr == nil {
 			purchase.CashDiscount = cashDiscountStats.TotalCashDiscount
+			// The balance and payment status depend on the discount.
+			_, _ = purchase.SetPaymentStatus()
 			_ = purchase.Update()
 			go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
 		}
@@ -251,6 +253,8 @@ func UpdatePurchaseCashDiscount(w http.ResponseWriter, r *http.Request) {
 		})
 		if statsErr == nil {
 			purchase.CashDiscount = cashDiscountStats.TotalCashDiscount
+			// The balance and payment status depend on the discount.
+			_, _ = purchase.SetPaymentStatus()
 			_ = purchase.Update()
 			go models.MarkDashboardDirty(*purchase.StoreID, purchase.Date)
 		}

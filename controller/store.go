@@ -168,7 +168,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := store.Validate(w, r, "create"); len(errs) > 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -412,7 +412,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := store.Validate(w, r, "update"); len(errs) > 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)

@@ -155,6 +155,8 @@ func CreateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	order.CashDiscount = cashDiscountStats.TotalCashDiscount
+	// The balance and payment status depend on the discount.
+	_, _ = order.SetPaymentStatus()
 	err = order.Update()
 	if err != nil {
 		response.Status = false
@@ -294,6 +296,8 @@ func UpdateSalesCashDiscount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	order.CashDiscount = cashDiscountStats.TotalCashDiscount
+	// The balance and payment status depend on the discount.
+	_, _ = order.SetPaymentStatus()
 	err = order.Update()
 	if err != nil {
 		response.Status = false

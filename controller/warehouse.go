@@ -103,7 +103,7 @@ func CreateWarehouse(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := warehouse.Validate(w, r, "create"); len(errs) > 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -217,7 +217,7 @@ func UpdateWarehouse(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := warehouse.Validate(w, r, "update"); len(errs) > 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)

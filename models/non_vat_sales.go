@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,16 +114,25 @@ func (s *NonVATSales) FindTotal() {
 			s.Products[i].UnitDiscountWithVAT = s.Products[i].UnitDiscount
 		} else if p.UnitPriceWithVAT == 0 && p.UnitPrice > 0 && s.VatPercent != nil && *s.VatPercent > 0 {
 			s.Products[i].UnitPriceWithVAT = RoundTo2Decimals(p.UnitPrice * (1 + (*s.VatPercent / 100)))
+		} else if s.VatPercent != nil && *s.VatPercent == 0 {
+			// With no VAT the price with VAT is the price; leaving it at zero
+			// made the whole sale total zero.
+			if p.UnitPriceWithVAT == 0 {
+				s.Products[i].UnitPriceWithVAT = p.UnitPrice
+			}
+			if p.UnitDiscountWithVAT == 0 {
+				s.Products[i].UnitDiscountWithVAT = p.UnitDiscount
+			}
 		}
 		total += p.Quantity * (s.Products[i].UnitPrice - p.UnitDiscount)
 		total = RoundTo2Decimals(total)
-		totalWithVAT += p.Quantity * (s.Products[i].UnitPriceWithVAT - p.UnitDiscountWithVAT)
+		totalWithVAT += p.Quantity * (s.Products[i].UnitPriceWithVAT - s.Products[i].UnitDiscountWithVAT)
 		totalWithVAT = RoundTo2Decimals(totalWithVAT)
 
 		//Actual
 		actualTotal += p.Quantity * (s.Products[i].UnitPrice - p.UnitDiscount)
 		actualTotal = RoundTo8Decimals(actualTotal)
-		actualTotalWithVAT += p.Quantity * (s.Products[i].UnitPriceWithVAT - p.UnitDiscountWithVAT)
+		actualTotalWithVAT += p.Quantity * (s.Products[i].UnitPriceWithVAT - s.Products[i].UnitDiscountWithVAT)
 		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 	}
 	s.Total = total
@@ -316,6 +326,18 @@ func (s *NonVATSales) Validate(w http.ResponseWriter, r *http.Request, scenario 
 		}
 		if !exists {
 			errs["id"] = "Invalid Non VAT Sales:" + s.ID.Hex()
+		}
+	}
+
+	if len(s.Products) == 0 {
+		errs["product_id"] = "At least 1 product is required"
+	}
+	for i, p := range s.Products {
+		if p.Quantity <= 0 {
+			errs["quantity_"+strconv.Itoa(i)] = "Quantity should be greater than zero"
+		}
+		if p.UnitPrice < 0 {
+			errs["unit_price_"+strconv.Itoa(i)] = "Unit price should not be negative"
 		}
 	}
 

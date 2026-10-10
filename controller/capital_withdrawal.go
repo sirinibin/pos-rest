@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -145,6 +147,14 @@ func CreateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = capitalwithdrawal.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = capitalwithdrawal
 
@@ -179,6 +189,18 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The body is decoded twice: once for the store id, and once onto the
+	// stored record so the edit is applied over it (decoding only into a
+	// fresh value and then reloading the record used to discard the edit).
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		response.Status = false
+		response.Errors["input"] = "Unable to read the request body"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	if !utils.Decode(w, r, &capitalwithdrawal) {
 		return
 	}
@@ -214,6 +236,11 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		response.Status = false
 		response.Errors["capitalwithdrawal"] = "Unable to find capitalwithdrawal:" + err.Error()
 		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if !utils.Decode(w, r, &capitalwithdrawal) {
 		return
 	}
 
@@ -263,6 +290,22 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to find capitalwithdrawal:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = capitalwithdrawal.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	err = capitalwithdrawal.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
 	}
