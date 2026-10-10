@@ -72,11 +72,28 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
+      # A local S3-compatible server, so the S3 upload/read/delete code is
+      # tested with real request signing. Throwaway keys; no real bucket.
+      - name: Start a local S3 server (SeaweedFS)
+        run: |
+          mkdir -p /tmp/s3cfg
+          echo '{"identities":[{"name":"ci","credentials":[{"accessKey":"ciaccesskey","secretKey":"cisecretkey123"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > /tmp/s3cfg/s3.json
+          docker run -d --network host --name s3 -v /tmp/s3cfg:/cfg chrislusf/seaweedfs:3.97 \
+            server -dir=/data -s3 -s3.port=8333 -s3.config=/cfg/s3.json -master.volumeSizeLimitMB=64
+          for i in $(seq 1 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8333/)" = 403 ] && exit 0
+            sleep 2
+          done
+          docker logs s3 | tail -20; exit 1
+
       # TestHealthCheck_ServicesDown asserts the health check reports MongoDB and
       # Redis as down, so it only holds without them; the unit job runs it.
       - name: Run integration tests
         env:
           MONGO_DB: startpos_integration_test
+          S3_TEST_ENDPOINT: http://localhost:8333
+          S3_TEST_ACCESS_KEY: ciaccesskey
+          S3_TEST_SECRET_KEY: cisecretkey123
         run: go test -tags integration ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA|TestHealthCheck_ServicesDown"
 
   # ── API end-to-end: the built server over real HTTP ──────────────────────

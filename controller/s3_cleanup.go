@@ -37,9 +37,11 @@ func headS3Object(s models.AdminSettings, key string) bool {
 	req.Header.Set("X-Amz-Date", timeStr)
 	req.Header.Set("X-Amz-Content-Sha256", emptyHash)
 
-	urlPath := "/" + key
+	// Sign the encoded key, as Go sends it; a raw key with spaces didn't match.
+	encodedKey := s3URIEncodeKey(key)
+	urlPath := "/" + encodedKey
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + encodedKey
 	}
 	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n", host, emptyHash, timeStr)
 	signedHeaders := "host;x-amz-content-sha256;x-amz-date"

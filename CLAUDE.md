@@ -19,7 +19,8 @@ deploy.sh enforces three gates before every deploy — all three must pass:
 
 ## GitHub Actions
 `deploy_test.yml` / `deploy_prod.yml` call `tests.yml` and deploy only if all of it passes:
-unit + API tests, integration tests (`-tags integration`, MongoDB + Redis services),
+unit + API tests, integration tests (`-tags integration`, MongoDB + Redis services, a SeaweedFS S3 server for the
+`S3_TEST_*` storage tests),
 API e2e (`-tags e2e`, see `e2e/README.md`), a race-detector job (`-race` on unit + integration,
 and the e2e suite against a `-race` server build), a report-only ZATCA sandbox job (`-tags "e2e zatca"`,
 test VAT 399999999900003 / CRN 4030360927, never Production) and the frontend's full-stack Playwright suite

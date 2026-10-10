@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,18 +32,35 @@ func s3StorageHost(s AdminSettings) string {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
 		ep = strings.TrimPrefix(ep, "https://")
 		ep = strings.TrimPrefix(ep, "http://")
-		return ep + "/" + s.S3BucketName
+		// Path-style: the bucket is in the path, not the Host header Go
+		// sends, so it must not be in the signed host either (S3-compatible
+		// services refused every signed request).
+		if i := strings.Index(ep, "/"); i >= 0 {
+			ep = ep[:i]
+		}
+		return ep
 	}
 	return fmt.Sprintf("%s.s3.%s.amazonaws.com", s.S3BucketName, s.S3Region)
 }
 
 // s3StoragePutURL returns the full URL for a PutObject request.
 func s3StoragePutURL(s AdminSettings, key string) string {
+	key = s3EncodeKey(key)
 	if s.S3Endpoint != "" {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
 		return ep + "/" + s.S3BucketName + "/" + key
 	}
 	return fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.S3BucketName, s.S3Region, key)
+}
+
+// s3EncodeKey percent-encodes each segment of key, so the signed path is
+// the one Go sends (file names with spaces failed the signature check).
+func s3EncodeKey(key string) string {
+	parts := strings.Split(key, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
 }
 
 // sha256Bytes returns the SHA-256 digest of b as a byte slice.
@@ -89,9 +107,10 @@ func uploadToS3Models(s AdminSettings, key string, data []byte, contentType stri
 		contentType, host, bodyHash, timeStr)
 	signedHeaders := "content-type;host;x-amz-content-sha256;x-amz-date"
 
-	urlPath := "/" + key
+	encodedKey := s3EncodeKey(key)
+	urlPath := "/" + encodedKey
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + encodedKey
 	}
 
 	canonicalRequest := strings.Join([]string{"PUT", urlPath, "", canonicalHeaders, signedHeaders, bodyHash}, "\n")

@@ -52,7 +52,13 @@ func s3Host(s models.AdminSettings) string {
 		ep := strings.TrimRight(s.S3Endpoint, "/")
 		ep = strings.TrimPrefix(ep, "https://")
 		ep = strings.TrimPrefix(ep, "http://")
-		return ep + "/" + s.S3BucketName
+		// Path-style: the bucket is in the path, not the Host header Go
+		// sends, so it must not be in the signed host either (S3-compatible
+		// services refused every signed request).
+		if i := strings.Index(ep, "/"); i >= 0 {
+			ep = ep[:i]
+		}
+		return ep
 	}
 	return fmt.Sprintf("%s.s3.%s.amazonaws.com", s.S3BucketName, s.S3Region)
 }
@@ -418,9 +424,11 @@ func deleteFromS3(s models.AdminSettings, key string) error {
 	req.Header.Set("X-Amz-Date", timeStr)
 	req.Header.Set("X-Amz-Content-Sha256", emptyHash)
 
-	urlPath := "/" + key
+	// Sign the encoded key, as Go sends it; a raw key with spaces didn't match.
+	encodedKey := s3URIEncodeKey(key)
+	urlPath := "/" + encodedKey
 	if s.S3Endpoint != "" {
-		urlPath = "/" + s.S3BucketName + "/" + key
+		urlPath = "/" + s.S3BucketName + "/" + encodedKey
 	}
 	canonicalHeaders := fmt.Sprintf("host:%s\nx-amz-content-sha256:%s\nx-amz-date:%s\n", host, emptyHash, timeStr)
 	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
@@ -450,6 +458,9 @@ func deleteFromS3(s models.AdminSettings, key string) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 300 && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("s3 delete %s: status %d", key, resp.StatusCode)
+	}
 	return nil
 }
 
