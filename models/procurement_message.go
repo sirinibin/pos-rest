@@ -573,6 +573,26 @@ func getPinnedContacts(storeID primitive.ObjectID, msgType string) map[string]ti
 	return m
 }
 
+// aggregateCount runs a pipeline ending in {$count: "total"} and returns the total.
+// Aggregate errors (timeouts, invalid regex, etc.) are returned instead of being
+// dropped, which previously left a nil cursor and panicked on cursor.All.
+func aggregateCount(ctx context.Context, col *mongo.Collection, countPipeline mongo.Pipeline) (int64, error) {
+	cur, err := col.Aggregate(ctx, countPipeline)
+	if err != nil {
+		return 0, err
+	}
+	var countResult []struct {
+		Total int64 `bson:"total"`
+	}
+	if err := cur.All(ctx, &countResult); err != nil {
+		return 0, err
+	}
+	if len(countResult) == 0 {
+		return 0, nil
+	}
+	return countResult[0].Total, nil
+}
+
 // ListContactThreads returns one row per distinct supplier contact, sorted by last message date desc.
 func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page, limit int, phones []string, dateFrom, dateTo *time.Time) ([]ContactThread, int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -673,14 +693,9 @@ func ListContactThreads(storeID primitive.ObjectID, msgType, search string, page
 
 	// Count
 	countPipeline := append(pipeline, bson.D{bson.E{Key: "$count", Value: "total"}})
-	countCur, _ := col.Aggregate(ctx, countPipeline)
-	var countResult []struct {
-		Total int64 `bson:"total"`
-	}
-	_ = countCur.All(ctx, &countResult)
-	var total int64
-	if len(countResult) > 0 {
-		total = countResult[0].Total
+	total, err := aggregateCount(ctx, col, countPipeline)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	skip := int64((page - 1) * limit)
