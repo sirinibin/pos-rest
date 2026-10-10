@@ -49,7 +49,7 @@ echo "==> Working tree is clean."
 # ─── 1. Tests ─────────────────────────────────────────────────────────────────
 echo ""
 echo "==> Running tests..."
-go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+go test ./... -count=1
 echo "==> All tests passed."
 
 # ─── 2. Build ─────────────────────────────────────────────────────────────────

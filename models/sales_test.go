@@ -706,23 +706,75 @@ func TestResolveDateKeyword_LastNDays_NegativeIsInvalid(t *testing.T) {
 func TestResolveDateKeyword_TimezoneOffset_SA(t *testing.T) {
 	// Saudi Arabia is UTC+3, represented as tzOffset=-3 in this codebase.
 	// "today" is the store's own calendar day: from 21:00 UTC it is already
-	// tomorrow in Riyadh, so compare with Riyadh's date, not the server's.
-	startSA, endSA, ok := resolveDateKeyword("today", -3)
+	// tomorrow in Riyadh. Fixed clocks keep this independent of when and
+	// where (server/CI timezone) the test runs.
+	cases := []struct {
+		now       string
+		wantStart string
+	}{
+		{"2026-10-09T00:00:00Z", "2026-10-08T21:00:00Z"}, // 03:00 Riyadh
+		{"2026-10-09T12:00:00Z", "2026-10-08T21:00:00Z"}, // 15:00 Riyadh
+		{"2026-10-09T20:59:59Z", "2026-10-08T21:00:00Z"}, // 23:59:59 Riyadh
+		{"2026-10-09T21:00:00Z", "2026-10-09T21:00:00Z"}, // Riyadh midnight
+		{"2026-10-09T23:59:59Z", "2026-10-09T21:00:00Z"}, // UK still on the 9th
+		{"2026-12-31T22:30:00Z", "2026-12-31T21:00:00Z"}, // New Year in Riyadh
+	}
+	for _, c := range cases {
+		now, _ := time.Parse(time.RFC3339, c.now)
+		// the server's own zone must not matter
+		for _, loc := range []string{"UTC", "Europe/London", "Asia/Kolkata", "America/New_York"} {
+			z, err := time.LoadLocation(loc)
+			if err != nil {
+				z = time.UTC
+			}
+			start, end, ok := resolveDateKeywordAt("today", -3, now.In(z))
+			if !ok {
+				t.Fatal("expected ok=true")
+			}
+			if got := start.UTC().Format(time.RFC3339); got != c.wantStart {
+				t.Errorf("now=%s (%s): SA today starts %s, want %s", c.now, loc, got, c.wantStart)
+			}
+			if got := end.Sub(start); got != 24*time.Hour-time.Second {
+				t.Errorf("now=%s: SA today should span one day, got %v", c.now, got)
+			}
+		}
+	}
+}
+
+func TestResolveDateKeyword_TimezoneOffset_SA_WallClock(t *testing.T) {
+	// the wall-clock wrapper resolves to the same Riyadh day as now
+	start, _, ok := resolveDateKeyword("today", -3)
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
 	riyadh := time.FixedZone("AST", 3*3600)
 	for _, now := range []time.Time{time.Now(), time.Now().Add(time.Second)} {
 		d := now.In(riyadh)
-		want := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, riyadh).UTC()
-		if startSA.Equal(want) {
-			if got := endSA.Sub(startSA); got != 24*time.Hour-time.Second {
-				t.Errorf("SA today should span one day, got %v", got)
-			}
+		if start.Equal(time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, riyadh)) {
 			return
 		}
 	}
-	t.Errorf("SA today should start at Riyadh midnight in UTC (21:00Z the day before), got %v", startSA)
+	t.Errorf("SA today should start at Riyadh midnight, got %v", start)
+}
+
+func TestResolveDateKeyword_YesterdayAndWeek_SA_FixedClock(t *testing.T) {
+	// Saturday 2026-10-10 00:30 Riyadh = Friday 21:30 UTC
+	now, _ := time.Parse(time.RFC3339, "2026-10-09T21:30:00Z")
+	s, _, _ := resolveDateKeywordAt("yesterday", -3, now)
+	if s.Format(time.RFC3339) != "2026-10-08T21:00:00Z" {
+		t.Errorf("yesterday in Riyadh is Oct 9, start %v", s)
+	}
+	s, e, _ := resolveDateKeywordAt("this week", -3, now)
+	if s.Format(time.RFC3339) != "2026-10-04T21:00:00Z" { // Monday Oct 5 Riyadh
+		t.Errorf("this week should start Monday Oct 5 Riyadh, got %v", s)
+	}
+	if e.Format(time.RFC3339) != "2026-10-10T20:59:59Z" {
+		t.Errorf("this week should end Saturday Oct 10 Riyadh, got %v", e)
+	}
+	s, _, _ = resolveDateKeywordAt("this month", -3, time.Date(2026, 10, 31, 21, 30, 0, 0, time.UTC))
+	if s.Format(time.RFC3339) != "2026-10-31T21:00:00Z" { // already November in Riyadh
+		t.Errorf("this month on Nov 1 Riyadh should start Nov 1, got %v", s)
+	}
 }
 
 func TestResolveDateKeyword_SAMidnightIs21UTC(t *testing.T) {

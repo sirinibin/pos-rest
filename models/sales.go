@@ -1585,7 +1585,14 @@ func (store *Store) SearchOrder(w http.ResponseWriter, r *http.Request) (orders 
 // Returns (start, end, true) when the keyword is recognised; (zero, zero, false)
 // for plain date strings that should be parsed normally.
 func resolveDateKeyword(keyword string, tzOffset float64) (start, end time.Time, ok bool) {
-	utcNow := time.Now().UTC()
+	return resolveDateKeywordAt(keyword, tzOffset, time.Now())
+}
+
+// resolveDateKeywordAt is resolveDateKeyword with an explicit "now", so the
+// result depends only on the store's offset, never on the server's clock or
+// local timezone.
+func resolveDateKeywordAt(keyword string, tzOffset float64, now time.Time) (start, end time.Time, ok bool) {
+	utcNow := now.UTC()
 	// Shift UTC to store-local time (tzOffset is negative for UTC+ zones, e.g. SA=-3)
 	localNow := utcNow.Add(time.Duration(float64(-1) * tzOffset * float64(time.Hour)))
 	today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, time.UTC)

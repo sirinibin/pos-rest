@@ -13,6 +13,25 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    # MongoDB + Redis so the DB-backed tests (erp API/integration, models
+    # integration) really run instead of skipping. Images come from Google's
+    # Docker Hub mirror (Docker Hub rate-limits anonymous mongo pulls).
+    services:
+      mongo:
+        image: mirror.gcr.io/library/mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: mirror.gcr.io/library/redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,9 +50,60 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
-      # ── Tests — skip flaky timezone test (matches deploy_v2.sh) ──────────────
+      # ── Tests — full suite incl. DB-backed + integration-tagged tests ────────
+      # Fails the job (and so the deploy) on any failing test or build error,
+      # and prints passed/failed/skipped counts so the log shows what ran.
       - name: Run tests
-        run: go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+        env:
+          ERP_TEST_DB: "1"
+          MONGO_HOST: 127.0.0.1
+          MONGO_PORT: "27017"
+          REDIS_DSN: 127.0.0.1:6379
+          TZ: Europe/London # same zone as the server; tests must not depend on it
+        run: |
+          set +e
+          go test -tags integration ./... -count=1 -json > test-results.json
+          TEST_EXIT=$?
+          set -e
+          # output of every failing test, so the log says why it failed
+          FAILED=$(jq -r 'select(.Action=="fail" and .Test!=null) | "\(.Package)\t\(.Test)"' test-results.json)
+          if [ -n "$FAILED" ]; then
+            echo "::group::Failing tests output"
+            echo "$FAILED" | while IFS=$'\t' read -r pkg test; do
+              jq -j --arg p "$pkg" --arg t "$test" 'select(.Action=="output" and .Package==$p and .Test==$t) | .Output' test-results.json
+            done
+            echo "::endgroup::"
+          fi
+          # build / package-level errors (no Test field): show them only when
+          # go test failed without a failing test to blame
+          if [ "$TEST_EXIT" -ne 0 ] && [ -z "$FAILED" ]; then
+            jq -r 'select(.Action=="output" and .Test==null) | .Output' test-results.json | grep -v '^$' || true
+          fi
+          echo
+          echo "Per package (top-level tests and subtests):"
+          jq -r 'select(.Test!=null and (.Action=="pass" or .Action=="fail" or .Action=="skip")) | "\(.Package|sub(".*/backend/?";"./"))\t\(.Action)"' test-results.json \
+            | sort | uniq -c | awk '{printf "  %-14s %-5s %6d\n", $2, $3, $1}'
+          PASS=$(jq -s '[.[] | select(.Test!=null and .Action=="pass")] | length' test-results.json)
+          FAIL=$(jq -s '[.[] | select(.Test!=null and .Action=="fail")] | length' test-results.json)
+          SKIP=$(jq -s '[.[] | select(.Test!=null and .Action=="skip")] | length' test-results.json)
+          echo
+          echo "TEST SUMMARY: passed=$PASS failed=$FAIL skipped=$SKIP (go test exit $TEST_EXIT)"
+          {
+            echo "### Backend tests"
+            echo "| passed | failed | skipped |"
+            echo "|---|---|---|"
+            echo "| $PASS | $FAIL | $SKIP |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$TEST_EXIT" -ne 0 ] || [ "$FAIL" -ne 0 ]; then
+            echo "Tests FAILED — aborting deploy."
+            exit 1
+          fi
+          # guard: the DB-backed suite must actually have run
+          if [ "$PASS" -lt 2500 ]; then
+            echo "Only $PASS tests passed (expected 2500+); DB-backed tests may have been skipped. Aborting."
+            exit 1
+          fi
+          rm -f test-results.json
 
       # ── Build — abort if go build produces any output (warnings = abort) ──────
       - name: Build
