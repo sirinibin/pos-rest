@@ -2948,7 +2948,7 @@ func parseCategories(raw string) []string {
 		parts := strings.Split(raw, ",")
 		var cats []string
 		for _, p := range parts {
-			p = strings.Trim(p, `" \t\n\r`)
+			p = strings.Trim(p, "\" \t\n\r")
 			if p != "" {
 				cats = append(cats, p)
 			}

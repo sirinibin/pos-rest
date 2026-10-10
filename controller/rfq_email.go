@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,7 +70,7 @@ func rfqEmailSave(storeObjID primitive.ObjectID, fields bson.M) error {
 // ── IMAP connection test ──────────────────────────────────────────────────────
 
 func imapTestLogin(host string, port int, useSSL bool, username, password string) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	timeout := 10 * time.Second
 
 	var conn net.Conn

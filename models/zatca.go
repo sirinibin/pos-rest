@@ -12,7 +12,7 @@ import (
 type ComplianceCheck struct {
 	SimplifiedInvoice    bool `json:"simplified_invoice" bson:"simplified_invoice"`
 	SimplifiedCreditNote bool `json:"simplified_credit_note" bson:"simplified_credit_note"`
-	SimplifiedDebitNote  bool `json:"simplified_debit_note" bson:"simplified_debit_note`
+	SimplifiedDebitNote  bool `json:"simplified_debit_note" bson:"simplifieddebitnote"` // key already stored by the old malformed tag
 	StandardInvoice      bool `json:"standard_invoice" bson:"standard_invoice"`
 	StandardCreditNote   bool `json:"standard_credit_note" bson:"standard_credit_note"`
 	StandardDebitNote    bool `json:"standard_debit_note" bson:"standard_debit_note"`

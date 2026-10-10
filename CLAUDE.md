@@ -11,8 +11,9 @@ deploy.sh enforces three gates before every deploy — all three must pass:
 1. **No uncommitted changes** — `git status --porcelain` must be empty.
    Commit or stash everything before running deploy.sh.
 
-2. **All tests pass** — `go test ./... -count=1` must exit 0.
-   Skipped: TestResolveDateKeyword_TimezoneOffset_SA (flaky near midnight UTC).
+2. **All tests pass** — `go test ./... -count=1` must exit 0 (no skipped tests).
+   CI (.github/workflows/deploy_v2.yml) also runs lint, the race detector, the
+   full DB-backed suite with MongoDB + Redis, and ci/smoke.sh before deploying.
 
 3. **No build output** — `go build` must produce zero output.
    Any output from go build (warnings, notes) causes an abort.
@@ -60,7 +61,7 @@ Resolve any conflicts before proceeding. Never start work on a stale copy.
 **Before every push:**
 ```bash
 git fetch origin && git rebase origin/v2
-go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+ERP_TEST_DB=1 MONGO_HOST=127.0.0.1 MONGO_PORT=27017 REDIS_DSN=127.0.0.1:6379 go test -tags integration ./... -count=1
 ```
 Both steps must pass cleanly. If the rebase pulls in new commits, re-run the tests.
 Never push if tests are red or if the rebase is unresolved.
@@ -70,7 +71,7 @@ Never push if tests are red or if the rebase is unresolved.
 Once all tests pass, **push immediately without asking** — to `origin/v2`:
 ```bash
 git fetch origin && git rebase origin/v2
-go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+ERP_TEST_DB=1 MONGO_HOST=127.0.0.1 MONGO_PORT=27017 REDIS_DSN=127.0.0.1:6379 go test -tags integration ./... -count=1
 git push origin v2
 ```
 Do not wait for confirmation. A green test suite is the only gate.

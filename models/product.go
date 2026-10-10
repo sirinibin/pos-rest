@@ -1032,18 +1032,10 @@ func (store *Store) SearchProduct(w http.ResponseWriter, r *http.Request, loadDa
 			textSearching = true
 		}
 	}
-	sortFieldName := ""
 	keys, ok = r.URL.Query()["sort"]
 	if ok && len(keys[0]) >= 1 {
 		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
-		sortFieldName = keys[0]
 		criterias.SortBy = GetSortByFields(keys[0])
-	}
-
-	if sortFieldName != "" {
-		if strings.HasPrefix(sortFieldName, "-") {
-			sortFieldName = strings.TrimPrefix(sortFieldName, "-")
-		}
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]
@@ -4683,7 +4675,7 @@ func sanitizeUTF8(input string) string {
 	// Ensure that we keep only valid UTF-8 characters and replace any invalid sequences
 	if !utf8.ValidString(input) {
 		// Replace invalid characters with a placeholder or remove them entirely
-		input = regexp.MustCompile(`[^a-zA-Z0-9\u0600-\u06FF]+`).ReplaceAllString(input, " ")
+		input = regexp.MustCompile(`[^a-zA-Z0-9\x{0600}-\x{06FF}]+`).ReplaceAllString(input, " ")
 	}
 	return input
 }
@@ -5433,18 +5425,10 @@ func (store *Store) BuildProductCriterias(w http.ResponseWriter, r *http.Request
 			criterias.SearchBy["$text"] = bson.M{"$search": searchWord}
 		}
 	}
-	sortFieldName := ""
 	keys, ok = r.URL.Query()["sort"]
 	if ok && len(keys[0]) >= 1 {
 		keys[0] = strings.Replace(keys[0], "stores.", "product_stores."+storeID.Hex()+".", -1)
-		sortFieldName = keys[0]
 		criterias.SortBy = GetSortByFields(keys[0])
-	}
-
-	if sortFieldName != "" {
-		if strings.HasPrefix(sortFieldName, "-") {
-			sortFieldName = strings.TrimPrefix(sortFieldName, "-")
-		}
 	}
 
 	keys, ok = r.URL.Query()["search[name]"]

@@ -25,26 +25,35 @@ type StoreConnection struct {
 	LastUsed time.Time
 }
 
+// GetDB and Client are called from many goroutines at once (HTTP handlers,
+// dashboard fan-outs, background jobs), so the connection maps are guarded by
+// mu; unguarded writes could crash the process with "concurrent map writes".
 func GetDB(dbName string) *mongo.Database {
-	if dbName != "" {
-		_, dbExists := dbs[dbName]
-		connection, connectionExists := connections[dbName]
-
-		if dbExists && connectionExists {
-			connection.LastUsed = time.Now()
-			return dbs[dbName]
-		}
-
-		dbs[dbName] = Client(dbName).Database(dbName)
-		return dbs[dbName]
-	} else {
+	if dbName == "" {
 		return Client(GetPosDB()).Database(GetPosDB())
 	}
+	mu.Lock()
+	defer mu.Unlock()
+	if d, ok := dbs[dbName]; ok {
+		if connection, ok := connections[dbName]; ok {
+			connection.LastUsed = time.Now()
+			return d
+		}
+	}
+	d := clientLocked(dbName).Database(dbName)
+	dbs[dbName] = d
+	return d
 }
 
 // Client : function to get Mongo Client
 func Client(dbName string) *mongo.Client {
+	mu.Lock()
+	defer mu.Unlock()
+	return clientLocked(dbName)
+}
 
+// clientLocked is Client for callers already holding mu.
+func clientLocked(dbName string) *mongo.Client {
 	once.Do(func() { // <-- atomic, does not allow repeating
 		if dbName == "" {
 			clientInstance = Connect(GetPosDB())
@@ -66,7 +75,7 @@ func Client(dbName string) *mongo.Client {
 				Client:   newClient,
 				LastUsed: time.Now(),
 			}
-			return connections[dbName].Client
+			return newClient
 		}
 
 		connection.LastUsed = time.Now()

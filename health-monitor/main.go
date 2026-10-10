@@ -770,9 +770,6 @@ func restartLogHandler(w http.ResponseWriter, r *http.Request) {
 	snapshot := make([]RestartLogEntry, len(rstLog))
 	copy(snapshot, rstLog)
 	rstLogMu.Unlock()
-	if snapshot == nil {
-		snapshot = []RestartLogEntry{}
-	}
 	json.NewEncoder(w).Encode(snapshot)
 }
 
