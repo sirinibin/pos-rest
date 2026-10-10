@@ -278,6 +278,36 @@ jobs:
           python -m venv ZatcaPython/venv
           ZatcaPython/venv/bin/pip install --quiet pyopenssl asn1crypto cryptography lxml pytz requests
 
+      # The Fatoora SDK is not in git (.gitignore). Copy it from the test API's
+      # folder on the server: only the jar, schemas, rules and static config,
+      # never Data/Certificates or Data/Input (stored keys and invoices).
+      - name: Fetch the Fatoora SDK from the test server
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+          API_PATH: ${{ secrets.AWS_GO_API_TEST_DEST_PATH }}
+        run: |
+          if [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$AWS_HOST" ] || [ -z "$API_PATH" ]; then
+            echo "::warning title=Fatoora SDK::deploy secrets are not available to this run; invoice signing will fail"
+            exit 0
+          fi
+          umask 077
+          KEY="$RUNNER_TEMP/sdk_key"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY"
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$AWS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          SDK=ZatcaPython/utilities/fatoora-cli-simulation
+          mkdir -p "$SDK"
+          ssh -i "$KEY" "$AWS_USER@$AWS_HOST" \
+            "cd '$API_PATH/$SDK' && tar -czf - Apps Data/Schemas Data/Rules \$(ls Data/PIH/pih.txt Configuration/config.json Configuration/defaults.json Configuration/usage.txt 2>/dev/null)" \
+            | tar -xzf - -C "$SDK"
+          rm -f "$KEY"
+          mkdir -p "$SDK/Data/Certificates" "$SDK/Data/Input" "$SDK/Data/PIH"
+          ls "$SDK/Apps"
+          test -f "$SDK/Apps/zatca-einvoicing-sdk-238-R3.4.4.jar"
+
       - name: Build server and seed e2e user
         run: |
           go build -o pos-rest .

@@ -26,6 +26,7 @@ jobs:
     uses: ./.github/workflows/tests.yml
     with:
       frontend_ref: master
+    secrets: inherit
 
   build-and-deploy:
     needs: tests
