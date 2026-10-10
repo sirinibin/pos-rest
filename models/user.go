@@ -406,6 +406,8 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	if govalidator.IsNull(user.Email) {
 		errs["email"] = "E-mail is required"
+	} else if !govalidator.IsEmail(strings.TrimSpace(user.Email)) {
+		errs["email"] = "Invalid e-mail address"
 	}
 
 	if govalidator.IsNull(user.Mob) {
