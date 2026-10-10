@@ -326,10 +326,12 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	go deliverynote.SetCustomerDeliveryNoteStats()
 	go deliverynoteOld.SetCustomerDeliveryNoteStats()
 
-	go func() {
+	// Pass deliverynote in: the handler reloads deliverynote below, and the goroutine must
+	// keep the saved copy instead of racing with that reassignment.
+	go func(deliverynote *models.DeliveryNote) {
 		deliverynote.ClearProductsHistory()
 		deliverynote.CreateProductsHistory(true, deliverynoteOld)
-	}()
+	}(deliverynote)
 
 	deliverynote, err = store.FindDeliveryNoteByID(&deliverynote.ID, bson.M{})
 	if err != nil {

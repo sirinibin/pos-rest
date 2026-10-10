@@ -179,14 +179,16 @@ func CreateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
+	// Pass stocktransfer in: the handler reloads stocktransfer below, and the goroutine must
+	// keep the saved copy instead of racing with that reassignment.
+	go func(stocktransfer *models.StockTransfer) {
 		stocktransfer.CreateProductsStockTransferHistory()
 		stocktransfer.SetProductsStock()
 		stocktransfer.SetProductsStockTransferStats()
 		stocktransfer.SetWarehouseStockTransferStats()
 		go stocktransfer.CreateProductsHistory(true, nil)
 		store.NotifyUsers("stocktransfer_updated")
-	}()
+	}(stocktransfer)
 
 	stocktransfer, err = store.FindStockTransferByID(&stocktransfer.ID, bson.M{})
 	if err != nil {
@@ -309,7 +311,9 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}*/
 
-	go func() {
+	// Pass stocktransfer in: the handler reloads stocktransfer below, and the goroutine must
+	// keep the saved copy instead of racing with that reassignment.
+	go func(stocktransfer *models.StockTransfer) {
 		stocktransfer.ClearProductsStockTransferHistory()
 		stocktransfer.CreateProductsStockTransferHistory()
 		stocktransfer.SetProductsStock()
@@ -324,7 +328,7 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		stocktransfer.ClearProductsHistory()
 		stocktransfer.CreateProductsHistory(true, stocktransferOld)
 		store.NotifyUsers("stocktransfer_updated")
-	}()
+	}(stocktransfer)
 
 	stocktransfer, err = store.FindStockTransferByID(&stocktransfer.ID, bson.M{})
 	if err != nil {

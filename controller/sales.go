@@ -491,7 +491,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
+	// Pass order in: the handler reloads order below, and the goroutine must
+	// keep the saved copy instead of racing with that reassignment.
+	go func(order *models.Order) {
 		order.LinkQuotation()
 		order.LinkDeliveryNote()
 		order.CreateProductsSalesHistory()
@@ -522,7 +524,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		store.NotifyUsers("sales_updated")
-	}()
+	}(order)
 
 	order, err = store.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {
@@ -749,7 +751,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
+	// Pass order in: the handler reloads order below, and the goroutine must
+	// keep the saved copy instead of racing with that reassignment.
+	go func(order *models.Order) {
 		order.LinkQuotation()
 		order.LinkDeliveryNote()
 		order.ClearProductsSalesHistory()
@@ -807,7 +811,7 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		store.NotifyUsers("sales_updated")
-	}()
+	}(order)
 
 	order, err = store.FindOrderByID(&order.ID, bson.M{})
 	if err != nil {

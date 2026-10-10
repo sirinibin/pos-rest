@@ -478,10 +478,12 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		linkedProduct.Update(nil)
 	}
 
-	go func() {
+	// Pass product in: the handler reloads product below, and the goroutine must
+	// keep the saved copy instead of racing with that reassignment.
+	go func(product *models.Product) {
 		product.ClearStockAdjustmentHistory()
 		product.CreateStockAdjustmentHistory()
-	}()
+	}(product)
 
 	product, err = store.FindProductByID(&product.ID, bson.M{})
 	if err != nil {

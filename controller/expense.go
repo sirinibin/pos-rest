@@ -338,10 +338,12 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
+	// Pass expense in: the handler reloads expense below, and the goroutine must
+	// keep the saved copy instead of racing with that reassignment.
+	go func(expense *models.Expense) {
 		expense.SetPostBalances()
 		expenseOld.SetPostBalances()
-	}()
+	}(expense)
 
 	store, _ = models.FindStoreByID(expense.StoreID, bson.M{})
 	store.NotifyUsers("expense_updated")
