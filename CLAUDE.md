@@ -32,6 +32,8 @@ Store access: `controller.StoreAccessMiddleware` answers 403 when a request name
 use. A new endpoint that takes a store under another key needs its own check.
 `controller.RBACWriteMiddleware` answers 403 for a create/update/delete (`POST /v1/x`, `PUT|PATCH|DELETE /v1/x/{id}`)
 the user's roles don't grant, in stores with `settings.enable_rbac_module` on; map new resources in `rbacResources`.
+Concurrency: recompute-and-save of product stock goes through `store.RefreshProductStock` / `store.UpdateProductLocked`
+(per-product lock); the signed-in user comes from `models.UserFromClaims(claims)`, never a package variable.
 Validation errors answer 400: a handler that writes no status calls `ensureStatus(w, http.StatusBadRequest)`. Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
 
 ## Usage

@@ -93,26 +93,28 @@ func AuthenticateByAccessToken(r *http.Request) (tokenClaims TokenClaims, err er
 	if tokenClaims.Type != "access_token" {
 		return tokenClaims, errors.New("invalid access token.")
 	}
-	TokenClaimsObject = tokenClaims
-	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	user, err := UserFromClaims(tokenClaims)
 	if err != nil {
 		return tokenClaims, err
 	}
 
-	UserObject, err = FindUserByID(&userID, bson.M{"id": 1, "name": 1, "deleted": 1, "role": 1, "role_ids": 1, "store_ids": 1})
-	if err != nil {
-		return tokenClaims, err
-	}
-
-	if UserObject.Deleted {
+	if user.Deleted {
 		return tokenClaims, errors.New("Account deleted")
 	}
 
 	return tokenClaims, nil
 }
 
-var TokenClaimsObject TokenClaims
-var UserObject *User
+// UserFromClaims loads the signed-in user of a request. It replaces the
+// package-level UserObject, which every request overwrote, so overlapping
+// requests checked one user's permissions against another's roles.
+func UserFromClaims(tokenClaims TokenClaims) (*User, error) {
+	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return FindUserByID(&userID, bson.M{"id": 1, "name": 1, "deleted": 1, "role": 1, "role_ids": 1, "store_ids": 1})
+}
 
 func AuthenticateByRefreshToken(r *http.Request) (tokenClaims TokenClaims, err error) {
 	tokenStr, err := ParseRefreshTokenFromRequest(r)

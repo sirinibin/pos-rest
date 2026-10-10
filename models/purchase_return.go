@@ -1,6 +1,7 @@
 package models
 
 import (
+	"sync"
 	"context"
 	"errors"
 	"fmt"
@@ -1636,39 +1637,8 @@ func (purchaseReturn *PurchaseReturn) SetProductsStock() (err error) {
 			continue
 		}
 
-		product, err := store.FindProductByID(&purchaseReturnProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&purchaseReturnProduct.ProductID); err != nil {
 			return err
-		}
-
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 	}
 	return nil
@@ -2781,39 +2751,10 @@ func (purchaseReturn *PurchaseReturn) SetProductsPurchaseReturnStats() error {
 	}
 
 	for _, purchaseReturnProduct := range purchaseReturn.Products {
-		product, err := store.FindProductByID(&purchaseReturnProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&purchaseReturnProduct.ProductID, func(product *Product) error {
+			return product.SetProductPurchaseReturnStats(purchaseReturnProduct.WarehouseCode)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductPurchaseReturnStats(purchaseReturnProduct.WarehouseCode)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductPurchaseReturnStats(purchaseReturnProduct.WarehouseCode)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 
 	}
@@ -3086,6 +3027,9 @@ func MakeJournalsForUnpaidPurchaseReturn(
 	return journals
 }
 
+// purchaseReturnLedgerMu guards this file's package-level payment totals, which every
+// CreateLedger call resets and fills: concurrent saves mixed their amounts.
+var purchaseReturnLedgerMu sync.Mutex
 var totalPurchaseReturnPaidAmount float64
 var extraPurchaseReturnAmountPaid float64
 var extraPurchaseReturnPayments []PurchaseReturnPayment
@@ -3424,6 +3368,9 @@ func RegroupPurchaseReturnPaymentsByDatetime(payments []PurchaseReturnPayment) [
 }
 
 func (purchaseReturn *PurchaseReturn) CreateLedger() (ledger *Ledger, err error) {
+	purchaseReturnLedgerMu.Lock()
+	defer purchaseReturnLedgerMu.Unlock()
+
 	store, err := FindStoreByID(purchaseReturn.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

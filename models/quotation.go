@@ -1,6 +1,7 @@
 package models
 
 import (
+	"sync"
 	"context"
 	"errors"
 	"fmt"
@@ -2736,38 +2737,10 @@ func (quotation *Quotation) SetProductsQuotationStats() error {
 	}
 
 	for _, quotationProduct := range quotation.Products {
-		product, err := store.FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&quotationProduct.ProductID, func(product *Product) error {
+			return product.SetProductQuotationStatsByStoreID(*quotation.StoreID)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductQuotationStatsByStoreID(*quotation.StoreID)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductQuotationStatsByStoreID(store.ID)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-			}
 		}
 
 	}
@@ -2912,38 +2885,10 @@ func (quotation *Quotation) SetProductsQuotationSalesStats() error {
 	}
 
 	for _, quotationProduct := range quotation.Products {
-		product, err := store.FindProductByID(&quotationProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&quotationProduct.ProductID, func(product *Product) error {
+			return product.SetProductQuotationSalesStats(quotationProduct.WarehouseCode)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductQuotationSalesStats(quotationProduct.WarehouseCode)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductQuotationSalesStats(quotationProduct.WarehouseCode)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-			}
 		}
 	}
 	return nil
@@ -2960,39 +2905,8 @@ func (quotation *Quotation) SetProductsStock() (err error) {
 	}
 
 	for _, quotationProduct := range quotation.Products {
-		product, err := store.FindProductByID(&quotationProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&quotationProduct.ProductID); err != nil {
 			return err
-		}
-
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(&store.ID)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 
 	}
@@ -3436,9 +3350,15 @@ func (quotation *Quotation) UndoAccounting() error {
 	return nil
 }
 
+// quotationLedgerMu guards this file's package-level payment totals, which every
+// CreateLedger call resets and fills: concurrent saves mixed their amounts.
+var quotationLedgerMu sync.Mutex
 var extraQuotationSalesPayments []QuotationPayment
 
 func (quotation *Quotation) CreateLedger() (ledger *Ledger, err error) {
+	quotationLedgerMu.Lock()
+	defer quotationLedgerMu.Unlock()
+
 	store, err := FindStoreByID(quotation.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

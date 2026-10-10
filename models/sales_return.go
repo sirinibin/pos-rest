@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -1983,39 +1984,8 @@ func (salesreturn *SalesReturn) SetProductsStock() (err error) {
 			continue
 		}
 
-		product, err := store.FindProductByID(&salesreturnProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&salesreturnProduct.ProductID); err != nil {
 			return err
-		}
-
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 	}
 
@@ -3842,39 +3812,10 @@ func (salesReturn *SalesReturn) SetProductsSalesReturnStats() error {
 			continue
 		}
 
-		product, err := store.FindProductByID(&salesReturnProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&salesReturnProduct.ProductID, func(product *Product) error {
+			return product.SetProductSalesReturnStats(salesReturnProduct.WarehouseCode)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductSalesReturnStats(salesReturnProduct.WarehouseCode)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductSalesReturnStats(salesReturnProduct.WarehouseCode)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 
 	}
@@ -4104,6 +4045,9 @@ func MakeJournalsForUnpaidSalesReturn(
 	return journals
 }
 
+// salesReturnLedgerMu guards this file's package-level payment totals, which every
+// CreateLedger call resets and fills: concurrent saves mixed their amounts.
+var salesReturnLedgerMu sync.Mutex
 var totalSalesReturnPaidAmount float64
 var extraSalesReturnAmountPaid float64
 var extraSalesReturnPayments []SalesReturnPayment
@@ -4494,6 +4438,9 @@ func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]Sal
 //End customer account journals
 
 func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
+	salesReturnLedgerMu.Lock()
+	defer salesReturnLedgerMu.Unlock()
+
 	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

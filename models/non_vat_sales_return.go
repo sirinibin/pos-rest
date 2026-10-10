@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -797,30 +798,8 @@ func (ret *NonVATSalesReturn) SetProductsStock() error {
 			continue
 		}
 
-		product, err := store.FindProductByID(&p.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&p.ProductID); err != nil {
 			return err
-		}
-
-		if err = product.SetStock(); err != nil {
-			return err
-		}
-
-		if err = product.Update(&store.ID); err != nil {
-			return err
-		}
-
-		for _, setProduct := range product.Set.Products {
-			setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-			if err != nil {
-				return err
-			}
-			if err = setProductObj.SetStock(); err != nil {
-				return err
-			}
-			if err = setProductObj.Update(&store.ID); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -829,6 +808,9 @@ func (ret *NonVATSalesReturn) SetProductsStock() error {
 
 // Accounting
 
+// nonVATSalesReturnLedgerMu guards this file's package-level payment totals, which every
+// CreateLedger call resets and fills: concurrent saves mixed their amounts.
+var nonVATSalesReturnLedgerMu sync.Mutex
 var totalNonVATSalesReturnPaidAmount float64
 var extraNonVATSalesReturnAmountPaid float64
 var extraNonVATSalesReturnPayments []QuotationSalesReturnPayment
@@ -918,6 +900,9 @@ func (ret *NonVATSalesReturn) UndoAccounting() error {
 }
 
 func (ret *NonVATSalesReturn) CreateLedger() (ledger *Ledger, err error) {
+	nonVATSalesReturnLedgerMu.Lock()
+	defer nonVATSalesReturnLedgerMu.Unlock()
+
 	store, err := FindStoreByID(ret.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

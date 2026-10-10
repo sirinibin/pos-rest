@@ -1,6 +1,7 @@
 package models
 
 import (
+	"sync"
 	"context"
 	"errors"
 	"fmt"
@@ -2711,38 +2712,8 @@ func (order *Order) SetProductsStock() (err error) {
 	}
 
 	for _, orderProduct := range order.Products {
-		product, err := store.FindProductByID(&orderProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&orderProduct.ProductID); err != nil {
 			return err
-		}
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(&store.ID)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 
 	}
@@ -4333,41 +4304,10 @@ func (order *Order) SetProductsSalesStats() error {
 	}
 
 	for _, orderProduct := range order.Products {
-		product, err := store.FindProductByID(&orderProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&orderProduct.ProductID, func(product *Product) error {
+			return product.SetProductSalesStats(orderProduct.WarehouseCode)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductSalesStats(orderProduct.WarehouseCode)
-		if err != nil {
-			log.Print("Error setting product sales stats: " + err.Error())
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			log.Print("Error updating: " + err.Error())
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductSalesStats(orderProduct.WarehouseCode)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 
 	}
@@ -4599,6 +4539,9 @@ func MakeJournalsForUnpaidSale(
 	return journals
 }
 
+// salesLedgerMu guards this file's package-level payment totals, which every
+// CreateLedger call resets and fills: concurrent saves mixed their amounts.
+var salesLedgerMu sync.Mutex
 var totalSalesPaidAmount float64
 var extraSalesAmountPaid float64
 var extraSalesPayments []SalesPayment
@@ -5078,6 +5021,9 @@ func (order *Order) AdjustPayments() error {
 //End customer account journals
 
 func (order *Order) CreateLedger() (ledger *Ledger, err error) {
+	salesLedgerMu.Lock()
+	defer salesLedgerMu.Unlock()
+
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

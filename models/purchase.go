@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -1449,7 +1450,6 @@ func (purchase *Purchase) Validate(
 		purchase.Date = &date
 	}
 
-
 	if !govalidator.IsNull(strings.TrimSpace(purchase.VatNo)) && !IsValidDigitNumber(strings.TrimSpace(purchase.VatNo), "15") {
 		errs["vat_no"] = "VAT No. should be 15 digits"
 		return
@@ -1767,39 +1767,8 @@ func (purchase *Purchase) SetProductsStock() (err error) {
 	}
 
 	for _, purchaseProduct := range purchase.Products {
-		product, err := store.FindProductByID(&purchaseProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&purchaseProduct.ProductID); err != nil {
 			return err
-		}
-
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 	}
 	return nil
@@ -1864,9 +1833,9 @@ func (purchase *Purchase) isLastPurchaseForProduct(productID primitive.ObjectID)
 		ID primitive.ObjectID `bson:"_id"`
 	}
 	err := collection.FindOne(ctx, bson.M{
-		"store_id":           purchase.StoreID,
+		"store_id":            purchase.StoreID,
 		"products.product_id": productID,
-		"deleted":            bson.M{"$ne": true},
+		"deleted":             bson.M{"$ne": true},
 	}, findOneOptions).Decode(&result)
 	if err != nil {
 		return false, err
@@ -2909,39 +2878,10 @@ func (purchase *Purchase) SetProductsPurchaseStats() error {
 	}
 
 	for _, purchaseProduct := range purchase.Products {
-		product, err := store.FindProductByID(&purchaseProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&purchaseProduct.ProductID, func(product *Product) error {
+			return product.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductPurchaseStats(purchaseProduct.WarehouseCode)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 
 	}
@@ -3201,6 +3141,9 @@ func MakeJournalsForUnpaidPurchase(
 	return journals
 }
 
+// purchaseLedgerMu guards this file's package-level payment totals, which every
+// CreateLedger call resets and fills: concurrent saves mixed their amounts.
+var purchaseLedgerMu sync.Mutex
 var totalPurchasePaidAmount float64
 var extraPurchaseAmountPaid float64
 var extraPurchasePayments []PurchasePayment
@@ -3577,6 +3520,9 @@ func RegroupPurchasePaymentsByDatetime(payments []PurchasePayment) [][]PurchaseP
 }
 
 func (purchase *Purchase) CreateLedger() (ledger *Ledger, err error) {
+	purchaseLedgerMu.Lock()
+	defer purchaseLedgerMu.Unlock()
+
 	store, err := FindStoreByID(purchase.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

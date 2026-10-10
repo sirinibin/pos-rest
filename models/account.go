@@ -505,6 +505,11 @@ func (store *Store) CreateAccountIfNotExists(
 	phone *string,
 	vatNo *string,
 ) (account *Account, err error) {
+	lockKey := store.ID.Hex()
+	if storeID != nil {
+		lockKey = storeID.Hex()
+	}
+	defer keyedLock(&accountCreateLocks, lockKey)()
 	name = strings.ToUpper(strings.TrimSpace(name))
 	if vatNo != nil && !govalidator.IsNull(strings.TrimSpace(*vatNo)) {
 		account, err = store.FindAccountByVatNoByName(*vatNo, name, storeID, bson.M{})

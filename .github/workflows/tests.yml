@@ -343,7 +343,12 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          grep -E -- '--- FAIL|_test.go:[0-9]+:' zatca.log | head -20 | while IFS= read -r l; do echo "::error title=ZATCA sandbox::${l}"; done
+          # GitHub shows at most 10 annotations per step, so failures go in one
+          # and notes in another, one line each.
+          fails=$(grep -E -- '--- FAIL|_test.go:[0-9]+:' zatca.log | grep -v 'NOTE ' | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          [ -n "$fails" ] && echo "::error title=ZATCA sandbox failures::${fails}"
+          notes=$(grep 'NOTE ' zatca.log | head -30 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          [ -n "$notes" ] && echo "::notice title=ZATCA sandbox notes::${notes}"
           [ -f zatca-ui.log ] && grep -E '✘|Error:|expect\(' zatca-ui.log | head -20 | while IFS= read -r l; do echo "::error title=ZATCA sandbox (UI)::${l:0:900}"; done
           grep -iE 'zatca|python|error' server.log | tail -10 | while IFS= read -r l; do echo "::warning title=ZATCA server log::${l:0:900}"; done
 

@@ -12,14 +12,23 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func canAccessUserRoles(action string) bool {
-	if models.UserObject == nil {
+func canAccessUserRoles(user *models.User, action string) bool {
+	if user == nil {
 		return false
 	}
-	if models.UserObject.Role == "Admin" {
+	if user.Role == "Admin" {
 		return true
 	}
-	return models.UserHasPermission("user_roles", action)
+	return models.UserHasPermission(user, "user_roles", action)
+}
+
+// requestUser is the signed-in user of r, or nil.
+func requestUser(claims models.TokenClaims) *models.User {
+	user, err := models.UserFromClaims(claims)
+	if err != nil {
+		return nil
+	}
+	return user
 }
 
 func ListUserRole(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +36,7 @@ func ListUserRole(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -36,7 +45,7 @@ func ListUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("read") {
+	if !canAccessUserRoles(requestUser(tokenClaims), "read") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -89,7 +98,7 @@ func CreateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("create") {
+	if !canAccessUserRoles(requestUser(tokenClaims), "create") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -143,7 +152,7 @@ func ViewUserRole(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -152,7 +161,7 @@ func ViewUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("read") {
+	if !canAccessUserRoles(requestUser(tokenClaims), "read") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -205,7 +214,7 @@ func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("update") {
+	if !canAccessUserRoles(requestUser(tokenClaims), "update") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -295,7 +304,7 @@ func DeleteUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("delete") {
+	if !canAccessUserRoles(requestUser(tokenClaims), "delete") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -366,7 +375,7 @@ func GetEffectivePermissions(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -375,7 +384,15 @@ func GetEffectivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	permissions, err := models.GetEffectivePermissions(models.UserObject.StoreIDs, models.UserObject.RoleIDs)
+	user := requestUser(tokenClaims)
+	if user == nil {
+		response.Status = false
+		response.Errors["access_token"] = "Invalid Access token: user not found"
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	permissions, err := models.GetEffectivePermissions(user.StoreIDs, user.RoleIDs)
 	if err != nil {
 		response.Status = false
 		response.Errors["permissions"] = "Unable to load permissions:" + err.Error()

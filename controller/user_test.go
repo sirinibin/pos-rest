@@ -113,18 +113,18 @@ func TestUser_Integration(t *testing.T) {
 	t.Skip("requires live MongoDB — run manually against a test instance")
 }
 
-// TestCanAccessUserRoles_NoUserObject verifies that canAccessUserRoles returns
-// false when models.UserObject is nil (no authenticated session).
-func TestCanAccessUserRoles_NoUserObject(t *testing.T) {
-	// Ensure no user is set in the global slot.
-	original := models.UserObject
-	models.UserObject = nil
-	defer func() { models.UserObject = original }()
-
-	actions := []string{"view", "create", "update", "delete"}
-	for _, action := range actions {
-		if canAccessUserRoles(action) {
-			t.Errorf("canAccessUserRoles(%q) = true with nil UserObject, want false", action)
+// canAccessUserRoles decides from the request's own user: none means no
+// access, an Admin always has it, others need a role that grants it.
+func TestCanAccessUserRoles_UsesTheRequestsUser(t *testing.T) {
+	for _, action := range []string{"read", "create", "update", "delete"} {
+		if canAccessUserRoles(nil, action) {
+			t.Errorf("canAccessUserRoles(nil, %q) = true, want false", action)
+		}
+		if !canAccessUserRoles(&models.User{Role: "Admin"}, action) {
+			t.Errorf("an Admin may not %s user roles", action)
+		}
+		if canAccessUserRoles(&models.User{Role: "SalesMan"}, action) {
+			t.Errorf("a SalesMan with no roles may %s user roles", action)
 		}
 	}
 }

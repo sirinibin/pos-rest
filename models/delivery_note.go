@@ -1070,39 +1070,10 @@ func (deliveryNote *DeliveryNote) SetProductsDeliveryNoteStats() error {
 	}
 
 	for _, deliveryNoteProduct := range deliveryNote.Products {
-		product, err := store.FindProductByID(&deliveryNoteProduct.ProductID, map[string]interface{}{})
-		if err != nil {
+		if err := store.UpdateProductLocked(&deliveryNoteProduct.ProductID, func(product *Product) error {
+			return product.SetProductDeliveryNoteStatsByStoreID(*deliveryNote.StoreID)
+		}); err != nil {
 			return err
-		}
-
-		err = product.SetProductDeliveryNoteStatsByStoreID(*deliveryNote.StoreID)
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(nil)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetProductDeliveryNoteStatsByStoreID(store.ID)
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 	}
 	return nil

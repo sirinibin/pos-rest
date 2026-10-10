@@ -675,38 +675,8 @@ func (stocktransfer *StockTransfer) SetProductsStock() (err error) {
 	}
 
 	for _, stocktransferProduct := range stocktransfer.Products {
-		product, err := store.FindProductByID(&stocktransferProduct.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&stocktransferProduct.ProductID); err != nil {
 			return err
-		}
-		err = product.SetStock()
-		if err != nil {
-			return err
-		}
-
-		err = product.Update(&store.ID)
-		if err != nil {
-			return err
-		}
-
-		if len(product.Set.Products) > 0 {
-			for _, setProduct := range product.Set.Products {
-				setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.SetStock()
-				if err != nil {
-					return err
-				}
-
-				err = setProductObj.Update(&store.ID)
-				if err != nil {
-					return err
-				}
-
-			}
 		}
 
 	}
