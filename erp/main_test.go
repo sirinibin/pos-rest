@@ -36,7 +36,13 @@ func TestMain(m *testing.M) {
 	initResources()
 	loginLimiter = controller.NewRateLimiter(100000, time.Minute)
 	signupLimiter = controller.NewRateLimiter(100000, time.Minute)
-	testRouter = NewRouter()
+	baseRouter := NewRouter()
+	testRouter = baseRouter
+	var cov *routeCoverage
+	if os.Getenv("ERP_ROUTE_COVERAGE") != "" {
+		cov = newRouteCoverage(baseRouter)
+		testRouter = cov
+	}
 	// a direct database change shows on the very next dashboard read
 	SnapshotVerifyAfter = 0
 	code := 0
@@ -69,6 +75,9 @@ func TestMain(m *testing.M) {
 		cancel0()
 		mongoVersion = bi.Version
 		code = m.Run()
+		if cov != nil && !finishRouteCoverage(cov) && code == 0 {
+			code = 1
+		}
 		fx.Drop()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		_ = db.GetDB("").Drop(ctx)
