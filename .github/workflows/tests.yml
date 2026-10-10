@@ -197,6 +197,66 @@ jobs:
           grep -A 40 "WARNING: DATA RACE" server.log | grep -E "pos-rest/|^(Write|Read|Previous)" | sort | uniq -c | sort -rn | head -40 || true
           [ "${RACES}" = "0" ]
 
+  # ── ZATCA Phase 2 against ZATCA's sandbox (developer portal) ─────────────
+  # Onboards a new non-production store (ZATCA's test VAT 399999999900003,
+  # CRN 4030360927) and reports simplified and standard invoices and a credit
+  # note. Report only: an outage of ZATCA's sandbox must not block deploys.
+  zatca-sandbox:
+    name: ZATCA sandbox (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    services:
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          go mod tidy
+          python -m venv ZatcaPython/venv
+          ZatcaPython/venv/bin/pip install --quiet pyopenssl asn1crypto cryptography lxml pytz requests
+
+      - name: Build server and seed e2e user
+        run: |
+          go build -o pos-rest .
+          go run ./e2e/seed
+
+      - name: Start server
+        run: |
+          API_PORT=2000 nohup ./pos-rest > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://localhost:2000/v1/me && exit 0
+            sleep 1
+          done
+          echo "Server did not start:"; cat server.log; exit 1
+
+      - name: Run ZATCA sandbox tests
+        run: go test -tags "e2e zatca" ./e2e/api -run TestZatcaSandbox -count=1 -v
+
+      - name: Server log
+        if: failure()
+        run: tail -n 300 server.log
+
   # ── UI end-to-end: the React app in Chromium against this API ────────────
   ui-e2e:
     name: UI end-to-end tests (Playwright)

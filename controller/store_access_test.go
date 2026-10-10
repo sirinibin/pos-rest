@@ -106,3 +106,23 @@ func TestStoreAccessMiddleware_PassesRequestsWithoutAValidToken(t *testing.T) {
 		t.Fatalf("a request without a valid token must reach the handler (which answers 401), got HTTP %d", rec.Code)
 	}
 }
+
+func TestRequestedStoreIDs_ZatcaConnectNamesTheStoreAsID(t *testing.T) {
+	a := primitive.NewObjectID()
+	var got []primitive.ObjectID
+	router := mux.NewRouter()
+	h := func(w http.ResponseWriter, r *http.Request) { got = requestedStoreIDs(r) }
+	router.HandleFunc("/v1/store/zatca/connect", h)
+	router.HandleFunc("/v1/order", h)
+	for _, c := range []struct {
+		path string
+		want int
+	}{{"/v1/store/zatca/connect", 1}, {"/v1/order", 0}} {
+		got = nil
+		req := httptest.NewRequest("POST", c.path, strings.NewReader(`{"id":"`+a.Hex()+`","otp":"1"}`))
+		router.ServeHTTP(httptest.NewRecorder(), req)
+		if len(got) != c.want {
+			t.Fatalf("%s: got %v, want %d store ids", c.path, got, c.want)
+		}
+	}
+}

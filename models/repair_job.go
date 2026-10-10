@@ -188,11 +188,28 @@ func (store *Store) GenerateRepairJobNumber() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	count, err := collection.CountDocuments(ctx, bson.M{"deleted": bson.M{"$ne": true}})
+	// A Redis counter, seeded with every job ever created (deleted ones
+	// included), so numbers stay unique after a delete and when two jobs are
+	// created at once. Counting only live jobs reissued numbers.
+	redisKey := store.ID.Hex() + "_repair_job_counter"
+	exists, err := db.RedisClient.Exists(redisKey).Result()
 	if err != nil {
 		return "", err
 	}
-	return "RJ-" + strconv.FormatInt(count+1, 10), nil
+	if exists == 0 {
+		count, err := collection.CountDocuments(ctx, bson.M{})
+		if err != nil {
+			return "", err
+		}
+		if err := db.RedisClient.SetNX(redisKey, count, 0).Err(); err != nil {
+			return "", err
+		}
+	}
+	next, err := db.RedisClient.Incr(redisKey).Result()
+	if err != nil {
+		return "", err
+	}
+	return "RJ-" + strconv.FormatInt(next, 10), nil
 }
 
 func (job *RepairJob) Insert() error {

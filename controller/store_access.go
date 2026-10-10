@@ -74,14 +74,21 @@ func requestedStoreIDs(r *http.Request) []primitive.ObjectID {
 	raw = append(raw, q["search[store_id]"]...)
 	raw = append(raw, q["store_id"]...)
 
+	tpl := ""
 	if route := mux.CurrentRoute(r); route != nil {
-		if tpl, err := route.GetPathTemplate(); err == nil && strings.HasPrefix(tpl, "/v1/store/{id}") {
-			raw = append(raw, mux.Vars(r)["id"])
-		}
+		tpl, _ = route.GetPathTemplate()
+	}
+	if strings.HasPrefix(tpl, "/v1/store/{id}") {
+		raw = append(raw, mux.Vars(r)["id"])
 	}
 
-	if s := bodyStoreID(r); s != "" {
-		raw = append(raw, s)
+	storeID, id := bodyStoreID(r)
+	if storeID != "" {
+		raw = append(raw, storeID)
+	}
+	// ZATCA connect/disconnect name the store as "id".
+	if strings.HasPrefix(tpl, "/v1/store/zatca/") && id != "" {
+		raw = append(raw, id)
 	}
 
 	var ids []primitive.ObjectID
@@ -94,20 +101,20 @@ func requestedStoreIDs(r *http.Request) []primitive.ObjectID {
 	return ids
 }
 
-// bodyStoreID returns the top-level "store_id" of a JSON object body and
-// leaves the body readable for the handler.
-func bodyStoreID(r *http.Request) string {
+// bodyStoreID returns the top-level "store_id" and "id" of a JSON object
+// body and leaves the body readable for the handler.
+func bodyStoreID(r *http.Request) (storeID, id string) {
 	if r.Body == nil || r.Body == http.NoBody {
-		return ""
+		return "", ""
 	}
 	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodPatch && r.Method != http.MethodDelete {
-		return ""
+		return "", ""
 	}
 	if ct := r.Header.Get("Content-Type"); ct != "" && !strings.Contains(ct, "json") && !strings.HasPrefix(ct, "text/plain") {
-		return ""
+		return "", ""
 	}
 	if r.ContentLength > maxPeekBody {
-		return ""
+		return "", ""
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxPeekBody+1))
 	rest := r.Body
@@ -116,16 +123,18 @@ func bodyStoreID(r *http.Request) string {
 		io.Closer
 	}{io.MultiReader(bytes.NewReader(body), rest), rest}
 	if err != nil || len(body) > maxPeekBody {
-		return ""
+		return "", ""
 	}
 	var probe struct {
 		StoreID interface{} `json:"store_id"`
+		ID      interface{} `json:"id"`
 	}
 	if json.Unmarshal(body, &probe) != nil {
-		return ""
+		return "", ""
 	}
-	s, _ := probe.StoreID.(string)
-	return s
+	storeID, _ = probe.StoreID.(string)
+	id, _ = probe.ID.(string)
+	return storeID, id
 }
 
 // storeAccessUser returns the user behind the request's access token, or nil

@@ -62,6 +62,11 @@ func TestSecurity_UserCannotReachAnotherStore(t *testing.T) {
 	code, res = call(t, "PUT", "/v1/order/"+theirSale+"?search[store_id]="+theirs, scoped, map[string]interface{}{"store_id": theirs})
 	denied("PUT their sale", code, res)
 
+	code, res = call(t, "POST", "/v1/store/zatca/disconnect", scoped, map[string]interface{}{"id": theirs})
+	denied("ZATCA disconnect (store as id)", code, res)
+	code, res = call(t, "PUT", "/v1/store/"+theirs, scoped, map[string]interface{}{"name": "Taken Over"})
+	denied("PUT their store", code, res)
+
 	// The admin who created the user still reaches both.
 	for _, s := range []string{mine, theirs} {
 		code, res = call(t, "GET", "/v1/order?search[store_id]="+s, tok, nil)
