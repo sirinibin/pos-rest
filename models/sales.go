@@ -142,6 +142,9 @@ type Order struct {
 
 type ZatcaReporting struct {
 	IsSimplified                       bool       `bson:"is_simplified" json:"is_simplified"`
+	// ICV is the invoice counter value the document was signed with: one
+	// sequence per store across invoices, credit and debit notes.
+	ICV                                int64      `bson:"icv,omitempty" json:"icv,omitempty"`
 	CompliancePassed                   bool       `bson:"compliance_passed" json:"compliance_passed"`
 	CompliancePassedAt                 *time.Time `bson:"compliance_passed_at,omitempty" json:"compliance_passed_at,omitempty"`
 	ComplianceInvoiceHash              string     `bson:"compliance_invoice_hash,omitempty" json:"compliance_invoice_hash,omitempty"`

@@ -17,7 +17,7 @@ import (
 const (
 	zatcaTestVAT = "399999999900003"
 	zatcaTestCRN = "4030360927"
-	zatcaTestOTP = "123345" // the developer portal accepts this OTP
+	zatcaTestOTP = "12345" // the developer portal's test OTP
 )
 
 func newZatcaStore(t *testing.T) string {
@@ -73,6 +73,7 @@ func TestZatcaSandbox_OnboardReportAndCredit(t *testing.T) {
 	simplified := mustOK(t, "simplified invoice", code, res)
 	z := zatcaOf(t, sid, "/v1/order/"+str(simplified, "id"))
 	wantReported(t, "simplified invoice", z)
+	z0 := z
 	if z["is_simplified"] != true {
 		t.Fatalf("a sale without a VAT-registered customer must be simplified")
 	}
@@ -104,10 +105,19 @@ func TestZatcaSandbox_OnboardReportAndCredit(t *testing.T) {
 	credit := mustOK(t, "credit note", code, res)
 	wantReported(t, "credit note", zatcaOf(t, sid, "/v1/sales-return/"+str(credit, "id")))
 
-	// A reported invoice can't be reported twice.
-	code, res = in(t, sid, "POST", "/v1/order/zatca/report/"+str(simplified, "id"), nil)
-	if res.Status {
-		t.Logf("re-reporting a reported invoice returned HTTP %d status=true", code)
+	// A reported invoice or credit note can't be reported twice: 409, and
+	// the document keeps the hash ZATCA accepted.
+	for _, doc := range []struct{ path, id, hash string }{
+		{"/v1/order", str(simplified, "id"), str(z0, "reporting_invoice_hash")},
+		{"/v1/sales-return", str(credit, "id"), str(zatcaOf(t, sid, "/v1/sales-return/"+str(credit, "id")), "reporting_invoice_hash")},
+	} {
+		code, res = in(t, sid, "POST", doc.path+"/zatca/report/"+doc.id, nil)
+		if code != http.StatusConflict || res.Status || res.Errors["already_reported"] == "" {
+			t.Fatalf("re-reporting %s %s: HTTP %d status=%v errors=%v, want 409 already_reported", doc.path, doc.id, code, res.Status, res.Errors)
+		}
+		if h := str(zatcaOf(t, sid, doc.path+"/"+doc.id), "reporting_invoice_hash"); h != doc.hash {
+			t.Fatalf("re-reporting %s %s changed its hash from %q to %q", doc.path, doc.id, doc.hash, h)
+		}
 	}
 
 	// Disconnecting stops reporting.

@@ -13,9 +13,10 @@ import (
 
 // Concurrent ZATCA reporting: several users of the same store, and users of
 // different stores, report sales and credit notes at the same moment. Each
-// document must be signed with its own store's certificate, carry its own
-// ICV and a previous-invoice hash (PIH) that continues its store's chain,
-// record the user who made it, and pass ZATCA's checks. Stores are new
+// document must be signed with its own store's key, carry its own ICV and a
+// previous-invoice hash (PIH) that continues its store's single chain (one
+// per device across invoices and credit notes, as ZATCA requires), record
+// the user who made it, and pass ZATCA's checks. Stores are new
 // sandbox stores with ZATCA's test VAT number (see zatca_sandbox_e2e_test.go).
 
 // zatcaGenesisPIH is ZATCA's PIH for a device's first invoice: the base64
@@ -26,6 +27,7 @@ type zatcaDoc struct {
 	kind, store, user, id string
 	icv                   int64
 	hash, prevHash, cert  string
+	signature             string
 	createdBy             string
 	z                     map[string]interface{}
 }
@@ -37,11 +39,12 @@ func viewZatcaDoc(t *testing.T, kind, sid, path string) zatcaDoc {
 	z, _ := m["zatca"].(map[string]interface{})
 	d := zatcaDoc{kind: kind, store: sid, id: str(m, "id"), hash: str(m, "hash"), prevHash: str(m, "prev_hash"),
 		createdBy: str(m, "created_by"), z: z}
-	if v, ok := m["invoice_count_value"].(float64); ok {
-		d.icv = int64(v)
-	}
 	if z != nil {
+		if v, ok := z["icv"].(float64); ok {
+			d.icv = int64(v)
+		}
 		d.cert, _ = z["x509_digital_certificate"].(string)
+		d.signature, _ = z["ecdsa_signature"].(string)
 	}
 	if s, _ := m["store_id"].(string); s != sid {
 		t.Errorf("%s %s: store_id %q, want %q", kind, d.id, s, sid)
@@ -49,10 +52,16 @@ func viewZatcaDoc(t *testing.T, kind, sid, path string) zatcaDoc {
 	return d
 }
 
-// checkChain checks one store's documents of one kind: unique ICVs, and a
-// PIH chain with no forks (two documents may not continue the same hash).
+// checkChain checks all of a new store's ZATCA documents: ICVs 1..n with no
+// repeats, and one PIH chain with no forks (two documents may not continue
+// the same hash) running in ICV order.
 func checkChain(t *testing.T, label string, docs []zatcaDoc) {
 	t.Helper()
+	for _, d := range docs {
+		if d.icv < 1 || d.icv > int64(len(docs)) {
+			t.Errorf("%s: %s %s has ICV %d; a new store's %d documents should use 1..%d", label, d.kind, d.id, d.icv, len(docs), len(docs))
+		}
+	}
 	byHash := map[string]zatcaDoc{}
 	icvs := map[int64]string{}
 	for _, d := range docs {
@@ -82,11 +91,65 @@ func checkChain(t *testing.T, label string, docs []zatcaDoc) {
 			continue
 		}
 		if prev, ok := byHash[d.prevHash]; !ok {
-			t.Errorf("%s: %s's PIH is not the hash of any earlier %s of this store", label, d.id, d.kind)
+			t.Errorf("%s: %s's PIH is not the hash of any earlier document of this store", label, d.id)
 		} else if prev.icv >= d.icv {
 			t.Errorf("%s: %s (ICV %d) continues %s (ICV %d): the chain runs against the ICV order", label, d.id, d.icv, prev.id, prev.icv)
 		}
 	}
+}
+
+// storeKeys reads each store's signing key from its CSR. Every store must
+// have its own.
+func storeKeys(t *testing.T, sids []string) map[string]*signerKey {
+	t.Helper()
+	keys := map[string]*signerKey{}
+	for _, sid := range sids {
+		code, res := call(t, "GET", "/v1/store/"+sid, authToken(t), nil)
+		z, _ := resultMap(t, res)["zatca"].(map[string]interface{})
+		csr, _ := z["csr"].(string)
+		k, err := csrKey(csr)
+		if code != http.StatusOK || err != nil || k.x == nil {
+			t.Fatalf("store %s: no readable CSR key (HTTP %d, %v)", sid, code, err)
+		}
+		for other, ok := range keys {
+			if ok.same(k) {
+				t.Fatalf("stores %s and %s were onboarded with the same key", other, sid)
+			}
+		}
+		keys[sid] = k
+	}
+	return keys
+}
+
+// checkSignedBy checks a document was signed with its own store's key, and
+// that its certificate is not one issued for another store's key. ZATCA's
+// developer portal answers every onboarding with its one test certificate,
+// which belongs to none of the stores' keys: that is counted, not failed.
+func checkSignedBy(t *testing.T, label string, d zatcaDoc, keys map[string]*signerKey, sandboxCerts map[string]string) {
+	t.Helper()
+	if !keys[d.store].verifiesHash(d.hash, d.signature) {
+		for sid, k := range keys {
+			if sid != d.store && k.verifiesHash(d.hash, d.signature) {
+				t.Errorf("%s: signed with store %s's key", label, sid)
+				return
+			}
+		}
+		t.Errorf("%s: signature does not verify with the store's own key", label)
+	}
+	ck, err := certKey(d.cert)
+	if err != nil {
+		t.Errorf("%s: unreadable certificate: %v", label, err)
+		return
+	}
+	for sid, k := range keys {
+		if ck.same(k) {
+			if sid != d.store {
+				t.Errorf("%s: carries the certificate issued for store %s", label, sid)
+			}
+			return
+		}
+	}
+	sandboxCerts[ck.subject] = d.store
 }
 
 func TestZatcaSandbox_ConcurrentReportingAcrossUsersAndStores(t *testing.T) {
@@ -174,7 +237,12 @@ func TestZatcaSandbox_ConcurrentReportingAcrossUsersAndStores(t *testing.T) {
 	startTogether(fns)
 
 	// Read every document back and check it.
-	certOf := map[string]string{}
+	sids := []string{}
+	for _, s := range stores {
+		sids = append(sids, s.sid)
+	}
+	keys := storeKeys(t, sids)
+	sandboxCerts := map[string]string{}
 	check := func(docs []zatcaDoc, path string) map[string][]zatcaDoc {
 		perStore := map[string][]zatcaDoc{}
 		for _, d := range docs {
@@ -190,46 +258,28 @@ func TestZatcaSandbox_ConcurrentReportingAcrossUsersAndStores(t *testing.T) {
 			if got.createdBy != d.user {
 				t.Errorf("%s: created_by %q, want the user who made it %q", label, got.createdBy, d.user)
 			}
-			if got.cert != "" {
-				if c, seen := certOf[d.store]; seen && c != got.cert {
-					t.Errorf("%s: signed with a different certificate than the store's other documents", label)
-				}
-				certOf[d.store] = got.cert
-			}
+			checkSignedBy(t, label, got, keys, sandboxCerts)
 			perStore[d.store] = append(perStore[d.store], got)
 		}
 		return perStore
 	}
 	salesByStore := check(sales, "/v1/order/")
 	creditsByStore := check(credits, "/v1/sales-return/")
-	// ZATCA's sandbox issues the same test certificate to every onboarding,
-	// so two stores sharing one says nothing about mixing there.
-	if len(certOf) == 2 && certOf[stores[0].sid] == certOf[stores[1].sid] {
-		t.Logf("NOTE both stores sign with the same certificate (expected in the sandbox)")
+	for subject := range sandboxCerts {
+		t.Logf("NOTE ZATCA's sandbox certificate %q is on these documents; it was not issued for any store's key, and each document's signature verifies with its own store's key", subject)
 	}
 
+	// One ICV sequence and one PIH chain per store across invoices and
+	// credit notes.
 	for _, s := range stores {
-		checkChain(t, "store "+s.sid+" invoices", salesByStore[s.sid])
-		checkChain(t, "store "+s.sid+" credit notes", creditsByStore[s.sid])
-
-		// ZATCA wants one ICV sequence and one PIH chain per device, across
-		// invoices and credit notes alike. Logged for now: the store keeps
-		// separate counters and chains per document type.
 		all := append(append([]zatcaDoc{}, salesByStore[s.sid]...), creditsByStore[s.sid]...)
 		sort.Slice(all, func(i, j int) bool { return all[i].icv < all[j].icv })
-		seen := map[int64]int{}
-		for _, d := range all {
-			seen[d.icv]++
-		}
-		for icv, n := range seen {
-			if n > 1 {
-				t.Logf("NOTE store %s: ICV %d is used by %d documents (invoices and credit notes count separately)", s.sid, icv, n)
-			}
-		}
+		checkChain(t, "store "+s.sid, all)
 	}
 }
 
-// Two stores onboarding at the same moment each get their own credentials.
+// Stores onboarding at the same moment each get their own key, and sign
+// their first sale with it.
 func TestZatcaSandbox_ConcurrentOnboarding(t *testing.T) {
 	sids := make([]string, 3)
 	fns := make([]func(), len(sids))
@@ -248,7 +298,8 @@ func TestZatcaSandbox_ConcurrentOnboarding(t *testing.T) {
 	}
 	startTogether(fns)
 
-	certs := map[string]int{}
+	keys := storeKeys(t, sids)
+	sandboxCerts := map[string]string{}
 	for i, sid := range sids {
 		code, res := call(t, "GET", "/v1/store/"+sid, authToken(t), nil)
 		z, _ := resultMap(t, res)["zatca"].(map[string]interface{})
@@ -267,13 +318,12 @@ func TestZatcaSandbox_ConcurrentOnboarding(t *testing.T) {
 		if d.z["reporting_passed"] != true {
 			t.Errorf("store %d: sale not reported: %v", i, d.z["reporting_errors"])
 		}
-		if d.cert != "" {
-			certs[d.cert]++
+		checkSignedBy(t, fmt.Sprintf("store %d sale", i), d, keys, sandboxCerts)
+		if d.icv != 1 || d.prevHash != zatcaGenesisPIH {
+			t.Errorf("store %d: first sale has ICV %d and PIH %q, want 1 and the hash of 0", i, d.icv, d.prevHash)
 		}
 	}
-	for _, n := range certs {
-		if n > 1 {
-			t.Logf("NOTE %d stores onboarded together sign with the same certificate (expected in the sandbox)", n)
-		}
+	for subject := range sandboxCerts {
+		t.Logf("NOTE ZATCA's sandbox certificate %q is on these documents; it was not issued for any store's key", subject)
 	}
 }

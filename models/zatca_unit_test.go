@@ -1,6 +1,10 @@
 package models
 
-import "testing"
+import (
+	"testing"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
 func TestGetZatcaUnit_PhysicalUnits(t *testing.T) {
 	cases := []struct {
@@ -80,5 +84,21 @@ func TestGetZatcaUnit_EmptyUnitNotService_ReturnsPCE(t *testing.T) {
 	p := OrderProduct{Unit: "", IsService: false}
 	if got := p.GetZatcaUnit(); got != "PCE" {
 		t.Errorf("GetZatcaUnit(empty physical) = %q, want PCE", got)
+	}
+}
+
+// Two stores' first invoices share a code; their unsigned XML must not share
+// a file, or one store would sign the other's invoice.
+func TestZatcaXMLPath_ScopedByStore(t *testing.T) {
+	a, b := primitive.NewObjectID(), primitive.NewObjectID()
+	pa, pb := zatcaXMLPath("invoice", &a, "S-INV-000001"), zatcaXMLPath("invoice", &b, "S-INV-000001")
+	if pa == pb {
+		t.Fatalf("two stores' invoice S-INV-000001 share %s", pa)
+	}
+	if want := "ZatcaPython/templates/invoice_" + a.Hex() + "_S-INV-000001.xml"; pa != want {
+		t.Fatalf("got %s, want %s", pa, want)
+	}
+	if zatcaXMLPath("credit_note", &a, "X") == zatcaXMLPath("debit_note", &a, "X") {
+		t.Fatal("a credit note and a debit note with the same code share a file")
 	}
 }

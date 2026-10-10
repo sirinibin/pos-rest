@@ -37,6 +37,10 @@ type PythonResponse struct {
 }
 
 // ConnectStoreToZatc : handler for POST /store/zatca/connect
+// zatcaOnboardingCommand runs the onboarding script (CSR, compliance and
+// production CSIDs). Tests swap it for a stand-in that prints ZATCA's answer.
+var zatcaOnboardingCommand = []string{"ZatcaPython/venv/bin/python", "ZatcaPython/csr_and_onboarding.py"}
+
 func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var response models.Response
@@ -159,11 +163,8 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pythonBinary := "ZatcaPython/venv/bin/python"
-	scriptPath := "ZatcaPython/csr_and_onboarding.py"
-
 	// Create command
-	cmd := exec.Command(pythonBinary, scriptPath)
+	cmd := exec.Command(zatcaOnboardingCommand[0], zatcaOnboardingCommand[1:]...)
 
 	// Set up pipes — keep stdout and stderr separate so stderr noise doesn't corrupt JSON
 	cmd.Stdin = bytes.NewReader(jsonData) // Send JSON data to stdin
@@ -379,6 +380,11 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if order.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
 		response.Status = false
@@ -416,6 +422,19 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
+
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("order", &orderID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
 
 		err = order.ReportToZatca()
 		if err != nil {
@@ -508,6 +527,11 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if salesReturn.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
 		response.Status = false
@@ -564,6 +588,19 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
+
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("salesreturn", &salesReturnID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
 
 		err = salesReturn.ReportToZatca()
 		if err != nil {
@@ -740,6 +777,11 @@ func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if deposit.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	// Old records may be missing UUID or ICV (created before ZATCA was added).
 	needsUpdate := false
 	if deposit.UUID == "" {
@@ -786,6 +828,19 @@ func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
+
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("customerdeposit", &depositID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
 
 		err = deposit.ReportToZatca()
 		if err != nil {
@@ -862,6 +917,11 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if withdrawal.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	// Old records may be missing UUID or ICV (created before ZATCA was added).
 	needsUpdateW := false
 	if withdrawal.UUID == "" {
@@ -908,6 +968,19 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
+
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("customerwithdrawal", &withdrawalID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
 
 		err = withdrawal.ReportToZatca()
 		if err != nil {
@@ -971,4 +1044,14 @@ func zatcaDeviceSerialNumber(prefix string, padding int64, currentDate string) s
 		serialNumber += strconv.Itoa(k+1) + "-" + part + "|"
 	}
 	return serialNumber + strconv.Itoa(len(parts)+1) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
+}
+
+// refuseZatcaReReport answers 409 for a document ZATCA already accepted:
+// reporting it again would send ZATCA the same invoice (same UUID) a second
+// time and fork the store's hash chain.
+func refuseZatcaReReport(w http.ResponseWriter, response *models.Response) {
+	response.Status = false
+	response.Errors["already_reported"] = "Already reported to ZATCA"
+	w.WriteHeader(http.StatusConflict)
+	json.NewEncoder(w).Encode(response)
 }

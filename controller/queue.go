@@ -176,55 +176,9 @@ func GetOrCreateQueue(storeID string, modelName string) *SafeQueue {
 	return nil
 }
 
-// CleanupQueueIfEmpty removes the queue if it's empty.
-func CleanupQueueIfEmpty(storeID string, modelName string) {
-	queueMu.Lock()
-	defer queueMu.Unlock()
-
-	if modelName == "sales" {
-		q, exists := storeSalesQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeSalesQueues, storeID)
-		}
-	} else if modelName == "sales_return" {
-		q, exists := storeSalesReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeSalesReturnQueues, storeID)
-		}
-	} else if modelName == "purchase" {
-		q, exists := storePurchaseQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storePurchaseQueues, storeID)
-		}
-	} else if modelName == "purchase_return" {
-		q, exists := storePurchaseReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storePurchaseReturnQueues, storeID)
-		}
-	} else if modelName == "quotation" {
-		q, exists := storeQuotationQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeQuotationQueues, storeID)
-		}
-	} else if modelName == "quotation_sales_return" {
-		q, exists := storeQuotationSalesReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeQuotationSalesReturnQueues, storeID)
-		}
-	} else if modelName == "zatca" {
-		q, exists := storeZatcaQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeZatcaQueues, storeID)
-		}
-	} else if modelName == "non_vat_sales" {
-		q, exists := storeNonVATSalesQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeNonVATSalesQueues, storeID)
-		}
-	} else if modelName == "non_vat_sales_return" {
-		q, exists := storeNonVATSalesReturnQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeNonVATSalesReturnQueues, storeID)
-		}
-	}
-}
+// CleanupQueueIfEmpty used to drop an empty queue from its map. A request
+// that had already fetched the queue but not yet enqueued then waited on the
+// dropped queue while the next request made a new one, and the two ran at the
+// same time (two ZATCA reports of one store continuing the same previous
+// invoice). Queues are one small value per store and model, so they stay.
+func CleanupQueueIfEmpty(storeID string, modelName string) {}

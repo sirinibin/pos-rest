@@ -292,19 +292,53 @@ func TestGetOrCreateQueue_DifferentStoresHaveIndependentQueues(t *testing.T) {
 	CleanupQueueIfEmpty("store-B", "zatca")
 }
 
-func TestCleanupQueueIfEmpty_RemovesEmptyQueue(t *testing.T) {
+func TestCleanupQueueIfEmpty_KeepsEmptyQueue(t *testing.T) {
 	id := "store-cleanup-empty"
 	q := GetOrCreateQueue(id, "zatca")
 	q.Enqueue(Request{Token: "t"})
 	q.Pop() //nolint:errcheck
 	CleanupQueueIfEmpty(id, "zatca")
 
-	// After cleanup, a new call returns a fresh (different) queue object.
-	q2 := GetOrCreateQueue(id, "zatca")
-	if q == q2 {
-		t.Error("expected a fresh queue after cleanup, got the same pointer")
+	// A request that fetched the queue before the cleanup must wait in the
+	// same queue as one that fetches it after.
+	if q2 := GetOrCreateQueue(id, "zatca"); q != q2 {
+		t.Error("cleanup replaced the store's queue; requests holding the old one would run alongside the new one")
 	}
-	CleanupQueueIfEmpty(id, "zatca")
+}
+
+// Requests of one store, each fetching the queue, waiting its turn, working
+// and cleaning up, never overlap.
+func TestQueue_StoreRequestsNeverOverlap(t *testing.T) {
+	id := "store-no-overlap"
+	var mu sync.Mutex
+	inside, maxInside := 0, 0
+	var wg sync.WaitGroup
+	for i := 0; i < 40; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			q := GetOrCreateQueue(id, "zatca")
+			token := generateQueueToken()
+			q.Enqueue(Request{Token: token})
+			q.WaitUntilMyTurn(token)
+			mu.Lock()
+			inside++
+			if inside > maxInside {
+				maxInside = inside
+			}
+			mu.Unlock()
+			time.Sleep(time.Millisecond)
+			mu.Lock()
+			inside--
+			mu.Unlock()
+			q.Pop() //nolint:errcheck
+			CleanupQueueIfEmpty(id, "zatca")
+		}()
+	}
+	wg.Wait()
+	if maxInside != 1 {
+		t.Fatalf("%d requests of one store ran at the same time", maxInside)
+	}
 }
 
 func TestCleanupQueueIfEmpty_KeepsNonEmptyQueue(t *testing.T) {

@@ -144,28 +144,20 @@ func (order *Order) MakeXMLContent() (string, error) {
 	invoice.DocumentCurrencyCode = "SAR"
 	invoice.TaxCurrencyCode = "SAR"
 
+	// One ICV sequence and one PIH chain per store across invoices, credit
+	// and debit notes (see NextZatcaChainLink).
+	link, err := NextZatcaChainLink(order.StoreID.Hex())
+	if err != nil {
+		return xmlContent, errors.New("error finding the store's last ZATCA document: " + err.Error())
+	}
+	order.Zatca.ICV = link.ICV
+	order.PrevHash = link.PIH
+
 	invoice.AdditionalDocumentRefs = []AdditionalDocumentRef{
 		AdditionalDocumentRef{
 			ID:   "ICV",
-			UUID: strconv.FormatInt(order.InvoiceCountValue, 10),
+			UUID: strconv.FormatInt(order.Zatca.ICV, 10),
 		},
-	}
-
-	lastReportedOrder, err := order.FindLastReportedOrder(bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return xmlContent, errors.New("error finding previous order: " + err.Error())
-	}
-
-	//log.Print("lastReportedOrder.Code:")
-	//log.Print(lastReportedOrder.Code)
-
-	if lastReportedOrder != nil && lastReportedOrder.Hash != "" {
-		order.PrevHash = lastReportedOrder.Hash
-	} else {
-		order.PrevHash, err = GenerateInvoiceHash("0") //Make hash of 0
-		if err != nil {
-			return xmlContent, err
-		}
 	}
 
 	invoice.AdditionalDocumentRefs = append(invoice.AdditionalDocumentRefs, AdditionalDocumentRef{
@@ -719,7 +711,7 @@ func (order *Order) MakeXMLContent() (string, error) {
 
 	updatedXML2 := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + string(updatedXML)
 
-	filePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
+	filePath := zatcaXMLPath("invoice", order.StoreID, order.Code)
 	// **Save Updated XML**
 	err = os.WriteFile(filePath, []byte(updatedXML2), 0644)
 	if err != nil {
@@ -839,7 +831,7 @@ func (order *Order) ReportToZatca() error {
 			"private_key":                      store.Zatca.PrivateKey,
 			"production_binary_security_token": store.Zatca.ProductionBinarySecurityToken,
 			"production_secret":                store.Zatca.ProductionSecret,
-			"xml_file_path":                    "ZatcaPython/templates/invoice_" + order.Code + ".xml",
+			"xml_file_path":                    zatcaXMLPath("invoice", order.StoreID, order.Code),
 			"is_simplified":                    isSimplified,
 			"store_id":                         store.ID.Hex(),
 		}
@@ -1008,7 +1000,7 @@ func (order *Order) SaveClearedInvoiceData(reportingResponse ZatcaReportingRespo
 
 	// Delete xml files
 
-	xmlFilePath := "ZatcaPython/templates/invoice_" + order.Code + ".xml"
+	xmlFilePath := zatcaXMLPath("invoice", order.StoreID, order.Code)
 	if _, err := os.Stat(xmlFilePath); err == nil {
 		err = os.Remove(xmlFilePath)
 		if err != nil {

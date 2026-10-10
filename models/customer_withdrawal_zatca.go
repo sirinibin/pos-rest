@@ -159,25 +159,20 @@ func (withdrawal *CustomerWithdrawal) MakeXMLContent() (string, error) {
 	invoice.DocumentCurrencyCode = "SAR"
 	invoice.TaxCurrencyCode = "SAR"
 
+	// One ICV sequence and one PIH chain per store across invoices, credit
+	// and debit notes (see NextZatcaChainLink).
+	link, err := NextZatcaChainLink(withdrawal.StoreID.Hex())
+	if err != nil {
+		return "", errors.New("error finding the store's last ZATCA document: " + err.Error())
+	}
+	withdrawal.Zatca.ICV = link.ICV
+	withdrawal.PrevHash = link.PIH
+
 	invoice.AdditionalDocumentRefs = []AdditionalDocumentRef{
 		{
 			ID:   "ICV",
-			UUID: strconv.FormatInt(withdrawal.InvoiceCountValue, 10),
+			UUID: strconv.FormatInt(withdrawal.Zatca.ICV, 10),
 		},
-	}
-
-	lastReported, err := withdrawal.FindLastReportedWithdrawal(bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return "", errors.New("error finding previous withdrawal: " + err.Error())
-	}
-
-	if lastReported != nil && lastReported.Hash != "" {
-		withdrawal.PrevHash = lastReported.Hash
-	} else {
-		withdrawal.PrevHash, err = GenerateInvoiceHash("0")
-		if err != nil {
-			return "", err
-		}
 	}
 
 	invoice.AdditionalDocumentRefs = append(invoice.AdditionalDocumentRefs, AdditionalDocumentRef{
@@ -429,7 +424,7 @@ func (withdrawal *CustomerWithdrawal) MakeXMLContent() (string, error) {
 	}
 	updatedXML2 := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + string(updatedXML)
 
-	filePath := "ZatcaPython/templates/credit_note_" + withdrawal.Code + ".xml"
+	filePath := zatcaXMLPath("credit_note", withdrawal.StoreID, withdrawal.Code)
 	if err = os.WriteFile(filePath, []byte(updatedXML2), 0644); err != nil {
 		return "", err
 	}
@@ -464,7 +459,7 @@ func (withdrawal *CustomerWithdrawal) ReportToZatca() error {
 		"private_key":                      store.Zatca.PrivateKey,
 		"production_binary_security_token": store.Zatca.ProductionBinarySecurityToken,
 		"production_secret":                store.Zatca.ProductionSecret,
-		"xml_file_path":                    "ZatcaPython/templates/credit_note_" + withdrawal.Code + ".xml",
+		"xml_file_path":                    zatcaXMLPath("credit_note", withdrawal.StoreID, withdrawal.Code),
 		"is_simplified":                    isSimplified,
 		"store_id":                         store.ID.Hex(),
 	}
@@ -563,7 +558,7 @@ func (withdrawal *CustomerWithdrawal) SaveClearedInvoiceData(reportingResponse Z
 	withdrawal.Zatca.IsSimplified = reportingResponse.IsSimplified
 
 	// Delete temp XML
-	xmlFilePath := "ZatcaPython/templates/credit_note_" + withdrawal.Code + ".xml"
+	xmlFilePath := zatcaXMLPath("credit_note", withdrawal.StoreID, withdrawal.Code)
 	if _, err := os.Stat(xmlFilePath); err == nil {
 		os.Remove(xmlFilePath)
 	}
