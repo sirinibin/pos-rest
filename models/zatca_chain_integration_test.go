@@ -175,3 +175,40 @@ func TestNextZatcaChainLink_UsesIndexes(t *testing.T) {
 		}
 	}
 }
+
+// A new store gets the chain indexes from CreateAllIndexes, which every way
+// of creating a store runs (create, guest sign-up, duplicate).
+func TestCreateAllIndexes_IncludesZatcaChainIndexes(t *testing.T) {
+	store := Store{ID: primitive.NewObjectID()}
+	storeDB := db.GetDB("store_" + store.ID.Hex())
+	t.Cleanup(func() { _ = storeDB.Drop(context.Background()) })
+	if err := store.CreateAllIndexes(); err != nil {
+		t.Fatalf("CreateAllIndexes: %v", err)
+	}
+	ctx := context.Background()
+	for _, collection := range zatcaChainCollections {
+		cur, err := storeDB.Collection(collection).Indexes().List(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var specs []struct {
+			Key bson.D `bson:"key"`
+		}
+		if err := cur.All(ctx, &specs); err != nil {
+			t.Fatal(err)
+		}
+		for _, model := range zatcaChainIndexes {
+			want, _ := bson.Marshal(model.Keys)
+			found := false
+			for _, spec := range specs {
+				got, _ := bson.Marshal(spec.Key)
+				if bson.Raw(got).String() == bson.Raw(want).String() {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("%s: missing index %v", collection, model.Keys)
+			}
+		}
+	}
+}
