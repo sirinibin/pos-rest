@@ -232,6 +232,6 @@ func (store *Store) AddNonVATSalesReturn(saleID *primitive.ObjectID, amount floa
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := db.GetDB("store_"+store.ID.Hex()).Collection("non_vat_sales").UpdateOne(ctx, bson.M{"_id": saleID},
-		bson.M{"$inc": bson.M{"return_count": 1, "return_amount": amount}})
+		bson.M{"$inc": bson.M{"return_count": int64(1), "return_amount": amount}})
 	return err
 }

@@ -529,8 +529,9 @@ func (store *Store) SearchStockTransfer(w http.ResponseWriter, r *http.Request) 
 func (stocktransfer *StockTransfer) Validate(w http.ResponseWriter, r *http.Request, scenario string, oldStockTransfer *StockTransfer) (errs map[string]string) {
 	errs = make(map[string]string)
 	store, err := FindStoreByID(stocktransfer.StoreID, bson.M{})
-	if err != nil {
+	if err != nil || store == nil {
 		errs["store_id"] = "invalid store id"
+		return errs // the warehouse checks below need the store
 	}
 
 	var fromWarehouse *Warehouse
