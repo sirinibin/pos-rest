@@ -421,6 +421,9 @@ func (quotation *Quotation) CreateNewCustomerFromName() error {
 		return err
 	}
 
+	// A name of only spaces is no name: the sale falls back to UNKNOWN.
+	quotation.CustomerName = TrimName(quotation.CustomerName)
+
 	customer, err := store.FindCustomerByID(quotation.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
@@ -1714,6 +1717,7 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 		return errs
 	}
 
+	quotation.CustomerName = TrimName(quotation.CustomerName)
 	if customer == nil && govalidator.IsNull(quotation.CustomerName) {
 		quotation.CustomerID = nil
 	}

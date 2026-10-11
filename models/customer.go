@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -2192,9 +2193,24 @@ func (customer *Customer) SetSearchLabel() {
 	}
 }
 
+// TrimName trims spaces and invisible characters (zero-width space, joiners,
+// byte order mark) from both ends of a name, so a name typed as only blanks
+// becomes "".
+func TrimName(name string) string {
+	return strings.TrimFunc(name, func(r rune) bool {
+		switch r {
+		case '\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF':
+			return true
+		}
+		return unicode.IsSpace(r)
+	})
+}
+
+var ErrCustomerNameRequired = errors.New("customer name is required")
+
 func (customer *Customer) TrimSpaceFromFields() {
-	customer.Name = strings.TrimSpace(customer.Name)
-	customer.NameInArabic = strings.TrimSpace(customer.NameInArabic)
+	customer.Name = TrimName(customer.Name)
+	customer.NameInArabic = TrimName(customer.NameInArabic)
 	customer.Phone = strings.TrimSpace(customer.Phone)
 	customer.VATNo = strings.TrimSpace(customer.VATNo)
 	customer.RegistrationNumber = strings.TrimSpace(customer.RegistrationNumber)
@@ -2403,6 +2419,13 @@ func (customer *Customer) IsCustomerExistsByVatNoByName() (exists bool, err erro
 }
 
 func (customer *Customer) Insert() error {
+	// Every create path (customer form, a name typed into a sale, quotation or
+	// delivery note, imports) ends here: never store a customer without a name.
+	customer.Name = TrimName(customer.Name)
+	if customer.Name == "" {
+		return ErrCustomerNameRequired
+	}
+
 	collection := db.GetDB("store_" + customer.StoreID.Hex()).Collection("customer")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -2008,6 +2008,8 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		return errs
 	}
 
+	order.CustomerName = TrimName(order.CustomerName)
+
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		errs["customer_id"] = "Invalid customer"
@@ -2384,6 +2386,9 @@ func (order *Order) CreateNewCustomerFromName() error {
 	if err != nil {
 		return err
 	}
+
+	// A name of only spaces is no name: the sale falls back to UNKNOWN.
+	order.CustomerName = TrimName(order.CustomerName)
 
 	customer, err := store.FindCustomerByID(order.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {

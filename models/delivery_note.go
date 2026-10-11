@@ -144,6 +144,9 @@ func (deliveryNote *DeliveryNote) CreateNewCustomerFromName() error {
 		return err
 	}
 
+	// A name of only spaces is no name: the sale falls back to UNKNOWN.
+	deliveryNote.CustomerName = TrimName(deliveryNote.CustomerName)
+
 	customer, err := store.FindCustomerByID(deliveryNote.CustomerID, bson.M{})
 	if err != nil && err != mongo.ErrNoDocuments {
 		return err
