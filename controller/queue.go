@@ -212,10 +212,10 @@ func CleanupQueueIfEmpty(storeID string, modelName string) {
 			delete(storeQuotationSalesReturnQueues, storeID)
 		}
 	} else if modelName == "zatca" {
-		q, exists := storeZatcaQueues[storeID]
-		if exists && len(q.queue) == 0 {
-			delete(storeZatcaQueues, storeID)
-		}
+		// Never dropped: a request that fetched this queue but had not yet
+		// enqueued would wait on the dropped queue while the next request made
+		// a new one, and two ZATCA reports of the store would run at once and
+		// continue the same previous invoice (forked hash chain).
 	} else if modelName == "non_vat_sales" {
 		q, exists := storeNonVATSalesQueues[storeID]
 		if exists && len(q.queue) == 0 {

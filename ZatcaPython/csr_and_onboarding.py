@@ -14,9 +14,7 @@ def main():
 
         dataFromGo = sys.stdin.read().strip()
         if not dataFromGo:
-            #print("No input received", file=sys.stderr)
-            dataFromGo["error"]="No input received"
-            print(json.dumps(data))
+            print(json.dumps({"error": "No input received"}))
             return
         
         try:
@@ -25,10 +23,8 @@ def main():
             #resp_data["error"]="Received JSON:"
             #print(json.dumps(resp_data))
         except json.JSONDecodeError:
-            print("Invalid JSON received", file=sys.stderr)
-            #resp_data["error"]="Invalid JSON received:"
-            #print(json.dumps(resp_data))
-            return  
+            print(json.dumps({"error": "Invalid JSON received"}))
+            return
       
           
 
@@ -133,7 +129,6 @@ def main():
         cert_info["csr"] = csr_base64
         cert_info["privateKey"] = private_key_content
 
-        api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
 
         # 2. Get Compliance CSID
         #print("\n2. Get Compliance CSID\n")
@@ -150,19 +145,17 @@ def main():
             cert_info["ccsid_binarySecurityToken"] = json_decoded_response["binarySecurityToken"]
             cert_info["ccsid_secret"] = json_decoded_response["secret"]
 
-            api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
-
+    
             #print("\ncomplianceCSID Server Response: \n" + clean_response)
             
-        except json.JSONDecodeError:
-            cert_info["error"] = clean_response
-            #print("\ncomplianceCSID Server Response: \n" + clean_response)
+        except (json.JSONDecodeError, KeyError, TypeError):
+            print(json.dumps({"error": "Compliance CSID request failed: " + str(clean_response)}))
+            return
   
         
          # 3: Sending Sample Documents
         #print("\n3: Sending Sample Documents\n")
 
-        cert_info = api_helper.load_json_from_file("ZatcaPython/certificates/certificateInfo.json")
         xml_template_path = "ZatcaPython/templates/invoice.xml"
 
         private_key = cert_info["privateKey"]
@@ -267,8 +260,11 @@ def main():
                 if prefix == "SIMDN":
                     compliance_check["simplified_debit_note"] = False
                 
-                #print(f"Failed to process {description}: status is {status}\n")
-                exit(1)
+                print(json.dumps({
+                    "error": f"ZATCA compliance check failed for {description}: status {status}: {clean_response}",
+                    "compliance_check": compliance_check,
+                }))
+                return
 
         # 4. Get Production CSID
         
@@ -287,13 +283,11 @@ def main():
             cert_info["pcsid_binarySecurityToken"] = json_decoded_response["binarySecurityToken"]
             cert_info["pcsid_secret"] = json_decoded_response["secret"]
 
-            api_helper.save_json_to_file("ZatcaPython/certificates/certificateInfo.json", cert_info)
-
+    
             #print(f"Production CSID Server Response: \n{clean_response}")
 
-        except json.JSONDecodeError:
-            cert_info["error"] = clean_response
-            #print(f"Production CSID Server Response: \n{clean_response}")
+        except (json.JSONDecodeError, KeyError, TypeError):
+            cert_info["error"] = "Production CSID request failed: " + str(clean_response)
 
   
         data = {

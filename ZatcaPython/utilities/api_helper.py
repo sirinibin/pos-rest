@@ -11,8 +11,9 @@ class api_helper:
             try:
                 response = requests.post(url, headers=headers, data=json_payload, auth=auth)
                 
-                # Check for HTTP errors
-                if response.status_code != 200:
+                # 200 accepted, 202 accepted with warnings (ZATCA keeps the
+                # document; sending it again would duplicate it): both pass
+                if response.status_code not in (200, 202):
                     raise Exception(f"HTTP error: {response.status_code} - url={url} headers={dict(response.headers)} body={response.text}")
                 
                 return response.text

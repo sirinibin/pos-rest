@@ -294,17 +294,31 @@ func TestGetOrCreateQueue_DifferentStoresHaveIndependentQueues(t *testing.T) {
 
 func TestCleanupQueueIfEmpty_RemovesEmptyQueue(t *testing.T) {
 	id := "store-cleanup-empty"
+	q := GetOrCreateQueue(id, "sales")
+	q.Enqueue(Request{Token: "t"})
+	q.Pop() //nolint:errcheck
+	CleanupQueueIfEmpty(id, "sales")
+
+	// After cleanup, a new call returns a fresh (different) queue object.
+	q2 := GetOrCreateQueue(id, "sales")
+	if q == q2 {
+		t.Error("expected a fresh queue after cleanup, got the same pointer")
+	}
+	CleanupQueueIfEmpty(id, "sales")
+}
+
+// A store's ZATCA queue is never dropped: a report that had fetched it but not
+// yet enqueued would wait on a dropped queue while the next report made a new
+// one, and the two would sign at once, continuing the same previous invoice.
+func TestCleanupQueueIfEmpty_KeepsTheZatcaQueue(t *testing.T) {
+	id := "store-zatca-keep"
 	q := GetOrCreateQueue(id, "zatca")
 	q.Enqueue(Request{Token: "t"})
 	q.Pop() //nolint:errcheck
 	CleanupQueueIfEmpty(id, "zatca")
-
-	// After cleanup, a new call returns a fresh (different) queue object.
-	q2 := GetOrCreateQueue(id, "zatca")
-	if q == q2 {
-		t.Error("expected a fresh queue after cleanup, got the same pointer")
+	if GetOrCreateQueue(id, "zatca") != q {
+		t.Error("the store's ZATCA queue was dropped; concurrent reports could fork the hash chain")
 	}
-	CleanupQueueIfEmpty(id, "zatca")
 }
 
 func TestCleanupQueueIfEmpty_KeepsNonEmptyQueue(t *testing.T) {

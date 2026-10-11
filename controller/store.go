@@ -54,6 +54,9 @@ func ListStore(w http.ResponseWriter, r *http.Request) {
 	if len(stores) == 0 {
 		response.Result = []interface{}{}
 	} else {
+		for i := range stores {
+			stores[i].HideZatcaSecrets()
+		}
 		response.Result = stores
 	}
 
@@ -227,6 +230,7 @@ func CreateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
+	store.HideZatcaSecrets()
 	response.Result = store
 
 	json.NewEncoder(w).Encode(response)
@@ -537,6 +541,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
+	store.HideZatcaSecrets()
 	response.Result = store
 
 	json.NewEncoder(w).Encode(response)
@@ -608,6 +613,7 @@ func ViewStore(w http.ResponseWriter, r *http.Request) {
 
 	//store.MarshalJSON()
 	response.Status = true
+	store.HideZatcaSecrets()
 	response.Result = store
 
 	json.NewEncoder(w).Encode(response)

@@ -167,7 +167,7 @@ func (deposit *CustomerDeposit) MakeXMLContent() (string, error) {
 	} else {
 		invoice.InvoiceTypeCode.Name = "0100000"
 	}
-	invoice.InvoiceTypeCode.Value = "381" // Debit Note
+	invoice.InvoiceTypeCode.Value = "383" // Debit Note
 	invoice.Note = &Note{
 		LanguageID: "en",
 		Value:      "Receivable debit note",
@@ -179,25 +179,20 @@ func (deposit *CustomerDeposit) MakeXMLContent() (string, error) {
 	invoice.DocumentCurrencyCode = "SAR"
 	invoice.TaxCurrencyCode = "SAR"
 
+	// One ICV sequence and one PIH chain per store across invoices, credit
+	// and debit notes (see NextZatcaChainLink).
+	link, err := NextZatcaChainLink(deposit.StoreID.Hex())
+	if err != nil {
+		return "", errors.New("error finding the store's last ZATCA document: " + err.Error())
+	}
+	deposit.Zatca.ICV = link.ICV
+	deposit.PrevHash = link.PIH
+
 	invoice.AdditionalDocumentRefs = []AdditionalDocumentRef{
 		{
 			ID:   "ICV",
-			UUID: strconv.FormatInt(deposit.InvoiceCountValue, 10),
+			UUID: strconv.FormatInt(deposit.Zatca.ICV, 10),
 		},
-	}
-
-	lastReported, err := deposit.FindLastReportedDeposit(bson.M{})
-	if err != nil && err != mongo.ErrNoDocuments {
-		return "", errors.New("error finding previous deposit: " + err.Error())
-	}
-
-	if lastReported != nil && lastReported.Hash != "" {
-		deposit.PrevHash = lastReported.Hash
-	} else {
-		deposit.PrevHash, err = GenerateInvoiceHash("0")
-		if err != nil {
-			return "", err
-		}
 	}
 
 	invoice.AdditionalDocumentRefs = append(invoice.AdditionalDocumentRefs, AdditionalDocumentRef{
@@ -444,13 +439,13 @@ func (deposit *CustomerDeposit) MakeXMLContent() (string, error) {
 		},
 	}
 
-	updatedXML, err := xml.MarshalIndent(invoice, "", "  ")
+	updatedXML, err := marshalZatcaXML(invoice, false)
 	if err != nil {
 		return "", err
 	}
 	updatedXML2 := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + string(updatedXML)
 
-	filePath := "ZatcaPython/templates/debit_note_" + deposit.Code + ".xml"
+	filePath := zatcaXMLPath("debit_note", deposit.StoreID, deposit.Code)
 	if err = os.WriteFile(filePath, []byte(updatedXML2), 0644); err != nil {
 		return "", err
 	}
@@ -485,7 +480,7 @@ func (deposit *CustomerDeposit) ReportToZatca() error {
 		"private_key":                      store.Zatca.PrivateKey,
 		"production_binary_security_token": store.Zatca.ProductionBinarySecurityToken,
 		"production_secret":                store.Zatca.ProductionSecret,
-		"xml_file_path":                    "ZatcaPython/templates/debit_note_" + deposit.Code + ".xml",
+		"xml_file_path":                    zatcaXMLPath("debit_note", deposit.StoreID, deposit.Code),
 		"is_simplified":                    isSimplified,
 		"store_id":                         store.ID.Hex(),
 	}
@@ -584,7 +579,7 @@ func (deposit *CustomerDeposit) SaveClearedInvoiceData(reportingResponse ZatcaRe
 	deposit.Zatca.IsSimplified = reportingResponse.IsSimplified
 
 	// Delete temp XML
-	xmlFilePath := "ZatcaPython/templates/debit_note_" + deposit.Code + ".xml"
+	xmlFilePath := zatcaXMLPath("debit_note", deposit.StoreID, deposit.Code)
 	if _, err := os.Stat(xmlFilePath); err == nil {
 		os.Remove(xmlFilePath)
 	}

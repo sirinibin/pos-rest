@@ -819,6 +819,24 @@ func TestAPI_ZatcaActions(t *testing.T) {
 	if get(pos.Body, "zatca.status") != "not_reported" || get(pos.Body, "zatca.uuid") == "pos-1234" {
 		t.Fatalf("POS zatca must be server-owned: %v", pos.Body["zatca"])
 	}
+	// a client-recorded "reported" status (erp.x.zatca) that ZATCA never
+	// received does not stop the real report
+	origDeposit := zatcaReporters["deposits"]
+	defer func() { zatcaReporters["deposits"] = origDeposit }()
+	depReported := false
+	zatcaReporters["deposits"] = func(w http.ResponseWriter, r *http.Request) {
+		depReported = true
+		writeJSON(w, 200, M{"status": true, "result": "ok"})
+	}
+	{
+		ctx, cancel := dbctx()
+		_, _ = storeDB(storeA()).Collection("customerdeposit").UpdateOne(ctx, bson.M{"_id": fx.DepositA1, "zatca.reporting_passed": bson.M{"$ne": true}},
+			bson.M{"$set": bson.M{"erp.x.zatca": bson.M{"status": "reported", "uuid": "client-made"}}})
+		cancel()
+	}
+	if r := call(t, "POST", "/deposits/"+fx.DepositA1.Hex()+"/zatca/report", tok, M{}); r.Code != 200 || !depReported {
+		t.Fatalf("client-recorded status must not skip the report: %d called=%v %s", r.Code, depReported, r.Raw)
+	}
 	// disconnect (stubbed legacy)
 	zatcaDisconnectHandler = func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := dbctx()

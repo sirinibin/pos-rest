@@ -2,6 +2,7 @@ package erp
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,14 @@ func TestSealSecret_RoundTripAndHint(t *testing.T) {
 		t.Fatal("short / tampered secret must not open")
 	}
 	s, _ := sealSecret("abcdef")
-	tampered := s[:len(s)-2] + "AA"
+	// flip one byte of the sealed bytes (replacing base64 characters could
+	// leave them unchanged, e.g. when the text already ended in the same ones)
+	raw, err := base64.RawStdEncoding.DecodeString(strings.TrimPrefix(s, sealedPrefix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)-1] ^= 0xff
+	tampered := sealedPrefix + base64.RawStdEncoding.EncodeToString(raw)
 	if v, err := openSecret(tampered); err == nil && v == "abcdef" {
 		t.Fatal("tampered secret must not open to the plain text")
 	}

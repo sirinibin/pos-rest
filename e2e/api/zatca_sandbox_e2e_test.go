@@ -6,7 +6,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -59,6 +63,27 @@ func zatcaAccepted(t *testing.T, what string, z M, wantStatus string) {
 	}
 }
 
+// zatcaChain follows a store's ZATCA device: every document it reports, of
+// any type, takes the next ICV and carries the previous document's hash as
+// its PIH, and goes out signed.
+type zatcaChain struct{ last M }
+
+func (c *zatcaChain) next(t *testing.T, what string, z M) {
+	t.Helper()
+	if S(z["signature"]) == "" {
+		t.Errorf("%s went to ZATCA unsigned", what)
+	}
+	if c.last != nil {
+		if Num(z["icv"]) != Num(c.last["icv"])+1 || S(z["pih"]) != S(c.last["hash"]) {
+			t.Errorf("%s: ICV %v after %v, PIH %q, previous hash %q (one chain per store across all document types)",
+				what, z["icv"], c.last["icv"], z["pih"], c.last["hash"])
+		}
+	} else if Num(z["icv"]) != 1 {
+		t.Errorf("%s: the store's first document has ICV %v, want 1", what, z["icv"])
+	}
+	c.last = z
+}
+
 func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 	otp := envOr("E2E_ZATCA_OTP", "12345")
 	s := SignupWith(t, zatcaSignupBody())
@@ -108,9 +133,12 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 	}
 
 	var first M
+	chain := &zatcaChain{}
 	t.Run("simplified invoice reported", func(t *testing.T) {
+		// saved before onboarding, reported now: its ICV is given when it is reported
 		first = zatcaReport(t, s, "sales", S(early["id"]))
 		zatcaAccepted(t, "simplified sale", first, "reported")
+		chain.next(t, "simplified sale", first)
 		if S(first["invoiceType"]) != "simplified" || Num(first["icv"]) < 1 {
 			t.Fatalf("simplified sale: %v", first)
 		}
@@ -129,6 +157,7 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 			"payments": []M{}})
 		z := zatcaReport(t, s, "sales", S(sale["id"]))
 		zatcaAccepted(t, "second simplified sale", z, "reported")
+		chain.next(t, "second simplified sale", z)
 		if Num(z["icv"]) != Num(first["icv"])+1 || S(z["pih"]) != S(first["hash"]) {
 			t.Fatalf("chain: icv %v→%v, pih %v, previous hash %v", first["icv"], z["icv"], z["pih"], first["hash"])
 		}
@@ -145,9 +174,11 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 			"items": []M{line(2, 150), line(1, 0.5)}, "payments": []M{}})
 		z := zatcaReport(t, s, "sales", S(b2b["id"]))
 		zatcaAccepted(t, "standard sale", z, "cleared")
+		chain.next(t, "standard sale", z)
 		if S(z["invoiceType"]) != "standard" {
 			t.Fatalf("B2B sale type: %v", z["invoiceType"])
 		}
+		zatcaSentAs(t, "standard sale", z, "388", "")
 		// the cleared invoice is stored and still reads as cleared
 		if got := Read(t, s.Token, "sales", S(b2b["id"])); S(Get(got, "zatca.status")) != "cleared" {
 			t.Fatalf("re-read: %v", got["zatca"])
@@ -163,9 +194,12 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 			"payments": []M{}})
 		zr := zatcaReport(t, s, "sales-returns", S(ret["id"]))
 		zatcaAccepted(t, "standard credit note", zr, "cleared")
+		chain.next(t, "standard credit note", zr)
 		if S(zr["invoiceType"]) != "credit" {
 			t.Errorf("standard credit note type: %v", zr["invoiceType"])
 		}
+		// a credit note (381) that names the invoice it corrects
+		zatcaSentAs(t, "standard credit note", zr, "381", S(b2b["code"]))
 	})
 
 	t.Run("credit note (sales return) reported", func(t *testing.T) {
@@ -175,9 +209,11 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 			"payments": []M{{"date": s.Now(), "amount": 23, "method": "cash"}}})
 		z := zatcaReport(t, s, "sales-returns", S(ret["id"]))
 		zatcaAccepted(t, "credit note", z, "reported")
+		chain.next(t, "simplified credit note", z)
 		if !strings.HasPrefix(S(z["invoiceType"]), "credit") {
 			t.Fatalf("return type: %v", z["invoiceType"])
 		}
+		zatcaSentAs(t, "simplified credit note", z, "381", S(early["code"]))
 	})
 
 	t.Run("debit note (deposit) and credit note (withdrawal)", func(t *testing.T) {
@@ -190,11 +226,15 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 		if S(zd["status"]) != "reported" && S(zd["status"]) != "cleared" || S(zd["error"]) != "" || S(zd["hash"]) == "" {
 			t.Fatalf("debit note: %v", zd)
 		}
+		chain.next(t, "debit note (deposit)", zd)
+		zatcaSentAs(t, "debit note (deposit)", zd, "383", "")
 		wd := Create(t, s.Token, "withdrawals", M{"storeId": s.ID, "date": s.Now(), "customerId": cid, "amount": 20, "method": "cash", "type": "refund", "notes": "credit note"})
 		zw := zatcaReport(t, s, "withdrawals", S(wd["id"]))
 		if S(zw["status"]) != "reported" && S(zw["status"]) != "cleared" || S(zw["error"]) != "" || S(zw["hash"]) == "" {
 			t.Fatalf("credit note: %v", zw)
 		}
+		chain.next(t, "credit note (withdrawal)", zw)
+		zatcaSentAs(t, "credit note (withdrawal)", zw, "381", "")
 	})
 
 	t.Run("environment locked once documents exist", func(t *testing.T) {
@@ -228,6 +268,7 @@ func TestZatcaSandbox_OnboardingAndReporting(t *testing.T) {
 		}
 		z := zatcaReport(t, s, "sales", S(sale["id"]))
 		zatcaAccepted(t, "sale after re-onboarding", z, "reported")
+		chain.next(t, "sale after re-onboarding", z)
 	})
 
 	t.Run("disconnect", func(t *testing.T) {
@@ -344,7 +385,9 @@ func TestZatcaSandbox_ConcurrentReporting(t *testing.T) {
 				zs = append(zs, z)
 			}
 		}
-		zatcaRaceBug(t, "NEW-ZATCA-LOST-REPORT", fmt.Sprintf("store %s: %d invoice(s) not reported after concurrent reporting answered 200: %v", s.ID, len(lost), lost), len(lost) > 0)
+		if len(lost) > 0 {
+			t.Errorf("store %s: %d invoice(s) not reported after concurrent reporting answered 200: %v", s.ID, len(lost), lost)
+		}
 		sort.Slice(zs, func(a, b int) bool { return Num(zs[a]["icv"]) < Num(zs[b]["icv"]) })
 		broken := 0
 		for i, z := range zs {
@@ -367,28 +410,76 @@ func TestZatcaSandbox_ConcurrentReporting(t *testing.T) {
 			t.Errorf("store %s: %d reported + %d lost of %d", s.ID, len(zs), len(lost), perStore)
 			continue
 		}
-		// models/sales_zatca.go takes the PIH from the last reported invoice
-		// with no lock, so invoices reported at the same moment chain to the
-		// same predecessor
-		zatcaRaceBug(t, "NEW-ZATCA-PIH-RACE", fmt.Sprintf("store %s: %d of %d PIH links broken by concurrent reporting", s.ID, broken, perStore-1), broken > 0)
+		// the store's ZATCA queue serialises reports and each continues the
+		// chain from the document reported before it (models/zatca_chain.go)
+		if broken > 0 {
+			t.Errorf("store %s: %d of %d PIH links broken by concurrent reporting", s.ID, broken, perStore-1)
+		}
 	}
 	// each store signs with its own private key (generated at onboarding)
 	if a, b := zatcaPrivateKey(t, stores[0].ID), zatcaPrivateKey(t, stores[1].ID); a == "" || a == b {
 		t.Errorf("stores share or lack a ZATCA private key (same=%v)", a == b)
 	}
+	// each store signs in its own SDK home (own config, PIH and certificates)
+	// linked to the one shared SDK, the production server's layout
+	for _, s := range stores {
+		zatcaStoreSDKHomeOK(t, s.ID)
+	}
 	// the invoice reported twice at once is submitted to ZATCA once
 	h1, h2 := S(Get(results[0].Body, "zatca.hash")), S(Get(results[len(results)-1].Body, "zatca.hash"))
-	zatcaRaceBug(t, "NEW-ZATCA-DOUBLE-REPORT", "the same invoice reported by two users at once was signed and submitted twice ("+h1+" / "+h2+")", h1 != h2)
+	if h1 != h2 {
+		t.Errorf("the same invoice reported by two users at once was signed and submitted twice (%s / %s)", h1, h2)
+	}
 }
 
-// zatcaRaceBug is KnownBug for a race: it may not show on every run, so a run
-// that doesn't reproduce it passes quietly.
-func zatcaRaceBug(t *testing.T, id, what string, seen bool) {
+// zatcaStoreSDKHomeOK checks ZatcaPython/store-data/<store>
+// (ZatcaPython/utilities/einvoice_signer.py ensure_store_sdk_home): the server
+// under test runs with this checkout's ZatcaPython (e2e/run.sh).
+func zatcaStoreSDKHomeOK(t *testing.T, storeID string) {
 	t.Helper()
-	if seen {
-		KnownBug(t, id, what, true)
-	} else {
-		t.Logf("%s not reproduced on this run", id)
+	home := filepath.Join("..", "..", "ZatcaPython", "store-data", storeID)
+	for _, d := range []string{"Configuration", "Data/PIH", "Data/Certificates"} {
+		if fi, err := os.Lstat(filepath.Join(home, d)); err != nil || !fi.IsDir() {
+			t.Errorf("store %s: %s is not its own folder (%v)", storeID, d, err)
+		}
+	}
+	for _, l := range []string{"Apps", "Data/Schemas", "Data/Rules"} {
+		if fi, err := os.Lstat(filepath.Join(home, l)); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			t.Errorf("store %s: %s does not link to the shared SDK (%v)", storeID, l, err)
+		}
+	}
+}
+
+var (
+	reInvoiceTypeCode = regexp.MustCompile(`<cbc:InvoiceTypeCode[^>]*>\s*(\d+)\s*<`)
+	reBillingRefID    = regexp.MustCompile(`(?s)<cac:BillingReference>.*?<cbc:ID>([^<]*)</cbc:ID>`)
+)
+
+// zatcaSentAs reads the invoice ZATCA accepted (zatca.xmlUrl) and checks its
+// type code (388 invoice, 381 credit note, 383 debit note) and, when given,
+// that its billing reference names the original invoice.
+func zatcaSentAs(t *testing.T, what string, z M, typeCode, billingRef string) {
+	t.Helper()
+	u := S(z["xmlUrl"])
+	if u == "" {
+		t.Errorf("%s: no accepted XML (xmlUrl) to check", what)
+		return
+	}
+	res, err := http.Get(baseURL + u)
+	if err != nil {
+		t.Errorf("%s: %v", what, err)
+		return
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	xml := string(b)
+	if m := reInvoiceTypeCode.FindStringSubmatch(xml); m == nil || m[1] != typeCode {
+		t.Errorf("%s: InvoiceTypeCode %v, want %s", what, m, typeCode)
+	}
+	if billingRef != "" {
+		if m := reBillingRefID.FindStringSubmatch(xml); m == nil || !strings.Contains(m[1], billingRef) {
+			t.Errorf("%s: BillingReference %v does not name invoice %s", what, m, billingRef)
+		}
 	}
 }
 

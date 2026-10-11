@@ -188,6 +188,16 @@ func (cfg *docCfg) lineToContract(x *mapCtx, l M, vat float64) M {
 	return it
 }
 
+// zatcaICV is the invoice counter value the document went to ZATCA with: the
+// store-wide counter (zatca.icv) since one chain covers every document type;
+// documents reported before it existed sent their invoice_count_value.
+func zatcaICV(d, z M) int64 {
+	if icv := intv(z["icv"]); icv > 0 {
+		return icv
+	}
+	return intv(d["invoice_count_value"])
+}
+
 func zatcaToContract(loc *time.Location, d M, kindOf string) M {
 	z := sub(d, "zatca")
 	status := "not_reported"
@@ -215,7 +225,7 @@ func zatcaToContract(loc *time.Location, d M, kindOf string) M {
 		}
 	}
 	out := M{"status": status, "invoiceType": inv, "uuid": str(d["uuid"]), "hash": str(d["hash"]),
-		"pih": str(d["prev_hash"]), "icv": intv(d["invoice_count_value"]), "qr": str(z["qr_code"]),
+		"pih": str(d["prev_hash"]), "icv": zatcaICV(d, z), "qr": str(z["qr_code"]),
 		"signature": str(z["ecdsa_signature"]), "reportedAt": fmtDTIn(loc, z["reporting_passed_at"]),
 		"xmlUrl": str(z["cleared_xml_url"]), "error": ""}
 	if errs := arr(z["reporting_errors"]); len(errs) > 0 {

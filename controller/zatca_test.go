@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/erp/erpfixture"
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -257,5 +259,61 @@ func TestClearZatcaReconnect_InvalidStoreID(t *testing.T) {
 	r = callHandler(t, ClearZatcaReconnect, "PUT", "/v1/store/"+unknown+"/zatca/clear-reconnect", tok, nil, "id", unknown)
 	if r.Code != http.StatusInternalServerError || r.Status || r.Errors["store_id"] == nil {
 		t.Fatalf("unknown store: want 500 errors.store_id, got %d %s", r.Code, r.Raw)
+	}
+}
+
+func TestZatcaDeviceSerialNumber(t *testing.T) {
+	const dev = "-4bd41220-f619-47bc-830b-7fedd3b33032"
+	cases := []struct {
+		prefix  string
+		padding int64
+		want    string
+	}{
+		{"S-DATE", 4, "1-S|2-20261010|3-0001|4" + dev},
+		{"INV", 3, "1-INV|2-001|3" + dev},
+		// no prefix used to send "1-|2-1|..." and ZATCA refused the CSR
+		{"", 1, "1-INV|2-1|3" + dev},
+		{" - ", 2, "1-INV|2-01|3" + dev},
+	}
+	for _, c := range cases {
+		if got := zatcaDeviceSerialNumber(c.prefix, c.padding, "20261010"); got != c.want {
+			t.Errorf("zatcaDeviceSerialNumber(%q, %d) = %q, want %q", c.prefix, c.padding, got, c.want)
+		}
+	}
+}
+
+func TestRefuseZatcaReReport(t *testing.T) {
+	w := httptest.NewRecorder()
+	var response models.Response
+	response.Errors = map[string]string{}
+	refuseZatcaReReport(w, &response)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "already_reported") {
+		t.Errorf("got %d %s, want 409 already_reported", w.Code, w.Body.String())
+	}
+}
+
+func TestIsConnectedToInternet_TriesEachProbe(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	closed, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedAddr := closed.Addr().String()
+	closed.Close()
+
+	saved := internetProbeAddrs
+	defer func() { internetProbeAddrs = saved }()
+
+	internetProbeAddrs = []string{closedAddr, ln.Addr().String()}
+	if !IsConnectedToInternet() {
+		t.Error("the second probe answers: want connected")
+	}
+	internetProbeAddrs = []string{closedAddr}
+	if IsConnectedToInternet() {
+		t.Error("no probe answers: want not connected")
 	}
 }

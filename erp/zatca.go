@@ -11,7 +11,7 @@ import (
 )
 
 // zatcaReporters are the EXISTING legacy ZATCA report handlers (Go UBL
-// builder + Python signer + per-collection hash chain). They are variables
+// builder + Python signer + the store's one ICV/PIH chain, models/zatca_chain.go). They are variables
 // only so tests can stub the external ZATCA call.
 var zatcaReporters = map[string]http.HandlerFunc{
 	"sales":         controller.ReportOrderToZatca,
@@ -23,6 +23,24 @@ var zatcaReporters = map[string]http.HandlerFunc{
 var zatcaReportPaths = map[string]string{
 	"sales": "/v1/order/zatca/report/", "sales-returns": "/v1/sales-return/zatca/report/",
 	"deposits": "/v1/customer-deposit/zatca/report/", "withdrawals": "/v1/customer-withdrawal/zatca/report/",
+}
+
+// zatcaCollections are the legacy collections of the reportable documents.
+var zatcaCollections = map[string]string{
+	"sales": "order", "sales-returns": "salesreturn", "deposits": "customerdeposit", "withdrawals": "customerwithdrawal",
+}
+
+// zatcaReportedInDB tells whether ZATCA accepted the document, from the
+// server-owned zatca.reporting_passed flag.
+func zatcaReportedInDB(storeHex, coll, hex string) bool {
+	oid, ok := oidOf(hex)
+	if !ok || coll == "" {
+		return false
+	}
+	ctx, cancel := dbctx()
+	defer cancel()
+	n, err := storeDB(storeHex).Collection(coll).CountDocuments(ctx, bson.M{"_id": oid, "zatca.reporting_passed": true})
+	return err == nil && n > 0
 }
 
 var (
@@ -64,18 +82,25 @@ func handleZatcaReport(path string) http.HandlerFunc {
 				return 0, nil, errf(http.StatusConflict, "zatca_reconnect_required",
 					"ZATCA re-connection is required because company details changed. Reconnect before reporting.", nil)
 			}
-			if z, _ := doc["zatca"].(M); z != nil && (z["status"] == "reported" || z["status"] == "cleared") {
-				return http.StatusOK, doc, nil // idempotent: never re-sign / re-chain
-			}
 			hex := id
 			if _, ok := oidOf(id); !ok {
 				hex = str(doc["id"])
+			}
+			// idempotent: never re-sign / re-chain. Decided on the server's own
+			// record, not the contract's status, which can be a client-recorded
+			// one (erp.x.zatca) that ZATCA never received.
+			if zatcaReportedInDB(storeHex, zatcaCollections[path], hex) {
+				return http.StatusOK, doc, nil
 			}
 			lr, _ := callV1(c, zatcaReporters[path], "POST", zatcaReportPaths[path]+hex, map[string]string{"id": hex}, storeHex, M{})
 			dashboardTouched(res, storeHex, hex)
 			out, gerr := res.Backend.Get(c, storeHex, hex, true)
 			if gerr != nil || out == nil {
 				return 0, nil, errInternal("reported document could not be reloaded")
+			}
+			if z, _ := out["zatca"].(M); lr.HTTP == http.StatusConflict && z != nil &&
+				(z["status"] == "reported" || z["status"] == "cleared") {
+				return http.StatusOK, out, nil // another request reported it first
 			}
 			if !lr.ok() {
 				if lr.HTTP == http.StatusUnauthorized {

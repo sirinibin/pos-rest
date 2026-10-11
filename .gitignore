@@ -27,3 +27,6 @@ ZatcaPython/repaired.pdf
 
 # Card Bridge setup files (built by cardbridge/build.sh)
 /cardbridge-dist/
+
+# ZATCA onboarding keeps keys and secrets in the store record only, never in files
+ZatcaPython/certificates/

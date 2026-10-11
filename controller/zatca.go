@@ -97,17 +97,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 	invoiceCode = strings.ReplaceAll(invoiceCode, "DATE", currentDate)
 	//log.Print("invoiceCode:" + invoiceCode)
 
-	serialNumberTemplate := fmt.Sprintf("%s-%0*d", store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, 1)
-
-	parts := strings.Split(serialNumberTemplate, "-")
-	serialNumber := ""
-	for k, part := range parts {
-		serialNumber += strconv.Itoa((k + 1)) + "-" + part + "|"
-	}
-
-	serialNumber += strconv.Itoa((len(parts) + 1)) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
-
-	serialNumber = strings.ReplaceAll(serialNumber, "DATE", currentDate)
+	serialNumber := zatcaDeviceSerialNumber(store.SalesSerialNumber.Prefix, store.SalesSerialNumber.PaddingCount, currentDate)
 	//log.Print("serialNumber:" + serialNumber)
 
 	//log.Print("serialNumber:" + serialNumber)
@@ -282,6 +272,7 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		store.Zatca.LastConnectedAt = &now
 		store.Zatca.ZatcaReconnectRequired = false
 	}
+	connected := store.Zatca.Connected
 
 	err = store.Update()
 	if err != nil {
@@ -313,6 +304,14 @@ func ConnectStoreToZatca(w http.ResponseWriter, r *http.Request) {
 		// Print output
 		fmt.Println(string(output))
 	*/
+
+	if !connected {
+		response.Status = false
+		response.Errors["otp"] = "ZATCA onboarding did not return all credentials; the store is not connected"
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	response.Status = true
 	//response.Result = store
@@ -374,6 +373,11 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if order.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
 		response.Status = false
@@ -411,6 +415,19 @@ func ReportOrderToZatca(w http.ResponseWriter, r *http.Request) {
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
+
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("order", &orderID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
 
 		err = order.ReportToZatca()
 		if err != nil {
@@ -502,6 +519,11 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if salesReturn.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	_, err = primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
 		response.Status = false
@@ -558,6 +580,19 @@ func ReportSalesReturnToZatca(w http.ResponseWriter, r *http.Request) {
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
+
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("salesreturn", &salesReturnID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
 
 		err = salesReturn.ReportToZatca()
 		if err != nil {
@@ -675,13 +710,20 @@ func DisconnectStoreFromZatca(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// internetProbeAddrs are tried in turn by IsConnectedToInternet: ZATCA's own
+// gateway first (what reporting needs; networks that block outside DNS still
+// reach it), then Google's DNS server.
+var internetProbeAddrs = []string{"gw-fatoora.zatca.gov.sa:443", "8.8.8.8:53"}
+
 func IsConnectedToInternet() bool {
 	timeout := 3 * time.Second
-	_, err := net.DialTimeout("tcp", "8.8.8.8:53", timeout) // Google's DNS server
-	if err != nil {
-		return false
+	for _, addr := range internetProbeAddrs {
+		if conn, err := net.DialTimeout("tcp", addr, timeout); err == nil {
+			conn.Close()
+			return true
+		}
 	}
-	return true
+	return false
 }
 
 func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
@@ -733,6 +775,11 @@ func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if deposit.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	// Old records may be missing UUID or ICV (created before ZATCA was added).
 	needsUpdate := false
 	if deposit.UUID == "" {
@@ -779,6 +826,19 @@ func ReportCustomerDepositToZatca(w http.ResponseWriter, r *http.Request) {
 			zatcaQueue.Pop()
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
+
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("customerdeposit", &depositID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
 
 		err = deposit.ReportToZatca()
 		if err != nil {
@@ -854,6 +914,11 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if withdrawal.Zatca.ReportingPassed {
+		refuseZatcaReReport(w, &response)
+		return
+	}
+
 	// Old records may be missing UUID or ICV (created before ZATCA was added).
 	needsUpdateW := false
 	if withdrawal.UUID == "" {
@@ -901,6 +966,19 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
 		}()
 
+		// Another request may have reported it while this one waited its turn.
+		if reported, err := store.IsZatcaReported("customerwithdrawal", &withdrawalID); err != nil || reported {
+			if err != nil {
+				response.Status = false
+				response.Errors["zatca"] = "Unable to check the ZATCA status: " + err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(response)
+				return
+			}
+			refuseZatcaReReport(w, &response)
+			return
+		}
+
 		err = withdrawal.ReportToZatca()
 		if err != nil {
 			_ = withdrawal.Update() // persist failure info (reporting_failed_count, reporting_errors)
@@ -924,4 +1002,37 @@ func ReportCustomerWithdrawalToZatca(w http.ResponseWriter, r *http.Request) {
 	response.Status = true
 	response.Result = withdrawal
 	json.NewEncoder(w).Encode(response)
+}
+
+// refuseZatcaReReport answers 409 for a document ZATCA already accepted:
+// reporting it again would send ZATCA the same invoice (same UUID) a second
+// time and fork the store's hash chain.
+func refuseZatcaReReport(w http.ResponseWriter, response *models.Response) {
+	response.Status = false
+	response.Errors["already_reported"] = "Already reported to ZATCA"
+	w.WriteHeader(http.StatusConflict)
+	json.NewEncoder(w).Encode(response)
+}
+
+// zatcaDeviceSerialNumber builds the CSR serial number ZATCA requires,
+// "1-<part>|2-<part>|...|n-<device id>", from the sales invoice prefix.
+// Empty parts are dropped: a store without a prefix sent "1-|2-..." and
+// ZATCA refused it with "serial number is mandatory field".
+func zatcaDeviceSerialNumber(prefix string, padding int64, currentDate string) string {
+	template := fmt.Sprintf("%s-%0*d", prefix, padding, 1)
+	template = strings.ReplaceAll(template, "DATE", currentDate)
+	parts := []string{}
+	for _, part := range strings.Split(template, "-") {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) < 2 {
+		parts = append([]string{"INV"}, parts...)
+	}
+	serialNumber := ""
+	for k, part := range parts {
+		serialNumber += strconv.Itoa(k+1) + "-" + part + "|"
+	}
+	return serialNumber + strconv.Itoa(len(parts)+1) + "-4bd41220-f619-47bc-830b-7fedd3b33032"
 }

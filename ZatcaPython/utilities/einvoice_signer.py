@@ -20,6 +20,29 @@ import uuid as uuid_lib
 import stat
 
 
+def sdk_private_key(private_key):
+    """
+    The store's signing key as the Fatoora SDK reads it: SEC1 ("EC PRIVATE
+    KEY") DER in base64, without PEM lines. Given a PKCS#8 key (what the SDK's
+    own -csr command writes) the SDK reports "signed successfully" but leaves
+    SignatureValue empty, so every invoice went out unsigned.
+    """
+    body = "".join(line for line in private_key.strip().splitlines() if not line.startswith("-----"))
+    key = serialization.load_der_private_key(base64.b64decode(body), password=None)
+    sec1 = key.private_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return base64.b64encode(sec1).decode()
+
+
+def signature_value(signed_xml):
+    """The SignatureValue of a signed invoice ("" when missing or empty)."""
+    match = re.search(r"<ds:SignatureValue[^>]*>([^<]*)</ds:SignatureValue>", signed_xml)
+    return match.group(1).strip() if match else ""
+
+
 def ensure_store_sdk_home(store_id):
     if not store_id:
         return os.path.abspath("ZatcaPython/utilities/fatoora-cli-simulation")
@@ -269,7 +292,7 @@ class einvoice_signer:
 
             # Save the private key to a file
             with open(private_key_file_path, "w") as key_file:
-                key_file.write(private_key)
+                key_file.write(sdk_private_key(private_key))
             # Set 644 permissions
             #os.chmod(private_key_file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
 
@@ -337,10 +360,16 @@ class einvoice_signer:
             # Verify signed invoice file
             if not os.path.exists(signed_file_path):
                 error_data = {
-                    "error": f"Signed invoice file not found: {signed_file_path}. Executing Fatoora sign command:"+ " ".join(sign_command),
+                    "error": f"Signed invoice file not found: {signed_file_path}. Executing Fatoora sign command:"+ " ".join(cmd),
                 }
                 print(json.dumps(error_data))
                 exit(1);
+
+            # Never send ZATCA an invoice the SDK left unsigned.
+            with open(signed_file_path, "r") as signed_file:
+                if not signature_value(signed_file.read()):
+                    print(json.dumps({"error": "the Fatoora SDK did not sign the invoice (empty SignatureValue)"}))
+                    exit(1)
             
 
             # Step 3: Run the Fatoora invoice request command
