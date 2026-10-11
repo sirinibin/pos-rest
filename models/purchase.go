@@ -1470,6 +1470,13 @@ func (purchase *Purchase) Validate(
 		vendor, err = store.FindVendorByID(purchase.VendorID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			errs["vendor_id"] = "error finding vendor"
+		} else if vendor == nil && govalidator.IsNull(purchase.VendorName) &&
+			(scenario != "update" || oldPurchase == nil || oldPurchase.VendorID == nil || *oldPurchase.VendorID != *purchase.VendorID) {
+			// an id that is not a vendor of this store (another company's
+			// vendor, a typo) must not be booked to the UNKNOWN vendor; a
+			// vendor_name with it creates that vendor (CreateNewVendorFromName)
+			errs["vendor_id"] = "Invalid vendor: " + purchase.VendorID.Hex()
+			return
 		}
 	}
 

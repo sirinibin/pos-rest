@@ -290,6 +290,37 @@ func productValidate(x *mapCtx, rec M, prev M) map[string]string {
 			e["code"] = "already used by another product"
 		}
 	}
+	// a barcode identifies one product of the store (scanning picks it); only
+	// a new or changed barcode is checked, so saved duplicates stay editable
+	if b := strings.TrimSpace(str(rec["barcode"])); b != "" && x.storeHex != "" &&
+		(prev == nil || (b != str(prev["bar_code"]) && b != str(prev["ean_12"]))) {
+		ctx, cancel := dbctx()
+		defer cancel()
+		f := bson.M{"$or": bson.A{bson.M{"bar_code": b}, bson.M{"ean_12": b}}, "deleted": bson.M{"$ne": true}}
+		if prev != nil {
+			f["_id"] = bson.M{"$ne": prev["_id"]}
+		}
+		if n, _ := storeDB(x.storeHex).Collection("product").CountDocuments(ctx, f); n > 0 {
+			e["barcode"] = "already used by another product"
+		}
+	}
+	// categories must exist in the store (the legacy save reports an unknown
+	// one as category_id_<i>); categories the product already has are kept
+	had := map[string]bool{}
+	if prev != nil {
+		for _, h := range ids(prev["category_id"]) {
+			had[h] = true
+		}
+	}
+	for _, c := range arr(rec["categoryIds"]) {
+		if h, err := x.ref("product_category", c); err == nil && h != nil && had[h.(string)] {
+			continue
+		}
+		if _, err := existingRef(x, "product_category", c); err != nil {
+			e["categoryIds"] = "unknown category " + str(c)
+			break
+		}
+	}
 	return e
 }
 
@@ -405,7 +436,7 @@ func productToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) 
 		sps := []interface{}{}
 		for _, cpt := range arr(rec["components"]) {
 			cm, _ := cpt.(M)
-			h, err := x.ref("product", cm["productId"])
+			h, err := existingRef(x, "product", cm["productId"])
 			if err != nil || h == nil {
 				return nil, errBadRequest("", map[string]string{"components": "unknown product"})
 			}
@@ -470,12 +501,18 @@ func productToLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create bool) 
 					typ = "removing"
 					delta = -delta
 				}
-				now = now.Add(time1Minute)
 				reason := "StartERP stock edit"
+				at := now.Add(time1Minute)
 				if prev == nil {
+					// opening stock: dated at the start of the current minute
+					// (documents are dated to the minute), so a purchase or
+					// sale entered right after it for this minute comes after it
 					reason = "opening"
+					at = now.Truncate(time.Minute)
+				} else {
+					now = at
 				}
-				adjs = append(adjs, M{"date_str": now.Format("2006-01-02T15:04:05Z07:00"), "type": typ, "quantity": delta,
+				adjs = append(adjs, M{"date_str": at.Format("2006-01-02T15:04:05Z07:00"), "type": typ, "quantity": delta,
 					"reason": reason, "warehouse_id": wid, "warehouse_code": code})
 			}
 			ps["stock_adjustments"] = adjs
@@ -522,6 +559,13 @@ func newProductsResource() *Resource {
 			}},
 		toC: productToContract, toL: productToLegacy, known: productKnown, validate: productValidate,
 		hybrid: knownSet("pricing", "stock"),
+		// a service keeps no stock: none is booked, so none is kept to echo
+		beforeCreate: func(x *mapCtx, rec M) error {
+			if boolv(rec["isService"]) {
+				delete(rec, "stock")
+			}
+			return nil
+		},
 		v1: v1Ops{path: "/v1/product", create: controller.CreateProduct, update: controller.UpdateProduct,
 			delete: controller.DeleteProduct, restore: controller.RestoreProduct},
 		fieldErr: map[string]string{"name": "nameEn", "name_in_arabic": "nameAr", "item_code": "code", "part_number": "partNo",
@@ -851,8 +895,14 @@ func newEmployeesResource() *Resource {
 			if create || ch["status"] {
 				p["is_active"] = str(rec["status"]) != "inactive"
 			}
-			if create && intv(rec["salaryDay"]) == 0 {
-				p["salary_day"] = 1 // legacy requires 1..28; the contract has no pay day
+			if (create || ch["salaryDay"]) && intv(rec["salaryDay"]) == 0 {
+				// legacy requires 1..28; the contract has no pay day: a new
+				// employee is paid on the 1st, an edit without one (PUT) keeps
+				// the saved day
+				p["salary_day"] = 1
+				if d := intv(get(prev, "salary_day")); d >= 1 && d <= 28 {
+					p["salary_day"] = d
+				}
 			}
 			if create && str(rec["joinDate"]) == "" {
 				return errBadRequest("", map[string]string{"joinDate": "required"})

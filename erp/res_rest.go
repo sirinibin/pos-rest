@@ -466,7 +466,9 @@ func purchaseBillValidate(x *mapCtx, rec M, prev M) map[string]string {
 	e := map[string]string{}
 	if str(rec["vendorId"]) == "" {
 		e["vendorId"] = "required"
-	} else if _, err := x.ref("vendor", rec["vendorId"]); err != nil {
+	} else if prev != nil && str(prev["vendorId"]) == str(rec["vendorId"]) {
+		// unchanged: a saved bill stays editable whatever its vendor
+	} else if _, err := existingRef(x, "vendor", rec["vendorId"]); err != nil {
 		e["vendorId"] = "unknown vendor"
 	}
 	if num(rec["amount"]) <= 0 {

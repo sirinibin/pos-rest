@@ -1469,13 +1469,15 @@ func (purchasereturn *PurchaseReturn) Validate(
 
 				maxAllowedQuantity := 0.00
 				if scenario == "update" {
-					maxAllowedQuantity = purchase.Products[i].Quantity - (purchase.Products[i].QuantityReturned - oldPurchaseReturn.Products[index].Quantity)
+					maxAllowedQuantity = purchase.Products[i].Quantity - (purchase.Products[i].QuantityReturned - oldPurchaseReturnQuantity(oldPurchaseReturn, index, purchaseReturnProduct.ProductID))
 				} else {
 					maxAllowedQuantity = purchase.Products[i].Quantity - purchase.Products[i].QuantityReturned
 				}
 
-				if purchaseReturnProduct.Quantity > maxAllowedQuantity {
-					//errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchase.Products[i].Unit
+				if RoundFloat(maxAllowedQuantity, 2) <= 0 {
+					errs["quantity_"+strconv.Itoa(index)] = "Already returned all purchased quantities"
+				} else if RoundFloat(purchaseReturnProduct.Quantity, 2) > RoundFloat(maxAllowedQuantity, 2) {
+					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + purchase.Products[i].Unit
 				}
 				break
 				/*
@@ -3830,4 +3832,23 @@ func (store *Store) BuildPurchaseReturnCriterias(w http.ResponseWriter, r *http.
 	}
 
 	return criterias, nil
+}
+
+// oldPurchaseReturnQuantity is the quantity the saved purchase return (before
+// this edit) returned of a product: the line at the same index when it is the
+// same product, else the first selected line of that product (lines may have
+// been added or reordered). 0 when the saved return has no such line.
+func oldPurchaseReturnQuantity(old *PurchaseReturn, index int, productID primitive.ObjectID) float64 {
+	if old == nil {
+		return 0
+	}
+	if index < len(old.Products) && old.Products[index].ProductID == productID && old.Products[index].Selected {
+		return old.Products[index].Quantity
+	}
+	for _, p := range old.Products {
+		if p.ProductID == productID && p.Selected {
+			return p.Quantity
+		}
+	}
+	return 0
 }

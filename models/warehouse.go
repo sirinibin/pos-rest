@@ -295,6 +295,28 @@ func (warehouse *Warehouse) Validate(w http.ResponseWriter, r *http.Request, sce
 		errs["name"] = "Name is required"
 	}
 
+	// a code chosen by the user (create assigns WH<n> without one) must be
+	// unique in the store; main_store names the stock without a warehouse.
+	// On update only a changed code is checked, so a saved warehouse stays
+	// editable whatever its code.
+	warehouse.Code = strings.TrimSpace(warehouse.Code)
+	if warehouse.Code != "" && store != nil {
+		check := scenario != "update"
+		if !check {
+			old, err := store.FindWarehouseByID(&warehouse.ID, bson.M{"code": 1})
+			check = err == nil && old != nil && old.Code != warehouse.Code
+		}
+		if check {
+			if strings.EqualFold(warehouse.Code, "main_store") {
+				errs["code"] = "Code main_store is reserved for the main store"
+			} else if exists, err := warehouse.IsWarehouseExistsByCode(); err != nil {
+				errs["code"] = err.Error()
+			} else if exists {
+				errs["code"] = "Code already exists"
+			}
+		}
+	}
+
 	/*
 		if govalidator.IsNull(warehouse.CountryCode) {
 			errs["country_code"] = "Country is required"
@@ -765,6 +787,24 @@ func (warehouse *Warehouse) MakeCode() error {
 	paddingCount := int64(1)
 	warehouse.Code = fmt.Sprintf("%s%0*d", "WH", paddingCount, incr)
 	return nil
+}
+
+// MakeFreeCode is MakeCode skipping numbers a user-chosen code already took
+// (a warehouse named WH3 by hand before the counter reached 3).
+func (warehouse *Warehouse) MakeFreeCode() error {
+	for i := 0; i < 1000; i++ {
+		if err := warehouse.MakeCode(); err != nil {
+			return err
+		}
+		exists, err := warehouse.IsWarehouseExistsByCode()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
+	}
+	return errors.New("no free warehouse code")
 }
 
 func (warehouse *Warehouse) UnMakeCode() error {

@@ -15,7 +15,9 @@ import (
 	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 )
 
 // CapitalWithdrawal : CapitalWithdrawal structure
@@ -48,7 +50,7 @@ type CapitalWithdrawal struct {
 	DeletedBy           *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser       *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt           *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
-	redisCounters counterClaims // numbers this document took while being created; never stored
+	redisCounters       counterClaims       // numbers this document took while being created; never stored
 }
 
 func (capitalwithdrawal *CapitalWithdrawal) AttributesValueChangeEvent(capitalwithdrawalOld *CapitalWithdrawal) error {
@@ -490,15 +492,110 @@ func (store *Store) GetCapitalWithdrawalCount() (count int64, err error) {
 	})
 }
 
+// capitalWithdrawalSerial is the store's capital withdrawal number series:
+// the serial StartERP keeps in the store (erp.x.serials.capitalWithdrawal,
+// default "CWD-" from 1). Capital withdrawals used to be numbered with the
+// capital deposit settings, so their numbers ran in the capital series.
+func capitalWithdrawalSerial(storeID *primitive.ObjectID) (prefix string, startFrom int64) {
+	prefix, startFrom = "CWD", 1
+	if storeID == nil {
+		return
+	}
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var raw struct {
+		Erp struct {
+			X struct {
+				Serials struct {
+					CapitalWithdrawal struct {
+						Prefix string      `bson:"prefix"`
+						Start  interface{} `bson:"start"`
+					} `bson:"capitalWithdrawal"`
+				} `bson:"serials"`
+			} `bson:"x"`
+		} `bson:"erp"`
+	}
+	err := collection.FindOne(ctx, bson.M{"_id": storeID},
+		options.FindOne().SetProjection(bson.M{"erp.x.serials.capitalWithdrawal": 1})).Decode(&raw)
+	if err != nil {
+		return
+	}
+	s := raw.Erp.X.Serials.CapitalWithdrawal
+	if p := strings.TrimSuffix(strings.TrimSpace(s.Prefix), "-"); p != "" {
+		prefix = p
+	}
+	switch v := s.Start.(type) {
+	case int32:
+		startFrom = int64(v)
+	case int64:
+		startFrom = v
+	case float64:
+		startFrom = int64(v)
+	}
+	if startFrom < 1 {
+		startFrom = 1
+	}
+	return
+}
+
+// highestCapitalWithdrawalNumber is the highest number an existing capital
+// withdrawal of the store carries (the trailing digits of its code, in the
+// old capital series or the new one), so the new series continues after it
+// and no number is given twice.
+func (store *Store) highestCapitalWithdrawalNumber() (int64, error) {
+	collection := db.GetDB("store_" + store.ID.Hex()).Collection("capitalwithdrawal")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cur, err := collection.Find(ctx, bson.M{}, options.Find().SetProjection(bson.M{"code": 1}))
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(ctx)
+	max := int64(0)
+	for cur.Next(ctx) {
+		var d struct {
+			Code string `bson:"code"`
+		}
+		if cur.Decode(&d) != nil {
+			continue
+		}
+		if n := trailingNumber(d.Code); n > max {
+			max = n
+		}
+	}
+	return max, cur.Err()
+}
+
+// trailingNumber is the number at the end of a document code (0 if none).
+func trailingNumber(code string) int64 {
+	i := len(code)
+	for i > 0 && code[i-1] >= '0' && code[i-1] <= '9' {
+		i--
+	}
+	if i == len(code) {
+		return 0
+	}
+	n, err := strconv.ParseInt(code[i:], 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+const capitalWithdrawalCounterKey = "_capital_withdrawal_cwd_counter"
+
 func (capitalWithdrawal *CapitalWithdrawal) MakeRedisCode() error {
 	store, err := FindStoreByID(capitalWithdrawal.StoreID, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	redisKey := capitalWithdrawal.StoreID.Hex() + "_capital_withdrawal_counter" // Global counter key
+	prefix, startFrom := capitalWithdrawalSerial(capitalWithdrawal.StoreID)
+	// a counter of its own (the old _capital_withdrawal_counter followed the
+	// capital series)
+	redisKey := capitalWithdrawal.StoreID.Hex() + capitalWithdrawalCounterKey
 
-	// === 1. Get location from store.CountryCode ===
 	location := time.UTC
 	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
 		loc, err := time.LoadLocation(timeZone)
@@ -507,22 +604,26 @@ func (capitalWithdrawal *CapitalWithdrawal) MakeRedisCode() error {
 		}
 	}
 
-	// === 2. Get date from order.CreatedAt or fallback to order.Date or now ===
-	baseTime := capitalWithdrawal.CreatedAt.In(location)
+	baseTime := time.Now().In(location)
+	if capitalWithdrawal.CreatedAt != nil {
+		baseTime = capitalWithdrawal.CreatedAt.In(location)
+	}
 
-	// === 3. Always ensure global counter exists ===
 	exists, err := db.RedisClient.Exists(redisKey).Result()
 	if err != nil {
 		return err
 	}
 	if exists == 0 {
-		count, err := store.GetCountByCollection("capital")
+		highest, err := store.highestCapitalWithdrawalNumber()
 		if err != nil {
 			return err
 		}
-		startFrom := store.CapitalDepositSerialNumber.StartFromCount
-		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
-		if err != nil {
+		initial := startFrom - 1
+		if highest > initial {
+			initial = highest
+		}
+		// SetNX: a request that raced this one to the empty key keeps its value
+		if err := db.RedisClient.SetNX(redisKey, initial, 0).Err(); err != nil {
 			return err
 		}
 	}
@@ -533,65 +634,39 @@ func (capitalWithdrawal *CapitalWithdrawal) MakeRedisCode() error {
 		return err
 	}
 
-	// === 5. Determine which counter to use for order.Code ===
-	useMonthly := strings.Contains(store.CapitalDepositSerialNumber.Prefix, "DATE")
 	var serialNumber int64 = globalIncr
-
-	if useMonthly {
-		// Generate monthly redis key
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := capitalWithdrawal.StoreID.Hex() + "_capital_withdrawal_counter_" + monthKey
-
-		// Ensure monthly counter exists
+	if strings.Contains(prefix, "DATE") && store.Settings.EnableMonthlySerialNumber {
+		monthKey := baseTime.Format("200601")
+		monthlyRedisKey := redisKey + "_" + monthKey
 		monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result()
 		if err != nil {
 			return err
 		}
 		if monthlyExists == 0 {
-			startFrom := store.CapitalDepositSerialNumber.StartFromCount
 			fromDate := time.Date(baseTime.Year(), baseTime.Month(), 1, 0, 0, 0, 0, location)
 			toDate := fromDate.AddDate(0, 1, 0).Add(-time.Nanosecond)
-
 			monthlyCount, err := store.GetCountByCollectionInRange(fromDate, toDate, "capitalwithdrawal")
 			if err != nil {
 				return err
 			}
-
-			if monthlyCount == 0 {
-				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
-				if err != nil {
-					return err
-				}
-			} else {
-				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
-				if err != nil {
-					return err
-				}
+			if err := db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err(); err != nil {
+				return err
 			}
 		}
-
-		// Increment monthly counter and use it
 		monthlyIncr, err := capitalWithdrawal.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
-		if store.Settings.EnableMonthlySerialNumber {
-			serialNumber = monthlyIncr
-		}
+		serialNumber = monthlyIncr
 	}
 
-	// === 6. Build the code ===
 	paddingCount := store.CapitalDepositSerialNumber.PaddingCount
-	if store.CapitalDepositSerialNumber.Prefix != "" {
-		capitalWithdrawal.Code = fmt.Sprintf("%s-%0*d", store.CapitalDepositSerialNumber.Prefix, paddingCount, serialNumber)
-	} else {
-		capitalWithdrawal.Code = fmt.Sprintf("%0*d", paddingCount, serialNumber)
+	if paddingCount < 1 {
+		paddingCount = 4
 	}
-
-	// === 7. Replace DATE token if used ===
+	capitalWithdrawal.Code = fmt.Sprintf("%s-%0*d", prefix, paddingCount, serialNumber)
 	if strings.Contains(capitalWithdrawal.Code, "DATE") {
-		orderDate := baseTime.Format("20060102") // YYYYMMDD
-		capitalWithdrawal.Code = strings.ReplaceAll(capitalWithdrawal.Code, "DATE", orderDate)
+		capitalWithdrawal.Code = strings.ReplaceAll(capitalWithdrawal.Code, "DATE", baseTime.Format("20060102"))
 	}
 
 	return nil
@@ -750,6 +825,13 @@ func (capitalwithdrawal *CapitalWithdrawal) DeleteCapitalWithdrawal(tokenClaims 
 		return err
 	}
 
+	// the postings go with the document (a delete used to leave them on the
+	// ledger, so cash and the party's balance still counted it)
+	err = capitalwithdrawal.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -890,4 +972,144 @@ func (store *Store) ProcessCapitalWithdrawals() error {
 	}
 
 	return nil
+}
+
+// DoAccounting posts a capital withdrawal: the investor's drawings account
+// is debited and the cash / bank paid out is credited (as for a dividend).
+func (capitalwithdrawal *CapitalWithdrawal) DoAccounting() error {
+	ledger, err := capitalwithdrawal.CreateLedger()
+	if err != nil {
+		return err
+	}
+
+	_, err = ledger.CreatePostings()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UndoAccounting removes the capital withdrawal's ledger and postings and
+// recalculates the balances of the accounts they touched.
+func (capitalwithdrawal *CapitalWithdrawal) UndoAccounting() error {
+	store, err := FindStoreByID(capitalwithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	ledger, err := store.FindLedgerByReferenceID(capitalwithdrawal.ID, *capitalwithdrawal.StoreID, bson.M{})
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	ledgerAccounts := map[string]Account{}
+	if ledger != nil {
+		ledgerAccounts, err = ledger.GetRelatedAccounts()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = store.RemoveLedgerByReferenceID(capitalwithdrawal.ID)
+	if err != nil {
+		return err
+	}
+
+	err = store.RemovePostingsByReferenceID(capitalwithdrawal.ID)
+	if err != nil {
+		return err
+	}
+
+	return SetAccountBalances(ledgerAccounts)
+}
+
+func (capitalwithdrawal *CapitalWithdrawal) CreateLedger() (ledger *Ledger, err error) {
+	now := time.Now()
+
+	store, err := FindStoreByID(capitalwithdrawal.StoreID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	if capitalwithdrawal.WithdrawnByUserID == nil {
+		return nil, errors.New("capital withdrawal has no investor")
+	}
+	investor, err := FindUserByID(capitalwithdrawal.WithdrawnByUserID, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	referenceModel := "withdrawer"
+	drawingAccount, err := store.CreateAccountIfNotExists(
+		capitalwithdrawal.StoreID,
+		&investor.ID,
+		&referenceModel,
+		investor.Name+" Drawings",
+		&investor.Mob,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	cashAccount, err := store.CreateAccountIfNotExists(capitalwithdrawal.StoreID, nil, nil, "Cash", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	bankAccount, err := store.CreateAccountIfNotExists(capitalwithdrawal.StoreID, nil, nil, "Bank", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	payingAccount := Account{}
+	if capitalwithdrawal.PaymentMethod == "cash" {
+		payingAccount = *cashAccount
+	} else if slices.Contains(BANK_PAYMENT_METHODS, capitalwithdrawal.PaymentMethod) {
+		payingAccount = *bankAccount
+	}
+
+	groupID := primitive.NewObjectID()
+
+	journals := []Journal{
+		{
+			Date:          capitalwithdrawal.Date,
+			AccountID:     drawingAccount.ID,
+			AccountNumber: drawingAccount.Number,
+			AccountName:   drawingAccount.Name,
+			DebitOrCredit: "debit",
+			Debit:         capitalwithdrawal.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		},
+		{
+			Date:          capitalwithdrawal.Date,
+			AccountID:     payingAccount.ID,
+			AccountNumber: payingAccount.Number,
+			AccountName:   payingAccount.Name,
+			DebitOrCredit: "credit",
+			Credit:        capitalwithdrawal.Amount,
+			GroupID:       groupID,
+			CreatedAt:     &now,
+			UpdatedAt:     &now,
+		},
+	}
+
+	ledger = &Ledger{
+		StoreID:        capitalwithdrawal.StoreID,
+		ReferenceID:    capitalwithdrawal.ID,
+		ReferenceModel: "capital_withdrawal",
+		ReferenceCode:  capitalwithdrawal.Code,
+		Journals:       journals,
+		CreatedAt:      &now,
+		UpdatedAt:      &now,
+	}
+
+	err = ledger.Insert()
+	if err != nil {
+		return nil, err
+	}
+
+	return ledger, nil
 }

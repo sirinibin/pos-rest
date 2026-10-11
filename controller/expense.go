@@ -141,14 +141,7 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 	hold := models.HoldStore(store.ID)
 	defer hold.Release()
 
-	if expense.VendorID != nil && !expense.VendorID.IsZero() {
-		expense.VatPercent = &store.VatPercent
-		baseAmount := models.RoundTo2Decimals(expense.Amount / (1 + (*expense.VatPercent / 100)))
-		expense.VatPrice = models.RoundTo2Decimals(baseAmount * (*expense.VatPercent / 100))
-	} else {
-		expense.VatPercent = nil
-		expense.VatPrice = 0
-	}
+	expense.SetVAT(store.VatPercent)
 
 	// Validate data
 	if errs := expense.Validate(w, r, "create"); len(errs) > 0 {
@@ -283,14 +276,7 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	expense.UpdatedAt = &now
 
-	if expense.VendorID != nil && !expense.VendorID.IsZero() {
-		expense.VatPercent = &store.VatPercent
-		baseAmount := models.RoundTo2Decimals(expense.Amount / (1 + (*expense.VatPercent / 100)))
-		expense.VatPrice = models.RoundTo2Decimals(baseAmount * (*expense.VatPercent / 100))
-	} else {
-		expense.VatPercent = nil
-		expense.VatPrice = 0
-	}
+	expense.SetVAT(store.VatPercent)
 
 	// Validate data
 	if errs := expense.Validate(w, r, "update"); len(errs) > 0 {

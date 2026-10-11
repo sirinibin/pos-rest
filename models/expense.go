@@ -57,9 +57,37 @@ type Expense struct {
 	Taxable             bool                  `bson:"taxable" json:"taxable"`
 	VatPercent          *float64              `bson:"vat_percent" json:"vat_percent"`
 	VatPrice            float64               `bson:"vat_price" json:"vat_price"`
-	VendorName          string                `json:"vendor_name" bson:"vendor_name"`
-	VendorNameArabic    string                `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
-	redisCounters counterClaims // numbers this document took while being created; never stored
+	// VatEntered: the client entered vat_price itself (kept as sent); without
+	// it the VAT is worked out at the store rate for a vendor, else 0
+	VatEntered       bool          `json:"vat_entered,omitempty" bson:"-"`
+	VendorName       string        `json:"vendor_name" bson:"vendor_name"`
+	VendorNameArabic string        `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
+	redisCounters    counterClaims // numbers this document took while being created; never stored
+}
+
+// SetVAT sets vat_percent / vat_price before a save: the VAT the client
+// entered (VatEntered) is kept; otherwise a vendor expense carries VAT at
+// the store rate inside its VAT-inclusive amount and one without a vendor
+// none (the old app's rule).
+func (expense *Expense) SetVAT(storeVatPercent float64) {
+	rate := storeVatPercent
+	if expense.VatEntered {
+		expense.VatPrice = RoundTo2Decimals(expense.VatPrice)
+		if expense.VatPrice > 0 {
+			expense.VatPercent = &rate
+		} else {
+			expense.VatPercent = nil
+		}
+		return
+	}
+	if expense.VendorID != nil && !expense.VendorID.IsZero() {
+		expense.VatPercent = &rate
+		baseAmount := RoundTo2Decimals(expense.Amount / (1 + (rate / 100)))
+		expense.VatPrice = RoundTo2Decimals(baseAmount * (rate / 100))
+	} else {
+		expense.VatPercent = nil
+		expense.VatPrice = 0
+	}
 }
 
 func (expense *Expense) AttributesValueChangeEvent(expenseOld *Expense) error {
@@ -600,11 +628,23 @@ func (expense *Expense) Validate(w http.ResponseWriter, r *http.Request, scenari
 		vendor, err = store.FindVendorByID(expense.VendorID, bson.M{})
 		if err != nil && err != mongo.ErrNoDocuments {
 			errs["vendor_id"] = "error finding vendor"
+		} else if vendor == nil && govalidator.IsNull(expense.VendorName) {
+			// an id that is not a vendor of this store is an error, not "no
+			// vendor" (a vendor_name with it creates that vendor)
+			errs["vendor_id"] = "Invalid vendor: " + expense.VendorID.Hex()
 		}
 	}
 
 	if vendor == nil && govalidator.IsNull(expense.VendorName) {
 		expense.VendorID = nil
+	}
+
+	if expense.VatEntered {
+		if expense.VatPrice < 0 {
+			errs["vat_price"] = "VAT should not be negative"
+		} else if expense.VatPrice > 0 && expense.VatPrice >= expense.Amount {
+			errs["vat_price"] = "VAT should be less than the amount"
+		}
 	}
 
 	if len(errs) > 0 {

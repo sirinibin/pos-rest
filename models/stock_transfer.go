@@ -177,8 +177,15 @@ func (stocktransfer *StockTransfer) FindNetTotal() {
 	//baseTotal = RoundTo8Decimals(baseTotal)
 	baseTotal = RoundTo2Decimals(baseTotal)
 
+	// without vat_percent (Validate then rejects the transfer) count no VAT
+	// instead of dereferencing nil
+	vatPercent := 0.0
+	if stocktransfer.VatPercent != nil {
+		vatPercent = *stocktransfer.VatPercent
+	}
+
 	// Now calculate VAT on the discounted base
-	stocktransfer.VatPrice = RoundTo2Decimals(baseTotal * (*stocktransfer.VatPercent / 100))
+	stocktransfer.VatPrice = RoundTo2Decimals(baseTotal * (vatPercent / 100))
 
 	//log.Print(baseTotal + stocktransfer.VatPrice)
 	stocktransfer.NetTotal = RoundTo2Decimals(baseTotal + stocktransfer.VatPrice)
@@ -188,7 +195,7 @@ func (stocktransfer *StockTransfer) FindNetTotal() {
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
 	// Now calculate VAT on the discounted base
-	stocktransfer.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*stocktransfer.VatPercent / 100))
+	stocktransfer.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (vatPercent / 100))
 	stocktransfer.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + stocktransfer.ActualVatPrice)
 
 	if stocktransfer.AutoRoundingAmount {

@@ -149,6 +149,15 @@ func CreateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// a capital withdrawal pays cash / bank out to the investor: post it
+	err = capitalwithdrawal.DoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response.Status = true
 	response.Result = capitalwithdrawal
 
@@ -273,6 +282,24 @@ func UpdateCapitalWithdrawal(w http.ResponseWriter, r *http.Request) {
 		response.Errors["view"] = "Unable to find capitalwithdrawal:" + err.Error()
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	// re-post the edited withdrawal (a deleted one stays off the ledger)
+	err = capitalwithdrawal.UndoAccounting()
+	if err != nil {
+		response.Status = false
+		response.Errors["undo_accounting"] = "Error undo accounting: " + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !capitalwithdrawal.Deleted {
+		err = capitalwithdrawal.DoAccounting()
+		if err != nil {
+			response.Status = false
+			response.Errors["do_accounting"] = "Error do accounting: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	response.Status = true

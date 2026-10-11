@@ -217,8 +217,9 @@ func TestPurchases_DocumentFlow(t *testing.T) {
 			{"discount above price", "items.0.unitDiscount", base(func(b M) { b["items"] = []M{purItem(pid, s.MS, 1, 5, 6)} })},
 		} {
 			r := Call(t, "POST", "/purchases", s.Token, c.body)
-			if r.Code != 400 {
-				t.Errorf("%s: %s", c.name, r)
+			purNeedErr(t, r, 400, c.field, c.name)
+			if r.ErrField("payments") != "" {
+				t.Errorf("%s: a bad line is reported as a payments error too: %s", c.name, r)
 			}
 			if r.ErrField(c.field) == "" || r.ErrField("payments") != "" {
 				t.Errorf("%s: want the error on %s, not on payments: %s", c.name, c.field, r)
@@ -242,8 +243,9 @@ func TestPurchases_DocumentFlow(t *testing.T) {
 		if dup.Code != 400 {
 			t.Fatalf("duplicate vendor invoice no.: %s", dup)
 		}
-		KnownBug(t, "NEW-PUR-VINV-FIELD", "duplicate vendor invoice error is reported under the legacy key vendor_invoice_no, not vendorInvoiceNo",
-			dup.ErrField("vendorInvoiceNo") == "" && dup.ErrField("vendor_invoice_no") != "")
+		if dup.ErrField("vendorInvoiceNo") == "" || dup.ErrField("vendor_invoice_no") != "" {
+			t.Errorf("duplicate vendor invoice error must be reported as vendorInvoiceNo: %s", dup)
+		}
 		v2 := s.Vendor(t)
 		r2 := Must(t, Call(t, "POST", "/purchases", s.Token, body(S(v2["id"]))), 201, "same number, other vendor").Body
 		docs = append(docs, doc{S(r2["id"]), net, vat, 0, 0})
@@ -253,12 +255,7 @@ func TestPurchases_DocumentFlow(t *testing.T) {
 		ov := other.Vendor(t)
 		for _, id := range []string{S(ov["id"]), "000000000000000000000001"} {
 			r := Call(t, "POST", "/purchases", s.Token, M{"storeId": s.ID, "date": s.Now(), "vendorId": id, "items": []M{purItem(pid, s.MS, 1, 2, 0)}})
-			KnownBug(t, "NEW-PUR-UNKNOWN-VENDOR", "a vendorId that does not exist in the store (or belongs to another company) is booked to the UNKNOWN vendor with 201 instead of 400 vendorId",
-				r.Code == 201 && S(r.Body["vendorName"]) == "UNKNOWN")
-			if r.Code == 201 {
-				_, vat, net := purOracle([]purLine{{1, 2, 0}}, 0, 0, 15)
-				docs = append(docs, doc{S(r.Body["id"]), net, vat, 0, 0})
-			}
+			purNeedErr(t, r, 400, "vendorId", "purchase with vendor "+id)
 		}
 		// the other company's vendor is untouched
 		if b := F(Read(t, other.Token, "vendors", S(ov["id"])), "creditBalance"); b != 0 {
@@ -519,7 +516,7 @@ func TestPurchases_Returns(t *testing.T) {
 	t.Run("cumulative returns above the purchased quantity", func(t *testing.T) {
 		// 4 returned, 6 left: returning 7 must be refused
 		r := ret(7, nil)
-		KnownBug(t, "NEW-PR-OVERRETURN", "a second purchase return can take the returned quantity above the purchased quantity (7 of 6 left accepted)", r.Code == 201)
+		purNeedErr(t, r, 400, "items.0.qty", "second return above the quantity left")
 		if r.Code == 201 {
 			_, _, net := purOracle([]purLine{{7, 12.5, 0}}, 0, 0, 15)
 			retNets = append(retNets, net)
@@ -703,7 +700,9 @@ func TestPurchases_OrdersRequestsBills(t *testing.T) {
 		if np.Code != 400 {
 			t.Errorf("put pr without assignee: %s", np)
 		}
-		KnownBug(t, "NEW-PR-ASSIGNED-FIELD", "a missing assignedTo is reported under the legacy field assigned_to", np.ErrField("assignedTo") == "")
+		if np.ErrField("assignedTo") == "" {
+			t.Errorf("put pr without assignee: want error.fields[assignedTo], got %s", np)
+		}
 		Must(t, Call(t, "PUT", "/purchase-requests/"+id, s.Token, M{"date": s.Now(), "status": "rejected", "assignedTo": r["assignedTo"],
 			"items": []M{purItem(pid, s.MS, 2, 0, 0)}}), 200, "put pr")
 		Must(t, Call(t, "DELETE", "/purchase-requests/"+id, s.Token, nil), 200, "delete pr")
@@ -732,10 +731,8 @@ func TestPurchases_OrdersRequestsBills(t *testing.T) {
 		purNeedErr(t, Call(t, "POST", "/purchase-bills", s.Token, M{"storeId": s.ID, "vendorId": "ven_x", "receivedAt": s.Now(), "fileName": "b", "amount": 1}), 400, "vendorId", "bill unknown vendor")
 		ov := other.Vendor(t)
 		x := Call(t, "POST", "/purchase-bills", s.Token, M{"storeId": s.ID, "vendorId": ov["id"], "receivedAt": s.Now(), "fileName": "b", "amount": 1})
-		KnownBug(t, "NEW-BILL-VENDOR", "a purchase bill accepts the vendor id of another company (any 24-hex id passes)", x.Code == 201)
-		if x.Code == 201 {
-			Must(t, Call(t, "DELETE", "/purchase-bills/"+S(x.Body["id"])+"?hard=1", s.Token, nil), 204, "remove stray bill")
-		}
+		purNeedErr(t, x, 400, "vendorId", "bill with another company's vendor")
+		purNeedErr(t, Call(t, "POST", "/purchase-bills", s.Token, M{"storeId": s.ID, "vendorId": "000000000000000000000001", "receivedAt": s.Now(), "fileName": "b", "amount": 1}), 400, "vendorId", "bill with a vendor id that does not exist")
 		nw := List(t, s.Token, "purchase-bills", "storeId="+s.ID+"&where.status=new&select=id,status")
 		if len(nw) != 1 || S(nw[0]["id"]) != id {
 			t.Errorf("new bills: %v", nw)
@@ -750,7 +747,9 @@ func TestPurchases_OrdersRequestsBills(t *testing.T) {
 		}
 		purNeedErr(t, PatchResp(t, s.Token, "purchase-bills", id, M{"amount": -1}), 400, "amount", "bill negative amount")
 		pu := Must(t, Call(t, "PUT", "/purchase-bills/"+id, s.Token, M{"vendorId": vid, "receivedAt": s.Now(), "fileName": "x.pdf", "amount": 115, "status": "new"}), 200, "put bill").Body
-		KnownBug(t, "NEW-NATIVE-PUT-RENUMBER", "PUT without code gives a numbered record (bill, pending transfer) a new number", S(pu["code"]) != S(r["code"]))
+		if S(pu["code"]) != S(r["code"]) {
+			t.Errorf("PUT without code renumbered the bill: %v -> %v", r["code"], pu["code"])
+		}
 		purNeedErr(t, Call(t, "PUT", "/purchase-bills/"+id, s.Token, M{"vendorId": vid, "fileName": "x.pdf", "amount": 115}), 400, "receivedAt", "put bill without receivedAt")
 		d := Must(t, Call(t, "DELETE", "/purchase-bills/"+id, s.Token, nil), 200, "delete bill").Body
 		if d["deleted"] != true {
@@ -964,7 +963,9 @@ func TestInventory_StockTransfers(t *testing.T) {
 		if F(pu, "items.0.qty") != 4 {
 			t.Errorf("put pending qty: %v", pu["items"])
 		}
-		KnownBug(t, "NEW-NATIVE-PUT-RENUMBER", "PUT without code gives a pending transfer a new number", S(pu["code"]) != S(r["code"]))
+		if S(pu["code"]) != S(r["code"]) {
+			t.Errorf("PUT without code renumbered the pending transfer: %v -> %v", r["code"], pu["code"])
+		}
 		bad := tr(s.MS, s.MS, 4, "pending")
 		delete(bad, "storeId")
 		purNeedErr(t, Call(t, "PUT", "/stock-transfers/"+id, s.Token, bad), 400, "toWarehouseId", "put same warehouses")
@@ -1050,7 +1051,10 @@ func TestInventory_Warehouses(t *testing.T) {
 		if S(r["nameAr"]) != "المستودع الشمالي" || S(r["manager"]) != "Ali" {
 			t.Errorf("warehouse: %v", r)
 		}
-		KnownBug(t, "NEW-WH-CODE", "the warehouse code sent on create is ignored (legacy assigns WH<n>)", S(r["code"]) != "NORTH")
+		if S(r["code"]) != "NORTH" {
+			t.Errorf("warehouse code sent on create: got %v, want NORTH", r["code"])
+		}
+		purNeedErr(t, Call(t, "POST", "/warehouses", s.Token, M{"storeId": s.ID, "nameEn": "North again", "code": "NORTH"}), 400, "code", "duplicate warehouse code")
 		rows := List(t, s.Token, "warehouses", "storeId="+s.ID)
 		if len(rows) != 2 || S(rows[0]["id"]) != s.MS || rows[0]["virtual"] != true {
 			t.Errorf("warehouse list: %v", rows)
@@ -1130,7 +1134,7 @@ func TestInventory_Products(t *testing.T) {
 		purNeedErr(t, mk(M{"nameEn": "Other", "barcode": "12ab"}), 400, "barcode", "bad barcode")
 		purNeedErr(t, mk(M{"nameEn": "Other", "barcode": "1234567"}), 400, "barcode", "7-digit barcode")
 		dup := mk(M{"nameEn": "Barcode twin", "barcode": "12345678"})
-		KnownBug(t, "NEW-BARCODE-DUP", "two products of a store can share one barcode", dup.Code == 201)
+		purNeedErr(t, dup, 400, "barcode", "barcode of another product")
 		auto := Must(t, mk(M{"nameEn": "Auto code"}), 201, "auto code").Body
 		if !strings.Contains(S(auto["code"]), "-P-0") || S(auto["barcode"]) == "" {
 			t.Errorf("auto code / barcode: %v %v", auto["code"], auto["barcode"])
@@ -1144,15 +1148,15 @@ func TestInventory_Products(t *testing.T) {
 		purNeedErr(t, mk(M{"nameEn": ""}), 400, "nameEn", "no name")
 		purNeedErr(t, mk(M{"nameEn": "AB"}), 400, "nameEn", "two-letter name (legacy min 3)")
 		purNeedErr(t, mk(M{"nameEn": "Bad WH", "stock": M{"wh_nope": M{"qty": 3}}}), 400, "stock", "stock in an unknown warehouse")
-		// any ms_ prefix is taken as this store's main warehouse
+		// only this store's ms_ id is its main warehouse
 		fm := mk(M{"nameEn": "Foreign MS", "stock": M{"ms_000000000000000000000001": M{"qty": 3}}})
-		KnownBug(t, "NEW-PROD-MS-ANY", "stock under another store's ms_ id is booked to this store's main warehouse", fm.Code == 201)
+		purNeedErr(t, fm, 400, "stock", "stock in another store's main warehouse")
 		purNeedErr(t, mk(M{"nameEn": "Bad brand", "brandId": "brd_nope"}), 400, "brandId", "unknown brand")
 		uc := mk(M{"nameEn": "Bad category", "categoryIds": []string{"000000000000000000000001"}})
 		if uc.Code != 400 {
 			t.Fatalf("unknown category: %s", uc)
 		}
-		KnownBug(t, "NEW-PROD-CAT-FIELD", "an unknown categoryIds entry is reported as error.fields[adjustments.0.id]", uc.ErrField("categoryIds") == "")
+		purNeedErr(t, uc, 400, "categoryIds", "unknown category")
 		purNeedErr(t, Call(t, "POST", "/products", s.Token, M{"storeId": other.ID, "nameEn": "Foreign"}), 403, "", "another store")
 	})
 
@@ -1185,7 +1189,9 @@ func TestInventory_Products(t *testing.T) {
 		if F(sr, "legacyStockTotal") != 0 {
 			t.Errorf("service booked stock: %v", sr["legacyStockTotal"])
 		}
-		KnownBug(t, "NEW-SERVICE-STOCK", "a service echoes the stock sent on create although none is booked", len(sr["stock"].(M)) != 0)
+		if st, _ := sr["stock"].(M); len(st) != 0 {
+			t.Errorf("service echoes stock: %v", sr["stock"])
+		}
 	})
 
 	t.Run("sets", func(t *testing.T) {
@@ -1203,7 +1209,7 @@ func TestInventory_Products(t *testing.T) {
 			t.Error("set listed as plain product")
 		}
 		r := mk(M{"nameEn": "Ghost kit", "isSet": true, "components": []M{{"productId": "000000000000000000000001", "qty": 1}}})
-		KnownBug(t, "NEW-SET-COMPONENT", "a set accepts a component product id that does not exist", r.Code == 201)
+		purNeedErr(t, r, 400, "components", "unknown component (24-hex id)")
 		purNeedErr(t, mk(M{"nameEn": "Bad kit", "isSet": true, "components": []M{{"productId": "prd_nope", "qty": 1}}}), 400, "components", "unknown component (client id)")
 	})
 
@@ -1365,10 +1371,12 @@ func TestInventory_Products(t *testing.T) {
 		})
 		for _, r := range rows {
 			if S(r["kind"]) == "sales" {
-				KnownBug(t, "NEW-HIST-SAME-MINUTE", "a sale in the same minute as a purchase shows stock -3 instead of 7 (stock before it counts dates < , not <=)", F(r, "stock") != 7)
+				if F(r, "stock") != 7 {
+					t.Errorf("sale in the same minute as the purchase: stock %v, want 7", r["stock"])
+				}
 			}
 		}
-		// opening stock is dated a minute ahead, so a purchase right after it reads as earlier
+		// opening stock is dated at the start of the minute, so a purchase entered right after it comes after it
 		o := Must(t, mk(M{"nameEn": "Opening item", "pricing": M{"purchase": 10, "retail": 20}, "stock": M{s.MS: M{"qty": 5}}}), 201, "opening").Body
 		Create(t, s.Token, "purchases", M{"storeId": s.ID, "date": s.Now(), "vendorId": v["id"], "items": []M{purItem(S(o["id"]), s.MS, 10, 12, 0)}})
 		purWaitStock(t, s, S(o["id"]), s.MS, 15)
@@ -1378,7 +1386,9 @@ func TestInventory_Products(t *testing.T) {
 		})
 		for _, r := range rows {
 			if S(r["kind"]) == "purchases" {
-				KnownBug(t, "NEW-HIST-OPENING", "opening stock is dated one minute in the future: the purchase after it shows stock 10, not 15", F(r, "stock") == 10)
+				if F(r, "stock") != 15 {
+					t.Errorf("purchase right after the opening stock: stock %v, want 15", r["stock"])
+				}
 			}
 		}
 	})

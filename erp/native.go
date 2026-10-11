@@ -305,7 +305,10 @@ func (b *nativeBackend) Update(c *Ctx, storeHex, id string, prev, next M, change
 			return nil, errBadRequest("", errs)
 		}
 	}
-	if b.serialKey != "" && changedSet(changed)["code"] {
+	if b.serialKey != "" && str(next["code"]) == "" {
+		// a PUT without code keeps the number (code is server-assigned)
+		next["code"] = prev["code"]
+	} else if b.serialKey != "" && changedSet(changed)["code"] {
 		code, err := b.assignCode(x, storeHex, str(next["code"]), id)
 		if err != nil {
 			return nil, err

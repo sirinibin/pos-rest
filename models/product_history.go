@@ -751,7 +751,7 @@ func (product *Product) CreateStockAdjustmentHistory() error {
 	defer cancel()
 
 	for _, stockAdjustment := range product.ProductStores[store.ID.Hex()].StockAdjustments {
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(stockAdjustment.Date)
+		stock, err := product.GetProductQuantityUpTo(stockAdjustment.Date)
 		if err != nil {
 			return err
 		}
@@ -840,7 +840,7 @@ func (product *Product) AdjustStockInHistoryAfter(after *time.Time) error {
 	}
 
 	for i, history := range histories {
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(history.Date)
+		stock, err := product.GetProductQuantityBeforeHistory(&histories[i])
 		if err != nil {
 			return err
 		}
@@ -975,7 +975,7 @@ func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool,
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+		stock, err := product.GetProductQuantityUpTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -1043,7 +1043,7 @@ func (stockTransfer *StockTransfer) CreateProductsHistory(updateNextStocks bool,
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -1146,7 +1146,7 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool, orderOld *Order
 
 		var stock float64
 		if !product.IsService {
-			stock, err = product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+			stock, err = product.GetProductQuantityUpTo(&updatedDate)
 			if err != nil {
 				return err
 			}
@@ -1222,7 +1222,7 @@ func (order *Order) CreateProductsHistory(updateNextStocks bool, orderOld *Order
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -1329,7 +1329,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool, sal
 
 		var stock float64
 		if !product.IsService {
-			stock, err = product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+			stock, err = product.GetProductQuantityUpTo(&updatedDate)
 			if err != nil {
 				return errors.New("Error getting product quantity for sales return:" + err.Error())
 			}
@@ -1404,7 +1404,7 @@ func (salesReturn *SalesReturn) CreateProductsHistory(updateNextStocks bool, sal
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return errors.New("error GetProductQuantityBeforeOrEqualTo:" + err.Error())
 				}
@@ -1507,7 +1507,7 @@ func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool, purchaseO
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+		stock, err := product.GetProductQuantityUpTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -1577,7 +1577,7 @@ func (purchase *Purchase) CreateProductsHistory(updateNextStocks bool, purchaseO
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -1681,7 +1681,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks boo
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+		stock, err := product.GetProductQuantityUpTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -1750,7 +1750,7 @@ func (purchaseReturn *PurchaseReturn) CreateProductsHistory(updateNextStocks boo
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -1849,7 +1849,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool, d
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+		stock, err := product.GetProductQuantityUpTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -1906,7 +1906,7 @@ func (deliverynote *DeliveryNote) CreateProductsHistory(updateNextStocks bool, d
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -2000,7 +2000,7 @@ func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool, quotati
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+		stock, err := product.GetProductQuantityUpTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -2084,7 +2084,7 @@ func (quotation *Quotation) CreateProductsHistory(updateNextStocks bool, quotati
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return err
 				}
@@ -2198,7 +2198,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNe
 			return err
 		}
 
-		stock, err := product.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+		stock, err := product.GetProductQuantityUpTo(&updatedDate)
 		if err != nil {
 			return err
 		}
@@ -2273,7 +2273,7 @@ func (quotationsalesReturn *QuotationSalesReturn) CreateProductsHistory(updateNe
 					return err
 				}
 
-				stock, err := setProductObj.GetProductQuantityBeforeOrEqualTo(&updatedDate)
+				stock, err := setProductObj.GetProductQuantityUpTo(&updatedDate)
 				if err != nil {
 					return err
 				}

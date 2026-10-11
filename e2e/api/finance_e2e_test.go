@@ -11,7 +11,6 @@ package api
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"math"
 	"net/url"
 	"os"
@@ -278,8 +277,9 @@ func TestFinanceExpenses(t *testing.T) {
 		if r.Code != 400 {
 			t.Fatalf("other company's category: want 400, got %s", r)
 		}
-		KnownBug(t, "NEW-fin-expcat-field", "unknown expense category is reported as error.fields.category_id_0 (legacy key), not categoryId",
-			r.ErrField("categoryId") == "" && r.ErrField("category_id_0") != "")
+		if r.ErrField("categoryId") == "" || r.ErrField("category_id_0") != "" {
+			t.Errorf("other company's category: want error.fields.categoryId, got %s", r)
+		}
 		// no token
 		Must(t, Call(t, "POST", "/expenses", "", exp(nil)), 401, "expense without token")
 	})
@@ -304,32 +304,32 @@ func TestFinanceExpenses(t *testing.T) {
 	})
 
 	t.Run("create with VAT on a vendor invoice", func(t *testing.T) {
-		// 200 + 15% = 230: the legacy amount is VAT-inclusive, its VAT is
-		// worked out back from it at the store rate
+		// 200 + 30 VAT: kept as entered (the legacy amount is VAT-inclusive: 230)
 		withVendor = Create(t, s.Token, "expenses", exp(M{"amount": 200, "vatAmount": 30, "vendorId": vendor["id"], "reference": "VINV-77"}))
-		gross := 230.0
-		vat := finR2(finR2(gross/1.15) * 0.15)
-		EqMoney(t, "amount (before VAT)", F(withVendor, "amount"), gross-vat)
-		EqMoney(t, "vatAmount", F(withVendor, "vatAmount"), vat)
+		EqMoney(t, "amount (before VAT)", F(withVendor, "amount"), 200)
+		EqMoney(t, "vatAmount", F(withVendor, "vatAmount"), 30)
 		if S(withVendor["vendorId"]) != S(vendor["id"]) || S(withVendor["reference"]) != "VINV-77" || S(withVendor["payee"]) != S(vendor["nameEn"]) {
 			t.Errorf("vendor expense: %v", withVendor)
 		}
 	})
 
-	t.Run("VAT entered is not kept", func(t *testing.T) {
-		// no vendor: the VAT entered is folded into the amount and dropped
+	t.Run("VAT entered is kept", func(t *testing.T) {
+		// no vendor: the VAT entered stays VAT
 		e := Create(t, s.Token, "expenses", exp(M{"amount": 100, "vatAmount": 15}))
-		EqMoney(t, "gross kept", F(e, "amount")+F(e, "vatAmount"), 115)
-		KnownBug(t, "NEW-fin-expense-vat", "POST /expenses without vendorId: vatAmount 15 comes back as amount 115, vatAmount 0",
-			Cents(F(e, "vatAmount")) == 0)
-		// vendor: VAT recomputed at 15% of the gross, the figure entered is ignored
+		EqMoney(t, "amount", F(e, "amount"), 100)
+		EqMoney(t, "vatAmount", F(e, "vatAmount"), 15)
+		// vendor: the figure entered, not 15% worked out of the gross
 		e = Create(t, s.Token, "expenses", exp(M{"amount": 100, "vatAmount": 5, "vendorId": vendor["id"]}))
-		EqMoney(t, "gross kept", F(e, "amount")+F(e, "vatAmount"), 105)
-		KnownBug(t, "NEW-fin-expense-vat", "POST /expenses with vendorId: amount 100 + vatAmount 5 comes back as 91.31 + 13.69",
-			Cents(F(e, "vatAmount")) != 500)
-		// a vendor id that does not exist is accepted
+		EqMoney(t, "amount", F(e, "amount"), 100)
+		EqMoney(t, "vatAmount", F(e, "vatAmount"), 5)
+		// an edit of another field keeps it
+		e = Patch(t, s.Token, "expenses", S(e["id"]), M{"description": "edited"})
+		EqMoney(t, "vatAmount after edit", F(e, "vatAmount"), 5)
+		// a vendor id that does not exist (or of another company) is refused
 		r := Call(t, "POST", "/expenses", s.Token, exp(M{"vendorId": primitive.NewObjectID().Hex()}))
-		KnownBug(t, "NEW-fin-expense-vendor", "POST /expenses accepts a vendorId that does not exist (201)", r.Code == 201)
+		if r.Code != 400 || r.ErrField("vendorId") == "" {
+			t.Errorf("unknown vendor: want 400 vendorId, got %s", r)
+		}
 	})
 
 	t.Run("read, list, filters, stats", func(t *testing.T) {
@@ -649,8 +649,9 @@ func TestFinanceDepositsWithdrawals(t *testing.T) {
 		// both notes gone: the customer is settled (the paid invoice only)
 		time.Sleep(2 * time.Second)
 		b := balance()
-		KnownBug(t, "NEW-fin-delete-ledger", fmt.Sprintf("DELETE /deposits|/withdrawals leaves the ledger postings: customer balance %.2f after deleting both notes, want 0", b),
-			Cents(b) != 0)
+		if Cents(b) != 0 {
+			t.Errorf("DELETE /deposits|/withdrawals must take their ledger postings: customer balance %.2f after deleting both notes, want 0", b)
+		}
 	})
 }
 
@@ -706,11 +707,18 @@ func TestFinanceCapitalAndLedger(t *testing.T) {
 		}
 		cw = Create(t, s.Token, "capital-withdrawals", money("investor", finOwnerName, 100, "cash"))
 		// numbers: capital withdrawals have their own series (store serial capitalWithdrawal "CWD-")
-		KnownBug(t, "NEW-fin-capwd-number", fmt.Sprintf("capital withdrawal numbered %v in the capital series (capitals %v, %v): numbers repeat across both",
-			cw["code"], capCash["code"], capBank["code"]), strings.HasPrefix(S(cw["code"]), "CAP-DPST-"))
+		if !strings.HasPrefix(S(cw["code"]), "CWD-") {
+			t.Errorf("capital withdrawal numbered %v, want the CWD- series (capitals %v, %v)", cw["code"], capCash["code"], capBank["code"])
+		}
+		cw2 := Create(t, s.Token, "capital-withdrawals", money("investor", finOwnerName, 1, "cash"))
+		if S(cw2["code"]) <= S(cw["code"]) || !strings.HasPrefix(S(cw2["code"]), "CWD-") {
+			t.Errorf("capital withdrawal numbers must increase: %v then %v", cw["code"], cw2["code"])
+		}
+		Must(t, Call(t, "DELETE", "/capital-withdrawals/"+S(cw2["id"])+"?hard=1", s.Token, nil), 204, "hard delete capital withdrawal")
 		cap3 := Create(t, s.Token, "capitals", money("investor", finOwnerName, 1, "cash"))
-		KnownBug(t, "NEW-fin-capwd-number", fmt.Sprintf("capital %v and capital withdrawal %v share one number", cap3["code"], cw["code"]),
-			S(cap3["code"]) == S(cw["code"]))
+		if S(cap3["code"]) == S(cw["code"]) {
+			t.Errorf("capital %v and capital withdrawal %v share one number", cap3["code"], cw["code"])
+		}
 		Must(t, Call(t, "DELETE", "/capitals/"+S(cap3["id"])+"?hard=1", s.Token, nil), 204, "hard delete capital")
 		// by user id
 		staffID, _ := s.User(t, "r_accountant")
@@ -850,11 +858,12 @@ func TestFinanceCapitalAndLedger(t *testing.T) {
 			return c != nil && cu != nil && Cents(finSigned(cu)) == -18000 && Cents(finSigned(c)) == 16500 && acc["BANK"] != nil && Cents(finSigned(acc["BANK"])) == Cents(wantBank) &&
 				(cash == Cents(wantCash-100) || cash == Cents(wantCash+1+9+1-7))
 		})
-		// deleted capitals (1, 9 and 1 by staff) and dividend (7) still move CASH,
-		// the capital withdrawal (100) never does
+		// deleted capitals (1, 9 and 1 by staff), dividend (7) and capital
+		// withdrawals (1 and 3) leave CASH; the capital withdrawal (100) is paid from it
 		cash := finSigned(acc["CASH"])
-		KnownBug(t, "NEW-fin-capwd-ledger", fmt.Sprintf("capital withdrawals are never posted and deleted capital/dividends keep their postings: CASH %.2f, want %.2f", cash, wantCash-100),
-			Cents(cash) == Cents(wantCash+1+9+1-7))
+		if Cents(cash) != Cents(wantCash-100) {
+			t.Errorf("CASH %.2f, want %.2f", cash, wantCash-100)
+		}
 		// one capital account per investor: the owner's holds the 7000 (staff
 		// capitals were 1 and 1)
 		var capAcc M
@@ -866,8 +875,9 @@ func TestFinanceCapitalAndLedger(t *testing.T) {
 		if capAcc == nil || S(capAcc["type"]) != "capital" {
 			t.Fatalf("no capital account: %v", acc)
 		}
-		KnownBug(t, "NEW-fin-delete-ledger", fmt.Sprintf("DELETE /capitals (soft and ?hard=1) keeps the ledger posting: capital account %.2f, want credit 7000", -finSigned(capAcc)),
-			Cents(finSigned(capAcc)) == -701000)
+		if Cents(finSigned(capAcc)) != -700000 {
+			t.Errorf("DELETE /capitals (soft and ?hard=1) must take the ledger posting: capital account %.2f, want credit 7000", -finSigned(capAcc))
+		}
 		if a := finAcctBy(acc, "referenceModel", "withdrawer"); a == nil || Cents(finSigned(a)) < 40000 || S(a["type"]) != "drawing" {
 			t.Errorf("drawings account: %v (want debit 400)", a)
 		}
@@ -966,14 +976,9 @@ func TestFinanceSalariesEmployees(t *testing.T) {
 		full := M{"storeId": s.ID, "nameEn": "Zaid Put", "joinDate": join, "basicSalary": 2500, "status": "inactive"}
 		cur := Read(t, s.Token, "employees", S(emp2["id"]))
 		put := Call(t, "PUT", "/employees/"+S(emp2["id"]), s.Token, full, "If-Match", Num(cur["version"]).String())
-		KnownBug(t, "NEW-fin-employee-put", "PUT /employees without salaryDay answers 400 salaryDay (POST defaults it to 1)",
-			put.Code == 400 && put.ErrField("salaryDay") != "")
-		if put.Code != 200 {
-			full["salaryDay"] = 1
-			put = Call(t, "PUT", "/employees/"+S(emp2["id"]), s.Token, full, "If-Match", Num(cur["version"]).String())
-		}
-		if put.Code != 200 || S(put.Body["nameEn"]) != "Zaid Put" {
-			t.Errorf("PUT employee: %s", put)
+		// without salaryDay (the contract has none): the saved pay day is kept
+		if put.Code != 200 || S(put.Body["nameEn"]) != "Zaid Put" || Num(put.Body["salaryDay"]) != Num(cur["salaryDay"]) {
+			t.Errorf("PUT employee without salaryDay: %s (salaryDay before %v)", put, cur["salaryDay"])
 		}
 		if r := Call(t, "PATCH", "/employees/"+S(emp2["id"]), s.Token, M{"nameEn": "x"}, "If-Match", "1"); r.Code != 409 {
 			t.Errorf("stale employee patch: %s", r)

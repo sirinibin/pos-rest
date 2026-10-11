@@ -111,3 +111,19 @@ func TestStockTransfer_FindTotalQuantity_Empty(t *testing.T) {
 		t.Errorf("TotalQuantity = %v, want 0", st.TotalQuantity)
 	}
 }
+
+// A transfer sent without vat_percent used to dereference a nil pointer in
+// FindNetTotal (it runs before Validate) and kill the request (bug #5):
+// it now counts no VAT and Validate answers 400 vat_percent.
+func TestStockTransfer_FindNetTotal_NilVatPercent(t *testing.T) {
+	st := StockTransfer{Products: []StockTransferProduct{makeSTProduct(2, 10.00, 0)}}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("FindNetTotal panicked without vat_percent: %v", r)
+		}
+	}()
+	st.FindNetTotal()
+	if st.VatPrice != 0 || st.NetTotal != 20.00 {
+		t.Errorf("VatPrice %v NetTotal %v, want 0 and 20", st.VatPrice, st.NetTotal)
+	}
+}

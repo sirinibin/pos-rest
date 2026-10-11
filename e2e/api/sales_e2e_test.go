@@ -687,7 +687,7 @@ func TestSalesStock_WarehousesAndUpdates(t *testing.T) {
 		Patch(t, s.Token, "sales", eid, M{"items": []M{salesLine(aid, s.MS, 1, 9)}})
 		Patch(t, s.Token, "sales", eid, M{"items": []M{salesLine(aid, s.MS, 1, 9), salesLine(c["id"], s.MS, 4, 2)}})
 		if got, ok := salesStockSettles(t, s, c["id"], s.MS, 6); !ok {
-			KnownBug(t, "NEW-sales-stock-edit-race", fmt.Sprintf("re-adding a line right after removing it left stock at %v, want 6", got), true)
+			t.Errorf("NEW-sales-stock-edit-race: re-adding a line right after removing it left stock at %v, want 6", got)
 		}
 	})
 	t.Run("missing and foreign ids", func(t *testing.T) {

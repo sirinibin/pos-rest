@@ -111,19 +111,26 @@ func CreateWarehouse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = warehouse.MakeCode()
-	if err != nil {
-		response.Status = false
-		response.Errors["code"] = "Error making code: " + err.Error()
-		json.NewEncoder(w).Encode(response)
-		return
+	// the code the user chose is kept (Validate checked it is unused);
+	// without one the next free WH<n> is assigned
+	autoCode := warehouse.Code == ""
+	if autoCode {
+		err = warehouse.MakeFreeCode()
+		if err != nil {
+			response.Status = false
+			response.Errors["code"] = "Error making code: " + err.Error()
+			json.NewEncoder(w).Encode(response)
+			return
+		}
 	}
 
 	err = warehouse.Insert()
 	if err != nil {
-		redisErr := warehouse.UnMakeCode()
-		if redisErr != nil {
-			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+		if autoCode {
+			redisErr := warehouse.UnMakeCode()
+			if redisErr != nil {
+				response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
+			}
 		}
 
 		response.Status = false
