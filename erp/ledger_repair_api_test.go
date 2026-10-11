@@ -257,9 +257,11 @@ func TestLedgerRepair_OldDeletesAndUnpostedCapitalWithdrawals(t *testing.T) {
 	defer cleanupStore(t, sidY)
 	dx := repairStoreDocs(t, ownerX, sidX)
 	dy := repairStoreDocs(t, ownerY, sidY)
-	for path, id := range map[string]string{"deposits": dy.deposit, "withdrawals": dy.withdrawal, "capitals": dy.capital, "dividends": dy.dividend} {
-		if r := call(t, "DELETE", "/"+path+"/"+id, ownerY, nil); r.Code != 200 {
-			t.Fatalf("delete %s: %d %s", path, r.Code, r.Raw)
+	// in the repair's order (models.ledgerRepairTypes): a customer account left
+	// at zero keeps the type of its last non-zero balance, so the order counts
+	for _, d := range []struct{ path, id string }{{"deposits", dy.deposit}, {"withdrawals", dy.withdrawal}, {"capitals", dy.capital}, {"dividends", dy.dividend}} {
+		if r := call(t, "DELETE", "/"+d.path+"/"+d.id, ownerY, nil); r.Code != 200 {
+			t.Fatalf("delete %s: %d %s", d.path, r.Code, r.Raw)
 		}
 	}
 	settle(sidY)
