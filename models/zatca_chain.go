@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -47,6 +48,67 @@ var zatcaChainIndexes = []bson.D{
 	{{Key: "zatca.reporting_passed", Value: 1}, {Key: "zatca.icv", Value: -1}, {Key: "invoice_count_value", Value: -1}},
 }
 
+// zatcaRejectedCollection keeps every document ZATCA rejected, one row per
+// rejected submission. ZATCA records the hash of a rejected document and
+// counts its ICV, so the chain goes on from it: its ICV is never used again
+// and the next document's PIH is its hash (DTG p.48, FAQ p.71 and p.77). A
+// sale rejected when it is created is never saved, so the row is the only
+// place its ICV and hash live.
+const zatcaRejectedCollection = "zatca_rejected"
+
+// zatcaRejectedIndexes serve NextZatcaChainLink's two lookups in
+// zatcaRejectedCollection (highest ICV, latest rejection).
+var zatcaRejectedIndexes = []bson.D{
+	{{Key: "icv", Value: -1}},
+	{{Key: "rejected_at", Value: -1}},
+}
+
+// ZatcaRejection is one document submission ZATCA rejected.
+type ZatcaRejection struct {
+	ID         primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
+	Collection string              `bson:"collection" json:"collection"`
+	DocID      *primitive.ObjectID `bson:"doc_id,omitempty" json:"doc_id,omitempty"`
+	Code       string              `bson:"code" json:"code"`
+	UUID       string              `bson:"uuid" json:"uuid"`
+	ICV        int64               `bson:"icv" json:"icv"`
+	Hash       string              `bson:"hash" json:"hash"`
+	PIH        string              `bson:"pih" json:"pih"`
+	Error      string              `bson:"error,omitempty" json:"error,omitempty"`
+	RejectedAt time.Time           `bson:"rejected_at" json:"rejected_at"`
+}
+
+// KeepZatcaRejectionInChain records a submission ZATCA rejected so the
+// store's chain continues from it, and gives the document a new UUID: the
+// corrected document goes to ZATCA as a new submission with a new UUID, ICV
+// and hash (DTG FAQ p.77-78). It returns the UUID the document carries from
+// now on (the old one if recording failed, so nothing else changes).
+// Callers hold the store's "zatca" queue.
+func KeepZatcaRejectionInChain(storeID *primitive.ObjectID, rejection ZatcaRejection) string {
+	if storeID == nil || rejection.Hash == "" || rejection.ICV <= 0 {
+		return rejection.UUID
+	}
+	storeDB := db.GetDB("store_" + storeID.Hex())
+	ctx, cancel := context.WithTimeout(context.Background(), zatcaChainQueryTimeout)
+	defer cancel()
+	if rejection.RejectedAt.IsZero() {
+		rejection.RejectedAt = time.Now()
+	}
+	if _, err := storeDB.Collection(zatcaRejectedCollection).InsertOne(ctx, rejection); err != nil {
+		log.Printf("[ZATCA] store %s: keeping rejected %s %s (ICV %d) in the chain failed: %v",
+			storeID.Hex(), rejection.Collection, rejection.Code, rejection.ICV, err)
+		return rejection.UUID
+	}
+	newUUID := uuid.New().String()
+	if rejection.DocID != nil && !rejection.DocID.IsZero() {
+		if _, err := storeDB.Collection(rejection.Collection).UpdateOne(ctx,
+			bson.M{"_id": rejection.DocID}, bson.M{"$set": bson.M{"uuid": newUUID}}); err != nil {
+			log.Printf("[ZATCA] store %s: new UUID for rejected %s %s not saved: %v",
+				storeID.Hex(), rejection.Collection, rejection.Code, err)
+		}
+	}
+	return newUUID
+}
+
 // The chain lookups only read, so a lookup that fails on a slow or briefly
 // unreachable database is safe to repeat: nothing is reported or saved until
 // it succeeds, and the ICV/PIH come from what is stored, not from a counter.
@@ -67,8 +129,9 @@ func isTransientDBError(err error) bool {
 // NextZatcaChainLink returns the ICV and PIH for the store's next ZATCA
 // document, assigned when it is reported (not when it is saved), so the chain
 // follows the order documents reach ZATCA. The ICV is one past the highest the
-// store reported, of any document type; the PIH is the hash of the document it
-// reported last, of any type (ZATCA's hash of "0" for the first one).
+// store sent, of any document type; the PIH is the hash of the document it
+// sent last, of any type (ZATCA's hash of "0" for the first one). Documents
+// ZATCA rejected count too (zatcaRejectedCollection).
 // Documents reported before the shared counter existed have no zatca.icv:
 // their invoice_count_value is what went to ZATCA, so the counter continues
 // above those too. Callers hold the store's "zatca" queue.
@@ -141,9 +204,40 @@ func nextZatcaChainLink(storeID string) (link ZatcaChainLink, err error) {
 		}
 	}
 
+	// submissions ZATCA rejected stay in the chain
+	lastHash := ""
+	var lastAt time.Time
+	if last != nil {
+		lastHash, lastAt = last.Hash, *last.Zatca.ReportedAt
+	}
+	findRejected := func(sort bson.D) (*ZatcaRejection, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), zatcaChainQueryTimeout)
+		defer cancel()
+		var r ZatcaRejection
+		err := storeDB.Collection(zatcaRejectedCollection).FindOne(ctx, bson.M{},
+			options.FindOne().SetSort(sort)).Decode(&r)
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &r, nil
+	}
+	if r, err := findRejected(bson.D{{Key: "icv", Value: -1}}); err != nil {
+		return link, err
+	} else if r != nil && r.ICV > maxICV {
+		maxICV = r.ICV
+	}
+	if r, err := findRejected(bson.D{{Key: "rejected_at", Value: -1}}); err != nil {
+		return link, err
+	} else if r != nil && r.Hash != "" && (lastHash == "" || r.RejectedAt.After(lastAt)) {
+		lastHash = r.Hash
+	}
+
 	link.ICV = maxICV + 1
-	if last != nil && last.Hash != "" {
-		link.PIH = last.Hash
+	if lastHash != "" {
+		link.PIH = lastHash
 	} else if link.PIH, err = GenerateInvoiceHash("0"); err != nil {
 		return link, err
 	}

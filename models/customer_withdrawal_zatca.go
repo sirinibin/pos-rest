@@ -495,6 +495,13 @@ func (withdrawal *CustomerWithdrawal) ReportToZatca() error {
 	}
 
 	if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
+		if reportingResponse.Rejected {
+			withdrawal.UUID = KeepZatcaRejectionInChain(withdrawal.StoreID, ZatcaRejection{
+				Collection: "customerwithdrawal", DocID: &withdrawal.ID, Code: withdrawal.Code, UUID: withdrawal.UUID,
+				ICV: withdrawal.Zatca.ICV, Hash: reportingResponse.InvoiceHash, PIH: withdrawal.PrevHash,
+				Error: reportingResponse.Error,
+			})
+		}
 		errMsg := "error reporting: " + reportingResponse.Error
 		withdrawal.RecordZatcaReportingFailure(errMsg)
 		return errors.New(errMsg)

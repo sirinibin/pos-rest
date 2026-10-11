@@ -895,6 +895,13 @@ func (salesReturn *SalesReturn) ReportToZatca() error {
 	}
 
 	if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
+		if reportingResponse.Rejected {
+			salesReturn.UUID = KeepZatcaRejectionInChain(salesReturn.StoreID, ZatcaRejection{
+				Collection: "salesreturn", DocID: &salesReturn.ID, Code: salesReturn.Code, UUID: salesReturn.UUID,
+				ICV: salesReturn.Zatca.ICV, Hash: reportingResponse.InvoiceHash, PIH: salesReturn.PrevHash,
+				Error: reportingResponse.Error,
+			})
+		}
 		errorMessage := "error reporting: " + reportingResponse.Error
 		err = salesReturn.RecordZatcaReportingFailure(errorMessage)
 		if err != nil {

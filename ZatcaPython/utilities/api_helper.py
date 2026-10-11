@@ -3,6 +3,16 @@ import time
 import requests
 from requests.auth import HTTPBasicAuth
 
+class ZatcaRejected(Exception):
+    """ZATCA answered 400: it refused the document (DTG FAQ p.71). ZATCA
+    still records the rejected document's hash, so the caller keeps it in
+    the store's ICV/PIH chain."""
+
+    def __init__(self, message, body=""):
+        super().__init__(message)
+        self.body = body
+
+
 class api_helper:
     
     @staticmethod
@@ -13,6 +23,8 @@ class api_helper:
                 
                 # 200 accepted, 202 accepted with warnings (ZATCA keeps the
                 # document; sending it again would duplicate it): both pass
+                if response.status_code == 400:
+                    raise ZatcaRejected(f"HTTP error: {response.status_code} - url={url} body={response.text}", response.text)
                 if response.status_code not in (200, 202):
                     raise Exception(f"HTTP error: {response.status_code} - url={url} headers={dict(response.headers)} body={response.text}")
                 

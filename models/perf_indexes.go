@@ -35,6 +35,13 @@ func init() {
 			}{coll, keys})
 		}
 	}
+	// and the submissions ZATCA rejected, which stay in that chain
+	for _, keys := range zatcaRejectedIndexes {
+		perfStoreIndexes = append(perfStoreIndexes, struct {
+			Coll string
+			Keys bson.D
+		}{zatcaRejectedCollection, keys})
+	}
 }
 
 // CreatePerfIndexes creates perfStoreIndexes in this store's database.

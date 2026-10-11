@@ -739,7 +739,10 @@ type ZatcaReportingResponse struct {
 	Error           string `json:"error"`
 	ClearedInvoice  string `json:"cleared_invoice"` //only for b2b (customers with VAT no.)
 	IsSimplified    bool   `json:"is_simplified"`   //only for b2b (customers with VAT no.)
-	Traceback       string `json:"traceback,omitempty"`
+	// Rejected is set when ZATCA answered and refused the document; the
+	// InvoiceHash is then the hash of what was sent.
+	Rejected  bool   `json:"rejected,omitempty"`
+	Traceback string `json:"traceback,omitempty"`
 }
 
 func (order *Order) RecordZatcaComplianceCheckFailure(errorMessage string) error {
@@ -894,6 +897,13 @@ func (order *Order) ReportToZatca() error {
 		//log.Printf("[ZATCA reporting] response: %s", output.String())
 
 		if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
+			if reportingResponse.Rejected {
+				order.UUID = KeepZatcaRejectionInChain(order.StoreID, ZatcaRejection{
+					Collection: "order", DocID: &order.ID, Code: order.Code, UUID: order.UUID,
+					ICV: order.Zatca.ICV, Hash: reportingResponse.InvoiceHash, PIH: order.PrevHash,
+					Error: reportingResponse.Error,
+				})
+			}
 			errorMessage := "error reporting: " + reportingResponse.Error
 			err = order.RecordZatcaReportingFailure(errorMessage)
 			if err != nil {

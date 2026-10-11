@@ -1,12 +1,23 @@
 import json
 import base64
 import time
-from utilities.api_helper import api_helper
+from utilities.api_helper import api_helper, ZatcaRejected
 from utilities.invoice_helper import invoice_helper
 from utilities.einvoice_signer import einvoice_signer
 from lxml import etree 
 import sys
 import traceback
+
+def rejected_output(invoice_hash, error):
+    """What Go reads when ZATCA refused the document: the hash of what was
+    sent, so the store's chain goes on from it."""
+    return {
+        "invoice_hash": invoice_hash,
+        "reporting_passed": False,
+        "rejected": True,
+        "error": error,
+    }
+
 
 def main():
     try:
@@ -95,14 +106,21 @@ def main():
         json_payload = einvoice_signer.get_request_api(new_doc, x509_certificate_content, private_key, environment_type, store_id)
         
         
-        if einvoice_signer.is_simplified_invoice(new_doc):
-            response = api_helper.invoice_reporting(cert_info, json_payload)
-            request_type = "Reporting Api"
-            api_url = cert_info["reportingUrl"]
-        else:
-            response = api_helper.invoice_clearance(cert_info, json_payload)
-            request_type = "Clearance Api"
-            api_url = cert_info["clearanceUrl"]
+        # the hash of the signed document: a rejected document keeps it in
+        # the store's chain (ZATCA records it too)
+        signed_hash = json.loads(json_payload)["invoiceHash"]
+        try:
+            if einvoice_signer.is_simplified_invoice(new_doc):
+                response = api_helper.invoice_reporting(cert_info, json_payload)
+                request_type = "Reporting Api"
+                api_url = cert_info["reportingUrl"]
+            else:
+                response = api_helper.invoice_clearance(cert_info, json_payload)
+                request_type = "Clearance Api"
+                api_url = cert_info["clearanceUrl"]
+        except ZatcaRejected as e:
+            print(json.dumps(rejected_output(signed_hash, str(e))))
+            return
 
         #clean_response = api_helper.clean_up_json(response, request_type, api_url)
 
@@ -129,7 +147,8 @@ def main():
             simplifiedPayload = json.loads(json_payload)
             clearedInvoice = simplifiedPayload["invoice"]
 
-        if "REPORTED" in status or "CLEARED" in status:
+        # exact match: "NOT_REPORTED" and "NOT_CLEARED" contain the words too
+        if status in ("REPORTED", "CLEARED"):
             json_payload = json.loads(json_payload)
             pih = json_payload["invoiceHash"]
             data = {
@@ -146,12 +165,7 @@ def main():
             #print(f"\n{description} processed successfully\n\n")
         else:
             #print(f"Failed to process {description}: status is {status}\n")
-            data = {
-            "invoice_hash": "",
-            "reporting_passed": False,
-            "error":   cert_info["error"],
-            }
-            print(json.dumps(data))  # Print JSON output
+            print(json.dumps(rejected_output(signed_hash, f"ZATCA status: {status}")))
             #exit(1)
 
             #time.sleep(1) 

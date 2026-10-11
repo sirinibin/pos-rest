@@ -516,6 +516,13 @@ func (deposit *CustomerDeposit) ReportToZatca() error {
 	}
 
 	if reportingResponse.Error != "" || !reportingResponse.ReportingPassed {
+		if reportingResponse.Rejected {
+			deposit.UUID = KeepZatcaRejectionInChain(deposit.StoreID, ZatcaRejection{
+				Collection: "customerdeposit", DocID: &deposit.ID, Code: deposit.Code, UUID: deposit.UUID,
+				ICV: deposit.Zatca.ICV, Hash: reportingResponse.InvoiceHash, PIH: deposit.PrevHash,
+				Error: reportingResponse.Error,
+			})
+		}
 		errMsg := "error reporting: " + reportingResponse.Error
 		deposit.RecordZatcaReportingFailure(errMsg)
 		return errors.New(errMsg)

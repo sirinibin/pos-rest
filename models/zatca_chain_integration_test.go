@@ -156,3 +156,140 @@ func TestNextZatcaChainLink_LookupsUseTheChainIndexes(t *testing.T) {
 		t.Fatalf("link %+v, want ICV 501 and the withdrawal's hash", link)
 	}
 }
+
+// A document ZATCA rejected keeps its ICV and its hash in the store's chain
+// (DTG p.48, FAQ p.71: documents 1, 2 rejected, 3 → 3's PIH is hash(2); the
+// corrected 2 goes again as 4 with PIH hash(3)). Its ICV is never used again
+// and it goes again with a new UUID.
+func TestZatcaRejectedDocumentsStayInTheChain(t *testing.T) {
+	storeID := primitive.NewObjectID()
+	storeDB := db.GetDB("store_" + storeID.Hex())
+	t.Cleanup(func() { _ = storeDB.Drop(context.Background()) })
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	base := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+	// document 1: reported
+	if _, err := storeDB.Collection("order").InsertOne(ctx, bson.M{"hash": "H-1", "invoice_count_value": 1,
+		"zatca": bson.M{"reporting_passed": true, "icv": 1, "reporting_passed_at": base}}); err != nil {
+		t.Fatal(err)
+	}
+	// document 2: a saved sale ZATCA rejects
+	saleID := primitive.NewObjectID()
+	if _, err := storeDB.Collection("order").InsertOne(ctx, bson.M{"_id": saleID, "code": "S-2", "uuid": "uuid-2",
+		"invoice_count_value": 2, "zatca": bson.M{"reporting_passed": false}}); err != nil {
+		t.Fatal(err)
+	}
+	link, err := NextZatcaChainLink(storeID.Hex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.ICV != 2 || link.PIH != "H-1" {
+		t.Fatalf("before the rejection: link %+v, want ICV 2 and H-1", link)
+	}
+	newUUID := KeepZatcaRejectionInChain(&storeID, ZatcaRejection{
+		Collection: "order", DocID: &saleID, Code: "S-2", UUID: "uuid-2",
+		ICV: link.ICV, Hash: "H-2-rejected", PIH: link.PIH, Error: "BR-KSA-44", RejectedAt: base.Add(time.Minute),
+	})
+	if newUUID == "" || newUUID == "uuid-2" {
+		t.Fatalf("the rejected sale keeps its UUID %q; ZATCA wants a new one when it goes again", newUUID)
+	}
+	var sale bson.M
+	if err := storeDB.Collection("order").FindOne(ctx, bson.M{"_id": saleID}).Decode(&sale); err != nil {
+		t.Fatal(err)
+	}
+	if sale["uuid"] != newUUID {
+		t.Errorf("stored UUID %v, want the new %s", sale["uuid"], newUUID)
+	}
+	var row ZatcaRejection
+	if err := storeDB.Collection(zatcaRejectedCollection).FindOne(ctx, bson.M{"doc_id": saleID}).Decode(&row); err != nil {
+		t.Fatal(err)
+	}
+	if row.ICV != 2 || row.Hash != "H-2-rejected" || row.PIH != "H-1" || row.UUID != "uuid-2" || row.Code != "S-2" || row.Error != "BR-KSA-44" {
+		t.Errorf("rejection row %+v", row)
+	}
+
+	// document 3 continues from the rejected one
+	link, err = NextZatcaChainLink(storeID.Hex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.ICV != 3 || link.PIH != "H-2-rejected" {
+		t.Fatalf("after the rejection: link %+v, want ICV 3 and the rejected document's hash", link)
+	}
+	// document 3 (a return) is reported, then the corrected sale goes as 4
+	if _, err := storeDB.Collection("salesreturn").InsertOne(ctx, bson.M{"hash": "H-3", "invoice_count_value": 1,
+		"zatca": bson.M{"reporting_passed": true, "icv": 3, "reporting_passed_at": base.Add(2 * time.Minute)}}); err != nil {
+		t.Fatal(err)
+	}
+	link, err = NextZatcaChainLink(storeID.Hex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.ICV != 4 || link.PIH != "H-3" {
+		t.Fatalf("after document 3: link %+v, want ICV 4 and H-3", link)
+	}
+
+	// a sale rejected while it was being created is never saved: the row
+	// alone keeps its ICV and hash
+	KeepZatcaRejectionInChain(&storeID, ZatcaRejection{
+		Collection: "order", Code: "S-5", UUID: "uuid-5", ICV: 4, Hash: "H-4-rejected", PIH: "H-3",
+		RejectedAt: base.Add(3 * time.Minute),
+	})
+	link, err = NextZatcaChainLink(storeID.Hex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link.ICV != 5 || link.PIH != "H-4-rejected" {
+		t.Fatalf("after an unsaved rejected sale: link %+v, want ICV 5 and H-4-rejected", link)
+	}
+
+	// nothing to keep without a hash or an ICV (the script failed before signing)
+	for _, r := range []ZatcaRejection{{Collection: "order", UUID: "u", ICV: 9}, {Collection: "order", UUID: "u", Hash: "H"}} {
+		if got := KeepZatcaRejectionInChain(&storeID, r); got != "u" {
+			t.Errorf("%+v: UUID changed to %q", r, got)
+		}
+	}
+	if got := KeepZatcaRejectionInChain(nil, ZatcaRejection{UUID: "u", ICV: 1, Hash: "H"}); got != "u" {
+		t.Errorf("no store: UUID changed to %q", got)
+	}
+	n, err := storeDB.Collection(zatcaRejectedCollection).CountDocuments(ctx, bson.M{})
+	if err != nil || n != 2 {
+		t.Fatalf("rejection rows = %d (%v), want 2", n, err)
+	}
+}
+
+// The rejected-submission lookups walk an index too.
+func TestZatcaRejectedLookupsUseTheirIndexes(t *testing.T) {
+	id := primitive.NewObjectID()
+	store := &Store{ID: id}
+	storeDB := db.GetDB("store_" + id.Hex())
+	t.Cleanup(func() { _ = storeDB.Drop(context.Background()) })
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	base := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	var docs []interface{}
+	for i := 1; i <= 200; i++ {
+		docs = append(docs, ZatcaRejection{Collection: "order", Code: "S", UUID: "u", ICV: int64(i), Hash: "H",
+			RejectedAt: base.Add(time.Duration(i) * time.Minute)})
+	}
+	if _, err := storeDB.Collection(zatcaRejectedCollection).InsertMany(ctx, docs); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreatePerfIndexes(); err != nil {
+		t.Fatal(err)
+	}
+	for _, sort := range []bson.D{{{Key: "icv", Value: -1}}, {{Key: "rejected_at", Value: -1}}} {
+		var explain bson.M
+		err := storeDB.RunCommand(ctx, bson.D{{Key: "explain", Value: bson.D{
+			{Key: "find", Value: zatcaRejectedCollection}, {Key: "filter", Value: bson.M{}}, {Key: "sort", Value: sort}, {Key: "limit", Value: 1},
+		}}, {Key: "verbosity", Value: "executionStats"}}).Decode(&explain)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan, _ := bson.MarshalExtJSON(explain["queryPlanner"].(bson.M)["winningPlan"], false, false)
+		if !bytes.Contains(plan, []byte(`"IXSCAN"`)) || bytes.Contains(plan, []byte(`"stage":"SORT"`)) {
+			t.Errorf("sort %v: not an indexed walk: %s", sort, plan)
+		}
+	}
+}
