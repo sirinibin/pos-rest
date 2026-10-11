@@ -164,8 +164,34 @@ func TestUser_Integration(t *testing.T) {
 		t.Errorf("db: password must be stored hashed and verifiable; user=%+v", dbUser)
 	}
 
-	// duplicate e-mail
+	// #2: the create answer carries no password hash
+	if strings.Contains(r.Raw, "$2a$") || created["password"] != nil {
+		t.Errorf("create answered the password hash: %s", r.Raw)
+	}
+
+	// duplicate e-mail, also in another letter case (#14)
 	gbExpectErr(t, "duplicate email", callHandler(t, CreateUser, "POST", "/v1/user", adminTok, body), http.StatusConflict, "email")
+	upper := map[string]interface{}{}
+	for k, v := range body {
+		upper[k] = v
+	}
+	upper["email"] = strings.ToUpper(email)
+	gbExpectErr(t, "duplicate email in upper case", callHandler(t, CreateUser, "POST", "/v1/user", adminTok, upper), http.StatusConflict, "email")
+	if u, err := models.FindUserByEmail(strings.ToUpper(email)); err != nil || u.ID.Hex() != id {
+		t.Errorf("FindUserByEmail ignores case: %v %v", u, err)
+	}
+
+	// #3: another company's user can neither read nor delete the user
+	userBTok := tokenFor(t, fx.UserBEmail)
+	gbExpectErr(t, "other company views", callHandler(t, ViewUser, "GET", "/v1/user/"+id, userBTok, nil, "id", id), http.StatusForbidden, "authorization")
+	gbExpectErr(t, "other company deletes", callHandler(t, DeleteUser, "DELETE", "/v1/user/"+id, userBTok, nil, "id", id), http.StatusForbidden, "authorization")
+	gbExpectErr(t, "other company updates", callHandler(t, UpdateUser, "PUT", "/v1/user/"+id, userBTok, body, "id", id), http.StatusForbidden, "authorization")
+	// a store's manager can't delete the platform admin either
+	adminID := fx.Admin.Hex()
+	gbExpectErr(t, "manager deletes the admin", callHandler(t, DeleteUser, "DELETE", "/v1/user/"+adminID, managerTok, nil, "id", adminID), http.StatusForbidden, "authorization")
+	if u, _ := models.FindUserByID(&oid, bson.M{}); u == nil || u.Deleted {
+		t.Fatalf("refused delete deleted the user")
+	}
 
 	// view (password never returned); the new user's own token works
 	userTok := tokenFor(t, email)
@@ -186,6 +212,9 @@ func TestUser_Integration(t *testing.T) {
 	gbExpect(t, "admin list", r, http.StatusOK, true)
 	if rows := gbIDs(gbList(t, r)); len(rows) != 1 || rows[id] == nil || gbTotalCount(t, r) != 1 {
 		t.Errorf("admin list by email: %s", r.Raw)
+	}
+	if strings.Contains(r.Raw, "$2a$") {
+		t.Errorf("#2: the user list answered password hashes: %s", r.Raw)
 	}
 	r = callHandler(t, ListUser, "GET", gbURL("/v1/user", primitive.NilObjectID, "limit", "1000"), managerTok, nil)
 	gbExpect(t, "manager list", r, http.StatusOK, true)
@@ -219,7 +248,7 @@ func TestUser_Integration(t *testing.T) {
 		t.Errorf("update not persisted: %+v", dbUser)
 	}
 	promote := map[string]interface{}{"name": "IT User Renamed", "email": email, "mob": "0599990003", "role": "Admin"}
-	gbExpectErr(t, "manager promoting to Admin", callHandler(t, UpdateUser, "PUT", "/v1/user/"+id, managerTok, promote, "id", id), http.StatusOK, "role")
+	gbExpectErr(t, "manager promoting to Admin", callHandler(t, UpdateUser, "PUT", "/v1/user/"+id, managerTok, promote, "id", id), http.StatusForbidden, "role")
 	gbExpectErr(t, "update with taken email",
 		callHandler(t, UpdateUser, "PUT", "/v1/user/"+id, adminTok, map[string]interface{}{"name": "X", "email": fx.SalesEmail, "mob": "0599990003"}, "id", id),
 		http.StatusConflict, "email")
@@ -238,18 +267,29 @@ func TestUser_Integration(t *testing.T) {
 	gbExpectErr(t, "deleted user's token", callHandler(t, ViewUser, "GET", "/v1/user/"+id, userTok, nil, "id", id), http.StatusUnauthorized, "access_token")
 }
 
-// TestCanAccessUserRoles_NoUserObject verifies that canAccessUserRoles returns
-// false when models.UserObject is nil (no authenticated session).
-func TestCanAccessUserRoles_NoUserObject(t *testing.T) {
-	// Ensure no user is set in the global slot.
-	original := models.UserObject
-	models.UserObject = nil
-	defer func() { models.UserObject = original }()
-
-	actions := []string{"view", "create", "update", "delete"}
-	for _, action := range actions {
-		if canAccessUserRoles(action) {
-			t.Errorf("canAccessUserRoles(%q) = true with nil UserObject, want false", action)
+// canAccessUserRoles decides from the request's own user: none means no
+// access, an Admin always has it, others need a role that grants it.
+func TestCanAccessUserRoles_UsesTheRequestsUser(t *testing.T) {
+	for _, action := range []string{"read", "create", "update", "delete"} {
+		if canAccessUserRoles(nil, action) {
+			t.Errorf("canAccessUserRoles(nil, %q) = true, want false", action)
 		}
+		if !canAccessUserRoles(&models.User{Role: "Admin"}, action) {
+			t.Errorf("an Admin may not %s user roles", action)
+		}
+		if canAccessUserRoles(&models.User{Role: "SalesMan"}, action) {
+			t.Errorf("a SalesMan with no roles may %s user roles", action)
+		}
+	}
+}
+
+func TestMayUseStore(t *testing.T) {
+	a, b := primitive.NewObjectID(), primitive.NewObjectID()
+	u := &models.User{Role: "Manager", StoreIDs: []*primitive.ObjectID{&a}}
+	if !mayUseStore(u, &a) || mayUseStore(u, &b) || mayUseStore(nil, &a) || mayUseStore(&models.User{Role: "Manager"}, &a) {
+		t.Fatal("non-admins may use only their own stores")
+	}
+	if !mayUseStore(&models.User{Role: "Admin"}, &b) || !mayUseStore(&models.User{Admin: true}, &b) {
+		t.Fatal("admins may use every store")
 	}
 }

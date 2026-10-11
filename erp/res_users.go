@@ -85,7 +85,7 @@ func userValidate(x *mapCtx, rec M, prev M) map[string]string {
 	role := str(rec["role"])
 	if role == "" {
 		e["role"] = "required"
-	} else if systemRoleByID(role) == nil && loadCustomRole(role) == nil {
+	} else if systemRoleByID(role) == nil && !customRoleOfCompany(x.c, role) {
 		e["role"] = "unknown role"
 	}
 	if sids := strs(rec["storeIds"]); len(sids) == 0 && !boolv(rec["admin"]) {
@@ -94,10 +94,20 @@ func userValidate(x *mapCtx, rec M, prev M) map[string]string {
 	if s := str(rec["status"]); s != "" && s != "active" && s != "inactive" {
 		e["status"] = "active or inactive"
 	}
-	if pw, ok := rec["password"]; ok && pw != nil && len(str(pw)) < 8 {
-		e["password"] = "at least 8 characters"
+	if pw, ok := rec["password"]; ok && pw != nil {
+		if msg := passwordRuleError(str(pw)); msg != "" {
+			e["password"] = msg
+		}
 	}
 	return e
+}
+
+// customRoleOfCompany reports whether id is a live custom role of the
+// caller's company (another company's role id is unknown here).
+func customRoleOfCompany(c *Ctx, id string) bool {
+	(&nativeBackend{coll: collCustomRole, org: true}).claimUnowned()
+	r := loadCustomRole(id)
+	return r != nil && ownedBy(c, r)
 }
 
 func randomPassword() string {

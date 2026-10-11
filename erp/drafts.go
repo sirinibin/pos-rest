@@ -178,6 +178,10 @@ func handleDraftGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if !c.can(draftModule(t), "view") {
+		writeErr(w, errForbidden(""))
+		return
+	}
 	s, err := draftStore(c, r, nil)
 	if err != nil {
 		writeErr(w, err)
@@ -283,6 +287,11 @@ func handleDraftDelete(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
+		// discarding a draft is part of writing one: the same right as saving it
+		// (any signed-in user, a read-only viewer too, used to delete drafts)
+		if !c.can(draftModule(t), "create") {
+			return 0, nil, errForbidden("")
+		}
 		s, err := draftStore(c, r, nil)
 		if err != nil {
 			return 0, nil, err
@@ -331,6 +340,9 @@ func handleDraftFinalize(w http.ResponseWriter, r *http.Request) {
 		payload := cloneM(sub(d, "payload"))
 		delete(payload, "id")
 		payload["storeId"] = s
+		if e := discountLimitErrors(c, res, payload, nil); e != nil {
+			return 0, nil, errBadRequest("", e)
+		}
 		rec, err := res.Backend.Create(c, s, payload, WriteMeta{Action: "created"})
 		if err != nil {
 			releaseClaim(dcol, oid)

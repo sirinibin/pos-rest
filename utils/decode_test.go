@@ -110,3 +110,21 @@ func TestDecode_TruncatedJSON_ReturnsFalse(t *testing.T) {
 		t.Errorf("status = %d, want 400", w.Code)
 	}
 }
+
+// ── null / empty bodies ───────────────────────────────────────────────────────
+
+// A JSON null body used to panic inside Decode (err.Error() on a nil error).
+func TestDecode_NullBody_ReturnsFalseWithoutPanic(t *testing.T) {
+	type Payload struct{ Name string }
+	var p *Payload
+	ok, w := callDecode(`null`, &p)
+	if ok {
+		t.Fatal("Decode returned true for a null body")
+	}
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "empty or null") {
+		t.Errorf("body = %s, want an empty-or-null message", w.Body.String())
+	}
+}

@@ -231,11 +231,20 @@ func GuestRegister(w http.ResponseWriter, r *http.Request) {
 		response.Errors[k] = v
 	}
 
+	// One registration per e-mail at a time, so two at once can't both find
+	// it free (held until the user is inserted).
+	defer models.LockUserEmail(req.Email)()
+
 	if _, ok := response.Errors["email"]; !ok {
 		tempUser := &models.User{Email: req.Email}
 		exists, err := tempUser.IsEmailExists()
 		if err != nil {
-			response.Errors["email"] = err.Error()
+			// a database failure is not the client's mistake: 503, not 400
+			w.WriteHeader(http.StatusServiceUnavailable)
+			response.Status = false
+			response.Errors = map[string]string{"db": "Unable to check the e-mail address: " + err.Error()}
+			json.NewEncoder(w).Encode(response)
+			return
 		} else if exists {
 			response.Errors["email"] = "Email is already in use"
 		}

@@ -564,38 +564,6 @@ type Zatca struct {
 	ZatcaReconnectRequired        bool                `bson:"zatca_reconnect_required,omitempty" json:"zatca_reconnect_required,omitempty"`
 }
 
-/*
-func (store *Store) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	}
-
-	store.ChangeLog = append(
-		store.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
-}
-*/
-
 func (store *Store) AttributesValueChangeEvent(storeOld *Store) error {
 
 	cashChanged := store.Settings.CashOpeningBalance != storeOld.Settings.CashOpeningBalance ||

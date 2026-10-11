@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/controller"
 )
 
 func urlUnescape(s string) (string, error) { return url.QueryUnescape(s) }
@@ -72,6 +73,8 @@ func callV1Q(c *Ctx, h http.HandlerFunc, method, path string, vars map[string]st
 	if vars != nil {
 		req = mux.SetURLVars(req, vars)
 	}
+	// the adapter has checked the caller's StartERP rights already
+	req = controller.AsAdapterCall(req)
 	rec := httptest.NewRecorder()
 	h(rec, req)
 	if debugV1 {

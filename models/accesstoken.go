@@ -78,41 +78,49 @@ func ParseRefreshTokenFromRequest(r *http.Request) (string, error) {
 	return tokenStr, nil
 }
 
+// AuthenticateByAccessToken checks the request's access token and that its
+// user still exists. Use AuthenticatedUser when the handler needs the caller.
 func AuthenticateByAccessToken(r *http.Request) (tokenClaims TokenClaims, err error) {
+	tokenClaims, _, err = AuthenticatedUser(r)
+	return tokenClaims, err
+}
+
+// AuthenticatedUser checks the request's access token and returns its claims
+// and the signed-in user (id, name, role, admin, store_ids, role_ids). The
+// caller belongs to this request only: it used to be kept in package-level
+// variables, so concurrent requests could run permission checks as each
+// other's user.
+func AuthenticatedUser(r *http.Request) (tokenClaims TokenClaims, user *User, err error) {
 
 	tokenStr, err := ParseAccessTokenFromRequest(r)
 	if err != nil {
-		return tokenClaims, err
+		return tokenClaims, nil, err
 
 	}
 
 	tokenClaims, err = AuthenticateByJWTToken(tokenStr)
 	if err != nil {
-		return tokenClaims, err
+		return tokenClaims, nil, err
 	}
 	if tokenClaims.Type != "access_token" {
-		return tokenClaims, errors.New("invalid access token.")
+		return tokenClaims, nil, errors.New("invalid access token.")
 	}
-	TokenClaimsObject = tokenClaims
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
-		return tokenClaims, err
+		return tokenClaims, nil, err
 	}
 
-	UserObject, err = FindUserByID(&userID, bson.M{"id": 1, "name": 1, "deleted": 1, "role": 1, "role_ids": 1, "store_ids": 1})
+	user, err = FindUserByID(&userID, bson.M{"id": 1, "name": 1, "deleted": 1, "role": 1, "admin": 1, "role_ids": 1, "store_ids": 1})
 	if err != nil {
-		return tokenClaims, err
+		return tokenClaims, nil, err
 	}
 
-	if UserObject.Deleted {
-		return tokenClaims, errors.New("Account deleted")
+	if user.Deleted {
+		return tokenClaims, nil, errors.New("Account deleted")
 	}
 
-	return tokenClaims, nil
+	return tokenClaims, user, nil
 }
-
-var TokenClaimsObject TokenClaims
-var UserObject *User
 
 func AuthenticateByRefreshToken(r *http.Request) (tokenClaims TokenClaims, err error) {
 	tokenStr, err := ParseRefreshTokenFromRequest(r)

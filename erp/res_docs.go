@@ -227,7 +227,7 @@ func zatcaToContract(loc *time.Location, d M, kindOf string) M {
 	out := M{"status": status, "invoiceType": inv, "uuid": str(d["uuid"]), "hash": str(d["hash"]),
 		"pih": str(d["prev_hash"]), "icv": zatcaICV(d, z), "qr": str(z["qr_code"]),
 		"signature": str(z["ecdsa_signature"]), "reportedAt": fmtDTIn(loc, z["reporting_passed_at"]),
-		"xmlUrl": str(z["cleared_xml_url"]), "error": ""}
+		"xmlUrl": signedXMLURL(str(z["cleared_xml_url"])), "error": ""}
 	if errs := arr(z["reporting_errors"]); len(errs) > 0 {
 		out["error"] = str(errs[len(errs)-1])
 	} else if errs := arr(z["compliance_check_errors"]); len(errs) > 0 && status == "failed" {

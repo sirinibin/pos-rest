@@ -174,6 +174,8 @@ func (signature *UserSignature) Validate(w http.ResponseWriter, r *http.Request,
 	store, err := FindStoreByID(signature.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		// the checks below need the store (a missing or unknown store id used to panic)
+		return errs
 	}
 
 	if scenario == "update" {

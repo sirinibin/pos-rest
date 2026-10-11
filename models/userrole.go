@@ -124,13 +124,19 @@ func (userRole *UserRole) Update() error {
 	updateOptions := options.Update()
 	updateOptions.SetUpsert(false)
 
-	_, err = collection.UpdateOne(
+	res, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": userRole.ID},
 		bson.M{"$set": userRole},
 		updateOptions,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return errors.New("user role not found in this store")
+	}
+	return nil
 }
 
 func (userRole *UserRole) Delete(tokenClaims TokenClaims) error {
@@ -297,13 +303,13 @@ func GetUserRolesTotalCount(storeID *primitive.ObjectID, searchBy map[string]int
 	return count, err
 }
 
-// UserHasPermission checks whether the current UserObject has the given action
-// on the given resource via their effective RBAC permissions.
-func UserHasPermission(resource, action string) bool {
-	if UserObject == nil || len(UserObject.RoleIDs) == 0 {
+// UserHasPermission checks whether user has the given action on the given
+// resource via their effective RBAC permissions.
+func UserHasPermission(user *User, resource, action string) bool {
+	if user == nil || len(user.RoleIDs) == 0 {
 		return false
 	}
-	perms, err := GetEffectivePermissions(UserObject.StoreIDs, UserObject.RoleIDs)
+	perms, err := GetEffectivePermissions(user.StoreIDs, user.RoleIDs)
 	if err != nil {
 		return false
 	}

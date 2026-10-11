@@ -951,11 +951,8 @@ func TestDocsDrafts(t *testing.T) {
 		Must(t, Call(t, "POST", dq("sales/"+ids["sales"]+"/finalize", ""), viewer, nil), 403, "viewer finalize")
 		tmp := Create(t, s.Token, "drafts/sales", M{"storeId": s.ID, "payload": M{"items": []M{}}})
 		r := Call(t, "DELETE", dq("sales/"+S(tmp["id"]), ""), viewer, nil)
-		KnownBug(t, "NEW-draft-delete-perm", "DELETE /drafts/{type}/{id} has no permission check: a read-only viewer deletes drafts", r.Code == 204)
-		if r.Code != 204 {
-			Must(t, r, 403, "viewer delete")
-			Must(t, Call(t, "DELETE", dq("sales/"+S(tmp["id"]), ""), s.Token, nil), 204, "owner delete")
-		}
+		Must(t, r, 403, "viewer delete")
+		Must(t, Call(t, "DELETE", dq("sales/"+S(tmp["id"]), ""), s.Token, nil), 204, "owner delete")
 	})
 
 	t.Run("finalize an invalid draft: 400, draft kept, nothing created", func(t *testing.T) {

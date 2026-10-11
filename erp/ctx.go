@@ -15,7 +15,7 @@ import (
 )
 
 // Ctx is the per-request adapter context. Unlike the legacy handlers it never
-// touches the process-global models.UserObject.
+// reads a process-global current user (the legacy handlers no longer do either).
 type Ctx struct {
 	R        *http.Request
 	Token    string // raw access token
@@ -168,8 +168,11 @@ func effectivePerms(u M, stores []M) (string, Perms) {
 	} else if r := loadCustomRole(roleID); r != nil {
 		base = permsFromM(r["perms"])
 	} else {
-		roleID = legacyRoleToContract(str(u["role"]), false)
-		base = permsFromM(systemRoleByID(roleID)["perms"])
+		// erp.role names a custom role that was deleted (or never existed):
+		// the user keeps no rights from it. It used to fall back to the legacy
+		// role (Salesman), so deleting a restricted role widened its users'
+		// rights. Restoring the role gives them back.
+		base = permsFor(func(string) Perm { return nonePerm() })
 	}
 	roleIDs := []primitive.ObjectID{}
 	for _, r := range arr(u["role_ids"]) {

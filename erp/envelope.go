@@ -63,7 +63,7 @@ func historyOf(doc M) []interface{} { return historyOfIn(riyadh, doc) }
 // historyOfIn is historyOf with synthesized times in the store zone loc.
 func historyOfIn(loc *time.Location, doc M) []interface{} {
 	if h := arr(get(doc, envKey+".h")); len(h) > 0 {
-		return h
+		return maskSecretHistory(h)
 	}
 	out := []interface{}{}
 	if ca := fmtDTIn(loc, doc["created_at"]); ca != "" {
@@ -197,12 +197,76 @@ func diff(prev, next M) []interface{} {
 				if from == to {
 					continue // e.g. "" vs missing: no visible change
 				}
+				if isSecretField(k) {
+					// the change is recorded, never the value (an admin-set
+					// password used to be kept here in plain text)
+					from, to = maskedVal(from), maskedVal(to)
+				}
 				changes = append(changes, M{"field": prefix + k, "from": from, "to": to})
 			}
 		}
 	}
 	walk("", prev, next)
 	return changes
+}
+
+// secretMask stands for a password in history entries.
+const secretMask = "••••••"
+
+// isSecretField: history keeps that such a field changed, never its value.
+func isSecretField(field string) bool {
+	f := strings.ToLower(field)
+	if i := strings.LastIndex(f, "."); i >= 0 {
+		f = f[i+1:]
+	}
+	return strings.Contains(f, "password") || strings.Contains(f, "secret")
+}
+
+func maskedVal(v string) string {
+	if v == "—" {
+		return v
+	}
+	return secretMask
+}
+
+// maskSecretHistory hides password values in stored history entries (entries
+// written before passwords were masked); other entries are returned as is.
+func maskSecretHistory(h []interface{}) []interface{} {
+	out := h
+	copied := false
+	for i, e := range h {
+		em, _ := e.(M)
+		if em == nil {
+			continue
+		}
+		ch := arr(em["changes"])
+		var masked []interface{}
+		for j, c := range ch {
+			cm, _ := c.(M)
+			if cm == nil || !isSecretField(str(cm["field"])) {
+				continue
+			}
+			if str(cm["from"]) == maskedVal(str(cm["from"])) && str(cm["to"]) == maskedVal(str(cm["to"])) {
+				continue
+			}
+			if masked == nil {
+				masked = append([]interface{}{}, ch...)
+			}
+			nc := cloneM(cm)
+			nc["from"], nc["to"] = maskedVal(str(cm["from"])), maskedVal(str(cm["to"]))
+			masked[j] = nc
+		}
+		if masked == nil {
+			continue
+		}
+		if !copied {
+			out, copied = append([]interface{}{}, h...), true
+		}
+		ne := cloneM(em)
+		ne["changes"] = masked
+		out[i] = ne
+	}
+	return out
 }
 
 func historyEntry(by, action string, changes []interface{}) M {

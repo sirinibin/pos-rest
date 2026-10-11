@@ -223,6 +223,9 @@ func TestCreateProduct_Integration(t *testing.T) {
 	part := fmt.Sprintf("PN-T%d", time.Now().UnixNano())
 	adj := []map[string]interface{}{{"date_str": "2026-01-15T10:00:00Z", "type": "adding", "quantity": 12, "reason": "opening"}}
 	id, r := createProductForTest(t, fx.StoreA, tok, productBody(fx.StoreA, name, part, fx.CategoryA, adj))
+	if !r.Status {
+		t.Fatalf("#11: a successful create answers status true, got %s", r.Raw)
+	}
 	res := r.resultMap(t)
 	if res["name"] != name || res["part_number"] != part || res["ean_12"] == nil || res["ean_12"] == "" || res["created_by"] != fx.Admin.Hex() {
 		t.Fatalf("create response mismatch: %s", r.Raw)

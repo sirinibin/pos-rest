@@ -146,8 +146,10 @@ func assertImageUpload(t *testing.T, h http.HandlerFunc, url, token string, stor
 		{"missing storeID", map[string]string{"id": eID}, tinyPNG, http.StatusBadRequest},
 		{"missing image", map[string]string{"id": eID, "storeID": sID}, nil, http.StatusBadRequest},
 		{"bad store id", map[string]string{"id": eID, "storeID": "not-hex"}, tinyPNG, http.StatusBadRequest},
-		{"unknown store", map[string]string{"id": eID, "storeID": primitive.NewObjectID().Hex()}, tinyPNG, http.StatusInternalServerError},
+		{"unknown store", map[string]string{"id": eID, "storeID": primitive.NewObjectID().Hex()}, tinyPNG, http.StatusNotFound},
 		{"bad entity id", map[string]string{"id": "not-hex", "storeID": sID}, tinyPNG, http.StatusBadRequest},
+		// #1: an id that doesn't exist used to answer 200 and leave an orphan file
+		{"unknown " + coll, map[string]string{"id": primitive.NewObjectID().Hex(), "storeID": sID}, tinyPNG, http.StatusNotFound},
 	}
 	for _, c := range cases {
 		rec := multipartUpload(t, h, url, token, c.fields, "x.png", c.image)
@@ -194,23 +196,13 @@ func assertImageUpload(t *testing.T, h http.HandlerFunc, url, token string, stor
 		t.Fatalf("document images = %v, want [%s]", imgs, out.URL)
 	}
 
-	// --- no token: the handler has no auth guard (see report). Accept the
-	// current behaviour (200 + image appended) but also a future 401, in
-	// which case nothing may have been written. ---
+	// --- #1: no token is 401, and nothing is written ---
 	rec = multipartUpload(t, h, url, "", fields, "anon.png", tinyPNG)
-	imgs := docStrings(storeDoc(t, storeID, coll, entityID), "images")
-	switch rec.Code {
-	case http.StatusUnauthorized:
-		if len(imgs) != 1 {
-			t.Fatalf("401 upload must not write, images=%v", imgs)
-		}
-	case http.StatusOK:
-		t.Logf("NOTE: %s accepts uploads without an access token", url)
-		if len(imgs) != 2 {
-			t.Fatalf("anonymous upload returned 200 but images=%v", imgs)
-		}
-	default:
-		t.Fatalf("no token: want 200 (current) or 401, got %d (%s)", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("no token: want 401, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	if imgs := docStrings(storeDoc(t, storeID, coll, entityID), "images"); len(imgs) != 1 {
+		t.Fatalf("401 upload must not write, images=%v", imgs)
 	}
 }
 

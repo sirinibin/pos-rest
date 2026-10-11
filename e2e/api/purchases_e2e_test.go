@@ -1010,7 +1010,7 @@ func TestInventory_StockTransfers(t *testing.T) {
 		before := purStockIn(t, s, pid, whID)
 		Must(t, Call(t, "POST", "/stock-transfers", s.Token, tr(whID, s.MS, before+50, "")), 201, "transfer above stock")
 		purWaitStock(t, s, pid, whID, -50)
-		// without vatPercent the adapter sends 0 (the legacy panic of bug #5 is not reachable here)
+		// without vatPercent the adapter sends 0 (the legacy route refuses it, #5)
 		nv := tr(s.MS, whID, 1, "")
 		delete(nv, "vatPercent")
 		if r := Must(t, Call(t, "POST", "/stock-transfers", s.Token, nv), 201, "no vatPercent").Body; F(r, "vatPercent") != 0 {
@@ -1022,9 +1022,9 @@ func TestInventory_StockTransfers(t *testing.T) {
 		code, raw, err := purRaw(t, "POST", "/v1/stock-transfer?search%5Bstore_id%5D="+s.ID, s.Token, M{"store_id": s.ID,
 			"date_str": time.Now().Format(time.RFC3339), "from_warehouse_code": "main_store", "to_warehouse_id": whID, "to_warehouse_code": wh["code"],
 			"products": []M{{"product_id": pid, "name": "x", "quantity": 1, "unit_price": 10}}})
-		KnownBug(t, "#5", "stock transfer without vat_percent panics instead of 400", err != nil || code >= 500)
-		if err == nil && code < 500 && code != 400 {
-			t.Errorf("legacy transfer without vat: %d %s", code, raw)
+		// #5: refused on the field instead of a nil-pointer panic
+		if err != nil || code != 400 || !strings.Contains(raw, "vat_percent") {
+			t.Errorf("#5: legacy transfer without vat: %d %s %v (want 400 on vat_percent)", code, raw, err)
 		}
 	})
 
@@ -1072,8 +1072,10 @@ func TestInventory_Warehouses(t *testing.T) {
 		purNeedErr(t, Call(t, "POST", "/warehouses", s.Token, M{"storeId": s.ID, "nameEn": "X", "code": "main"}), 400, "code", "reserved code")
 		purNeedErr(t, Call(t, "POST", "/warehouses", s.Token, M{"storeId": s.ID, "nameEn": "Phone", "code": "PH", "phone": "12"}), 400, "phone", "bad phone")
 		purNeedErr(t, Call(t, "POST", "/warehouses", s.Token, M{"storeId": other.ID, "nameEn": "X", "code": "Y"}), 403, "", "another store")
-		code, _, err := purRaw(t, "POST", "/v1/warehouse?search%5Bstore_id%5D="+s.ID, s.Token, M{"store_id": s.ID})
-		KnownBug(t, "#9", "legacy warehouse validation errors answer HTTP 500", err == nil && code == 500)
+		code, body, err := purRaw(t, "POST", "/v1/warehouse?search%5Bstore_id%5D="+s.ID, s.Token, M{"store_id": s.ID})
+		if err != nil || code != 400 {
+			t.Errorf("#9: legacy warehouse validation errors: %d %s %v (want 400)", code, body, err)
+		}
 	})
 	t.Run("edit, delete, restore", func(t *testing.T) {
 		g := Patch(t, s.Token, "warehouses", id, M{"nameEn": "North Renamed"})
@@ -1441,11 +1443,11 @@ func TestInventory_Lookups(t *testing.T) {
 			t.Errorf("rename: %v", g["name"])
 		}
 		Must(t, Call(t, "PUT", "/customer-categories/"+id, s.Token, M{"name": "Gold"}), 200, "put")
-		// org-scoped native records live in one main-DB collection with no company filter
-		leak := purIDs(List(t, other.Token, "customer-categories", ""))[id]
-		KnownBug(t, "NEW-CCT-LEAK", "another company lists customer categories of every company", leak)
-		g := Call(t, "GET", "/customer-categories/"+id, other.Token, nil)
-		KnownBug(t, "NEW-CCT-LEAK", "another company reads a customer category by id (want 404)", g.Code != 404)
+		// org-scoped native records carry their company's stores (NEW-CCT-LEAK)
+		if purIDs(List(t, other.Token, "customer-categories", ""))[id] {
+			t.Errorf("NEW-CCT-LEAK: another company lists this company's customer category")
+		}
+		purNeedErr(t, Call(t, "GET", "/customer-categories/"+id, other.Token, nil), 404, "", "customer category of another company")
 		Must(t, Call(t, "DELETE", "/customer-categories/"+id, s.Token, nil), 200, "delete")
 		Must(t, Call(t, "POST", "/customer-categories/"+id+"/restore", s.Token, nil), 200, "restore")
 		purNeedErr(t, Call(t, "PATCH", "/customer-categories/"+id, s.Token, M{"name": "x"}, "If-Match", "1"), 409, "", "stale")

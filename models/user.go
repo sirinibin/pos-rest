@@ -5,8 +5,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -14,6 +16,7 @@ import (
 	"github.com/sirinibin/startpos/backend/db"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 ) //import "encoding/json"
 
@@ -186,6 +189,7 @@ func GetOnlineAdminUsers() (users []User, err error) {
 		if err != nil {
 			return users, errors.New("Cursor decode error:" + err.Error())
 		}
+		user.Password = ""
 		users = append(users, user)
 	} //end for loop
 
@@ -228,6 +232,7 @@ func GetOnlineUsersByStoreID(storeID *primitive.ObjectID) (users []User, err err
 		if err != nil {
 			return users, errors.New("Cursor decode error:" + err.Error())
 		}
+		user.Password = "" // never hand out password hashes
 		users = append(users, user)
 	} //end for loop
 
@@ -363,6 +368,15 @@ func (user *User) UpdateForeignLabelFields() error {
 	return nil
 }
 
+// emailCIFilter matches an e-mail address ignoring case (and surrounding
+// spaces): ADMIN@x and admin@x are the same account.
+func emailCIFilter(email string) bson.M {
+	return bson.M{"$regex": "^" + regexp.QuoteMeta(strings.TrimSpace(email)) + "$", "$options": "i"}
+}
+
+// FindUserByEmail finds the user with this e-mail. An exact match wins;
+// otherwise the address is matched ignoring case (it used to be
+// case-sensitive, so "Admin@x" could not sign in as "admin@x").
 func FindUserByEmail(email string) (user *User, err error) {
 	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -371,10 +385,29 @@ func FindUserByEmail(email string) (user *User, err error) {
 	err = collection.FindOne(ctx,
 		bson.M{"email": email}).
 		Decode(&user)
+	if err == mongo.ErrNoDocuments && strings.TrimSpace(email) != "" {
+		user = nil
+		err = collection.FindOne(ctx,
+			bson.M{"email": emailCIFilter(email)}).
+			Decode(&user)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return user, err
+}
+
+// userEmailLocks serializes "is this e-mail free?" + insert per address, so
+// two users created at once with the same e-mail can't both pass the check.
+var userEmailLocks sync.Map // lower-case e-mail -> *sync.Mutex
+
+// LockUserEmail locks the e-mail address and returns its unlock.
+func LockUserEmail(email string) func() {
+	key := strings.ToLower(strings.TrimSpace(email))
+	m, _ := userEmailLocks.LoadOrStore(key, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario string) (errs map[string]string) {
@@ -400,12 +433,15 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	}
 
-	if govalidator.IsNull(user.Name) {
+	if govalidator.IsNull(strings.TrimSpace(user.Name)) {
 		errs["name"] = "Name is required"
 	}
 
 	if govalidator.IsNull(user.Email) {
 		errs["email"] = "E-mail is required"
+	} else if user.ID.IsZero() && !govalidator.IsEmail(strings.TrimSpace(user.Email)) {
+		// new users only: existing records keep whatever they have
+		errs["email"] = "Invalid e-mail address"
 	}
 
 	if govalidator.IsNull(user.Mob) {
@@ -414,6 +450,8 @@ func (user *User) Validate(w http.ResponseWriter, r *http.Request, scenario stri
 
 	if user.ID.IsZero() && govalidator.IsNull(user.Password) {
 		errs["password"] = "Password is required"
+	} else if user.ID.IsZero() && len(user.Password) < MinPasswordLength {
+		errs["password"] = "Password must be at least 6 characters"
 	}
 
 	if !govalidator.IsNull(user.PhotoContent) {
@@ -631,6 +669,7 @@ func SearchUser(w http.ResponseWriter, r *http.Request) (users []User, criterias
 			user.DeletedByUser, _ = FindUserByID(user.DeletedBy, deletedByUserSelectFields)
 		}
 
+		user.Password = "" // never hand out password hashes
 		users = append(users, user)
 	} //end for loop
 
@@ -643,6 +682,11 @@ func (user *User) Insert() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// The id is set here so callers (guest registration) can answer with it;
+	// it used to stay 000000000000000000000000.
+	if user.ID.IsZero() {
+		user.ID = primitive.NewObjectID()
+	}
 	_, err := collection.InsertOne(ctx, &user)
 	if err != nil {
 		return err
@@ -775,13 +819,14 @@ func (user *User) IsEmailExists() (exists bool, err error) {
 	defer cancel()
 	count := int64(0)
 
+	// e-mails are compared ignoring case: ADMIN@x is taken when admin@x is
 	if user.ID.IsZero() {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": user.Email,
+			"email": emailCIFilter(user.Email),
 		})
 	} else {
 		count, err = collection.CountDocuments(ctx, bson.M{
-			"email": user.Email,
+			"email": emailCIFilter(user.Email),
 			"_id":   bson.M{"$ne": user.ID},
 		})
 	}
@@ -821,6 +866,10 @@ func IsUserExists(ID *primitive.ObjectID) (exists bool, err error) {
 
 	return (count > 0), err
 }
+
+// MinPasswordLength is the shortest password the legacy user endpoints
+// accept, the same rule change-password and guest sign-up already applied.
+const MinPasswordLength = 6
 
 func HashPassword(password string) string {
 	salt, _ := bcrypt.Salt(10)

@@ -163,8 +163,7 @@ func TestProductTaxonomy_Unauthenticated(t *testing.T) {
 	}
 }
 
-// TestUploadProductImage_SkipAuth_Integration runs UploadProductImage (which
-// parses the multipart form before, and instead of, any authentication)
+// TestUploadProductImage_SkipAuth_Integration runs UploadProductImage
 // against a fresh product in the seeded store: form validation, a successful
 // upload stored via the local-disk fallback (no S3 configured in the test DB)
 // and appended to the product's images, and the no-token behaviour.
@@ -174,9 +173,8 @@ func TestUploadProductImage_SkipAuth_Integration(t *testing.T) {
 	assertImageUpload(t, UploadProductImage, "/v1/product/upload-image", tokenFor(t, fx.AdminEmail), fx.StoreA, id, "product", "products")
 }
 
-// TestDeleteProductImage_NoAuthGuard documents that DeleteProductImage carries
-// no authentication guard.  It validates required query parameters and returns
-// 400 Bad Request (not 401) when they are absent.
+// TestDeleteProductImage_NoAuthGuard: DeleteProductImage answers 400 when
+// required query parameters are absent (before the login check).
 func TestDeleteProductImage_NoAuthGuard(t *testing.T) {
 	// Empty request — url, id, and storeID are all missing.
 	r := httptest.NewRequest(http.MethodDelete, "/v1/product/image", nil)

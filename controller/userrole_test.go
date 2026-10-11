@@ -192,6 +192,16 @@ func TestUserRole_Integration(t *testing.T) {
 	if err != nil || stored.Name != name+" v2" || len(stored.Permissions) != 1 || !stored.Permissions[0].Create || stored.UpdatedByName != "Admin T1" {
 		t.Fatalf("update not persisted: %+v err=%v", stored, err)
 	}
+	// #15: naming another store updated nothing and still answered status true
+	moved := map[string]interface{}{"name": name + " moved", "store_id": fx.StoreB.Hex()}
+	gbExpectErr(t, "update into another store", callHandler(t, UpdateUserRole, "PUT", viewURL, adminTok, moved, "id", id), http.StatusBadRequest, "store_id")
+	if s, _ := models.FindUserRoleByID(&fx.StoreA, &roleID, bson.M{}); s == nil || s.Name != name+" v2" {
+		t.Errorf("refused move changed the role: %+v", s)
+	}
+	// a role holder of store A can't reach store B's roles
+	gbExpectErr(t, "role holder lists another store", callHandler(t, ListUserRole, "GET", gbURL("/v1/user-role", fx.StoreB), holderTok, nil), http.StatusForbidden, "store_id")
+	gbExpectErr(t, "role holder views in another store", callHandler(t, ViewUserRole, "GET", gbURL("/v1/user-role/"+id, fx.StoreB), holderTok, nil, "id", id), http.StatusForbidden, "store_id")
+
 	// the updated permission takes effect for the role holder
 	other := map[string]interface{}{"name": uniqName("IT Role by holder"), "store_id": fx.StoreA.Hex()}
 	r = callHandler(t, CreateUserRole, "POST", "/v1/user-role", holderTok, other)

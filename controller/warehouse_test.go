@@ -143,10 +143,10 @@ func TestWarehouse_Integration(t *testing.T) {
 	body := map[string]interface{}{"name": name, "store_id": fx.StoreA.Hex(), "address": "Exit 5",
 		"national_address": map[string]interface{}{"building_no": "4321", "zipcode": "12345", "city_name": "Riyadh"}}
 
-	// validation errors must be rejected (note: the handler answers them with 500, not 400)
+	// validation errors must be rejected with 400 (#9: they used to answer 500)
 	rejected := func(what string, r apiResp, keys ...string) {
 		t.Helper()
-		if r.Status || r.Code < 400 {
+		if r.Status || r.Code != http.StatusBadRequest {
 			t.Fatalf("%s: expected a rejection, got code=%d body=%s", what, r.Code, r.Raw)
 		}
 		for _, k := range keys {
@@ -215,7 +215,7 @@ func TestWarehouse_Integration(t *testing.T) {
 		t.Fatalf("update not persisted: %+v err=%v", stored, err)
 	}
 	rejected("update with blank name", callHandler(t, UpdateWarehouse, "PUT", viewURL, tok, map[string]interface{}{"name": "  ", "store_id": fx.StoreA.Hex()}, "id", id), "name")
-	rejected("update unknown", callHandler(t, UpdateWarehouse, "PUT", gbURL("/v1/warehouse/"+missing, fx.StoreA), tok, upd, "id", missing), "view")
+	gbExpectErr(t, "update unknown", callHandler(t, UpdateWarehouse, "PUT", gbURL("/v1/warehouse/"+missing, fx.StoreA), tok, upd, "id", missing), http.StatusNotFound, "view")
 	if s, _ := store.FindWarehouseByID(&oid, bson.M{}); s == nil || s.Name != name+" v2" {
 		t.Errorf("rejected update changed the warehouse: %+v", s)
 	}

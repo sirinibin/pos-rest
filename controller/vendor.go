@@ -409,7 +409,7 @@ func ViewVendor(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if account != nil {
-			vendor.CreditBalance = account.Balance
+			vendor.CreditBalance = vendorCreditBalance(account)
 		} else {
 			account, err = store.FindAccountByPhoneByName(vendor.Phone, vendor.Name, &store.ID, bson.M{})
 			if err != nil && err != mongo.ErrNoDocuments {
@@ -419,7 +419,7 @@ func ViewVendor(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if account != nil {
-				vendor.CreditBalance = account.Balance
+				vendor.CreditBalance = vendorCreditBalance(account)
 			}
 		}
 
@@ -493,7 +493,7 @@ func ViewVendorByVatNoByName(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if account != nil {
-			vendor.CreditBalance = account.Balance
+			vendor.CreditBalance = vendorCreditBalance(account)
 		} else {
 			account, err = store.FindAccountByPhoneByName(vendor.Phone, vendor.Name, &store.ID, bson.M{})
 			if err != nil && err != mongo.ErrNoDocuments {
@@ -503,7 +503,7 @@ func ViewVendorByVatNoByName(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if account != nil {
-				vendor.CreditBalance = account.Balance
+				vendor.CreditBalance = vendorCreditBalance(account)
 			}
 		}
 
@@ -681,4 +681,14 @@ func VendorSummary(w http.ResponseWriter, r *http.Request) {
 
 	response.Result = vendorStats
 	json.NewEncoder(w).Encode(response)
+}
+
+// vendorCreditBalance is a vendor's credit balance from its account, with the
+// sign SetCreditBalance (and so create/update) uses: a liability (the store
+// owes the vendor) is negative. The view handlers used to show it positive.
+func vendorCreditBalance(account *models.Account) float64 {
+	if account.Type == "liability" {
+		return account.Balance * -1
+	}
+	return account.Balance
 }

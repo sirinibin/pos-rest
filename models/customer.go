@@ -634,38 +634,6 @@ func (customer *Customer) SetAdditionalkeywords() {
 	}
 }
 
-/*
-func (customer *Customer) SetChangeLog(
-	event string,
-	attribute, oldValue, newValue *string,
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && attribute != nil {
-		description = *attribute + " changed from " + *oldValue + " to " + *newValue + " by " + UserObject.Name
-	}
-
-	customer.ChangeLog = append(
-		customer.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
-}
-*/
-
 func (customer *Customer) SetCreditBalance() error {
 	if customer == nil {
 		return nil

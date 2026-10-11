@@ -31,6 +31,19 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Store ID required", http.StatusBadRequest)
 		return
 	}
+	store := imageStore(w, r, storeID)
+	if store == nil {
+		return
+	}
+	productObjectID, err := primitive.ObjectIDFromHex(productID)
+	if err != nil {
+		http.Error(w, "invalid product id", http.StatusBadRequest)
+		return
+	}
+	if !imageRecordExists(store, "product", &productObjectID) {
+		http.Error(w, "Product not found", http.StatusNotFound)
+		return
+	}
 
 	file, handler, err := r.FormFile("image")
 	if err != nil {
@@ -42,22 +55,6 @@ func UploadProductImage(w http.ResponseWriter, r *http.Request) {
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		http.Error(w, "Failed to read file:"+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
-	if err != nil {
-		http.Error(w, "invalid store id", http.StatusBadRequest)
-		return
-	}
-	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
-	if err != nil {
-		http.Error(w, "invalid store", http.StatusInternalServerError)
-		return
-	}
-	productObjectID, err := primitive.ObjectIDFromHex(productID)
-	if err != nil {
-		http.Error(w, "invalid product id", http.StatusBadRequest)
 		return
 	}
 
@@ -102,16 +99,8 @@ func DeleteProductImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Best-effort local file removal (no-op for S3/cdn URLs)
-	_ = os.Remove("." + imageUrl)
-
-	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
-	if err != nil {
-		http.Error(w, "invalid store id", http.StatusBadRequest)
-		return
-	}
-	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
-	if err != nil {
-		http.Error(w, "invalid store", http.StatusInternalServerError)
+	store := imageStore(w, r, storeID)
+	if store == nil {
 		return
 	}
 	productObjectID, err := primitive.ObjectIDFromHex(productID)
@@ -120,11 +109,18 @@ func DeleteProductImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	product, _ := store.FindProductByID(&productObjectID, bson.M{})
+	product, err := store.FindProductByID(&productObjectID, bson.M{})
+	if err != nil {
+		http.Error(w, "Product not found", http.StatusNotFound)
+		return
+	}
 	before := len(product.Images)
 	product.Images = removeItem(product.Images, imageUrl) // exact match for /cdn/ URLs
 	if len(product.Images) == before {
 		product.Images = removeItem(product.Images, filepath.Base(imageUrl)) // basename for old records
+	}
+	if len(product.Images) < before {
+		removeLocalImage(imageUrl) // only a file the record really had
 	}
 	_ = product.Update(&store.ID)
 

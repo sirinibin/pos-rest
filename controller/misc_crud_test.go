@@ -172,7 +172,7 @@ func TestMiscCRUD_Unauthenticated(t *testing.T) {
 //
 // All three Upload*Image handlers call r.ParseMultipartForm before any auth
 // check, so they cannot be covered by a plain no-token unit test.
-// All three Delete*Image handlers carry no authentication guard — they validate
+// The Delete*Image handlers validate
 // required query parameters and return 400, not 401.
 
 // TestUploadCustomerImage_SkipAuth_Integration stubs the customer image upload
@@ -198,8 +198,9 @@ func TestUploadVendorImage_SkipAuth_Integration(t *testing.T) {
 	assertImageUpload(t, UploadVendorImage, "/v1/vendor/upload-image", tokenFor(t, fx.AdminEmail), fx.StoreA, id, "vendor", "vendors")
 }
 
-// TestDeleteCustomerImage_NoAuthGuard documents that DeleteCustomerImage has
-// no authentication guard and returns 400 when required query params are absent.
+// TestDeleteCustomerImage_NoAuthGuard: DeleteCustomerImage answers 400 when
+// required query params are absent (before the login check, see
+// TestEntityImages_AuthAndStore_Integration).
 func TestDeleteCustomerImage_NoAuthGuard(t *testing.T) {
 	r := httptest.NewRequest(http.MethodDelete, "/v1/customer/image", nil)
 	w := httptest.NewRecorder()
@@ -213,8 +214,8 @@ func TestDeleteCustomerImage_NoAuthGuard(t *testing.T) {
 	}
 }
 
-// TestDeleteVendorImage_NoAuthGuard documents that DeleteVendorImage has no
-// authentication guard and returns 400 when required query params are absent.
+// TestDeleteVendorImage_NoAuthGuard: DeleteVendorImage answers 400 when
+// required query params are absent (before the login check).
 func TestDeleteVendorImage_NoAuthGuard(t *testing.T) {
 	r := httptest.NewRequest(http.MethodDelete, "/v1/vendor/image", nil)
 	w := httptest.NewRecorder()

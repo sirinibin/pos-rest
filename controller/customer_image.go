@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -30,6 +29,19 @@ func UploadCustomerImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Store ID required", http.StatusBadRequest)
 		return
 	}
+	store := imageStore(w, r, storeID)
+	if store == nil {
+		return
+	}
+	customerObjectID, err := primitive.ObjectIDFromHex(customerID)
+	if err != nil {
+		http.Error(w, "invalid customer id", http.StatusBadRequest)
+		return
+	}
+	if !imageRecordExists(store, "customer", &customerObjectID) {
+		http.Error(w, "Customer not found", http.StatusNotFound)
+		return
+	}
 
 	file, handler, err := r.FormFile("image")
 	if err != nil {
@@ -41,22 +53,6 @@ func UploadCustomerImage(w http.ResponseWriter, r *http.Request) {
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		http.Error(w, "Failed to read file:"+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
-	if err != nil {
-		http.Error(w, "invalid store id", http.StatusBadRequest)
-		return
-	}
-	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
-	if err != nil {
-		http.Error(w, "invalid store", http.StatusInternalServerError)
-		return
-	}
-	customerObjectID, err := primitive.ObjectIDFromHex(customerID)
-	if err != nil {
-		http.Error(w, "invalid customer id", http.StatusBadRequest)
 		return
 	}
 
@@ -92,16 +88,8 @@ func DeleteCustomerImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = os.Remove("." + imageUrl)
-
-	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
-	if err != nil {
-		http.Error(w, "invalid store id", http.StatusBadRequest)
-		return
-	}
-	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
-	if err != nil {
-		http.Error(w, "invalid store", http.StatusInternalServerError)
+	store := imageStore(w, r, storeID)
+	if store == nil {
 		return
 	}
 	customerObjectID, err := primitive.ObjectIDFromHex(customerID)
@@ -110,11 +98,18 @@ func DeleteCustomerImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	customer, _ := store.FindCustomerByID(&customerObjectID, bson.M{})
+	customer, err := store.FindCustomerByID(&customerObjectID, bson.M{})
+	if err != nil {
+		http.Error(w, "Customer not found", http.StatusNotFound)
+		return
+	}
 	before := len(customer.Images)
 	customer.Images = removeItem(customer.Images, imageUrl)
 	if len(customer.Images) == before {
 		customer.Images = removeItem(customer.Images, filepath.Base(imageUrl))
+	}
+	if len(customer.Images) < before {
+		removeLocalImage(imageUrl) // only a file the record really had
 	}
 	customer.Update()
 
