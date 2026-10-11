@@ -63,7 +63,8 @@ func TestFlow_NegativeLineQuantitiesAreRefused(t *testing.T) {
 	wantStock(t, sid, b, 0)
 }
 
-// Editing a transfer may re-use the stock it already moved, and no more.
+// Editing a transfer re-uses the stock it already moved; going beyond that is
+// allowed with a warning.
 func TestFlow_StockTransferEditCountsWhatItAlreadyMoved(t *testing.T) {
 	sid := newStore(t)
 	from, fromCode := createWarehouse(t, sid, "East Warehouse")
@@ -96,14 +97,21 @@ func TestFlow_StockTransferEditCountsWhatItAlreadyMoved(t *testing.T) {
 		return ""
 	})
 
-	code, res = in(t, sid, "PUT", "/v1/stock-transfer/"+str(tr, "id"), body(6))
-	mustReject(t, "edit to 6 when 2 are left and 3 already moved", code, res, "quantity_0")
 	code, res = in(t, sid, "PUT", "/v1/stock-transfer/"+str(tr, "id"), body(5))
-	mustOK(t, "edit to 5", code, res)
+	mustWarn(t, "edit to 5 when 2 are left and 3 already moved", code, res)
 	eventually(t, "stocks after the edit", func() string {
 		e, w := warehouseStock(t, sid, widget, fromCode), warehouseStock(t, sid, widget, toCode)
 		if !approx(e, 0) || !approx(w, 5) {
 			return fmt.Sprintf("%s %v %s %v, want 0 and 5", fromCode, e, toCode, w)
+		}
+		return ""
+	})
+	code, res = in(t, sid, "PUT", "/v1/stock-transfer/"+str(tr, "id"), body(6))
+	mustWarn(t, "edit to 6, one more than the source had", code, res, "quantity_0")
+	eventually(t, "stocks after the short edit", func() string {
+		e, w := warehouseStock(t, sid, widget, fromCode), warehouseStock(t, sid, widget, toCode)
+		if !approx(e, -1) || !approx(w, 6) {
+			return fmt.Sprintf("%s %v %s %v, want -1 and 6", fromCode, e, toCode, w)
 		}
 		return ""
 	})

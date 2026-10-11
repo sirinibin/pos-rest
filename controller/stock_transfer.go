@@ -143,6 +143,9 @@ func CreateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// A source short of stock doesn't block the transfer: it is saved, the
+	// source goes negative, and the shortage comes back as a warning.
+	response.Warnings = stocktransfer.StockWarnings
 
 	stocktransfer.FindTotalQuantity()
 
@@ -285,6 +288,7 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	response.Warnings = stocktransfer.StockWarnings
 
 	stocktransfer.FindTotalQuantity()
 	stocktransfer.UpdateForeignLabelFields()

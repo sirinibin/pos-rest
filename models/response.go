@@ -6,5 +6,6 @@ type Response struct {
 	TotalCount int64                  `bson:"total_count,omitempty" json:"total_count"`
 	Result     interface{}            `bson:"result,omitempty" json:"result,omitempty"`
 	Errors     map[string]string      `bson:"errors,omitempty" json:"errors,omitempty"`
+	Warnings   map[string]string      `bson:"warnings,omitempty" json:"warnings,omitempty"`
 	Meta       map[string]interface{} `bson:"meta,omitempty" json:"meta,omitempty"`
 }

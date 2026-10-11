@@ -71,6 +71,22 @@ func mustOK(t *testing.T, what string, code int, res apiResponse) map[string]int
 	return resultMap(t, res)
 }
 
+// mustWarn fails the test unless the call succeeded with a warning under each
+// of the given keys, and none under any other key.
+func mustWarn(t *testing.T, what string, code int, res apiResponse, keys ...string) map[string]interface{} {
+	t.Helper()
+	out := mustOK(t, what, code, res)
+	for _, k := range keys {
+		if _, ok := res.Warnings[k]; !ok {
+			t.Fatalf("%s: want a warning on %s, got %v", what, k, res.Warnings)
+		}
+	}
+	if len(res.Warnings) != len(keys) {
+		t.Fatalf("%s: want warnings on %v only, got %v", what, keys, res.Warnings)
+	}
+	return out
+}
+
 // mustReject fails the test unless the call was refused with an error under
 // one of the given keys.
 func mustReject(t *testing.T, what string, code int, res apiResponse, keys ...string) {

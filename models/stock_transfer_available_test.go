@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -120,5 +122,32 @@ func TestSameWarehouse(t *testing.T) {
 		if got := sameWarehouse(c.x, c.y); got != c.want {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestShortageWarnings(t *testing.T) {
+	if got := shortageWarnings(map[int]float64{}); got != nil {
+		t.Errorf("no shortfall: warnings = %v, want none", got)
+	}
+	got := shortageWarnings(map[int]float64{0: 1, 2: 0.5})
+	if len(got) != 2 {
+		t.Fatalf("warnings = %v, want two", got)
+	}
+	if !strings.Contains(got["quantity_0"], "1 short") || !strings.Contains(got["quantity_2"], "0.5 short") {
+		t.Errorf("warnings = %v, want the shortfall in each", got)
+	}
+	if !strings.Contains(got["quantity_0"], "negative") {
+		t.Errorf("warning %q should say the source goes negative", got["quantity_0"])
+	}
+}
+
+func TestResponseWarningsOnlyWhenSet(t *testing.T) {
+	b, _ := json.Marshal(Response{Status: true})
+	if strings.Contains(string(b), "warnings") {
+		t.Errorf("empty warnings are in the JSON: %s", b)
+	}
+	b, _ = json.Marshal(Response{Status: true, Warnings: map[string]string{"quantity_0": "short"}})
+	if !strings.Contains(string(b), `"warnings":{"quantity_0":"short"}`) {
+		t.Errorf("warnings missing from the JSON: %s", b)
 	}
 }

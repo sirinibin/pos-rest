@@ -32,6 +32,7 @@ type apiResponse struct {
 	TotalCount int64             `json:"total_count"`
 	Result     json.RawMessage   `json:"result"`
 	Errors     map[string]string `json:"errors"`
+	Warnings   map[string]string `json:"warnings"`
 }
 
 var (

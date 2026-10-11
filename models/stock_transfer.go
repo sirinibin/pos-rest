@@ -83,6 +83,10 @@ type StockTransfer struct {
 	CreatedByName      string                 `json:"created_by_name,omitempty" bson:"created_by_name,omitempty"`
 	UpdatedByName      string                 `json:"updated_by_name,omitempty" bson:"updated_by_name,omitempty"`
 	Remarks            string                 `bson:"remarks" json:"remarks"`
+	// StockWarnings is set by Validate: per line ("quantity_<i>"), how far the
+	// source falls short. A shortage doesn't block the transfer; the source
+	// stock simply goes negative.
+	StockWarnings map[string]string `json:"-" bson:"-"`
 }
 
 func (stocktransfer *StockTransfer) AttributesValueChangeEvent(stocktransferOld *StockTransfer) error {
@@ -650,8 +654,9 @@ func (stocktransfer *StockTransfer) Validate(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	stocktransfer.StockWarnings = nil
 	if len(errs) == 0 {
-		stocktransfer.validateAvailableStock(store, fromWarehouse, oldStockTransfer, errs)
+		stocktransfer.StockWarnings = stocktransfer.stockShortageWarnings(store, fromWarehouse, oldStockTransfer)
 	}
 
 	if stocktransfer.VatPercent == nil {
@@ -1580,10 +1585,11 @@ func transferShortfalls(products []StockTransferProduct, available map[string]fl
 	return out
 }
 
-// validateAvailableStock refuses a transfer that moves more than the source
-// warehouse (or the main store) holds; it used to drive the source negative.
-// Services and product sets aren't stock-tracked and aren't checked.
-func (stocktransfer *StockTransfer) validateAvailableStock(store *Store, fromWarehouse *Warehouse, old *StockTransfer, errs map[string]string) {
+// stockShortageWarnings returns a warning per line that moves more than the
+// source warehouse (or the main store) holds. Shortages are allowed: the
+// transfer goes through and the source stock goes negative. Services and
+// product sets aren't stock-tracked and aren't checked.
+func (stocktransfer *StockTransfer) stockShortageWarnings(store *Store, fromWarehouse *Warehouse, old *StockTransfer) map[string]string {
 	code := transferSourceCode(fromWarehouse)
 	available := map[string]float64{}
 	for _, line := range stocktransfer.Products {
@@ -1607,7 +1613,17 @@ func (stocktransfer *StockTransfer) validateAvailableStock(store *Store, fromWar
 		}
 	}
 
-	for i, over := range transferShortfalls(stocktransfer.Products, available, alreadyTaken) {
-		errs["quantity_"+strconv.Itoa(i)] = fmt.Sprintf("Not enough stock at the source: %s short", strconv.FormatFloat(over, 'f', -1, 64))
+	return shortageWarnings(transferShortfalls(stocktransfer.Products, available, alreadyTaken))
+}
+
+// shortageWarnings turns per-line shortfalls into "quantity_<i>" warnings.
+func shortageWarnings(shortfalls map[int]float64) map[string]string {
+	if len(shortfalls) == 0 {
+		return nil
 	}
+	out := make(map[string]string, len(shortfalls))
+	for i, over := range shortfalls {
+		out["quantity_"+strconv.Itoa(i)] = fmt.Sprintf("Not enough stock at the source: %s short, the source stock will go negative", strconv.FormatFloat(over, 'f', -1, 64))
+	}
+	return out
 }

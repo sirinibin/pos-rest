@@ -263,26 +263,51 @@ func TestFlow_StockTransferMovesStockBetweenWarehouses(t *testing.T) {
 	// A transfer moves stock, it does not create or destroy it.
 	wantStock(t, sid, widget, 10)
 
-	// A source can't give more than it holds: WN has 6, the main store none.
-	code, res = transfer(from, to, 7)
-	mustReject(t, "transfer of 7 from a warehouse holding 6", code, res, "quantity_0")
-	code, res = transfer("", to, 1)
-	mustReject(t, "transfer from an empty main store", code, res, "quantity_0")
-	code, res = transfer(from, to, -1)
-	mustReject(t, "negative transfer", code, res, "quantity_0")
-	code, res = in(t, sid, "POST", "/v1/stock-transfer", map[string]interface{}{
-		"store_id": sid, "from_warehouse_id": from, "to_warehouse_id": to, "date_str": nowStr(), "vat_percent": 15,
-		"products": []map[string]interface{}{
-			{"product_id": widget, "name": "Widget", "quantity": 4, "unit_price": 60, "unit": "PC"},
-			{"product_id": widget, "name": "Widget", "quantity": 3, "unit_price": 60, "unit": "PC"},
-		},
-	})
-	mustReject(t, "two lines of one product adding up to more than the stock", code, res, "quantity_1")
+	// A source short of stock doesn't block the transfer: it goes through with
+	// a warning and the source goes negative. WN has 6, the main store none.
 	code, res = transfer(from, to, 6)
-	mustOK(t, "transfer everything left", code, res)
+	mustWarn(t, "transfer exactly what WN holds", code, res)
+	// Stock is recomputed after the response; wait for it before the next check.
 	eventually(t, "WN emptied", func() string {
 		if n := warehouseStock(t, sid, widget, fromCode); !approx(n, 0) {
 			return fmt.Sprintf("%s = %v, want 0", fromCode, n)
+		}
+		return ""
+	})
+	code, res = transfer(from, to, 2)
+	mustWarn(t, "transfer of 2 from an empty WN", code, res, "quantity_0")
+	if !strings.Contains(res.Warnings["quantity_0"], "2 short") {
+		t.Fatalf("shortage warning = %q, want it to say 2 short", res.Warnings["quantity_0"])
+	}
+	eventually(t, "WN negative", func() string {
+		if n := warehouseStock(t, sid, widget, fromCode); !approx(n, -2) {
+			return fmt.Sprintf("%s = %v, want -2", fromCode, n)
+		}
+		return ""
+	})
+	code, res = transfer("", to, 1)
+	mustWarn(t, "transfer from an empty main store", code, res, "quantity_0")
+	code, res = transfer(from, to, -1)
+	mustReject(t, "negative transfer", code, res, "quantity_0")
+	code, res = transfer(from, to, 0)
+	mustReject(t, "transfer of zero still refused", code, res, "quantity_0")
+	twoLines := map[string]interface{}{
+		"store_id": sid, "from_warehouse_id": from, "to_warehouse_id": to, "date_str": nowStr(), "vat_percent": 15,
+		"products": []map[string]interface{}{
+			{"product_id": widget, "name": "Widget", "quantity": 1, "unit_price": 60, "unit": "PC"},
+			{"product_id": widget, "name": "Widget", "quantity": 1, "unit_price": 60, "unit": "PC"},
+		},
+	}
+	code, res = in(t, sid, "POST", "/v1/stock-transfer", twoLines)
+	tl := mustWarn(t, "two lines of one product from a negative WN", code, res, "quantity_0", "quantity_1")
+	// An edit that is still short is saved, with the warning.
+	code, res = in(t, sid, "PUT", "/v1/stock-transfer/"+str(tl, "id"), twoLines)
+	mustWarn(t, "edit of a short transfer", code, res, "quantity_0", "quantity_1")
+	// WN: 6 - 6 - 2 - 1 - 1 = -4; main store: -1; south: 4 + 6 + 2 + 1 + 1 + 1 = 15.
+	eventually(t, "sources went negative", func() string {
+		n, m, s := warehouseStock(t, sid, widget, fromCode), warehouseStock(t, sid, widget, "main_store"), warehouseStock(t, sid, widget, toCode)
+		if !approx(n, -4) || !approx(m, -1) || !approx(s, 15) {
+			return fmt.Sprintf("%s %v main_store %v %s %v, want -4, -1 and 15", fromCode, n, m, toCode, s)
 		}
 		return ""
 	})
