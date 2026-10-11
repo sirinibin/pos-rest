@@ -222,3 +222,30 @@ func TestQuickDeploy_TargetsTestThenProduction(t *testing.T) {
 		}
 	}
 }
+
+// There is no test branch any more: nothing may wait on it or route by it.
+func TestNoWorkflowDependsOnATestBranch(t *testing.T) {
+	files := []string{
+		"../.github/workflows/deploy.yml",
+		"../.github/workflows/deploy_quick.yml",
+		"../.github/workflows/cleanup_merged_branches.yml",
+		"../.github/workflows/tests.yml",
+		"../deploy_quick.sh",
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(b)
+		for _, bad := range []string{"origin/test", "branches: [master, test]", "github.ref_name != 'test'", "frontend_ref: test"} {
+			if strings.Contains(s, bad) {
+				t.Errorf("%s still refers to the test branch (%q)", f, bad)
+			}
+		}
+	}
+	b, _ := os.ReadFile("../deploy_quick.sh")
+	if !strings.Contains(string(b), `if [ "$BRANCH" = master ] && $TO_TEST; then TARGET=test; fi`) {
+		t.Error("deploy_quick.sh must reach the test server from master with --test")
+	}
+}

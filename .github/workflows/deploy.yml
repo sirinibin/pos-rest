@@ -3,8 +3,8 @@ name: Test, build and deploy (test, then production)
 # One pipeline for both servers. master and test carry the same code, so a
 # push to master runs every suite once, builds the API once, deploys that
 # binary to the test API, and only after the test API is healthy deploys the
-# very same binary to production. The test branch is a mirror of master and
-# triggers nothing.
+# very same binary to production. There is no test branch: master is the only
+# branch that deploys.
 on:
   push:
     branches:

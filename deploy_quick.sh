@@ -7,17 +7,22 @@
 #
 # Branch routing (auto-detected):
 #   master → production API  (start-api,      port 2000)
-#   test   → test API        (start-api-test,  port 2002)
+#   master + --test → test API        (start-api-test,  port 2002)
 #   v2     → v2 API          (start-api-v2,    port 2004)
 #
 # Usage:
 #   ./deploy_quick.sh          — build + deploy current branch target
+#   ./deploy_quick.sh --test   — on master: deploy to the test server instead
 #   ./deploy_quick.sh --force  — also skip uncommitted-changes check
 
 set -euo pipefail
 
 FORCE=false
-for arg in "$@"; do [ "$arg" = "--force" ] && FORCE=true; done
+TO_TEST=false
+for arg in "$@"; do
+  [ "$arg" = "--force" ] && FORCE=true
+  [ "$arg" = "--test" ] && TO_TEST=true
+done
 
 SSH_KEY="${SSH_KEY:-$HOME/Downloads/startuptech-v2.pem}"
 AWS_USER="ubuntu"
@@ -28,7 +33,10 @@ cd "$(dirname "$0")"
 
 # ─── Detect branch → set target ───────────────────────────────────────────────
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-case "$BRANCH" in
+# There is no test branch: master's code goes to the test server with --test.
+TARGET="$BRANCH"
+if [ "$BRANCH" = master ] && $TO_TEST; then TARGET=test; fi
+case "$TARGET" in
   master)
     SERVICE="start-api"
     PORT=2000
@@ -49,7 +57,7 @@ case "$BRANCH" in
     ;;
   *)
     echo "==> ABORTED: deploy_quick.sh does not support branch '$BRANCH'."
-    echo "    Supported branches: master, test, v2"
+    echo "    Supported: master (add --test for the test server), v2"
     exit 1
     ;;
 esac
