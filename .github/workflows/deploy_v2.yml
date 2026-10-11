@@ -270,6 +270,8 @@ jobs:
           java-version: "17"
       - name: Install ZatcaPython venv and the ZATCA SDK
         run: ci/zatca-sdk.sh
+      - name: ZATCA signer tests (store key signs through the real SDK)
+        run: ZatcaPython/venv/bin/python -m unittest discover -s ZatcaPython/tests -v
       - name: ZATCA Phase 2 against the sandbox (VAT 399999999900003, CRN 4030360927)
         env:
           MONGO_HOST: 127.0.0.1
