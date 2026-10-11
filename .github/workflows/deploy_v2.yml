@@ -1,17 +1,8 @@
 name: Build and Deploy Go Application to v2 (startpos-api-v2.gulfunionozone.com)
 
+# Manual only since 2026-10-11: GitHub Actions costs too much, so releases run
+# from ./deploy_v2.sh on the owner's machine (same gates, run locally).
 on:
-  push:
-    branches:
-      - v2
-    paths:
-      - "**.go"
-      - "**.mod"
-      - "**.sum"
-      - ".github/workflows/deploy_v2.yml"
-      - "ci/**"
-      - "e2e/**"
-      - "cardbridge/**"
   workflow_dispatch:
 
 # Quality gates run in parallel; the deploy job only starts when every gate
@@ -152,10 +143,8 @@ jobs:
 
   race-db:
     runs-on: ubuntu-latest
-    # Report only: the legacy handlers update documents from background
-    # goroutines while the request still uses them, which the race detector
-    # flags. Counts show in the job summary; make this blocking once fixed.
-    continue-on-error: true
+    # Blocking since 2026-10-11 (0 races since e7057ba; the user wants every
+    # suite to pass before a deploy).
     services:
       mongo:
         image: mirror.gcr.io/library/mongo:7
@@ -190,7 +179,7 @@ jobs:
           go test -race ./erp/ -count=1 -json > race.json
           EXIT=$?
           set -e
-          ci/test-summary.sh race.json "$EXIT" "erp API tests (race, report only)"
+          ci/test-summary.sh race.json "$EXIT" "erp API tests (race)" 700
 
   e2e:
     runs-on: ubuntu-latest
@@ -290,7 +279,7 @@ jobs:
         run: grep -i -n "zatca\|python\|error\|panic" zatca-server.log | tail -n 200 || true
 
   build-and-deploy:
-    needs: [lint, unit, api, smoke, e2e]
+    needs: [lint, unit, api, smoke, e2e, race-db]
     if: github.ref == 'refs/heads/v2'
     runs-on: ubuntu-latest
 

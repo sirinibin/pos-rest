@@ -2,6 +2,8 @@
 # Deploy the Go backend v2 to https://startpos-api-v2.gulfunionozone.com
 # Must be run from the v2 branch (enforced below).
 #
+# THE ONLY DEPLOYMENT ROUTE since 2026-10-11: GitHub Actions no longer runs on
+# push (cost), so run this from your Mac to release; a push alone deploys nothing.
 # Runs the same gates as .github/workflows/deploy_v2.yml, one after another,
 # and deploys only when every gate passes (stops at the first failure and
 # prints its output). Works on macOS and Linux.
@@ -14,7 +16,7 @@
 #   e2e         e2e/run.sh: race-built server, API e2e + functional (>= 300 passing)
 #   ui-adapter  e2e-starterp: the StartERP UI (frontend master build) against /v1/erp,
 #               read back through the old v1 endpoints (not in the workflow)
-#   race-db     go test -race ./erp with the DB (REPORT ONLY, as in CI)
+#   race-db     go test -race ./erp with the DB (gates the deploy, no data race)
 #   zatca       TestZatcaSandbox vs ZATCA's sandbox (REPORT ONLY, as in CI)
 #   deploy      build linux/amd64, Card Bridge setup files, upload, swap, restart
 #   cleanup     delete merged claude/* branches older than 24 h (report only)
@@ -32,7 +34,10 @@
 # Needs Go, jq, curl, openssl; MongoDB on 27017 + Redis on 6379 (running ones
 # are used, only t1_* test databases are touched; else started with Docker,
 # else local mongod / redis-server); Docker for the S3 test server (api).
-# zatca also needs Java 11+ and python3 (skipped without them).
+# zatca also needs Java 11+ and python3 (skipped without them) and clones the
+# SDK from https://github.com/sirinibin/zatca-sdk. ERP_TEST_DB=1,
+# S3_TEST_REQUIRED=1 and TZ are set by the script; deploy needs the SSH key
+# at ~/Downloads/startuptech-v2.pem (SSH_KEY to change).
 # Logs: .deploy-logs/<time>/<step>.log
 set -euo pipefail
 
@@ -45,7 +50,7 @@ while [ $# -gt 0 ]; do
         --check) CHECK_ONLY=true ;;
         --only) ONLY="$2"; CHECK_ONLY=true; shift ;;
         --only=*) ONLY="${1#--only=}"; CHECK_ONLY=true ;;
-        -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,41p' "$0"; exit 0 ;;
         *) echo "unknown option: $1 (see ./deploy_v2.sh --help)"; exit 2 ;;
     esac
     shift
@@ -287,7 +292,8 @@ step_e2e() {
 step_race_db() {
     local exit=0
     ERP_TEST_DB=1 TZ=Europe/London go test -race ./erp/ -count=1 -json > "$WORK_DIR/race.json" || exit=$?
-    summary "$WORK_DIR/race.json" "$exit" "erp API tests (race, report only)"
+    summary "$WORK_DIR/race.json" "$exit" "erp API tests (race)" 700
+    skips "erp API tests (race)" "$WORK_DIR/race.json"
 }
 
 step_zatca() {
@@ -454,13 +460,15 @@ run_step preflight gate   step_preflight
 run_step lint      gate   step_lint
 run_step unit      gate   step_unit
 if want api || want smoke || want e2e || want ui-adapter || want race-db || want zatca; then
+    ONLY_SAVED="$ONLY"; [ -n "$ONLY" ] && ONLY="$ONLY,services" # --only api etc. still needs the DB
     run_step services gate step_services
+    ONLY="$ONLY_SAVED"
 fi
 run_step api       gate   step_api
 run_step smoke     gate   step_smoke
 run_step e2e       gate   step_e2e
 run_step ui-adapter gate  step_ui_adapter
-run_step race-db   report step_race_db
+run_step race-db   gate   step_race_db
 run_step zatca     report step_zatca
 
 if $CHECK_ONLY; then

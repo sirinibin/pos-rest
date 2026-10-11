@@ -1,13 +1,9 @@
 name: Build and Deploy Go Application to production
 
+# Manual only since 2026-10-11: GitHub Actions costs too much, so releases run
+# from ./deploy_v2.sh on the owner's machine (same gates, run locally).
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - "**.go"
-      - "**.mod"
-      - "**.sum"
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:

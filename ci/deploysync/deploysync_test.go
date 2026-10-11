@@ -97,7 +97,7 @@ func TestDeployScriptGatesOnEveryJobTheDeployNeeds(t *testing.T) {
 func TestReportOnlyJobsStayReportOnly(t *testing.T) {
 	script, wf := read(t, "deploy_v2.sh"), read(t, ".github/workflows/deploy_v2.yml")
 	ss := steps(script)
-	for ci, local := range map[string]string{"race-db": "race-db", "zatca-sandbox": "zatca"} {
+	for ci, local := range map[string]string{"zatca-sandbox": "zatca"} {
 		if !strings.Contains(job(wf, ci), "continue-on-error: true") {
 			t.Errorf("CI job %s is no longer report-only; update deploy_v2.sh", ci)
 		}
