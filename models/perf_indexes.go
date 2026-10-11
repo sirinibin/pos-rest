@@ -24,6 +24,19 @@ var perfStoreIndexes = []struct {
 	{"customerdeposit", bson.D{{Key: "store_id", Value: 1}, {Key: "date", Value: -1}, {Key: "deleted", Value: 1}}},
 }
 
+func init() {
+	// the ZATCA chain lookups (NextZatcaChainLink) on every document type
+	// that shares the store's ICV/PIH chain
+	for _, coll := range zatcaChainCollections {
+		for _, keys := range zatcaChainIndexes {
+			perfStoreIndexes = append(perfStoreIndexes, struct {
+				Coll string
+				Keys bson.D
+			}{coll, keys})
+		}
+	}
+}
+
 // CreatePerfIndexes creates perfStoreIndexes in this store's database.
 // Creating an index that already exists with the same keys is a no-op.
 func (store *Store) CreatePerfIndexes() error {
