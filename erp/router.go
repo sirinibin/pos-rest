@@ -51,6 +51,8 @@ func Register(router *mux.Router) {
 	registerZatcaAdmin(s)
 	// platform admins: registered companies per country, public footer map (company_registry.go)
 	registerCompanyRegistry(s)
+	// platform admins: one-off ledger repair (ledger_repair.go)
+	registerLedgerRepair(s)
 
 	// Subscription billing by bank transfer (billing.go)
 	registerBilling(s)

@@ -24,6 +24,7 @@ func TestEndpoints_Unauthenticated(t *testing.T) {
 		{"DELETE", "/drafts/sales/x"}, {"POST", "/drafts/sales/x/finalize"},
 		{"GET", "/stores/x/starter-catalog"}, {"POST", "/stores/x/starter-catalog"},
 		{"GET", "/admin/zatca-reconnects"}, {"POST", "/stores/x/zatca/unmark"},
+		{"POST", "/admin/repairs/ledger"},
 		{"GET", "/admin/companies"}, {"POST", "/admin/companies"}, {"PUT", "/admin/companies/x"}, {"DELETE", "/admin/companies/x"},
 		{"GET", "/admin/card-terminal-providers"}, {"PUT", "/admin/card-terminal-providers/simulator"},
 		{"GET", "/card-terminals/providers"}, {"GET", "/card-terminals"}, {"POST", "/card-terminals"},

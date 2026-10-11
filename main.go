@@ -102,6 +102,10 @@ func seedDefaultUser() {
 
 // testing
 func main() {
+	// `<binary> repair-ledgers ...` runs the one-off ledger repair and exits
+	if repairLedgersMode() {
+		return
+	}
 	fmt.Println("Start POS Restful API")
 	db.Client("")
 	seedDefaultUser()

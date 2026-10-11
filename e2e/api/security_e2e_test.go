@@ -1344,9 +1344,27 @@ func TestSecurity_StoresSettings(t *testing.T) {
 		if r := Call(t, "GET", "/admin/zatca-reconnects", "", nil); r.Code != 401 {
 			t.Errorf("no token: %s", r)
 		}
+		// the one-off ledger repair is a platform-admin tool too
+		if r := Call(t, "POST", "/admin/repairs/ledger", s.Token, M{"storeId": s.ID}); r.Code != 403 {
+			t.Errorf("owner ledger repair: %s", r)
+		}
+		if r := Call(t, "POST", "/admin/repairs/ledger", "", M{"storeId": s.ID}); r.Code != 401 {
+			t.Errorf("ledger repair without a token: %s", r)
+		}
 		admin, db := secPlatformAdmin(t)
 		if db == nil {
 			return
+		}
+		// a dry run of a clean store: nothing to repair, nothing changed
+		lr := Must(t, Call(t, "POST", "/admin/repairs/ledger", admin, M{"storeId": s.ID}), 200, "ledger repair dry run")
+		if lr.Body["apply"] != false || len(Objs(lr.Body["stores"])) != 1 || S(Objs(lr.Body["stores"])[0]["storeId"]) != s.ID ||
+			Objs(lr.Body["stores"])[0]["deletedWithLedger"] == nil || len(Objs(Objs(lr.Body["stores"])[0]["deletedWithLedger"])) != 0 {
+			t.Errorf("ledger repair dry run: %s", lr)
+		}
+		for _, b := range []M{{"storeId": "x"}, {"storeId": primitive.NewObjectID().Hex()}, {"apply": "yes"}} {
+			if r := Call(t, "POST", "/admin/repairs/ledger", admin, b); r.Code != 400 {
+				t.Errorf("ledger repair %v: %s", b, r)
+			}
 		}
 		me := Must(t, Call(t, "GET", "/auth/me", admin, nil), 200, "admin me")
 		if Get(me.Body, "user.platformAdmin") != true {
