@@ -116,7 +116,9 @@ func main() {
 	go models.EnsureRFQSupplierIndexes()
 	go models.EnsureGooglePlacesCacheIndexes()
 	go models.EnsureProcurementMessageIndexes()
-	go models.EnsurePerfIndexesAllStores()
+	// every store gets every index a new store gets (incl. the perf and
+	// ZATCA chain indexes), not just stores created after an index was added
+	go models.EnsureAllStoreIndexesAllStores()
 	go models.DeduplicateRFQSuppliersAllStores()
 
 	httpPort := env.Getenv("API_PORT", "2000")

@@ -52,17 +52,21 @@ func (store *Store) CreatePerfIndexes() error {
 	return nil
 }
 
-// EnsurePerfIndexesAllStores adds perfStoreIndexes to every existing store
-// (CreateAllIndexes only runs when a store is created).
-func EnsurePerfIndexesAllStores() {
+// EnsureAllStoreIndexesAllStores gives every existing store every index a new
+// store gets (CreateAllIndexes, perfStoreIndexes included), so an index added
+// to the code reaches old stores on the next start too. Indexes a store
+// already has are left as they are (creating one again is a no-op), nothing
+// is dropped, and a store whose index differs (e.g. its own text index) only
+// logs that index and carries on with the rest.
+func EnsureAllStoreIndexesAllStores() {
 	stores, err := GetAllStores()
 	if err != nil {
-		log.Printf("perf indexes: listing stores: %v", err)
+		log.Printf("store indexes: listing stores: %v", err)
 		return
 	}
 	for i := range stores {
-		if err := stores[i].CreatePerfIndexes(); err != nil {
-			log.Printf("perf indexes: %v", err)
+		if err := stores[i].CreateAllIndexes(); err != nil {
+			log.Printf("store indexes: %v", err)
 		}
 	}
 }

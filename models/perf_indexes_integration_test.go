@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func indexKeySet(t *testing.T, col *mongo.Collection) map[string]bool {
@@ -117,5 +118,54 @@ func TestEnsureProcurementMessageIndexes_UnreadIndex(t *testing.T) {
 	want := bson.D{{Key: "store_id", Value: 1}, {Key: "direction", Value: 1}, {Key: "type", Value: 1}, {Key: "read", Value: 1}, {Key: "message_date", Value: 1}}
 	if !indexKeySet(t, procurementMessageCol())[keyJSON(want)] {
 		t.Fatalf("procurement_messages unread index %s missing", keyJSON(want))
+	}
+}
+
+// An existing store (made before today's indexes) gets every index a new
+// store gets when the server starts: running CreateAllIndexes again over a
+// store that already has some of them is a no-op for those, adds the rest,
+// and a clashing index of the store's own only costs that one index.
+func TestCreateAllIndexes_ExistingStoreGetsEveryIndex(t *testing.T) {
+	id := primitive.NewObjectID()
+	store := &Store{ID: id}
+	sdb := db.GetDB("store_" + id.Hex())
+	t.Cleanup(func() { _ = sdb.Drop(context.Background()) })
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	// an old store: data, one of the indexes already there, and an index of
+	// its own on the same keys as one of ours but under another name
+	if _, err := sdb.Collection("salesreturn").InsertOne(ctx, bson.M{"code": "R-1",
+		"zatca": bson.M{"reporting_passed": true, "icv": 3}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateCompoundIndex("order", zatcaChainIndexes[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sdb.Collection("vendor").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "code", Value: 1}}, Options: options.Index().SetName("legacy_vendor_code")}); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = store.CreateAllIndexes() // the clashing vendor index is reported, the rest still built
+	if err := store.CreatePerfIndexes(); err != nil {
+		t.Fatalf("second run must be a no-op: %v", err)
+	}
+	for _, ix := range perfStoreIndexes {
+		if !indexKeySet(t, sdb.Collection(ix.Coll))[keyJSON(ix.Keys)] {
+			t.Errorf("%s: index %s missing", ix.Coll, keyJSON(ix.Keys))
+		}
+	}
+	for _, want := range []struct {
+		coll string
+		keys bson.D
+	}{
+		{"order", bson.D{{Key: "customer_id", Value: 1}}},
+		{"product_history", bson.D{{Key: "product_id", Value: 1}}},
+		{"vendor", bson.D{{Key: "phone", Value: 1}}},
+	} {
+		if !indexKeySet(t, sdb.Collection(want.coll))[keyJSON(want.keys)] {
+			t.Errorf("%s: index %s missing", want.coll, keyJSON(want.keys))
+		}
 	}
 }
