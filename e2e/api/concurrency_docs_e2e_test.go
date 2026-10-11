@@ -274,10 +274,6 @@ func TestConcDocs_Numbering(t *testing.T) {
 		for si, f := range stores {
 			f := f
 			ru := &run{first: cdMaxNo(t, f.Store, tp.path, tp.series) + 1, before: cdTotal(t, f.Store, tp.path)}
-			if tp.name == "warehouses" {
-				// legacy numbers warehouses WH<n> by a counter of the store's warehouses
-				ru.first = cdTotal(t, f.Store, "warehouses") // the virtual main store is listed but not numbered
-			}
 			runs[si] = ru
 			roles := cdRoles[tp.module]
 			for i := 0; i < n; i++ {
@@ -289,6 +285,10 @@ func TestConcDocs_Numbering(t *testing.T) {
 						t.Errorf("%s store %s: %s creates: %s", tp.name, f.Country, role, r)
 						return
 					}
+					if tp.name == "warehouses" && S(r.Body["code"]) != S(body["code"]) {
+						// the code sent is required and kept (NEW-WH-CODE), so there is no number to hand out
+						t.Errorf("warehouse store %s: code %v sent, %v kept", f.Country, body["code"], r.Body["code"])
+					}
 					mu.Lock()
 					ru.codes = append(ru.codes, S(r.Body["code"]))
 					mu.Unlock()
@@ -299,6 +299,9 @@ func TestConcDocs_Numbering(t *testing.T) {
 		for si, f := range stores {
 			ru := runs[si]
 			dups, gapless, nums := cdNumbers(ru.codes, ru.first)
+			if tp.name == "warehouses" {
+				gapless = true // chosen codes, not a series: only uniqueness counts
+			}
 			if got := cdTotal(t, f.Store, tp.path); got != ru.before+len(ru.codes) {
 				t.Errorf("%s store %s: %d listed after %d creates, want %d", tp.name, f.Country, got, len(ru.codes), ru.before+len(ru.codes))
 			}
