@@ -97,6 +97,10 @@ func CreateCapital(w http.ResponseWriter, r *http.Request) {
 	if !utils.Decode(w, r, &capital) {
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStoreOf(capital.StoreID)
+	defer hold.Release()
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -153,7 +157,7 @@ func CreateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go capital.SetPostBalances()
+	hold.Go(func() { capital.SetPostBalances() })
 
 	response.Status = true
 	response.Result = capital
@@ -196,6 +200,10 @@ func UpdateCapital(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	capitalOld, err = store.FindCapitalByID(&capitalID, bson.M{})
 	if err != nil {
@@ -284,7 +292,9 @@ func UpdateCapital(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		capital.SetPostBalances()
 		capitalOld.SetPostBalances()
 	}()
@@ -435,6 +445,10 @@ func DeleteCapital(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	capital, err := store.FindCapitalByID(&capitalID, bson.M{})
 	if err != nil {

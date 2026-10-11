@@ -1459,21 +1459,25 @@ func (store *Store) SaveInvoiceBackgroundFile() error {
 }
 
 func (store *Store) Update() error {
-	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	updateOptions := options.Update()
-	updateOptions.SetUpsert(false)
-	defer cancel()
-
-	err := store.UpdateForeignLabelFields()
+	unset, err := store.prepareUpdate()
 	if err != nil {
 		return err
+	}
+	return store.writeUpdate(bson.M{"$set": store}, unset)
+}
+
+// prepareUpdate saves uploaded files and label fields before a store save
+// and returns the fields to unset.
+func (store *Store) prepareUpdate() (bson.M, error) {
+	err := store.UpdateForeignLabelFields()
+	if err != nil {
+		return nil, err
 	}
 
 	if !govalidator.IsNull(store.LogoContent) {
 		err := store.SaveLogoFile()
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	store.LogoContent = ""
@@ -1481,7 +1485,7 @@ func (store *Store) Update() error {
 	if !govalidator.IsNull(store.InvoiceBackgroundContent) {
 		err := store.SaveInvoiceBackgroundFile()
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	store.InvoiceBackgroundContent = ""
@@ -1491,7 +1495,6 @@ func (store *Store) Update() error {
 	removeInvoiceBackground := store.RemoveInvoiceBackground
 	store.RemoveInvoiceBackground = false
 
-	updateDoc := bson.M{"$set": store}
 	unset := bson.M{}
 	if removeLogo {
 		unset["logo"] = ""
@@ -1499,11 +1502,24 @@ func (store *Store) Update() error {
 	if removeInvoiceBackground {
 		unset["invoice_background"] = ""
 	}
+	return unset, nil
+}
+
+func (store *Store) writeUpdate(updateDoc bson.M, unset bson.M) error {
+	collection := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updateOptions := options.Update()
+	updateOptions.SetUpsert(false)
+	defer cancel()
+
 	if len(unset) > 0 {
 		updateDoc["$unset"] = unset
 	}
+	if len(updateDoc) == 0 {
+		return nil
+	}
 
-	_, err = collection.UpdateOne(
+	_, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": store.ID},
 		updateDoc,

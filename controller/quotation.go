@@ -131,6 +131,10 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	var quotation *models.Quotation
 	// Decode data
@@ -384,15 +388,15 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go quotation.SetPostBalances()
-	go quotation.CreateProductsHistory(true, nil)
+	hold.Go(func() { quotation.SetPostBalances() })
+	hold.Go(func() { quotation.CreateProductsHistory(true, nil) })
 	if quotation.StoreID != nil {
 		go models.MarkDashboardDirty(*quotation.StoreID, quotation.Date)
 	}
 
 	// If this quotation was created from an RFQ, update the RFQ with the back-link.
 	if quotation.RFQReceivedID != nil && !quotation.RFQReceivedID.IsZero() && quotation.StoreID != nil {
-		go models.AddQuotationLinkToRFQ(*quotation.StoreID, *quotation.RFQReceivedID, quotation.ID, quotation.Code)
+		hold.Go(func() { models.AddQuotationLinkToRFQ(*quotation.StoreID, *quotation.RFQReceivedID, quotation.ID, quotation.Code) })
 	}
 
 	response.Status = true
@@ -437,6 +441,10 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	quotationOld, err := store.FindQuotationByID(&quotationID, bson.M{})
 	if err != nil {
@@ -701,12 +709,16 @@ func UpdateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		quotation.ClearProductsHistory()
 		quotation.CreateProductsHistory(true, quotationOld)
 	}()
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		quotation.SetPostBalances()
 		quotationOld.SetPostBalances()
 	}()
@@ -821,6 +833,10 @@ func DeleteQuotation(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	quotation, err := store.FindQuotationByID(&quotationID, bson.M{})
 	if err != nil {

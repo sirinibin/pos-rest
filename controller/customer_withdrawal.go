@@ -108,6 +108,10 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 	if !utils.Decode(w, r, &customerwithdrawal) {
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStoreOf(customerwithdrawal.StoreID)
+	defer hold.Release()
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -269,7 +273,7 @@ func CreateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go customerwithdrawal.SetPostBalances()
+	hold.Go(func() { customerwithdrawal.SetPostBalances() })
 	store, _ := models.FindStoreByID(customerwithdrawal.StoreID, bson.M{})
 	store.NotifyUsers("payable_updated")
 
@@ -314,6 +318,10 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	customerwithdrawalOld, err = store.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
 	if err != nil {
@@ -494,7 +502,9 @@ func UpdateCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		customerwithdrawal.SetPostBalances()
 		customerwithdrawalOld.SetPostBalances()
 	}()
@@ -670,6 +680,10 @@ func DeleteCustomerWithdrawal(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	customerwithdrawal, err := store.FindCustomerWithdrawalByID(&customerwithdrawalID, bson.M{})
 	if err != nil {

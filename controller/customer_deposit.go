@@ -109,6 +109,11 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 	if !utils.Decode(w, r, &customerdeposit) {
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process); this
+	// also keeps the 30-second duplicate-receipt check and the insert together
+	hold := models.HoldStoreOf(customerdeposit.StoreID)
+	defer hold.Release()
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -270,7 +275,7 @@ func CreateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go customerdeposit.SetPostBalances()
+	hold.Go(func() { customerdeposit.SetPostBalances() })
 
 	store, _ = models.FindStoreByID(customerdeposit.StoreID, bson.M{})
 	store.NotifyUsers("receivable_updated")
@@ -319,6 +324,10 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	customerdepositOld, err = store.FindCustomerDepositByID(&customerdepositID, bson.M{})
 	if err != nil {
@@ -499,7 +508,9 @@ func UpdateCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		customerdeposit.SetPostBalances()
 		customerdepositOld.SetPostBalances()
 	}()
@@ -667,6 +678,10 @@ func DeleteCustomerDeposit(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	customerdeposit, err := store.FindCustomerDepositByID(&customerdepositID, bson.M{})
 	if err != nil {

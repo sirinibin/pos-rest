@@ -135,6 +135,10 @@ func CreateSalesPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	//Updating order.payments
 	order, _ := store.FindOrderByID(salespayment.OrderID, map[string]interface{}{})
@@ -202,6 +206,10 @@ func UpdateSalesPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	salespayment, err = store.FindSalesPaymentByID(&salespaymentID, bson.M{})
 	if err != nil {
@@ -384,6 +392,10 @@ func DeleteSalesPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	salesPayment, err := store.FindSalesPaymentByID(&salesPaymentID, bson.M{})
 	if err != nil {

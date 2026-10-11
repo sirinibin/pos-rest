@@ -164,10 +164,18 @@ func (s *stockTransfersBackend) Update(c *Ctx, storeHex, id string, prev, next M
 		}
 		if str(next["status"]) == "completed" {
 			// completion: the legacy transfer is created now (moves stock via legacy code)
+			// claim the pending record in the database first: of several
+			// completions (also from another API process) only one creates
+			// the transfer; the others get 409 or 404.
+			pcol := s.pending.col(storeHex)
+			if err := claimOrAnswer(pcol, id); err != nil {
+				return nil, err
+			}
 			body := cloneM(next)
 			delete(body, "id")
 			rec, err := s.legacy.Create(c, storeHex, body, WriteMeta{Action: "completed"})
 			if err != nil {
+				releaseClaim(pcol, id)
 				return nil, err
 			}
 			_ = s.pending.HardDelete(c, storeHex, id, meta)

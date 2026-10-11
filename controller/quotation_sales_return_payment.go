@@ -136,6 +136,10 @@ func CreateQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	//Updating quotationsalesReturn.payments
 	quotationsalesReturn, _ := store.FindQuotationSalesReturnByID(quotationsalesreturnpayment.QuotationSalesReturnID, map[string]interface{}{})
@@ -204,6 +208,10 @@ func UpdateQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	quotationsalesreturnpayment, err = store.FindQuotationSalesReturnPaymentByID(&quotationsalesreturnpaymentID, bson.M{})
 	if err != nil {
@@ -387,6 +395,10 @@ func DeleteQuotationSalesReturnPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	quotationsalesReturnPayment, err := store.FindQuotationSalesReturnPaymentByID(&quotationsalesReturnPaymentID, bson.M{})
 	if err != nil {

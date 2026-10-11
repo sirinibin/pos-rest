@@ -247,6 +247,10 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	order.CreatedBy = &userID
 	order.UpdatedBy = &userID
@@ -494,7 +498,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	// Pass order in: the handler reloads order below, and the goroutine must
 	// keep the saved copy instead of racing with that reassignment.
+	hold.Add()
 	go func(order *models.Order) {
+		defer hold.Release()
 		order.LinkQuotation()
 		order.LinkDeliveryNote()
 		order.CreateProductsSalesHistory()
@@ -502,8 +508,8 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		order.SetProductsSalesStats()
 		order.SetCustomerSalesStats()
 		order.DoAccounting()
-		go order.CreateProductsHistory(true, nil)
-		go order.SetPostBalances()
+		hold.Go(func(x *models.Order) func() { return func() { x.CreateProductsHistory(true, nil) } }(order))
+		hold.Go(func(x *models.Order) func() { return func() { x.SetPostBalances() } }(order))
 		if order.CustomerID != nil && !order.CustomerID.IsZero() {
 			customer, _ := store.FindCustomerByID(order.CustomerID, bson.M{})
 			if customer != nil {
@@ -515,7 +521,9 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// BI: update customer churn/CLV and product velocity/XYZ on order create
+		hold.Add()
 		go func() {
+			defer hold.Release()
 			if order.CustomerID != nil && !order.CustomerID.IsZero() {
 				models.UpdateCustomerBIOnOrderChange(order.StoreID, order.CustomerID)
 			}
@@ -581,6 +589,10 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	orderOld, err = store.FindOrderByID(&orderID, bson.M{})
 	if err != nil {
@@ -754,7 +766,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 
 	// Pass order in: the handler reloads order below, and the goroutine must
 	// keep the saved copy instead of racing with that reassignment.
+	hold.Add()
 	go func(order *models.Order) {
+		defer hold.Release()
 		order.LinkQuotation()
 		order.LinkDeliveryNote()
 		order.ClearProductsSalesHistory()
@@ -771,7 +785,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		order.ClearProductsHistory()
 		order.CreateProductsHistory(true, orderOld)
 
+		hold.Add()
 		go func() {
+			defer hold.Release()
 			order.SetPostBalances()
 			orderOld.SetPostBalances()
 		}()
@@ -797,7 +813,9 @@ func UpdateOrder(w http.ResponseWriter, r *http.Request) {
 			orderOld.SetProductsSalesStats()
 		}
 		// BI: update customer churn/CLV and product velocity/XYZ on order update
+		hold.Add()
 		go func() {
+			defer hold.Release()
 			if order.CustomerID != nil && !order.CustomerID.IsZero() {
 				models.UpdateCustomerBIOnOrderChange(order.StoreID, order.CustomerID)
 			}
@@ -1151,6 +1169,10 @@ func DeleteOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	order, err := store.FindOrderByID(&orderID, bson.M{})
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -251,6 +252,7 @@ func handleDraftPut(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		id := mux.Vars(r)["id"]
+		defer lockDraft(t, id)()
 		if _, err := loadDraft(s, t, id); err != nil {
 			return 0, nil, err
 		}
@@ -286,6 +288,7 @@ func handleDraftDelete(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		id := mux.Vars(r)["id"]
+		defer lockDraft(t, id)()
 		if _, err := loadDraft(s, t, id); err != nil {
 			return 0, nil, err
 		}
@@ -312,8 +315,17 @@ func handleDraftFinalize(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		id := mux.Vars(r)["id"]
+		defer lockDraft(t, id)()
 		d, err := loadDraft(s, t, id)
 		if err != nil {
+			return 0, nil, err
+		}
+		// claim the draft in the database before creating: of several
+		// finalizes (also from another API process) only one creates the
+		// document; the others get 409 (being finalized) or 404 (done).
+		oid, _ := oidOf(id)
+		dcol := storeDB(s).Collection(draftTypes[t].coll)
+		if err := claimOrAnswer(dcol, oid); err != nil {
 			return 0, nil, err
 		}
 		payload := cloneM(sub(d, "payload"))
@@ -321,13 +333,21 @@ func handleDraftFinalize(w http.ResponseWriter, r *http.Request) {
 		payload["storeId"] = s
 		rec, err := res.Backend.Create(c, s, payload, WriteMeta{Action: "created"})
 		if err != nil {
-			return 0, nil, err // draft stays untouched
+			releaseClaim(dcol, oid)
+			return 0, nil, err // draft stays as it was
 		}
 		dashboardTouched(res, s, str(rec["id"]))
-		oid, _ := oidOf(id)
 		ctx, cancel := dbctx()
 		defer cancel()
-		_, _ = storeDB(s).Collection(draftTypes[t].coll).DeleteOne(ctx, bson.M{"_id": oid})
+		_, _ = dcol.DeleteOne(ctx, bson.M{"_id": oid})
 		return http.StatusCreated, rec, nil
 	})
+}
+
+// lockDraft serialises the writes of one draft (in-process; the API runs as
+// one process). Finalize re-reads the draft under it, so of two finalizes of
+// the same draft only the first creates a document: the second finds the
+// draft gone (404).
+func lockDraft(t, id string) func() {
+	return models.LockKey("erp-draft|" + t + "|" + id)
 }

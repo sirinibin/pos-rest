@@ -364,7 +364,11 @@ func (b *nativeBackend) assignCode(x *mapCtx, storeHex, code, selfID string) (st
 		}
 		cur.Close(ctx)
 	}
-	return fmt.Sprintf("%s%0*d", base, width, max+1), nil
+	n, err := nextSerial(col.Database(), b.coll+"|"+base, max)
+	if err != nil {
+		return "", errInternal("db: " + err.Error())
+	}
+	return fmt.Sprintf("%s%0*d", base, width, n), nil
 }
 
 var _ Backend = (*nativeBackend)(nil)

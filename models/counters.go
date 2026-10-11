@@ -7,18 +7,15 @@ import (
 // Document numbers come from Redis counters (INCR is atomic). Two rules keep
 // them unique under concurrent creates:
 //
-//   - A counter is seeded with SETNX (seedCounter): when two creates find the
-//     counter missing at the same moment, the first seed wins and the second
-//     does not reset it after numbers were already handed out.
+//   - A missing counter is seeded (from the stored documents) with SETNX:
+//     when two creates find the counter missing at the same moment, the
+//     first seed wins and the second does not reset it after numbers were
+//     already handed out. Keys and values are unchanged, so another API
+//     build using the same Redis keeps counting on the same counters.
 //   - A create that fails after taking a number gives it back only while it
 //     is still the counter's latest value (counterClaims.release, one atomic
 //     Redis script). Once someone else took a later number the failed one is
 //     left as a gap: it is never handed out twice.
-
-// seedCounter sets a missing counter; an existing counter is left alone.
-func seedCounter(key string, value int64) error {
-	return db.RedisClient.SetNX(key, value, 0).Err()
-}
 
 // counterClaims are the counter values a document took while being numbered
 // (counter key → value). Kept on the document in an unexported field, so it

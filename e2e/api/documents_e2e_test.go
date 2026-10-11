@@ -1495,7 +1495,7 @@ func TestDocsRepairJobs(t *testing.T) {
 		docsRoutes(t, s, "repair-jobs", S(j2["id"]), true, "000000000000000000000000")
 	})
 
-	t.Run("delete: number reuse, restore unsupported", func(t *testing.T) {
+	t.Run("delete: no number reuse, restore unsupported", func(t *testing.T) {
 		Must(t, Call(t, "DELETE", "/repair-jobs/"+S(j2["id"]), s.Token, nil), 200, "delete")
 		r := Call(t, "POST", "/repair-jobs/"+S(j2["id"])+"/restore", s.Token, nil)
 		if r.Code != 409 || r.ErrCode() != "unsupported_legacy" {
@@ -1506,7 +1506,9 @@ func TestDocsRepairJobs(t *testing.T) {
 		for _, row := range List(t, s.Token, "repair-jobs", "storeId="+s.ID+"&includeDeleted=1") {
 			codes[S(row["code"])]++
 		}
-		KnownBug(t, "#12", "repair job numbers repeat after a delete (count+1)", codes[S(n["code"])] > 1)
+		if codes[S(n["code"])] > 1 {
+			t.Errorf("#12: repair job number %s repeats after a delete", S(n["code"]))
+		}
 		Must(t, Call(t, "DELETE", "/repair-jobs/000000000000000000000000", s.Token, nil), 404, "delete unknown")
 		Must(t, Call(t, "GET", "/repair-jobs/"+S(j1["id"]), other.Token, nil), 404, "foreign read")
 	})

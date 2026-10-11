@@ -104,6 +104,10 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 	if !utils.Decode(w, r, &deliverynote) {
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStoreOf(deliverynote.StoreID)
+	defer hold.Release()
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -175,12 +179,12 @@ func CreateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go deliverynote.CreateProductsDeliveryNoteHistory()
+	hold.Go(func() { deliverynote.CreateProductsDeliveryNoteHistory() })
 
-	go deliverynote.SetProductsDeliveryNoteStats()
-	go deliverynote.SetCustomerDeliveryNoteStats()
+	hold.Go(func() { deliverynote.SetProductsDeliveryNoteStats() })
+	hold.Go(func() { deliverynote.SetCustomerDeliveryNoteStats() })
 
-	go deliverynote.CreateProductsHistory(true, nil)
+	hold.Go(func() { deliverynote.CreateProductsHistory(true, nil) })
 
 	response.Status = true
 	response.Result = deliverynote
@@ -224,6 +228,10 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	deliverynoteOld, err := store.FindDeliveryNoteByID(&deliverynoteID, bson.M{})
 	if err != nil {
@@ -317,18 +325,20 @@ func UpdateDeliveryNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go deliverynote.ClearProductsDeliveryNoteHistory()
-	go deliverynote.CreateProductsDeliveryNoteHistory()
+	hold.Go(func(x *models.DeliveryNote) func() { return func() { x.ClearProductsDeliveryNoteHistory() } }(deliverynote))
+	hold.Go(func(x *models.DeliveryNote) func() { return func() { x.CreateProductsDeliveryNoteHistory() } }(deliverynote))
 
-	go deliverynote.SetProductsDeliveryNoteStats()
-	go deliverynoteOld.SetProductsDeliveryNoteStats()
+	hold.Go(func(x *models.DeliveryNote) func() { return func() { x.SetProductsDeliveryNoteStats() } }(deliverynote))
+	hold.Go(func() { deliverynoteOld.SetProductsDeliveryNoteStats() })
 
-	go deliverynote.SetCustomerDeliveryNoteStats()
-	go deliverynoteOld.SetCustomerDeliveryNoteStats()
+	hold.Go(func(x *models.DeliveryNote) func() { return func() { x.SetCustomerDeliveryNoteStats() } }(deliverynote))
+	hold.Go(func() { deliverynoteOld.SetCustomerDeliveryNoteStats() })
 
 	// Pass deliverynote in: the handler reloads deliverynote below, and the goroutine must
 	// keep the saved copy instead of racing with that reassignment.
+	hold.Add()
 	go func(deliverynote *models.DeliveryNote) {
+		defer hold.Release()
 		deliverynote.ClearProductsHistory()
 		deliverynote.CreateProductsHistory(true, deliverynoteOld)
 	}(deliverynote)

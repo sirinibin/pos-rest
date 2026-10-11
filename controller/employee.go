@@ -593,6 +593,10 @@ func CreateEmployeeSalaryPayment(w http.ResponseWriter, r *http.Request) {
 	if !utils.Decode(w, r, &payment) {
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStoreOf(payment.StoreID)
+	defer hold.Release()
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -725,6 +729,10 @@ func UpdateEmployeeSalaryPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	payment, err := store.FindEmployeeSalaryPaymentByID(&id, bson.M{})
 	if err != nil {
@@ -858,6 +866,10 @@ func DeleteEmployeeSalaryPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	payment, err := store.FindEmployeeSalaryPaymentByID(&id, bson.M{})
 	if err != nil {

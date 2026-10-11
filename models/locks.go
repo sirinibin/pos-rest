@@ -130,6 +130,25 @@ func HoldStore(storeID primitive.ObjectID) *StoreHold {
 	return &StoreHold{n: 1, unlock: storeLocks.Lock(storeID.Hex())}
 }
 
+// HoldStoreOf is HoldStore for a store id that may be missing (nil hold).
+func HoldStoreOf(storeID *primitive.ObjectID) *StoreHold {
+	if storeID == nil || storeID.IsZero() {
+		return nil
+	}
+	return HoldStore(*storeID)
+}
+
+// Add adds a share for a goroutine the caller starts itself; that goroutine
+// must defer Release.
+func (h *StoreHold) Add() {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.n++
+	h.mu.Unlock()
+}
+
 // Go runs fn in a new goroutine that shares the hold: the store stays locked
 // until fn returns (or panics).
 func (h *StoreHold) Go(fn func()) {

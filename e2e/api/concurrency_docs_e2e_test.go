@@ -20,18 +20,17 @@ import (
 // editing the same document, returns and payments that together exceed the
 // parent, completing a transfer or finalizing a draft twice, stock under
 // product edits and movements, and store settings edited by two admins.
-// Helpers use the cd prefix (concRace is shared with other concurrency
+// Helpers use the cd prefix (concFail is shared with other concurrency
 // tests).
 
-// concRace records a race-only bug: the check holds when the same steps run
-// one after another, so a run where the race did not happen is only logged.
-func concRace(t testing.TB, id, what string, observed bool) {
+// concFail fails the test when a race (named by its bug id, fixed) shows up
+// again: requests that arrive together must give the same result as the same
+// requests one after another.
+func concFail(t testing.TB, id, what string, observed bool) {
 	t.Helper()
 	if observed {
-		KnownBug(t, id, what, true)
-		return
+		t.Errorf("%s: %s", id, what)
 	}
-	t.Logf("race %s did not reproduce this run", id)
 }
 
 // cdRun fires every call at the same moment (start barrier) and waits.
@@ -308,10 +307,10 @@ func TestConcDocs_Numbering(t *testing.T) {
 			}
 			id := "NEW-CONC-NUM-" + strings.ToUpper(strings.ReplaceAll(tp.name, " ", "-"))
 			if len(dups) > 0 || !gapless {
-				concRace(t, id, fmt.Sprintf("%d concurrent POST /%s (store %s) got numbers %v, want %d..%d once each (duplicate codes %v)",
+				concFail(t, id, fmt.Sprintf("%d concurrent POST /%s (store %s) got numbers %v, want %d..%d once each (duplicate codes %v)",
 					n, tp.path, f.Country, nums, ru.first, ru.first+n-1, dups), true)
 			} else {
-				concRace(t, id, "", false)
+				concFail(t, id, "", false)
 			}
 		}
 	}
@@ -419,12 +418,12 @@ func TestConcDocs_FirstDocsNewParty(t *testing.T) {
 			dupNumbers = append(dupNumbers, S(a["code"]))
 		}
 	}
-	concRace(t, "NEW-CONC-ACCT-DUP", fmt.Sprintf("first documents of a new customer/vendor at the same moment create more than one ledger account for it, "+
+	concFail(t, "NEW-CONC-ACCT-DUP", fmt.Sprintf("first documents of a new customer/vendor at the same moment create more than one ledger account for it, "+
 		"or duplicate system accounts %v (models/account.go CreateAccountIfNotExists: find, then insert): %s", dupNames, report), dupAcct || len(dupNames) > 0)
-	concRace(t, "NEW-CONC-ACCT-NUMBER", fmt.Sprintf("ledger accounts created at the same moment share account numbers %v (number = 1000 + count)", dupNumbers), len(dupNumbers) > 0)
+	concFail(t, "NEW-CONC-ACCT-NUMBER", fmt.Sprintf("ledger accounts created at the same moment share account numbers %v (number = 1000 + count)", dupNumbers), len(dupNumbers) > 0)
 	if !dupAcct {
-		concRace(t, "NEW-sales-ledger-race", "new customers' balances after their first sales at the same moment: "+strings.Join(custBad, "; "), len(custBad) > 0)
-		concRace(t, "NEW-CONC-VENDOR-LEDGER", "new vendors' balances after their first purchases at the same moment: "+strings.Join(vendBad, "; "), len(vendBad) > 0)
+		concFail(t, "NEW-sales-ledger-race", "new customers' balances after their first sales at the same moment: "+strings.Join(custBad, "; "), len(custBad) > 0)
+		concFail(t, "NEW-CONC-VENDOR-LEDGER", "new vendors' balances after their first purchases at the same moment: "+strings.Join(vendBad, "; "), len(vendBad) > 0)
 	}
 }
 
@@ -502,7 +501,7 @@ func TestConcDocs_SameDocPatch(t *testing.T) {
 	if t.Failed() {
 		t.FailNow()
 	}
-	concRace(t, "NEW-CONC-IFMATCH", fmt.Sprintf("two PATCHes with the same If-Match version both answered 200 (%s): the version check is read-then-write, "+
+	concFail(t, "NEW-CONC-IFMATCH", fmt.Sprintf("two PATCHes with the same If-Match version both answered 200 (%s): the version check is read-then-write, "+
 		"not part of the update (erp/engine.go handleUpdate), so one edit silently overwrites the other", strings.Join(both, ", ")), len(both) > 0)
 
 	report := cdSettle(func() string {
@@ -536,7 +535,7 @@ func TestConcDocs_SameDocPatch(t *testing.T) {
 		eq("sale qtyReturned", F(sl, "items.0.qtyReturned"), q)
 		return strings.Join(bad, "; ")
 	})
-	concRace(t, "NEW-CONC-PATCH-LEDGER", "after two users edited the same documents at the same moment the books do not match the final documents: "+report, report != "")
+	concFail(t, "NEW-CONC-PATCH-LEDGER", "after two users edited the same documents at the same moment the books do not match the final documents: "+report, report != "")
 }
 
 // ---------- 4. returns that together exceed the sale / purchase ----------
@@ -584,7 +583,7 @@ func TestConcDocs_OverReturn(t *testing.T) {
 		})
 	}
 	cdRun(calls)
-	concRace(t, "NEW-CONC-SR-OVERRETURN", fmt.Sprintf("sales returns at the same moment accepted %v of a sale of 5: each checks the sale's returned quantity before any of them saves it", srQty), srQty > 5)
+	concFail(t, "NEW-CONC-SR-OVERRETURN", fmt.Sprintf("sales returns at the same moment accepted %v of a sale of 5: each checks the sale's returned quantity before any of them saves it", srQty), srQty > 5)
 	KnownBug(t, "NEW-PR-OVERRETURN", fmt.Sprintf("purchase returns accepted %v of a purchase of 5 (also one after another)", prQty), prQty > 5)
 	parent := func(path, id, pid string, stock float64, qty float64) string {
 		return cdSettle(func() string {
@@ -596,9 +595,9 @@ func TestConcDocs_OverReturn(t *testing.T) {
 		})
 	}
 	msg := parent("sales", sale, a, 95+srQty, srQty)
-	concRace(t, "NEW-CONC-SR-PARENT", "sales returns of one sale at the same moment: "+msg, msg != "")
+	concFail(t, "NEW-CONC-SR-PARENT", "sales returns of one sale at the same moment: "+msg, msg != "")
 	msg = parent("purchases", pur, b, 5-prQty, prQty)
-	concRace(t, "NEW-CONC-PR-PARENT", "purchase returns of one purchase at the same moment: "+msg, msg != "")
+	concFail(t, "NEW-CONC-PR-PARENT", "purchase returns of one purchase at the same moment: "+msg, msg != "")
 }
 
 // ---------- 5. purchase payments that together overpay ----------
@@ -641,7 +640,7 @@ func TestConcDocs_PurchaseOverpay(t *testing.T) {
 			}
 			return ""
 		})
-		concRace(t, "NEW-CONC-PUR-OVERPAY", fmt.Sprintf("four identical payment edits of one purchase at the same moment (step %d): %s", step+1, msg), msg != "")
+		concFail(t, "NEW-CONC-PUR-OVERPAY", fmt.Sprintf("four identical payment edits of one purchase at the same moment (step %d): %s", step+1, msg), msg != "")
 	}
 }
 
@@ -690,7 +689,7 @@ func TestConcDocs_TransferComplete(t *testing.T) {
 	_, msOK := salesStockSettles(t, cs.Store, pid, cs.MS, 4)
 	_, whOK := salesStockSettles(t, cs.Store, pid, wh, 6)
 	ms, w := salesStockAt(t, cs.Store, pid, cs.MS), salesStockAt(t, cs.Store, pid, wh)
-	concRace(t, "NEW-CONC-TRANSFER-COMPLETE", fmt.Sprintf("three completions of one pending transfer at the same moment: %v succeeded per round, %d completed transfers recorded for 2, "+
+	concFail(t, "NEW-CONC-TRANSFER-COMPLETE", fmt.Sprintf("three completions of one pending transfer at the same moment: %v succeeded per round, %d completed transfers recorded for 2, "+
 		"stock main %v / branch %v (want 4 / 6): erp/res_rest.go stockTransfersBackend.Update creates the legacy transfer before it removes the pending one", wins, done, ms, w),
 		wins[0] > 1 || wins[1] > 1 || done != 2 || !msOK || !whOK)
 	if wins[0] == 0 || wins[1] == 0 {
@@ -751,9 +750,9 @@ func TestConcDocs_DraftDoubleFinalize(t *testing.T) {
 		}
 	}
 	got, stockOK := salesStockSettles(t, cs.Store, pid, cs.MS, 50-2*float64(created["sales"]))
-	concRace(t, "NEW-CONC-STOCK-MOVES", fmt.Sprintf("%d sales of one product created at the same moment (finalized drafts): stock %v, want %v",
+	concFail(t, "NEW-CONC-STOCK-MOVES", fmt.Sprintf("%d sales of one product created at the same moment (finalized drafts): stock %v, want %v",
 		created["sales"], got, 50-2*float64(created["sales"])), !stockOK)
-	concRace(t, "NEW-CONC-DRAFT-FINALIZE", "one draft finalized by several users at the same moment creates several documents ("+strings.Join(extra, "; ")+
+	concFail(t, "NEW-CONC-DRAFT-FINALIZE", "one draft finalized by several users at the same moment creates several documents ("+strings.Join(extra, "; ")+
 		"): erp/drafts.go handleDraftFinalize loads the draft, creates the document and only then deletes the draft", len(extra) > 0)
 }
 
@@ -828,9 +827,9 @@ func TestConcDocs_ProductStock(t *testing.T) {
 		})
 	}
 	m1, m2 := check(p1), check(p2)
-	concRace(t, "NEW-CONC-STOCK-MOVES", "sales and purchases of one product at the same moment leave its stock wrong (product saved whole with $set after a "+
+	concFail(t, "NEW-CONC-STOCK-MOVES", "sales and purchases of one product at the same moment leave its stock wrong (product saved whole with $set after a "+
 		"stale read, models/product.go Product.Update): "+m2, m2 != "")
-	concRace(t, "NEW-CONC-PRODUCT-PATCH-STOCK", "product edits (name, price) at the same moment as its sales and purchases leave its stock wrong: "+m1, m1 != "" && m2 == "")
+	concFail(t, "NEW-CONC-PRODUCT-PATCH-STOCK", "product edits (name, price) at the same moment as its sales and purchases leave its stock wrong: "+m1, m1 != "" && m2 == "")
 
 	// two absolute stock edits at the same moment
 	p3 := S(cs.Product(t, 10, 20, 100)["id"])
@@ -846,7 +845,7 @@ func TestConcDocs_ProductStock(t *testing.T) {
 	cdRun(calls)
 	time.Sleep(2 * time.Second)
 	got := salesStockAt(t, cs.Store, p3, cs.MS)
-	concRace(t, "NEW-CONC-STOCK-ABS", fmt.Sprintf("two users set a product's stock to 40 and 70 at the same moment: stock %v (each edit is turned into an adjustment "+
+	concFail(t, "NEW-CONC-STOCK-ABS", fmt.Sprintf("two users set a product's stock to 40 and 70 at the same moment: stock %v (each edit is turned into an adjustment "+
 		"from the stock it read, erp/res_master.go productToLegacy)", got), got != 40 && got != 70)
 
 	// an absolute edit while the product is sold and bought
@@ -881,7 +880,7 @@ func TestConcDocs_ProductStock(t *testing.T) {
 			ok = ok || got == float64(30-s+2*p)
 		}
 	}
-	concRace(t, "NEW-CONC-STOCK-ABS", fmt.Sprintf("stock set to 30 while 4 × 1 were sold and 3 × 2 bought at the same moment: stock %v, want 30 plus some of those movements", got), !ok)
+	concFail(t, "NEW-CONC-STOCK-ABS", fmt.Sprintf("stock set to 30 while 4 × 1 were sold and 3 × 2 bought at the same moment: stock %v, want 30 plus some of those movements", got), !ok)
 }
 
 // ---------- 10. two admins edit store settings ----------
@@ -912,5 +911,5 @@ func TestConcDocs_StorePatch(t *testing.T) {
 			lost = append(lost, fmt.Sprintf("round %d: branch %q email %q", round, st["branchEn"], st["email"]))
 		}
 	}
-	concRace(t, "NEW-CONC-STORE-PATCH", "two admins editing different store settings at the same moment lose one change (the store is saved whole): "+strings.Join(lost, "; "), len(lost) > 0)
+	concFail(t, "NEW-CONC-STORE-PATCH", "two admins editing different store settings at the same moment lose one change (the store is saved whole): "+strings.Join(lost, "; "), len(lost) > 0)
 }
