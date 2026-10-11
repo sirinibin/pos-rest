@@ -6,13 +6,22 @@
 - Wait for it to listen on port 2000 before testing.
 
 ## Deploy rules (backend/deploy.sh)
-deploy.sh enforces three gates before every deploy — all three must pass:
+deploy.sh is the deploy gate:
 
 1. **No uncommitted changes** — `git status --porcelain` must be empty.
    Commit or stash everything before running deploy.sh.
 
-2. **All tests pass** — `go test ./... -count=1` must exit 0.
+2. **Unit, functional and e2e suites pass** — `ci/run_all_tests.sh` runs, locally on a copy of HEAD
+   and stopping at the first failure: unit + API tests, the ZATCA signing-key tests, integration
+   (MongoDB + Redis + versitygw S3), API e2e (incl. the robustness sweep and restart test), and the
+   frontend's full-stack Playwright suite on a laptop screen. `FULL=1` adds what GitHub Actions
+   always runs on top: the race detector, every screen size and the ZATCA sandbox tests.
    Skipped: TestResolveDateKeyword_TimezoneOffset_SA (flaky near midnight UTC).
+   Needs Docker running (throwaway MongoDB/Redis/S3 on ports 37017/36379/38333, API on 32000, so a
+   dev stack on 27017/6379/2000 is untouched), go, node 18+, java 17+, python3. reactjs-pos comes
+   from GitHub at master (`FRONTEND_REF` to change) or `FRONTEND_DIR=<checkout>`. Settings are
+   in `ci/lib.sh` (keep it identical to reactjs-pos's `ci/lib.sh`). Change `ci/run_all_tests.sh`
+   together with `tests.yml`.
 
 3. **No build output** — `go build` must produce zero output.
    Any output from go build (warnings, notes) causes an abort.
@@ -54,7 +63,8 @@ Validation errors answer 400: a handler that writes no status calls `ensureStatu
 
 ## Usage
 ```
-backend/deploy.sh   # deploys to both test and production
+backend/deploy.sh              # every suite, one build, test API (health-checked), then production
+backend/deploy.sh --test-only  # same, stop after the test API
 ```
 
 ## Low-downtime restarts

@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
-# Deploy the Go backend to both test and production after all tests pass.
+# Deploy the Go backend to both test and production after the unit,
+# functional and e2e suites pass (ci/run_all_tests.sh; FULL=1 also runs the
+# race detector, every screen size and the ZATCA sandbox, as Actions does).
+#
+# One script for both servers, like .github/workflows/deploy.yml: test once,
+# build once, deploy that binary to the test API, health-check it (rolled back
+# if unhealthy), then the same binary to production.
 #
 # Usage:
-#   ./deploy.sh           — deploy test + production
+#   ./deploy.sh              — test API, then production
+#   ./deploy.sh --test-only  — stop after the test API
+#   FULL=1 ./deploy.sh       — with the full GitHub Actions test set
+#
+# Needs Docker running (throwaway MongoDB, Redis and S3 for the tests); see
+# ci/run_all_tests.sh for the other tools and settings.
 set -euo pipefail
 
 SSH_KEY="$HOME/Downloads/startuptech-v2.pem"
@@ -13,6 +24,14 @@ HEALTH_BINARY="pos-health-monitor"
 HEALTH_DEST="/home/ubuntu/go/src/github.com/sirinibin/pos-rest"
 
 cd "$(dirname "$0")"
+
+TEST_ONLY=false
+for arg in "$@"; do
+    case "$arg" in
+        --test-only) TEST_ONLY=true ;;
+        *) echo "Unknown option: $arg"; echo "Usage: $0 [--test-only]"; exit 1 ;;
+    esac
+done
 
 # ─── guard: uncommitted changes ───────────────────────────────────────────────
 
@@ -27,10 +46,12 @@ fi
 echo "==> Working tree is clean."
 
 # ─── 1. Tests ─────────────────────────────────────────────────────────────────
+# Unit + API, ZATCA signing, integration with MongoDB/Redis/S3, API e2e and
+# the frontend's UI e2e, on this machine (see ci/run_all_tests.sh). Nothing
+# deploys unless they pass.
 echo ""
-echo "==> Running tests..."
-# Skip TestResolveDateKeyword_TimezoneOffset_SA — flaky near midnight UTC (SA/UTC day-boundary edge case)
-go test ./... -count=1 -skip "TestResolveDateKeyword_TimezoneOffset_SA"
+echo "==> Running the test suites (ci/run_all_tests.sh)..."
+bash ci/run_all_tests.sh
 echo "==> All tests passed."
 
 # ─── 2. Build (main API + health monitor) ────────────────────────────────────
@@ -108,7 +129,14 @@ deploy_to() {
 }
 
 # ─── 3. Deploy main API ──────────────────────────────────────────────────────
+# Production only after the test API is healthy on this binary: deploy_to
+# fails (and remote_restart.sh rolls the test API back) otherwise.
 deploy_to "start-api-test" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest-test" "TEST" 2002
+if [ "$TEST_ONLY" = true ]; then
+    echo ""
+    echo "==> Test API deployed (--test-only: production and the health monitor left as they are)."
+    exit 0
+fi
 deploy_to "start-api" "/home/ubuntu/go/src/github.com/sirinibin/pos-rest" "PRODUCTION" 2000
 
 # ─── 4. Deploy health monitor (single shared instance) ────────────────────────
