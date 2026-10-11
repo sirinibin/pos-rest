@@ -55,15 +55,7 @@ func StoreAccessMiddleware(next http.Handler) http.Handler {
 
 // userMayUseStore is the access rule; see StoreAccessMiddleware.
 func userMayUseStore(role string, storeIDs []*primitive.ObjectID, id primitive.ObjectID) bool {
-	if role == "Admin" || len(storeIDs) == 0 {
-		return true
-	}
-	for _, s := range storeIDs {
-		if s != nil && *s == id {
-			return true
-		}
-	}
-	return false
+	return models.UserMayUseStore(role, storeIDs, id)
 }
 
 // requestedStoreIDs lists every valid, non-zero store id the request names.

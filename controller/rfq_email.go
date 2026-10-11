@@ -63,6 +63,9 @@ func rfqEmailSave(storeObjID primitive.ObjectID, fields bson.M) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": fields})
+	if err == nil {
+		models.NotifyStoreUpdated(storeObjID)
+	}
 	return err
 }
 
@@ -1161,6 +1164,32 @@ func rfqEmailAccountUpdate(storeObjID, accountID primitive.ObjectID, fields bson
 			Filters: []interface{}{bson.M{"elem._id": accountID}},
 		}),
 	)
+	if err == nil {
+		models.NotifyStoreUpdated(storeObjID)
+	}
+	return err
+}
+
+// rfqEmailAccountTouch is rfqEmailAccountUpdate without the store_updated
+// event, for the mail poller's own bookkeeping.
+func rfqEmailAccountTouch(storeObjID, accountID primitive.ObjectID, fields bson.M) error {
+	// store-push: silent. Background bookkeeping (poll time, refreshed OAuth
+	// tokens) that no screen shows; announcing it would make every open
+	// browser re-read the store after each mail poll.
+	col := db.Client("").Database(db.GetPosDB()).Collection("store")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	setDoc := bson.M{}
+	for k, v := range fields {
+		setDoc["settings.rfq_email_accounts.$[elem]."+k] = v
+	}
+	_, err := col.UpdateOne(ctx,
+		bson.M{"_id": storeObjID},
+		bson.M{"$set": setDoc},
+		options.Update().SetArrayFilters(options.ArrayFilters{
+			Filters: []interface{}{bson.M{"elem._id": accountID}},
+		}),
+	)
 	return err
 }
 
@@ -1519,6 +1548,7 @@ func DisconnectRFQEmailAccount(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "failed to remove account"})
 		return
 	}
+	models.NotifyStoreUpdated(storeObjID)
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 

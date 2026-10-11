@@ -1482,6 +1482,7 @@ func (store *Store) Update() error {
 	if err != nil {
 		return err
 	}
+	NotifyStoreUpdated(store.ID)
 	return nil
 }
 
@@ -1516,6 +1517,7 @@ func (store *Store) DeleteStore(tokenClaims TokenClaims) (err error) {
 	if err != nil {
 		return err
 	}
+	NotifyStoreUpdated(store.ID)
 
 	return nil
 }
@@ -1537,6 +1539,9 @@ func (store *Store) RestoreStore() error {
 			"permanent_deletion_after_days":    "",
 		}},
 	)
+	if err == nil {
+		NotifyStoreUpdated(store.ID)
+	}
 	return err
 }
 
@@ -1555,6 +1560,9 @@ func (store *Store) MarkForPermanentDeletion(days int) error {
 			"permanent_deletion_after_days":    days,
 		}},
 	)
+	if err == nil {
+		NotifyStoreUpdated(store.ID)
+	}
 	return err
 }
 
@@ -1572,6 +1580,9 @@ func (store *Store) UnmarkForPermanentDeletion() error {
 			"permanent_deletion_after_days":    "",
 		}},
 	)
+	if err == nil {
+		NotifyStoreUpdated(store.ID)
+	}
 	return err
 }
 
@@ -1588,6 +1599,9 @@ func (store *Store) ClearZatcaReconnectRequired() error {
 		bson.M{"_id": store.ID},
 		bson.M{"$set": bson.M{"zatca.zatca_reconnect_required": false}},
 	)
+	if err == nil {
+		NotifyStoreUpdated(store.ID)
+	}
 	return err
 }
 
@@ -1664,6 +1678,9 @@ func (store *Store) PermanentlyDelete() error {
 	// Hard-delete the store document from the main DB
 	storeCollection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	_, err = storeCollection.DeleteOne(ctx, bson.M{"_id": store.ID})
+	if err == nil {
+		NotifyStoreUpdated(store.ID)
+	}
 	return err
 }
 

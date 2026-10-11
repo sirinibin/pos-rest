@@ -699,7 +699,9 @@ func FixDirectS3URLsHandler(w http.ResponseWriter, r *http.Request) {
 					update["invoice_background"] = nu
 				}
 				if len(update) > 0 {
-					posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": doc.ID}, bson.M{"$set": update})
+					if _, err := posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": doc.ID}, bson.M{"$set": update}); err == nil {
+						models.NotifyStoreUpdated(doc.ID)
+					}
 					fixed++
 				}
 			}

@@ -118,6 +118,9 @@ func saveStoreWhatsAppSettings(storeID primitive.ObjectID, evoURL, instanceName,
 			"settings.evolution_api_key":       token,
 		}},
 	)
+	if err == nil {
+		models.NotifyStoreUpdated(storeID)
+	}
 	return err
 }
 
@@ -133,6 +136,9 @@ func clearStoreWhatsAppSettings(storeID primitive.ObjectID) error {
 			"settings.evolution_api_key":       "",
 		}},
 	)
+	if err == nil {
+		models.NotifyStoreUpdated(storeID)
+	}
 	return err
 }
 

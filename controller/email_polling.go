@@ -345,7 +345,7 @@ func ensureZohoToken(storeID primitive.ObjectID, acct models.RFQEmailAccount) (s
 		return acct.ZohoAccessToken, fmt.Errorf("refresh returned empty token")
 	}
 
-	rfqEmailAccountUpdate(storeID, acct.ID, bson.M{"zoho_access_token": tok.AccessToken}) //nolint:errcheck
+	rfqEmailAccountTouch(storeID, acct.ID, bson.M{"zoho_access_token": tok.AccessToken}) //nolint:errcheck
 	return tok.AccessToken, nil
 }
 
@@ -1135,7 +1135,7 @@ func ensureGmailToken(storeID primitive.ObjectID, acct models.RFQEmailAccount) (
 	if tok.AccessToken == "" {
 		return acct.GmailAccessToken, nil
 	}
-	rfqEmailAccountUpdate(storeID, acct.ID, bson.M{"gmail_access_token": tok.AccessToken}) //nolint:errcheck
+	rfqEmailAccountTouch(storeID, acct.ID, bson.M{"gmail_access_token": tok.AccessToken}) //nolint:errcheck
 	return tok.AccessToken, nil
 }
 
@@ -1425,7 +1425,7 @@ func ensureOutlookToken(storeID primitive.ObjectID, acct models.RFQEmailAccount)
 	if tok.AccessToken == "" {
 		return acct.OutlookAccessToken, nil
 	}
-	rfqEmailAccountUpdate(storeID, acct.ID, bson.M{"outlook_access_token": tok.AccessToken}) //nolint:errcheck
+	rfqEmailAccountTouch(storeID, acct.ID, bson.M{"outlook_access_token": tok.AccessToken}) //nolint:errcheck
 	return tok.AccessToken, nil
 }
 
@@ -1878,7 +1878,7 @@ func processPolledEmail(storeID primitive.ObjectID, settings models.StoreSetting
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func updateAccountLastPolled(storeID, accountID primitive.ObjectID, t time.Time) {
-	rfqEmailAccountUpdate(storeID, accountID, bson.M{"last_polled_at": t}) //nolint:errcheck
+	rfqEmailAccountTouch(storeID, accountID, bson.M{"last_polled_at": t}) //nolint:errcheck
 }
 
 // testIMAPConnection dials imapHost:993 with TLS and authenticates via XOAUTH2.

@@ -195,6 +195,12 @@ func (store *Store) NotifyUsers(event string) error {
 // the given store. It uses the in-memory Clients map as the source of truth for live connections
 // (more reliable than iterating user.Devices from the DB, which can be stale).
 func emitToStoreUsers(storeID primitive.ObjectID, event string) {
+	emitToStoreUsersData(storeID, event, nil)
+}
+
+// emitToStoreUsersData is emitToStoreUsers with a payload. A user belongs to the store
+// when UserMayUseStore says so (the same rule the API's store access check applies).
+func emitToStoreUsersData(storeID primitive.ObjectID, event string, data interface{}) {
 	// Snapshot connected userIDs under the mutex so we don't hold it during DB calls.
 	ClientsMu.Lock()
 	userIDs := make([]string, 0, len(Clients))
@@ -212,17 +218,7 @@ func emitToStoreUsers(storeID primitive.ObjectID, event string) {
 		if err != nil {
 			continue
 		}
-		// Check if user belongs to this store or is an admin.
-		belongs := user.Admin || user.Role == "Admin"
-		if !belongs {
-			for _, sid := range user.StoreIDs {
-				if sid != nil && *sid == storeID {
-					belongs = true
-					break
-				}
-			}
-		}
-		if !belongs {
+		if !user.Admin && !UserMayUseStore(user.Role, user.StoreIDs, storeID) {
 			continue
 		}
 		// Emit to all open device connections for this user.
@@ -236,9 +232,23 @@ func emitToStoreUsers(storeID primitive.ObjectID, event string) {
 		}
 		ClientsMu.Unlock()
 		for _, did := range deviceIDs {
-			Emit(userIDStr, did, event, nil)
+			Emit(userIDStr, did, event, data)
 		}
 	}
+}
+
+// UserMayUseStore is the store access rule: Admins, users whose store_ids is empty,
+// and users with the store in their store_ids may use it.
+func UserMayUseStore(role string, storeIDs []*primitive.ObjectID, id primitive.ObjectID) bool {
+	if role == "Admin" || len(storeIDs) == 0 {
+		return true
+	}
+	for _, s := range storeIDs {
+		if s != nil && *s == id {
+			return true
+		}
+	}
+	return false
 }
 
 // NotifyStoreUsersWAUnread broadcasts "wa_unread_changed" to all connected users of a store.

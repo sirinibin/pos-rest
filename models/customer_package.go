@@ -255,11 +255,26 @@ func propagatePackageTabsToStores(p *CustomerPackage) error {
 	storeCollection := db.Client("").Database(db.GetPosDB()).Collection("store")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := storeCollection.UpdateMany(ctx,
-		bson.M{"customer_package_id": p.ID},
+	filter := bson.M{"customer_package_id": p.ID}
+	ids, err := storeCollection.Distinct(ctx, "_id", filter)
+	if err != nil {
+		return err
+	}
+	_, err = storeCollection.UpdateMany(ctx,
+		filter,
 		bson.M{"$set": bson.M{"customer_package_tab_ids": p.TabIDs, "customer_package_name": p.Name}},
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	storeIDs := make([]primitive.ObjectID, 0, len(ids))
+	for _, id := range ids {
+		if oid, ok := id.(primitive.ObjectID); ok {
+			storeIDs = append(storeIDs, oid)
+		}
+	}
+	NotifyStoresUpdated(storeIDs)
+	return nil
 }
 
 func (p *CustomerPackage) Delete(tokenClaims TokenClaims) error {

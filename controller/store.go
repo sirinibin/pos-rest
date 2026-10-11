@@ -969,7 +969,7 @@ func UpdateStorePrintSettings(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = collection.UpdateOne(
+	res, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": storeID},
 		bson.M{"$set": bson.M{"settings.print_settings": payload.PrintSettings}},
@@ -980,6 +980,9 @@ func UpdateStorePrintSettings(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+	if res.ModifiedCount > 0 {
+		models.NotifyStoreUpdated(storeID)
 	}
 
 	response.Status = true
@@ -1023,7 +1026,7 @@ func UpdateStoreEmailSignatures(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = collection.UpdateOne(
+	res, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": storeID},
 		bson.M{"$set": bson.M{"settings.email_signatures": payload.EmailSignatures}},
@@ -1034,6 +1037,9 @@ func UpdateStoreEmailSignatures(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+	if res.ModifiedCount > 0 {
+		models.NotifyStoreUpdated(storeID)
 	}
 
 	response.Status = true
@@ -1077,7 +1083,7 @@ func UpdateStoreSidebarConfig(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = collection.UpdateOne(
+	res, err := collection.UpdateOne(
 		ctx,
 		bson.M{"_id": storeID},
 		bson.M{"$set": bson.M{"settings.sidebar_config": payload.SidebarConfig}},
@@ -1088,6 +1094,9 @@ func UpdateStoreSidebarConfig(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+	if res.ModifiedCount > 0 {
+		models.NotifyStoreUpdated(storeID)
 	}
 
 	response.Status = true

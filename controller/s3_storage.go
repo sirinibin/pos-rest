@@ -1279,8 +1279,10 @@ func updateEntityImageURLsInMongo(ctx context.Context, s models.AdminSettings) {
 				}
 			}
 			if relKey != "" {
-				posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
-					bson.M{"$set": bson.M{"logo": "/cdn/" + relKey}})
+				if _, err := posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
+					bson.M{"$set": bson.M{"logo": "/cdn/" + relKey}}); err == nil {
+					models.NotifyStoreUpdated(store.ID)
+				}
 			}
 		}
 		// Store invoice background
@@ -1297,8 +1299,10 @@ func updateEntityImageURLsInMongo(ctx context.Context, s models.AdminSettings) {
 				}
 			}
 			if relKey != "" {
-				posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
-					bson.M{"$set": bson.M{"invoice_background": "/cdn/" + relKey}})
+				if _, err := posDB.Collection("store").UpdateOne(ctx, bson.M{"_id": store.ID},
+					bson.M{"$set": bson.M{"invoice_background": "/cdn/" + relKey}}); err == nil {
+					models.NotifyStoreUpdated(store.ID)
+				}
 			}
 		}
 

@@ -125,6 +125,9 @@ func rfqSaveMetaSettings(storeID primitive.ObjectID, role, phoneNumberID, access
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := col.UpdateOne(ctx, bson.M{"_id": storeID}, bson.M{"$set": upd})
+	if err == nil {
+		models.NotifyStoreUpdated(storeID)
+	}
 	return err
 }
 
@@ -146,6 +149,9 @@ func rfqClearMetaSettings(storeID primitive.ObjectID, role string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := col.UpdateOne(ctx, bson.M{"_id": storeID}, bson.M{"$set": upd})
+	if err == nil {
+		models.NotifyStoreUpdated(storeID)
+	}
 	return err
 }
 
@@ -263,9 +269,11 @@ func connectMetaWhatsApp(w http.ResponseWriter, r *http.Request, role string) {
 		col := db.Client("").Database(db.GetPosDB()).Collection("store")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{
+		if _, err := col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{
 			"settings.bot_waba_business_account_id": wabaID,
-		}})
+		}}); err == nil {
+			models.NotifyStoreUpdated(storeObjID)
+		}
 	}
 
 	webhookURL := buildWebhookURL(r, body.StoreID)
@@ -524,6 +532,7 @@ func SaveWABABusinessAccountID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to save"}`, http.StatusInternalServerError)
 		return
 	}
+	models.NotifyStoreUpdated(storeObjID)
 	fmt.Fprint(w, `{"success":true}`)
 }
 
@@ -562,9 +571,11 @@ func GetWABATemplates(w http.ResponseWriter, r *http.Request) {
 			col := db.Client("").Database(db.GetPosDB()).Collection("store")
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{
+			if _, err := col.UpdateOne(ctx, bson.M{"_id": storeObjID}, bson.M{"$set": bson.M{
 				"settings.bot_waba_business_account_id": wabaID,
-			}})
+			}}); err == nil {
+				models.NotifyStoreUpdated(storeObjID)
+			}
 		}
 	}
 	if wabaID == "" {
