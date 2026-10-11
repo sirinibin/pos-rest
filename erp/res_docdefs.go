@@ -74,6 +74,15 @@ func newSalesResource() *Resource {
 			b.noDelete = "Sales invoices cannot be deleted in the existing system; issue a sales return (credit note) instead."
 			// a POS terminal's Bills list: its own recent sales
 			b.listWhere["posType"] = posTypeWhere
+			// reported to ZATCA: only the cash discount and payments change
+			b.updateGuard = zatcaLockGuard(b)
+			b.known["zatcaLocked"] = true
+			toC := b.toC
+			b.toC = func(x *mapCtx, d M) M {
+				rec := toC(x, d)
+				rec["zatcaLocked"] = zatcaLockOn(x.store, d)
+				return rec
+			}
 		})
 }
 

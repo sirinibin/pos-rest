@@ -252,28 +252,31 @@ type legacyBackend struct {
 	toL           toLFn
 	known         map[string]bool
 	validate      validateFn
-	v1            v1Ops
-	fieldErr      map[string]string
-	lineErr       map[string]string
-	lineKey       string
-	afterWrite    func(x *mapCtx, hex string, rec, prevDoc M, ch map[string]bool, create bool) error
-	beforeCreate  func(x *mapCtx, rec M) error
-	noDelete      string
-	noRestore     string
-	readOnly      bool
-	sortKey       string
-	searchKeys    []string                                         // legacy keys ?q= matches (search.go); none = ?q= not supported
-	searchSort    string                                           // sort key for ?q= results (e.g. name), "" = sortKey
-	searchFn      func(c *Ctx, storeHex, q string) (bson.M, error) // ?q= filter in place of searchKeys (products: product_search.go)
-	listSort      map[string]string                                // ?sort= contract field -> legacy key (listquery.go)
-	listWhere     map[string]whereKey                              // ?where.<field>= contract field -> legacy key
-	listRange     map[string]string                                // ?min.<field>= / ?max.<field>= numeric contract field -> legacy key
-	listSumExpr   map[string]func(storeHex string) interface{}     // ?sum= computed totals (e.g. stock value)
-	mainOrg       bool                                             // org-scoped resource in the main DB (stores, users)
-	access        func(c *Ctx) bson.M                              // extra visibility filter (mainOrg)
-	hybrid        map[string]bool                                  // keys mapped to legacy AND preserved in erp.x (nested objects partially mapped)
-	storeHint     func(x *mapCtx, rec M) string                    // main-DB docs: which store DB context to use
-	affectsStock  bool                                             // document moves stock: bump the version of every product it touches (rule 53)
+	// updateGuard refuses an update before anything is written (sales: the
+	// ZATCA lock, zatca_lock.go)
+	updateGuard  func(x *mapCtx, prevDoc, prev, next M, changed []string) error
+	v1           v1Ops
+	fieldErr     map[string]string
+	lineErr      map[string]string
+	lineKey      string
+	afterWrite   func(x *mapCtx, hex string, rec, prevDoc M, ch map[string]bool, create bool) error
+	beforeCreate func(x *mapCtx, rec M) error
+	noDelete     string
+	noRestore    string
+	readOnly     bool
+	sortKey      string
+	searchKeys   []string                                         // legacy keys ?q= matches (search.go); none = ?q= not supported
+	searchSort   string                                           // sort key for ?q= results (e.g. name), "" = sortKey
+	searchFn     func(c *Ctx, storeHex, q string) (bson.M, error) // ?q= filter in place of searchKeys (products: product_search.go)
+	listSort     map[string]string                                // ?sort= contract field -> legacy key (listquery.go)
+	listWhere    map[string]whereKey                              // ?where.<field>= contract field -> legacy key
+	listRange    map[string]string                                // ?min.<field>= / ?max.<field>= numeric contract field -> legacy key
+	listSumExpr  map[string]func(storeHex string) interface{}     // ?sum= computed totals (e.g. stock value)
+	mainOrg      bool                                             // org-scoped resource in the main DB (stores, users)
+	access       func(c *Ctx) bson.M                              // extra visibility filter (mainOrg)
+	hybrid       map[string]bool                                  // keys mapped to legacy AND preserved in erp.x (nested objects partially mapped)
+	storeHint    func(x *mapCtx, rec M) string                    // main-DB docs: which store DB context to use
+	affectsStock bool                                             // document moves stock: bump the version of every product it touches (rule 53)
 	// adapterSoftDelete: the legacy delete is DESTRUCTIVE (DeleteOne), so the
 	// contract soft delete is kept in erp.del (restorable); ?hard=1 calls the
 	// legacy delete.
@@ -838,6 +841,11 @@ func (b *legacyBackend) Update(c *Ctx, storeHex, id string, prev, next M, change
 	}
 	hex := hexOf(prevDoc["_id"])
 	x := newMapCtx(c, storeHex)
+	if b.updateGuard != nil {
+		if err := b.updateGuard(x, prevDoc, prev, next, changed); err != nil {
+			return nil, err
+		}
+	}
 	if b.validate != nil {
 		if errs := b.validate(x, next, prevDoc); len(errs) > 0 {
 			return nil, errBadRequest("", errs)
