@@ -121,7 +121,13 @@ func (store *Store) CreateAllIndexes() error {
 	idx("order", bson.M{"invoice_count_value": 1})
 	idx("order", bson.M{"payment_status": 1})
 	cidx("order", bson.D{{Key: "deleted", Value: 1}})
-	cidx("order", bson.D{{Key: "zatca.reporting_passed", Value: 1}, {Key: "zatca.reporting_passed_at", Value: -1}})
+
+	// invoices, credit and debit notes: the store's ZATCA chain
+	for _, coll := range zatcaChainCollections {
+		for _, model := range zatcaChainIndexes {
+			cidx(coll, model.Keys.(bson.D))
+		}
+	}
 
 	// salesreturn
 	idx("salesreturn", bson.M{"customer_id": 1})

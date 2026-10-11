@@ -128,6 +128,7 @@ func main() {
 	go models.EnsureRFQReceivedIndexes()
 	go models.EnsureRFQSupplierIndexes()
 	go models.EnsureGooglePlacesCacheIndexes()
+	go models.EnsureZatcaChainIndexesAllStores()
 	go models.DeduplicateRFQSuppliersAllStores()
 
 	router := mux.NewRouter()

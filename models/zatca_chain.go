@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/sirinibin/startpos/backend/db"
@@ -24,6 +25,49 @@ type zatcaChainDoc struct {
 		ICV        int64      `bson:"icv"`
 		ReportedAt *time.Time `bson:"reporting_passed_at"`
 	} `bson:"zatca"`
+}
+
+// zatcaChainIndexes serve NextZatcaChainLink's lookups in every chain
+// collection: the last reported document, the highest ICV, and the highest
+// invoice_count_value of documents reported before the shared counter. Each
+// becomes a walk to one index entry instead of a scan and in-memory sort of
+// every reported document, which on a large store outran the lookup's
+// timeout ("error finding the store's last ZATCA document: ... context
+// deadline exceeded").
+var zatcaChainIndexes = []mongo.IndexModel{
+	{Keys: bson.D{{Key: "zatca.reporting_passed", Value: 1}, {Key: "zatca.reporting_passed_at", Value: -1}}},
+	{Keys: bson.D{{Key: "zatca.reporting_passed", Value: 1}, {Key: "zatca.icv", Value: -1}, {Key: "invoice_count_value", Value: -1}}},
+}
+
+// EnsureZatcaChainIndexes creates the store's ZATCA chain indexes where they
+// are missing (stores made before they existed); creating an existing index
+// is a no-op.
+func EnsureZatcaChainIndexes(storeID string) error {
+	storeDB := db.GetDB("store_" + storeID)
+	for _, collection := range zatcaChainCollections {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		_, err := storeDB.Collection(collection).Indexes().CreateMany(ctx, zatcaChainIndexes)
+		cancel()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// EnsureZatcaChainIndexesAllStores runs EnsureZatcaChainIndexes for every
+// store, at startup.
+func EnsureZatcaChainIndexesAllStores() {
+	stores, err := GetAllStores()
+	if err != nil {
+		log.Printf("ZATCA chain indexes: listing stores: %v", err)
+		return
+	}
+	for _, store := range stores {
+		if err := EnsureZatcaChainIndexes(store.ID.Hex()); err != nil {
+			log.Printf("ZATCA chain indexes for store %s: %v", store.ID.Hex(), err)
+		}
+	}
 }
 
 // ZatcaChainLink is where the store's next ZATCA document continues the chain.

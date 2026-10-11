@@ -4,6 +4,8 @@ package models
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,5 +84,94 @@ func TestNextZatcaChainLink(t *testing.T) {
 	}
 	if l := next(otherID); l.ICV != 501 || l.PIH != "other-store" {
 		t.Fatalf("other store: got %+v", l)
+	}
+}
+
+// The chain lookup must not scan and sort a store's reported documents: on a
+// large store that outran its timeout ("error finding the store's last ZATCA
+// document: ... context deadline exceeded"). With the chain indexes every
+// lookup reads at most a couple of documents and sorts nothing in memory.
+func TestNextZatcaChainLink_UsesIndexes(t *testing.T) {
+	storeID := primitive.NewObjectID().Hex()
+	storeDB := db.GetDB("store_" + storeID)
+	t.Cleanup(func() { _ = storeDB.Drop(context.Background()) })
+	ctx := context.Background()
+	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+
+	// Legacy documents (no zatca.icv), then documents on the shared counter,
+	// plus unreported drafts, in every chain collection.
+	for ci, collection := range zatcaChainCollections {
+		var docs []interface{}
+		for i := 1; i <= 300; i++ {
+			z := bson.M{"reporting_passed": i%10 != 0,
+				"reporting_passed_at": at.Add(time.Duration(i*4+ci) * time.Minute)}
+			if i > 100 {
+				z["icv"] = int64(i*4 + ci)
+			}
+			docs = append(docs, bson.M{"hash": collection + "-" + strconv.Itoa(i),
+				"invoice_count_value": int64(i), "zatca": z})
+		}
+		if _, err := storeDB.Collection(collection).InsertMany(ctx, docs); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := NextZatcaChainLink(storeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureZatcaChainIndexes(storeID); err != nil {
+		t.Fatalf("EnsureZatcaChainIndexes: %v", err)
+	}
+	if err := EnsureZatcaChainIndexes(storeID); err != nil {
+		t.Fatalf("EnsureZatcaChainIndexes is not idempotent: %v", err)
+	}
+	got, err := NextZatcaChainLink(storeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("indexes changed the answer: %+v, want %+v", got, want)
+	}
+	// Highest ICV is 299*4+3 (customerwithdrawal; 300 is unreported), and the
+	// last reported document is that same one.
+	if got.ICV != 299*4+3+1 || got.PIH != "customerwithdrawal-299" {
+		t.Fatalf("got %+v", got)
+	}
+
+	queries := []struct {
+		filter bson.M
+		sort   bson.D
+	}{
+		{bson.M{"zatca.reporting_passed": true}, bson.D{{Key: "zatca.reporting_passed_at", Value: -1}}},
+		{bson.M{"zatca.reporting_passed": true}, bson.D{{Key: "zatca.icv", Value: -1}}},
+		{bson.M{"zatca.reporting_passed": true, "zatca.icv": bson.M{"$exists": false}},
+			bson.D{{Key: "invoice_count_value", Value: -1}}},
+	}
+	for _, collection := range zatcaChainCollections {
+		for _, q := range queries {
+			var res bson.M
+			err := storeDB.RunCommand(ctx, bson.D{
+				{Key: "explain", Value: bson.D{
+					{Key: "find", Value: collection},
+					{Key: "filter", Value: q.filter},
+					{Key: "sort", Value: q.sort},
+					{Key: "limit", Value: 1},
+				}},
+				{Key: "verbosity", Value: "executionStats"},
+			}).Decode(&res)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, _ := bson.MarshalExtJSON(res["queryPlanner"].(bson.M)["winningPlan"], false, false)
+			stats := res["executionStats"].(bson.M)
+			examined := toInt64(stats["totalDocsExamined"])
+			if strings.Contains(string(plan), `"COLLSCAN"`) || strings.Contains(string(plan), `"stage":"SORT"`) {
+				t.Errorf("%s %v sort %v: scans or sorts in memory: %s", collection, q.filter, q.sort, plan)
+			}
+			if examined > 2 {
+				t.Errorf("%s %v sort %v: examined %d documents, want at most 2", collection, q.filter, q.sort, examined)
+			}
+		}
 	}
 }
