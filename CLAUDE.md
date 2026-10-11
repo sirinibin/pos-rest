@@ -18,7 +18,12 @@ deploy.sh enforces three gates before every deploy — all three must pass:
    Any output from go build (warnings, notes) causes an abort.
 
 ## GitHub Actions
-`deploy_test.yml` / `deploy_prod.yml` call `tests.yml` and deploy only if all of it passes:
+One pipeline for both servers: a push to `master` runs `deploy.yml`, which calls `tests.yml` once, builds the binary
+once, deploys it to the test API (start-api-test 2002) and, only after that is healthy, the same binary to production
+(start-api 2000). `test` is a mirror of master and triggers nothing; keep pushing the same commits to both. A failed
+production deploy is rolled back by `remote_restart.sh`; "Re-run failed jobs" redeploys the same build without re-testing.
+`deploy_quick.yml` (manual, tests skipped) takes a target: both / test / production.
+`tests.yml` runs:
 unit + API tests, integration tests (`-tags integration`, MongoDB + Redis services, a versitygw S3 server for the
 `S3_TEST_*` storage tests),
 API e2e (`-tags e2e`, see `e2e/README.md`), a race-detector job (`-race` on unit + integration,

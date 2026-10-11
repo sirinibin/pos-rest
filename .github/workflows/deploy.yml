@@ -1,0 +1,195 @@
+name: Test, build and deploy (test, then production)
+
+# One pipeline for both servers. master and test carry the same code, so a
+# push to master runs every suite once, builds the API once, deploys that
+# binary to the test API, and only after the test API is healthy deploys the
+# very same binary to production. The test branch is a mirror of master and
+# triggers nothing.
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**.go"
+      - "**.mod"
+      - "**.sum"
+      - "e2e/**"
+      - "ZatcaPython/**"
+      - "deploy/**"
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/tests.yml"
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits instead of racing.
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  # Unit, API, integration (MongoDB + Redis), API e2e and UI e2e suites.
+  # Nothing is deployed unless every one of them passes.
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      frontend_ref: master
+
+  # Built once (in parallel with the tests); both servers get this binary.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      # ── Build — abort if go build produces any output (warnings = abort) ──────
+      - name: Build
+        run: |
+          BUILD_LOG=$(mktemp)
+          if ! GOOS=linux GOARCH=amd64 go build \
+                -ldflags="-X 'main.version=${{ github.sha }}'" \
+                -o pos-rest . 2>"$BUILD_LOG"; then
+            cat "$BUILD_LOG"
+            echo "Build FAILED — aborting."
+            exit 1
+          fi
+          if [ -s "$BUILD_LOG" ]; then
+            cat "$BUILD_LOG"
+            echo "Build produced warnings — aborting (matches deploy.sh gate)."
+            exit 1
+          fi
+          sha256sum ./pos-rest | tee pos-rest.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-release
+          path: |
+            pos-rest
+            pos-rest.sha256
+          retention-days: 14
+          if-no-files-found: error
+
+  # ── Test server first ───────────────────────────────────────────────────────
+  deploy-test:
+    needs: [tests, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code (deploy scripts)
+        uses: actions/checkout@v4
+
+      - name: Download the tested build
+        uses: actions/download-artifact@v4
+        with:
+          name: api-release
+
+      # Artifacts drop the executable bit; scp carries this mode to the server.
+      - name: Restore executable bit
+        run: chmod 755 pos-rest
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+
+      # ── Upload binary while service is still live (no downtime during transfer) ──
+      - name: Upload binary to staging path
+        run: |
+          sha256sum -c pos-rest.sha256
+          scp -i private_key -o StrictHostKeyChecking=no \
+            pos-rest \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_TEST_DEST_PATH }}/pos-rest.new
+
+      # ── Verify checksum before touching the running service ───────────────────
+      - name: Verify remote checksum
+        run: |
+          LOCAL_SUM=$(awk '{print $1}' pos-rest.sha256)
+          REMOTE_SUM=$(ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sha256sum ${{ secrets.AWS_GO_API_TEST_DEST_PATH }}/pos-rest.new | awk '{print \$1}'")
+          if [ "$LOCAL_SUM" != "$REMOTE_SUM" ]; then
+            echo "Checksum MISMATCH — upload was corrupted. Aborting."
+            echo "  local : $LOCAL_SUM"
+            echo "  remote: $REMOTE_SUM"
+            exit 1
+          fi
+          echo "Checksum verified: $LOCAL_SUM"
+
+      # ── Graceful restart: no kill, health-checked, automatic rollback ────────
+      # deploy/remote_restart.sh renames the new binary in while the old one
+      # keeps serving, runs `systemctl restart` (the API drains in-flight
+      # requests on SIGTERM; the new one binds its port before connecting to
+      # MongoDB so requests queue instead of failing), waits for /v1/health
+      # and puts the previous binary back if the new build is unhealthy, which
+      # fails this job and keeps production on its current build.
+      - name: Swap binary and restart service
+        run: |
+          ssh -i private_key -o StrictHostKeyChecking=no -o ServerAliveInterval=15 \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "bash -s -- '${{ secrets.AWS_GO_API_TEST_DEST_PATH }}' start-api-test 2002" \
+            < deploy/remote_restart.sh
+
+  # ── Production: the same binary, only after the test API came up healthy ───
+  # If this job fails, remote_restart.sh has already put production's previous
+  # binary back; "Re-run failed jobs" redeploys this same build without
+  # re-running the tests.
+  deploy-production:
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code (deploy scripts)
+        uses: actions/checkout@v4
+
+      - name: Download the tested build
+        uses: actions/download-artifact@v4
+        with:
+          name: api-release
+
+      # Artifacts drop the executable bit; scp carries this mode to the server.
+      - name: Restore executable bit
+        run: chmod 755 pos-rest
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload binary to staging path
+        run: |
+          sha256sum -c pos-rest.sha256
+          scp -i private_key -o StrictHostKeyChecking=no \
+            pos-rest \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:${{ secrets.AWS_GO_API_PROD_DEST_PATH }}/pos-rest.new
+
+      - name: Verify remote checksum
+        run: |
+          LOCAL_SUM=$(awk '{print $1}' pos-rest.sha256)
+          REMOTE_SUM=$(ssh -i private_key -o StrictHostKeyChecking=no \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "sha256sum ${{ secrets.AWS_GO_API_PROD_DEST_PATH }}/pos-rest.new | awk '{print \$1}'")
+          if [ "$LOCAL_SUM" != "$REMOTE_SUM" ]; then
+            echo "Checksum MISMATCH — upload was corrupted. Aborting."
+            echo "  local : $LOCAL_SUM"
+            echo "  remote: $REMOTE_SUM"
+            exit 1
+          fi
+          echo "Checksum verified: $LOCAL_SUM"
+
+      - name: Swap binary and restart service
+        run: |
+          ssh -i private_key -o StrictHostKeyChecking=no -o ServerAliveInterval=15 \
+            ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} \
+            "bash -s -- '${{ secrets.AWS_GO_API_PROD_DEST_PATH }}' start-api 2000" \
+            < deploy/remote_restart.sh

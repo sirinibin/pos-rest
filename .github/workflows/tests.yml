@@ -1,7 +1,7 @@
 name: Tests
 
-# Every test suite for the API. deploy_test.yml and deploy_prod.yml call this
-# workflow and only deploy when all of its jobs pass. It can also be run by
+# Every test suite for the API. deploy.yml calls this once per push to master
+# and deploys to test, then production, only when all of its jobs pass. It can also be run by
 # hand from the Actions tab against any branch.
 on:
   workflow_call:
