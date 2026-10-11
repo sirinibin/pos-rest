@@ -1262,13 +1262,14 @@ func TestSalesReturns_UnknownOrder(t *testing.T) {
 	if err == nil {
 		salesWantErr(t, r, 400, "orderId")
 	}
-	// the panic leaves the store's sales-return queue locked: later returns hang
+	// whatever happened to the bad return, the store's sales-return queue is
+	// freed (NEW-sr-queue-stuck): the next return goes through
 	sale := Create(t, s.Token, "sales", salesBody(s, nil, []M{s.Line(pid, 1, 2)}, nil))
 	r, err = salesTry(t, "POST", "/sales-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": sale["id"],
 		"items": []M{s.Line(pid, 1, 2)}}, 5*time.Second)
-	KnownBug(t, "NEW-sr-queue-stuck", "after that panic every later POST /sales-returns of the store hangs (the legacy per-store queue is never popped)",
-		err != nil)
-	if err == nil && r.Code != 201 {
+	if err != nil {
+		t.Errorf("NEW-sr-queue-stuck: POST /sales-returns after the bad one hangs (the store's queue was not freed): %v", err)
+	} else if r.Code != 201 {
 		t.Errorf("valid return after the bad one: %s", r)
 	}
 }
