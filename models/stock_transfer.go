@@ -154,6 +154,11 @@ func (stocktransfer *StockTransfer) UpdateForeignLabelFields() error {
 
 func (stocktransfer *StockTransfer) FindNetTotal() {
 	stocktransfer.FindTotal()
+	// handlers total before they validate: a request without vat_percent is
+	// refused by Validate ("VAT Percentage is required"), not a nil panic
+	if stocktransfer.VatPercent == nil {
+		return
+	}
 
 	/*
 		if stocktransfer.DiscountWithVAT > 0 {

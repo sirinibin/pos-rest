@@ -31,6 +31,8 @@ func TestLegacyHandlers_NoStoreOrNullBody_Integration(t *testing.T) {
 		{"warehouse unknown store", CreateWarehouse, "/v1/warehouse", map[string]interface{}{"name": "X", "store_id": "5f0000000000000000000001"}},
 		{"signature without store", CreateSignature, "/v1/signature", map[string]interface{}{"name": "X"}},
 		{"stock transfer without store", CreateStockTransfer, "/v1/stock-transfer", map[string]interface{}{"code": "X"}},
+		{"stock transfer without vat_percent", CreateStockTransfer, "/v1/stock-transfer?search[store_id]=" + fx.StoreA.Hex(),
+			map[string]interface{}{"store_id": fx.StoreA.Hex(), "products": []interface{}{}}},
 		{"warehouse null body", CreateWarehouse, "/v1/warehouse", "null"},
 		{"user null body", CreateUser, "/v1/user", "null"},
 		{"signature null body", CreateSignature, "/v1/signature", "null"},
