@@ -844,6 +844,14 @@ func (customerWithdrawal *CustomerWithdrawal) Validate(w http.ResponseWriter, r 
 
 	if customerWithdrawal.Type == "customer" && (customerWithdrawal.CustomerID == nil || customerWithdrawal.CustomerID.IsZero()) {
 		errs["customer_id"] = "Customer is required"
+	} else if customerWithdrawal.CustomerID != nil && !customerWithdrawal.CustomerID.IsZero() && store != nil {
+		// a customer of another store (or none) is a bad request, not a
+		// failure later when the names are looked up
+		if _, err := store.FindCustomerByID(customerWithdrawal.CustomerID, bson.M{"_id": 1}); err == mongo.ErrNoDocuments {
+			errs["customer_id"] = "Invalid customer: " + customerWithdrawal.CustomerID.Hex()
+		} else if err != nil {
+			errs["customer_id"] = "error finding customer: " + err.Error()
+		}
 	}
 
 	if customerWithdrawal.Type == "vendor" && (customerWithdrawal.VendorID == nil || customerWithdrawal.VendorID.IsZero()) {
@@ -1515,6 +1523,15 @@ func (customerwithdrawal *CustomerWithdrawal) DeleteCustomerWithdrawal(tokenClai
 		return err
 	}
 
+	// the postings go with the document (a delete used to leave them on the
+	// ledger, so cash and the party's balance still counted it)
+	err = customerwithdrawal.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
+	customerwithdrawal.SetPartyBalances()
+
 	return nil
 }
 
@@ -2086,3 +2103,29 @@ func (customerWithdrawal *CustomerWithdrawal) CreateLedger() (ledgers []Ledger, 
 
 	return ledgers, nil
 }*/
+
+// SetPartyBalances recalculates the balance of the customer, vendor or
+// employee the note is for (after its postings changed).
+func (customerwithdrawal *CustomerWithdrawal) SetPartyBalances() {
+	store, _ := FindStoreByID(customerwithdrawal.StoreID, bson.M{})
+	if store == nil {
+		return
+	}
+	if customerwithdrawal.CustomerID != nil && !customerwithdrawal.CustomerID.IsZero() {
+		if customer, _ := store.FindCustomerByID(customerwithdrawal.CustomerID, bson.M{}); customer != nil {
+			customer.SetCreditBalance()
+		}
+	}
+	if customerwithdrawal.VendorID != nil && !customerwithdrawal.VendorID.IsZero() {
+		if vendor, _ := store.FindVendorByID(customerwithdrawal.VendorID, bson.M{}); vendor != nil {
+			vendor.SetCreditBalance()
+		}
+	}
+	if customerwithdrawal.EmployeeID != nil && !customerwithdrawal.EmployeeID.IsZero() {
+		if emp, _ := store.FindEmployeeByID(customerwithdrawal.EmployeeID, bson.M{}); emp != nil {
+			if empAccount, _ := emp.GetOrCreateLiabilityAccount(store); empAccount != nil {
+				empAccount.CalculateBalance(nil, nil)
+			}
+		}
+	}
+}

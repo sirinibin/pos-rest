@@ -16,6 +16,7 @@ var docFieldErr = map[string]string{
 	"blocked": "customerId", "zatca_reconnect": "zatca", "code": "code", "non_vat_sales_id": "orderId",
 	"from_warehouse_id": "fromWarehouseId", "to_warehouse_id": "toWarehouseId", "expected_date_str": "expectedDate",
 	"validity_days": "validityDays", "delivery_days": "deliveryDays",
+	"vendor_invoice_no": "vendorInvoiceNo", "assigned_to": "assignedTo",
 }
 
 var docLineErr = map[string]string{
@@ -201,7 +202,60 @@ func newPurchasesResource() *Resource {
 		// app, may leave it empty); the legacy model books it to the UNKNOWN vendor.
 		"store DB `purchase` (+ `purchase_payment`)", func(b *legacyBackend) {
 			b.listWhere["posType"] = posTypeWhere
+			inner := b.validate
+			b.validate = func(x *mapCtx, rec M, prev M) map[string]string {
+				e := inner(x, rec, prev)
+				// a bad line (negative price or qty, discount above the price)
+				// also makes the net negative, so the paid-vs-net check fires
+				// too: report the line, not the payments
+				if le := docLineErrors(rec); len(le) > 0 {
+					delete(e, "payments")
+					for k, v := range le {
+						e[k] = v
+					}
+				}
+				return e
+			}
 		})
+}
+
+// docLineErrors checks the contract line rules (the ones linesToLegacy
+// applies) together with the document-level checks, so a bad line is
+// reported under its own field.
+func docLineErrors(rec M) map[string]string {
+	e := map[string]string{}
+	for i, it := range arr(rec["items"]) {
+		im, _ := it.(M)
+		if im == nil {
+			continue
+		}
+		pfx := "items." + itoa(i) + "."
+		up, ud := num(im["unitPrice"]), num(im["unitDiscount"])
+		if num(im["qty"]) <= 0 {
+			e[pfx+"qty"] = "must be > 0"
+		}
+		if up < 0 {
+			e[pfx+"unitPrice"] = "must be >= 0"
+		}
+		if ud > up && up > 0 {
+			e[pfx+"unitDiscount"] = "cannot exceed unit price"
+		}
+	}
+	return e
+}
+
+// existingRef resolves a contract reference like x.ref and also requires the
+// record to exist in the store (x.ref passes any 24-hex id through, e.g. the
+// id of another company's record). nil, nil for an empty reference.
+func existingRef(x *mapCtx, coll string, v interface{}) (interface{}, error) {
+	h, err := x.ref(coll, v)
+	if err != nil || h == nil {
+		return h, err
+	}
+	if x.doc(coll, h.(string)) == nil {
+		return nil, errBadRequest("Unknown reference "+str(v), map[string]string{coll: "unknown id " + str(v)})
+	}
+	return h, nil
 }
 
 func newPurchaseReturnsResource() *Resource {
@@ -313,6 +367,10 @@ func newExpensesResource() *Resource {
 			if create || ch["amount"] || ch["vatAmount"] {
 				p["amount"] = round2(num(rec["amount"]) + num(rec["vatAmount"])) // legacy amount is VAT-inclusive
 			}
+			// keep the VAT entered, on every save (the legacy save otherwise
+			// works it out at the store rate for a vendor and drops it without one)
+			p["vat_price"] = round2(num(rec["vatAmount"]))
+			p["vat_entered"] = true
 			if create || ch["method"] {
 				p["payment_method"] = str(rec["method"])
 			}
@@ -337,7 +395,7 @@ func newExpensesResource() *Resource {
 				p["description"] = desc
 			}
 			if create || ch["vendorId"] {
-				h, err := x.ref("vendor", rec["vendorId"])
+				h, err := existingRef(x, "vendor", rec["vendorId"])
 				if err != nil {
 					return nil, errBadRequest("", map[string]string{"vendorId": "unknown vendor"})
 				}
@@ -372,7 +430,9 @@ func newExpensesResource() *Resource {
 		},
 		v1: v1Ops{path: "/v1/expense", create: controller.CreateExpense, update: controller.UpdateExpense, delete: controller.DeleteExpense},
 		fieldErr: map[string]string{"date_str": "date", "amount": "amount", "payment_method": "method", "description": "description",
-			"category_id": "categoryId", "vendor_id": "vendorId"},
+			"category_id": "categoryId", "vendor_id": "vendorId",
+			// the contract has one category: the legacy list's first entry
+			"category_id_0": "categoryId", "vat_price": "vatAmount"},
 		lineErr: map[string]string{"category_id": "categoryId"},
 	}
 	return &Resource{Name: "expenses", Path: "expenses", Scope: "store", Module: "finance", DateField: "date", Legacy: "store DB `expense`", Backend: b}

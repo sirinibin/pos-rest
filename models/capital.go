@@ -885,6 +885,13 @@ func (capital *Capital) DeleteCapital(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
+	// the postings go with the document (a delete used to leave them on the
+	// ledger, so cash and the party's balance still counted it)
+	err = capital.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

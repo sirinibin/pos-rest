@@ -5183,7 +5183,43 @@ func (product *Product) GetProductQuantityByTypeByWarehouseID(typeStr string, wa
 	return stats.Quantity, nil
 }
 
+// GetProductQuantityBeforeOrEqualTo is the stock from the history entries
+// dated strictly before toDate (despite its name; all of them when nil).
 func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (float64, error) {
+	if toDate == nil {
+		return product.getProductQuantity(nil)
+	}
+	return product.getProductQuantity(bson.M{"date": bson.M{"$lt": toDate}})
+}
+
+// GetProductQuantityUpTo is the stock before a NEW history entry dated
+// toDate: every saved entry dated up to and including toDate counts, since
+// the ones of the same moment (a purchase and a sale entered for the same
+// minute) were saved first.
+func (product *Product) GetProductQuantityUpTo(toDate *time.Time) (float64, error) {
+	if toDate == nil {
+		return product.getProductQuantity(nil)
+	}
+	return product.getProductQuantity(bson.M{"date": bson.M{"$lte": toDate}})
+}
+
+// GetProductQuantityBeforeHistory is the stock before a SAVED history entry:
+// entries dated before it, and those of the same moment saved before it
+// (lower _id), count.
+func (product *Product) GetProductQuantityBeforeHistory(history *ProductHistory) (float64, error) {
+	if history == nil || history.Date == nil {
+		return product.getProductQuantity(nil)
+	}
+	if history.ID.IsZero() {
+		return product.GetProductQuantityBeforeOrEqualTo(history.Date)
+	}
+	return product.getProductQuantity(bson.M{"$or": bson.A{
+		bson.M{"date": bson.M{"$lt": history.Date}},
+		bson.M{"date": history.Date, "_id": bson.M{"$lt": history.ID}},
+	}})
+}
+
+func (product *Product) getProductQuantity(dateFilter bson.M) (float64, error) {
 	store, err := FindStoreByID(product.StoreID, bson.M{})
 	if err != nil {
 		return 0, err
@@ -5200,8 +5236,8 @@ func (product *Product) GetProductQuantityBeforeOrEqualTo(toDate *time.Time) (fl
 		"product_id": product.ID,
 	}
 
-	if toDate != nil {
-		filter["date"] = bson.M{"$lt": toDate}
+	for k, v := range dateFilter {
+		filter[k] = v
 	}
 
 	cutoffDate := time.Date(2025, 7, 28, 0, 0, 0, 0, time.UTC)

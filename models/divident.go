@@ -687,6 +687,13 @@ func (divident *Divident) DeleteDivident(tokenClaims TokenClaims) (err error) {
 		return err
 	}
 
+	// the postings go with the document (a delete used to leave them on the
+	// ledger, so cash and the party's balance still counted it)
+	err = divident.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

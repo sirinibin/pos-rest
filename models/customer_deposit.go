@@ -877,6 +877,14 @@ func (customerDeposit *CustomerDeposit) Validate(w http.ResponseWriter, r *http.
 
 	if customerDeposit.Type == "customer" && (customerDeposit.CustomerID == nil || customerDeposit.CustomerID.IsZero()) {
 		errs["customer_id"] = "Customer is required"
+	} else if customerDeposit.CustomerID != nil && !customerDeposit.CustomerID.IsZero() && store != nil {
+		// a customer of another store (or none) is a bad request, not a
+		// failure later when the names are looked up
+		if _, err := store.FindCustomerByID(customerDeposit.CustomerID, bson.M{"_id": 1}); err == mongo.ErrNoDocuments {
+			errs["customer_id"] = "Invalid customer: " + customerDeposit.CustomerID.Hex()
+		} else if err != nil {
+			errs["customer_id"] = "error finding customer: " + err.Error()
+		}
 	}
 
 	if customerDeposit.Type == "vendor" && (customerDeposit.VendorID == nil || customerDeposit.VendorID.IsZero()) {
@@ -1540,6 +1548,15 @@ func (customerdeposit *CustomerDeposit) DeleteCustomerDeposit(tokenClaims TokenC
 		return err
 	}
 
+	// the postings go with the document (a delete used to leave them on the
+	// ledger, so cash and the party's balance still counted it)
+	err = customerdeposit.UndoAccounting()
+	if err != nil {
+		return err
+	}
+
+	customerdeposit.SetPartyBalances()
+
 	return nil
 }
 
@@ -2035,4 +2052,30 @@ func (customerDeposit *CustomerDeposit) CreateLedger() (ledgers []Ledger, err er
 	}
 
 	return ledgers, nil
+}
+
+// SetPartyBalances recalculates the balance of the customer, vendor or
+// employee the note is for (after its postings changed).
+func (customerdeposit *CustomerDeposit) SetPartyBalances() {
+	store, _ := FindStoreByID(customerdeposit.StoreID, bson.M{})
+	if store == nil {
+		return
+	}
+	if customerdeposit.CustomerID != nil && !customerdeposit.CustomerID.IsZero() {
+		if customer, _ := store.FindCustomerByID(customerdeposit.CustomerID, bson.M{}); customer != nil {
+			customer.SetCreditBalance()
+		}
+	}
+	if customerdeposit.VendorID != nil && !customerdeposit.VendorID.IsZero() {
+		if vendor, _ := store.FindVendorByID(customerdeposit.VendorID, bson.M{}); vendor != nil {
+			vendor.SetCreditBalance()
+		}
+	}
+	if customerdeposit.EmployeeID != nil && !customerdeposit.EmployeeID.IsZero() {
+		if emp, _ := store.FindEmployeeByID(customerdeposit.EmployeeID, bson.M{}); emp != nil {
+			if empAccount, _ := emp.GetOrCreateLiabilityAccount(store); empAccount != nil {
+				empAccount.CalculateBalance(nil, nil)
+			}
+		}
+	}
 }

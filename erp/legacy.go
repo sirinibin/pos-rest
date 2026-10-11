@@ -135,8 +135,12 @@ func (x *mapCtx) whCodeByID(hex string) string {
 
 // legacyWarehouse maps a contract warehouse id to legacy (warehouse_id, warehouse_code).
 func (x *mapCtx) legacyWarehouse(id string) (interface{}, interface{}, error) {
-	if id == "" || isMainStoreWarehouse(id) {
+	if id == "" || id == mainStoreWarehouseID(x.storeHex) {
 		return nil, nil, nil
+	}
+	if isMainStoreWarehouse(id) {
+		// the main store of another store is not a warehouse of this one
+		return nil, nil, errBadRequest("Unknown reference "+id, map[string]string{"warehouse": "unknown id " + id})
 	}
 	hex, err := x.ref("warehouse", id)
 	if err != nil {

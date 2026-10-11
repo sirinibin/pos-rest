@@ -585,7 +585,7 @@ func TestConcDocs_OverReturn(t *testing.T) {
 	}
 	cdRun(calls)
 	concRace(t, "NEW-CONC-SR-OVERRETURN", fmt.Sprintf("sales returns at the same moment accepted %v of a sale of 5: each checks the sale's returned quantity before any of them saves it", srQty), srQty > 5)
-	KnownBug(t, "NEW-PR-OVERRETURN", fmt.Sprintf("purchase returns accepted %v of a purchase of 5 (also one after another)", prQty), prQty > 5)
+	concRace(t, "NEW-CONC-PR-OVERRETURN", fmt.Sprintf("purchase returns at the same moment accepted %v of a purchase of 5: each checks the purchase's returned quantity before any of them saves it", prQty), prQty > 5)
 	parent := func(path, id, pid string, stock float64, qty float64) string {
 		return cdSettle(func() string {
 			got, st := F(Read(t, cs.Token, path, id), "items.0.qtyReturned"), cs.Stock(t, pid)
