@@ -793,7 +793,13 @@ func TestRBAC_SystemRoleMatrix(t *testing.T) {
 				"role": "r_viewer", "storeIds": []string{s.ID}, "password": "Staff@123456"}); r.Code != 403 {
 				t.Errorf("%s creates a user: %s", role, r)
 			}
-			if r := PatchResp(t, s.Token, "stores", s.ID, M{"branchEn": "x"}); r.Code != 200 {
+			// the role subtests run in parallel on one store, so the owner's edit can
+			// lose the If-Match race to another subtest's (409): read again and retry
+			r = PatchResp(t, s.Token, "stores", s.ID, M{"branchEn": "x"})
+			for i := 0; i < 5 && r.Code == 409; i++ {
+				r = PatchResp(t, s.Token, "stores", s.ID, M{"branchEn": "x"})
+			}
+			if r.Code != 200 {
 				t.Errorf("owner patches store: %s", r)
 			}
 			if r := Call(t, "PATCH", "/stores/"+s.ID, tok, M{"branchEn": "by " + role}); r.Code != 403 {
