@@ -95,6 +95,10 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	var item *models.NonVATSales
 	if !utils.Decode(w, r, &item) {
@@ -127,7 +131,7 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
-	releaseQueue := queueRelease(queue, store.ID.Hex(), "non_vat_sales")
+	releaseQueue := queueRelease(queue, queueToken)
 	defer releaseQueue()
 
 	if errs := item.Validate(w, r, "create"); len(errs) > 0 {
@@ -183,11 +187,14 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 		store.LinkNonVATSalesToRepairJob(&jid, item.ID, item.Code, item.NetTotal)
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		_ = item.CreateProductsNonVATSalesHistory()
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -270,6 +277,10 @@ func UpdateNonVATSales(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	params := mux.Vars(r)
 	ID, err := primitive.ObjectIDFromHex(params["id"])
@@ -345,13 +356,16 @@ func UpdateNonVATSales(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		_ = item.UndoAccounting()
 		_ = item.ClearProductsNonVATSalesHistory()
 		_ = item.CreateProductsNonVATSalesHistory()
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -380,6 +394,10 @@ func DeleteNonVATSales(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	params := mux.Vars(r)
 	ID, err := primitive.ObjectIDFromHex(params["id"])
@@ -407,11 +425,14 @@ func DeleteNonVATSales(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		_ = item.UndoAccounting()
 		_ = item.ClearProductsNonVATSalesHistory()
 		_ = item.SetProductsStock()
 		_ = item.SetCustomerNonVATSalesStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true

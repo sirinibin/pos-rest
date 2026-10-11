@@ -279,7 +279,7 @@ func concCheckStore(t *testing.T, cs *concStore, when string) {
 		// each sale recomputes the product's stock and saves the whole product
 		// after its own read, so a stale writer can finish last
 		got, ok := salesStockSettles(t, s, pid, s.MS, want[i])
-		concRace(t, "NEW-CONC-STOCK-MOVES", fmt.Sprintf("concurrent sales leave product stock %v, want %v (models/product.go:3349 whole-document $set after a stale recompute)", got, want[i]), !ok)
+		concFail(t, "NEW-CONC-STOCK-MOVES", fmt.Sprintf("concurrent sales leave product stock %v, want %v (models/product.go:3349 whole-document $set after a stale recompute)", got, want[i]), !ok)
 	}
 
 	// customer balances: what the customer's sales still owe
@@ -320,8 +320,9 @@ func concCheckStore(t *testing.T, cs *concStore, when string) {
 // the right balance; at the same moment the customer's ledger account can
 // end up wrong (a sale's ledger misses one of its payments while the sale and
 // its payment records are right). One more edit on its own tells a stale
-// cached balance from a wrong ledger. Both are open bugs, recorded with
-// KnownBug when they reproduce (they don't on every run).
+// cached balance from a wrong ledger. Both were races (the store's writes,
+// including the background accounting, are now serialised); either one
+// failing again fails the test.
 func concCheckBalance(t *testing.T, cs *concStore, cid string, owed int64) {
 	t.Helper()
 	got, ok := concBalanceSettles(t, cs.s, cid, owed)
@@ -337,17 +338,17 @@ func concCheckBalance(t *testing.T, cs *concStore, cid string, owed int64) {
 		}
 	}
 	if got, ok = concBalanceSettles(t, cs.s, cid, owed); ok {
-		KnownBug(t, "NEW-sales-balance-stale", fmt.Sprintf("edits of one customer's sales at the same moment leave its creditBalance stale (%.2f, want %.2f) until the next edit: "+
-			"each edit recomputes it from the ledger in its own goroutine (controller/sales.go, customer.SetCreditBalance) and the last writer can hold an older read", stale, float64(owed)/100), true)
+		t.Error("NEW-sales-balance-stale: "+fmt.Sprintf("edits of one customer's sales at the same moment leave its creditBalance stale (%.2f, want %.2f) until the next edit: "+
+			"each edit recomputes it from the ledger in its own goroutine (controller/sales.go, customer.SetCreditBalance) and the last writer can hold an older read", stale, float64(owed)/100))
 		return
 	}
 	var ledger float64
 	if a := finAcctBy(finAccounts(t, cs.s), "referenceId", cid); a != nil {
 		ledger = finSigned(a)
 	}
-	KnownBug(t, "NEW-sales-ledger-race", fmt.Sprintf("sales of one customer created or paid at the same moment leave the customer's ledger account wrong: "+
+	t.Error("NEW-sales-ledger-race: "+fmt.Sprintf("sales of one customer created or paid at the same moment leave the customer's ledger account wrong: "+
 		"balance %.2f (ledger %.2f), want %.2f, and a later edit does not repair it; every sale and payment record is right, the sale's ledger misses a payment. "+
-		"Sale accounting runs in an unsynchronised goroutine per create/edit (controller/sales.go DoAccounting: undo then redo by reference)", got, ledger, float64(owed)/100), true)
+		"Sale accounting runs in an unsynchronised goroutine per create/edit (controller/sales.go DoAccounting: undo then redo by reference)", got, ledger, float64(owed)/100))
 }
 
 func concBalanceSettles(t *testing.T, s *Store, cid string, want int64) (float64, bool) {

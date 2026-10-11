@@ -417,6 +417,10 @@ func (store *Store) SetPostsBalancesByAccountID(
 	account *Account,
 	afterDate *time.Time,
 ) (err error) {
+	// running balances of one account are recomputed one pass at a time
+	// (they were run in unsynchronised goroutines, and an older pass could
+	// finish last)
+	defer lockAccountBalance(account.ID)()
 	collection := db.GetDB("store_" + store.ID.Hex()).Collection("posting")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/sirinibin/startpos/backend/models"
 )
 
 // ListQuery carries the contract list parameters (§1.4).
@@ -365,6 +366,15 @@ func ifMatch(r *http.Request) (int64, bool) {
 	return n, true
 }
 
+// lockDoc serialises the writes of one record (in-process: the API runs as
+// one process): the If-Match version check, the write and the version bump
+// happen as one step, so two edits of the same version can't both win, and
+// two edits never interleave their undo/redo of stock and books. Lock order:
+// this record lock first, then the store hold a legacy handler takes.
+func lockDoc(res *Resource, id string) func() {
+	return models.LockKey("erp-doc|" + res.Path + "|" + id)
+}
+
 func handleUpdate(w http.ResponseWriter, r *http.Request, res *Resource, replace bool) {
 	withAuthAndIdem(w, r, func(c *Ctx) (int, interface{}, error) {
 		if res.ReadOnly != "" {
@@ -374,6 +384,7 @@ func handleUpdate(w http.ResponseWriter, r *http.Request, res *Resource, replace
 			return 0, nil, err
 		}
 		id := mux.Vars(r)["id"]
+		defer lockDoc(res, id)()
 		body, err := readBody(r)
 		if err != nil {
 			return 0, nil, err
@@ -461,6 +472,7 @@ func handleDelete(w http.ResponseWriter, r *http.Request, res *Resource) {
 			return 0, nil, err
 		}
 		id := mux.Vars(r)["id"]
+		defer lockDoc(res, id)()
 		storeHex, err := resolveStore(c, res, id, nil)
 		if err != nil {
 			return 0, nil, err
@@ -508,6 +520,7 @@ func handleRestore(w http.ResponseWriter, r *http.Request, res *Resource) {
 			return 0, nil, err
 		}
 		id := mux.Vars(r)["id"]
+		defer lockDoc(res, id)()
 		storeHex, err := resolveStore(c, res, id, nil)
 		if err != nil {
 			return 0, nil, err

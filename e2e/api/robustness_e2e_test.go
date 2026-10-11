@@ -302,11 +302,8 @@ func TestRobustness_ConcurrentCreateCodes(t *testing.T) {
 			}
 		}
 		// the code must be unique: the products PATCH refuses a shared one ("already used by another product")
-		// a race: it doesn't show on every run, so a clean run is only logged
 		if len(dups) > 0 {
-			KnownBug(t, "NEW-CODES-"+strings.ToUpper(res.path), fmt.Sprintf("%d concurrent POST /%s answered duplicate codes %v", n, res.path, dups), true)
-		} else {
-			t.Logf("%s: %d concurrent creates got distinct codes this run", res.path, n)
+			t.Errorf("NEW-CODES-%s: %d concurrent POST /%s answered duplicate codes %v", strings.ToUpper(res.path), n, res.path, dups)
 		}
 	}
 }

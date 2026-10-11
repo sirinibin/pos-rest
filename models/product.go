@@ -2994,7 +2994,7 @@ func (product *Product) SetBarcode() error {
 		}
 
 		if lastProduct == nil {
-			err = db.RedisClient.Set(redisKey, 100000000000, 0).Err()
+			err = db.RedisClient.SetNX(redisKey, 100000000000, 0).Err()
 			if err != nil {
 				return err
 			}
@@ -3004,7 +3004,7 @@ func (product *Product) SetBarcode() error {
 			if err != nil {
 				return errors.New("error converting  ean12-1 string to int: " + err.Error())
 			}
-			err = db.RedisClient.Set(redisKey, lastEan12, 0).Err()
+			err = db.RedisClient.SetNX(redisKey, lastEan12, 0).Err()
 			if err != nil {
 				return err
 			}

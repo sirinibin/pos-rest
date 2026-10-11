@@ -123,6 +123,10 @@ func CreateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	stocktransfer.CreatedBy = &userID
 	stocktransfer.UpdatedBy = &userID
@@ -181,12 +185,14 @@ func CreateStockTransfer(w http.ResponseWriter, r *http.Request) {
 
 	// Pass stocktransfer in: the handler reloads stocktransfer below, and the goroutine must
 	// keep the saved copy instead of racing with that reassignment.
+	hold.Add()
 	go func(stocktransfer *models.StockTransfer) {
+		defer hold.Release()
 		stocktransfer.CreateProductsStockTransferHistory()
 		stocktransfer.SetProductsStock()
 		stocktransfer.SetProductsStockTransferStats()
 		stocktransfer.SetWarehouseStockTransferStats()
-		go stocktransfer.CreateProductsHistory(true, nil)
+		hold.Go(func(x *models.StockTransfer) func() { return func() { x.CreateProductsHistory(true, nil) } }(stocktransfer))
 		store.NotifyUsers("stocktransfer_updated")
 	}(stocktransfer)
 
@@ -241,6 +247,10 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	stocktransferOld, err = store.FindStockTransferByID(&stocktransferID, bson.M{})
 	if err != nil {
@@ -313,7 +323,9 @@ func UpdateStockTransfer(w http.ResponseWriter, r *http.Request) {
 
 	// Pass stocktransfer in: the handler reloads stocktransfer below, and the goroutine must
 	// keep the saved copy instead of racing with that reassignment.
+	hold.Add()
 	go func(stocktransfer *models.StockTransfer) {
+		defer hold.Release()
 		stocktransfer.ClearProductsStockTransferHistory()
 		stocktransfer.CreateProductsStockTransferHistory()
 		stocktransfer.SetProductsStock()
@@ -640,6 +652,10 @@ func DeleteStockTransfer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	stocktransfer, err := store.FindStockTransferByID(&stocktransferID, bson.M{})
 	if err != nil {

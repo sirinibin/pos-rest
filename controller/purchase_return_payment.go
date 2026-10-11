@@ -136,6 +136,10 @@ func CreatePurchaseReturnPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	//Updating purchase.payments
 	purchaseReturn, _ := store.FindPurchaseReturnByID(purchasereturnpayment.PurchaseReturnID, map[string]interface{}{})
@@ -199,6 +203,10 @@ func UpdatePurchaseReturnPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	purchasereturnpayment, err = store.FindPurchaseReturnPaymentByID(&purchasereturnpaymentID, bson.M{})
 	if err != nil {
@@ -377,6 +385,10 @@ func DeletePurchaseReturnPayment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	purchaseReturnPayment, err := store.FindPurchaseReturnPaymentByID(&purchaseReturnPaymentID, bson.M{})
 	if err != nil {

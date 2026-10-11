@@ -89,6 +89,7 @@ type NonVATSales struct {
 	RepairJobIDs           []primitive.ObjectID `json:"repair_job_ids,omitempty" bson:"repair_job_ids,omitempty"`
 	ExcludeServiceTax      bool                 `json:"exclude_service_tax" bson:"exclude_service_tax"`
 	ExcludeProductTax      bool                 `json:"exclude_product_tax" bson:"exclude_product_tax"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 // ---- Calculation helpers ----
@@ -377,13 +378,13 @@ func (s *NonVATSales) MakeRedisCode() error {
 			return err
 		}
 		startFrom := serialNum.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := s.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -407,12 +408,12 @@ func (s *NonVATSales) MakeRedisCode() error {
 			if err != nil {
 				return err
 			}
-			err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+			err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 			if err != nil {
 				return err
 			}
 		}
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := s.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -436,39 +437,9 @@ func (s *NonVATSales) MakeRedisCode() error {
 }
 
 func (s *NonVATSales) UnMakeRedisCode() error {
-	store, err := FindStoreByID(s.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	redisKey := s.StoreID.Hex() + "_non_vat_sales_counter"
-
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-	baseTime := s.CreatedAt.In(location)
-
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	if strings.Contains(store.NonVATSalesSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601")
-		monthlyRedisKey := redisKey + "_" + monthKey
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return s.redisCounters.release()
 }
 
 // ProcessPayments copies PaymentsInput → Payments and computes payment summary fields.
@@ -870,30 +841,8 @@ func (s *NonVATSales) SetProductsStock() error {
 	}
 
 	for _, p := range s.Products {
-		product, err := store.FindProductByID(&p.ProductID, bson.M{})
-		if err != nil {
+		if err := store.RefreshProductStock(&p.ProductID); err != nil {
 			return err
-		}
-
-		if err = product.SetStock(); err != nil {
-			return err
-		}
-
-		if err = product.Update(&store.ID); err != nil {
-			return err
-		}
-
-		for _, setProduct := range product.Set.Products {
-			setProductObj, err := store.FindProductByID(setProduct.ProductID, bson.M{})
-			if err != nil {
-				return err
-			}
-			if err = setProductObj.SetStock(); err != nil {
-				return err
-			}
-			if err = setProductObj.Update(&store.ID); err != nil {
-				return err
-			}
 		}
 	}
 
@@ -991,8 +940,10 @@ func (s *NonVATSales) UndoAccounting() error {
 }
 
 func (s *NonVATSales) CreateLedger() (ledger *Ledger, err error) {
-	nonVATSalesLedgerStateMu.Lock() // the payment split below uses package-level state
-	defer nonVATSalesLedgerStateMu.Unlock()
+	// the payment totals the journals are built with are package variables
+	ledgerJournalsMu.Lock()
+	defer ledgerJournalsMu.Unlock()
+
 	store, err := FindStoreByID(s.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

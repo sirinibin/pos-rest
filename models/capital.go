@@ -51,6 +51,7 @@ type Capital struct {
 	DeletedBy          *primitive.ObjectID `json:"deleted_by,omitempty" bson:"deleted_by,omitempty"`
 	DeletedByUser      *User               `json:"deleted_by_user,omitempty"`
 	DeletedAt          *time.Time          `bson:"deleted_at,omitempty" json:"deleted_at,omitempty"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 func (model *Capital) SetPostBalances() error {
@@ -548,14 +549,14 @@ func (capital *Capital) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.CapitalDepositSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
 	// === 4. Increment global counter ===
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := capital.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -585,12 +586,12 @@ func (capital *Capital) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
@@ -598,7 +599,7 @@ func (capital *Capital) MakeRedisCode() error {
 		}
 
 		// Increment monthly counter and use it
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := capital.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -625,46 +626,9 @@ func (capital *Capital) MakeRedisCode() error {
 }
 
 func (capital *Capital) UnMakeRedisCode() error {
-	store, err := FindStoreByID(capital.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	// Global counter key
-	redisKey := capital.StoreID.Hex() + "_capital_deposit_counter"
-
-	// Get location from store.CountryCode
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-
-	// Use CreatedAt, or fallback to now
-	baseTime := capital.CreatedAt.In(location)
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	// Decrement monthly counter only if Prefix contains "DATE"
-	if strings.Contains(store.CapitalDepositSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := capital.StoreID.Hex() + "_capital_deposit_counter_" + monthKey
-
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return capital.redisCounters.release()
 }
 
 /*
@@ -692,7 +656,7 @@ func (model *Capital) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}

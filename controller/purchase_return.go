@@ -125,6 +125,10 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	var purchasereturn *models.PurchaseReturn
 	// Decode data
@@ -152,6 +156,7 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	defer queue.Done(queueToken) // frees the queue on every path
 
 	// Validate data
 	if errs := purchasereturn.Validate(w, r, "create", nil); len(errs) > 0 {
@@ -279,16 +284,16 @@ func CreatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
 	purchase.Update()
 
-	go purchasereturn.UpdatePurchaseReturnCount()
-	go purchasereturn.SetProductsPurchaseReturnStats()
-	go purchasereturn.SetVendorPurchaseReturnStats()
-	go purchase.SetVendorPurchaseStats()
+	hold.Go(func() { purchasereturn.UpdatePurchaseReturnCount() })
+	hold.Go(func() { purchasereturn.SetProductsPurchaseReturnStats() })
+	hold.Go(func() { purchasereturn.SetVendorPurchaseReturnStats() })
+	hold.Go(func() { purchase.SetVendorPurchaseStats() })
 
 	if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
-		go purchasereturn.SetPostBalances()
+		hold.Go(func() { purchasereturn.SetPostBalances() })
 	}
 
-	go purchasereturn.CreateProductsHistory(true, nil)
+	hold.Go(func() { purchasereturn.CreateProductsHistory(true, nil) })
 
 	store.NotifyUsers("purchase_return_updated")
 	if purchasereturn.StoreID != nil {
@@ -336,6 +341,10 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	purchasereturnOld, err = store.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {
@@ -502,20 +511,24 @@ func UpdatePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 	purchase.ReturnAmount, purchase.ReturnCount, _ = store.GetReturnedAmountByPurchaseID(purchase.ID)
 	purchase.Update()
 
-	go purchasereturn.UpdatePurchaseReturnCount()
-	go purchasereturn.SetProductsPurchaseReturnStats()
-	go purchasereturnOld.SetProductsPurchaseReturnStats()
-	go purchasereturn.SetVendorPurchaseReturnStats()
-	go purchase.SetVendorPurchaseStats()
+	hold.Go(func() { purchasereturn.UpdatePurchaseReturnCount() })
+	hold.Go(func() { purchasereturn.SetProductsPurchaseReturnStats() })
+	hold.Go(func() { purchasereturnOld.SetProductsPurchaseReturnStats() })
+	hold.Go(func() { purchasereturn.SetVendorPurchaseReturnStats() })
+	hold.Go(func() { purchase.SetVendorPurchaseStats() })
 
 	if !store.Settings.DisablePurchasesOnAccounts || purchasereturn.EnableOnAccounts {
+		hold.Add()
 		go func() {
+			defer hold.Release()
 			purchasereturn.SetPostBalances()
 			purchasereturnOld.SetPostBalances()
 		}()
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		purchasereturn.ClearProductsHistory()
 		purchasereturn.CreateProductsHistory(true, purchasereturnOld)
 	}()
@@ -624,6 +637,10 @@ func DeletePurchaseReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	purchasereturn, err := store.FindPurchaseReturnByID(&purchasereturnID, bson.M{})
 	if err != nil {

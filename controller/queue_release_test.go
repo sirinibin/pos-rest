@@ -11,7 +11,7 @@ func TestQueueRelease_PanicReleasesOnce(t *testing.T) {
 	func() {
 		defer func() { _ = recover() }()
 		q.WaitUntilMyTurn("first")
-		release := queueRelease(q, store, "sales_return")
+		release := queueRelease(q, "first")
 		defer release()
 		release() // the explicit release on the happy path
 		panic("handler panics after releasing")
@@ -21,7 +21,7 @@ func TestQueueRelease_PanicReleasesOnce(t *testing.T) {
 	}
 	func() {
 		defer func() { _ = recover() }()
-		release := queueRelease(q, store, "sales_return")
+		release := queueRelease(q, "second")
 		defer release()
 		panic("handler panics before releasing")
 	}()

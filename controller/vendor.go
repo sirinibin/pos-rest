@@ -239,6 +239,10 @@ func UpdateVendor(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	vendorOld, err := store.FindVendorByID(&vendorID, bson.M{})
 	if err != nil {

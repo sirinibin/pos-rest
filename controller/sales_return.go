@@ -134,6 +134,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	salesreturn.CreatedBy = &userID
 	salesreturn.UpdatedBy = &userID
@@ -164,7 +168,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
-	releaseQueue := queueRelease(queue, store.ID.Hex(), "sales_return")
+	releaseQueue := queueRelease(queue, queueToken)
 	defer releaseQueue()
 
 	// Validate data
@@ -212,7 +216,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
-		releaseZatca = queueRelease(zatcaQueue, store.ID.Hex(), "zatca")
+		releaseZatca = queueRelease(zatcaQueue, zatcaQueueToken)
 
 		err = salesreturn.ReportToZatca()
 		if err != nil {
@@ -328,11 +332,11 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.SetCustomerSalesReturnStats()
 	order.SetCustomerSalesStats()
 
-	go salesreturn.SetProductsSalesReturnStats()
+	hold.Go(func() { salesreturn.SetProductsSalesReturnStats() })
 
-	go salesreturn.SetPostBalances()
+	hold.Go(func() { salesreturn.SetPostBalances() })
 
-	go salesreturn.CreateProductsHistory(true, nil)
+	hold.Go(func() { salesreturn.CreateProductsHistory(true, nil) })
 
 	store.NotifyUsers("sales_return_updated")
 	if salesreturn.StoreID != nil {
@@ -381,6 +385,10 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	salesreturnOld, err = store.FindSalesReturnByID(&salesreturnID, bson.M{})
 	if err != nil {
@@ -577,15 +585,19 @@ func UpdateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.SetCustomerSalesReturnStats()
 	order.SetCustomerSalesStats()
 
-	go salesreturn.SetProductsSalesReturnStats()
-	go salesreturnOld.SetProductsSalesReturnStats()
+	hold.Go(func() { salesreturn.SetProductsSalesReturnStats() })
+	hold.Go(func() { salesreturnOld.SetProductsSalesReturnStats() })
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		salesreturn.SetPostBalances()
 		salesreturnOld.SetPostBalances()
 	}()
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		salesreturn.ClearProductsHistory()
 		salesreturn.CreateProductsHistory(true, salesreturnOld)
 	}()
@@ -694,6 +706,10 @@ func DeleteSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	salesreturn, err := store.FindSalesReturnByID(&salesreturnID, bson.M{})
 	if err != nil {

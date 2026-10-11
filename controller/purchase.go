@@ -138,6 +138,10 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	var purchase *models.Purchase
 	// Decode data
@@ -165,6 +169,7 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	defer queue.Done(queueToken) // frees the queue on every path
 
 	// Validate data
 	if errs := purchase.Validate(w, r, "create", nil); len(errs) > 0 {
@@ -310,10 +315,10 @@ func CreatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
-		go purchase.SetPostBalances()
+		hold.Go(func() { purchase.SetPostBalances() })
 	}
 
-	go purchase.CreateProductsHistory(true, nil)
+	hold.Go(func() { purchase.CreateProductsHistory(true, nil) })
 
 	if store.Settings.EnableRFQSupplierOnPurchase && purchase.VendorID != nil && !purchase.VendorID.IsZero() && purchase.StoreID != nil {
 		vendorID := *purchase.VendorID
@@ -367,6 +372,10 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	purchaseOld, err = store.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {
@@ -562,13 +571,17 @@ func UpdatePurchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !store.Settings.DisablePurchasesOnAccounts || purchase.EnableOnAccounts {
+		hold.Add()
 		go func() {
+			defer hold.Release()
 			purchase.SetPostBalances()
 			purchaseOld.SetPostBalances()
 		}()
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		purchase.ClearProductsHistory()
 		purchase.CreateProductsHistory(true, purchaseOld)
 	}()
@@ -694,6 +707,10 @@ func DeletePurchase(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	purchase, err := store.FindPurchaseByID(&purchaseID, bson.M{})
 	if err != nil {

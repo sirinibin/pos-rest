@@ -107,6 +107,10 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	var item *models.NonVATSalesReturn
 	if !utils.Decode(w, r, &item) {
@@ -139,7 +143,7 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
-	releaseQueue := queueRelease(queue, store.ID.Hex(), "non_vat_sales_return")
+	releaseQueue := queueRelease(queue, queueToken)
 	defer releaseQueue()
 
 	if errs := item.Validate(w, r, "create"); len(errs) > 0 {
@@ -184,21 +188,20 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	releaseQueue()
 
-	// Update return count on the parent non_vat_sales document
+	// Update return count on the parent non_vat_sales document; $inc so two
+	// returns of one sale saved at once both count.
 	if item.NonVATSalesID != nil && !item.NonVATSalesID.IsZero() {
-		parent, err := store.FindNonVATSalesByID(item.NonVATSalesID, bson.M{})
-		if err == nil {
-			parent.ReturnCount++
-			parent.ReturnAmount += item.NetTotal
-			_ = parent.Update()
-		}
+		_ = store.AddNonVATSalesReturn(item.NonVATSalesID, item.NetTotal)
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		_ = item.CreateProductsNonVATSalesReturnHistory()
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesReturnStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -280,6 +283,10 @@ func UpdateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	params := mux.Vars(r)
 	ID, err := primitive.ObjectIDFromHex(params["id"])
@@ -354,13 +361,16 @@ func UpdateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		_ = item.UndoAccounting()
 		_ = item.ClearProductsNonVATSalesReturnHistory()
 		_ = item.CreateProductsNonVATSalesReturnHistory()
 		_ = item.SetProductsStock()
 		_ = item.DoAccounting()
 		_ = item.SetCustomerNonVATSalesReturnStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true
@@ -389,6 +399,10 @@ func DeleteNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	params := mux.Vars(r)
 	ID, err := primitive.ObjectIDFromHex(params["id"])
@@ -416,11 +430,14 @@ func DeleteNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		_ = item.UndoAccounting()
 		_ = item.ClearProductsNonVATSalesReturnHistory()
 		_ = item.SetProductsStock()
 		_ = item.SetCustomerNonVATSalesReturnStats()
+		_ = models.RefreshCustomerCreditBalance(item.StoreID, item.CustomerID)
 	}()
 
 	response.Status = true

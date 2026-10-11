@@ -417,6 +417,18 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// What was stored before this request: only the fields the request
+	// changes are written back, so concurrent saves of different settings
+	// do not undo each other.
+	before, err := models.StoreSnapshot(store)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Decode data
 	if !utils.Decode(w, r, &store) {
 		return
@@ -509,7 +521,7 @@ func UpdateStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = store.Update()
+	err = store.UpdateChanged(before)
 	if err != nil {
 		response.Status = false
 		response.Errors = make(map[string]string)

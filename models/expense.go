@@ -59,6 +59,7 @@ type Expense struct {
 	VatPrice            float64               `bson:"vat_price" json:"vat_price"`
 	VendorName          string                `json:"vendor_name" bson:"vendor_name"`
 	VendorNameArabic    string                `json:"vendor_name_arabic" bson:"vendor_name_arabic"`
+	redisCounters counterClaims // numbers this document took while being created; never stored
 }
 
 func (expense *Expense) AttributesValueChangeEvent(expenseOld *Expense) error {
@@ -743,14 +744,14 @@ func (expense *Expense) MakeRedisCode() error {
 			return err
 		}
 		startFrom := store.ExpenseSerialNumber.StartFromCount
-		err = db.RedisClient.Set(redisKey, startFrom+count-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom+count-1, 0).Err()
 		if err != nil {
 			return err
 		}
 	}
 
 	// === 4. Increment global counter ===
-	globalIncr, err := db.RedisClient.Incr(redisKey).Result()
+	globalIncr, err := expense.redisCounters.incr(redisKey)
 	if err != nil {
 		return err
 	}
@@ -780,12 +781,12 @@ func (expense *Expense) MakeRedisCode() error {
 			}
 
 			if monthlyCount == 0 {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
 			} else {
-				err = db.RedisClient.Set(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
+				err = db.RedisClient.SetNX(monthlyRedisKey, startFrom+monthlyCount-1, 0).Err()
 				if err != nil {
 					return err
 				}
@@ -793,7 +794,7 @@ func (expense *Expense) MakeRedisCode() error {
 		}
 
 		// Increment monthly counter and use it
-		monthlyIncr, err := db.RedisClient.Incr(monthlyRedisKey).Result()
+		monthlyIncr, err := expense.redisCounters.incr(monthlyRedisKey)
 		if err != nil {
 			return err
 		}
@@ -820,46 +821,9 @@ func (expense *Expense) MakeRedisCode() error {
 }
 
 func (expense *Expense) UnMakeRedisCode() error {
-	store, err := FindStoreByID(expense.StoreID, bson.M{})
-	if err != nil {
-		return err
-	}
-
-	// Global counter key
-	redisKey := expense.StoreID.Hex() + "_expense_counter"
-
-	// Get location from store.CountryCode
-	location := time.UTC
-	if timeZone, ok := TimezoneMap[strings.ToUpper(store.CountryCode)]; ok {
-		loc, err := time.LoadLocation(timeZone)
-		if err == nil {
-			location = loc
-		}
-	}
-
-	// Use CreatedAt, or fallback to now
-	baseTime := expense.CreatedAt.In(location)
-
-	// Always try to decrement global counter
-	if exists, err := db.RedisClient.Exists(redisKey).Result(); err == nil && exists != 0 {
-		if _, err := db.RedisClient.Decr(redisKey).Result(); err != nil {
-			return err
-		}
-	}
-
-	// Decrement monthly counter only if Prefix contains "DATE"
-	if strings.Contains(store.ExpenseSerialNumber.Prefix, "DATE") {
-		monthKey := baseTime.Format("200601") // e.g., 202505
-		monthlyRedisKey := expense.StoreID.Hex() + "_expense_counter_" + monthKey
-
-		if monthlyExists, err := db.RedisClient.Exists(monthlyRedisKey).Result(); err == nil && monthlyExists != 0 {
-			if _, err := db.RedisClient.Decr(monthlyRedisKey).Result(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	// Give the numbers back only while nobody took a later one (see
+	// counters.go); otherwise they stay unused gaps, never reused.
+	return expense.redisCounters.release()
 }
 
 /*
@@ -887,7 +851,7 @@ func (model *Expense) MakeCode() error {
 
 		startFrom += count
 		// Set the initial counter value (startFrom - 1) so that the first increment gives startFrom
-		err = db.RedisClient.Set(redisKey, startFrom-1, 0).Err()
+		err = db.RedisClient.SetNX(redisKey, startFrom-1, 0).Err()
 		if err != nil {
 			return err
 		}
@@ -1331,7 +1295,22 @@ func (expense *Expense) FindPreviousExpense(selectFields map[string]interface{})
 
 //Accounting
 
+// DoAccounting posts the expense. An expense at the same minute as its
+// neighbour moves the neighbour a minute on and re-posts it; two expenses
+// saved at once both re-posted the same neighbour and posted it twice. The
+// store's expense accounting runs one at a time (in-process lock).
 func (expense *Expense) DoAccounting() error {
+	defer LockKey("expense-accounting:" + expense.StoreID.Hex())()
+	return expense.doAccounting()
+}
+
+// UndoAccounting removes the expense's postings; see DoAccounting.
+func (expense *Expense) UndoAccounting() error {
+	defer LockKey("expense-accounting:" + expense.StoreID.Hex())()
+	return expense.undoAccounting()
+}
+
+func (expense *Expense) doAccounting() error {
 	previousExpense, err := expense.FindPreviousExpense(bson.M{})
 	if err != nil {
 		return errors.New("Error finding previous expense:" + err.Error())
@@ -1362,11 +1341,11 @@ func (expense *Expense) DoAccounting() error {
 				return err
 			}
 
-			err = nextExpense.UndoAccounting()
+			err = nextExpense.undoAccounting()
 			if err != nil {
 				return err
 			}
-			err = nextExpense.DoAccounting()
+			err = nextExpense.doAccounting()
 			if err != nil {
 				return err
 			}
@@ -1385,7 +1364,7 @@ func (expense *Expense) DoAccounting() error {
 	return nil
 }
 
-func (expense *Expense) UndoAccounting() error {
+func (expense *Expense) undoAccounting() error {
 	store, err := FindStoreByID(expense.StoreID, bson.M{})
 	if err != nil {
 		return err

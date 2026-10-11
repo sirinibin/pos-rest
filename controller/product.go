@@ -182,6 +182,10 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	var product *models.Product
 	// Decode data
@@ -323,7 +327,9 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		product.Update(nil)
 	}
 
+	hold.Add()
 	go func() {
+		defer hold.Release()
 		product.CreateStockAdjustmentHistory()
 	}()
 
@@ -359,6 +365,10 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	productID, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
@@ -480,7 +490,9 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 
 	// Pass product in: the handler reloads product below, and the goroutine must
 	// keep the saved copy instead of racing with that reassignment.
+	hold.Add()
 	go func(product *models.Product) {
+		defer hold.Release()
 		product.ClearStockAdjustmentHistory()
 		product.CreateStockAdjustmentHistory()
 	}(product)
@@ -661,6 +673,10 @@ func DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	product, err := store.FindProductByID(&productID, bson.M{})
 	if err != nil {
@@ -772,6 +788,10 @@ func RestoreProduct(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	product, err := store.FindProductByID(&productID, bson.M{})
 	if err != nil {

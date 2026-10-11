@@ -188,11 +188,63 @@ func (store *Store) GenerateRepairJobNumber() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// count+1 alone handed the same number to jobs created together, and
+	// again after a job was deleted. The number now comes from a counter that
+	// first moves up to the highest number already in use (old count+1 rule
+	// and the highest RJ-n stored, so it continues from existing data) and
+	// then counts on atomically.
 	count, err := collection.CountDocuments(ctx, bson.M{"deleted": bson.M{"$ne": true}})
 	if err != nil {
 		return "", err
 	}
-	return "RJ-" + strconv.FormatInt(count+1, 10), nil
+	highest := count
+	cur, err := collection.Find(ctx, bson.M{"job_number": bson.M{"$regex": "^RJ-[0-9]+$"}},
+		options.Find().SetProjection(bson.M{"job_number": 1}))
+	if err != nil {
+		return "", err
+	}
+	for cur.Next(ctx) {
+		var d struct {
+			JobNumber string `bson:"job_number"`
+		}
+		if cur.Decode(&d) == nil {
+			if n, err := strconv.ParseInt(d.JobNumber[3:], 10, 64); err == nil && n > highest {
+				highest = n
+			}
+		}
+	}
+	cur.Close(ctx)
+	n, err := nextStoreSerial(ctx, store.ID, "repair_job", highest)
+	if err != nil {
+		return "", err
+	}
+	return "RJ-" + strconv.FormatInt(n, 10), nil
+}
+
+// collStoreSerials (store DB): {_id: <series>, n: <last number handed out>}.
+// A new collection that only this code reads; nothing else changes shape.
+const collStoreSerials = "serial_counters"
+
+// nextStoreSerial returns the next number of a series, never the same number
+// twice: the counter is raised to highest ($max) and then incremented ($inc),
+// both atomic single-document updates (no transaction needed), so requests
+// arriving together, or from another API process, never share a number.
+func nextStoreSerial(ctx context.Context, storeID primitive.ObjectID, series string, highest int64) (int64, error) {
+	col := db.GetDB("store_" + storeID.Hex()).Collection(collStoreSerials)
+	_, err := col.UpdateOne(ctx, bson.M{"_id": series}, bson.M{"$max": bson.M{"n": highest}}, options.Update().SetUpsert(true))
+	if mongo.IsDuplicateKeyError(err) {
+		// two first-time upserts at once: the other one created the counter
+		_, err = col.UpdateOne(ctx, bson.M{"_id": series}, bson.M{"$max": bson.M{"n": highest}})
+	}
+	if err != nil {
+		return 0, err
+	}
+	var d struct {
+		N int64 `bson:"n"`
+	}
+	err = col.FindOneAndUpdate(ctx, bson.M{"_id": series}, bson.M{"$inc": bson.M{"n": 1}},
+		options.FindOneAndUpdate().SetReturnDocument(options.After)).Decode(&d)
+	return d.N, err
 }
 
 func (job *RepairJob) Insert() error {

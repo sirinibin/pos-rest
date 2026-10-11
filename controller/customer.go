@@ -275,6 +275,10 @@ func UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	customerOld, err = store.FindCustomerByID(&customerID, nil)
 	if err != nil {

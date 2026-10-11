@@ -1091,7 +1091,11 @@ func nextProductCode(x *mapCtx) string {
 		}
 		cur.Close(ctx)
 	}
-	return base + leftPad(max+1, 4)
+	n, err := nextSerial(storeDB(x.storeHex), "product|"+base, max)
+	if err != nil {
+		n = max + 1 // counter unavailable: fall back to the scan
+	}
+	return base + leftPad(n, 4)
 }
 
 func leftPad(n, w int) string {

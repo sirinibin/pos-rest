@@ -136,6 +136,10 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	if expense.VendorID != nil && !expense.VendorID.IsZero() {
 		expense.VatPercent = &store.VatPercent
@@ -193,7 +197,7 @@ func CreateExpense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go expense.SetPostBalances()
+	hold.Go(func() { expense.SetPostBalances() })
 
 	store.NotifyUsers("expense_updated")
 	if expense.StoreID != nil {
@@ -241,6 +245,10 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	expenseOld, err = store.FindExpenseByID(&expenseID, bson.M{})
 	if err != nil {
@@ -340,7 +348,9 @@ func UpdateExpense(w http.ResponseWriter, r *http.Request) {
 
 	// Pass expense in: the handler reloads expense below, and the goroutine must
 	// keep the saved copy instead of racing with that reassignment.
+	hold.Add()
 	go func(expense *models.Expense) {
+		defer hold.Release()
 		expense.SetPostBalances()
 		expenseOld.SetPostBalances()
 	}(expense)
@@ -518,6 +528,10 @@ func DeleteExpense(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	expense, err := store.FindExpenseByID(&expenseID, bson.M{})
 	if err != nil {

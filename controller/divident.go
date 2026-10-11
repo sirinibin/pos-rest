@@ -97,6 +97,10 @@ func CreateDivident(w http.ResponseWriter, r *http.Request) {
 	if !utils.Decode(w, r, &divident) {
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStoreOf(divident.StoreID)
+	defer hold.Release()
 
 	userID, err := primitive.ObjectIDFromHex(tokenClaims.UserID)
 	if err != nil {
@@ -141,7 +145,7 @@ func CreateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go divident.SetPostBalances()
+	hold.Go(func() { divident.SetPostBalances() })
 
 	response.Status = true
 	response.Result = divident
@@ -184,6 +188,10 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	dividentOld, err = store.FindDividentByID(&dividentID, bson.M{})
 	if err != nil {
@@ -272,7 +280,7 @@ func UpdateDivident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go divident.SetPostBalances()
+	hold.Go(func() { divident.SetPostBalances() })
 
 	response.Status = true
 	response.Result = divident
@@ -420,6 +428,10 @@ func DeleteDivident(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+	// one write of this store at a time, with the stock/ledger work it starts
+	// in the background (in-process lock: the API runs as one process)
+	hold := models.HoldStore(store.ID)
+	defer hold.Release()
 
 	divident, err := store.FindDividentByID(&dividentID, bson.M{})
 	if err != nil {
