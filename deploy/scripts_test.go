@@ -400,7 +400,7 @@ func TestEnableSocket_HTTPSPortIsNextPort(t *testing.T) {
 	}
 }
 
-// The workflows run the script as `ssh host "bash -s -- ..." < remote_restart.sh`.
+// deploy.sh and deploy_quick.sh run the script as `ssh host "bash -s -- ..." < remote_restart.sh`.
 // A command that reads stdin (sudo, systemctl) must not eat the rest of it.
 func TestRemoteRestart_SafeWhenPipedToBashS(t *testing.T) {
 	e := newEnv(t)
@@ -437,10 +437,8 @@ func TestRemoteRestart_SafeWhenPipedToBashS(t *testing.T) {
 
 func TestDeployPathsUseGracefulRestart(t *testing.T) {
 	paths := map[string][]string{
-		"../.github/workflows/deploy.yml":       {"start-api-test 2002", "start-api 2000"},
-		"../.github/workflows/deploy_quick.yml": {"service: start-api\n", "port: 2000", "service: start-api-test\n", "port: 2002"},
-		"../deploy.sh":                          {`"TEST" 2002`, `"PRODUCTION" 2000`},
-		"../deploy_quick.sh":                    {"PORT=2000", "PORT=2002"},
+		"../deploy.sh":       {`"TEST" 2002`, `"PRODUCTION" 2000`},
+		"../deploy_quick.sh": {"PORT=2000", "PORT=2002"},
 	}
 	for path, wants := range paths {
 		b, err := os.ReadFile(path)
@@ -462,15 +460,6 @@ func TestDeployPathsUseGracefulRestart(t *testing.T) {
 			if !strings.Contains(s, w) {
 				t.Errorf("%s: missing %q (service/port mapping)", path, w)
 			}
-		}
-	}
-}
-
-func TestDeployWorkflowsRedeployOnScriptChange(t *testing.T) {
-	for _, path := range []string{"../.github/workflows/deploy.yml"} {
-		b, _ := os.ReadFile(path)
-		if !strings.Contains(string(b), `- "deploy/**"`) {
-			t.Errorf("%s does not trigger on deploy/** changes", path)
 		}
 	}
 }

@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
-# Deploy the Go backend to both test and production after the unit,
-# functional and e2e suites pass (ci/run_all_tests.sh; FULL=1 also runs the
-# race detector, every screen size and the ZATCA sandbox, as Actions does).
+# Deploy the Go backend to both test and production after every test suite
+# passes (ci/run_all_tests.sh: unit + API, ZATCA signing, integration, API
+# e2e, the frontend's UI e2e on every screen size, the race detector and the
+# ZATCA sandbox).
 #
-# One script for both servers, like .github/workflows/deploy.yml: test once,
-# build once, deploy that binary to the test API, health-check it (rolled back
-# if unhealthy), then the same binary to production.
+# The only deploy path (GitHub Actions is not used). One script for both
+# servers: test once, build once, deploy that binary to the test API,
+# health-check it (rolled back if unhealthy), then the same binary to
+# production.
 #
 # Usage:
 #   ./deploy.sh              — test API, then production
 #   ./deploy.sh --test-only  — stop after the test API
-#   FULL=1 ./deploy.sh       — with the full GitHub Actions test set
 #
 # Needs Docker running (throwaway MongoDB, Redis and S3 for the tests); see
 # ci/run_all_tests.sh for the other tools and settings.
 set -euo pipefail
+
+# Deploy only after every suite passes: QUICK=1 (fewer suites) is for local
+# iteration with ci/run_all_tests.sh, never for a deploy.
+if [ -n "${QUICK:-}" ]; then
+    echo "==> ABORTED: deploy.sh always runs every test suite; unset QUICK and run it again."
+    exit 1
+fi
 
 SSH_KEY="$HOME/Downloads/startuptech-v2.pem"
 AWS_USER="ubuntu"
@@ -46,9 +54,10 @@ fi
 echo "==> Working tree is clean."
 
 # ─── 1. Tests ─────────────────────────────────────────────────────────────────
-# Unit + API, ZATCA signing, integration with MongoDB/Redis/S3, API e2e and
-# the frontend's UI e2e, on this machine (see ci/run_all_tests.sh). Nothing
-# deploys unless they pass.
+# Every suite: unit + API, ZATCA signing, integration with MongoDB/Redis/S3,
+# API e2e, the frontend's UI e2e on every screen size, the race detector and
+# the ZATCA sandbox, on this machine (see ci/run_all_tests.sh). Nothing
+# deploys unless they all pass.
 echo ""
 echo "==> Running the test suites (ci/run_all_tests.sh)..."
 bash ci/run_all_tests.sh

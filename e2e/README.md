@@ -28,9 +28,8 @@ go build -o pos-rest . && API_PORT=2000 ./pos-rest &
 go test -tags e2e ./e2e/... -count=1 -v
 ```
 
-GitHub Actions runs these, the unit/API tests, the integration tests
+`ci/run_all_tests.sh` (run by `deploy.sh`) runs these, the unit/API tests, the integration tests
 (`-tags integration`), a race-detector job (unit + integration with `-race`,
 then this suite against a `-race` build of the server), the ZATCA sandbox
-tests (report only, so a sandbox outage can't block a deploy) and the
-frontend's full-stack Playwright suite in
-`.github/workflows/tests.yml` before every test and production deploy.
+tests and the frontend's full-stack Playwright suite (every screen size) before
+every test and production deploy. GitHub Actions is not used.

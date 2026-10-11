@@ -15,8 +15,8 @@ import (
 	"github.com/sirinibin/startpos/backend/models"
 )
 
-// These tests talk to a real S3-compatible server (versitygw in CI, see
-// tests.yml), so they cover the SigV4 signing that the unit tests' fake
+// These tests talk to a real S3-compatible server (versitygw, see
+// ci/lib.sh), so they cover the SigV4 signing that the unit tests' fake
 // servers accept blindly. They skip when S3_TEST_ENDPOINT is unset.
 func s3TestSettings(t *testing.T) models.AdminSettings {
 	t.Helper()

@@ -11,7 +11,7 @@ import (
 
 // ZATCA Phase 2 against ZATCA's sandbox (the developer portal). Runs only
 // with -tags "e2e zatca" and needs the ZatcaPython venv and internet access;
-// tests.yml runs it in the zatca-sandbox job. The store is always a new,
+// ci/run_all_tests.sh runs it before every deploy. The store is always a new,
 // non-production one with ZATCA's test VAT number and CRN, so nothing here
 // touches a real taxpayer.
 const (

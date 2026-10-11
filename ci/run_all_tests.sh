@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# The unit, functional and end-to-end suites of .github/workflows/tests.yml,
-# on this machine. deploy.sh runs this and deploys only if it exits 0. It
-# stops at the first failing stage.
+# Every test suite, on this machine. deploy.sh runs this and deploys only if
+# it exits 0. It stops at the first failing stage.
 #
-#   ci/run_all_tests.sh          unit, functional and e2e (the default)
-#   FULL=1 ci/run_all_tests.sh   also what only GitHub Actions needs to run
-#                                every time: race detector, every screen
-#                                size, ZATCA sandbox
+#   ci/run_all_tests.sh          every suite (what deploy.sh runs)
+#   QUICK=1 ci/run_all_tests.sh  laptop screen only, no race detector or ZATCA
+#                                sandbox; for local iteration, never enough to
+#                                deploy
 #
 # Stages (each on fresh, empty MongoDB and Redis):
 #   1. Unit and API tests, then the ZATCA signing-key tests (Python + Fatoora SDK)
@@ -14,12 +13,12 @@
 #   3. API end-to-end tests against the built server (incl. the robustness
 #      sweep and the restart test)
 #   4. UI end-to-end tests: the frontend's full-stack Playwright suite against
-#      this API serving the frontend build, on a laptop screen (FULL=1: every
-#      screen size)
-#   FULL=1 only:
+#      this API serving the frontend build, on every screen size (QUICK=1:
+#      laptop screen only)
 #   5. Race detector: unit + integration with -race, then the API e2e suite
 #      against a -race build of the server (server-side races: report only)
 #   6. ZATCA sandbox, API and UI (needs ZATCA's sandbox online)
+#   (5 and 6 are skipped with QUICK=1)
 #
 # Tests run on a copy of the committed tree (HEAD), as CI checks out the
 # commit, so go mod tidy and the ZATCA SDK never touch this checkout.
@@ -34,6 +33,10 @@ API_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=ci/lib.sh
 . "$API_DIR/ci/lib.sh"
 trap ci_cleanup EXIT
+
+# Every suite runs by default. QUICK=1 skips the slow ones for local
+# iteration only; deploy.sh refuses to run with it.
+if [ "${QUICK:-}" = 1 ]; then FULL=0; else FULL=1; fi
 
 SKIP="TestResolveDateKeyword_TimezoneOffset_SA"   # flaky near midnight UTC
 SKIP_DB="$SKIP|TestHealthCheck_ServicesDown"     # only holds with no MongoDB/Redis
@@ -117,10 +120,10 @@ FE_BUILD="$WORK/frontend-build"
 frontend_build "$FE" "" "$FE_BUILD"
 playwright_setup "$FE/e2e"
 
-if [ "${FULL:-}" = 1 ]; then
+if [ "$FULL" = 1 ]; then
     UI_PROJECTS="" UI_LABEL="every screen size"
 else
-    UI_PROJECTS="--project=desktop" UI_LABEL="laptop screen; FULL=1 for every size"
+    UI_PROJECTS="--project=desktop" UI_LABEL="laptop screen only (QUICK=1)"
 fi
 stage "UI end-to-end tests (Playwright, $UI_LABEL)"
 services_up
@@ -129,8 +132,8 @@ start_api "$API" ./pos-rest "$CI_LOGS/ui-e2e-server.log" "$FE_BUILD"
 (cd "$FE/e2e" && npx playwright test -c playwright.fullstack.config.js $UI_PROJECTS) || fail "UI e2e tests (report: $FE/e2e/playwright-report-fullstack)"
 stop_api
 
-# ── 5. Race detector against MongoDB + Redis (FULL=1) ───────────────────────
-if [ "${FULL:-}" = 1 ]; then
+# ── 5. Race detector against MongoDB + Redis ────────────────────────────────
+if [ "$FULL" = 1 ]; then
     stage "Race detector: unit and integration tests"
     services_up
     MONGO_DB=startpos_race_test go test -race -tags integration ./... -count=1 -skip "$SKIP_DB"
@@ -150,11 +153,10 @@ if [ "${FULL:-}" = 1 ]; then
     fi
 fi
 
-# ── 6. ZATCA Phase 2 against ZATCA's sandbox (FULL=1) ───────────────────────
-# Depends on ZATCA's sandbox being up and reachable, so it is left out by
-# default (the GitHub Actions pipeline still runs it). A new non-production
-# store: VAT 399999999900003, CRN 4030360927, OTP 12345.
-if [ "${FULL:-}" = 1 ]; then
+# ── 6. ZATCA Phase 2 against ZATCA's sandbox ────────────────────────────────
+# Needs ZATCA's sandbox up and reachable; a sandbox outage blocks a deploy.
+# A new non-production store: VAT 399999999900003, CRN 4030360927, OTP 12345.
+if [ "$FULL" = 1 ]; then
     stage "ZATCA sandbox (API + UI)"
     rm -rf ZatcaPython/venv
     ln -s "$VENV" ZatcaPython/venv
@@ -175,7 +177,7 @@ if [ "${FULL:-}" = 1 ]; then
     stop_api
 else
     stage_end
-    note "race detector, other screen sizes and ZATCA sandbox not run (FULL=1 runs them; GitHub Actions runs them on every push)"
+    note "QUICK=1: race detector, other screen sizes and ZATCA sandbox not run; not enough to deploy"
 fi
 
 ci_summary

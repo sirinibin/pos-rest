@@ -1,251 +1,91 @@
 package deploy
 
-// Structure tests for the GitHub Actions deploy pipeline: master and test
-// carry the same code, so one workflow runs the suites once, builds once and
-// deploys that build to the test API and then to production.
+// GitHub Actions is not used (2026-10-11): deploy.sh is the only deploy path.
+// It tests once, builds once and deploys that build to the test API and,
+// only after it is healthy, to production.
 
 import (
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
-
-	"go.yaml.in/yaml/v3"
 )
 
-type workflow struct {
-	On struct {
-		Push struct {
-			Branches []string `yaml:"branches"`
-			Paths    []string `yaml:"paths"`
-		} `yaml:"push"`
-		WorkflowDispatch *struct {
-			Inputs map[string]struct {
-				Default string   `yaml:"default"`
-				Options []string `yaml:"options"`
-			} `yaml:"inputs"`
-		} `yaml:"workflow_dispatch"`
-	} `yaml:"on"`
-	Concurrency struct {
-		Group            string `yaml:"group"`
-		CancelInProgress bool   `yaml:"cancel-in-progress"`
-	} `yaml:"concurrency"`
-	Jobs map[string]struct {
-		Uses  string            `yaml:"uses"`
-		With  map[string]string `yaml:"with"`
-		Needs yaml.Node         `yaml:"needs"`
-		Steps []struct {
-			Name string            `yaml:"name"`
-			Uses string            `yaml:"uses"`
-			Run  string            `yaml:"run"`
-			With map[string]string `yaml:"with"`
-		} `yaml:"steps"`
-	} `yaml:"jobs"`
+func TestNoGitHubActionsWorkflows(t *testing.T) {
+	if _, err := os.Stat("../.github/workflows"); err == nil {
+		t.Error(".github/workflows exists; GitHub Actions is not used, deploy.sh is the only deploy path")
+	}
 }
 
-func loadWorkflow(t *testing.T, path string) workflow {
-	t.Helper()
-	b, err := os.ReadFile(path)
+func TestDeploySh_TestsOnceThenTestAPIBeforeProduction(t *testing.T) {
+	b, err := os.ReadFile("../deploy.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var w workflow
-	if err := yaml.Unmarshal(b, &w); err != nil {
-		t.Fatalf("%s: %v", path, err)
-	}
-	return w
-}
-
-func needsOf(t *testing.T, n yaml.Node) []string {
-	t.Helper()
-	switch n.Kind {
-	case 0:
-		return nil
-	case yaml.ScalarNode:
-		return []string{n.Value}
-	case yaml.SequenceNode:
-		var out []string
-		for _, c := range n.Content {
-			out = append(out, c.Value)
-		}
-		return out
-	}
-	t.Fatalf("unexpected needs node kind %v", n.Kind)
-	return nil
-}
-
-func sameSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	m := map[string]bool{}
-	for _, x := range a {
-		m[x] = true
-	}
-	for _, x := range b {
-		if !m[x] {
-			return false
-		}
-	}
-	return true
-}
-
-func TestDeployWorkflow_OnePipelineForBothServers(t *testing.T) {
-	w := loadWorkflow(t, "../.github/workflows/deploy.yml")
-
-	if !sameSet(w.On.Push.Branches, []string{"master"}) {
-		t.Errorf("deploy.yml must run on pushes to master only (test is a mirror), got %v", w.On.Push.Branches)
-	}
-	if raw, _ := os.ReadFile("../.github/workflows/deploy.yml"); !strings.Contains(string(raw), "\n  workflow_dispatch:") {
-		t.Error("deploy.yml should keep a manual Run workflow button")
-	}
-	for _, p := range []string{"**.go", "**.mod", "**.sum", "e2e/**", "ZatcaPython/**", "deploy/**", ".github/workflows/deploy.yml", ".github/workflows/tests.yml"} {
-		found := false
-		for _, have := range w.On.Push.Paths {
-			found = found || have == p
-		}
-		if !found {
-			t.Errorf("deploy.yml paths filter is missing %q", p)
-		}
-	}
-	if w.Concurrency.Group == "" || w.Concurrency.CancelInProgress {
-		t.Errorf("deploys must queue in one concurrency group, got %+v", w.Concurrency)
-	}
-
-	want := map[string][]string{
-		"tests":             nil,
-		"build":             nil,
-		"deploy-test":       {"tests", "build"},
-		"deploy-production": {"deploy-test"},
-	}
-	if len(w.Jobs) != len(want) {
-		t.Errorf("jobs = %d, want exactly %v", len(w.Jobs), want)
-	}
-	for name, needs := range want {
-		j, ok := w.Jobs[name]
-		if !ok {
-			t.Errorf("job %q missing", name)
-			continue
-		}
-		if got := needsOf(t, j.Needs); !sameSet(got, needs) {
-			t.Errorf("%s needs %v, want %v", name, got, needs)
-		}
-	}
-
-	// The suites run exactly once, against the frontend's master.
-	if j := w.Jobs["tests"]; j.Uses != "./.github/workflows/tests.yml" || j.With["frontend_ref"] != "master" {
-		t.Errorf("tests job = uses %q with %v", j.Uses, j.With)
-	}
-
-	// One build: only the build job compiles; both deploys take its artifact.
-	for name, j := range w.Jobs {
-		for _, s := range j.Steps {
-			if strings.Contains(s.Run, "go build") && name != "build" {
-				t.Errorf("%s compiles its own binary; it must deploy the tested build", name)
-			}
-		}
-	}
-	var uploaded string
-	for _, s := range w.Jobs["build"].Steps {
-		if strings.HasPrefix(s.Uses, "actions/upload-artifact@") {
-			uploaded = s.With["name"]
-		}
-	}
-	if uploaded == "" {
-		t.Fatal("build job does not upload its binary")
-	}
-	for _, name := range []string{"deploy-test", "deploy-production"} {
-		var downloaded string
-		var restart string
-		for _, s := range w.Jobs[name].Steps {
-			if strings.HasPrefix(s.Uses, "actions/download-artifact@") {
-				downloaded = s.With["name"]
-			}
-			if strings.Contains(s.Run, "< deploy/remote_restart.sh") {
-				restart = s.Run
-			}
-		}
-		if downloaded != uploaded {
-			t.Errorf("%s deploys artifact %q, want the built %q", name, downloaded, uploaded)
-		}
-		if restart == "" {
-			t.Errorf("%s does not restart through deploy/remote_restart.sh", name)
-		}
-	}
-
-	// Each job talks to its own server and never the other's.
-	checks := map[string]struct{ want, never string }{
-		"deploy-test":       {"start-api-test 2002", "AWS_GO_API_PROD_DEST_PATH"},
-		"deploy-production": {"start-api 2000", "AWS_GO_API_TEST_DEST_PATH"},
-	}
-	for name, c := range checks {
-		var all strings.Builder
-		for _, s := range w.Jobs[name].Steps {
-			all.WriteString(s.Run)
-		}
-		if !strings.Contains(all.String(), c.want) {
-			t.Errorf("%s does not restart %q", name, c.want)
-		}
-		if strings.Contains(all.String(), c.never) {
-			t.Errorf("%s touches %s", name, c.never)
-		}
-	}
-}
-
-func TestDeployWorkflow_OldPerBranchWorkflowsAreGone(t *testing.T) {
-	for _, p := range []string{"../.github/workflows/deploy_test.yml", "../.github/workflows/deploy_prod.yml"} {
-		if _, err := os.Stat(p); err == nil {
-			t.Errorf("%s still exists; it would run the suites a second time", p)
-		}
-	}
-}
-
-func TestQuickDeploy_TargetsTestThenProduction(t *testing.T) {
-	w := loadWorkflow(t, "../.github/workflows/deploy_quick.yml")
-	if len(w.On.Push.Branches) != 0 {
-		t.Fatal("quick deploy must never run on push")
-	}
-	in, ok := w.On.WorkflowDispatch.Inputs["target"]
-	if !ok || in.Default != "both" || !sameSet(in.Options, []string{"both", "test", "production"}) {
-		t.Errorf("target input = %+v", in)
-	}
-	if got := needsOf(t, w.Jobs["deploy"].Needs); !sameSet(got, []string{"build"}) {
-		t.Errorf("deploy needs %v", got)
-	}
-	b, _ := os.ReadFile("../.github/workflows/deploy_quick.yml")
 	s := string(b)
-	if strings.Index(s, "target: test") > strings.Index(s, "target: production") {
-		t.Error("the test server must come before production in the matrix")
+	tests := strings.Index(s, "bash ci/run_all_tests.sh")
+	testAPI := strings.Index(s, `deploy_to "start-api-test"`)
+	prod := strings.Index(s, `deploy_to "start-api" `)
+	if tests < 0 || testAPI < 0 || prod < 0 {
+		t.Fatalf("deploy.sh must run ci/run_all_tests.sh and deploy to start-api-test and start-api (tests=%d test=%d prod=%d)", tests, testAPI, prod)
 	}
-	for _, w := range []string{"max-parallel: 1", "fail-fast: true"} {
-		if !strings.Contains(s, w) {
-			t.Errorf("quick deploy is missing %q", w)
+	if !(tests < testAPI && testAPI < prod) {
+		t.Errorf("deploy.sh order must be tests, test API, production (tests=%d test=%d prod=%d)", tests, testAPI, prod)
+	}
+	if n := strings.Count(s, `go build -o "$BINARY" .`); n != 1 {
+		t.Errorf("deploy.sh must build the API binary once, found %d builds", n)
+	}
+	if strings.Contains(s, ".github/workflows") {
+		t.Error("deploy.sh still refers to .github/workflows")
+	}
+}
+
+func TestQuickDeploy_ReachesTestFromMaster(t *testing.T) {
+	b, err := os.ReadFile("../deploy_quick.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if strings.Contains(s, "origin/test") {
+		t.Error("deploy_quick.sh still refers to the test branch")
+	}
+	if !strings.Contains(s, `if [ "$BRANCH" = master ] && $TO_TEST; then TARGET=test; fi`) {
+		t.Error("deploy_quick.sh must reach the test server from master with --test")
+	}
+}
+
+// Deploys happen only after every suite passes (user rule 2026-10-11): the
+// slow suites run by default, and QUICK=1 is refused by deploy.sh.
+func TestRunAllTests_EverySuiteByDefault(t *testing.T) {
+	b, err := os.ReadFile("../ci/run_all_tests.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if !strings.Contains(s, `if [ "${QUICK:-}" = 1 ]; then FULL=0; else FULL=1; fi`) {
+		t.Error("ci/run_all_tests.sh must run every suite unless QUICK=1")
+	}
+	if strings.Contains(s, `"${FULL:-}"`) {
+		t.Error("ci/run_all_tests.sh still reads FULL from the environment (opt-in)")
+	}
+	for _, stage := range []string{"Race detector", "ZATCA sandbox", `UI_PROJECTS="" UI_LABEL="every screen size"`} {
+		if !strings.Contains(s, stage) {
+			t.Errorf("ci/run_all_tests.sh is missing %q", stage)
 		}
 	}
 }
 
-// There is no test branch any more: nothing may wait on it or route by it.
-func TestNoWorkflowDependsOnATestBranch(t *testing.T) {
-	files := []string{
-		"../.github/workflows/deploy.yml",
-		"../.github/workflows/deploy_quick.yml",
-		"../.github/workflows/cleanup_merged_branches.yml",
-		"../.github/workflows/tests.yml",
-		"../deploy_quick.sh",
+func TestDeploySh_RefusesQuick(t *testing.T) {
+	cmd := exec.Command("bash", "../deploy.sh")
+	cmd.Env = append(os.Environ(), "QUICK=1", "HOME="+t.TempDir())
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("deploy.sh ran with QUICK=1:\n%s", out)
 	}
-	for _, f := range files {
-		b, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-		s := string(b)
-		for _, bad := range []string{"origin/test", "branches: [master, test]", "github.ref_name != 'test'", "frontend_ref: test"} {
-			if strings.Contains(s, bad) {
-				t.Errorf("%s still refers to the test branch (%q)", f, bad)
-			}
-		}
+	if !strings.Contains(string(out), "always runs every test suite") {
+		t.Fatalf("unexpected output:\n%s", out)
 	}
-	b, _ := os.ReadFile("../deploy_quick.sh")
-	if !strings.Contains(string(b), `if [ "$BRANCH" = master ] && $TO_TEST; then TARGET=test; fi`) {
-		t.Error("deploy_quick.sh must reach the test server from master with --test")
+	if strings.Contains(string(out), "Running the test suites") || strings.Contains(string(out), "Checking for uncommitted") {
+		t.Fatalf("deploy.sh went past the QUICK check:\n%s", out)
 	}
 }
