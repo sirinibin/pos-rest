@@ -262,6 +262,10 @@ func (store *Store) CreateAllIndexes() error {
 	idx("product_sales_return_history", bson.M{"created_at": -1})
 	idx("product_sales_return_history", bson.M{"updated_at": -1})
 
+	if err := store.CreatePerfIndexes(); err != nil {
+		errs = append(errs, err.Error())
+	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("store %s: %d index error(s): %s", store.ID.Hex(), len(errs), strings.Join(errs, " | "))
 	}

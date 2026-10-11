@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -1030,7 +1031,7 @@ func EnsureProcurementMessageIndexes() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	col := procurementMessageCol()
-	col.Indexes().CreateMany(ctx, []mongo.IndexModel{
+	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{
 			bson.E{Key: "store_id", Value: 1},
 			bson.E{Key: "type", Value: 1},
@@ -1040,5 +1041,16 @@ func EnsureProcurementMessageIndexes() {
 			bson.E{Key: "store_id", Value: 1},
 			bson.E{Key: "created_at", Value: 1},
 		}},
+		// unread / RFQ-candidate counts polled by the email and WhatsApp badges
+		{Keys: bson.D{
+			bson.E{Key: "store_id", Value: 1},
+			bson.E{Key: "direction", Value: 1},
+			bson.E{Key: "type", Value: 1},
+			bson.E{Key: "read", Value: 1},
+			bson.E{Key: "message_date", Value: 1},
+		}},
 	})
+	if err != nil {
+		log.Printf("procurement_messages indexes: %v", err)
+	}
 }

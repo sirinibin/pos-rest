@@ -115,6 +115,8 @@ func main() {
 	go models.EnsureRFQReceivedIndexes()
 	go models.EnsureRFQSupplierIndexes()
 	go models.EnsureGooglePlacesCacheIndexes()
+	go models.EnsureProcurementMessageIndexes()
+	go models.EnsurePerfIndexesAllStores()
 	go models.DeduplicateRFQSuppliersAllStores()
 
 	httpPort := env.Getenv("API_PORT", "2000")
