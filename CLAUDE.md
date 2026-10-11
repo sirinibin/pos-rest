@@ -23,6 +23,24 @@ deploy.sh enforces three gates before every deploy — all three must pass:
 backend/deploy.sh   # deploys to both test and production
 ```
 
+## v2 deploy without GitHub Actions (deploy_v2.sh)
+```
+./deploy_v2.sh                  # every CI gate in turn, then deploy (v2 branch, clean tree)
+./deploy_v2.sh --check          # every CI gate, no deploy
+./deploy_v2.sh --only unit,api  # just those steps, no deploy
+```
+Runs the same gates as `.github/workflows/deploy_v2.yml` one after another and deploys only when
+all pass: lint (go vet, staticcheck, silent build), unit (`-race`, no DB, >= 2000 passing, Card
+Bridge), api (`-tags integration`, MongoDB + Redis + `ci/s3-test-server.sh`, >= 2500, full route
+coverage), smoke (`ci/smoke.sh`), e2e (`e2e/run.sh`, race server, >= 300), ui-adapter (`e2e-starterp`:
+the frontend master build against /v1/erp, read back through v1; not in the workflow), then race-db and the
+ZATCA sandbox (report only, as in CI), then the existing build/upload/swap plus the Card Bridge
+setup files, then the merged `claude/*` branch cleanup. Stops at the first failing gate with its
+output and a per-step summary with every suite's passed/failed/skipped counts; a skipped test fails
+the run unless it passed elsewhere (`ci/skip-gate.sh`: unit's DB tests must pass in api). Logs in `.deploy-logs/<time>/`. Needs Go, jq, Docker (S3 test
+server; also starts MongoDB/Redis when none run on 27017/6379), and Java 11+ + python3 for the
+ZATCA step (skipped without). `ci/deploysync` tests keep the script in step with the workflow.
+
 ## After every backend change
 1. Write Go tests for changed logic.
 2. `go test ./...` to verify.

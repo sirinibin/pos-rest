@@ -30,3 +30,9 @@ ZatcaPython/repaired.pdf
 
 # ZATCA onboarding keeps keys and secrets in the store record only, never in files
 ZatcaPython/certificates/
+
+# deploy_v2.sh run logs
+/.deploy-logs/
+
+# deploy_v2.sh: frontend checkout for the ui-adapter step
+/.ci/

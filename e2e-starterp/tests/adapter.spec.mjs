@@ -116,8 +116,11 @@ test("UI against the adapter: legacy data, customer, product, sale with payment,
   const pbox = page.getByPlaceholder(/Search product by name, part no\. or barcode/);
   await pbox.fill("Oil Filter");
   await pbox.press("Enter");
-  await expect(page.locator(".docs-items-wrap")).toContainText("Oil Filter");
-  await page.getByRole("button", { name: "Paid in full" }).click();
+  await expect(page.getByRole("row", { name: /Oil Filter/ }).first()).toBeVisible();
+  // the form pre-fills one payment row for the full amount ("Paid in full" is then disabled)
+  const paidInFull = page.getByRole("button", { name: "Paid in full" });
+  if (await paidInFull.isEnabled()) await paidInFull.click();
+  await page.getByRole("combobox", { name: "Method" }).first().selectOption("Cash");
   await primary(page, "Create").click();
   await page.waitForURL(/#\/app\/sales\/(?!new)[^/]+$/, { timeout: 30_000 });
   const saleId = await legacyId(tok, "sales", idFromUrl(page.url(), "/app/sales"));

@@ -11,7 +11,9 @@
 # Needs Go; dpkg-deb and zip when present (the .deb / .zip are skipped otherwise).
 set -euo pipefail
 cd "$(dirname "$0")"
-OUT="$(realpath -m "${1:-../cardbridge-dist}")"
+# absolute path without GNU realpath -m (macOS has none)
+mkdir -p "${1:-../cardbridge-dist}"
+OUT="$(cd "${1:-../cardbridge-dist}" && pwd)"
 VERSION="${CARD_BRIDGE_VERSION:-1.0.$(git rev-list --count HEAD 2>/dev/null || echo 0)}"
 SERVER="${CARD_BRIDGE_SERVER:-https://startpos-api-v2.gulfunionozone.com/v1/erp}"
 rm -rf "$OUT" && mkdir -p "$OUT"
