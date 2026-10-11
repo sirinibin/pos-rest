@@ -173,8 +173,12 @@ func saveAttachment(settings models.AdminSettings, relKey string, data []byte, c
 // Registered with router.PathPrefix("/cdn/")
 func CdnFileHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/cdn/")
-	if path == "" || strings.Contains(path, "..") {
+	if path == "" || strings.Contains(path, "..") || !cdnServable(path) {
 		http.NotFound(w, r)
+		return
+	}
+	if code := cdnAccess(r, path); code != 0 {
+		http.Error(w, http.StatusText(code), code)
 		return
 	}
 	s := loadAdminS3Settings()

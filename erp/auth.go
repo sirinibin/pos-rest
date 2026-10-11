@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -166,8 +167,8 @@ func ownPasswordErrors(current, next string) map[string]string {
 	switch {
 	case next == "":
 		e["newPassword"] = "required"
-	case len(next) < 8:
-		e["newPassword"] = "at least 8 characters"
+	case passwordRuleError(next) != "":
+		e["newPassword"] = passwordRuleError(next)
 	case next == current:
 		e["newPassword"] = "must differ from the current password"
 	}
@@ -243,6 +244,19 @@ func passwordStrength(p string) int {
 	return s
 }
 
+// passwordRuleError is the one password rule (sign-up, changing your own
+// password, an admin setting a user's password): at least 8 characters and
+// at least two of upper+lower case, a digit, a symbol. "" when p passes.
+func passwordRuleError(p string) string {
+	if len(p) < 8 {
+		return "at least 8 characters"
+	}
+	if passwordStrength(p) < 2 {
+		return "too weak"
+	}
+	return ""
+}
+
 // ValidateSignup mirrors the UI rules (L29129–29150) server-side.
 func ValidateSignup(body M) map[string]string {
 	e := map[string]string{}
@@ -269,10 +283,8 @@ func ValidateSignup(body M) map[string]string {
 	} else if !validMobileFor(cp, m) {
 		e["owner.mobile"] = cp.NameEn + " mobile number (" + cp.MobileHint + ")"
 	}
-	if p := str(o["password"]); len(p) < 8 {
-		e["owner.password"] = "at least 8 characters"
-	} else if passwordStrength(p) < 2 {
-		e["owner.password"] = "too weak"
+	if msg := passwordRuleError(str(o["password"])); msg != "" {
+		e["owner.password"] = msg
 	}
 	if strings.TrimSpace(str(c["nameEn"])) == "" {
 		e["company.nameEn"] = "Registered company name is required"
@@ -400,11 +412,11 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	fake := &Ctx{R: r}
 	res, _ := callV1(fake, controller.GuestRegister, "POST", "/v1/guest-register", nil, "", legacyReq)
 	if !res.ok() {
-		writeErr(w, legacyErr(res, map[string]string{"email": "owner.email", "name": "owner.name", "mob": "owner.mobile",
+		writeErr(w, signupErr(res, map[string]string{"email": "owner.email", "name": "owner.name", "mob": "owner.mobile",
 			"password": "owner.password", "vat_no": "company.vatNo", "registration_number": "company.crNo",
 			"business_category": "company.type", "national_address_building_no": "company.address.buildingNo",
 			"national_address_street_name": "company.address.streetEn", "national_address_district_name": "company.address.districtEn",
-			"national_address_city_name": "company.address.cityEn", "national_address_zipcode": "company.address.postalCode"}, nil, ""))
+			"national_address_city_name": "company.address.cityEn", "national_address_zipcode": "company.address.postalCode"}))
 		return
 	}
 	u := findUserByEmailCI(email)
@@ -463,6 +475,20 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, M{"accessToken": tok.Token, "refreshToken": tok.RefreshToken,
 		"user": userToContractFull(u, stores), "store": store})
+}
+
+// signupErr maps a failed guest registration: a server-side failure (the
+// store, its database, its indexes or the user could not be written, or the
+// database could not be read) is 503 "try again", never a 400 that blames
+// the form; validation errors stay 400 on their fields.
+func signupErr(res *v1Result, fieldMap map[string]string) *APIError {
+	if res == nil || res.HTTP >= 500 {
+		if res != nil {
+			log.Printf("sign-up failed: HTTP %d %v", res.HTTP, res.Errors)
+		}
+		return errf(http.StatusServiceUnavailable, "unavailable", "Sign-up is temporarily unavailable. Please try again in a moment.", nil)
+	}
+	return legacyErr(res, fieldMap, nil, "")
 }
 
 // signupCategory is the business_category saved for a sign-up: the canonical

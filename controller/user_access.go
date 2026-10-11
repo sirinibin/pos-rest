@@ -1,0 +1,119 @@
+package controller
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/sirinibin/startpos/backend/models"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
+
+type adapterCallKey struct{}
+
+// AsAdapterCall marks an in-process request the StartERP adapter (package
+// erp) sends to a legacy handler after it has already checked the caller's
+// StartERP permissions and store access. The legacy user rules below only
+// know the legacy roles (Admin/Manager/SalesMan); StartERP roles map onto
+// them coarsely (a custom role is "SalesMan"), so they would refuse what the
+// adapter allowed. The mark lives in the request context, which a network
+// client cannot set.
+func AsAdapterCall(r *http.Request) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), adapterCallKey{}, true))
+}
+
+func isAdapterCall(r *http.Request) bool {
+	v, _ := r.Context().Value(adapterCallKey{}).(bool)
+	return v
+}
+
+func isAdminUser(u *models.User) bool {
+	return u != nil && (u.Admin || u.Role == "Admin")
+}
+
+func shareAStore(a, b []*primitive.ObjectID) bool {
+	for _, x := range a {
+		for _, y := range b {
+			if x != nil && y != nil && *x == *y {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// manageUserError says why the requesting user may not change or delete the
+// target user, or "" when they may. It is the rule ChangePassword and
+// ToggleUserStatus already applied: admins manage anyone, everyone manages
+// themselves, and a Manager manages Managers and SalesMen who share one of
+// their stores. Update and delete used to let any signed-in user change or
+// delete any user, admins included.
+func manageUserError(requesting, target *models.User) string {
+	if isAdminUser(requesting) || requesting.ID == target.ID {
+		return ""
+	}
+	if requesting.Role != "Manager" {
+		return "Only Admin or Manager can manage other users"
+	}
+	if target.Role != "Manager" && target.Role != "SalesMan" {
+		return "Manager can only manage Manager or SalesMan users"
+	}
+	if !shareAStore(requesting.StoreIDs, target.StoreIDs) {
+		return "Target user is not in your store"
+	}
+	return ""
+}
+
+// createUserError says why the requesting user may not create users, or ""
+// when they may: Admins and Managers create users, SalesMen used to as well.
+func createUserError(requesting *models.User) string {
+	if isAdminUser(requesting) || requesting.Role == "Manager" {
+		return ""
+	}
+	return "Only Admin or Manager can create users"
+}
+
+// viewUserAllowed mirrors the user list: non-admins see themselves, users
+// they created and users who share one of their stores.
+func viewUserAllowed(requesting, target *models.User) bool {
+	if isAdminUser(requesting) || requesting.ID == target.ID {
+		return true
+	}
+	if target.CreatedBy != nil && *target.CreatedBy == requesting.ID {
+		return true
+	}
+	return shareAStore(requesting.StoreIDs, target.StoreIDs)
+}
+
+// grantErrors checks what a non-admin puts on a user they create or edit:
+// no admin flag, and only stores they can use themselves (plus, on an edit,
+// stores the user already had). A user limited to some stores may not give
+// out an empty store list, which means every store. A non-admin with no
+// stores of their own has nothing to give (on v2 an empty store list means no
+// store for anyone but an admin).
+func grantErrors(requesting *models.User, admin bool, role string, storeIDs, alreadyHad []*primitive.ObjectID) map[string]string {
+	errs := map[string]string{}
+	if isAdminUser(requesting) {
+		return errs
+	}
+	if admin {
+		errs["admin"] = "Only admins can grant admin access"
+	}
+	if role == "Admin" {
+		errs["role"] = "Only admins can assign the Admin role"
+	}
+	if len(storeIDs) == 0 {
+		errs["store_ids"] = "Choose at least one store"
+		return errs
+	}
+	for _, s := range storeIDs {
+		if s == nil {
+			continue
+		}
+		one := []*primitive.ObjectID{s}
+		if !shareAStore(one, requesting.StoreIDs) && !shareAStore(one, alreadyHad) {
+			errs["store_ids"] = "You can only give access to your own stores"
+			break
+		}
+	}
+	return errs
+}

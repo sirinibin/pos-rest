@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -12,14 +13,41 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func canAccessUserRoles(action string) bool {
-	if models.UserObject == nil {
+// canAccessUserRoles says whether the signed-in user may do action on user
+// roles. The caller is passed in: it used to be read from a package-level
+// variable that every concurrent request overwrote.
+func canAccessUserRoles(user *models.User, action string) bool {
+	if user == nil {
 		return false
 	}
-	if models.UserObject.Role == "Admin" {
+	if user.Role == "Admin" {
 		return true
 	}
-	return models.UserHasPermission("user_roles", action)
+	return models.UserHasPermission(user, "user_roles", action)
+}
+
+// mayUseStore says whether user may work in store id: Admins everywhere,
+// everyone else only in their own stores.
+func mayUseStore(user *models.User, id *primitive.ObjectID) bool {
+	if user == nil || id == nil {
+		return false
+	}
+	if user.Admin || user.Role == "Admin" {
+		return true
+	}
+	for _, s := range user.StoreIDs {
+		if s != nil && *s == *id {
+			return true
+		}
+	}
+	return false
+}
+
+func refuseStore(w http.ResponseWriter, response *models.Response) {
+	response.Status = false
+	response.Errors["store_id"] = "You don't have access to this store"
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(response)
 }
 
 func ListUserRole(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +55,7 @@ func ListUserRole(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	_, caller, err := models.AuthenticatedUser(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -36,12 +64,20 @@ func ListUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("read") {
+	if !canAccessUserRoles(caller, "read") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
+	}
+
+	q := r.URL.Query()
+	for _, raw := range append([]string{q.Get("search[store_id]")}, strings.Split(q.Get("search[store_ids]"), ",")...) {
+		if oid, e := primitive.ObjectIDFromHex(strings.TrimSpace(raw)); e == nil && !mayUseStore(caller, &oid) {
+			refuseStore(w, &response)
+			return
+		}
 	}
 
 	userRoles, criterias, err := models.SearchUserRole(w, r)
@@ -80,7 +116,7 @@ func CreateUserRole(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, caller, err := models.AuthenticatedUser(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -89,7 +125,7 @@ func CreateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("create") {
+	if !canAccessUserRoles(caller, "create") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -107,6 +143,11 @@ func CreateUserRole(w http.ResponseWriter, r *http.Request) {
 		response.Status = false
 		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
 		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if userRole.StoreID != nil && !userRole.StoreID.IsZero() && !mayUseStore(caller, userRole.StoreID) {
+		refuseStore(w, &response)
 		return
 	}
 
@@ -142,7 +183,7 @@ func ViewUserRole(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	_, caller, err := models.AuthenticatedUser(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -151,7 +192,7 @@ func ViewUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("read") {
+	if !canAccessUserRoles(caller, "read") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -163,7 +204,12 @@ func ViewUserRole(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !mayUseStore(caller, &store.ID) {
+		refuseStore(w, &response)
 		return
 	}
 
@@ -194,7 +240,7 @@ func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, caller, err := models.AuthenticatedUser(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -203,7 +249,7 @@ func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("update") {
+	if !canAccessUserRoles(caller, "update") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -215,7 +261,12 @@ func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !mayUseStore(caller, &store.ID) {
+		refuseStore(w, &response)
 		return
 	}
 
@@ -249,8 +300,18 @@ func UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A role lives in its store's database: naming another store used to
+	// update nothing and still answer status true.
+	if updates.StoreID != nil && !updates.StoreID.IsZero() && *updates.StoreID != store.ID {
+		response.Status = false
+		response.Errors["store_id"] = "A role can't be moved to another store"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	userRole.Name = updates.Name
-	userRole.StoreID = updates.StoreID
+	userRole.StoreID = &store.ID
 	userRole.Permissions = updates.Permissions
 	userRole.UpdatedBy = &userID
 	now := time.Now()
@@ -282,7 +343,7 @@ func DeleteUserRole(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	tokenClaims, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, caller, err := models.AuthenticatedUser(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -291,7 +352,7 @@ func DeleteUserRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !canAccessUserRoles("delete") {
+	if !canAccessUserRoles(caller, "delete") {
 		response.Status = false
 		response.Errors["access"] = "Access denied"
 		w.WriteHeader(http.StatusForbidden)
@@ -303,7 +364,12 @@ func DeleteUserRole(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["store_id"] = "Invalid store id:" + err.Error()
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !mayUseStore(caller, &store.ID) {
+		refuseStore(w, &response)
 		return
 	}
 
@@ -361,7 +427,7 @@ func GetEffectivePermissions(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	_, caller, err := models.AuthenticatedUser(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -370,7 +436,7 @@ func GetEffectivePermissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	permissions, err := models.GetEffectivePermissions(models.UserObject.StoreIDs, models.UserObject.RoleIDs)
+	permissions, err := models.GetEffectivePermissions(caller.StoreIDs, caller.RoleIDs)
 	if err != nil {
 		response.Status = false
 		response.Errors["permissions"] = "Unable to load permissions:" + err.Error()

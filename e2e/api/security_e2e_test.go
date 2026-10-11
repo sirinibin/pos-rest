@@ -260,7 +260,7 @@ func TestAuth_SignupSuccessAndDuplicates(t *testing.T) {
 		d["owner"].(M)["email"] = em
 		dr := Call(t, "POST", "/auth/signup", "", d)
 		if dr.Code == 201 {
-			KnownBug(t, "#14", "sign-up accepts an e-mail that differs only in case: "+em, true)
+			t.Errorf("#14: sign-up accepts an e-mail that differs only in case: %s", em)
 			continue
 		}
 		if dr.Code != 409 || dr.ErrCode() != "email_taken" || dr.ErrField("owner.email") == "" {
@@ -473,10 +473,7 @@ func TestAuth_ChangeOwnPassword(t *testing.T) {
 	// a weak but 8+ character password: sign-up refuses it as "too weak"
 	weak := "weakpassword"
 	r := call(M{"currentPassword": pw, "newPassword": weak})
-	if r.Code == 200 {
-		KnownBug(t, "NEW-AUTH-WEAKPW", "POST /auth/password accepts a password sign-up rejects as too weak (lower-case letters only)", true)
-		pw = weak
-	} else if r.Code != 400 || r.ErrField("newPassword") == "" {
+	if r.Code != 400 || r.ErrField("newPassword") == "" {
 		t.Errorf("weak new password: %s", r)
 	}
 
@@ -580,19 +577,14 @@ func TestSecurity_StoreIsolation(t *testing.T) {
 			leak := secHas(r.Data(), id) || strings.Contains(r.Raw, orgNames[p])
 			g := Call(t, "GET", "/"+p+"/"+id, b.Token, nil)
 			pa := Call(t, "PATCH", "/"+p+"/"+id, b.Token, M{"description": "seen by B"})
-			switch p {
-			case "customer-categories", "roles":
-				// stored in one main-DB collection with no tenant filter
-				KnownBug(t, "NEW-ISO-"+strings.ToUpper(p), p+" of company A are listed, read and changed by company B (main-DB native collection without a tenant filter, erp/native.go List/load)",
-					leak || g.Code == 200 || pa.Code == 200)
-			default:
-				if leak {
-					t.Errorf("B's %s list leaks A's record %s", p, orgNames[p])
-				}
-				secRefused(t, "B reads "+p, g)
-				secRefused(t, "B patches "+p, pa)
-				secRefused(t, "B deletes "+p, Call(t, "DELETE", "/"+p+"/"+id, b.Token, nil))
+			// customer categories and roles share one main-DB collection per
+			// kind; each record carries its company's stores (NEW-ISO-*)
+			if leak {
+				t.Errorf("B's %s list leaks A's record %s", p, orgNames[p])
 			}
+			secRefused(t, "B reads "+p, g)
+			secRefused(t, "B patches "+p, pa)
+			secRefused(t, "B deletes "+p, Call(t, "DELETE", "/"+p+"/"+id, b.Token, nil))
 		}
 	})
 
@@ -664,24 +656,32 @@ func TestSecurity_StoreIsolation(t *testing.T) {
 	t.Run("legacy routes", func(t *testing.T) {
 		// #3: any signed-in user can read and delete any user through /v1/user/{id}
 		r := CallURL(t, "GET", baseURL+"/v1/user/"+aStaffID, b.Token, nil)
-		KnownBug(t, "#3", "B's owner reads A's user through GET /v1/user/{id}", r.Code == 200 && strings.Contains(r.Raw, aStaffID))
+		if r.Code != 403 || strings.Contains(r.Raw, aStaffID) {
+			t.Errorf("#3: B's owner reads A's user through GET /v1/user/{id}: %s", r)
+		}
 		victim, _, _, _ := secStaff(t, a, "r_viewer")
 		r = CallURL(t, "DELETE", baseURL+"/v1/user/"+victim, b.Token, nil)
 		g := Call(t, "GET", "/users/"+victim, a.Token, nil)
-		KnownBug(t, "#3", "B's owner deletes A's user through DELETE /v1/user/{id}", r.Code == 200 && (g.Code == 404 || g.Body["deleted"] == true))
-		// #2: the legacy user list returns bcrypt hashes
+		if r.Code != 403 || g.Code != 200 || g.Body["deleted"] == true {
+			t.Errorf("#3: B's owner deletes A's user through DELETE /v1/user/{id}: %s / %s", r, g)
+		}
+		// #2: the legacy user list carries no bcrypt hashes
 		l := CallURL(t, "GET", baseURL+"/v1/user", a.Token, nil)
-		KnownBug(t, "#2", "GET /v1/user returns password hashes", strings.Contains(l.Raw, "$2a$"))
-		// #1: image uploads need no login
+		if l.Code != 200 || strings.Contains(l.Raw, "$2a$") {
+			t.Errorf("#2: GET /v1/user returns password hashes: %s", l)
+		}
+		// #1: image uploads need a login and the store, and a record that exists
 		for _, k := range []struct{ path, id string }{{"customer", S(cust["id"])}, {"vendor", S(vend["id"])}, {"product", S(prod["id"])}} {
-			code, body := secMultipart(t, baseURL+"/v1/"+k.path+"/upload-image", "", map[string]string{"id": k.id, "storeID": a.ID})
-			KnownBug(t, "#1", "POST /v1/"+k.path+"/upload-image without a token answers "+http.StatusText(code), code < 300)
-			if code >= 500 {
-				t.Errorf("upload %s: %d %s", k.path, code, body)
+			if code, body := secMultipart(t, baseURL+"/v1/"+k.path+"/upload-image", "", map[string]string{"id": k.id, "storeID": a.ID}); code != 401 {
+				t.Errorf("#1: POST /v1/%s/upload-image without a token: %d %s", k.path, code, body)
+			}
+			if code, body := secMultipart(t, baseURL+"/v1/"+k.path+"/upload-image", b.Token, map[string]string{"id": k.id, "storeID": a.ID}); code != 403 {
+				t.Errorf("#1: B uploads an image to A's %s: %d %s", k.path, code, body)
 			}
 		}
-		code, _ := secMultipart(t, baseURL+"/v1/customer/upload-image", "", map[string]string{"id": primitive.NewObjectID().Hex(), "storeID": a.ID})
-		KnownBug(t, "#1", "image upload for a customer that doesn't exist answers 200 (orphan file)", code == 200)
+		if code, body := secMultipart(t, baseURL+"/v1/customer/upload-image", a.Token, map[string]string{"id": primitive.NewObjectID().Hex(), "storeID": a.ID}); code != 404 {
+			t.Errorf("#1: image upload for a customer that doesn't exist: %d %s (want 404, no orphan file)", code, body)
+		}
 	})
 }
 
@@ -824,7 +824,9 @@ func TestRBAC_CashierDiscountLimit(t *testing.T) {
 	if r.Code >= 500 {
 		t.Fatalf("sale: %s", r)
 	}
-	KnownBug(t, "NEW-RBAC-MAXDISC", "a Cashier (role maxDiscount 5%) saves a sale with a 50% discount: role maxDiscount is never enforced", r.Code == 201)
+	if r.Code != 400 || r.ErrField("items.0.unitDiscount") == "" {
+		t.Errorf("NEW-RBAC-MAXDISC: a Cashier (role maxDiscount 5%%) saves a sale with a 50%% discount: %s", r)
+	}
 	// a sale without a discount is fine
 	Must(t, Call(t, "POST", "/sales", tok, M{"storeId": s.ID, "date": s.Now(), "customerId": c["id"], "items": []M{s.Line(S(p["id"]), 1, 100)},
 		"payments": []M{{"date": s.Now(), "amount": 115, "method": "cash"}}}), 201, "cashier sale")
@@ -972,8 +974,12 @@ func TestRBAC_CustomRole(t *testing.T) {
 	}
 	tok = Login(t, email, pw)
 	sr := Call(t, "POST", "/sales", tok, M{"storeId": s.ID})
-	KnownBug(t, "NEW-RBAC-DELROLE", "users of a deleted custom role fall back to Salesman rights (they gain sales create; erp/ctx.go effectivePerms)",
-		sr.Code != 403)
+	if sr.Code != 403 {
+		t.Errorf("NEW-RBAC-DELROLE: a user of a deleted custom role creates a sale: %s", sr)
+	}
+	if r := Call(t, "PATCH", "/customers/"+S(cust["id"]), tok, M{"remarks": "deleted role"}); r.Code != 403 {
+		t.Errorf("NEW-RBAC-DELROLE: a user of a deleted custom role keeps its grants: %s", r)
+	}
 	// a user can't be given a deleted role
 	if r := Call(t, "POST", "/users", s.Token, M{"name": "X", "email": "x" + Uniq() + Digits(3) + "@e2e.example", "phone": "05" + Digits(8),
 		"role": rid, "storeIds": []string{s.ID}}); r.Code != 400 || r.ErrField("role") == "" {
@@ -1097,9 +1103,9 @@ func TestRBAC_UsersCRUD(t *testing.T) {
 	pp := Must(t, PatchResp(t, s.Token, "users", id, M{"password": np}), 200, "password reset")
 	secNoSecrets(t, "password patch", pp)
 	// the record's history must not keep the new password in clear text
-	KnownBug(t, "NEW-SEC-PWHIST", "PATCH /users/{id} {password} writes the plain-text password into the user's history "+
-		"(history[].changes {field: password, to: <password>}), returned by every /users read (erp/envelope.go diff)",
-		strings.Contains(pp.Raw, np) || strings.Contains(Must(t, Call(t, "GET", "/users?limit=1000", s.Token, nil), 200, "users").Raw, np))
+	if strings.Contains(pp.Raw, np) || strings.Contains(Must(t, Call(t, "GET", "/users?limit=1000", s.Token, nil), 200, "users").Raw, np) {
+		t.Errorf("NEW-SEC-PWHIST: the user's history keeps the plain-text password")
+	}
 	if r := secLoginResp(t, email, pw); r.Code != 401 {
 		t.Errorf("old password after reset: %s", r)
 	}
@@ -1166,10 +1172,12 @@ func TestRBAC_UsersCRUD(t *testing.T) {
 		t.Errorf("re-create user with a deleted user's e-mail: %s", r)
 	}
 
-	// legacy create returns the hash (#2)
+	// legacy create never returns the hash (#2)
 	lr := CallURL(t, "POST", baseURL+"/v1/user", s.Token, M{"name": "Legacy", "email": "legacy" + Uniq() + Digits(3) + "@e2e.example",
 		"mob": "05" + Digits(8), "password": "Staff@123456", "role": "SalesMan", "store_ids": []string{s.ID}})
-	KnownBug(t, "#2", "POST /v1/user returns the new user's bcrypt hash", strings.Contains(lr.Raw, "$2a$"))
+	if lr.Code != 200 || strings.Contains(lr.Raw, "$2a$") {
+		t.Errorf("#2: POST /v1/user returns the new user's bcrypt hash: %s", lr)
+	}
 }
 
 // ---------- stores ----------

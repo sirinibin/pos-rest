@@ -1,6 +1,7 @@
 package erp
 
 import (
+	"regexp"
 	"strings"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -94,7 +95,17 @@ func roleValidate(c *Ctx, rec M, selfID string) map[string]string {
 		}
 		ctx, cancel := dbctx()
 		defer cancel()
-		cur, err := mainDB().Collection(collCustomRole).Find(ctx, bson.M{"deleted": bson.M{"$ne": true}})
+		// names are unique within the company (another company may use the same name)
+		f := bson.M{"deleted": bson.M{"$ne": true},
+			"name": bson.M{"$regex": "^\\s*" + regexp.QuoteMeta(name) + "\\s*$", "$options": "i"}}
+		if c != nil && c.Admin {
+			f[nativeOwnerKey] = bson.M{"$in": orgOwnerStores(c)}
+		} else {
+			for k, v := range tenantFilter(c) {
+				f[k] = v
+			}
+		}
+		cur, err := mainDB().Collection(collCustomRole).Find(ctx, f)
 		if err == nil {
 			for cur.Next(ctx) {
 				d := bsonToM(cur.Current)

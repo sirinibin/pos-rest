@@ -58,6 +58,13 @@ func (b *nativeBackend) clean(d M) M {
 
 func (b *nativeBackend) List(c *Ctx, storeHex string, q ListQuery) ([]M, int64, error) {
 	f := bson.M{"_erp_hd": bson.M{"$ne": true}}
+	if b.org {
+		// one collection for every company: only the caller's company's records
+		b.claimUnowned()
+		for k, v := range tenantFilter(c) {
+			f[k] = v
+		}
+	}
 	if !q.IncludeDeleted {
 		f["deleted"] = bson.M{"$ne": true}
 	}
@@ -149,9 +156,15 @@ func (b *nativeBackend) load(storeHex, id string, includeHidden bool) (M, error)
 }
 
 func (b *nativeBackend) Get(c *Ctx, storeHex, id string, includeHidden bool) (M, error) {
+	if b.org {
+		b.claimUnowned()
+	}
 	d, err := b.load(storeHex, id, includeHidden)
 	if err != nil || d == nil {
 		return nil, err
+	}
+	if b.org && !ownedBy(c, d) {
+		return nil, nil // another company's record: not found
 	}
 	return b.clean(d), nil
 }
@@ -194,6 +207,17 @@ func (b *nativeBackend) persist(loc *time.Location, storeHex string, rec M, upse
 	doc[nativeDateKey] = b.dateOf(loc, rec)
 	ctx, cancel := dbctx()
 	defer cancel()
+	if b.org && upsert {
+		if _, ok := doc[nativeOwnerKey]; !ok {
+			// records are rewritten whole: keep the owner (not part of the API record)
+			var cur bson.M
+			if b.col(storeHex).FindOne(ctx, bson.M{"_id": doc["_id"]}, options.FindOne().SetProjection(bson.M{nativeOwnerKey: 1})).Decode(&cur) == nil {
+				if o, ok := cur[nativeOwnerKey]; ok {
+					doc[nativeOwnerKey] = o
+				}
+			}
+		}
+	}
 	var err error
 	if upsert {
 		_, err = b.col(storeHex).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
@@ -249,6 +273,9 @@ func (b *nativeBackend) Create(c *Ctx, storeHex string, body M, meta WriteMeta) 
 	rec["updatedAt"] = now
 	rec["updatedBy"] = c.UserName
 	rec["history"] = []interface{}{historyEntryIn(loc, c.UserName, "created", []interface{}{})}
+	if b.org {
+		rec[nativeOwnerKey] = orgOwnerStores(c)
+	}
 	if err := b.persist(loc, storeHex, rec, false); err != nil {
 		return nil, err
 	}

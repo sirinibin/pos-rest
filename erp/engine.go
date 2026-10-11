@@ -343,6 +343,9 @@ func handleCreate(w http.ResponseWriter, r *http.Request, res *Resource) {
 		if storeHex != "" {
 			body["storeId"] = storeHex
 		}
+		if e := discountLimitErrors(c, res, body, nil); e != nil {
+			return 0, nil, errBadRequest("", e)
+		}
 		rec, err := res.Backend.Create(c, storeHex, body, WriteMeta{Action: "created"})
 		if err != nil {
 			return 0, nil, err
@@ -442,6 +445,9 @@ func handleUpdate(w http.ResponseWriter, r *http.Request, res *Resource, replace
 		action := decodeChangeReason(r.Header.Get("X-Change-Reason"))
 		if action == "" {
 			action = "updated"
+		}
+		if e := discountLimitErrors(c, res, next, changed); e != nil {
+			return 0, nil, errBadRequest("", e)
 		}
 		rec, err := res.Backend.Update(c, storeHex, id, prev, next, changed, WriteMeta{Action: action, Replace: replace})
 		if err != nil {

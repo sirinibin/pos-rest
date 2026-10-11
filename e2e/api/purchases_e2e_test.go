@@ -1074,8 +1074,10 @@ func TestInventory_Warehouses(t *testing.T) {
 		purNeedErr(t, Call(t, "POST", "/warehouses", s.Token, M{"storeId": s.ID, "nameEn": "X", "code": "main"}), 400, "code", "reserved code")
 		purNeedErr(t, Call(t, "POST", "/warehouses", s.Token, M{"storeId": s.ID, "nameEn": "Phone", "code": "PH", "phone": "12"}), 400, "phone", "bad phone")
 		purNeedErr(t, Call(t, "POST", "/warehouses", s.Token, M{"storeId": other.ID, "nameEn": "X", "code": "Y"}), 403, "", "another store")
-		code, _, err := purRaw(t, "POST", "/v1/warehouse?search%5Bstore_id%5D="+s.ID, s.Token, M{"store_id": s.ID})
-		KnownBug(t, "#9", "legacy warehouse validation errors answer HTTP 500", err == nil && code == 500)
+		code, body, err := purRaw(t, "POST", "/v1/warehouse?search%5Bstore_id%5D="+s.ID, s.Token, M{"store_id": s.ID})
+		if err != nil || code != 400 {
+			t.Errorf("#9: legacy warehouse validation errors: %d %s %v (want 400)", code, body, err)
+		}
 	})
 	t.Run("edit, delete, restore", func(t *testing.T) {
 		g := Patch(t, s.Token, "warehouses", id, M{"nameEn": "North Renamed"})
@@ -1443,11 +1445,11 @@ func TestInventory_Lookups(t *testing.T) {
 			t.Errorf("rename: %v", g["name"])
 		}
 		Must(t, Call(t, "PUT", "/customer-categories/"+id, s.Token, M{"name": "Gold"}), 200, "put")
-		// org-scoped native records live in one main-DB collection with no company filter
-		leak := purIDs(List(t, other.Token, "customer-categories", ""))[id]
-		KnownBug(t, "NEW-CCT-LEAK", "another company lists customer categories of every company", leak)
-		g := Call(t, "GET", "/customer-categories/"+id, other.Token, nil)
-		KnownBug(t, "NEW-CCT-LEAK", "another company reads a customer category by id (want 404)", g.Code != 404)
+		// org-scoped native records carry their company's stores (NEW-CCT-LEAK)
+		if purIDs(List(t, other.Token, "customer-categories", ""))[id] {
+			t.Errorf("NEW-CCT-LEAK: another company lists this company's customer category")
+		}
+		purNeedErr(t, Call(t, "GET", "/customer-categories/"+id, other.Token, nil), 404, "", "customer category of another company")
 		Must(t, Call(t, "DELETE", "/customer-categories/"+id, s.Token, nil), 200, "delete")
 		Must(t, Call(t, "POST", "/customer-categories/"+id+"/restore", s.Token, nil), 200, "restore")
 		purNeedErr(t, Call(t, "PATCH", "/customer-categories/"+id, s.Token, M{"name": "x"}, "If-Match", "1"), 409, "", "stale")

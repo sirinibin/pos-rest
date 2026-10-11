@@ -530,6 +530,8 @@ func (stocktransfer *StockTransfer) Validate(w http.ResponseWriter, r *http.Requ
 	store, err := FindStoreByID(stocktransfer.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		// the checks below need the store (a missing or unknown store id used to panic)
+		return errs
 	}
 
 	var fromWarehouse *Warehouse

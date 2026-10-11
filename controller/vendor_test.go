@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -236,6 +237,22 @@ func TestCreateVendor_Integration(t *testing.T) {
 	}
 	if p := gcFindAll(t, fx.StoreA, "posting", bson.M{"reference_id": vid, "reference_model": "vendor_opening_balance"}); len(p) == 0 {
 		t.Error("opening balance postings missing")
+	}
+
+	// #16: a vendor with a VAT number shows the same sign on view as on
+	// create/update (view used to show the payable balance positive)
+	vat := fmt.Sprintf("3%013d3", time.Now().UnixNano()%1e13)
+	r = callHandler(t, CreateVendor, "POST", "/v1/vendor", tok, map[string]interface{}{
+		"store_id": sid, "name": uniqName("gc vat vendor"), "vat_no": vat, "opening_balance": 300.0, "opening_balance_date": obDate,
+	})
+	if !r.Status {
+		t.Fatalf("create VAT vendor: %d %s", r.Code, r.Raw)
+	}
+	m = r.resultMap(t)
+	vatID := m["id"].(string)
+	v := callHandler(t, ViewVendor, "GET", "/v1/vendor/"+vatID+"?search[store_id]="+sid, tok, nil, "id", vatID)
+	if cb, _ := v.resultMap(t)["credit_balance"].(float64); cb != m["credit_balance"] || cb != -300 {
+		t.Errorf("view credit_balance = %v, create answered %v; want -300 both", v.resultMap(t)["credit_balance"], m["credit_balance"])
 	}
 }
 

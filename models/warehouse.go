@@ -55,38 +55,6 @@ type Warehouse struct {
 	StockTransferReceivedQuantity float64             `bson:"stock_transfer_received_quantity" json:"stock_transfer_received_quantity"`
 }
 
-/*
-func (warehouse *Warehouse) SetChangeLog(
-	event string,
-	name, oldValue, newValue interface{},
-) {
-	now := time.Now()
-	description := ""
-	if event == "create" {
-		description = "Created by " + UserObject.Name
-	} else if event == "update" {
-		description = "Updated by " + UserObject.Name
-	} else if event == "delete" {
-		description = "Deleted by " + UserObject.Name
-	} else if event == "view" {
-		description = "Viewed by " + UserObject.Name
-	} else if event == "attribute_value_change" && name != nil {
-		description = name.(string) + " changed from " + oldValue.(string) + " to " + newValue.(string) + " by " + UserObject.Name
-	}
-
-	warehouse.ChangeLog = append(
-		warehouse.ChangeLog,
-		ChangeLog{
-			Event:         event,
-			Description:   description,
-			CreatedBy:     &UserObject.ID,
-			CreatedByName: UserObject.Name,
-			CreatedAt:     &now,
-		},
-	)
-}
-*/
-
 func (warehouse *Warehouse) AttributesValueChangeEvent(warehouseOld *Warehouse) error {
 
 	if warehouse.Name != warehouseOld.Name {
@@ -293,6 +261,8 @@ func (warehouse *Warehouse) Validate(w http.ResponseWriter, r *http.Request, sce
 	store, err := FindStoreByID(warehouse.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "invalid store id"
+		// the checks below need the store (a missing or unknown store id used to panic)
+		return errs
 	}
 
 	/*oldWarehouse, err := FindWarehouseByID(&warehouse.ID, bson.M{})

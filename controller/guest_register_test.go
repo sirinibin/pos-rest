@@ -822,11 +822,9 @@ func TestGuestRegister_Integration_Success(t *testing.T) {
 	if u.Password == req.Password || !u.VerifyPassword(req.Password) || u.VerifyPassword("wrong-pass") {
 		t.Fatalf("password must be stored as a hash of the submitted password")
 	}
-	// NOTE: result.user.id is currently the zero ObjectID because
-	// models.User.Insert does not assign the generated _id back to the struct
-	// (reported); identify the returned user by e-mail and role instead.
-	if resp.Result.User["email"] != req.Email || resp.Result.User["role"] != "Manager" {
-		t.Fatalf("response user mismatch: %v", resp.Result.User)
+	// #13: result.user.id is the new user's id (it used to be 000…000)
+	if resp.Result.User["email"] != req.Email || resp.Result.User["role"] != "Manager" || resp.Result.User["id"] != u.ID.Hex() || u.ID.IsZero() {
+		t.Fatalf("response user mismatch: %v (stored id %s)", resp.Result.User, u.ID.Hex())
 	}
 
 	// store database exists with its indexes

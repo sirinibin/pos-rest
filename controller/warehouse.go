@@ -10,6 +10,7 @@ import (
 	"github.com/sirinibin/startpos/backend/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ListWarehouse : handler for GET /warehouse
@@ -103,7 +104,7 @@ func CreateWarehouse(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := warehouse.Validate(w, r, "create"); len(errs) > 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)
@@ -180,7 +181,13 @@ func UpdateWarehouse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	warehouseOld, err = store.FindWarehouseByID(&warehouseID, bson.M{})
-	if err != nil {
+	if err == mongo.ErrNoDocuments {
+		w.WriteHeader(http.StatusNotFound)
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	} else if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
@@ -217,7 +224,7 @@ func UpdateWarehouse(w http.ResponseWriter, r *http.Request) {
 
 	// Validate data
 	if errs := warehouse.Validate(w, r, "update"); len(errs) > 0 {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
 		json.NewEncoder(w).Encode(response)

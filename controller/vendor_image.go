@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -30,6 +29,19 @@ func UploadVendorImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Store ID required", http.StatusBadRequest)
 		return
 	}
+	store := imageStore(w, r, storeID)
+	if store == nil {
+		return
+	}
+	vendorObjectID, err := primitive.ObjectIDFromHex(vendorID)
+	if err != nil {
+		http.Error(w, "invalid vendor id", http.StatusBadRequest)
+		return
+	}
+	if !imageRecordExists(store, "vendor", &vendorObjectID) {
+		http.Error(w, "Vendor not found", http.StatusNotFound)
+		return
+	}
 
 	file, handler, err := r.FormFile("image")
 	if err != nil {
@@ -41,22 +53,6 @@ func UploadVendorImage(w http.ResponseWriter, r *http.Request) {
 	fileBytes, err := io.ReadAll(file)
 	if err != nil {
 		http.Error(w, "Failed to read file:"+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
-	if err != nil {
-		http.Error(w, "invalid store id", http.StatusBadRequest)
-		return
-	}
-	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
-	if err != nil {
-		http.Error(w, "invalid store", http.StatusInternalServerError)
-		return
-	}
-	vendorObjectID, err := primitive.ObjectIDFromHex(vendorID)
-	if err != nil {
-		http.Error(w, "invalid vendor id", http.StatusBadRequest)
 		return
 	}
 
@@ -92,16 +88,8 @@ func DeleteVendorImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = os.Remove("." + imageUrl)
-
-	storeObjectID, err := primitive.ObjectIDFromHex(storeID)
-	if err != nil {
-		http.Error(w, "invalid store id", http.StatusBadRequest)
-		return
-	}
-	store, err := models.FindStoreByID(&storeObjectID, bson.M{})
-	if err != nil {
-		http.Error(w, "invalid store", http.StatusInternalServerError)
+	store := imageStore(w, r, storeID)
+	if store == nil {
 		return
 	}
 	vendorObjectID, err := primitive.ObjectIDFromHex(vendorID)
@@ -110,11 +98,18 @@ func DeleteVendorImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vendor, _ := store.FindVendorByID(&vendorObjectID, bson.M{})
+	vendor, err := store.FindVendorByID(&vendorObjectID, bson.M{})
+	if err != nil {
+		http.Error(w, "Vendor not found", http.StatusNotFound)
+		return
+	}
 	before := len(vendor.Images)
 	vendor.Images = removeItem(vendor.Images, imageUrl)
 	if len(vendor.Images) == before {
 		vendor.Images = removeItem(vendor.Images, filepath.Base(imageUrl))
+	}
+	if len(vendor.Images) < before {
+		removeLocalImage(imageUrl) // only a file the record really had
 	}
 	vendor.Update()
 

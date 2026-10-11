@@ -327,6 +327,7 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		product.CreateStockAdjustmentHistory()
 	}()
 
+	response.Status = true
 	response.Result = product
 
 	json.NewEncoder(w).Encode(response)

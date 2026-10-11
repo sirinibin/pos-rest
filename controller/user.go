@@ -130,9 +130,17 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	user.CreatedAt = &now
 	user.UpdatedAt = &now
 
+	requestingUser, err := models.FindUserByID(&userID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Only Admins (role=Admin) can create users with role=Admin
 	if user.Role == "Admin" {
-		requestingUser, _ := models.FindUserByID(&userID, bson.M{})
 		if requestingUser.Role != "Admin" {
 			response.Status = false
 			response.Errors["role"] = "Only admins can assign the Admin role"
@@ -140,6 +148,23 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if msg := createUserError(requestingUser); msg != "" && !isAdapterCall(r) {
+		response.Status = false
+		response.Errors["authorization"] = msg
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if errs := grantErrors(requestingUser, user.Admin, user.Role, user.StoreIDs, nil); len(errs) > 0 && !isAdapterCall(r) {
+		response.Status = false
+		response.Errors = errs
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// One create per e-mail at a time, so two at once can't both find it free.
+	defer models.LockUserEmail(user.Email)()
 
 	// Validate data
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
@@ -211,6 +236,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Status = true
+	user.Password = "" // never answer with the password hash
 	response.Result = user
 
 	json.NewEncoder(w).Encode(response)
@@ -255,6 +281,48 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var userForm *models.UserForm
 	// Decode data
 	if !utils.Decode(w, r, &userForm) {
+		return
+	}
+
+	requestingID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, err := models.FindUserByID(&requestingID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if msg := manageUserError(requestingUser, user); msg != "" && !isAdapterCall(r) {
+		response.Status = false
+		response.Errors["authorization"] = msg
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !isAdminUser(requestingUser) && requestingUser.ID == user.ID && userForm.Role != user.Role {
+		response.Status = false
+		response.Errors["role"] = "You can't change your own role"
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	grantedRole := ""
+	if userForm.Role != user.Role {
+		grantedRole = userForm.Role
+	}
+	if errs := grantErrors(requestingUser, userForm.Admin && !user.Admin, grantedRole, userForm.StoreIDs, user.StoreIDs); len(errs) > 0 && !isAdapterCall(r) {
+		response.Status = false
+		response.Errors = errs
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !govalidator.IsNull(userForm.Password) && len(userForm.Password) < models.MinPasswordLength {
+		response.Status = false
+		response.Errors["password"] = "Password must be at least 6 characters"
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -321,6 +389,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		response.Errors["updating_labels"] = "error updating labels: " + err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(response)
+		return
 	}
 
 	now = time.Now()
@@ -334,6 +403,7 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 			response.Errors["saving_photo"] = "error saving photo: " + err.Error()
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(response)
+			return
 		}
 	}
 
@@ -395,7 +465,7 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	_, requestingUser, err := models.AuthenticatedUser(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -410,6 +480,24 @@ func ViewUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["customer_id"] = "Invalid User ID:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Only users the caller may see (themselves, users they created, users
+	// of their stores; Admins everyone): any signed-in user used to read any
+	// user of any company.
+	target, err := models.FindUserByID(&userID, bson.M{"store_ids": 1, "created_by": 1})
+	if err != nil {
+		response.Status = false
+		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	if !viewUserAllowed(requestingUser, target) {
+		response.Status = false
+		response.Errors["authorization"] = "You can't view this user"
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -467,6 +555,25 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Status = false
 		response.Errors["view"] = "Unable to view:" + err.Error()
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	requestingID, _ := primitive.ObjectIDFromHex(tokenClaims.UserID)
+	requestingUser, err := models.FindUserByID(&requestingID, bson.M{})
+	if err != nil {
+		response.Status = false
+		response.Errors["user_id"] = "Invalid User ID:" + err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	// Any signed-in user used to delete any user, Admins and other
+	// companies' users included.
+	if msg := manageUserError(requestingUser, user); msg != "" && !isAdapterCall(r) {
+		response.Status = false
+		response.Errors["authorization"] = msg
+		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
@@ -830,6 +937,9 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// One create per e-mail at a time, so two at once can't both find it free.
+	defer models.LockUserEmail(user.Email)()
+
 	// Validate data
 	if errs := user.Validate(w, r, "create"); len(errs) > 0 {
 		response.Status = false
@@ -841,6 +951,17 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	user.UpdatedAt = &now
 	user.CreatedAt = &now
+
+	// This route needs no login: a self-registered account gets no admin
+	// rights, role or stores (it could ask for role "Admin" and every store),
+	// and its password is stored hashed like everyone else's (it used to be
+	// stored as typed, so the account could never sign in).
+	user.Admin = false
+	user.Role = ""
+	user.StoreIDs = nil
+	user.RoleIDs = nil
+	user.StoreID = nil
+	user.Password = models.HashPassword(user.Password)
 
 	err := user.Insert()
 	if err != nil {
