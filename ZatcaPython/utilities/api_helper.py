@@ -5,27 +5,47 @@ from requests.auth import HTTPBasicAuth
 
 class api_helper:
     
-    @staticmethod
-    def post_request_with_retries(url, headers, json_payload, auth=None, retries=3, backoff_factor=1):
-        for attempt in range(retries):
-            try:
-                response = requests.post(url, headers=headers, data=json_payload, auth=auth)
-                
-                # Check for HTTP errors
-                if response.status_code != 200:
-                    raise Exception(f"HTTP error: {response.status_code} - url={url} headers={dict(response.headers)} body={response.text}")
-                
-                return response.text
-            
-            except requests.exceptions.ConnectionError as e:
-                #print(f"ConnectionError: {e}. Attempt {attempt + 1} of {retries}.")
-                if attempt < retries - 1:
-                    time.sleep(backoff_factor * (2 ** attempt))  # Exponential backoff
-                else:
-                    raise  # Re-raise the last exception if all retries fail
+    # ZATCA answers 200 when a request passes and 202 when it passes with
+    # warnings (an invoice REPORTED/CLEARED with warnings is still accepted).
+    OK_STATUSES = (200, 202)
+    # Answers that mean ZATCA (or Cloudflare in front of it) never handled the
+    # request, so sending it again is safe: rate limiting, gateway errors, and
+    # Cloudflare's 52x "origin unreachable" family. 504 is left out on purpose:
+    # the request may have been processed.
+    RETRY_STATUSES = (429, 500, 502, 503, 520, 521, 522, 523, 524)
+    TIMEOUT = (10, 60)  # seconds: connect, read
+    MAX_RETRY_AFTER = 30
 
     @staticmethod
-    def compliance_csid(cert_info, retries=3, backoff_factor=1):
+    def retry_delay(response, attempt, backoff_factor):
+        delay = backoff_factor * (2 ** attempt)
+        retry_after = response.headers.get("Retry-After", "") if response is not None else ""
+        if retry_after.strip().isdigit():
+            delay = max(delay, int(retry_after))
+        return min(delay, api_helper.MAX_RETRY_AFTER)
+
+    @staticmethod
+    def post_request_with_retries(url, headers, json_payload, auth=None, retries=4, backoff_factor=2, sleep=time.sleep):
+        for attempt in range(retries):
+            last = attempt == retries - 1
+            try:
+                response = requests.post(url, headers=headers, data=json_payload, auth=auth, timeout=api_helper.TIMEOUT)
+            except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout):
+                # The request never reached ZATCA.
+                if last:
+                    raise
+                sleep(api_helper.retry_delay(None, attempt, backoff_factor))
+                continue
+
+            if response.status_code in api_helper.OK_STATUSES:
+                return response.text
+            if response.status_code in api_helper.RETRY_STATUSES and not last:
+                sleep(api_helper.retry_delay(response, attempt, backoff_factor))
+                continue
+            raise Exception(f"HTTP error: {response.status_code} - url={url} headers={dict(response.headers)} body={response.text}")
+
+    @staticmethod
+    def compliance_csid(cert_info, retries=4, backoff_factor=2):
         csr = cert_info['csr']
         OTP = cert_info['OTP']
         url = cert_info['complianceCsidUrl']
@@ -43,7 +63,7 @@ class api_helper:
         return api_helper.post_request_with_retries(url, headers, json_payload, retries=retries, backoff_factor=backoff_factor)
 
     @staticmethod
-    def production_csid(cert_info, retries=3, backoff_factor=1):
+    def production_csid(cert_info, retries=4, backoff_factor=2):
         request_id = cert_info['ccsid_requestID']
         id_token = cert_info['ccsid_binarySecurityToken']
         secret = cert_info['ccsid_secret']
@@ -62,7 +82,7 @@ class api_helper:
         return api_helper.post_request_with_retries(url, headers, json_payload, auth=auth, retries=retries, backoff_factor=backoff_factor)
 
     @staticmethod
-    def compliance_checks(cert_info, json_payload, retries=3, backoff_factor=1):
+    def compliance_checks(cert_info, json_payload, retries=4, backoff_factor=2):
         id_token = cert_info['ccsid_binarySecurityToken']
         secret = cert_info['ccsid_secret']
         url = cert_info["complianceChecksUrl"]
@@ -78,7 +98,7 @@ class api_helper:
         return api_helper.post_request_with_retries(url, headers, json_payload, auth=auth, retries=retries, backoff_factor=backoff_factor)
 
     @staticmethod
-    def invoice_reporting(cert_info, json_payload, retries=3, backoff_factor=1):
+    def invoice_reporting(cert_info, json_payload, retries=4, backoff_factor=2):
         id_token = cert_info['pcsid_binarySecurityToken']
         secret = cert_info['pcsid_secret']
         url = cert_info["reportingUrl"]
@@ -94,7 +114,7 @@ class api_helper:
         return api_helper.post_request_with_retries(url, headers, json_payload, auth=auth, retries=retries, backoff_factor=backoff_factor)
 
     @staticmethod
-    def invoice_clearance(cert_info, json_payload, retries=3, backoff_factor=1):
+    def invoice_clearance(cert_info, json_payload, retries=4, backoff_factor=2):
         id_token = cert_info['pcsid_binarySecurityToken']
         secret = cert_info['pcsid_secret']
         url = cert_info["clearanceUrl"]

@@ -42,7 +42,9 @@ ZATCA: a store is one device, so invoices, credit and debit notes share one ICV 
 number. A document ZATCA accepted answers 409 `already_reported` if reported again. Unsigned XML goes to
 `zatcaXMLPath` (store id in the name). The Fatoora SDK signs only with a SEC1 key: given PKCS#8 (what its `-csr` writes) it
 leaves SignatureValue empty yet reports success, so the signer converts with `sdk_private_key` and refuses an
-unsigned result (`ZatcaPython/tests`, run in the unit job).
+unsigned result (`ZatcaPython/tests`, run in the unit job). Calls to ZATCA (`api_helper.post_request_with_retries`)
+accept 200 and 202 (passed with warnings), time out, and retry only answers ZATCA never handled (429, 5xx except 504,
+Cloudflare 52x, connection errors).
 Validation errors answer 400: a handler that writes no status calls `ensureStatus(w, http.StatusBadRequest)`. Note `TestHealthCheck_ServicesDown` only holds with no MongoDB/Redis.
 
 ## Usage
