@@ -5074,6 +5074,8 @@ func (order *Order) AdjustPayments() error {
 //End customer account journals
 
 func (order *Order) CreateLedger() (ledger *Ledger, err error) {
+	salesLedgerStateMu.Lock() // the payment split below uses package-level state
+	defer salesLedgerStateMu.Unlock()
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

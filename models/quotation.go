@@ -3432,6 +3432,8 @@ func (quotation *Quotation) UndoAccounting() error {
 var extraQuotationSalesPayments []QuotationPayment
 
 func (quotation *Quotation) CreateLedger() (ledger *Ledger, err error) {
+	quotationLedgerStateMu.Lock() // the payment split below uses package-level state
+	defer quotationLedgerStateMu.Unlock()
 	store, err := FindStoreByID(quotation.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

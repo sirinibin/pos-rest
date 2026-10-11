@@ -828,6 +828,8 @@ func (ret *NonVATSalesReturn) UndoAccounting() error {
 }
 
 func (ret *NonVATSalesReturn) CreateLedger() (ledger *Ledger, err error) {
+	nonVATSalesReturnLedgerStateMu.Lock() // the payment split below uses package-level state
+	defer nonVATSalesReturnLedgerStateMu.Unlock()
 	store, err := FindStoreByID(ret.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

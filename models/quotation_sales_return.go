@@ -4029,6 +4029,8 @@ func RegroupQuotationSalesReturnPaymentsByDatetime(payments []QuotationSalesRetu
 //End customer account journals
 
 func (quotationsalesReturn *QuotationSalesReturn) CreateLedger() (ledger *Ledger, err error) {
+	quotationSalesReturnLedgerStateMu.Lock() // the payment split below uses package-level state
+	defer quotationSalesReturnLedgerStateMu.Unlock()
 	store, err := FindStoreByID(quotationsalesReturn.StoreID, bson.M{})
 	if err != nil {
 		return nil, err
