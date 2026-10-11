@@ -1061,3 +1061,15 @@ func EnsureProcurementMessageIndexes() {
 		}},
 	})
 }
+
+// ProcurementMessageStoreID returns the store a procurement message belongs to.
+func ProcurementMessageStoreID(id primitive.ObjectID) (primitive.ObjectID, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var msg struct {
+		StoreID primitive.ObjectID `bson:"store_id"`
+	}
+	err := procurementMessageCol().FindOne(ctx, bson.M{"_id": id},
+		options.FindOne().SetProjection(bson.M{"store_id": 1})).Decode(&msg)
+	return msg.StoreID, err
+}
