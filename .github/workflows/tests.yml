@@ -380,10 +380,18 @@ jobs:
         run: tail -n 300 server.log
 
   # ── UI end-to-end: the React app in Chromium against this API ────────────
+  # One runner per screen size (the frontend's playwright.fullstack.config.js
+  # projects), like the frontend's own pipeline: every spec on the laptop
+  # size, specs tagged @devices on the others. All six in one runner ran into
+  # the job time limit.
   ui-e2e:
-    name: UI end-to-end tests (Playwright)
+    name: UI end-to-end tests (Playwright) - ${{ matrix.project }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop, desktop-large, tablet, tablet-landscape, phone, phone-small]
     services:
       mongo:
         image: mongo:7
@@ -454,13 +462,13 @@ jobs:
         working-directory: frontend/e2e
         env:
           CI: "true"
-        run: npx playwright test -c playwright.fullstack.config.js
+        run: npx playwright test -c playwright.fullstack.config.js --project=${{ matrix.project }}
 
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-api
+          name: playwright-report-api-${{ matrix.project }}
           path: |
             frontend/e2e/playwright-report-fullstack
             frontend/e2e/test-results-fullstack
