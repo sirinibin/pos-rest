@@ -779,8 +779,9 @@ func ListThreadMessages(storeID primitive.ObjectID, contactPhone, msgType string
 	return msgs, total, nil
 }
 
-// MarkThreadMessagesRead marks all unread inbound messages from contactPhone as read.
-func MarkThreadMessagesRead(storeID primitive.ObjectID, contactPhone, msgType string) error {
+// MarkThreadMessagesRead marks all unread inbound messages from contactPhone as
+// read and returns how many it changed.
+func MarkThreadMessagesRead(storeID primitive.ObjectID, contactPhone, msgType string) (int64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	emailPat2 := "(?i)(^|<)" + regexp.QuoteMeta(contactPhone) + "(>|$)"
@@ -793,8 +794,11 @@ func MarkThreadMessagesRead(storeID primitive.ObjectID, contactPhone, msgType st
 	if msgType != "" {
 		filter["type"] = msgType
 	}
-	_, err := procurementMessageCol().UpdateMany(ctx, filter, bson.M{"$set": bson.M{"read": true}})
-	return err
+	res, err := procurementMessageCol().UpdateMany(ctx, filter, bson.M{"$set": bson.M{"read": true}})
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
 }
 
 // ResolveProcurementSender looks up the given phone number or email address in

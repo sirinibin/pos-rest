@@ -324,7 +324,16 @@ func GetThreadMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 
-	_ = models.MarkThreadMessagesRead(storeID, contactPhone, msgType)
+	// Opening a thread reads its messages: push the new unread count to the
+	// store's other open sessions (the header badges no longer poll).
+	if n, _ := models.MarkThreadMessagesRead(storeID, contactPhone, msgType); n > 0 {
+		switch msgType {
+		case "whatsapp":
+			go models.NotifyStoreUsersWAUnread(storeID)
+		case "email":
+			go models.NotifyStoreUsersEmailUnread(storeID)
+		}
+	}
 
 	msgs, total, err := models.ListThreadMessages(storeID, contactPhone, msgType, page, limit)
 	if err != nil {
