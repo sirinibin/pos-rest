@@ -127,10 +127,11 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	releaseQueue := queueRelease(queue, store.ID.Hex(), "non_vat_sales")
+	defer releaseQueue()
 
 	if errs := item.Validate(w, r, "create"); len(errs) > 0 {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales")
+		releaseQueue()
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
@@ -139,10 +140,10 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item.FindTotalQuantity()
+	item.CalculateProfit() // as on update: a new sale's profit was never computed
 
 	if err = item.UpdateForeignLabelFields(); err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales")
+		releaseQueue()
 		response.Status = false
 		response.Errors["update_foreign_fields"] = "error updating foreign fields: " + err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
@@ -151,8 +152,7 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = item.MakeRedisCode(); err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales")
+		releaseQueue()
 		response.Status = false
 		response.Errors["code"] = "error making code: " + err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
@@ -163,8 +163,7 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 	item.ProcessPayments()
 
 	if err = item.Insert(); err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales")
+		releaseQueue()
 		_ = item.UnMakeRedisCode()
 		response.Status = false
 		response.Errors["insert"] = "Unable to insert to db:" + err.Error()
@@ -173,8 +172,7 @@ func CreateNonVATSales(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue.Pop()
-	CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales")
+	releaseQueue()
 
 	// Link to repair job(s)
 	if item.RepairJobID != nil && !item.RepairJobID.IsZero() {

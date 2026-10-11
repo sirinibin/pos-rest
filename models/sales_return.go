@@ -772,16 +772,16 @@ func (salesreturn *SalesReturn) UpdateForeignLabelFields() error {
 }
 
 func (salesReturn *SalesReturn) FindNetTotal() {
-	salesReturn.ShippingOrHandlingFees = RoundTo2Decimals(salesReturn.ShippingOrHandlingFees)
-	salesReturn.Discount = RoundTo2Decimals(salesReturn.Discount)
+	salesReturn.ShippingOrHandlingFees = salesReturn.money(salesReturn.ShippingOrHandlingFees)
+	salesReturn.Discount = salesReturn.money(salesReturn.Discount)
 
 	salesReturn.FindTotal()
 
 	/*
 		if salesReturn.DiscountWithVAT > 0 {
-			salesReturn.Discount = RoundTo2Decimals(salesReturn.DiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+			salesReturn.Discount = salesReturn.money(salesReturn.DiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
 		} else if salesReturn.Discount > 0 {
-			salesReturn.DiscountWithVAT = RoundTo2Decimals(salesReturn.Discount * (1 + (*salesReturn.VatPercent / 100)))
+			salesReturn.DiscountWithVAT = salesReturn.money(salesReturn.Discount * (1 + (*salesReturn.VatPercent / 100)))
 		} else {
 			salesReturn.Discount = 0
 			salesReturn.DiscountWithVAT = 0
@@ -789,28 +789,28 @@ func (salesReturn *SalesReturn) FindNetTotal() {
 
 	// Apply discount to the base amount first
 	baseTotal := salesReturn.Total + salesReturn.ShippingOrHandlingFees - salesReturn.Discount
-	baseTotal = RoundTo2Decimals(baseTotal)
+	baseTotal = salesReturn.money(baseTotal)
 
 	//Actual
 	actualBaseTotal := salesReturn.ActualTotal + salesReturn.ShippingOrHandlingFees - salesReturn.Discount
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
 	// Now calculate VAT on the discounted base
-	salesReturn.VatPrice = RoundTo2Decimals(baseTotal * (*salesReturn.VatPercent / 100))
+	salesReturn.VatPrice = salesReturn.money(baseTotal * (*salesReturn.VatPercent / 100))
 
 	//Actual
-	salesReturn.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*salesReturn.VatPercent / 100))
+	salesReturn.ActualVatPrice = salesReturn.money(actualBaseTotal * (*salesReturn.VatPercent / 100))
 
-	salesReturn.NetTotal = RoundTo2Decimals(baseTotal + salesReturn.VatPrice)
+	salesReturn.NetTotal = salesReturn.money(baseTotal + salesReturn.VatPrice)
 
 	//actual
-	salesReturn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + salesReturn.ActualVatPrice)
+	salesReturn.ActualNetTotal = salesReturn.money(actualBaseTotal + salesReturn.ActualVatPrice)
 
 	if salesReturn.AutoRoundingAmount {
-		salesReturn.RoundingAmount = RoundTo2Decimals(salesReturn.ActualNetTotal - salesReturn.NetTotal)
+		salesReturn.RoundingAmount = salesReturn.money(salesReturn.ActualNetTotal - salesReturn.NetTotal)
 	}
 
-	salesReturn.NetTotal = RoundTo2Decimals(salesReturn.NetTotal + salesReturn.RoundingAmount)
+	salesReturn.NetTotal = salesReturn.money(salesReturn.NetTotal + salesReturn.RoundingAmount)
 
 	salesReturn.CalculateDiscountPercentage()
 }
@@ -827,38 +827,38 @@ func (salesReturn *SalesReturn) FindTotal() {
 
 		/*
 			if product.UnitPriceWithVAT > 0 {
-				salesReturn.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+				salesReturn.Products[i].UnitPrice = salesReturn.money(product.UnitPriceWithVAT / (1 + (*salesReturn.VatPercent / 100)))
 			} else if product.UnitPrice > 0 {
-				salesReturn.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*salesReturn.VatPercent / 100)))
+				salesReturn.Products[i].UnitPriceWithVAT = salesReturn.money(product.UnitPrice * (1 + (*salesReturn.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountWithVAT > 0 {
-				salesReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
+				salesReturn.Products[i].UnitDiscount = salesReturn.money(product.UnitDiscountWithVAT / (1 + (*salesReturn.VatPercent / 100)))
 			} else if product.UnitDiscount > 0 {
-				salesReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*salesReturn.VatPercent / 100)))
+				salesReturn.Products[i].UnitDiscountWithVAT = salesReturn.money(product.UnitDiscount * (1 + (*salesReturn.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountPercentWithVAT > 0 {
-				salesReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+				salesReturn.Products[i].UnitDiscountPercent = salesReturn.money((product.UnitDiscount / product.UnitPrice) * 100)
 			} else if product.UnitDiscountPercent > 0 {
-				salesReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+				salesReturn.Products[i].UnitDiscountPercentWithVAT = salesReturn.money((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
 			}*/
 
 		total += (product.Quantity * (salesReturn.Products[i].UnitPrice - salesReturn.Products[i].UnitDiscount))
-		total = RoundTo2Decimals(total)
+		total = salesReturn.money(total)
 
 		actualTotal += (product.Quantity * (salesReturn.Products[i].UnitPrice - salesReturn.Products[i].UnitDiscount))
 		actualTotal = RoundTo8Decimals(actualTotal)
 
 		totalWithVAT += (product.Quantity * (salesReturn.Products[i].UnitPriceWithVAT - salesReturn.Products[i].UnitDiscountWithVAT))
-		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+		totalWithVAT = salesReturn.money(totalWithVAT)
 
 		actualTotalWithVAT += (product.Quantity * (salesReturn.Products[i].UnitPriceWithVAT - salesReturn.Products[i].UnitDiscountWithVAT))
 		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 	}
 
-	//salesReturn.Total = RoundTo2Decimals(total)
-	//salesReturn.TotalWithVAT = RoundTo2Decimals(totalWithVAT)
+	//salesReturn.Total = salesReturn.money(total)
+	//salesReturn.TotalWithVAT = salesReturn.money(totalWithVAT)
 	salesReturn.Total = total
 	salesReturn.TotalWithVAT = totalWithVAT
 	salesReturn.ActualTotal = actualTotal
@@ -1440,6 +1440,7 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 	store, err := FindStoreByID(salesreturn.StoreID, bson.M{})
 	if err != nil {
 		errs["store_id"] = "Store is required"
+		return errs
 	}
 
 	if !govalidator.IsNull(strings.TrimSpace(salesreturn.Phone)) && !ValidStorePhone(store, strings.TrimSpace(salesreturn.Phone)) {
@@ -1452,9 +1453,28 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	// Everything below reads the sale: without one there is nothing to check
+	// against (an unknown order id used to panic here, leaving the store's
+	// sales-return queue locked).
+	if salesreturn.OrderID == nil || salesreturn.OrderID.IsZero() {
+		errs["order_id"] = "Order ID is required"
+		return errs
+	}
 	order, err := store.FindOrderByID(salesreturn.OrderID, bson.M{})
-	if err != nil {
+	if err != nil || order == nil {
 		errs["order_id"] = "Order is invalid"
+		return errs
+	}
+
+	// A return is the sale's credit note: without a customer of its own it
+	// belongs to the sale's customer (whose receivable it reduces, and whose
+	// VAT registration decides the ZATCA credit note type).  Returns saved
+	// before without a customer keep it that way on an edit (their ledger and
+	// ZATCA document stay as they are).
+	keepNoCustomer := scenario == "update" && oldSalesReturn != nil && (oldSalesReturn.CustomerID == nil || oldSalesReturn.CustomerID.IsZero())
+	if !keepNoCustomer && (salesreturn.CustomerID == nil || salesreturn.CustomerID.IsZero()) && order.CustomerID != nil && !order.CustomerID.IsZero() {
+		cid := *order.CustomerID
+		salesreturn.CustomerID = &cid
 	}
 
 	customer, err := store.FindCustomerByID(salesreturn.CustomerID, bson.M{})
@@ -1585,12 +1605,6 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	} //end for
 
-	if salesreturn.OrderID == nil || salesreturn.OrderID.IsZero() {
-		w.WriteHeader(http.StatusBadRequest)
-		errs["order_id"] = "Order ID is required"
-		return errs
-	}
-
 	/*
 		maxDiscountAllowed := 0.00
 		if scenario == "update" {
@@ -1711,36 +1725,8 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 			errs["unit_discount_"+strconv.Itoa(index)] = "Unit discount should not be greater than unit price"
 		}
 
-		//for _, orderProduct := range order.Products {
-		//for i := 0; i < len(order.Products); i++ {
-		for i := len(order.Products) - 1; i >= 0; i-- {
-			if order.Products[i].ProductID == salesReturnProduct.ProductID {
-				//soldQty := RoundFloat((orderProduct.Quantity - orderProduct.QuantityReturned), 2)
-				maxAllowedQuantity := 0.00
-				if scenario == "update" {
-					maxAllowedQuantity = order.Products[i].Quantity - (order.Products[i].QuantityReturned - oldSalesReturn.Products[index].Quantity)
-				} else {
-					maxAllowedQuantity = order.Products[i].Quantity - order.Products[i].QuantityReturned
-					//log.Print(orderProduct.QuantityReturned)
-				}
-
-				if salesReturnProduct.Quantity > maxAllowedQuantity {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", maxAllowedQuantity) + " " + order.Products[i].Unit
-				}
-
-				/*soldQty := RoundFloat((order.Products[i].Quantity - order.Products[i].QuantityReturned), 2)
-				if salesReturnProduct.Quantity > float64(soldQty) {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + order.Products[i].Unit
-				}*/
-
-				/*if soldQty == 0 {
-					errs["quantity_"+strconv.Itoa(index)] = "Already returned all sold quantities"
-				} else if salesReturnProduct.Quantity > float64(soldQty) {
-					errs["quantity_"+strconv.Itoa(index)] = "Quantity should not be greater than purchased quantity: " + fmt.Sprintf("%.02f", soldQty) + " " + order.Products[i].Unit
-				}*/
-
-				break
-			}
+		if !salesReturnProduct.ProductID.IsZero() {
+			salesReturnLineCheck(errs, index, salesReturnProduct, salesreturn.Products, order, scenario, oldSalesReturn)
 		}
 
 		/*
@@ -1772,8 +1758,8 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if totalPayment > RoundTo2Decimals(salesreturn.NetTotal-salesreturn.CashDiscount) {
-		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(salesreturn.NetTotal-salesreturn.CashDiscount)) + " (Net Total - Cash Discount)"
+	if totalPayment > salesreturn.money(salesreturn.NetTotal-salesreturn.CashDiscount) {
+		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", salesreturn.money(salesreturn.NetTotal-salesreturn.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
@@ -1789,12 +1775,12 @@ func (salesreturn *SalesReturn) Validate(w http.ResponseWriter, r *http.Request,
 
 	if scenario == "update" {
 		/*
-			if totalPayment > 0 && totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid)) {
+			if totalPayment > 0 && totalPayment > salesreturn.money(order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid)) {
 				errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-(order.ReturnAmount-oldSalesReturn.TotalPaymentPaid))) + " (total payment received)"
 				return errs
 			}*/
 	} else {
-		if totalPayment > RoundTo2Decimals(order.TotalPaymentReceived-order.ReturnAmount) {
+		if totalPayment > salesreturn.money(order.TotalPaymentReceived-order.ReturnAmount) {
 			errs["total_payment"] = "Total payment should not be greater than " + fmt.Sprintf("%.2f", (order.TotalPaymentReceived-order.ReturnAmount)) + " (total payment received)"
 			return errs
 		}
@@ -3541,18 +3527,18 @@ func (salesReturn *SalesReturn) SetPaymentStatus() (payments []SalesReturnPaymen
 		}
 	} //end for loop
 
-	salesReturn.TotalPaymentPaid = RoundTo2Decimals(totalPaymentPaid)
+	salesReturn.TotalPaymentPaid = salesReturn.money(totalPaymentPaid)
 	//salesReturn.BalanceAmount = ToFixed(salesReturn.NetTotal-totalPaymentPaid, 2)
-	salesReturn.BalanceAmount = RoundTo2Decimals((salesReturn.NetTotal - salesReturn.CashDiscount) - totalPaymentPaid)
+	salesReturn.BalanceAmount = salesReturn.money((salesReturn.NetTotal - salesReturn.CashDiscount) - totalPaymentPaid)
 	salesReturn.PaymentMethods = paymentMethods
 	salesReturn.Payments = payments
 	salesReturn.PaymentsCount = int64(len(payments))
 
-	if RoundTo2Decimals((salesReturn.NetTotal - salesReturn.CashDiscount)) <= RoundTo2Decimals(totalPaymentPaid) {
+	if salesReturn.money((salesReturn.NetTotal - salesReturn.CashDiscount)) <= salesReturn.money(totalPaymentPaid) {
 		salesReturn.PaymentStatus = "paid"
-	} else if RoundTo2Decimals(totalPaymentPaid) > 0 {
+	} else if salesReturn.money(totalPaymentPaid) > 0 {
 		salesReturn.PaymentStatus = "paid_partially"
-	} else if RoundTo2Decimals(totalPaymentPaid) <= 0 {
+	} else if salesReturn.money(totalPaymentPaid) <= 0 {
 		salesReturn.PaymentStatus = "not_paid"
 	}
 
@@ -4483,6 +4469,8 @@ func RegroupSalesReturnPaymentsByDatetime(payments []SalesReturnPayment) [][]Sal
 //End customer account journals
 
 func (salesReturn *SalesReturn) CreateLedger() (ledger *Ledger, err error) {
+	salesReturnLedgerStateMu.Lock() // the payment split below uses package-level state
+	defer salesReturnLedgerStateMu.Unlock()
 	store, err := FindStoreByID(salesReturn.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

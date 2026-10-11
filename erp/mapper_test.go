@@ -18,6 +18,13 @@ func testX(storeHex string, store M, warehouses ...M) *mapCtx {
 
 func hexID() string { return primitive.NewObjectID().Hex() }
 
+// testCustomer is a customer of the test store (documents refuse unknown ones).
+func testCustomer(x *mapCtx) string {
+	id := hexID()
+	x.cache["customer|"+id] = M{"_id": id, "name": "Customer"}
+	return id
+}
+
 // ---------------- stores ----------------
 
 func TestStoreToContract_ModernAndLegacyShapes(t *testing.T) {
@@ -342,7 +349,7 @@ func TestSalesToLegacy_Create(t *testing.T) {
 	x.cache["product|"+pid] = M{"_id": pid, "name": "Oil 5W30", "item_code": "EO", "part_number": "PN", "unit": "pcs",
 		"product_stores": M{sid: M{"purchase_unit_price": 80.0}}}
 	b := newSalesResource().Backend.(*legacyBackend)
-	rec := M{"date": "2026-10-05T11:30", "customerId": hexID(), "vatPercent": 15.0, "roundingAuto": true, "discount": 0.0,
+	rec := M{"date": "2026-10-05T11:30", "customerId": testCustomer(x), "vatPercent": 15.0, "roundingAuto": true, "discount": 0.0,
 		"items":    []interface{}{M{"productId": pid, "qty": 3.0, "unitPrice": 33.33, "unitDiscount": 0.0, "warehouseId": wh}},
 		"payments": []interface{}{M{"id": "pay_client", "date": "2026-10-05T11:30", "amount": 115.0, "method": "cash"}, M{"amount": 0.0}}}
 	p, err := b.toL(x, rec, nil, allKeys(rec), true)
@@ -382,7 +389,7 @@ func TestSalesToLegacy_LineWithoutWarehouseGoesToMainStore(t *testing.T) {
 		if wh != nil {
 			item["warehouseId"] = wh
 		}
-		rec := M{"date": "2026-10-05T11:30", "customerId": hexID(), "vatPercent": 15.0, "items": []interface{}{item}}
+		rec := M{"date": "2026-10-05T11:30", "customerId": testCustomer(x), "vatPercent": 15.0, "items": []interface{}{item}}
 		p, err := b.toL(x, rec, nil, allKeys(rec), true)
 		if err != nil {
 			t.Fatalf("warehouseId %v: %v", wh, err)
@@ -664,7 +671,7 @@ func TestEmployeeVehicleMapping(t *testing.T) {
 		t.Fatal("national id rule")
 	}
 	v := newVehiclesResource().Backend.(*legacyBackend)
-	vp, _ := v.toL(x, M{"plate": " abj   1234 ", "make": "Toyota", "customerId": hexID()}, nil, knownSet("plate", "make", "customerId"), true)
+	vp, _ := v.toL(x, M{"plate": " abj   1234 ", "make": "Toyota", "customerId": testCustomer(x)}, nil, knownSet("plate", "make", "customerId"), true)
 	if vp["vehicle_number"] != "ABJ 1234" {
 		t.Fatalf("plate normalization: %v", vp["vehicle_number"])
 	}

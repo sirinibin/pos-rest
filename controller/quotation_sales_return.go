@@ -144,11 +144,12 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	releaseQueue := queueRelease(queue, store.ID.Hex(), "quotation_sales_return")
+	defer releaseQueue()
 
 	// Validate data
 	if errs := quotationsalesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+		releaseQueue()
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
@@ -159,8 +160,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 	quotationsalesreturn.FindTotalQuantity()
 	err = quotationsalesreturn.UpdateForeignLabelFields()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+		releaseQueue()
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update_foreign_fields"] = "error updating foreign fields: " + err.Error()
@@ -172,8 +172,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = quotationsalesreturn.CalculateQuotationSalesReturnProfit()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+		releaseQueue()
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["profit_calculation"] = "error calc: " + err.Error()
@@ -185,8 +184,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = quotationsalesreturn.MakeCode()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+		releaseQueue()
 
 		response.Status = false
 		response.Errors = make(map[string]string)
@@ -201,8 +199,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = quotationsalesreturn.Insert()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+		releaseQueue()
 
 		redisErr := quotationsalesreturn.UnMakeCode()
 		if redisErr != nil {
@@ -217,8 +214,7 @@ func CreateQuotationSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue.Pop()
-	CleanupQueueIfEmpty(store.ID.Hex(), "quotation_sales_return")
+	releaseQueue()
 
 	quotationsalesreturn.UpdateQuotationReturnCount()
 	quotationsalesreturn.UpdateQuotationReturnDiscount(nil)

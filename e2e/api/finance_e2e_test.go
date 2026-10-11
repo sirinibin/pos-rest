@@ -547,10 +547,9 @@ func TestFinanceDepositsWithdrawals(t *testing.T) {
 			}
 			for _, bad := range []string{primitive.NewObjectID().Hex(), S(otherCust["id"])} {
 				r := Call(t, "POST", "/"+path, s.Token, note(M{"customerId": bad}))
-				KnownBug(t, "NEW-fin-note-customer", "POST /"+path+" with a customerId that is not a customer of the store answers 500 (want 400 customerId)",
-					r.Code == 500)
-				if r.Code == 201 {
-					t.Errorf("%s accepted a foreign customer: %s", path, r)
+				// a customer that is not one of the store's is refused on customerId
+				if r.Code != 400 || r.ErrField("customerId") == "" {
+					t.Errorf("%s with a foreign customer: want 400 customerId, got %s", path, r)
 				}
 			}
 		}
@@ -1454,13 +1453,9 @@ func TestCountrySignupAndSale(t *testing.T) {
 			vat := math.Round(sub*w.vat/100*unit) / unit
 			if w.decimals == 3 {
 				tot, vatGot, netGot := F(sale, "legacyTotals.total"), F(sale, "legacyTotals.vat"), F(sale, "legacyTotals.net")
-				ok := math.Round(tot*1000) == math.Round(finR3(sub)*1000) && math.Round(vatGot*1000) == math.Round(vat*1000) &&
-					math.Round(netGot*1000) == math.Round(finR3(sub+vat)*1000)
-				KnownBug(t, "NEW-fin-3dec", fmt.Sprintf("%s (%s, 3 decimals): sale total/VAT/net %.3f/%.3f/%.3f, want %.3f/%.3f/%.3f (rounded to 2 decimals)",
-					w.cc, w.currency, tot, vatGot, netGot, finR3(sub), vat, finR3(sub+vat)), !ok && Cents(tot) == Cents(sub))
-				if !ok && Cents(tot) != Cents(sub) {
-					t.Errorf("%s 3-decimal totals: %v", w.cc, sale["legacyTotals"])
-				}
+				finEq3(t, w.cc+" total", tot, finR3(sub))
+				finEq3(t, w.cc+" VAT", vatGot, vat)
+				finEq3(t, w.cc+" net", netGot, finR3(sub+vat))
 			} else {
 				EqMoney(t, w.cc+" total", F(sale, "legacyTotals.total"), sub)
 				EqMoney(t, w.cc+" VAT", F(sale, "legacyTotals.vat"), vat)

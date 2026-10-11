@@ -54,8 +54,10 @@ func RoundDecimal(val float64) float64 {
 	return result
 }
 
+// RoundTo2Decimals rounds money half away from zero to 2 decimals (RoundMoney:
+// on the decimal value, so 0.495 stored as 0.49499… still gives 0.50).
 func RoundTo2Decimals(num float64) float64 {
-	return math.Round(num*100) / 100
+	return RoundMoney(num, 2)
 }
 
 func RoundTo4Decimals(num float64) float64 {

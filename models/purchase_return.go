@@ -693,43 +693,43 @@ func (purchasereturn *PurchaseReturn) UpdateForeignLabelFields() error {
 }
 
 func (purchaseReturn *PurchaseReturn) FindNetTotal() {
-	purchaseReturn.ShippingOrHandlingFees = RoundTo2Decimals(purchaseReturn.ShippingOrHandlingFees)
-	purchaseReturn.Discount = RoundTo2Decimals(purchaseReturn.Discount)
+	purchaseReturn.ShippingOrHandlingFees = purchaseReturn.money(purchaseReturn.ShippingOrHandlingFees)
+	purchaseReturn.Discount = purchaseReturn.money(purchaseReturn.Discount)
 
 	purchaseReturn.FindTotal()
 
 	/*
 		if purchaseReturn.DiscountWithVAT > 0 {
-			purchaseReturn.Discount = RoundTo2Decimals(purchaseReturn.DiscountWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
+			purchaseReturn.Discount = purchaseReturn.money(purchaseReturn.DiscountWithVAT / (1 + (*purchaseReturn.VatPercent / 100)))
 		} else if purchaseReturn.Discount > 0 {
-			purchaseReturn.DiscountWithVAT = RoundTo2Decimals(purchaseReturn.Discount * (1 + (*purchaseReturn.VatPercent / 100)))
+			purchaseReturn.DiscountWithVAT = purchaseReturn.money(purchaseReturn.Discount * (1 + (*purchaseReturn.VatPercent / 100)))
 		} else {
 			purchaseReturn.Discount = 0
 			purchaseReturn.DiscountWithVAT = 0
 		}*/
 	// Apply discount to the base amount first
 	baseTotal := purchaseReturn.Total + purchaseReturn.ShippingOrHandlingFees - purchaseReturn.Discount
-	baseTotal = RoundTo2Decimals(baseTotal)
+	baseTotal = purchaseReturn.money(baseTotal)
 
 	// Now calculate VAT on the discounted base
-	purchaseReturn.VatPrice = RoundTo2Decimals(baseTotal * (*purchaseReturn.VatPercent / 100))
+	purchaseReturn.VatPrice = purchaseReturn.money(baseTotal * (*purchaseReturn.VatPercent / 100))
 
-	purchaseReturn.NetTotal = RoundTo2Decimals(baseTotal + purchaseReturn.VatPrice)
+	purchaseReturn.NetTotal = purchaseReturn.money(baseTotal + purchaseReturn.VatPrice)
 
 	//Actual
 	actualBaseTotal := purchaseReturn.ActualTotal + purchaseReturn.ShippingOrHandlingFees - purchaseReturn.Discount
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
 	// Now calculate VAT on the discounted base
-	purchaseReturn.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*purchaseReturn.VatPercent / 100))
+	purchaseReturn.ActualVatPrice = purchaseReturn.money(actualBaseTotal * (*purchaseReturn.VatPercent / 100))
 
-	purchaseReturn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + purchaseReturn.ActualVatPrice)
+	purchaseReturn.ActualNetTotal = purchaseReturn.money(actualBaseTotal + purchaseReturn.ActualVatPrice)
 
 	if purchaseReturn.AutoRoundingAmount {
-		purchaseReturn.RoundingAmount = RoundTo2Decimals(purchaseReturn.ActualNetTotal - purchaseReturn.NetTotal)
+		purchaseReturn.RoundingAmount = purchaseReturn.money(purchaseReturn.ActualNetTotal - purchaseReturn.NetTotal)
 	}
 
-	purchaseReturn.NetTotal = RoundTo2Decimals(purchaseReturn.NetTotal + purchaseReturn.RoundingAmount)
+	purchaseReturn.NetTotal = purchaseReturn.money(purchaseReturn.NetTotal + purchaseReturn.RoundingAmount)
 
 	purchaseReturn.CalculateDiscountPercentage()
 }
@@ -747,8 +747,8 @@ func (purchaseReturn *PurchaseReturn) FindTotal() {
 
 		total += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPrice - purchaseReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPriceWithVAT - purchaseReturn.Products[i].UnitDiscountWithVAT))
-		total = RoundTo2Decimals(total)
-		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+		total = purchaseReturn.money(total)
+		totalWithVAT = purchaseReturn.money(totalWithVAT)
 
 		//Actual values
 		actualTotal += (product.Quantity * (purchaseReturn.Products[i].PurchaseReturnUnitPrice - purchaseReturn.Products[i].UnitDiscount))
@@ -1509,13 +1509,13 @@ func (purchasereturn *PurchaseReturn) Validate(
 		errs["vat_percent"] = "VAT Percentage is required"
 	}
 
-	if totalPayment > RoundTo2Decimals(purchasereturn.NetTotal-purchasereturn.CashDiscount) {
-		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchasereturn.NetTotal-purchasereturn.CashDiscount)) + " (Net Total - Cash Discount)"
+	if totalPayment > purchasereturn.money(purchasereturn.NetTotal-purchasereturn.CashDiscount) {
+		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", purchasereturn.money(purchasereturn.NetTotal-purchasereturn.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
-	if totalPayment > RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount) {
-		errs["total_payment"] = "Total payment amount should not exceed Original Purchase Amount: " + fmt.Sprintf("%.02f", RoundTo2Decimals(purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
+	if totalPayment > purchase.money(purchase.NetTotal-purchase.CashDiscount) {
+		errs["total_payment"] = "Total payment amount should not exceed Original Purchase Amount: " + fmt.Sprintf("%.02f", purchase.money(purchase.NetTotal-purchase.CashDiscount)) + " (Net Total - Cash Discount)"
 		return errs
 	}
 
@@ -2573,17 +2573,17 @@ func (model *PurchaseReturn) SetPaymentStatus() (payments []PurchaseReturnPaymen
 		}
 	} //end for loop
 
-	model.TotalPaymentPaid = RoundTo2Decimals(totalPaymentPaid)
-	model.BalanceAmount = RoundTo2Decimals((model.NetTotal - model.CashDiscount) - totalPaymentPaid)
+	model.TotalPaymentPaid = model.money(totalPaymentPaid)
+	model.BalanceAmount = model.money((model.NetTotal - model.CashDiscount) - totalPaymentPaid)
 	model.PaymentMethods = paymentMethods
 	model.Payments = payments
 	model.PaymentsCount = int64(len(payments))
 
-	if RoundTo2Decimals((model.NetTotal - model.CashDiscount)) <= RoundTo2Decimals(totalPaymentPaid) {
+	if model.money((model.NetTotal - model.CashDiscount)) <= model.money(totalPaymentPaid) {
 		model.PaymentStatus = "paid"
-	} else if RoundTo2Decimals(totalPaymentPaid) > 0 {
+	} else if model.money(totalPaymentPaid) > 0 {
 		model.PaymentStatus = "paid_partially"
-	} else if RoundTo2Decimals(totalPaymentPaid) <= 0 {
+	} else if model.money(totalPaymentPaid) <= 0 {
 		model.PaymentStatus = "not_paid"
 	}
 

@@ -645,17 +645,17 @@ func (quotation *Quotation) SetPaymentStatus() (models []QuotationPayment, err e
 		}
 	} //end for loop
 
-	quotation.TotalPaymentReceived = RoundTo2Decimals(totalPaymentReceived)
-	quotation.BalanceAmount = RoundTo2Decimals((quotation.NetTotal - quotation.CashDiscount) - totalPaymentReceived)
+	quotation.TotalPaymentReceived = quotation.money(totalPaymentReceived)
+	quotation.BalanceAmount = quotation.money((quotation.NetTotal - quotation.CashDiscount) - totalPaymentReceived)
 	quotation.PaymentMethods = paymentMethods
 	quotation.Payments = models
 	quotation.PaymentsCount = int64(len(models))
 
-	if RoundTo2Decimals((quotation.NetTotal - quotation.CashDiscount)) <= RoundTo2Decimals(totalPaymentReceived) {
+	if quotation.money((quotation.NetTotal - quotation.CashDiscount)) <= quotation.money(totalPaymentReceived) {
 		quotation.PaymentStatus = "paid"
-	} else if RoundTo2Decimals(totalPaymentReceived) > 0 {
+	} else if quotation.money(totalPaymentReceived) > 0 {
 		quotation.PaymentStatus = "paid_partially"
-	} else if RoundTo2Decimals(totalPaymentReceived) <= 0 {
+	} else if quotation.money(totalPaymentReceived) <= 0 {
 		quotation.PaymentStatus = "not_paid"
 	}
 
@@ -1191,43 +1191,43 @@ func (quotation *Quotation) UpdateForeignLabelFields() error {
 }
 
 func (quotation *Quotation) FindNetTotal() error {
-	quotation.ShippingOrHandlingFees = RoundTo2Decimals(quotation.ShippingOrHandlingFees)
-	quotation.Discount = RoundTo2Decimals(quotation.Discount)
+	quotation.ShippingOrHandlingFees = quotation.money(quotation.ShippingOrHandlingFees)
+	quotation.Discount = quotation.money(quotation.Discount)
 
 	quotation.FindTotal()
 
 	/*
 		if quotation.DiscountWithVAT > 0 {
-			quotation.Discount = RoundTo2Decimals(quotation.DiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
+			quotation.Discount = quotation.money(quotation.DiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
 		} else if quotation.Discount > 0 {
-			quotation.DiscountWithVAT = RoundTo2Decimals(quotation.Discount * (1 + (*quotation.VatPercent / 100)))
+			quotation.DiscountWithVAT = quotation.money(quotation.Discount * (1 + (*quotation.VatPercent / 100)))
 		} else {
 			quotation.Discount = 0
 			quotation.DiscountWithVAT = 0
 		}*/
 	// Apply discount to the base amount first
 	baseTotal := quotation.Total + quotation.ShippingOrHandlingFees - quotation.Discount
-	baseTotal = RoundTo2Decimals(baseTotal)
+	baseTotal = quotation.money(baseTotal)
 
 	// Now calculate VAT on the discounted base
-	quotation.VatPrice = RoundTo2Decimals(baseTotal * (*quotation.VatPercent / 100))
+	quotation.VatPrice = quotation.money(baseTotal * (*quotation.VatPercent / 100))
 
-	quotation.NetTotal = RoundTo2Decimals(baseTotal + quotation.VatPrice)
+	quotation.NetTotal = quotation.money(baseTotal + quotation.VatPrice)
 
 	//Actual
 	actualBaseTotal := quotation.ActualTotal + quotation.ShippingOrHandlingFees - quotation.Discount
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
 	// Now calculate VAT on the discounted base
-	quotation.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*quotation.VatPercent / 100))
+	quotation.ActualVatPrice = quotation.money(actualBaseTotal * (*quotation.VatPercent / 100))
 
-	quotation.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + quotation.ActualVatPrice)
+	quotation.ActualNetTotal = quotation.money(actualBaseTotal + quotation.ActualVatPrice)
 
 	if quotation.AutoRoundingAmount {
-		quotation.RoundingAmount = RoundTo2Decimals(quotation.ActualNetTotal - quotation.NetTotal)
+		quotation.RoundingAmount = quotation.money(quotation.ActualNetTotal - quotation.NetTotal)
 	}
 
-	quotation.NetTotal = RoundTo2Decimals(quotation.NetTotal + quotation.RoundingAmount)
+	quotation.NetTotal = quotation.money(quotation.NetTotal + quotation.RoundingAmount)
 
 	quotation.CalculateDiscountPercentage()
 	return nil
@@ -1243,27 +1243,27 @@ func (quotation *Quotation) FindTotal() {
 
 		/*
 			if product.UnitPriceWithVAT > 0 {
-				quotation.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*quotation.VatPercent / 100)))
+				quotation.Products[i].UnitPrice = quotation.money(product.UnitPriceWithVAT / (1 + (*quotation.VatPercent / 100)))
 			} else if product.UnitPrice > 0 {
-				quotation.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*quotation.VatPercent / 100)))
+				quotation.Products[i].UnitPriceWithVAT = quotation.money(product.UnitPrice * (1 + (*quotation.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountWithVAT > 0 {
-				quotation.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
+				quotation.Products[i].UnitDiscount = quotation.money(product.UnitDiscountWithVAT / (1 + (*quotation.VatPercent / 100)))
 			} else if product.UnitDiscount > 0 {
-				quotation.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*quotation.VatPercent / 100)))
+				quotation.Products[i].UnitDiscountWithVAT = quotation.money(product.UnitDiscount * (1 + (*quotation.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountPercentWithVAT > 0 {
-				quotation.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+				quotation.Products[i].UnitDiscountPercent = quotation.money((product.UnitDiscount / product.UnitPrice) * 100)
 			} else if product.UnitDiscountPercent > 0 {
-				quotation.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+				quotation.Products[i].UnitDiscountPercentWithVAT = quotation.money((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
 			}*/
 
 		total += (product.Quantity * (quotation.Products[i].UnitPrice - quotation.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (quotation.Products[i].UnitPriceWithVAT - quotation.Products[i].UnitDiscountWithVAT))
-		total = RoundTo2Decimals(total)
-		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+		total = quotation.money(total)
+		totalWithVAT = quotation.money(totalWithVAT)
 
 		//Actual values
 		actualTotal += (product.Quantity * (quotation.Products[i].UnitPrice - quotation.Products[i].UnitDiscount))
@@ -1769,8 +1769,8 @@ func (quotation *Quotation) Validate(w http.ResponseWriter, r *http.Request, sce
 			}
 		}
 
-		if totalPayment > RoundTo2Decimals(quotation.NetTotal-quotation.CashDiscount) {
-			errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(quotation.NetTotal-quotation.CashDiscount)) + " (Net Total - Cash Discount)"
+		if totalPayment > quotation.money(quotation.NetTotal-quotation.CashDiscount) {
+			errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", quotation.money(quotation.NetTotal-quotation.CashDiscount)) + " (Net Total - Cash Discount)"
 			return
 		}
 
@@ -3432,6 +3432,8 @@ func (quotation *Quotation) UndoAccounting() error {
 var extraQuotationSalesPayments []QuotationPayment
 
 func (quotation *Quotation) CreateLedger() (ledger *Ledger, err error) {
+	quotationLedgerStateMu.Lock() // the payment split below uses package-level state
+	defer quotationLedgerStateMu.Unlock()
 	store, err := FindStoreByID(quotation.StoreID, bson.M{})
 	if err != nil {
 		return nil, err

@@ -275,10 +275,11 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	releaseQueue := queueRelease(queue, store.ID.Hex(), "sales")
+	defer releaseQueue()
 
 	if errs := order.Validate(w, r, "create", nil); len(errs) > 0 {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+		releaseQueue()
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
@@ -288,8 +289,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.CreateNewCustomerFromName()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+		releaseQueue()
 		response.Status = false
 		response.Errors["new_customer_from_name"] = "error creating new customer from name: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -298,8 +298,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.SetUnKnownCustomerIfNoCustomerSelected()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+		releaseQueue()
 		response.Status = false
 		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -316,16 +315,14 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		}
 		pendingCount, err := store.GetTotalCount(pendingFilter, "order")
 		if err != nil {
-			queue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			releaseQueue()
 			response.Status = false
 			response.Errors["pending_sales_check"] = "error checking pending sales: " + err.Error()
 			json.NewEncoder(w).Encode(response)
 			return
 		}
 		if pendingCount >= int64(store.Settings.BlockSalesAfterPendingCount) {
-			queue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			releaseQueue()
 			w.WriteHeader(http.StatusBadRequest)
 			response.Status = false
 			response.Errors["blocked"] = fmt.Sprintf(
@@ -341,8 +338,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.UpdateForeignLabelFields()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+		releaseQueue()
 		response.Status = false
 		response.Errors["foreign_fields"] = "Error updating foreign fields: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -353,8 +349,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		// User-supplied invoice ID — validate uniqueness before accepting.
 		order.Code = strings.TrimSpace(order.Code)
 		if existing, _ := store.FindOrderByCode(order.Code, bson.M{"_id": 1}); existing != nil {
-			queue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			releaseQueue()
 			response.Status = false
 			response.Errors["code"] = "Invoice ID already exists: " + order.Code
 			json.NewEncoder(w).Encode(response)
@@ -367,8 +362,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		for attempt := 0; attempt < maxCodeRetries; attempt++ {
 			err = order.MakeCode()
 			if err != nil {
-				queue.Pop()
-				CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+				releaseQueue()
 				response.Status = false
 				response.Errors["code"] = "Error making code: " + err.Error()
 				json.NewEncoder(w).Encode(response)
@@ -383,8 +377,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		// Setting disabled — original path, unchanged.
 		err = order.MakeCode()
 		if err != nil {
-			queue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+			releaseQueue()
 			response.Status = false
 			response.Errors["code"] = "Error making code: " + err.Error()
 			json.NewEncoder(w).Encode(response)
@@ -394,8 +387,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.CalculateOrderProfit()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+		releaseQueue()
 		response.Status = false
 		response.Errors["profit"] = "Error calculating order profit: " + err.Error()
 		json.NewEncoder(w).Encode(response)
@@ -406,8 +398,7 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	order.Zatca = models.ZatcaReporting{}
 
 	if store.Zatca.ZatcaReconnectRequired && order.EnableReportToZatca {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
+		releaseQueue()
 		response.Status = false
 		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
 		w.WriteHeader(http.StatusForbidden)
@@ -416,19 +407,20 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var zatcaQueue *SafeQueue
+	releaseZatca := func() {}
+	defer func() { releaseZatca() }()
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && order.EnableReportToZatca {
 		//Zatca Queue
 		zatcaQueue = GetOrCreateQueue(store.ID.Hex(), "zatca")
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+		releaseZatca = queueRelease(zatcaQueue, store.ID.Hex(), "zatca")
 
 		err = order.ReportToZatca()
 		if err != nil {
-			queue.Pop()
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "sales")
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+			releaseQueue()
+			releaseZatca()
 			log.Print("reporting failed")
 			redisErr := order.UnMakeRedisCode()
 			if redisErr != nil {
@@ -444,12 +436,10 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = order.Insert()
 	if err != nil {
-		queue.Pop()
+		releaseQueue()
 		if zatcaQueue != nil {
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+			releaseZatca()
 		}
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 		redisErr := order.UnMakeRedisCode()
 		if redisErr != nil {
 			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -463,12 +453,10 @@ func CreateOrder(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	queue.Pop()
+	releaseQueue()
 	if zatcaQueue != nil {
-		zatcaQueue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+		releaseZatca()
 	}
-	CleanupQueueIfEmpty(store.ID.Hex(), "sales")
 
 	if order.RepairJobID != nil && !order.RepairJobID.IsZero() {
 		store.LinkOrderToRepairJob(order.RepairJobID, order.ID, order.Code, order.NetTotal)

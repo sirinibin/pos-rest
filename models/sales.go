@@ -790,16 +790,16 @@ func (order *Order) UpdateForeignLabelFields() error {
 }
 
 func (order *Order) FindNetTotal() {
-	order.ShippingOrHandlingFees = RoundTo2Decimals(order.ShippingOrHandlingFees)
-	order.Discount = RoundTo2Decimals(order.Discount)
+	order.ShippingOrHandlingFees = order.money(order.ShippingOrHandlingFees)
+	order.Discount = order.money(order.Discount)
 
 	order.FindTotal()
 
 	/*
 		if order.DiscountWithVAT > 0 {
-			order.Discount = RoundTo2Decimals(order.DiscountWithVAT / (1 + (*order.VatPercent / 100)))
+			order.Discount = order.money(order.DiscountWithVAT / (1 + (*order.VatPercent / 100)))
 		} else if order.Discount > 0 {
-			order.DiscountWithVAT = RoundTo2Decimals(order.Discount * (1 + (*order.VatPercent / 100)))
+			order.DiscountWithVAT = order.money(order.Discount * (1 + (*order.VatPercent / 100)))
 		} else {
 			order.Discount = 0
 			order.DiscountWithVAT = 0
@@ -813,27 +813,27 @@ func (order *Order) FindNetTotal() {
 	// Apply discount to the base amount first
 	baseTotal := order.Total + order.ShippingOrHandlingFees - order.Discount
 	//baseTotal = RoundTo8Decimals(baseTotal)
-	baseTotal = RoundTo2Decimals(baseTotal)
+	baseTotal = order.money(baseTotal)
 
 	// Now calculate VAT on the discounted base
-	order.VatPrice = RoundTo2Decimals(baseTotal * (*order.VatPercent / 100))
+	order.VatPrice = order.money(baseTotal * (*order.VatPercent / 100))
 
 	//log.Print(baseTotal + order.VatPrice)
-	order.NetTotal = RoundTo2Decimals(baseTotal + order.VatPrice)
+	order.NetTotal = order.money(baseTotal + order.VatPrice)
 
 	//Actual
 	actualBaseTotal := order.ActualTotal + order.ShippingOrHandlingFees - order.Discount
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
 	// Now calculate VAT on the discounted base
-	order.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*order.VatPercent / 100))
-	order.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + order.ActualVatPrice)
+	order.ActualVatPrice = order.money(actualBaseTotal * (*order.VatPercent / 100))
+	order.ActualNetTotal = order.money(actualBaseTotal + order.ActualVatPrice)
 
 	if order.AutoRoundingAmount {
-		order.RoundingAmount = RoundTo2Decimals(order.ActualNetTotal - order.NetTotal)
+		order.RoundingAmount = order.money(order.ActualNetTotal - order.NetTotal)
 	}
 
-	order.NetTotal = RoundTo2Decimals(order.NetTotal + order.RoundingAmount)
+	order.NetTotal = order.money(order.NetTotal + order.RoundingAmount)
 
 	order.CalculateDiscountPercentage()
 }
@@ -848,31 +848,31 @@ func (order *Order) FindTotal() {
 	for i, product := range order.Products {
 		/*
 			if product.UnitPriceWithVAT > 0 {
-				order.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*order.VatPercent / 100)))
+				order.Products[i].UnitPrice = order.money(product.UnitPriceWithVAT / (1 + (*order.VatPercent / 100)))
 			} else if product.UnitPrice > 0 {
-				order.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*order.VatPercent / 100)))
+				order.Products[i].UnitPriceWithVAT = order.money(product.UnitPrice * (1 + (*order.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountWithVAT > 0 {
-				order.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*order.VatPercent / 100)))
+				order.Products[i].UnitDiscount = order.money(product.UnitDiscountWithVAT / (1 + (*order.VatPercent / 100)))
 			} else if product.UnitDiscount > 0 {
-				order.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*order.VatPercent / 100)))
+				order.Products[i].UnitDiscountWithVAT = order.money(product.UnitDiscount * (1 + (*order.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountPercentWithVAT > 0 {
-				order.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+				order.Products[i].UnitDiscountPercent = order.money((product.UnitDiscount / product.UnitPrice) * 100)
 			} else if product.UnitDiscountPercent > 0 {
-				order.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+				order.Products[i].UnitDiscountPercentWithVAT = order.money((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
 			}*/
 
 		total += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
-		total = RoundTo2Decimals(total)
+		total = order.money(total)
 
-		//order.Products[i].LineTotal = RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
+		//order.Products[i].LineTotal = order.money(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
 		//order.Products[i].ActualLineTotal = RoundTo8Decimals(product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
 
 		totalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
-		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+		totalWithVAT = order.money(totalWithVAT)
 
 		//Actual values
 		actualTotal += (product.Quantity * (order.Products[i].UnitPrice - order.Products[i].UnitDiscount))
@@ -880,7 +880,7 @@ func (order *Order) FindTotal() {
 		actualTotalWithVAT += (product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
 		actualTotalWithVAT = RoundTo8Decimals(actualTotalWithVAT)
 
-		//order.Products[i].LineTotalWithVAT = RoundTo2Decimals(product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
+		//order.Products[i].LineTotalWithVAT = order.money(product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
 		//order.Products[i].ActualLineTotalWithVAT = RoundTo8Decimals(product.Quantity * (order.Products[i].UnitPriceWithVAT - order.Products[i].UnitDiscountWithVAT))
 	}
 
@@ -2108,7 +2108,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 		errs["discount"] = "Cash discount should not be < 0"
 	}
 
-	if order.CashDiscount >= order.NetTotal {
+	if order.CashDiscount > 0 && order.CashDiscount >= order.NetTotal {
 		errs["cash_discount"] = "Cash discount should not be >= " + fmt.Sprintf("%.02f", order.NetTotal)
 	} else if order.CashDiscount < 0 {
 		errs["cash_discount"] = "Cash discount should not < 0 "
@@ -2173,8 +2173,8 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	}
 
-	if totalPayment > RoundTo2Decimals(order.NetTotal-order.CashDiscount) {
-		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", RoundTo2Decimals(order.NetTotal-order.CashDiscount)) + " (Net Total - Cash Discount)"
+	if totalPayment > order.money(order.NetTotal-order.CashDiscount) {
+		errs["total_payment"] = "Total payment should not exceed: " + fmt.Sprintf("%.02f", order.money(order.NetTotal-order.CashDiscount)) + " (Net Total - Cash Discount)"
 		return
 	}
 
@@ -2188,7 +2188,7 @@ func (order *Order) Validate(w http.ResponseWriter, r *http.Request, scenario st
 
 	//validation
 	if customer != nil && customer.CreditLimit > 0 {
-		actualBalanceAmount := RoundTo2Decimals(order.NetTotal - order.CashDiscount - totalPayment)
+		actualBalanceAmount := order.money(order.NetTotal - order.CashDiscount - totalPayment)
 		// A fully-paid sale extends no credit — skip the limit check.
 		if actualBalanceAmount > 0 {
 			if customer.Account == nil {
@@ -3276,17 +3276,17 @@ func (order *Order) SetPaymentStatus() (models []SalesPayment, err error) {
 		}
 	} //end for loop
 
-	order.TotalPaymentReceived = RoundTo2Decimals(totalPaymentReceived)
-	order.BalanceAmount = RoundTo2Decimals((order.NetTotal - order.CashDiscount) - totalPaymentReceived)
+	order.TotalPaymentReceived = order.money(totalPaymentReceived)
+	order.BalanceAmount = order.money((order.NetTotal - order.CashDiscount) - totalPaymentReceived)
 	order.PaymentMethods = paymentMethods
 	order.Payments = models //updating payments
 	order.PaymentsCount = int64(len(models))
 
-	if RoundTo2Decimals((order.NetTotal - order.CashDiscount)) <= RoundTo2Decimals(totalPaymentReceived) {
+	if order.money((order.NetTotal - order.CashDiscount)) <= order.money(totalPaymentReceived) {
 		order.PaymentStatus = "paid"
-	} else if RoundTo2Decimals(totalPaymentReceived) > 0 {
+	} else if order.money(totalPaymentReceived) > 0 {
 		order.PaymentStatus = "paid_partially"
-	} else if RoundTo2Decimals(totalPaymentReceived) <= 0 {
+	} else if order.money(totalPaymentReceived) <= 0 {
 		order.PaymentStatus = "not_paid"
 	}
 
@@ -5077,6 +5077,8 @@ func (order *Order) AdjustPayments() error {
 //End customer account journals
 
 func (order *Order) CreateLedger() (ledger *Ledger, err error) {
+	salesLedgerStateMu.Lock() // the payment split below uses package-level state
+	defer salesLedgerStateMu.Unlock()
 	store, err := FindStoreByID(order.StoreID, bson.M{})
 	if err != nil {
 		return nil, err
