@@ -15,6 +15,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sirinibin/startpos/backend/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // GET /v1/procurement-message-threads
@@ -109,6 +110,10 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+
+	if enabled, ok := unreadFeedEnabled(w, storeID, "whatsapp"); !ok || !enabled {
 		return
 	}
 
@@ -207,6 +212,36 @@ func GetRFQWhatsAppUnreadHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"items": items, "total_unread": allThreadsUnread})
 }
 
+// unreadFeedEnabled answers the unread-badge endpoints cheaply when the store's
+// RFQ module is off or the channel is not connected: one projected store read,
+// then 200 with an empty feed and "enabled": false, so older clients that still
+// poll get a valid body. It writes 404/500 itself when the store can't be read.
+// ok is false when a response was already written for an error.
+func unreadFeedEnabled(w http.ResponseWriter, storeID primitive.ObjectID, feed string) (enabled bool, ok bool) {
+	whatsapp, email, err := findStoreUnreadFeeds(storeID)
+	if err == mongo.ErrNoDocuments {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "store not found"})
+		return false, false
+	}
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return false, false
+	}
+	enabled = whatsapp
+	if feed == "email" {
+		enabled = email
+	}
+	if !enabled {
+		json.NewEncoder(w).Encode(map[string]interface{}{"items": []interface{}{}, "total_unread": 0, "enabled": false})
+	}
+	return enabled, true
+}
+
+// findStoreUnreadFeeds is swapped out in tests.
+var findStoreUnreadFeeds = models.FindStoreUnreadFeeds
+
 // EmailUnreadSummary represents one unread inbound email shown in the app header badge dropdown.
 type EmailUnreadSummary struct {
 	ID          string `json:"id"`
@@ -225,6 +260,10 @@ func GetEmailUnreadHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid store_id"})
+		return
+	}
+
+	if enabled, ok := unreadFeedEnabled(w, storeID, "email"); !ok || !enabled {
 		return
 	}
 
