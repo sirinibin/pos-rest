@@ -12,7 +12,15 @@ import (
 // invoice total or VAT), so the reported XML stays true. The store setting
 // settings.disable_sales_edit_once_reported_to_zatca (on unless set false,
 // as in models.Order.Validate) switches the lock off.
-var zatcaLockedEditable = map[string]bool{"cashDiscount": true, "payments": true}
+//
+// The remarks and the links to a repair job / vehicle are not in the reported
+// XML either; the POS terminals write them right after the sale is saved (a
+// workshop's job card, a boutique's alteration date), often once it was
+// reported, so they stay writable too (user decision, 2026-10-11).
+var zatcaLockedEditable = map[string]bool{
+	"cashDiscount": true, "payments": true,
+	"remarks": true, "repairJobId": true, "vehicleId": true,
+}
 
 // zatcaLockOn: the legacy document d is reported to ZATCA in a store whose
 // invoices lock once reported.

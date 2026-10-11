@@ -53,7 +53,9 @@ func TestZatcaLockedChanges(t *testing.T) {
 		{"payments only", M{"payments": []interface{}{M{"amount": 10.0}}}, []string{"payments"}, []string{}},
 		{"both allowed", M{"cashDiscount": 1.0, "payments": []interface{}{M{"amount": 1.0}}}, []string{"cashDiscount", "payments"}, []string{}},
 		{"items", M{"items": []interface{}{M{"qty": 2.0}}}, []string{"items"}, []string{"items"}},
-		{"remarks and discount", M{"remarks": "b", "discount": 3.0}, []string{"discount", "remarks"}, []string{"discount", "remarks"}},
+		{"remarks and discount", M{"remarks": "b", "discount": 3.0}, []string{"discount", "remarks"}, []string{"discount"}},
+		{"remarks only (not in the XML)", M{"remarks": "Job JC-1"}, []string{"remarks"}, []string{}},
+		{"job card and vehicle links", M{"repairJobId": "j1", "vehicleId": "v1"}, []string{"repairJobId", "vehicleId"}, []string{}},
 		{"date", M{"date": "2026-10-12T10:00"}, []string{"date"}, []string{"date"}},
 		{"customer", M{"customerId": "abc"}, []string{"customerId"}, []string{"customerId"}},
 		{"commission", M{"commission": 4.0}, []string{"commission"}, []string{"commission"}},
@@ -76,15 +78,15 @@ func TestZatcaLockGuard_Message(t *testing.T) {
 	b := newSalesResource().Backend.(*legacyBackend)
 	x := &mapCtx{store: M{"zatca": M{"phase": "2"}}}
 	prevDoc := M{"zatca": M{"reporting_passed": true}}
-	err := b.updateGuard(x, prevDoc, M{"remarks": "a"}, M{"remarks": "b"}, []string{"remarks"})
+	err := b.updateGuard(x, prevDoc, M{"discount": 0.0}, M{"discount": 2.0}, []string{"discount"})
 	ae, ok := err.(*APIError)
-	if !ok || ae.Status != 400 || ae.Fields["remarks"] == "" || !strings.Contains(ae.Message, "reported to ZATCA") {
+	if !ok || ae.Status != 400 || ae.Fields["discount"] == "" || !strings.Contains(ae.Message, "reported to ZATCA") {
 		t.Fatalf("got %#v", err)
 	}
 	if err := b.updateGuard(x, prevDoc, M{"cashDiscount": 0.0}, M{"cashDiscount": 3.0}, []string{"cashDiscount"}); err != nil {
 		t.Fatalf("cash discount refused: %v", err)
 	}
-	if err := b.updateGuard(x, M{"zatca": M{}}, M{"remarks": "a"}, M{"remarks": "b"}, []string{"remarks"}); err != nil {
+	if err := b.updateGuard(x, M{"zatca": M{}}, M{"discount": 0.0}, M{"discount": 2.0}, []string{"discount"}); err != nil {
 		t.Fatalf("unreported invoice refused: %v", err)
 	}
 	// the other document types have no lock
@@ -181,7 +183,6 @@ func TestAPI_ZatcaReportedSaleLock(t *testing.T) {
 		field string
 	}{
 		{"line quantity", M{"items": []M{{"productId": fx.ProductA2.Hex(), "qty": 3, "unitPrice": 50, "warehouseId": "ms_" + storeA()}}}, "items"},
-		{"remarks", M{"remarks": "changed after reporting"}, "remarks"},
 		{"bill discount", M{"discount": 5}, "discount"},
 		{"date", M{"date": "2026-10-11T11:00"}, "date"},
 		{"phone", M{"phone": "0500000000"}, "phone"},
@@ -199,6 +200,10 @@ func TestAPI_ZatcaReportedSaleLock(t *testing.T) {
 	if !reflect.DeepEqual(g2.Body["items"], items) || g2.Body["remarks"] != "edited before reporting" || num(g2.Body["discount"]) != 0 {
 		t.Fatalf("a refused edit changed the invoice: %s", g2.Raw)
 	}
+	// the remarks are not in the reported XML: a terminal's note after the sale is taken
+	if r := call(t, "PATCH", "/sales/"+id, tok, M{"remarks": "Job JC-1 · ABC 123"}); r.Code != 200 || r.Body["remarks"] != "Job JC-1 · ABC 123" {
+		t.Fatalf("remarks after reporting: %d %s", r.Code, r.Raw)
+	}
 	// the same items resent unchanged are not a change
 	if r := call(t, "PATCH", "/sales/"+id, tok, M{"items": items, "cashDiscount": 4}); r.Code != 200 || num(r.Body["cashDiscount"]) != 4 {
 		t.Fatalf("cash discount with unchanged items: %d %s", r.Code, r.Raw)
@@ -214,12 +219,12 @@ func TestAPI_ZatcaReportedSaleLock(t *testing.T) {
 	}
 	// the store setting switched off: the invoice may be edited again
 	setStore(bson.M{"settings.disable_sales_edit_once_reported_to_zatca": false}, nil)
-	if r := call(t, "PATCH", "/sales/"+id, tok, M{"remarks": "lock off"}); r.Code != 200 || r.Body["zatcaLocked"] != false {
+	if r := call(t, "PATCH", "/sales/"+id, tok, M{"discount": 1}); r.Code != 200 || r.Body["zatcaLocked"] != false {
 		t.Fatalf("lock off: %d %s", r.Code, r.Raw)
 	}
 	// Phase 1: no lock either
 	setStore(bson.M{"zatca.phase": "1"}, bson.M{"settings.disable_sales_edit_once_reported_to_zatca": ""})
-	if r := call(t, "PATCH", "/sales/"+id, tok, M{"remarks": "phase 1"}); r.Code != 200 {
+	if r := call(t, "PATCH", "/sales/"+id, tok, M{"discount": 2}); r.Code != 200 {
 		t.Fatalf("phase 1: %d %s", r.Code, r.Raw)
 	}
 }
