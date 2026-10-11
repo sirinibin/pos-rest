@@ -56,6 +56,7 @@ type BackupJob struct {
 	done    bool
 	errMsg  string
 	zipPath string
+	owner        string // user id of whoever started it; progress is pushed to them
 	mu      sync.Mutex
 }
 
@@ -105,6 +106,7 @@ func deleteBackupJob(jobID string) {
 func (j *BackupJob) setStep(stepID, status string, progress float64, msg string) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	defer j.pushProgress() // only schedules the push; the snapshot is taken later
 	for _, s := range j.steps {
 		if s.ID == stepID {
 			s.Status = status
@@ -120,6 +122,7 @@ func (j *BackupJob) setStep(stepID, status string, progress float64, msg string)
 func (j *BackupJob) fail(stepID, msg string) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	defer j.pushProgress() // only schedules the push; the snapshot is taken later
 	for _, s := range j.steps {
 		if s.ID == stepID {
 			s.Status = "error"
@@ -128,6 +131,11 @@ func (j *BackupJob) fail(stepID, msg string) {
 	}
 	j.errMsg = msg
 	j.done = true
+}
+
+// pushProgress sends the latest progress to the job's owner (no polling).
+func (j *BackupJob) pushProgress() {
+	models.PushJobProgress(j.owner, "backup", j.JobID, func() interface{} { return j.snapshot() })
 }
 
 func (j *BackupJob) snapshot() BackupProgressData {
@@ -242,7 +250,7 @@ func StartStoreBackup(w http.ResponseWriter, r *http.Request) {
 	var response models.Response
 	response.Errors = make(map[string]string)
 
-	_, err := models.AuthenticateByAccessToken(r)
+	tokenClaims, err := models.AuthenticateByAccessToken(r)
 	if err != nil {
 		response.Status = false
 		response.Errors["access_token"] = "Invalid Access token:" + err.Error()
@@ -255,6 +263,7 @@ func StartStoreBackup(w http.ResponseWriter, r *http.Request) {
 	storeID := vars["id"]
 
 	job := newBackupJob(storeID)
+	job.owner = tokenClaims.UserID
 	go runBackupJob(job)
 
 	response.Status = true
@@ -264,7 +273,8 @@ func StartStoreBackup(w http.ResponseWriter, r *http.Request) {
 
 // ── GET /v1/store/{id}/backup/progress?job_id=xxx ─────────────────────────────
 // Returns a plain JSON snapshot of the current backup job state.
-// The frontend polls this endpoint every 500 ms.
+// Progress is pushed to the job owner as job_progress (models.PushJobProgress);
+// the browser reads this endpoint once when it starts watching and after a reconnect.
 
 func GetStoreBackupProgress(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -534,6 +544,7 @@ func runBackupJob(job *BackupJob) {
 	job.zipPath = zipPath
 	job.done = true
 	job.mu.Unlock()
+	job.pushProgress()
 }
 
 func backupCopyDir(src, dst string, onFile func(int64)) error {

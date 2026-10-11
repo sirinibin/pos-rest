@@ -158,14 +158,17 @@ func (user *User) SetDeviceCounts() error {
 	return nil
 }
 
+// GetOnlineAdminUsers returns the online users who manage users: Admins and Managers.
 func GetOnlineAdminUsers() (users []User, err error) {
 	collection := db.Client("").Database(db.GetPosDB()).Collection("user")
 	ctx := context.Background()
 	findOptions := options.Find()
 	findOptions.SetNoCursorTimeout(true)
 	findOptions.SetAllowDiskUse(true)
+	// Admins and Managers both manage users (the Users screen and the
+	// Manage Users window), so both get the online/device-count pushes.
 	filter := map[string]interface{}{
-		"role":   "Admin",
+		"role":   map[string]interface{}{"$in": []string{"Admin", "Manager"}},
 		"online": true,
 	}
 	cur, err := collection.Find(ctx, filter, findOptions)

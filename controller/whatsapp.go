@@ -222,6 +222,14 @@ func ConnectWhatsApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The browser is told when the QR changes and when the phone is linked
+	// (whatsapp_connect over the WebSocket) instead of asking every few seconds.
+	owner := ""
+	if claims, err := models.AuthenticateByAccessToken(r); err == nil {
+		owner = claims.UserID
+	}
+	startWhatsAppConnectWatch(storeObjID, owner)
+
 	fmt.Fprintf(w, `{"success":true,"instance_name":%q,"token":%q}`, instanceName, token)
 }
 
@@ -273,14 +281,23 @@ func GetWhatsAppQR(w http.ResponseWriter, r *http.Request) {
 	storeIDStr := r.URL.Query().Get("store_id")
 	evoURL, evoKey, instanceName := evoConfigFromStore(storeIDStr)
 
-	respBody, _, err := evoCall("GET",
-		fmt.Sprintf("%s/instance/connect/%s", evoURL, instanceName),
-		evoKey, nil)
+	respBody, err := whatsAppQR(evoURL, evoKey, instanceName)
 	if err != nil {
 		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
 		return
 	}
-	w.Write(evoNormalizeQR(respBody))
+	w.Write(respBody)
+}
+
+// whatsAppQR returns the instance's current QR as {"base64","count","code"}.
+func whatsAppQR(evoURL, evoKey, instanceName string) ([]byte, error) {
+	respBody, _, err := evoCall("GET",
+		fmt.Sprintf("%s/instance/connect/%s", evoURL, instanceName),
+		evoKey, nil)
+	if err != nil {
+		return nil, err
+	}
+	return evoNormalizeQR(respBody), nil
 }
 
 // ── 3. GetWhatsAppStatus ─────────────────────────────────────────────────────
@@ -288,20 +305,36 @@ func GetWhatsAppQR(w http.ResponseWriter, r *http.Request) {
 // Returns { connected: bool, phone: "...", instance_name: "..." }
 func GetWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	storeIDStr := r.URL.Query().Get("store_id")
+	st, err := whatsAppConnectionStatus(r.URL.Query().Get("store_id"))
+	if err != nil {
+		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
+		return
+	}
+	json.NewEncoder(w).Encode(st)
+}
+
+// whatsAppStatus is the answer of GET /v1/whatsapp/status.
+type whatsAppStatus struct {
+	Connected    bool   `json:"connected"`
+	Phone        string `json:"phone,omitempty"`
+	InstanceName string `json:"instance_name,omitempty"`
+	Status       string `json:"status,omitempty"`
+}
+
+// whatsAppConnectionStatus asks Evolution API whether the store's instance is
+// linked to a phone; an error means Evolution API could not be reached.
+func whatsAppConnectionStatus(storeIDStr string) (whatsAppStatus, error) {
 	evoURL, evoKey, instanceName := evoConfigFromStore(storeIDStr)
 
 	if instanceName == "" {
-		fmt.Fprint(w, `{"connected":false}`)
-		return
+		return whatsAppStatus{}, nil
 	}
 
 	respBody, _, err := evoCall("GET",
 		fmt.Sprintf("%s/instance/fetchInstances", evoURL),
 		evoKey, nil)
 	if err != nil {
-		http.Error(w, `{"error":"Evolution API unreachable"}`, http.StatusBadGateway)
-		return
+		return whatsAppStatus{}, err
 	}
 
 	// Accept both v2.2.x ("name") and v2.3.x ("instanceName") field names.
@@ -312,8 +345,7 @@ func GetWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
 		OwnerJid         string `json:"ownerJid"`
 	}
 	if err := json.Unmarshal(respBody, &instances); err != nil {
-		fmt.Fprint(w, `{"connected":false}`)
-		return
+		return whatsAppStatus{}, nil
 	}
 
 	for _, inst := range instances {
@@ -322,14 +354,15 @@ func GetWhatsAppStatus(w http.ResponseWriter, r *http.Request) {
 			instName = inst.InstanceName
 		}
 		if instName == instanceName {
-			connected := inst.ConnectionStatus == "open"
-			phone := strings.TrimSuffix(inst.OwnerJid, "@s.whatsapp.net")
-			fmt.Fprintf(w, `{"connected":%v,"phone":%q,"instance_name":%q,"status":%q}`,
-				connected, phone, instanceName, inst.ConnectionStatus)
-			return
+			return whatsAppStatus{
+				Connected:    inst.ConnectionStatus == "open",
+				Phone:        strings.TrimSuffix(inst.OwnerJid, "@s.whatsapp.net"),
+				InstanceName: instanceName,
+				Status:       inst.ConnectionStatus,
+			}, nil
 		}
 	}
-	fmt.Fprintf(w, `{"connected":false,"instance_name":%q}`, instanceName)
+	return whatsAppStatus{InstanceName: instanceName}, nil
 }
 
 // ── 4. DisconnectWhatsApp ────────────────────────────────────────────────────
@@ -349,6 +382,8 @@ func DisconnectWhatsApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	evoURL, evoKey, instanceName := evoConfigFromStore(storeIDStr)
+
+	stopWhatsAppConnectWatch(storeObjID)
 
 	// Delete instance from Evolution API (best-effort, don't fail on error)
 	if instanceName != "" {

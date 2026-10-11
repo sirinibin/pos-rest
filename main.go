@@ -763,6 +763,7 @@ func main() {
 	// API routes that must come BEFORE the SPA catch-all PathPrefix("/")
 	// (gorilla/mux matches routes in registration order)
 	router.HandleFunc("/v1/socket", controller.WebSocketHandler).Methods("GET")
+	router.HandleFunc("/v1/app/frontend-deployed", controller.FrontendDeployed).Methods("POST")
 	router.HandleFunc("/v1/upload-pdf", controller.SavePdf).Methods("POST")
 	router.HandleFunc("/v1/share-pdf", controller.SharePdf).Methods("POST")
 	router.HandleFunc("/v1/whatsapp/send-document", controller.SendWhatsAppDocument).Methods("POST")

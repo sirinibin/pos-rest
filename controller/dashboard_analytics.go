@@ -240,7 +240,10 @@ func DashboardBackfill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	months, _ := strconv.Atoi(r.URL.Query().Get("months"))
-	go models.BackfillDashboardForStore(storeID, months)
+	go func() {
+		models.BackfillDashboardForStore(storeID, months)
+		models.NotifyDashboardRecomputed(storeID) // open dashboards reload when it is done
+	}()
 	dashboardJSON(w, map[string]string{"message": "backfill started"})
 }
 

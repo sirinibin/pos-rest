@@ -25,6 +25,7 @@ type DuplicateWithoutDataJob struct {
 	steps        []*DuplicateStepData
 	done         bool
 	errMsg       string
+	owner        string // user id of whoever started it; progress is pushed to them
 	mu           sync.Mutex
 }
 
@@ -67,6 +68,7 @@ func deleteDuplicateWithoutDataJob(jobID string) {
 func (j *DuplicateWithoutDataJob) setStep(stepID, status string, progress float64, msg string) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	defer j.pushProgress() // only schedules the push; the snapshot is taken later
 	for _, s := range j.steps {
 		if s.ID == stepID {
 			s.Status = status
@@ -82,6 +84,7 @@ func (j *DuplicateWithoutDataJob) setStep(stepID, status string, progress float6
 func (j *DuplicateWithoutDataJob) fail(stepID, msg string) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	defer j.pushProgress() // only schedules the push; the snapshot is taken later
 	for _, s := range j.steps {
 		if s.ID == stepID {
 			s.Status = "error"
@@ -90,6 +93,11 @@ func (j *DuplicateWithoutDataJob) fail(stepID, msg string) {
 	}
 	j.errMsg = msg
 	j.done = true
+}
+
+// pushProgress sends the latest progress to the job's owner (no polling).
+func (j *DuplicateWithoutDataJob) pushProgress() {
+	models.PushJobProgress(j.owner, "duplicate_without_data", j.JobID, func() interface{} { return j.snapshot() })
 }
 
 func (j *DuplicateWithoutDataJob) snapshot() DuplicateProgressData {
@@ -217,6 +225,7 @@ func StartStoreDuplicateWithoutData(w http.ResponseWriter, r *http.Request) {
 	newStoreIDStr := newStoreOID.Hex()
 
 	job := newDuplicateWithoutDataJob(oldStoreID, newStoreIDStr, body.NewName)
+	job.owner = tokenClaims.UserID
 	go runDuplicateWithoutDataJob(job, oldStoreID, newStoreOID, body.NewName, body.NewNameInArabic, userID)
 
 	response.Status = true
@@ -369,6 +378,7 @@ func runDuplicateWithoutDataJob(
 	job.mu.Lock()
 	job.done = true
 	job.mu.Unlock()
+	job.pushProgress()
 
 	go func() {
 		time.Sleep(5 * time.Minute)

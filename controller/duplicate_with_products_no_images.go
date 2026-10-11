@@ -25,6 +25,7 @@ type DuplicateWithProductsNoImagesJob struct {
 	steps        []*DuplicateStepData
 	done         bool
 	errMsg       string
+	owner        string // user id of whoever started it; progress is pushed to them
 	mu           sync.Mutex
 }
 
@@ -73,6 +74,7 @@ func deleteDuplicateWithProductsNoImagesJob(jobID string) {
 func (j *DuplicateWithProductsNoImagesJob) setStep(stepID, status string, progress float64, msg string) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	defer j.pushProgress() // only schedules the push; the snapshot is taken later
 	for _, s := range j.steps {
 		if s.ID == stepID {
 			s.Status = status
@@ -88,6 +90,7 @@ func (j *DuplicateWithProductsNoImagesJob) setStep(stepID, status string, progre
 func (j *DuplicateWithProductsNoImagesJob) fail(stepID, msg string) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	defer j.pushProgress() // only schedules the push; the snapshot is taken later
 	for _, s := range j.steps {
 		if s.ID == stepID {
 			s.Status = "error"
@@ -96,6 +99,11 @@ func (j *DuplicateWithProductsNoImagesJob) fail(stepID, msg string) {
 	}
 	j.errMsg = msg
 	j.done = true
+}
+
+// pushProgress sends the latest progress to the job's owner (no polling).
+func (j *DuplicateWithProductsNoImagesJob) pushProgress() {
+	models.PushJobProgress(j.owner, "duplicate_with_products_no_images", j.JobID, func() interface{} { return j.snapshot() })
 }
 
 func (j *DuplicateWithProductsNoImagesJob) snapshot() DuplicateProgressData {
@@ -241,6 +249,7 @@ func StartStoreDuplicateWithProductsNoImages(w http.ResponseWriter, r *http.Requ
 	newStoreIDStr := newStoreOID.Hex()
 
 	job := newDuplicateWithProductsNoImagesJob(oldStoreID, newStoreIDStr, body.NewName)
+	job.owner = tokenClaims.UserID
 	go runDuplicateWithProductsNoImagesJob(job, oldStoreID, newStoreOID, body.NewName, body.NewNameInArabic, userID)
 
 	response.Status = true
@@ -536,6 +545,7 @@ func runDuplicateWithProductsNoImagesJob(
 	job.mu.Lock()
 	job.done = true
 	job.mu.Unlock()
+	job.pushProgress()
 
 	go func() {
 		time.Sleep(5 * time.Minute)

@@ -4307,6 +4307,7 @@ func TriggerRFQProcess(w http.ResponseWriter, r *http.Request) {
 	rfq.ErrorMsg = ""
 	rfq.Categories = nil
 	models.UpdateRFQReceived(rfq)
+	BroadcastRFQEvent(storeIDStr, "rfq_updated") // open lists show it back to "received"
 
 	go processRFQ(rfq, storeObjID)
 	fmt.Fprint(w, `{"success":true,"message":"Processing started"}`)

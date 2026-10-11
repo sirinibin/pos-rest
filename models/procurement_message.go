@@ -146,6 +146,9 @@ func SaveProcurementMessage(msg *ProcurementMessage) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := procurementMessageCol().InsertOne(ctx, msg)
+	if err == nil {
+		NotifyProcurementMessagesChanged(msg.StoreID, msg.Type)
+	}
 	return err
 }
 
@@ -486,6 +489,9 @@ func DeleteAllProcurementMessages(storeID primitive.ObjectID, msgType string) (i
 	if err != nil {
 		return 0, err
 	}
+	if res.DeletedCount > 0 {
+		notifyProcurementMessageTypes(storeID, msgType)
+	}
 	return res.DeletedCount, nil
 }
 
@@ -504,6 +510,9 @@ func DeleteOldProcurementMessages(storeID primitive.ObjectID, days int) (int64, 
 	})
 	if err != nil {
 		return 0, err
+	}
+	if res.DeletedCount > 0 {
+		notifyProcurementMessageTypes(storeID, "")
 	}
 	return res.DeletedCount, nil
 }
@@ -1072,4 +1081,15 @@ func ProcurementMessageStoreID(id primitive.ObjectID) (primitive.ObjectID, error
 	err := procurementMessageCol().FindOne(ctx, bson.M{"_id": id},
 		options.FindOne().SetProjection(bson.M{"store_id": 1})).Decode(&msg)
 	return msg.StoreID, err
+}
+
+// notifyProcurementMessageTypes announces a change to one message type, or
+// to both when msgType is empty.
+func notifyProcurementMessageTypes(storeID primitive.ObjectID, msgType string) {
+	if msgType != "" {
+		NotifyProcurementMessagesChanged(storeID, msgType)
+		return
+	}
+	NotifyProcurementMessagesChanged(storeID, "whatsapp")
+	NotifyProcurementMessagesChanged(storeID, "email")
 }

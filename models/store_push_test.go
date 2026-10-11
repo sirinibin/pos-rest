@@ -127,7 +127,7 @@ func TestNotifyStoreUpdated_ConcurrentWritersAlwaysFollowedByEvent(t *testing.T)
 		t.Fatal("no event sent")
 	}
 	storePushMu.Lock()
-	pending := storePushPending[id]
+	pending := storePushPending[StoreUpdatedEvent+"|"+id.Hex()]
 	storePushMu.Unlock()
 	if pending {
 		t.Fatal("a write was left pending with no event")
@@ -221,5 +221,155 @@ func TestStoreWritesNotify(t *testing.T) {
 	}
 	if len(offenders) > 0 {
 		t.Fatalf("these functions write the store without NotifyStoreUpdated:\n  %s", strings.Join(offenders, "\n  "))
+	}
+}
+
+func TestNotifyProcurementMessagesChanged_BundledPerType(t *testing.T) {
+	var mu sync.Mutex
+	got := map[string]int{}
+	oldSend, oldDelay := sendProcurementMessagesChanged, StorePushDelay
+	sendProcurementMessagesChanged = func(_ primitive.ObjectID, msgType string) {
+		mu.Lock()
+		got[msgType]++
+		mu.Unlock()
+	}
+	StorePushDelay = 20 * time.Millisecond
+	defer func() {
+		time.Sleep(60 * time.Millisecond)
+		sendProcurementMessagesChanged, StorePushDelay = oldSend, oldDelay
+	}()
+	id := primitive.NewObjectID()
+	for i := 0; i < 50; i++ {
+		NotifyProcurementMessagesChanged(id, "email")
+	}
+	NotifyProcurementMessagesChanged(id, "whatsapp")
+	NotifyProcurementMessagesChanged(primitive.NilObjectID, "email")
+	time.Sleep(80 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if got["email"] != 1 || got["whatsapp"] != 1 || len(got) != 2 {
+		t.Fatalf("want one event per type, got %v", got)
+	}
+}
+
+// A store change and a message change at the same moment are separate events.
+func TestCoalesce_TopicsDoNotSwallowEachOther(t *testing.T) {
+	sent := withStorePushRecorder(t, 20*time.Millisecond)
+	var msgs int32
+	oldSend := sendProcurementMessagesChanged
+	sendProcurementMessagesChanged = func(primitive.ObjectID, string) { atomic.AddInt32(&msgs, 1) }
+	defer func() { sendProcurementMessagesChanged = oldSend }()
+	id := primitive.NewObjectID()
+	NotifyStoreUpdated(id)
+	NotifyProcurementMessagesChanged(id, "whatsapp")
+	time.Sleep(80 * time.Millisecond)
+	if len(sent()) != 1 || atomic.LoadInt32(&msgs) != 1 {
+		t.Fatalf("store events %d, message events %d; want 1 and 1", len(sent()), msgs)
+	}
+}
+
+func TestPushJobProgress_LatestSnapshotToOwner(t *testing.T) {
+	var mu sync.Mutex
+	var got []map[string]interface{}
+	var owners []string
+	oldSend, oldDelay := sendJobProgress, StorePushDelay
+	sendJobProgress = func(owner string, data map[string]interface{}) {
+		mu.Lock()
+		owners = append(owners, owner)
+		got = append(got, data)
+		mu.Unlock()
+	}
+	StorePushDelay = 20 * time.Millisecond
+	defer func() {
+		time.Sleep(60 * time.Millisecond)
+		sendJobProgress, StorePushDelay = oldSend, oldDelay
+	}()
+	var step int32
+	snap := func() interface{} { return atomic.LoadInt32(&step) }
+	for i := 1; i <= 30; i++ {
+		atomic.StoreInt32(&step, int32(i))
+		PushJobProgress("u1", "backup", "job-1", snap)
+	}
+	PushJobProgress("", "backup", "job-2", snap)
+	PushJobProgress("u1", "backup", "", snap)
+	time.Sleep(80 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 {
+		t.Fatalf("want one bundled event, got %d", len(got))
+	}
+	if owners[0] != "u1" || got[0]["job_id"] != "job-1" || got[0]["kind"] != "backup" || got[0]["progress"] != int32(30) {
+		t.Fatalf("want the latest snapshot for the owner, got %v to %v", got[0], owners[0])
+	}
+}
+
+func TestNotifyFrontendDeployed_OncePerGap(t *testing.T) {
+	oldSend, oldGap := sendFrontendDeployed, FrontendDeployedMinGap
+	storePushMu.Lock()
+	oldLast := lastFrontendDeployed
+	lastFrontendDeployed = time.Time{}
+	storePushMu.Unlock()
+	t.Cleanup(func() {
+		sendFrontendDeployed, FrontendDeployedMinGap = oldSend, oldGap
+		storePushMu.Lock()
+		lastFrontendDeployed = oldLast
+		storePushMu.Unlock()
+	})
+
+	var mu sync.Mutex
+	sent := 0
+	sendFrontendDeployed = func() { mu.Lock(); sent++; mu.Unlock() }
+	FrontendDeployedMinGap = 100 * time.Millisecond
+
+	results := make(chan bool, 20)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); results <- NotifyFrontendDeployed() }()
+	}
+	wg.Wait()
+	close(results)
+	announced := 0
+	for r := range results {
+		if r {
+			announced++
+		}
+	}
+	if announced != 1 {
+		t.Fatalf("%d of 20 simultaneous calls announced, want 1", announced)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	if !NotifyFrontendDeployed() {
+		t.Fatal("a call after the gap must announce again")
+	}
+	time.Sleep(20 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if sent != 2 {
+		t.Fatalf("sent %d times, want 2", sent)
+	}
+}
+
+func TestNotifyDashboardRecomputed_OncePerBurstPerStore(t *testing.T) {
+	oldSend, oldDelay := sendDashboardRecomputed, StorePushDelay
+	t.Cleanup(func() { sendDashboardRecomputed, StorePushDelay = oldSend, oldDelay })
+	StorePushDelay = 20 * time.Millisecond
+
+	var mu sync.Mutex
+	got := map[primitive.ObjectID]int{}
+	sendDashboardRecomputed = func(id primitive.ObjectID) { mu.Lock(); got[id]++; mu.Unlock() }
+
+	a, b := primitive.NewObjectID(), primitive.NewObjectID()
+	NotifyDashboardRecomputed(a)
+	NotifyDashboardRecomputed(a)
+	NotifyDashboardRecomputed(b)
+	NotifyDashboardRecomputed(primitive.NilObjectID)
+	time.Sleep(80 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if got[a] != 1 || got[b] != 1 || len(got) != 2 {
+		t.Fatalf("sent %v, want one event each for the two stores", got)
 	}
 }

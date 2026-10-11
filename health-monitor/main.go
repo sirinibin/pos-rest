@@ -189,6 +189,7 @@ func tryAutoRestart(key, service, envName string, threshold time.Duration, cfg A
 		log.Printf("[health-monitor] auto-restart %s OK", service)
 	}
 	appendRestartLog(entry)
+	statusHubInstance.recheck()
 }
 
 // autoRestartLoop runs in the background every 30s.
@@ -567,10 +568,10 @@ func requireAdminStateless(w http.ResponseWriter, r *http.Request) bool {
 // requireViewAccess — read-only status/log endpoints.
 // Allows: admins (new tokens), users in AllowedUsers list, or any valid old token.
 func requireViewAccess(w http.ResponseWriter, r *http.Request) bool {
-	claims := parseJWTClaims(w, r)
-	if claims == nil {
-		return false
-	}
+	return viewAccessClaims(w, r) != nil
+}
+
+func claimsMayView(claims jwt.MapClaims) bool {
 	isAdminUser, hasFlag := claimsHaveAdminFlag(claims)
 	// Admin user or old token without flag → allow
 	if !hasFlag || isAdminUser {
@@ -586,7 +587,6 @@ func requireViewAccess(w http.ResponseWriter, r *http.Request) bool {
 			return true
 		}
 	}
-	http.Error(w, `{"error":"access denied"}`, http.StatusForbidden)
 	return false
 }
 
@@ -607,12 +607,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireViewAccess(w, r) {
 		return
 	}
-	production := buildStatus("Production", "start-api.service", 2000, frontendBuildDir("production"))
-	test := buildStatus("Test", "start-api-test.service", 2002, frontendBuildDir("test"))
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"production": production,
-		"test":       test,
-	})
+	json.NewEncoder(w).Encode(computeStatus())
 }
 
 func restartHandler(w http.ResponseWriter, r *http.Request) {
@@ -711,6 +706,7 @@ func restartHandler(w http.ResponseWriter, r *http.Request) {
 				log.Printf("[health-monitor] restart %s OK", t.service)
 			}
 			appendRestartLog(entry)
+			statusHubInstance.recheck() // open status windows see it at once
 		}
 	}()
 }
@@ -832,6 +828,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health-monitor/status", statusHandler)
+	mux.HandleFunc("/health-monitor/status/stream", statusStreamHandler)
 	mux.HandleFunc("/health-monitor/restart", restartHandler)
 	mux.HandleFunc("/health-monitor/config", configHandler)
 	mux.HandleFunc("/health-monitor/restart-log", restartLogHandler)
