@@ -9,6 +9,7 @@ on:
       - "**.mod"
       - "**.sum"
       - "e2e/**"
+      - "ZatcaPython/**"
       - "deploy/**"
       - ".github/workflows/deploy_test.yml"
       - ".github/workflows/tests.yml"
