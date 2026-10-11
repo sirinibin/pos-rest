@@ -29,10 +29,20 @@ func cdnSig(path string, exp int64) string {
 // SignCdnURL returns link ("/cdn/…", without a query) with an expiry and a
 // signature; other values are returned unchanged.
 func SignCdnURL(link string, now time.Time) string {
+	return SignCdnURLFor(link, now, CdnLinkTTL)
+}
+
+// CdnShareLinkTTL is how long a link printed in a shared document (the ZATCA
+// XML link in an invoice PDF sent to a customer) works: longer than the
+// years an invoice must be kept.
+const CdnShareLinkTTL = 10 * 365 * 24 * time.Hour
+
+// SignCdnURLFor is SignCdnURL with a link that works for ttl.
+func SignCdnURLFor(link string, now time.Time, ttl time.Duration) string {
 	if !strings.HasPrefix(link, "/cdn/") || strings.Contains(link, "?") {
 		return link
 	}
-	exp := now.Add(CdnLinkTTL).Unix()
+	exp := now.Add(ttl).Unix()
 	return link + "?exp=" + strconv.FormatInt(exp, 10) + "&sig=" + cdnSig(link, exp)
 }
 

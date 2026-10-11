@@ -33,6 +33,9 @@ func TestEndpoints_Unauthenticated(t *testing.T) {
 		{"GET", "/card-terminal-payments/x"}, {"POST", "/card-terminal-payments/x/cancel"},
 		{"POST", "/card-bridges/pairing-code"}, {"GET", "/card-bridges"}, {"DELETE", "/card-bridges/x"},
 		{"POST", "/card-bridge/hello"}, {"GET", "/card-bridge/jobs"}, {"POST", "/card-bridge/jobs/x/result"},
+		{"GET", "/whatsapp/status"}, {"POST", "/sales/x/whatsapp"}, {"POST", "/sales/x/pdf-link"}, {"GET", "/sales/x/share-links"},
+		{"GET", "/rfq-bot/status"}, {"GET", "/rfq-bot/waba-templates"}, {"POST", "/rfq-bot/connect"},
+		{"POST", "/rfq-bot/waba-business-account-id"}, {"DELETE", "/rfq-bot/disconnect"}, {"POST", "/rfq-bot/waba-test-message"},
 	}
 	for _, r := range Resources() {
 		eps = append(eps,

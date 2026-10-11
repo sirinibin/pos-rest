@@ -60,6 +60,7 @@ func Register(router *mux.Router) {
 	// Card machines (card swiping terminals) and their providers (card_terminals.go)
 	registerCardTerminals(s)
 	registerCardBridge(s)
+	registerWhatsAppShare(s)
 
 	// Starter catalog of the store's business category (starter_catalog.go)
 	registerStarterCatalog(s)
