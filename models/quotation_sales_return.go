@@ -147,7 +147,7 @@ func (quotationSalesReturn *QuotationSalesReturn) CloseQuotationSalesPayment() e
 		return err
 	}
 
-	amount := RoundTo2Decimals(quotationSalesReturn.BalanceAmount)
+	amount := quotationSalesReturn.money(quotationSalesReturn.BalanceAmount)
 
 	if quotation.BalanceAmount < amount {
 		amount = quotation.BalanceAmount
@@ -302,16 +302,16 @@ func (customer *Customer) CloseCustomerPendingQuotationSalesByQuotationSalesRetu
 		return err
 	}
 
-	quotationSalesReturnBalanceAmount := RoundTo2Decimals(quotationSalesReturn.BalanceAmount)
+	quotationSalesReturnBalanceAmount := quotationSalesReturn.money(quotationSalesReturn.BalanceAmount)
 
 	amountToSettle := float64(0.00)
 
 	for _, pendingSale := range pendingSales {
 		if pendingSale.BalanceAmount > quotationSalesReturnBalanceAmount {
-			amountToSettle = RoundTo2Decimals(quotationSalesReturnBalanceAmount)
+			amountToSettle = quotationSalesReturn.money(quotationSalesReturnBalanceAmount)
 			quotationSalesReturnBalanceAmount = float64(0.00)
 		} else {
-			amountToSettle = RoundTo2Decimals(pendingSale.BalanceAmount)
+			amountToSettle = quotationSalesReturn.money(pendingSale.BalanceAmount)
 			quotationSalesReturnBalanceAmount -= amountToSettle
 		}
 
@@ -977,16 +977,16 @@ func (quotationsalesreturn *QuotationSalesReturn) UpdateForeignLabelFields() err
 }
 
 func (quotationsalesReturn *QuotationSalesReturn) FindNetTotal() error {
-	quotationsalesReturn.ShippingOrHandlingFees = RoundTo2Decimals(quotationsalesReturn.ShippingOrHandlingFees)
-	quotationsalesReturn.Discount = RoundTo2Decimals(quotationsalesReturn.Discount)
+	quotationsalesReturn.ShippingOrHandlingFees = quotationsalesReturn.money(quotationsalesReturn.ShippingOrHandlingFees)
+	quotationsalesReturn.Discount = quotationsalesReturn.money(quotationsalesReturn.Discount)
 
 	quotationsalesReturn.FindTotal()
 
 	/*
 		if quotationsalesReturn.DiscountWithVAT > 0 {
-			quotationsalesReturn.Discount = RoundTo2Decimals(quotationsalesReturn.DiscountWithVAT / (1 + (*quotationsalesReturn.VatPercent / 100)))
+			quotationsalesReturn.Discount = quotationsalesReturn.money(quotationsalesReturn.DiscountWithVAT / (1 + (*quotationsalesReturn.VatPercent / 100)))
 		} else if quotationsalesReturn.Discount > 0 {
-			quotationsalesReturn.DiscountWithVAT = RoundTo2Decimals(quotationsalesReturn.Discount * (1 + (*quotationsalesReturn.VatPercent / 100)))
+			quotationsalesReturn.DiscountWithVAT = quotationsalesReturn.money(quotationsalesReturn.Discount * (1 + (*quotationsalesReturn.VatPercent / 100)))
 		} else {
 			quotationsalesReturn.Discount = 0
 			quotationsalesReturn.DiscountWithVAT = 0
@@ -994,26 +994,26 @@ func (quotationsalesReturn *QuotationSalesReturn) FindNetTotal() error {
 
 	// Apply discount to the base amount first
 	baseTotal := quotationsalesReturn.Total + quotationsalesReturn.ShippingOrHandlingFees - quotationsalesReturn.Discount
-	baseTotal = RoundTo2Decimals(baseTotal)
+	baseTotal = quotationsalesReturn.money(baseTotal)
 
 	// Now calculate VAT on the discounted base
-	quotationsalesReturn.VatPrice = RoundTo2Decimals(baseTotal * (*quotationsalesReturn.VatPercent / 100))
-	quotationsalesReturn.NetTotal = RoundTo2Decimals(baseTotal + quotationsalesReturn.VatPrice)
+	quotationsalesReturn.VatPrice = quotationsalesReturn.money(baseTotal * (*quotationsalesReturn.VatPercent / 100))
+	quotationsalesReturn.NetTotal = quotationsalesReturn.money(baseTotal + quotationsalesReturn.VatPrice)
 
 	//Actual
 	actualBaseTotal := quotationsalesReturn.ActualTotal + quotationsalesReturn.ShippingOrHandlingFees - quotationsalesReturn.Discount
 	actualBaseTotal = RoundTo8Decimals(actualBaseTotal)
 
 	// Now calculate VAT on the discounted base
-	quotationsalesReturn.ActualVatPrice = RoundTo2Decimals(actualBaseTotal * (*quotationsalesReturn.VatPercent / 100))
+	quotationsalesReturn.ActualVatPrice = quotationsalesReturn.money(actualBaseTotal * (*quotationsalesReturn.VatPercent / 100))
 
-	quotationsalesReturn.ActualNetTotal = RoundTo2Decimals(actualBaseTotal + quotationsalesReturn.ActualVatPrice)
+	quotationsalesReturn.ActualNetTotal = quotationsalesReturn.money(actualBaseTotal + quotationsalesReturn.ActualVatPrice)
 
 	if quotationsalesReturn.AutoRoundingAmount {
-		quotationsalesReturn.RoundingAmount = RoundTo2Decimals(quotationsalesReturn.ActualNetTotal - quotationsalesReturn.NetTotal)
+		quotationsalesReturn.RoundingAmount = quotationsalesReturn.money(quotationsalesReturn.ActualNetTotal - quotationsalesReturn.NetTotal)
 	}
 
-	quotationsalesReturn.NetTotal = RoundTo2Decimals(quotationsalesReturn.NetTotal + quotationsalesReturn.RoundingAmount)
+	quotationsalesReturn.NetTotal = quotationsalesReturn.money(quotationsalesReturn.NetTotal + quotationsalesReturn.RoundingAmount)
 
 	quotationsalesReturn.CalculateDiscountPercentage()
 
@@ -1035,27 +1035,27 @@ func (quotationsalesReturn *QuotationSalesReturn) FindTotal() {
 
 		/*
 			if product.UnitPriceWithVAT > 0 {
-				quotationsalesReturn.Products[i].UnitPrice = RoundTo2Decimals(product.UnitPriceWithVAT / (1 + (*quotationsalesReturn.VatPercent / 100)))
+				quotationsalesReturn.Products[i].UnitPrice = quotationsalesReturn.money(product.UnitPriceWithVAT / (1 + (*quotationsalesReturn.VatPercent / 100)))
 			} else if product.UnitPrice > 0 {
-				quotationsalesReturn.Products[i].UnitPriceWithVAT = RoundTo2Decimals(product.UnitPrice * (1 + (*quotationsalesReturn.VatPercent / 100)))
+				quotationsalesReturn.Products[i].UnitPriceWithVAT = quotationsalesReturn.money(product.UnitPrice * (1 + (*quotationsalesReturn.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountWithVAT > 0 {
-				quotationsalesReturn.Products[i].UnitDiscount = RoundTo2Decimals(product.UnitDiscountWithVAT / (1 + (*quotationsalesReturn.VatPercent / 100)))
+				quotationsalesReturn.Products[i].UnitDiscount = quotationsalesReturn.money(product.UnitDiscountWithVAT / (1 + (*quotationsalesReturn.VatPercent / 100)))
 			} else if product.UnitDiscount > 0 {
-				quotationsalesReturn.Products[i].UnitDiscountWithVAT = RoundTo2Decimals(product.UnitDiscount * (1 + (*quotationsalesReturn.VatPercent / 100)))
+				quotationsalesReturn.Products[i].UnitDiscountWithVAT = quotationsalesReturn.money(product.UnitDiscount * (1 + (*quotationsalesReturn.VatPercent / 100)))
 			}
 
 			if product.UnitDiscountPercentWithVAT > 0 {
-				quotationsalesReturn.Products[i].UnitDiscountPercent = RoundTo2Decimals((product.UnitDiscount / product.UnitPrice) * 100)
+				quotationsalesReturn.Products[i].UnitDiscountPercent = quotationsalesReturn.money((product.UnitDiscount / product.UnitPrice) * 100)
 			} else if product.UnitDiscountPercent > 0 {
-				quotationsalesReturn.Products[i].UnitDiscountPercentWithVAT = RoundTo2Decimals((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
+				quotationsalesReturn.Products[i].UnitDiscountPercentWithVAT = quotationsalesReturn.money((product.UnitDiscountWithVAT / product.UnitPriceWithVAT) * 100)
 			}*/
 
 		total += (product.Quantity * (quotationsalesReturn.Products[i].UnitPrice - quotationsalesReturn.Products[i].UnitDiscount))
 		totalWithVAT += (product.Quantity * (quotationsalesReturn.Products[i].UnitPriceWithVAT - quotationsalesReturn.Products[i].UnitDiscountWithVAT))
-		total = RoundTo2Decimals(total)
-		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+		total = quotationsalesReturn.money(total)
+		totalWithVAT = quotationsalesReturn.money(totalWithVAT)
 
 		//Actual values
 		actualTotal += (product.Quantity * (quotationsalesReturn.Products[i].UnitPrice - quotationsalesReturn.Products[i].UnitDiscount))
@@ -1824,8 +1824,16 @@ func (quotationsalesreturn *QuotationSalesReturn) Validate(w http.ResponseWriter
 			if quotation.Products[i].ProductID == quotationsalesReturnProduct.ProductID {
 				//soldQty := RoundFloat((quotationProduct.Quantity - quotationProduct.QuantityReturned), 2)
 				maxAllowedQuantity := 0.00
-				if scenario == "update" {
-					maxAllowedQuantity = quotation.Products[i].Quantity - (quotation.Products[i].QuantityReturned - oldQuotationSalesReturn.Products[index].Quantity)
+				if scenario == "update" && oldQuotationSalesReturn != nil {
+					// what this return held of the product before the edit (a line
+					// added by the edit has no line at the same index in the old return)
+					oldQty := 0.0
+					for _, op := range oldQuotationSalesReturn.Products {
+						if op.Selected && op.ProductID == quotationsalesReturnProduct.ProductID {
+							oldQty += op.Quantity
+						}
+					}
+					maxAllowedQuantity = quotation.Products[i].Quantity - (quotation.Products[i].QuantityReturned - oldQty)
 				} else {
 					maxAllowedQuantity = quotation.Products[i].Quantity - quotation.Products[i].QuantityReturned
 				}
@@ -3042,11 +3050,11 @@ func (quotationsalesReturn *QuotationSalesReturn) SetPaymentStatus() (payments [
 	quotationsalesReturn.Payments = payments
 	quotationsalesReturn.PaymentsCount = int64(len(payments))
 
-	if RoundTo2Decimals((quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount)) <= RoundTo2Decimals(totalPaymentPaid) {
+	if quotationsalesReturn.money((quotationsalesReturn.NetTotal - quotationsalesReturn.CashDiscount)) <= quotationsalesReturn.money(totalPaymentPaid) {
 		quotationsalesReturn.PaymentStatus = "paid"
-	} else if RoundTo2Decimals(totalPaymentPaid) > 0 {
+	} else if quotationsalesReturn.money(totalPaymentPaid) > 0 {
 		quotationsalesReturn.PaymentStatus = "paid_partially"
-	} else if RoundTo2Decimals(totalPaymentPaid) <= 0 {
+	} else if quotationsalesReturn.money(totalPaymentPaid) <= 0 {
 		quotationsalesReturn.PaymentStatus = "not_paid"
 	}
 

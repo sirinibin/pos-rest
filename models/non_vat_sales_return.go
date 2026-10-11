@@ -104,12 +104,12 @@ func (r *NonVATSalesReturn) FindTotal() {
 			r.Products[i].UnitPriceWithVAT = r.Products[i].UnitPrice
 			r.Products[i].UnitDiscountWithVAT = r.Products[i].UnitDiscount
 		} else if p.UnitPriceWithVAT == 0 && p.UnitPrice > 0 && r.VatPercent != nil && *r.VatPercent > 0 {
-			r.Products[i].UnitPriceWithVAT = RoundTo2Decimals(p.UnitPrice * (1 + (*r.VatPercent / 100)))
+			r.Products[i].UnitPriceWithVAT = r.money(p.UnitPrice * (1 + (*r.VatPercent / 100)))
 		}
 		total += p.Quantity * (r.Products[i].UnitPrice - p.UnitDiscount)
-		total = RoundTo2Decimals(total)
+		total = r.money(total)
 		totalWithVAT += p.Quantity * (r.Products[i].UnitPriceWithVAT - p.UnitDiscountWithVAT)
-		totalWithVAT = RoundTo2Decimals(totalWithVAT)
+		totalWithVAT = r.money(totalWithVAT)
 
 		//Actual
 		actualTotal += p.Quantity * (r.Products[i].UnitPrice - p.UnitDiscount)
@@ -124,8 +124,8 @@ func (r *NonVATSalesReturn) FindTotal() {
 }
 
 func (r *NonVATSalesReturn) FindVatPrice() {
-	r.VatPrice = RoundTo2Decimals(r.TotalWithVAT - r.Total)
-	r.ActualVatPrice = RoundTo2Decimals(r.ActualTotalWithVAT - r.ActualTotal)
+	r.VatPrice = r.money(r.TotalWithVAT - r.Total)
+	r.ActualVatPrice = r.money(r.ActualTotalWithVAT - r.ActualTotal)
 }
 
 func (r *NonVATSalesReturn) FindNetTotal() error {
@@ -138,23 +138,23 @@ func (r *NonVATSalesReturn) FindNetTotal() error {
 		r.VatPercent = &vatPercent
 	}
 
-	r.Discount = RoundTo2Decimals(r.Discount)
+	r.Discount = r.money(r.Discount)
 
 	r.FindTotal()
 	r.FindVatPrice()
 
 	netTotal := r.TotalWithVAT - r.Discount - r.CashDiscount
-	r.NetTotal = RoundTo2Decimals(netTotal)
+	r.NetTotal = r.money(netTotal)
 
 	//Actual
 	actualNetTotal := r.ActualTotalWithVAT - r.Discount - r.CashDiscount
-	r.ActualNetTotal = RoundTo2Decimals(actualNetTotal)
+	r.ActualNetTotal = r.money(actualNetTotal)
 
 	if r.AutoRoundingAmount {
-		r.RoundingAmount = RoundTo2Decimals(r.ActualNetTotal - r.NetTotal)
+		r.RoundingAmount = r.money(r.ActualNetTotal - r.NetTotal)
 	}
 
-	r.NetTotal = RoundTo2Decimals(r.NetTotal + r.RoundingAmount)
+	r.NetTotal = r.money(r.NetTotal + r.RoundingAmount)
 
 	return nil
 }
@@ -245,6 +245,10 @@ func (ret *NonVATSalesReturn) Validate(w http.ResponseWriter, r *http.Request, s
 			errs["date_str"] = "Invalid date format"
 		}
 		ret.Date = &date
+	}
+
+	if err := ret.checkReturnedQuantities(store, errs); err != nil {
+		errs["non_vat_sales_id"] = "error checking returned quantities: " + err.Error()
 	}
 
 	if scenario == "update" {
@@ -437,11 +441,11 @@ func (ret *NonVATSalesReturn) ProcessPayments() {
 
 	ret.Payments = payments
 	ret.PaymentsCount = int64(len(payments))
-	ret.TotalPaymentPaid = RoundTo2Decimals(total)
+	ret.TotalPaymentPaid = ret.money(total)
 	ret.PaymentMethods = methods
 
-	effective := RoundTo2Decimals(ret.NetTotal - ret.CashDiscount)
-	ret.BalanceAmount = RoundTo2Decimals(effective - total)
+	effective := ret.money(ret.NetTotal - ret.CashDiscount)
+	ret.BalanceAmount = ret.money(effective - total)
 	if total <= 0 {
 		ret.PaymentStatus = "not_paid"
 	} else if ret.BalanceAmount <= 0 {

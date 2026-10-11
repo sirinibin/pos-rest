@@ -139,10 +139,11 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	releaseQueue := queueRelease(queue, store.ID.Hex(), "non_vat_sales_return")
+	defer releaseQueue()
 
 	if errs := item.Validate(w, r, "create"); len(errs) > 0 {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales_return")
+		releaseQueue()
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
@@ -154,8 +155,7 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	item.ProcessPayments()
 
 	if err = item.UpdateForeignLabelFields(); err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales_return")
+		releaseQueue()
 		response.Status = false
 		response.Errors["update_foreign_fields"] = "error updating foreign fields: " + err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
@@ -164,8 +164,7 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = item.MakeRedisCode(); err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales_return")
+		releaseQueue()
 		response.Status = false
 		response.Errors["code"] = "error making code: " + err.Error()
 		w.WriteHeader(http.StatusInternalServerError)
@@ -174,8 +173,7 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = item.Insert(); err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales_return")
+		releaseQueue()
 		_ = item.UnMakeRedisCode()
 		response.Status = false
 		response.Errors["insert"] = "Unable to insert to db:" + err.Error()
@@ -184,8 +182,7 @@ func CreateNonVATSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue.Pop()
-	CleanupQueueIfEmpty(store.ID.Hex(), "non_vat_sales_return")
+	releaseQueue()
 
 	// Update return count on the parent non_vat_sales document
 	if item.NonVATSalesID != nil && !item.NonVATSalesID.IsZero() {

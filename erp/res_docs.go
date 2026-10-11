@@ -392,7 +392,7 @@ func (cfg *docCfg) toContract(x *mapCtx, d M) M {
 		// the client's rounding: the client's net (ksTotals + rounding) is then
 		// the legacy net_total
 		rec["roundingAuto"] = false
-		rec["rounding"] = round2(num(d["rounding_amount"]) - roundingCentFix(rec, vat))
+		rec["rounding"] = roundD(num(d["rounding_amount"])-roundingCentFixD(rec, vat, x.decimals()), x.decimals())
 	}
 	for _, lk := range cfg.links {
 		rec[lk.c] = idOrNil(d[lk.l])
@@ -411,43 +411,6 @@ func (cfg *docCfg) toContract(x *mapCtx, d M) M {
 		"paid": num(d["total_payment_received"]) + num(d["total_payment_paid"]), "balance": num(d["balance_amount"]),
 		"paymentStatus": str(d["payment_status"]), "profit": num(d["profit"])}
 	return rec
-}
-
-// ksTotals reproduces the client's ks() taxable/VAT/net for rounding.
-func ksTotals(rec M, vat float64) (beforeRounding float64) {
-	gross, itemDisc := 0.0, 0.0
-	for _, it := range arr(rec["items"]) {
-		im, _ := it.(M)
-		q := num(im["qty"])
-		gross += q * num(im["unitPrice"])
-		itemDisc += q * num(im["unitDiscount"])
-	}
-	taxable := round2(gross - itemDisc - num(rec["discount"]) + num(rec["shipping"]))
-	v := round2(taxable * vat / 100)
-	return round2(taxable + v)
-}
-
-// legacyBeforeRounding reproduces the legacy save's net before rounding
-// (models.Order FindTotal / FindNetTotal and their twins on the other
-// documents): it rounds the running line sum to 2 decimals after every line,
-// so with VAT-inclusive prices (4-decimal unit prices) it can land a cent away
-// from ksTotals.  The legacy net is legacyBeforeRounding + rounding_amount.
-func legacyBeforeRounding(rec M, vat float64) float64 {
-	total := 0.0
-	for _, it := range arr(rec["items"]) {
-		im, _ := it.(M)
-		total = round2(total + num(im["qty"])*(num(im["unitPrice"])-num(im["unitDiscount"])))
-	}
-	base := round2(total + round2(num(rec["shipping"])) - round2(num(rec["discount"])))
-	return round2(base + round2(base*vat/100))
-}
-
-// roundingCentFix is what the legacy rounding_amount carries on top of the
-// client's rounding so that the legacy net equals the client's net (else the
-// legacy save rejects a payment of the full total: "Total payment should not
-// exceed …").  Read back, it is taken off again.
-func roundingCentFix(rec M, vat float64) float64 {
-	return round2(ksTotals(rec, vat) - legacyBeforeRounding(rec, vat))
 }
 
 // matchPrevLine finds the legacy line a contract item corresponds to, so
@@ -720,7 +683,7 @@ func (cfg *docCfg) toLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create
 			return nil, errBadRequest("", map[string]string{"discount": "must be >= 0"})
 		}
 		p["discount"] = d
-		p["discount_with_vat"] = round2(d * (1 + vat/100))
+		p["discount_with_vat"] = roundD(d*(1+vat/100), x.decimals())
 	}
 	if cfg.shipping && (create || ch["shipping"]) {
 		p["shipping_handling_fees"] = num(rec["shipping"])
@@ -782,11 +745,11 @@ func (cfg *docCfg) toLegacy(x *mapCtx, rec M, prev M, ch map[string]bool, create
 		// auto_rounding_amount: send the exact amount instead.
 		r := num(rec["rounding"])
 		if boolv(rec["roundingAuto"]) {
-			br := ksTotals(rec, vat)
+			br := ksTotalsD(rec, vat, x.decimals())
 			r = autoRounding(br, x.profile())
 		}
 		p["auto_rounding_amount"] = false
-		p["rounding_amount"] = round2(r + roundingCentFix(rec, vat))
+		p["rounding_amount"] = roundD(r+roundingCentFixD(rec, vat, x.decimals()), x.decimals())
 	}
 	if cfg.payments {
 		pays, err := cfg.paymentsToLegacy(x.loc(), rec, prev, date)
@@ -901,22 +864,40 @@ func (cfg *docCfg) validate(x *mapCtx, rec M, prev M) map[string]string {
 		}
 		paid += num(pm["amount"])
 	}
-	if cfg.payments && cfg.rounding {
+	// a line with a negative quantity, price or an excess discount is refused
+	// on the line itself (linesToLegacy); the net computed from it means
+	// nothing, so the payments are not checked against it
+	if cfg.payments && cfg.rounding && !badLineAmounts(rec) {
 		vat := x.vatPercent()
 		if v, ok := rec["vatPercent"]; ok && v != nil {
 			vat = num(v)
 		}
-		br := ksTotals(rec, vat)
+		br := ksTotalsD(rec, vat, x.decimals())
 		r := num(rec["rounding"])
 		if boolv(rec["roundingAuto"]) {
 			r = autoRounding(br, x.profile())
 		}
-		net := round2(br + r)
+		net := roundD(br+r, x.decimals())
 		if paid+num(rec["cashDiscount"]) > net+0.009 {
 			e["payments"] = "paid + cash discount exceeds the net total"
 		}
 	}
 	return e
+}
+
+// badLineAmounts: a line linesToLegacy refuses for its amounts.
+func badLineAmounts(rec M) bool {
+	for _, it := range arr(rec["items"]) {
+		im, _ := it.(M)
+		if im == nil {
+			continue
+		}
+		up, ud := num(im["unitPrice"]), num(im["unitDiscount"])
+		if num(im["qty"]) <= 0 || up < 0 || (ud > up && up > 0) {
+			return true
+		}
+	}
+	return false
 }
 
 // paymentMethods is the contract enum (= the legacy method values; the legacy

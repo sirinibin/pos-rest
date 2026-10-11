@@ -91,10 +91,14 @@ const countryChoiceError = "choose a supported country: Saudi Arabia, UAE, Oman,
 // autoRounding is the cash rounding of a total: the nearest 0.05 (the app's
 // default) or the country's step (India: the nearest rupee).
 func autoRounding(before float64, p *models.CountryProfile) float64 {
-	if p == nil || p.RoundingStep <= 0 || p.RoundingStep == 0.05 {
-		return round2(math.Round(before*20)/20 - before)
+	d := 2
+	if p != nil && p.Decimals == 3 {
+		d = 3
 	}
-	return round2(math.Round(before/p.RoundingStep)*p.RoundingStep - before)
+	if p == nil || p.RoundingStep <= 0 || p.RoundingStep == 0.05 {
+		return roundD(math.Round(before*20)/20-before, d)
+	}
+	return roundD(math.Round(before/p.RoundingStep)*p.RoundingStep-before, d)
 }
 
 // validPhoneFor accepts the country's mobiles and landlines; Saudi keeps

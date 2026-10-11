@@ -158,6 +158,12 @@ func (x *mapCtx) ref(coll string, v interface{}) (interface{}, error) {
 		return nil, nil
 	}
 	if _, ok := oidOf(s); ok {
+		// a document's customer must be one of the store's customers: the
+		// legacy save silently swaps an unknown id (or another store's) for
+		// the walk-in customer
+		if coll == "customer" && x.storeHex != "" && x.doc(coll, s) == nil {
+			return nil, errBadRequest("Unknown customer "+s, map[string]string{coll: "unknown id " + s})
+		}
 		return s, nil
 	}
 	if strings.HasPrefix(s, "ms_") && coll == "warehouse" {

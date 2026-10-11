@@ -401,10 +401,7 @@ func TestDocsQuotations(t *testing.T) {
 		b := base(s.Line(pid, 1, 10))
 		b["customerId"] = S(other.Customer(t, "")["id"])
 		r := Call(t, "POST", "/quotations", s.Token, b)
-		KnownBug(t, "NEW-foreign-customer", "a quotation accepts another store's customer id (saved as customer UNKNOWN) instead of 400 customerId", r.Code == 201)
-		if r.Code != 201 {
-			docsWantErr(t, r, 400, "foreign customer", "customerId")
-		}
+		docsWantErr(t, r, 400, "foreign customer", "customerId")
 	})
 }
 
@@ -609,8 +606,7 @@ func TestDocsNonVAT(t *testing.T) {
 			t.Errorf("VAT forced to 0: %v %v", ns["vatPercent"], Get(ns, "items.0.vatPercent"))
 		}
 		EqMoney(t, "balance", F(ns, "legacyTotals.balance"), net-20)
-		KnownBug(t, "NEW-nonvat-profit", "non-VAT sale profit is never computed on save (always 0)",
-			Cents(F(ns, "legacyTotals.profit")) != Cents(profit))
+		EqMoney(t, "non-VAT sale profit", F(ns, "legacyTotals.profit"), profit)
 		if S(ns["code"]) != "NVS-001" {
 			t.Errorf("non-VAT numbering: %v", ns["code"])
 		}
@@ -653,13 +649,7 @@ func TestDocsNonVAT(t *testing.T) {
 		// 4 sold, 1 returned: 5 more is over the sale
 		r := Call(t, "POST", "/nonvat-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": ns["id"], "customerId": cid,
 			"items": []M{s.Line(pid, 5, 12.5)}})
-		KnownBug(t, "NEW-nonvat-overreturn", "non-VAT returns accept more than was sold (stock goes up by the excess)", r.Code == 201)
-		if r.Code == 201 {
-			// undo it so the rest of the test runs on the intended state
-			Must(t, Call(t, "DELETE", "/nonvat-returns/"+r.ID(), s.Token, nil), 200, "delete over-return")
-		} else {
-			docsWantErr(t, r, 400, "over-return", "items.0.qty")
-		}
+		docsWantErr(t, r, 400, "over-return", "items.0.qty")
 		docsStockEventually(t, s, pid, 35)
 	})
 
@@ -1270,10 +1260,7 @@ func TestDocsPackages(t *testing.T) {
 		b := body()
 		b["storeId"] = other.ID
 		r0 := Call(t, "POST", "/packages", other.Token, b)
-		KnownBug(t, "NEW-foreign-customer", "a package accepts another store's customer id", r0.Code == 201)
-		if r0.Code != 201 {
-			docsWantErr(t, r0, 400, "customer of another store", "customerId")
-		}
+		docsWantErr(t, r0, 400, "customer of another store", "customerId")
 		// no date field: no stats route
 		Must(t, Call(t, "GET", "/packages/stats?storeId="+s.ID, s.Token, nil), 404, "no stats")
 		id := S(pk["id"])
@@ -1321,11 +1308,7 @@ func TestDocsVehicles(t *testing.T) {
 		docsWantErr(t, Call(t, "POST", "/vehicles", s.Token, M{"storeId": s.ID, "plate": plate(), "make": "X", "customerId": cid, "year": 2031}), 400, "year 2031", "year")
 		r := Call(t, "POST", "/vehicles", s.Token, M{"storeId": s.ID, "plate": plate(), "make": "X", "model": "Y",
 			"customerId": S(other.Customer(t, "")["id"])})
-		if r.Code != 400 {
-			t.Errorf("customer of another store: %s", r)
-		}
-		KnownBug(t, "NEW-vehicle-customer-field", "unknown customer on a vehicle is reported as error.fields.foreign_fields, not customerId",
-			r.Code == 400 && r.ErrField("customerId") == "")
+		docsWantErr(t, r, 400, "customer of another store", "customerId")
 	})
 
 	t.Run("lists: filters, sort, search", func(t *testing.T) {

@@ -206,8 +206,8 @@ func TestPurchases_DocumentFlow(t *testing.T) {
 		for _, c := range cases {
 			purNeedErr(t, Call(t, "POST", "/purchases", s.Token, c.body), 400, c.field, c.name)
 		}
-		// a line that makes the net negative is reported as a payments error,
-		// because the paid-vs-net check runs before the line checks
+		// a line that makes the net negative is reported on the line, not as a
+		// payments error (the paid-vs-net check is skipped for such lines)
 		for _, c := range []struct {
 			name, field string
 			body        M
@@ -220,7 +220,9 @@ func TestPurchases_DocumentFlow(t *testing.T) {
 			if r.Code != 400 {
 				t.Errorf("%s: %s", c.name, r)
 			}
-			KnownBug(t, "NEW-PUR-PAY-MASK", c.name+": reported as error.fields[payments] instead of "+c.field, r.ErrField(c.field) == "")
+			if r.ErrField(c.field) == "" || r.ErrField("payments") != "" {
+				t.Errorf("%s: want the error on %s, not on payments: %s", c.name, c.field, r)
+			}
 		}
 		purNeedErr(t, Call(t, "POST", "/purchases", s.Token, base(func(b M) { delete(b, "storeId") })), 400, "storeId", "no store")
 		purNeedErr(t, Call(t, "POST", "/purchases", s.Token, base(func(b M) { b["storeId"] = other.ID })), 403, "", "another store")
@@ -279,12 +281,8 @@ func TestPurchases_DocumentFlow(t *testing.T) {
 				"items": []M{purItem(pid, s.MS, 1, price, 0)}}), 201, "purchase").Body
 			_, vat, net := purOracle([]purLine{{1, price, 0}}, 0, 0, 15)
 			docs = append(docs, doc{S(r["id"]), net, vat, 0, 0})
+			// 33.30 × 15% = 4.995 → 5.00, although the float product is 4.99499…
 			got := Cents(F(r, "legacyTotals.vat"))
-			if price == 33.3 {
-				// 33.30 × 15% = 4.995 → 5.00; the float product is 4.99499…
-				KnownBug(t, "NEW-VAT-HALF", "VAT 4.995 on a 33.30 purchase is rounded down to 4.99 (float half-cent rounding)", got == vat-1)
-				continue
-			}
 			if got != vat || Cents(F(r, "legacyTotals.net")) != net {
 				t.Errorf("price %.2f: vat %d net %v, want %d / %d", price, got, F(r, "legacyTotals.net"), vat, net)
 			}

@@ -262,11 +262,11 @@ func TestSalesCreate_TotalsVATOracle(t *testing.T) {
 			salesEqC(t, "vat of "+salesC(up), F(r, "legacyTotals.vat"), o.vat)
 			salesEqC(t, "net of "+salesC(up), F(r, "legacyTotals.net"), o.net)
 		}
-		// 3.30 × 15% = 0.495 exactly → 0.50, but 3.3*0.15 in float is 0.49499…
+		// 3.30 × 15% = 0.495 exactly → 0.50, although 3.3*0.15 in float is 0.49499…
 		r := Create(t, s.Token, "sales", salesBody(s, nil, []M{s.Line(pid, 1, 3.3)}, nil))
 		o := salesOracle([]salesLn{{1, 3.3, 0}}, 0, 0, 15)
-		KnownBug(t, "NEW-vat-half-cent", "VAT of 3.30 at 15% is 0.495 → 0.50; the server rounds the float product 0.49499… to 0.49 (net 3.79 not 3.80)",
-			Cents(F(r, "legacyTotals.vat")) != o.vat)
+		salesEqC(t, "vat of 3.30", F(r, "legacyTotals.vat"), o.vat)
+		salesEqC(t, "net of 3.30", F(r, "legacyTotals.net"), o.net)
 	})
 
 	t.Run("huge amounts", func(t *testing.T) {
@@ -381,8 +381,9 @@ func TestSalesCreate_Validation(t *testing.T) {
 	t.Run("unit price zero", func(t *testing.T) {
 		r := Call(t, "POST", "/sales", s.Token, salesBody(s, nil, []M{s.Line(pid, 1, 0)}, nil))
 		salesWantErr(t, r, 400, "items.0.unitPrice")
-		KnownBug(t, "NEW-zero-net-cash-discount", "a zero-price sale also gets a bogus cashDiscount error \"Cash discount should not be >= 0.00\" with no cash discount",
-			r.ErrField("cashDiscount") != "")
+		if r.ErrField("cashDiscount") != "" {
+			t.Errorf("a zero-price sale without cash discount gets a cashDiscount error: %s", r)
+		}
 	})
 
 	t.Run("negative quantity price and line discount name the line", func(t *testing.T) {
@@ -399,8 +400,9 @@ func TestSalesCreate_Validation(t *testing.T) {
 				t.Errorf("%s: want 400, got %s", c.field, r)
 				continue
 			}
-			KnownBug(t, "NEW-line-error-masked", "a line with a negative amount is refused with payments: \"paid + cash discount exceeds the net total\" instead of "+c.field,
-				r.ErrField(c.field) == "" && r.ErrField("payments") != "")
+			if r.ErrField(c.field) == "" || r.ErrField("payments") != "" {
+				t.Errorf("%s: want the error on the line, not on payments: %s", c.field, r)
+			}
 		}
 	})
 
@@ -410,8 +412,7 @@ func TestSalesCreate_Validation(t *testing.T) {
 			if r.Code == 201 {
 				ok++
 			}
-			KnownBug(t, "NEW-sales-unknown-customer", "a customerId that is not a customer of the store (unknown, or another store's) is silently replaced by the UNKNOWN walk-in customer (201) instead of 400 customerId",
-				r.Code == 201 && r.Body["customerName"] == "UNKNOWN")
+			salesWantErr(t, r, 400, "customerId")
 		}
 	})
 
@@ -976,11 +977,18 @@ func TestSalesIdempotency(t *testing.T) {
 	}
 	salesWaitStock(t, s, pid, s.MS, 50-2-1-2)
 
-	// the key is scoped to the user only, not to the endpoint
+	// the key is scoped to the user and the endpoint: the same key on
+	// POST /sales-returns is a new request (a return), not a replay of the sale
 	r := Call(t, "POST", "/sales-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": first.ID(),
 		"items": []M{s.Line(pid, 1, 20)}}, "Idempotency-Key", key)
-	KnownBug(t, "NEW-idem-scope", "an Idempotency-Key first used on POST /sales replays that sale (201, S-INV code) on POST /sales-returns; no return is created",
-		r.Header.Get("Idempotent-Replayed") == "true" && r.ID() == first.ID())
+	if r.Code != 201 || r.Header.Get("Idempotent-Replayed") != "" || r.ID() == first.ID() || !strings.HasPrefix(S(r.Body["code"]), "SR-") {
+		t.Errorf("same key on another endpoint: %s (replayed=%q)", r, r.Header.Get("Idempotent-Replayed"))
+	}
+	again = Call(t, "POST", "/sales-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": first.ID(),
+		"items": []M{s.Line(pid, 1, 20)}}, "Idempotency-Key", key)
+	if again.Header.Get("Idempotent-Replayed") != "true" || again.ID() != r.ID() {
+		t.Errorf("replay on the return endpoint: %s", again)
+	}
 }
 
 // TestSalesReturns_Flow: partial and full returns, the remaining quantity,
@@ -1092,34 +1100,22 @@ func TestSalesReturns_Flow(t *testing.T) {
 	salesWaitBalance(t, s, cid, receivable)
 	t.Run("a product that is not on the invoice", func(t *testing.T) {
 		r := Call(t, "POST", "/sales-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": s2, "customerId": cid, "items": []M{s.Line(S(x["id"]), 1, 1)}})
-		KnownBug(t, "NEW-sr-foreign-line", "a return of a product that is not on the invoice is accepted (201) and puts stock in; want 400 items.0.productId",
-			r.Code == 201)
-		if r.Code == 201 {
-			salesWaitStock(t, s, x["id"], s.MS, 2)
-			n := salesOracle([]salesLn{{1, 1, 0}}, 0, 0, 15).net
-			live = append(live, salesRDoc{r.ID(), n, 0})
-			receivable -= n
-		}
+		salesWantErr(t, r, 400, "items.0.productId")
+		salesWaitStock(t, s, x["id"], s.MS, 1)
 	})
 	t.Run("a refund price above the invoice price", func(t *testing.T) {
 		r := Call(t, "POST", "/sales-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": s2, "customerId": cid, "items": []M{s.Line(aid, 1, 15)}})
-		KnownBug(t, "NEW-sr-price-above-sale", "a return line priced 15.00 for a line sold at 10.00 is accepted (201): the customer is credited more than was charged",
-			r.Code == 201)
-		if r.Code == 201 {
-			n := salesOracle([]salesLn{{1, 15, 0}}, 0, 0, 15).net
-			live = append(live, salesRDoc{r.ID(), n, 0})
-			receivable -= n
-		}
+		salesWantErr(t, r, 400, "items.0.unitPrice")
 	})
 	t.Run("a return without customerId", func(t *testing.T) {
 		r := Create(t, s.Token, "sales-returns", M{"storeId": s.ID, "date": s.Now(), "orderId": s2, "items": []M{s.Line(aid, 1, 10)}})
 		n := salesOracle([]salesLn{{1, 10, 0}}, 0, 0, 15).net
 		live = append(live, salesRDoc{S(r["id"]), n, 0})
-		KnownBug(t, "NEW-sr-no-customer", "a return created without customerId is not linked to the sale's customer (customerId null), so the customer's receivable is not reduced",
-			r["customerId"] == nil)
-		if r["customerId"] != nil {
-			receivable -= n
+		// the return belongs to the sale's customer, whose receivable it reduces
+		if r["customerId"] != cid {
+			t.Errorf("return without customerId: customerId %v, want the sale's customer %v", r["customerId"], cid)
 		}
+		receivable -= n
 		salesWaitBalance(t, s, cid, receivable)
 	})
 
@@ -1131,7 +1127,7 @@ func TestSalesReturns_Flow(t *testing.T) {
 		salesEqC(t, "edited return net", F(r, "legacyTotals.net"), on)
 		receivable += live[1].net - on
 		live[1].net = on
-		salesWaitStock(t, s, aid, s.MS, 49)
+		salesWaitStock(t, s, aid, s.MS, 48)
 		salesWaitBalance(t, s, cid, receivable)
 		// back up to the remainder of the sale (3 sold, 1 returned elsewhere)
 		salesWantErr(t, PatchResp(t, s.Token, "sales-returns", id, M{"items": []M{s.Line(aid, 3, 10)}}), 400, "items.0.qty")
@@ -1144,16 +1140,17 @@ func TestSalesReturns_Flow(t *testing.T) {
 		if pr["remarks"] != "مرتجع" || Num(pr["version"]) != Num(cur["version"])+1 {
 			t.Errorf("PUT: %v v%v", pr["remarks"], pr["version"])
 		}
-		salesWaitStock(t, s, aid, s.MS, 49)
+		salesWaitStock(t, s, aid, s.MS, 48)
 	})
 	t.Run("PATCH adding a line to a return", func(t *testing.T) {
 		id := S(r1["id"])
+		// the other line of the sale is fully returned by now (b: 2 of 2 by r3):
+		// the added line is checked against the sale, no panic
 		r, err := salesTry(t, "PATCH", "/sales-returns/"+id, s.Token, M{"items": []M{s.Line(aid, 1, 10), s.Line(bid, 1, 7)}}, 20*time.Second)
-		KnownBug(t, "NEW-sr-update-panic", "PATCH of a return with more lines than before panics (index out of range in SalesReturn.Validate) and drops the connection",
-			err != nil)
-		if err == nil && r.Code >= 500 {
-			t.Errorf("PATCH adding a line: %s", r)
+		if err != nil {
+			t.Fatalf("PATCH adding a line: %v", err)
 		}
+		salesWantErr(t, r, 400, "items.1.qty")
 	})
 
 	t.Run("delete and restore a return", func(t *testing.T) {
@@ -1200,7 +1197,7 @@ func TestSalesReturns_Flow(t *testing.T) {
 	t.Run("stats and list errors", func(t *testing.T) {
 		r := Must(t, Call(t, "GET", "/sales-returns/stats?storeId="+s.ID+"&sum=net&groupBy=party", s.Token, nil), 200, "groupBy").Body
 		var net int64
-		for _, d := range live[:5] {
+		for _, d := range live {
 			net += d.net
 		}
 		salesEqC(t, "returns of the customer", F(r, "groups."+S(cid)+".sums.net"), net)
@@ -1208,7 +1205,7 @@ func TestSalesReturns_Flow(t *testing.T) {
 		salesWantErr(t, Call(t, "GET", "/sales-returns/stats", s.Token, nil), 400, "storeId")
 		salesWantErr(t, Call(t, "GET", "/sales-returns?storeId="+s.ID+"&page=0", s.Token, nil), 400, "page")
 		rows := List(t, s.Token, "sales-returns", "storeId="+s.ID+"&where.customerId="+S(cid)+"&sort=code&select=code,orderId")
-		if len(rows) != 5 || rows[0]["orderId"] != sid || rows[0]["items"] != nil {
+		if len(rows) != len(live) || rows[0]["orderId"] != sid || rows[0]["items"] != nil {
 			t.Errorf("returns of the customer: %v", rows)
 		}
 		const none = "aaaaaaaaaaaaaaaaaaaaaaaa"
@@ -1257,18 +1254,18 @@ func TestSalesReturns_UnknownOrder(t *testing.T) {
 	pid := S(p["id"])
 	r, err := salesTry(t, "POST", "/sales-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": "aaaaaaaaaaaaaaaaaaaaaaaa",
 		"items": []M{s.Line(pid, 1, 2)}}, 20*time.Second)
-	KnownBug(t, "NEW-sr-unknown-order-panic", "POST /sales-returns with an orderId that is no sale of the store panics (nil order in SalesReturn.Validate) and drops the connection; want 400 orderId",
-		err != nil)
-	if err == nil {
-		salesWantErr(t, r, 400, "orderId")
+	if err != nil {
+		t.Fatalf("POST /sales-returns with an unknown orderId: %v", err)
 	}
-	// the panic leaves the store's sales-return queue locked: later returns hang
+	salesWantErr(t, r, 400, "orderId")
+	// the store's sales-return queue is released: a later return goes through
 	sale := Create(t, s.Token, "sales", salesBody(s, nil, []M{s.Line(pid, 1, 2)}, nil))
 	r, err = salesTry(t, "POST", "/sales-returns", s.Token, M{"storeId": s.ID, "date": s.Now(), "orderId": sale["id"],
 		"items": []M{s.Line(pid, 1, 2)}}, 5*time.Second)
-	KnownBug(t, "NEW-sr-queue-stuck", "after that panic every later POST /sales-returns of the store hangs (the legacy per-store queue is never popped)",
-		err != nil)
-	if err == nil && r.Code != 201 {
+	if err != nil {
+		t.Fatalf("valid return after the bad one hangs or fails: %v", err)
+	}
+	if r.Code != 201 {
 		t.Errorf("valid return after the bad one: %s", r)
 	}
 }

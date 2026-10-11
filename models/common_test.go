@@ -1019,13 +1019,13 @@ func TestMergeMaps_DoesNotMutateInputs(t *testing.T) {
 
 func TestRoundTo2Decimals(t *testing.T) {
 	cases := []struct{ in, want float64 }{
-		// 1.005 is stored as slightly < 1.005 in IEEE754, so rounds down to 1.00
-		{1.005, 1.00},
+		// 1.005 is stored as slightly < 1.005 in IEEE754; money rounds the decimal value half away from zero
+		{1.005, 1.01},
 		{1.006, 1.01},
 		{1.004, 1.00},
 		{2.555, 2.56},
 		{0.0, 0.0},
-		{-1.005, -1.00},
+		{-1.005, -1.01},
 		{100.999, 101.00},
 		{1.0 / 3.0, 0.33},
 	}

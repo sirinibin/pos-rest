@@ -164,11 +164,12 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	releaseQueue := queueRelease(queue, store.ID.Hex(), "sales_return")
+	defer releaseQueue()
 
 	// Validate data
 	if errs := salesreturn.Validate(w, r, "create", nil); len(errs) > 0 {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
+		releaseQueue()
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
@@ -182,8 +183,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = salesreturn.MakeCode()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
+		releaseQueue()
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["code"] = "Error making code: " + err.Error()
@@ -195,8 +195,7 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	salesreturn.UUID = uuid.New().String()
 
 	if store.Zatca.ZatcaReconnectRequired && salesreturn.EnableReportToZatca {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
+		releaseQueue()
 		response.Status = false
 		response.Errors["zatca_reconnect"] = "ZATCA re-connection is required. ZATCA-sensitive fields (such as company name, branch name, VAT number, business category, registration number (CRN), or national address) have been changed. Please reconnect to ZATCA before reporting any invoice."
 		w.WriteHeader(http.StatusForbidden)
@@ -205,19 +204,20 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var zatcaQueue *SafeQueue
+	releaseZatca := func() {}
+	defer func() { releaseZatca() }()
 	if store.Zatca.Phase == "2" && store.Zatca.Connected && salesreturn.EnableReportToZatca {
 		//Zatca Queue
 		zatcaQueue = GetOrCreateQueue(store.ID.Hex(), "zatca")
 		zatcaQueueToken := generateQueueToken()
 		zatcaQueue.Enqueue(Request{Token: zatcaQueueToken})
 		zatcaQueue.WaitUntilMyTurn(zatcaQueueToken)
+		releaseZatca = queueRelease(zatcaQueue, store.ID.Hex(), "zatca")
 
 		err = salesreturn.ReportToZatca()
 		if err != nil {
-			queue.Pop()
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+			releaseQueue()
+			releaseZatca()
 			redisErr := salesreturn.UnMakeCode()
 			if redisErr != nil {
 				response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -232,12 +232,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 
 	err = salesreturn.Insert()
 	if err != nil {
-		queue.Pop()
+		releaseQueue()
 		if zatcaQueue != nil {
-			zatcaQueue.Pop()
-			CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+			releaseZatca()
 		}
-		CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 		redisErr := salesreturn.UnMakeCode()
 		if redisErr != nil {
 			response.Errors["error_unmaking_code"] = "error_unmaking_code: " + redisErr.Error()
@@ -251,12 +249,10 @@ func CreateSalesReturn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue.Pop()
+	releaseQueue()
 	if zatcaQueue != nil {
-		zatcaQueue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "zatca")
+		releaseZatca()
 	}
-	CleanupQueueIfEmpty(store.ID.Hex(), "sales_return")
 
 	salesreturn.UpdateOrderReturnCount()
 	salesreturn.UpdateOrderReturnDiscount(nil)

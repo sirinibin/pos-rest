@@ -63,7 +63,7 @@ func withAuthAndIdem(w http.ResponseWriter, r *http.Request, fn func(c *Ctx) (in
 		key = key[:200]
 	}
 	ensureIdemIndex()
-	docID := c.UserID.Hex() + "|" + key
+	docID := idemDocID(c.UserID.Hex(), r.Method, r.URL.Path, key)
 	muI, _ := idemLocks.LoadOrStore(docID, &sync.Mutex{})
 	mu := muI.(*sync.Mutex)
 	mu.Lock()
@@ -75,6 +75,15 @@ func withAuthAndIdem(w http.ResponseWriter, r *http.Request, fn func(c *Ctx) (in
 	ctx, cancel := dbctx()
 	var prev idemRecord
 	err = mainDB().Collection(collIdempotency).FindOne(ctx, bson.M{"_id": docID}).Decode(&prev)
+	if err != nil {
+		// keys stored before they were scoped to the endpoint (id user|key)
+		// still replay, on the endpoint they were used on only
+		var old idemRecord
+		if mainDB().Collection(collIdempotency).FindOne(ctx, bson.M{"_id": c.UserID.Hex() + "|" + key}).Decode(&old) == nil &&
+			old.Method == r.Method && old.Path == r.URL.Path {
+			prev, err = old, nil
+		}
+	}
 	cancel()
 	if err == nil && time.Since(prev.CreatedAt) < idemTTL {
 		w.Header().Set("Idempotent-Replayed", "true")
@@ -115,6 +124,13 @@ func withAuthAndIdem(w http.ResponseWriter, r *http.Request, fn func(c *Ctx) (in
 	if len(payload) > 0 && status != http.StatusNoContent {
 		_, _ = w.Write(append(payload, '\n'))
 	}
+}
+
+// idemDocID scopes an Idempotency-Key to the user, the method and the path: the
+// same key sent to another endpoint is another request (it used to replay the
+// first endpoint's answer, e.g. a sale for a sales return).
+func idemDocID(userHex, method, path, key string) string {
+	return userHex + "|" + method + " " + path + "|" + key
 }
 
 func respond(w http.ResponseWriter, status int, body interface{}, err error) {

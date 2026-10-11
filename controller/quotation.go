@@ -159,11 +159,12 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	queueToken := generateQueueToken()
 	queue.Enqueue(Request{Token: queueToken})
 	queue.WaitUntilMyTurn(queueToken)
+	releaseQueue := queueRelease(queue, store.ID.Hex(), "quotation")
+	defer releaseQueue()
 
 	// Validate data
 	if errs := quotation.Validate(w, r, "create"); len(errs) > 0 {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
 		response.Errors = errs
@@ -174,8 +175,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.CreateNewCustomerFromName()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -186,8 +186,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.SetUnKnownCustomerIfNoCustomerSelected()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 
 		response.Status = false
 		response.Errors["setting_unknown_customer"] = "error setting unknown customer: " + err.Error()
@@ -197,8 +196,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.LinkOrUnLinkSales(nil)
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 
 		w.WriteHeader(http.StatusBadRequest)
 		response.Status = false
@@ -212,8 +210,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 	//	quotation.FindVatPrice()
 	err = quotation.UpdateForeignLabelFields()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["update_foreign_fields"] = "error updating foreign fields: " + err.Error()
@@ -225,8 +222,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.MakeCode()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["code"] = "error making code: " + err.Error()
@@ -238,8 +234,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.CalculateQuotationProfit()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 		response.Status = false
 		response.Errors = make(map[string]string)
 		response.Errors["profit_calculation"] = "error calc: " + err.Error()
@@ -251,8 +246,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 
 	err = quotation.Insert()
 	if err != nil {
-		queue.Pop()
-		CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+		releaseQueue()
 
 		redisErr := quotation.UnMakeRedisCode()
 		if redisErr != nil {
@@ -267,8 +261,7 @@ func CreateQuotation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	queue.Pop()
-	CleanupQueueIfEmpty(store.ID.Hex(), "quotation")
+	releaseQueue()
 
 	if quotation.RepairJobID != nil && !quotation.RepairJobID.IsZero() {
 		store.LinkQuotationToRepairJob(quotation.RepairJobID, quotation.ID, quotation.Code, quotation.NetTotal, quotation.Type)
