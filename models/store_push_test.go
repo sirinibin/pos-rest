@@ -17,7 +17,9 @@ import (
 )
 
 // withStorePushRecorder swaps the sender for a recorder for one test.
-func withStorePushRecorder(t *testing.T, delay time.Duration) (sent func() []primitive.ObjectID) {
+// sent(ids...) returns the events for those stores only: in the integration
+// run, writes from other tests' background work can land in the recorder.
+func withStorePushRecorder(t *testing.T, delay time.Duration) (sent func(ids ...primitive.ObjectID) []primitive.ObjectID) {
 	t.Helper()
 	var mu sync.Mutex
 	var got []primitive.ObjectID
@@ -32,10 +34,19 @@ func withStorePushRecorder(t *testing.T, delay time.Duration) (sent func() []pri
 		time.Sleep(3 * delay) // let pending timers fire before restoring
 		sendStoreUpdated, StorePushDelay = oldSend, oldDelay
 	})
-	return func() []primitive.ObjectID {
+	return func(ids ...primitive.ObjectID) []primitive.ObjectID {
 		mu.Lock()
 		defer mu.Unlock()
-		return append([]primitive.ObjectID(nil), got...)
+		var out []primitive.ObjectID
+		for _, g := range got {
+			for _, id := range ids {
+				if g == id {
+					out = append(out, g)
+					break
+				}
+			}
+		}
+		return out
 	}
 }
 
@@ -46,7 +57,7 @@ func TestNotifyStoreUpdated_BurstSendsOneEvent(t *testing.T) {
 		NotifyStoreUpdated(id)
 	}
 	time.Sleep(120 * time.Millisecond)
-	got := sent()
+	got := sent(id)
 	if len(got) != 1 || got[0] != id {
 		t.Fatalf("want one event for %s, got %v", id.Hex(), got)
 	}
@@ -59,7 +70,7 @@ func TestNotifyStoreUpdated_LaterWriteSendsAgain(t *testing.T) {
 	time.Sleep(80 * time.Millisecond)
 	NotifyStoreUpdated(id)
 	time.Sleep(80 * time.Millisecond)
-	if got := sent(); len(got) != 2 {
+	if got := sent(id); len(got) != 2 {
 		t.Fatalf("want an event after each separated write, got %d", len(got))
 	}
 }
@@ -69,7 +80,7 @@ func TestNotifyStoreUpdated_StoresAreIndependent(t *testing.T) {
 	a, b := primitive.NewObjectID(), primitive.NewObjectID()
 	NotifyStoresUpdated([]primitive.ObjectID{a, b, a, b})
 	time.Sleep(80 * time.Millisecond)
-	got := sent()
+	got := sent(a, b)
 	if len(got) != 2 {
 		t.Fatalf("want one event per store, got %v", got)
 	}
@@ -83,7 +94,7 @@ func TestNotifyStoreUpdated_ZeroIDIgnored(t *testing.T) {
 	sent := withStorePushRecorder(t, 10*time.Millisecond)
 	NotifyStoreUpdated(primitive.NilObjectID)
 	time.Sleep(40 * time.Millisecond)
-	if got := sent(); len(got) != 0 {
+	if got := sent(primitive.NilObjectID); len(got) != 0 {
 		t.Fatalf("zero id must not send, got %v", got)
 	}
 }
@@ -121,9 +132,9 @@ func TestNotifyStoreUpdated_ConcurrentWritersAlwaysFollowedByEvent(t *testing.T)
 		}()
 	}
 	wg.Wait()
-	last := len(sent())
+	last := len(sent(id))
 	time.Sleep(40 * time.Millisecond)
-	if len(sent()) == 0 {
+	if len(sent(id)) == 0 {
 		t.Fatal("no event sent")
 	}
 	storePushMu.Lock()
@@ -132,11 +143,11 @@ func TestNotifyStoreUpdated_ConcurrentWritersAlwaysFollowedByEvent(t *testing.T)
 	if pending {
 		t.Fatal("a write was left pending with no event")
 	}
-	if len(sent()) < last {
+	if len(sent(id)) < last {
 		t.Fatal("events went missing")
 	}
-	if len(sent()) >= 8*40 {
-		t.Fatalf("writes were not bundled: %d events for %d writes", len(sent()), 8*40)
+	if len(sent(id)) >= 8*40 {
+		t.Fatalf("writes were not bundled: %d events for %d writes", len(sent(id)), 8*40)
 	}
 }
 
@@ -227,8 +238,12 @@ func TestStoreWritesNotify(t *testing.T) {
 func TestNotifyProcurementMessagesChanged_BundledPerType(t *testing.T) {
 	var mu sync.Mutex
 	got := map[string]int{}
+	id := primitive.NewObjectID()
 	oldSend, oldDelay := sendProcurementMessagesChanged, StorePushDelay
-	sendProcurementMessagesChanged = func(_ primitive.ObjectID, msgType string) {
+	sendProcurementMessagesChanged = func(storeID primitive.ObjectID, msgType string) {
+		if storeID != id {
+			return // another test's background work
+		}
 		mu.Lock()
 		got[msgType]++
 		mu.Unlock()
@@ -238,7 +253,6 @@ func TestNotifyProcurementMessagesChanged_BundledPerType(t *testing.T) {
 		time.Sleep(60 * time.Millisecond)
 		sendProcurementMessagesChanged, StorePushDelay = oldSend, oldDelay
 	}()
-	id := primitive.NewObjectID()
 	for i := 0; i < 50; i++ {
 		NotifyProcurementMessagesChanged(id, "email")
 	}
@@ -257,14 +271,18 @@ func TestCoalesce_TopicsDoNotSwallowEachOther(t *testing.T) {
 	sent := withStorePushRecorder(t, 20*time.Millisecond)
 	var msgs int32
 	oldSend := sendProcurementMessagesChanged
-	sendProcurementMessagesChanged = func(primitive.ObjectID, string) { atomic.AddInt32(&msgs, 1) }
-	defer func() { sendProcurementMessagesChanged = oldSend }()
 	id := primitive.NewObjectID()
+	sendProcurementMessagesChanged = func(storeID primitive.ObjectID, _ string) {
+		if storeID == id {
+			atomic.AddInt32(&msgs, 1)
+		}
+	}
+	defer func() { sendProcurementMessagesChanged = oldSend }()
 	NotifyStoreUpdated(id)
 	NotifyProcurementMessagesChanged(id, "whatsapp")
 	time.Sleep(80 * time.Millisecond)
-	if len(sent()) != 1 || atomic.LoadInt32(&msgs) != 1 {
-		t.Fatalf("store events %d, message events %d; want 1 and 1", len(sent()), msgs)
+	if len(sent(id)) != 1 || atomic.LoadInt32(&msgs) != 1 {
+		t.Fatalf("store events %d, message events %d; want 1 and 1", len(sent(id)), msgs)
 	}
 }
 
@@ -358,9 +376,16 @@ func TestNotifyDashboardRecomputed_OncePerBurstPerStore(t *testing.T) {
 
 	var mu sync.Mutex
 	got := map[primitive.ObjectID]int{}
-	sendDashboardRecomputed = func(id primitive.ObjectID) { mu.Lock(); got[id]++; mu.Unlock() }
-
 	a, b := primitive.NewObjectID(), primitive.NewObjectID()
+	sendDashboardRecomputed = func(id primitive.ObjectID) {
+		if id != a && id != b && !id.IsZero() {
+			return // another test's background work
+		}
+		mu.Lock()
+		got[id]++
+		mu.Unlock()
+	}
+
 	NotifyDashboardRecomputed(a)
 	NotifyDashboardRecomputed(a)
 	NotifyDashboardRecomputed(b)
